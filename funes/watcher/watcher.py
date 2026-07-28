@@ -186,12 +186,11 @@ if HAS_WATCHDOG:
 
 
 class FolderMonitor:
-    """Administra la escucha activa en 1_entrada con monitoreo híbrido (Watchdog + Polling continuo + escaneo inicial)."""
+    """Administra la escucha en 1_entrada exclusivamente mediante sondeo (polling) cada 300 segundos."""
 
-    def __init__(self, pipeline: ETLPipeline, poll_interval_sec: float = 60.0):
+    def __init__(self, pipeline: ETLPipeline, poll_interval_sec: float = 300.0):
         self.pipeline = pipeline
         self.poll_interval_sec = poll_interval_sec
-        self.observer = Observer() if HAS_WATCHDOG else None
         self._stop_event = threading.Event()
         self._poll_thread = None
 
@@ -202,17 +201,10 @@ class FolderMonitor:
         # 1. Escaneo e ingesta inmediata de archivos que ya estaban en 1_entrada antes de arrancar Funes
         self.process_existing_files()
 
-        # 2. Monitoreo en tiempo real vía Watchdog (eventos del sistema de archivos)
-        if HAS_WATCHDOG and self.observer:
-            handler = IngestionWatcher(self.pipeline)
-            self.observer.schedule(handler, path=input_dir, recursive=False)
-            self.observer.start()
-            logger.info(f"Monitoreo en tiempo real (watchdog) activo en 1_entrada: {input_dir}")
-
-        # 3. Monitoreo híbrido por sondeo (polling thread) como red de seguridad en segundo plano
+        # 2. Monitoreo por sondeo (polling thread) únicamente cada 300 segundos
         self._poll_thread = threading.Thread(target=self._run_poll_loop, daemon=True, name="FolderPollingThread")
         self._poll_thread.start()
-        logger.info(f"Monitoreo híbrido (polling thread cada {self.poll_interval_sec}s) activo en 1_entrada.")
+        logger.info(f"Monitoreo por sondeo activo en 1_entrada (intervalo: {self.poll_interval_sec}s): {input_dir}")
 
     def process_existing_files(self) -> None:
         """Procesa de inmediato los archivos que ya se encontraban en 1_entrada al iniciar Funes."""
@@ -231,9 +223,6 @@ class FolderMonitor:
 
     def stop(self) -> None:
         self._stop_event.set()
-        if HAS_WATCHDOG and self.observer:
-            self.observer.stop()
-            self.observer.join()
         if self._poll_thread:
             self._poll_thread.join(timeout=3)
         logger.info("Monitoreo de la carpeta 1_entrada detenido.")

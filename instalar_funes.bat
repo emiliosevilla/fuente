@@ -2,7 +2,7 @@
 setlocal enabledelayedexpansion
 cd /d "%~dp0"
 
-TITLE Funes Knowledge Base — Auto Instalador y Ejecutable
+TITLE Funes — Auto Instalador y Ejecutable
 echo =======================================================
 echo          FUNES KNOWLEDGE BASE ETL FOR OBSIDIAN
 echo =======================================================
@@ -31,7 +31,11 @@ pip install -r requirements.txt
 pip install -e .
 
 echo.
-echo 3. Comprobando servicio de IA Local (Ollama)...
+echo 3. Creando acceso directo Funes.lnk en el Escritorio...
+python create_shortcuts.py
+
+echo.
+echo 4. Comprobando servicio de IA Local (Ollama)...
 curl -s http://localhost:11434/api/tags >nul 2>&1
 if %errorlevel% neq 0 (
     where ollama >nul 2>&1
@@ -46,13 +50,13 @@ if %errorlevel% neq 0 (
 )
 
 echo.
-echo 4. Iniciando Funes Knowledge Base...
-set /p VAULT_PATH="Introduce la ruta a tu Vault de Obsidian (o presiona Enter para usar ventana de seleccion): "
+echo 5. Iniciando Funes Knowledge Base...
+set /p VAULT_PATH="Introduce la ruta a tu Vault de Obsidian (presiona Enter para usar ./Funes): "
 if not "%VAULT_PATH%"=="" (
     set VAULT_PATH=%VAULT_PATH:"=%
     python funes\main.py --vault "!VAULT_PATH!"
 ) else (
-    python funes\main.py
+    python funes\main.py --vault ".\Funes"
 )
 
 pause

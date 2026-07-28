@@ -5,12 +5,12 @@ from PyInstaller.utils.hooks import collect_data_files, collect_submodules
 
 block_cipher = None
 
-# Recopilación automática de datos y submódulos para librerías complejas (ChromaDB, PDF, Office, Pydantic)
-datas = [('funes', 'funes')]
+datas = [('funes', 'funes'), ('assets', 'assets')]
 hidden_imports = [
     'funes',
     'funes.config',
     'funes.core.vault',
+    'funes.core.icon_generator',
     'funes.extractors.base',
     'funes.extractors.office_pdf',
     'funes.extractors.tex_tm',
@@ -37,7 +37,6 @@ hidden_imports = [
     'sqlite3',
 ]
 
-# Intenta recolectar submódulos de chromadb si está instalado durante el build
 try:
     datas += collect_data_files('chromadb')
     hidden_imports += collect_submodules('chromadb')
@@ -74,7 +73,7 @@ exe = EXE(
     a.zipfiles,
     a.datas,
     [],
-    name='FunesKnowledgeBase',
+    name='Funes',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -86,4 +85,5 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
+    icon='assets/funes_icon.ico',
 )

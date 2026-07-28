@@ -1,6 +1,6 @@
 """
 Script de empaquetado para distribución de ejecutables independientes de Funes.
-Genera los ejecutables autónomos (.exe para Windows o binario ejecutable para macOS).
+Genera los ejecutables autónomos (Funes.exe para Windows o binario Funes para macOS).
 """
 import sys
 import subprocess
@@ -24,7 +24,7 @@ def build():
             sys.executable,
             "-m",
             "PyInstaller",
-            "--name=FunesKnowledgeBase",
+            "--name=Funes",
             "--onefile",
             "--clean",
             "funes/main.py",
@@ -43,7 +43,7 @@ def build():
 
     dist_dir = Path("dist")
     if dist_dir.exists():
-        exe_file = list(dist_dir.glob("FunesKnowledgeBase*"))
+        exe_file = list(dist_dir.glob("Funes*"))
         if exe_file:
             print("\n" + "=" * 60)
             print("¡COMPILACIÓN EXITOSA PARA DISTRIBUCIÓN A USUARIOS FINALES!")

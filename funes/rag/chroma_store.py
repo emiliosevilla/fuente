@@ -29,10 +29,13 @@ class ChromaStore:
         self.persist_directory = persist_directory
         self.client = None
         self.collection = None
-        self._init_chroma()
+        self._initialized = False
 
     def _init_chroma(self) -> None:
-        """Inicializa ChromaDB embebido sin requerir servidor externo."""
+        """Inicializa ChromaDB embebido de forma perezosa."""
+        if self._initialized:
+            return
+        self._initialized = True
         _patch_sqlite_for_chroma()
         try:
             import chromadb
@@ -47,6 +50,9 @@ class ChromaStore:
 
     def add_chunks(self, chunks: List[str], metadatas: List[Dict[str, Any]], ids: List[str]) -> bool:
         """Añade o actualiza fragmentos en ChromaDB con desinfección estricta de metadatos."""
+        if not self._initialized:
+            self._init_chroma()
+
         if not self.collection:
             logger.warning("ChromaDB no está activo. Se omitió la adición de vectores.")
             return False

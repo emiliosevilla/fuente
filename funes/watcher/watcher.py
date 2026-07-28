@@ -167,21 +167,28 @@ class ETLPipeline:
 
 if HAS_WATCHDOG:
     class IngestionWatcher(FileSystemEventHandler):
-        """FileWatcher que escucha eventos de creación de archivos en 1_entrada."""
+        """FileWatcher que escucha eventos de creación, traslado y modificación de archivos en 1_entrada."""
 
         def __init__(self, pipeline: ETLPipeline):
             self.pipeline = pipeline
 
         def on_created(self, event):
             if not event.is_directory:
-                p = Path(event.src_path)
-                self.pipeline.process_file(p)
+                self.pipeline.process_file(Path(event.src_path))
+
+        def on_moved(self, event):
+            if not event.is_directory:
+                self.pipeline.process_file(Path(event.dest_path))
+
+        def on_modified(self, event):
+            if not event.is_directory:
+                self.pipeline.process_file(Path(event.src_path))
 
 
 class FolderMonitor:
-    """Administra la escucha activa en 1_entrada con soporte watchdog y polling automático."""
+    """Administra la escucha activa en 1_entrada con monitoreo híbrido (Watchdog + Polling continuo + escaneo inicial)."""
 
-    def __init__(self, pipeline: ETLPipeline, poll_interval_sec: float = 300.0):
+    def __init__(self, pipeline: ETLPipeline, poll_interval_sec: float = 60.0):
         self.pipeline = pipeline
         self.poll_interval_sec = poll_interval_sec
         self.observer = Observer() if HAS_WATCHDOG else None
@@ -192,15 +199,35 @@ class FolderMonitor:
         input_dir = str(self.pipeline.config.vault.input_dir)
         self._stop_event.clear()
 
+        # 1. Escaneo e ingesta inmediata de archivos que ya estaban en 1_entrada antes de arrancar Funes
+        self.process_existing_files()
+
+        # 2. Monitoreo en tiempo real vía Watchdog (eventos del sistema de archivos)
         if HAS_WATCHDOG and self.observer:
             handler = IngestionWatcher(self.pipeline)
             self.observer.schedule(handler, path=input_dir, recursive=False)
             self.observer.start()
-            logger.info(f"Monitoreo activo (watchdog) en la carpeta 1_entrada: {input_dir}")
-        else:
-            self._poll_thread = threading.Thread(target=self._run_poll_loop, daemon=True, name="FolderPollingThread")
-            self._poll_thread.start()
-            logger.info(f"Monitoreo activo (polling loop thread) en la carpeta 1_entrada: {input_dir}")
+            logger.info(f"Monitoreo en tiempo real (watchdog) activo en 1_entrada: {input_dir}")
+
+        # 3. Monitoreo híbrido por sondeo (polling thread) como red de seguridad en segundo plano
+        self._poll_thread = threading.Thread(target=self._run_poll_loop, daemon=True, name="FolderPollingThread")
+        self._poll_thread.start()
+        logger.info(f"Monitoreo híbrido (polling thread cada {self.poll_interval_sec}s) activo en 1_entrada.")
+
+    def process_existing_files(self) -> None:
+        """Procesa de inmediato los archivos que ya se encontraban en 1_entrada al iniciar Funes."""
+        input_dir = self.pipeline.config.vault.input_dir
+        try:
+            files = [f for f in input_dir.glob("*") if f.is_file() and not is_temporary_or_system_file(f)]
+            if files:
+                logger.info(f"Detectados {len(files)} archivo(s) preexistentes en 1_entrada. Iniciando procesamiento inmediato...")
+                for f in files:
+                    if self._stop_event.is_set():
+                        break
+                    self.pipeline.process_file(f)
+                    time.sleep(0.01)
+        except Exception as e:
+            logger.error(f"Error escaneando archivos preexistentes en 1_entrada: {e}")
 
     def stop(self) -> None:
         self._stop_event.set()
@@ -212,7 +239,7 @@ class FolderMonitor:
         logger.info("Monitoreo de la carpeta 1_entrada detenido.")
 
     def _run_poll_loop(self) -> None:
-        """Bucle de sondeo (polling) para cuando watchdog no está disponible con cedido explícito de hilo (thread yield)."""
+        """Bucle de sondeo (polling) híbrido con cedido explícito de hilo (thread yield)."""
         input_dir = self.pipeline.config.vault.input_dir
 
         while not self._stop_event.is_set():

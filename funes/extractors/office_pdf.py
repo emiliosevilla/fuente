@@ -8,7 +8,7 @@ logger = logging.getLogger(__name__)
 
 
 class TextAndOfficeExtractor(BaseExtractor):
-    """Extractor completo para TXT, PDF, DOCX, DOC, XLSX, XLS, PPTX, PPT, MSG."""
+    """Extractor completo para TXT, PDF, DOCX, DOC, XLSX, XLS, PPTX, PPT, MSG con Docling y MarkItDown."""
 
     SUPPORTED_EXTENSIONS = {
         ".txt", ".md", ".pdf",
@@ -25,11 +25,17 @@ class TextAndOfficeExtractor(BaseExtractor):
         ext = file_path.suffix.lower()
         metadata = {"original_file": file_path.name, "format": ext}
 
-        # Intenta primero utilizar MarkItDown si está instalado para máxima fideldad
+        # 1. Intenta primero Docling (IBM) si está instalado
+        docling_res = self._try_docling(file_path)
+        if docling_res:
+            return docling_res, metadata
+
+        # 2. Intenta MarkItDown (Microsoft) si está instalado
         markitdown_res = self._try_markitdown(file_path)
         if markitdown_res:
             return markitdown_res, metadata
 
+        # 3. Extractores específicos de formato en Python
         try:
             if ext in {".txt", ".md"}:
                 return self._extract_txt(file_path), metadata
@@ -49,8 +55,23 @@ class TextAndOfficeExtractor(BaseExtractor):
             logger.error(f"Error extrayendo {file_path.name}: {e}")
             return f"[Error de extracción en {file_path.name}: {str(e)}]", metadata
 
+    def _try_docling(self, path: Path) -> str | None:
+        """Intenta extraer vía Docling (IBM Research) si se encuentra disponible en el entorno."""
+        try:
+            from docling.document_converter import DocumentConverter
+            converter = DocumentConverter()
+            result = converter.convert(str(path))
+            if result and hasattr(result, "document"):
+                md_content = result.document.export_to_markdown()
+                if md_content:
+                    logger.info(f"Extracción Docling exitosa para {path.name}")
+                    return md_content
+        except Exception as e:
+            logger.debug(f"Docling no disponible o error para {path.name}: {e}")
+        return None
+
     def _try_markitdown(self, path: Path) -> str | None:
-        """Intenta extraer via MarkItDown de Microsoft si se encuentra disponible."""
+        """Intenta extraer vía MarkItDown (Microsoft) si se encuentra disponible."""
         try:
             from markitdown import MarkItDown
             md = MarkItDown()

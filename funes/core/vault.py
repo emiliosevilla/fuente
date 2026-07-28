@@ -1,12 +1,20 @@
 import os
+import re
 import shutil
 import hashlib
+import json
 from pathlib import Path
 import logging
 
 from funes.config import VaultConfig
 
 logger = logging.getLogger(__name__)
+
+WINDOWS_RESERVED_NAMES = {
+    "CON", "PRN", "AUX", "NUL",
+    "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9",
+    "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
+}
 
 
 class VaultManager:
@@ -36,7 +44,8 @@ class VaultManager:
             raise FileNotFoundError(f"Archivo de entrada no encontrado: {source_path}")
 
         file_hash = self.calculate_file_hash(source_path)
-        dest_filename = f"{source_path.stem}_{file_hash[:8]}{source_path.suffix}"
+        safe_stem = self.sanitize_filename(source_path.stem)
+        dest_filename = f"{safe_stem}_{file_hash[:8]}{source_path.suffix}"
         dest_path = self.config.dirty_dir / dest_filename
 
         shutil.copy2(source_path, dest_path)
@@ -44,13 +53,15 @@ class VaultManager:
         return dest_path
 
     def save_clean_md(self, relative_name: str, content: str, metadata: dict) -> Path:
-        """Guarda un documento transformado a .md verbatim en 3_limpio con encabezado de metadatos."""
-        clean_filename = f"{Path(relative_name).stem}.md"
+        """Guarda un documento transformado a .md verbatim en 3_limpio con encabezado YAML seguro."""
+        safe_stem = self.sanitize_filename(Path(relative_name).stem)
+        clean_filename = f"{safe_stem}.md"
         clean_path = self.config.clean_dir / clean_filename
 
         header = "---\n"
         for k, v in metadata.items():
-            header += f"{k}: {v}\n"
+            safe_val = json.dumps(str(v), ensure_ascii=False)
+            header += f"{k}: {safe_val}\n"
         header += "---\n\n"
 
         full_content = header + content
@@ -63,7 +74,7 @@ class VaultManager:
 
     def save_atomic_note(self, title: str, content: str) -> Path:
         """Guarda una nota atómica final estructurada en 4_salida."""
-        safe_title = "".join(c for c in title if c.isalnum() or c in (" ", "_", "-")).strip()
+        safe_title = self.sanitize_filename(title)
         if not safe_title:
             safe_title = "Nota_Sin_Titulo"
 
@@ -74,6 +85,18 @@ class VaultManager:
 
         logger.info(f"Nota atómica guardada en 4_salida: {output_path.name}")
         return output_path
+
+    @staticmethod
+    def sanitize_filename(name: str) -> str:
+        """Saneador estricto de nombres de archivo compatible con Windows, macOS y Linux."""
+        # Reemplazar caracteres no permitidos en sistemas de archivos
+        sanitized = re.sub(r'[\\/*?:"<>|]', "_", name).strip(". ")
+        
+        # Evitar nombres reservados en Windows
+        if sanitized.upper() in WINDOWS_RESERVED_NAMES:
+            sanitized = f"_{sanitized}"
+            
+        return sanitized if sanitized else "Archivo_Sin_Nombre"
 
     @staticmethod
     def calculate_file_hash(file_path: Path) -> str:

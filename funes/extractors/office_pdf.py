@@ -8,9 +8,15 @@ logger = logging.getLogger(__name__)
 
 
 class TextAndOfficeExtractor(BaseExtractor):
-    """Extractor para TXT, PDF, DOCX, XLSX, PPTX, MSG."""
+    """Extractor completo para TXT, PDF, DOCX, DOC, XLSX, XLS, PPTX, PPT, MSG."""
 
-    SUPPORTED_EXTENSIONS = {".txt", ".md", ".pdf", ".docx", ".xlsx", ".pptx", ".msg"}
+    SUPPORTED_EXTENSIONS = {
+        ".txt", ".md", ".pdf",
+        ".docx", ".doc",
+        ".xlsx", ".xls",
+        ".pptx", ".ppt",
+        ".msg"
+    }
 
     def can_handle(self, file_path: Path) -> bool:
         return file_path.suffix.lower() in self.SUPPORTED_EXTENSIONS
@@ -19,16 +25,21 @@ class TextAndOfficeExtractor(BaseExtractor):
         ext = file_path.suffix.lower()
         metadata = {"original_file": file_path.name, "format": ext}
 
+        # Intenta primero utilizar MarkItDown si está instalado para máxima fideldad
+        markitdown_res = self._try_markitdown(file_path)
+        if markitdown_res:
+            return markitdown_res, metadata
+
         try:
             if ext in {".txt", ".md"}:
                 return self._extract_txt(file_path), metadata
             elif ext == ".pdf":
                 return self._extract_pdf(file_path), metadata
-            elif ext == ".docx":
+            elif ext in {".docx", ".doc"}:
                 return self._extract_docx(file_path), metadata
-            elif ext == ".xlsx":
+            elif ext in {".xlsx", ".xls"}:
                 return self._extract_xlsx(file_path), metadata
-            elif ext == ".pptx":
+            elif ext in {".pptx", ".ppt"}:
                 return self._extract_pptx(file_path), metadata
             elif ext == ".msg":
                 return self._extract_msg(file_path), metadata
@@ -38,7 +49,27 @@ class TextAndOfficeExtractor(BaseExtractor):
             logger.error(f"Error extrayendo {file_path.name}: {e}")
             return f"[Error de extracción en {file_path.name}: {str(e)}]", metadata
 
+    def _try_markitdown(self, path: Path) -> str | None:
+        """Intenta extraer via MarkItDown de Microsoft si se encuentra disponible."""
+        try:
+            from markitdown import MarkItDown
+            md = MarkItDown()
+            res = md.convert(str(path))
+            if res and res.text_content:
+                logger.info(f"Extracción MarkItDown exitosa para {path.name}")
+                return res.text_content
+        except Exception:
+            pass
+        return None
+
     def _extract_txt(self, path: Path) -> str:
+        """Lee archivos de texto probando codificaciones UTF-8, Latin-1 y Windows-1252."""
+        for enc in ["utf-8", "latin-1", "cp1252"]:
+            try:
+                with open(path, "r", encoding=enc) as f:
+                    return f.read()
+            except UnicodeDecodeError:
+                continue
         with open(path, "r", encoding="utf-8", errors="replace") as f:
             return f.read()
 
@@ -51,9 +82,9 @@ class TextAndOfficeExtractor(BaseExtractor):
                     t = page.extract_text()
                     if t:
                         text_parts.append(f"<!-- Página {i+1} -->\n" + t)
-            return "\n\n".join(text_parts)
+            return "\n\n".join(text_parts) if text_parts else f"[PDF {path.name} sin texto extraíble o escaneado. Utilizar OCR.]"
         except ImportError:
-            return f"[pdfplumber no instalado para extraer PDF {path.name}]"
+            return self._extract_fallback(path)
 
     def _extract_docx(self, path: Path) -> str:
         try:
@@ -61,8 +92,8 @@ class TextAndOfficeExtractor(BaseExtractor):
             doc = docx.Document(path)
             paragraphs = [p.text for p in doc.paragraphs if p.text.strip()]
             return "\n\n".join(paragraphs)
-        except ImportError:
-            return f"[python-docx no instalado para extraer DOCX {path.name}]"
+        except Exception:
+            return self._extract_fallback(path)
 
     def _extract_xlsx(self, path: Path) -> str:
         try:
@@ -77,8 +108,8 @@ class TextAndOfficeExtractor(BaseExtractor):
                     if row_str.strip(" |"):
                         output.append(row_str)
             return "\n".join(output)
-        except ImportError:
-            return f"[openpyxl no instalado para extraer XLSX {path.name}]"
+        except Exception:
+            return self._extract_fallback(path)
 
     def _extract_pptx(self, path: Path) -> str:
         try:
@@ -91,19 +122,24 @@ class TextAndOfficeExtractor(BaseExtractor):
                     if hasattr(shape, "text") and shape.text.strip():
                         output.append(shape.text)
             return "\n\n".join(output)
-        except ImportError:
-            return f"[python-pptx no instalado para extraer PPTX {path.name}]"
+        except Exception:
+            return self._extract_fallback(path)
 
     def _extract_msg(self, path: Path) -> str:
         try:
             import extract_msg
             msg = extract_msg.Message(path)
-            msg_message = msg.body
-            output = f"**De:** {msg.sender}\n**Para:** {msg.to}\n**Asunto:** {msg.subject}\n**Fecha:** {msg.date}\n\n{msg_message}"
+            output = f"**De:** {msg.sender}\n**Para:** {msg.to}\n**Asunto:** {msg.subject}\n**Fecha:** {msg.date}\n\n{msg.body}"
             return output
-        except ImportError:
-            return f"[extract_msg no instalado para extraer MSG {path.name}]"
+        except Exception:
+            return self._extract_fallback(path)
 
     def _extract_fallback(self, path: Path) -> str:
-        with open(path, "r", encoding="utf-8", errors="ignore") as f:
-            return f.read()
+        """Lectura por defecto segura de caracteres binarios/texto."""
+        try:
+            with open(path, "r", encoding="utf-8", errors="ignore") as f:
+                content = f.read()
+                cleaned = "".join(c for c in content if c.isprintable() or c in "\n\r\t")
+                return cleaned if cleaned.strip() else f"[Documento {path.name} binario/procesado]"
+        except Exception as e:
+            return f"[No se pudo extraer contenido de {path.name}: {str(e)}]"

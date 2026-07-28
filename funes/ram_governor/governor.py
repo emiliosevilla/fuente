@@ -1,11 +1,11 @@
 import os
 import sys
+import ctypes
 import logging
 from typing import Dict, Any
 
 logger = logging.getLogger(__name__)
 
-# Intenta importar psutil o implementa mediciones estándar con os / sys
 try:
     import psutil
     HAS_PSUTIL = True
@@ -21,6 +21,20 @@ except ImportError:
     HAS_REQUESTS = False
 
 
+class MEMORYSTATUSEX(ctypes.Structure):
+    _fields_ = [
+        ("dwLength", ctypes.c_ulong),
+        ("dwMemoryLoad", ctypes.c_ulong),
+        ("ullTotalPhys", ctypes.c_ulonglong),
+        ("ullAvailPhys", ctypes.c_ulonglong),
+        ("ullTotalPageFile", ctypes.c_ulonglong),
+        ("ullAvailPageFile", ctypes.c_ulonglong),
+        ("ullTotalVirtual", ctypes.c_ulonglong),
+        ("ullAvailVirtual", ctypes.c_ulonglong),
+        ("sullAvailExtendedVirtual", ctypes.c_ulonglong),
+    ]
+
+
 class RAMGovernor:
     """Administra la memoria RAM del sistema y selecciona dinámicamente el modelo LLM adecuado."""
 
@@ -29,7 +43,7 @@ class RAMGovernor:
         self.safety_margin_pct = safety_margin_pct
 
     def get_system_ram_info(self) -> Dict[str, Any]:
-        """Obtiene información precisa de RAM del sistema."""
+        """Obtiene información precisa de RAM del sistema (compatible con macOS, Windows y Linux)."""
         total_gb = 16.0
         available_gb = 8.0
 
@@ -38,9 +52,14 @@ class RAMGovernor:
             total_gb = mem.total / (1024 ** 3)
             available_gb = mem.available / (1024 ** 3)
         else:
-            # Fallback multiplataforma cuando psutil no está presente
             try:
-                if sys.platform == "darwin":
+                if sys.platform == "win32":
+                    stat = MEMORYSTATUSEX()
+                    stat.dwLength = ctypes.sizeof(MEMORYSTATUSEX)
+                    if ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(stat)):
+                        total_gb = stat.ullTotalPhys / (1024 ** 3)
+                        available_gb = stat.ullAvailPhys / (1024 ** 3)
+                elif sys.platform == "darwin":
                     import subprocess
                     out = subprocess.check_output(["sysctl", "-n", "hw.memsize"]).decode().strip()
                     total_gb = int(out) / (1024 ** 3)
@@ -102,8 +121,34 @@ class RAMGovernor:
                 return False
 
     def ensure_model_available(self, model_name: str) -> bool:
-        """Comprueba si el modelo está descargado en Ollama."""
+        """Comprueba si el modelo está descargado en Ollama. Si no, solicita el pull."""
         if not self.check_ollama_status():
             logger.warning(f"Ollama no está respondiendo en {self.ollama_url}")
             return False
-        return True
+
+        try:
+            if HAS_REQUESTS:
+                resp = requests.get(f"{self.ollama_url}/api/tags", timeout=5)
+                if resp.status_code == 200:
+                    models = [m.get("name") for m in resp.json().get("models", [])]
+                    if any(model_name in m for m in models):
+                        return True
+
+                logger.info(f"Descargando modelo '{model_name}' en Ollama...")
+                pull_resp = requests.post(
+                    f"{self.ollama_url}/api/pull",
+                    json={"name": model_name, "stream": False},
+                    timeout=600,
+                )
+                return pull_resp.status_code == 200
+            else:
+                req = urllib.request.Request(f"{self.ollama_url}/api/tags")
+                with urllib.request.urlopen(req, timeout=5) as resp:
+                    data = json.loads(resp.read().decode("utf-8"))
+                    models = [m.get("name") for m in data.get("models", [])]
+                    if any(model_name in m for m in models):
+                        return True
+                return True
+        except Exception as e:
+            logger.error(f"Error comprobando disponibilidad del modelo '{model_name}': {e}")
+            return False

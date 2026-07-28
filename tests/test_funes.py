@@ -1,3 +1,4 @@
+import time
 import unittest
 import tempfile
 from pathlib import Path
@@ -8,6 +9,7 @@ from funes.extractors.registry import ExtractorRegistry
 from funes.ram_governor.governor import RAMGovernor
 from funes.rag.semantic_chunker import SemanticChunker
 from funes.graph_engine.linker import GraphLinker
+from funes.watcher.watcher import wait_until_file_stable, ETLPipeline, FolderMonitor
 
 
 class TestFunes(unittest.TestCase):
@@ -26,6 +28,54 @@ class TestFunes(unittest.TestCase):
         self.assertTrue(self.config.vault.dirty_dir.exists())
         self.assertTrue(self.config.vault.clean_dir.exists())
         self.assertTrue(self.config.vault.output_dir.exists())
+
+    def test_sanitize_filename(self):
+        # Nombres prohibidos en Windows y caracteres especiales
+        raw_names = ["CON", "PRN", "Informe/2026:Final?.pdf", "IA*RAG<1>.txt"]
+        sanitized = [VaultManager.sanitize_filename(n) for n in raw_names]
+        
+        self.assertEqual(sanitized[0], "_CON")
+        self.assertEqual(sanitized[1], "_PRN")
+        self.assertNotIn("/", sanitized[2])
+        self.assertNotIn(":", sanitized[2])
+        self.assertNotIn("*", sanitized[3])
+
+    def test_linker_protection_yaml_and_code(self):
+        # Crear nota de destino en 4_salida
+        existing_note = self.config.vault.output_dir / "Proyecto Alpha.md"
+        with open(existing_note, "w", encoding="utf-8") as f:
+            f.write("Contenido de Proyecto Alpha")
+
+        linker = GraphLinker(self.config.vault.output_dir)
+
+        content = """---
+title: "Nota sobre Proyecto Alpha"
+tags: [proyecto alpha, test]
+---
+
+# Proyecto Alpha
+
+En este informe hablamos del Proyecto Alpha.
+
+```python
+# No modificar esto:
+var_name = "Proyecto Alpha"
+```
+
+Ver también: `Proyecto Alpha en codigo inline`
+"""
+        linked = linker.auto_link_content(content, "Otra Nota")
+
+        # Verificar que el frontmatter NO fue modificado
+        self.assertIn('tags: [proyecto alpha, test]', linked)
+        self.assertNotIn('tags: [[Proyecto Alpha]]', linked)
+
+        # Verificar que el cuerpo SÍ fue enlazado
+        self.assertIn("del [[Proyecto Alpha]].", linked)
+
+        # Verificar que los bloques de código NO fueron modificados
+        self.assertIn('var_name = "Proyecto Alpha"', linked)
+        self.assertIn('`Proyecto Alpha en codigo inline`', linked)
 
     def test_ram_governor(self):
         gov = RAMGovernor()
@@ -52,16 +102,12 @@ class TestFunes(unittest.TestCase):
         chunks = chunker.chunk_markdown(md, "test.md")
         self.assertGreaterEqual(len(chunks), 2)
 
-    def test_graph_linker(self):
-        # Crear nota ficticia en 4_salida
-        existing_note = self.config.vault.output_dir / "Proyecto Alpha.md"
-        with open(existing_note, "w", encoding="utf-8") as f:
-            f.write("Nota de Proyecto Alpha")
+    def test_wait_until_file_stable(self):
+        test_file = self.config.vault.input_dir / "estabilidad.txt"
+        with open(test_file, "w", encoding="utf-8") as f:
+            f.write("Prueba de estabilidad de escritura")
 
-        linker = GraphLinker(self.config.vault.output_dir)
-        text = "Estamos trabajando en el Proyecto Alpha con el equipo."
-        linked = linker.auto_link_content(text, "Otra Nota")
-        self.assertIn("[[Proyecto Alpha]]", linked)
+        self.assertTrue(wait_until_file_stable(test_file, max_wait_sec=2.0))
 
 
 if __name__ == "__main__":

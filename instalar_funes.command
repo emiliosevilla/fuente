@@ -28,6 +28,21 @@ echo "Creando acceso directo ejecutable Funes.command en el Escritorio..."
 python3 create_shortcuts.py
 
 echo ""
+echo "Comprobando instalacion de Obsidian..."
+if [ ! -d "/Applications/Obsidian.app" ] && ! command -v obsidian &> /dev/null; then
+    echo "[!] Obsidian no esta instalado en este Mac."
+    if command -v brew &> /dev/null; then
+        echo "Instalando Obsidian automaticamente via Homebrew..."
+        brew install --cask obsidian
+    else
+        echo "Abriendo la pagina oficial de descarga de Obsidian (https://obsidian.md/download)..."
+        open "https://obsidian.md/download"
+    fi
+else
+    echo "[+] Obsidian detectado correctamente."
+fi
+
+echo ""
 echo "Comprobando servicio de IA Local (Ollama)..."
 if ! curl -s http://localhost:11434/api/tags > /dev/null; then
     if command -v ollama &> /dev/null; then

@@ -2,6 +2,7 @@ import time
 import logging
 import threading
 from pathlib import Path
+from typing import Callable, Any
 
 from funes.config import AppConfig
 from funes.core.vault import VaultManager
@@ -25,6 +26,26 @@ IGNORE_PREFIXES = (".", "~$", ".~", "desktop.ini", "Thumbs.db", ".DS_Store")
 IGNORE_SUFFIXES = (".tmp", ".lock", ".crdownload", ".part", ".githistory", ".swp", ".tmp_proj")
 
 
+def retry_on_io_error(max_retries: int = 3, delay_sec: float = 0.5) -> Callable:
+    """Decorador para reintentar operaciones E/S en carpetas de red (NAS, SharePoint, OneDrive)."""
+    def decorator(func: Callable) -> Callable:
+        def wrapper(*args, **kwargs) -> Any:
+            last_err = None
+            current_delay = delay_sec
+            for attempt in range(1, max_retries + 1):
+                try:
+                    return func(*args, **kwargs)
+                except (OSError, PermissionError) as e:
+                    last_err = e
+                    logger.warning(f"Intento {attempt}/{max_retries} falló por error de red/ES ({e}). Reintentando en {current_delay}s...")
+                    time.sleep(current_delay)
+                    current_delay *= 2
+            logger.error(f"Operación falló definitivamente tras {max_retries} intentos: {last_err}")
+            raise last_err
+        return wrapper
+    return decorator
+
+
 def is_temporary_or_system_file(file_path: Path) -> bool:
     """Detecta archivos temporales de SharePoint, OneDrive, Word o del sistema operativo."""
     name_lower = file_path.name.lower()
@@ -36,8 +57,8 @@ def is_temporary_or_system_file(file_path: Path) -> bool:
 
 
 def wait_until_file_stable(file_path: Path, max_wait_sec: float = 10.0, check_interval: float = 0.5) -> bool:
-    """Espera a que un archivo entrante en 1_entrada termine de escribirse (Sharepoint/OneDrive/Red local)."""
-    if not file_path.exists() or is_temporary_or_system_file(file_path):
+    """Espera a que un archivo entrante en 1_entrada termine de escribirse en disco o red."""
+    if is_temporary_or_system_file(file_path):
         return False
 
     start_time = time.time()
@@ -45,6 +66,8 @@ def wait_until_file_stable(file_path: Path, max_wait_sec: float = 10.0, check_in
 
     while time.time() - start_time < max_wait_sec:
         try:
+            if not file_path.exists():
+                return False
             current_size = file_path.stat().st_size
             if current_size == last_size and current_size > 0:
                 return True
@@ -53,7 +76,10 @@ def wait_until_file_stable(file_path: Path, max_wait_sec: float = 10.0, check_in
             pass
         time.sleep(check_interval)
 
-    return file_path.exists() and file_path.stat().st_size > 0
+    try:
+        return file_path.exists() and file_path.stat().st_size > 0
+    except OSError:
+        return False
 
 
 class ETLPipeline:
@@ -74,7 +100,13 @@ class ETLPipeline:
 
     def process_file(self, raw_file_path: Path) -> bool:
         """Ejecuta el flujo ETL completo para un archivo entrante."""
-        if raw_file_path.is_dir() or is_temporary_or_system_file(raw_file_path):
+        if is_temporary_or_system_file(raw_file_path):
+            return False
+
+        try:
+            if raw_file_path.is_dir():
+                return False
+        except OSError:
             return False
 
         logger.info(f"=== Iniciando Pipeline ETL para: {raw_file_path.name} ===")
@@ -84,8 +116,8 @@ class ETLPipeline:
             return False
 
         try:
-            # Paso 1: Copiar a 2_sucio
-            dirty_path = self.vault.copy_to_dirty(raw_file_path)
+            # Paso 1: Copiar a 2_sucio con reintento ante micro-cortes de red
+            dirty_path = self._safe_copy_to_dirty(raw_file_path)
 
             # Paso 2: Extraer a verbatim .md y guardar en 3_limpio
             content_verbatim, metadata = self.extractors.extract(dirty_path)
@@ -111,7 +143,7 @@ class ETLPipeline:
 
             # Paso 6: Interconectar mediante WikiLinks y guardar en 4_salida
             atomic_linked = self.linker.auto_link_content(atomic_raw, raw_file_path.stem)
-            self.vault.save_atomic_note(raw_file_path.stem, atomic_linked)
+            self.vault.save_atomic_note(raw_file_path.stem, atomic_linked, source_ext=raw_file_path.suffix)
 
             # Eliminar el archivo procesado de 1_entrada de forma segura
             try:
@@ -125,7 +157,12 @@ class ETLPipeline:
             return True
         except Exception as e:
             logger.error(f"Error procesando {raw_file_path.name}: {e}", exc_info=True)
+            self.vault.move_to_quarantine(raw_file_path, reason=str(e))
             return False
+
+    @retry_on_io_error(max_retries=3, delay_sec=0.5)
+    def _safe_copy_to_dirty(self, raw_file_path: Path) -> Path:
+        return self.vault.copy_to_dirty(raw_file_path)
 
 
 if HAS_WATCHDOG:

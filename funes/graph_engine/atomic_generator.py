@@ -26,27 +26,28 @@ class AtomicNoteGenerator:
         prompt = f"Documento de Origen: {file_name}\n\nContenido Verbatim:\n{clean_md_content}\n\nGenera la nota atómica estructurada:"
 
         try:
+            payload = {
+                "model": model_name,
+                "prompt": prompt,
+                "system": ATOMIC_NOTE_SYSTEM_PROMPT,
+                "stream": False,
+                "keep_alive": "0m",
+                "options": {
+                    "num_ctx": 2048,
+                    "num_thread": 2
+                }
+            }
             if HAS_REQUESTS:
                 resp = requests.post(
                     f"{self.ollama_url}/api/generate",
-                    json={
-                        "model": model_name,
-                        "prompt": prompt,
-                        "system": ATOMIC_NOTE_SYSTEM_PROMPT,
-                        "stream": False,
-                    },
+                    json=payload,
                     timeout=180,
                 )
                 if resp.status_code == 200:
                     result = resp.json().get("response", "").strip()
                     return self._clean_llm_markdown(result)
             else:
-                data = json.dumps({
-                    "model": model_name,
-                    "prompt": prompt,
-                    "system": ATOMIC_NOTE_SYSTEM_PROMPT,
-                    "stream": False,
-                }).encode("utf-8")
+                data = json.dumps(payload).encode("utf-8")
                 req = urllib.request.Request(
                     f"{self.ollama_url}/api/generate",
                     data=data,

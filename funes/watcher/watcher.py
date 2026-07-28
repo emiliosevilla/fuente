@@ -181,7 +181,7 @@ if HAS_WATCHDOG:
 class FolderMonitor:
     """Administra la escucha activa en 1_entrada con soporte watchdog y polling automático."""
 
-    def __init__(self, pipeline: ETLPipeline, poll_interval_sec: float = 2.0):
+    def __init__(self, pipeline: ETLPipeline, poll_interval_sec: float = 3.0):
         self.pipeline = pipeline
         self.poll_interval_sec = poll_interval_sec
         self.observer = Observer() if HAS_WATCHDOG else None

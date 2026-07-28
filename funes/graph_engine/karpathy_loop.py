@@ -14,12 +14,13 @@ logger = logging.getLogger(__name__)
 class KarpathyGraphLoop:
     """Bucle autónomo al estilo Karpathy para refinamiento continuo del grafo de notas en Obsidian."""
 
-    def __init__(self, output_dir: Path, interval_sec: int = 300):
+    def __init__(self, output_dir: Path, interval_sec: int = 600):
         self.output_dir = output_dir
         self.interval_sec = interval_sec
         self.linker = GraphLinker(output_dir)
         self._stop_event = threading.Event()
         self._thread = None
+        self._last_max_mtime = 0.0
 
     def start(self) -> None:
         """Inicia el bucle de mantenimiento de grafo en un hilo secundario."""
@@ -49,11 +50,19 @@ class KarpathyGraphLoop:
 
     def refine_knowledge_graph(self) -> None:
         """Escanea 4_salida, detecta notas huérfanas, re-enlaza WikiLinks y agrupa la MOC por categorías."""
-        logger.info("Ejecutando ciclo KarpathyGraphLoop: Refinando conexiones en 4_salida...")
-
         notes = list(self.output_dir.glob("*.md"))
         if not notes:
             return
+
+        # Omitir procesamiento si ningún archivo ha cambiado desde la última iteración
+        current_max_mtime = max((n.stat().st_mtime for n in notes), default=0.0)
+        moc_exists = (self.output_dir / "_Indice_MOC.md").exists()
+        if moc_exists and current_max_mtime <= self._last_max_mtime:
+            logger.debug("KarpathyGraphLoop: Sin cambios detectados en 4_salida. Omitiendo escaneo.")
+            return
+
+        self._last_max_mtime = current_max_mtime
+        logger.info("Ejecutando ciclo KarpathyGraphLoop: Refinando conexiones en 4_salida...")
 
         note_contents: Dict[str, str] = {}
         orphans: Set[str] = set()

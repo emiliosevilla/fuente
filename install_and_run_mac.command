@@ -21,12 +21,25 @@ fi
 source venv/bin/activate
 pip install --upgrade pip
 pip install -r requirements.txt
+pip install -e .
+
+echo ""
+echo "Comprobando servicio de IA Local (Ollama)..."
+if ! curl -s http://localhost:11434/api/tags > /dev/null; then
+    if command -v ollama &> /dev/null; then
+        echo "Iniciando Ollama serve en segundo plano..."
+        ollama serve > /dev/null 2>&1 &
+        sleep 3
+    else
+        echo "[!] Nota: Ollama no esta instalado o respondiendo en http://localhost:11434"
+        echo "    Para inferencia con IA local, descargalo desde https://ollama.com/"
+    fi
+fi
 
 echo ""
 echo "Iniciando Funes..."
 read -p "Arrastra tu carpeta Vault de Obsidian aqui (o presiona Enter para usar selector de ventana): " VAULT_INPUT
 
-# Limpiar comillas iniciales y finales si el usuario arrastro la carpeta a la terminal
 VAULT_INPUT=$(echo "$VAULT_INPUT" | sed "s/^'//;s/'$//;s/^\"//;s/\"$//")
 
 if [ -n "$VAULT_INPUT" ]; then

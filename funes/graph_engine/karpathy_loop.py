@@ -94,10 +94,10 @@ class KarpathyGraphLoop:
 
         now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-        # Extraer tags de notas
+        # Extraer claves / tags de notas
         tag_clusters: Dict[str, List[str]] = {}
         for stem, content in note_contents.items():
-            tags_match = re.search(r"tags:\s*\[(.*?)\]", content, re.IGNORECASE)
+            tags_match = re.search(r"(?:claves|tags):\s*\[(.*?)\]", content, re.IGNORECASE)
             if tags_match:
                 extracted_tags = [t.strip().strip("'\"") for t in tags_match.group(1).split(",") if t.strip()]
                 for tag in extracted_tags:
@@ -107,9 +107,11 @@ class KarpathyGraphLoop:
 
         lines = [
             "---",
-            'title: "Índice MOC — Mapa de Conocimiento Global"',
-            f'date: "{now_str}"',
-            'tags: [moc, indice, funes]',
+            'título: "Índice MOC — Mapa de Conocimiento Global"',
+            f'fecha: "{now_str}"',
+            'autor: "Funes Karpathy Loop"',
+            'claves: [moc, indice, funes]',
+            'fuentes: [4_salida/]',
             "---",
             "",
             "# Map of Content (MOC) — Funes Knowledge Base",

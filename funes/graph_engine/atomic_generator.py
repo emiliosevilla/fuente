@@ -76,11 +76,11 @@ class AtomicNoteGenerator:
         stem = file_name.rsplit(".", 1)[0]
         today_str = datetime.now().strftime("%Y-%m-%d")
         return f"""---
-title: "{stem}"
-date: "{today_str}"
-author: "Funes Extractor"
-tags: [auto-generado, ingesta]
-problem: "Procesamiento automático de {file_name}"
+título: "{stem}"
+fecha: "{today_str}"
+autor: "Funes Extractor"
+claves: [auto-generado, ingesta]
+fuentes: [{file_name}]
 ---
 
 # {stem}
@@ -103,9 +103,24 @@ Estructurar e interconectar conocimiento en Obsidian.
 ## Método
 Pipeline ETL Funes.
 
+## Ejemplos
+Registro de ingesta inicial.
+
 ## Desarrollo
 {clean_md_content[:2000]}
 
 ## Resultado
 Nota atómica inicial registrada.
+
+## Referencias Cruzadas
+
+### Reuniones
+
+### Emails
+
+### Conversaciones
+
+### Normativa
+
+### Otras Notas Atómicas
 """

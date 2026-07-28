@@ -1,68 +1,103 @@
-# Funes — Knowledge Base ETL para Obsidian
+<p align="center">
+  <img src="assets/funes_icon.png" alt="Funes Icon" width="128" />
+  <h1 align="center">Funes — Knowledge Base ETL para Obsidian</h1>
+</p>
 
-**Funes** es un sistema ETL (Extracción, Transformación y Carga) y Knowledge Base inteligente diseñado para procesar flujos diarios de archivos multiformato desestructurados y volcarlos automáticamente en un **Vault de Obsidian** como notas atómicas hiperconectadas (`[[WikiLinks]]`).
+<p align="center">
+  <b>Funes</b> es un sistema inteligente de ETL (Extracción, Transformación y Carga) e Ingesta de Conocimiento diseñado para procesar flujos diarios de archivos multiformato desestructurados y volcarlos automáticamente en tu <b>Vault de Obsidian</b> como notas atómicas hiperconectadas (<code>[[WikiLinks]]</code>).
+</p>
 
 ---
 
 ## 🚀 Características Principales
 
 1. **Flujo ETL de 4 Etapas**:
-   - `1_entrada/`: Escucha continua de archivos volcados en bruto.
-   - `2_sucio/`: Copia de respaldo de archivos originales.
-   - `3_limpio/`: Conversión verbatim a Markdown plano (`.md`).
-   - `4_salida/`: Notas atómicas estructuradas en el formato estándar con metadatos e interconexión masiva.
-2. **Soporte Multiformato**:
-   - Documentos: PDF, DOCX, DOC, XLSX, XLS, PPTX, MSG, TXT, MD.
-   - Formato Académico/Científico: LaTeX (`.tex`), TeXmacs (`.tm`) preservando expresiones matemáticas `$math$`.
-   - Audio: Transcripción automática local de MP3, WAV, M4A con **Faster-Whisper**.
-   - Imágenes: OCR local para PNG, JPEG, TIFF.
+   - `1_entrada/`: Carpeta de ingesta continua de archivos volcados en bruto.
+   - `2_sucio/`: Copia de respaldo original para auditoría e integridad.
+   - `3_limpio/`: Transcripción verbatim a Markdown plano (`.md`).
+   - `4_salida/`: Notas atómicas estructuradas con metadatos e interconexión masiva (`[[WikiLinks]]`).
+   - `.funes/`: Cuarentena (`quarantine/`) y base de datos vectorial semántica ChromaDB.
+
+2. **Soporte Multiformato Extensivo**:
+   - **Documentos y Tablas**: PDF, DOCX, DOC, XLSX, XLS, PPTX, CSV, JSON, HTML, MSG, TXT, MD.
+   - **Formato Académico/Científico**: LaTeX (`.tex`), TeXmacs (`.tm`) preservando expresiones matemáticas `$math$`.
+   - **Audio**: Transcripción automática local de MP3, WAV, M4A con **Faster-Whisper**.
+   - **Imágenes**: OCR local para PNG, JPEG, TIFF vía **Tesseract**.
+
 3. **RAM Governor (IA Adaptativa Local)**:
-   - Mantiene una holgura libre del 35% de RAM del sistema para evitar congelamientos o lag.
-   - Selecciona automáticamente el modelo LLM óptimo vía Ollama:
-     - **RAM <= 8 GB**: `Qwen 1.5 2B` / `Qwen 2.5 1.5B`
-     - **RAM 8 - 16 GB**: `Qwen 2.5 3B` / `Qwen 2.5 7B`
-     - **RAM 16 - 32 GB**: `Qwen 2.5 14B` / `Command-R 35B`
+   - Mantiene una holgura libre del 35% de la memoria RAM para prevenir congelamientos.
+   - Selecciona dinámicamente el modelo LLM óptimo vía Ollama:
+     - **RAM ≤ 8 GB**: `Qwen 1.5 2B` / `Qwen 2.5 1.5B`
+     - **RAM 8 – 16 GB**: `Qwen 2.5 3B` / `Qwen 2.5 7B`
+     - **RAM 16 – 32 GB**: `Qwen 2.5 14B` / `Command-R 35B`
      - **RAM > 32 GB**: `Qwen 2.5 32B` / `Command-R`
+
 4. **Bucle de Grafo Estilo Karpathy (`KarpathyGraphLoop`)**:
-   - Hilo autónomo en segundo plano que re-evalúa notas, inserta enlaces `[[WikiLinks]]` cruzados y actualiza el mapa global de conocimiento (`_Indice_MOC.md`).
-5. **Base Vectorial ChromaDB embebida**:
-   - Indexación semántica y chunking por significado (estilo RAGAnything).
+   - Hilo autónomo en segundo plano que re-evalúa notas, inserta enlaces `[[WikiLinks]]` cruzados y genera/actualiza de forma continua el mapa de contenidos global **`4_salida/_Indice_MOC.md`**.
+
+5. **Tolerancia a Fallos y Alta Disponibilidad**:
+   - **Filtro de Archivos Temporales**: Ignora automáticamente archivos temporales de Office (`~$*`), descargas en curso (`.crdownload`, `.part`), y archivos bloqueados (`.tmp`, `.lock`).
+   - **Reintentos en Red**: Resistencia ante micro-cortes en unidades de red compartidas (`SMB/NFS`).
+   - **Compatibilidad SQLite**: Auto-parche para versiones heredadas de SQLite mediante `pysqlite3`.
+   - **Aislamiento de Cuarentena**: Archivos defectuosos se trasladan a `.funes/quarantine/` sin detener el flujo de ingesta.
 
 ---
 
 ## 📦 Instalación y Uso Rápido
 
-### Opción 1: Ejecutar desde código fuente (Desarrolladores)
+### Instalador y Lanzador de 1-Clic
+
+Puedes iniciar Funes de forma inmediata usando los scripts oficiales preconfigurados:
+
+- **Windows**: Haz doble clic en `instalar_funes.bat`
+- **macOS**: Haz doble clic en `instalar_funes.command`
+
+Estos scripts instalarán el entorno virtual, crearán los accesos directos de escritorio (`Funes.lnk` / `Funes.command`) y lanzarán la aplicación.
+
+---
+
+### Opción 1: Ejecutar desde Código Fuente (Desarrolladores)
+
 ```bash
-# 1. Clonar repositorio
+# 1. Clonar el repositorio
+git clone https://github.com/tu-usuario/funes.git
 cd funes
 
-# 2. Ejecutar tests de verificación
-python3 -m unittest discover -s tests
+# 2. Instalar dependencias
+pip install -r requirements.txt
 
-# 3. Iniciar Funes vinculándolo a tu Vault de Obsidian
-python3 funes/main.py --vault "/Ruta/A/Tu/ObsidianVault"
+# 3. Ejecutar suite de pruebas de verificación
+PYTHONPATH=. python3 -m unittest discover -s tests
+
+# 4. Iniciar Funes en tu Vault de Obsidian
+python3 funes/main.py --vault "./Funes"
 ```
 
-### Opción 2: Compilar Ejecutable Autónomo (Windows / macOS)
+---
+
+### Opción 2: Compilar Binario Autónomo
+
+Para generar el ejecutable sin dependencias externas:
+
 ```bash
 python3 build_installer.py
 ```
-El ejecutable binario se generará en la carpeta `dist/FunesKnowledgeBase`.
+
+El binario ejecutable `Funes.exe` (Windows) o ejecutable nativo (macOS) se creará en la carpeta `dist/`.
 
 ---
 
 ## 📄 Plantilla de Nota Atómica Generada (`4_salida`)
 
-Las notas en `4_salida/` siguen la estructura unificada requerida:
+Cada archivo procesado genera una nota atómica estandarizada:
 
 ```markdown
 ---
-title: "Título de la Nota"
-date: "AAAA-MM-DD"
-author: "Autor"
-tags: [tema1, tema2]
-problem: "Descripción del problema"
+título: "Título de la Nota"
+fecha: "AAAA-MM-DD"
+autor: "Autor"
+claves: [tema1, tema2]
+fuentes: [md_sucio_1, md_sucio_2]
 ---
 
 # Título de la Nota
@@ -81,13 +116,33 @@ problem: "Descripción del problema"
 ...
 ## Método
 ...
+## Ejemplos
+...
 ## Desarrollo
 ...
 ## Resultado
 ...
+
+## Referencias Cruzadas
+
+### Reuniones
+- [[Reunión_...]]
+
+### Emails
+- [[Email_...]]
+
+### Conversaciones
+- [[Conversación_...]]
+
+### Normativa
+- [[Normativa_...]]
+
+### Otras Notas Atómicas
+- [[Nota_...]]
 ```
 
 ---
 
 ## 🛠️ Licencia e Información
-Desarrollado bajo licencia MIT para la gestión inteligente y soberana de conocimiento local con privacidad total.
+
+Desarrollado bajo licencia MIT para la gestión inteligente, local y privada del conocimiento personal.

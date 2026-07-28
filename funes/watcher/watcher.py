@@ -21,10 +21,23 @@ try:
 except ImportError:
     HAS_WATCHDOG = False
 
+IGNORE_PREFIXES = (".", "~$", ".~", "desktop.ini", "Thumbs.db", ".DS_Store")
+IGNORE_SUFFIXES = (".tmp", ".lock", ".crdownload", ".part", ".githistory", ".swp", ".tmp_proj")
+
+
+def is_temporary_or_system_file(file_path: Path) -> bool:
+    """Detecta archivos temporales de SharePoint, OneDrive, Word o del sistema operativo."""
+    name_lower = file_path.name.lower()
+    if any(name_lower.startswith(prefix.lower()) for prefix in IGNORE_PREFIXES):
+        return True
+    if any(name_lower.endswith(suffix.lower()) for suffix in IGNORE_SUFFIXES):
+        return True
+    return False
+
 
 def wait_until_file_stable(file_path: Path, max_wait_sec: float = 10.0, check_interval: float = 0.5) -> bool:
-    """Espera a que un archivo entrante en 1_entrada termine de escribirse ( Sharepoint/OneDrive/Red local )."""
-    if not file_path.exists():
+    """Espera a que un archivo entrante en 1_entrada termine de escribirse (Sharepoint/OneDrive/Red local)."""
+    if not file_path.exists() or is_temporary_or_system_file(file_path):
         return False
 
     start_time = time.time()
@@ -34,7 +47,6 @@ def wait_until_file_stable(file_path: Path, max_wait_sec: float = 10.0, check_in
         try:
             current_size = file_path.stat().st_size
             if current_size == last_size and current_size > 0:
-                # El tamaño del archivo se ha mantenido constante y no es 0
                 return True
             last_size = current_size
         except OSError:
@@ -62,13 +74,13 @@ class ETLPipeline:
 
     def process_file(self, raw_file_path: Path) -> bool:
         """Ejecuta el flujo ETL completo para un archivo entrante."""
-        if raw_file_path.name.startswith(".") or raw_file_path.is_dir():
+        if raw_file_path.is_dir() or is_temporary_or_system_file(raw_file_path):
             return False
 
         logger.info(f"=== Iniciando Pipeline ETL para: {raw_file_path.name} ===")
 
         if not wait_until_file_stable(raw_file_path):
-            logger.warning(f"El archivo {raw_file_path.name} no se estabilizó o está vacío. Omitiendo.")
+            logger.warning(f"El archivo {raw_file_path.name} es temporal, no se estabilizó o está vacío. Omitiendo.")
             return False
 
         try:
@@ -168,7 +180,7 @@ class FolderMonitor:
 
         while not self._stop_event.is_set():
             try:
-                files = [f for f in input_dir.glob("*") if f.is_file() and not f.name.startswith(".")]
+                files = [f for f in input_dir.glob("*") if f.is_file() and not is_temporary_or_system_file(f)]
                 for f in files:
                     if self._stop_event.is_set():
                         break

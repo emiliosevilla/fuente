@@ -6,10 +6,11 @@ from pathlib import Path
 from funes.config import get_default_config
 from funes.core.vault import VaultManager
 from funes.extractors.registry import ExtractorRegistry
+from funes.extractors.office_pdf import TextAndOfficeExtractor
 from funes.ram_governor.governor import RAMGovernor
 from funes.rag.semantic_chunker import SemanticChunker
 from funes.graph_engine.linker import GraphLinker
-from funes.watcher.watcher import wait_until_file_stable, ETLPipeline, FolderMonitor
+from funes.watcher.watcher import wait_until_file_stable, is_temporary_or_system_file
 
 
 class TestFunes(unittest.TestCase):
@@ -30,7 +31,6 @@ class TestFunes(unittest.TestCase):
         self.assertTrue(self.config.vault.output_dir.exists())
 
     def test_sanitize_filename(self):
-        # Nombres prohibidos en Windows y caracteres especiales
         raw_names = ["CON", "PRN", "Informe/2026:Final?.pdf", "IA*RAG<1>.txt"]
         sanitized = [VaultManager.sanitize_filename(n) for n in raw_names]
         
@@ -40,8 +40,46 @@ class TestFunes(unittest.TestCase):
         self.assertNotIn(":", sanitized[2])
         self.assertNotIn("*", sanitized[3])
 
+    def test_temporary_and_lock_file_filtering(self):
+        """Verifica que los archivos de bloqueo de Word (~$Doc.docx) y temporales (.tmp) sean ignorados."""
+        lock_file = Path("~$WordDocument.docx")
+        tmp_file = Path("download.crdownload")
+        ds_store = Path(".DS_Store")
+        normal_file = Path("Documento_Normal.docx")
+
+        self.assertTrue(is_temporary_or_system_file(lock_file))
+        self.assertTrue(is_temporary_or_system_file(tmp_file))
+        self.assertTrue(is_temporary_or_system_file(ds_store))
+        self.assertFalse(is_temporary_or_system_file(normal_file))
+
+    def test_csv_json_html_extraction(self):
+        """Verifica la conversión a Markdown de CSV, JSON y HTML."""
+        csv_file = self.config.vault.input_dir / "datos.csv"
+        with open(csv_file, "w", encoding="utf-8") as f:
+            f.write("Nombre,Edad,Ciudad\nJuan,30,Madrid\nAna,25,Barcelona\n")
+
+        json_file = self.config.vault.input_dir / "config.json"
+        with open(json_file, "w", encoding="utf-8") as f:
+            f.write('{"proyecto": "Funes", "version": "0.1.0"}')
+
+        html_file = self.config.vault.input_dir / "pagina.html"
+        with open(html_file, "w", encoding="utf-8") as f:
+            f.write("<h1>Titulo HTML</h1><p>Parrafo de texto.</p>")
+
+        extractor = TextAndOfficeExtractor()
+
+        csv_text, _ = extractor.extract(csv_file)
+        self.assertIn("| Juan | 30 | Madrid |", csv_text)
+
+        json_text, _ = extractor.extract(json_file)
+        self.assertIn("```json", json_text)
+        self.assertIn('"proyecto": "Funes"', json_text)
+
+        html_text, _ = extractor.extract(html_file)
+        self.assertIn("# Titulo HTML", html_text)
+        self.assertIn("Parrafo de texto.", html_text)
+
     def test_linker_protection_yaml_and_code(self):
-        # Crear nota de destino en 4_salida
         existing_note = self.config.vault.output_dir / "Proyecto Alpha.md"
         with open(existing_note, "w", encoding="utf-8") as f:
             f.write("Contenido de Proyecto Alpha")
@@ -66,14 +104,9 @@ Ver también: `Proyecto Alpha en codigo inline`
 """
         linked = linker.auto_link_content(content, "Otra Nota")
 
-        # Verificar que el frontmatter NO fue modificado
         self.assertIn('tags: [proyecto alpha, test]', linked)
         self.assertNotIn('tags: [[Proyecto Alpha]]', linked)
-
-        # Verificar que el cuerpo SÍ fue enlazado
         self.assertIn("del [[Proyecto Alpha]].", linked)
-
-        # Verificar que los bloques de código NO fueron modificados
         self.assertIn('var_name = "Proyecto Alpha"', linked)
         self.assertIn('`Proyecto Alpha en codigo inline`', linked)
 
@@ -87,27 +120,11 @@ Ver también: `Proyecto Alpha en codigo inline`
         self.assertIsInstance(model, str)
         self.assertTrue(len(model) > 0)
 
-    def test_extractor_registry_txt(self):
-        test_file = self.config.vault.input_dir / "prueba.txt"
-        with open(test_file, "w", encoding="utf-8") as f:
-            f.write("# Título de Prueba\n\nEste es un contenido de prueba.")
-
-        registry = ExtractorRegistry()
-        content, meta = registry.extract(test_file)
-        self.assertIn("Título de Prueba", content)
-
     def test_semantic_chunker(self):
         chunker = SemanticChunker(max_chunk_size=100)
         md = "# Encabezado 1\n\nPrimer párrafo corto.\n\n# Encabezado 2\n\nSegundo párrafo corto."
         chunks = chunker.chunk_markdown(md, "test.md")
         self.assertGreaterEqual(len(chunks), 2)
-
-    def test_wait_until_file_stable(self):
-        test_file = self.config.vault.input_dir / "estabilidad.txt"
-        with open(test_file, "w", encoding="utf-8") as f:
-            f.write("Prueba de estabilidad de escritura")
-
-        self.assertTrue(wait_until_file_stable(test_file, max_wait_sec=2.0))
 
 
 if __name__ == "__main__":

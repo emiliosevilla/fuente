@@ -22,6 +22,7 @@ class VaultManager:
 
     def __init__(self, config: VaultConfig):
         self.config = config
+        self.quarantine_dir = self.config.system_dir / "quarantine"
         self._ensure_directories()
 
     def _ensure_directories(self) -> None:
@@ -33,6 +34,7 @@ class VaultManager:
             self.config.output_dir,
             self.config.system_dir,
             self.config.chroma_dir,
+            self.quarantine_dir,
         ]
         for d in dirs:
             d.mkdir(parents=True, exist_ok=True)
@@ -52,11 +54,33 @@ class VaultManager:
         logger.info(f"Copiado a 2_sucio: {source_path.name} -> {dest_path.name}")
         return dest_path
 
+    def move_to_quarantine(self, source_path: Path, reason: str = "Error de extracción") -> Path:
+        """Mueve un archivo corrupto o no procesable a la carpeta de cuarentena .funes/quarantine."""
+        safe_name = self.sanitize_filename(source_path.name)
+        dest_path = self.quarantine_dir / f"FAILED_{safe_name}"
+
+        try:
+            if source_path.exists():
+                shutil.move(str(source_path), str(dest_path))
+                logger.warning(f"Archivo movido a cuarentena ({reason}): {source_path.name}")
+        except Exception as e:
+            logger.error(f"Error moviendo a cuarentena {source_path.name}: {e}")
+
+        return dest_path
+
     def save_clean_md(self, relative_name: str, content: str, metadata: dict) -> Path:
-        """Guarda un documento transformado a .md verbatim en 3_limpio con encabezado YAML seguro."""
-        safe_stem = self.sanitize_filename(Path(relative_name).stem)
+        """Guarda un documento transformado a .md verbatim en 3_limpio evitando colisiones de nombre."""
+        p = Path(relative_name)
+        safe_stem = self.sanitize_filename(p.stem)
+        ext_clean = p.suffix.lstrip(".").lower()
+        
         clean_filename = f"{safe_stem}.md"
         clean_path = self.config.clean_dir / clean_filename
+
+        # Si ya existe un archivo limpio con el mismo nombre pero otra extensión original, usar sufijo
+        if clean_path.exists() and ext_clean:
+            clean_filename = f"{safe_stem}_{ext_clean}.md"
+            clean_path = self.config.clean_dir / clean_filename
 
         header = "---\n"
         for k, v in metadata.items():
@@ -72,14 +96,17 @@ class VaultManager:
         logger.info(f"Guardado en 3_limpio: {clean_path.name}")
         return clean_path
 
-    def save_atomic_note(self, title: str, content: str) -> Path:
-        """Guarda una nota atómica final estructurada en 4_salida."""
+    def save_atomic_note(self, title: str, content: str, source_ext: str = "") -> Path:
+        """Guarda una nota atómica final estructurada en 4_salida con gestión de colisiones."""
         safe_title = self.sanitize_filename(title)
         if not safe_title:
             safe_title = "Nota_Sin_Titulo"
 
         output_path = self.config.output_dir / f"{safe_title}.md"
         
+        if output_path.exists() and source_ext:
+            output_path = self.config.output_dir / f"{safe_title}_{source_ext.lstrip('.')}.md"
+
         with open(output_path, "w", encoding="utf-8") as f:
             f.write(content)
 
@@ -89,25 +116,18 @@ class VaultManager:
     @staticmethod
     def sanitize_filename(name: str) -> str:
         """Saneador estricto de nombres de archivo compatible con Windows, macOS y Linux."""
-        # 1. Eliminar caracteres nulos y de control ASCII (0x00 - 0x1F)
         sanitized = "".join(c for c in name if ord(c) >= 32)
-        
-        # 2. Reemplazar barras, caracteres especiales e inyecciones de ruta
         sanitized = re.sub(r'[\\/*?:"<>|]', "_", sanitized)
         sanitized = re.sub(r"\.\.+", "_", sanitized)
-        
-        # 3. Eliminar puntos y espacios iniciales/finales
         sanitized = sanitized.strip(". ")
-        
-        # 4. Truncar a máximo 180 caracteres para evitar errores de longitud de ruta del SO
+
         if len(sanitized) > 180:
             sanitized = sanitized[:180]
-            
-        # 5. Evitar nombres reservados en Windows (CON, PRN, AUX, NUL, COM1, etc.)
+
         stem_upper = sanitized.split(".")[0].upper()
         if stem_upper in WINDOWS_RESERVED_NAMES:
             sanitized = f"_{sanitized}"
-            
+
         return sanitized if sanitized else "Archivo_Sin_Nombre"
 
     @staticmethod

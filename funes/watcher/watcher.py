@@ -181,7 +181,7 @@ if HAS_WATCHDOG:
 class FolderMonitor:
     """Administra la escucha activa en 1_entrada con soporte watchdog y polling automático."""
 
-    def __init__(self, pipeline: ETLPipeline, poll_interval_sec: float = 3.0):
+    def __init__(self, pipeline: ETLPipeline, poll_interval_sec: float = 60.0):
         self.pipeline = pipeline
         self.poll_interval_sec = poll_interval_sec
         self.observer = Observer() if HAS_WATCHDOG else None
@@ -212,7 +212,7 @@ class FolderMonitor:
         logger.info("Monitoreo de la carpeta 1_entrada detenido.")
 
     def _run_poll_loop(self) -> None:
-        """Bucle de sondeo (polling) para cuando watchdog no está disponible."""
+        """Bucle de sondeo (polling) para cuando watchdog no está disponible con cedido explícito de hilo (thread yield)."""
         input_dir = self.pipeline.config.vault.input_dir
 
         while not self._stop_event.is_set():
@@ -222,7 +222,9 @@ class FolderMonitor:
                     if self._stop_event.is_set():
                         break
                     self.pipeline.process_file(f)
+                    time.sleep(0.01)  # Cedido explícito de hilo (thread yield)
             except Exception as e:
                 logger.error(f"Error en el bucle de polling: {e}")
 
+            time.sleep(0.01)  # Cedido explícito de hilo (thread yield)
             self._stop_event.wait(timeout=self.poll_interval_sec)

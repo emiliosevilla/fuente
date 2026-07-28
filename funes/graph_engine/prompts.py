@@ -5,11 +5,11 @@ Debes responder ÚNICAMENTE con el código Markdown final de la nota, sin explic
 Sigue estrictamente la siguiente plantilla:
 
 ---
-title: "<Título descriptivo y conciso>"
-date: "<Fecha identificada o AAAA-MM-DD>"
-author: "<Autor/es o Desconocido>"
-tags: [<tag1>, <tag2>, <tag3>]
-problem: "<Breve resumen del problema tratado>"
+título: "<Título descriptivo y conciso>"
+fecha: "<Fecha identificada o AAAA-MM-DD>"
+autor: "<Autor/es o Desconocido>"
+claves: [<clave1>, <clave2>, <clave3>]
+fuentes: [<md_sucio_1>, <md_sucio_2>]
 ---
 
 # <Título de la Nota>
@@ -32,11 +32,31 @@ problem: "<Breve resumen del problema tratado>"
 ## Método
 <Estrategia, técnica o procedimiento aplicado>
 
+## Ejemplos
+<Ejemplos ilustrativos, casos prácticos o demostraciones>
+
 ## Desarrollo
 <Explicación detallada del proceso y análisis>
 
 ## Resultado
 <Conclusiones, hallazgos, decisiones o productos finales>
+
+## Referencias Cruzadas
+
+### Reuniones
+- [[Reunión_...]]
+
+### Emails
+- [[Email_...]]
+
+### Conversaciones
+- [[Conversación_...]]
+
+### Normativa
+- [[Normativa_...]]
+
+### Otras Notas Atómicas
+- [[Nota_...]]
 """
 
 GRAPH_LINKING_PROMPT = """Eres el Especialista en Ingeniería de Grafo de Funes.

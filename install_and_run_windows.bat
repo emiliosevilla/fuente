@@ -8,7 +8,7 @@ echo          FUNES KNOWLEDGE BASE ETL FOR OBSIDIAN
 echo =======================================================
 echo.
 
-echo 1. Comprobando instalacion de Python...
+echo 1. Comprobando instalacion de Python 3...
 python --version >nul 2>&1
 if %errorlevel% neq 0 (
     py --version >nul 2>&1
@@ -28,13 +28,21 @@ if not exist "venv" (
 call venv\Scripts\activate.bat
 python -m pip install --upgrade pip
 pip install -r requirements.txt
+pip install -e .
 
 echo.
 echo 3. Comprobando servicio de IA Local (Ollama)...
 curl -s http://localhost:11434/api/tags >nul 2>&1
 if %errorlevel% neq 0 (
-    echo [!] Nota: Ollama no responde en http://localhost:11434
-    echo     Para inferencia con IA local, puedes iniciar Ollama desde https://ollama.com/
+    where ollama >nul 2>&1
+    if %errorlevel% equ 0 (
+        echo Iniciando servicio local Ollama en segundo plano...
+        start /b ollama serve >nul 2>&1
+        timeout /t 3 >nul
+    ) else (
+        echo [!] Nota: Ollama no responde en http://localhost:11434
+        echo     Para inferencia con IA local, descárgalo e inícialo desde https://ollama.com/
+    )
 )
 
 echo.

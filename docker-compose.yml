@@ -1,0 +1,28 @@
+version: '3.8'
+
+services:
+  funes:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: funes_knowledge_base
+    restart: unless-stopped
+    volumes:
+      # Montar la carpeta local del Vault de Obsidian dentro del contenedor
+      - ./ObsidianVault:/vault
+    environment:
+      - OLLAMA_URL=http://ollama:11434
+    depends_on:
+      - ollama
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: funes_ollama_service
+    restart: unless-stopped
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_storage:/root/.ollama
+
+volumes:
+  ollama_storage:

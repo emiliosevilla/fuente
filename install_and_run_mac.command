@@ -22,11 +22,15 @@ source venv/bin/activate
 pip install --upgrade pip
 pip install -r requirements.txt
 
+echo ""
 echo "Iniciando Funes..."
-read -p "Introduce la ruta a tu Vault de Obsidian (o presiona Enter para usar ./ObsidianVault): " VAULT_INPUT
+read -p "Arrastra tu carpeta Vault de Obsidian aqui (o presiona Enter para usar selector de ventana): " VAULT_INPUT
 
-if [ -z "$VAULT_INPUT" ]; then
-    VAULT_INPUT="./ObsidianVault"
+# Limpiar comillas iniciales y finales si el usuario arrastro la carpeta a la terminal
+VAULT_INPUT=$(echo "$VAULT_INPUT" | sed "s/^'//;s/'$//;s/^\"//;s/\"$//")
+
+if [ -n "$VAULT_INPUT" ]; then
+    python3 funes/main.py --vault "$VAULT_INPUT"
+else
+    python3 funes/main.py
 fi
-
-python3 funes/main.py --vault "$VAULT_INPUT"

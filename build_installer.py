@@ -1,43 +1,54 @@
 """
-Script de empaquetado para Funes Knowledge Base.
-Genera los ejecutables independientes para macOS y Windows sin requerir instalación previa de Python.
+Script de empaquetado para distribución de ejecutables independientes de Funes.
+Genera los ejecutables autónomos (.exe para Windows o binario ejecutable para macOS).
 """
 import sys
 import subprocess
-import shutil
 from pathlib import Path
 
 
 def build():
-    print("=== Iniciando compilación de Funes Executable ===")
+    print("=== Compilador de Distribucion Funes Knowledge Base ===")
     
-    # 1. Asegurar PyInstaller
+    # 1. Verificar/Instalar PyInstaller
     try:
         import PyInstaller
     except ImportError:
         print("Instalando PyInstaller...")
         subprocess.check_call([sys.executable, "-m", "pip", "install", "pyinstaller"])
 
-    # 2. Comando de empaquetado PyInstaller
-    cmd = [
-        sys.executable,
-        "-m",
-        "PyInstaller",
-        "--name=FunesKnowledgeBase",
-        "--onefile",
-        "--clean",
-        "--add-data=funes:funes",
-        "funes/main.py",
-    ]
+    spec_file = Path("funes.spec")
+    if not spec_file.exists():
+        print("[!] No se encontró funes.spec. Generando compilación genérica...")
+        cmd = [
+            sys.executable,
+            "-m",
+            "PyInstaller",
+            "--name=FunesKnowledgeBase",
+            "--onefile",
+            "--clean",
+            "funes/main.py",
+        ]
+    else:
+        cmd = [
+            sys.executable,
+            "-m",
+            "PyInstaller",
+            "--clean",
+            "funes.spec",
+        ]
 
-    print(f"Ejecutando comando: {' '.join(cmd)}")
+    print(f"Ejecutando compilación PyInstaller: {' '.join(cmd)}")
     subprocess.check_call(cmd)
 
     dist_dir = Path("dist")
     if dist_dir.exists():
         exe_file = list(dist_dir.glob("FunesKnowledgeBase*"))
         if exe_file:
-            print(f"\n¡Compilación exitosa! Ejecutable disponible en: {exe_file[0].resolve()}")
+            print("\n" + "=" * 60)
+            print("¡COMPILACIÓN EXITOSA PARA DISTRIBUCIÓN A USUARIOS FINALES!")
+            print(f"Ubicación del ejecutable final: {exe_file[0].resolve()}")
+            print("=" * 60 + "\n")
 
 
 if __name__ == "__main__":

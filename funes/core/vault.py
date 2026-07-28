@@ -89,11 +89,23 @@ class VaultManager:
     @staticmethod
     def sanitize_filename(name: str) -> str:
         """Saneador estricto de nombres de archivo compatible con Windows, macOS y Linux."""
-        # Reemplazar caracteres no permitidos en sistemas de archivos
-        sanitized = re.sub(r'[\\/*?:"<>|]', "_", name).strip(". ")
+        # 1. Eliminar caracteres nulos y de control ASCII (0x00 - 0x1F)
+        sanitized = "".join(c for c in name if ord(c) >= 32)
         
-        # Evitar nombres reservados en Windows
-        if sanitized.upper() in WINDOWS_RESERVED_NAMES:
+        # 2. Reemplazar barras, caracteres especiales e inyecciones de ruta
+        sanitized = re.sub(r'[\\/*?:"<>|]', "_", sanitized)
+        sanitized = re.sub(r"\.\.+", "_", sanitized)
+        
+        # 3. Eliminar puntos y espacios iniciales/finales
+        sanitized = sanitized.strip(". ")
+        
+        # 4. Truncar a máximo 180 caracteres para evitar errores de longitud de ruta del SO
+        if len(sanitized) > 180:
+            sanitized = sanitized[:180]
+            
+        # 5. Evitar nombres reservados en Windows (CON, PRN, AUX, NUL, COM1, etc.)
+        stem_upper = sanitized.split(".")[0].upper()
+        if stem_upper in WINDOWS_RESERVED_NAMES:
             sanitized = f"_{sanitized}"
             
         return sanitized if sanitized else "Archivo_Sin_Nombre"

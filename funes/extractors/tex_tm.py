@@ -33,12 +33,20 @@ class TeXAndTeXmacsExtractor(BaseExtractor):
         return cleaned, metadata
 
     def _clean_latex(self, raw: str) -> str:
-        """Limpia comentarios y comandos estandarizados de LaTeX preservando fórmulas math."""
-        # Elimina comentarios % que no sean \%
-        text = re.sub(r"(?<!\\)%.*", "", raw)
+        """Limpia comentarios y comandos estandarizados de LaTeX preservando fórmulas math e hipervínculos."""
+        lines = []
+        for line in raw.splitlines():
+            # Evita eliminar % si es parte de \% o una URL encoding (ej. %20)
+            if "%" in line and not ("\\%" in line or "%20" in line or "http" in line):
+                # Cortar en el caracter % no escapado
+                line = re.sub(r"(?<!\\)%.*", "", line)
+            lines.append(line)
+        text = "\n".join(lines)
 
-        # Mantiene las fórmulas en $...$ y $$...$$ intactas
-        # Normaliza secciones a encabezados de Markdown
+        # Convertir entornos de ecuación LaTeX a bloques math de Markdown $$ ... $$
+        text = re.sub(r"\\begin\{(?:equation|align|gather)\*?\}([\s\S]*?)\\end\{(?:equation|align|gather)\*?\}", r"\n$$\1$$\n", text)
+
+        # Normalizar secciones a encabezados Markdown (#, ##, ###)
         text = re.sub(r"\\section\*?\{([^}]+)\}", r"# \1", text)
         text = re.sub(r"\\subsection\*?\{([^}]+)\}", r"## \1", text)
         text = re.sub(r"\\subsubsection\*?\{([^}]+)\}", r"### \1", text)
@@ -51,8 +59,6 @@ class TeXAndTeXmacsExtractor(BaseExtractor):
 
     def _clean_texmacs(self, raw: str) -> str:
         """Extrae el contenido legible de un documento TeXmacs (.tm)."""
-        # TeXmacs usa sintaxis basada en árbol de expresiones <...|...>
-        # Extraemos texto de párrafos y fórmulas
         text = re.sub(r"<doc-data\|.*?>", "", raw, flags=re.DOTALL)
         text = re.sub(r"<([a-zA-Z0-9_-]+)\|([^>]+)>", r"\2", text)
         text = re.sub(r"\\<", "<", text)

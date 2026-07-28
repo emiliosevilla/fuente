@@ -14,11 +14,13 @@ class SemanticChunker:
 
     def chunk_markdown(self, md_content: str, source_file: str) -> List[Dict[str, Any]]:
         """Aplica chunking estructurado y semántico sobre Markdown verbatim."""
+        safe_source_id = re.sub(r"[^a-zA-Z0-9_-]", "_", source_file)
+        
         # Dividir por encabezados (#, ##, ###)
         sections = re.split(r"\n(?=#+\s)", md_content)
         chunks = []
 
-        for sec_idx, sec in enumerate(sections):
+        for sec in sections:
             sec_text = sec.strip()
             if not sec_text:
                 continue
@@ -27,7 +29,7 @@ class SemanticChunker:
             header_match = re.match(r"^(#+\s+[^\n]+)", sec_text)
             current_header = header_match.group(1) if header_match else "General"
 
-            # Si la sección excede el tamaño máximo, dividir por párrafos
+            # Si la sección excede el tamaño máximo, dividir por párrafos y frases
             if len(sec_text) > self.max_chunk_size:
                 paragraphs = sec_text.split("\n\n")
                 current_chunk = []
@@ -35,9 +37,22 @@ class SemanticChunker:
 
                 for p in paragraphs:
                     p_len = len(p)
-                    if current_len + p_len > self.max_chunk_size and current_chunk:
+                    # Manejar párrafos gigantes individuales
+                    if p_len > self.max_chunk_size:
+                        sub_sentences = re.split(r"(?<=[.!?])\s+", p)
+                        for sentence in sub_sentences:
+                            s_len = len(sentence)
+                            if current_len + s_len > self.max_chunk_size and current_chunk:
+                                chunk_text = " ".join(current_chunk)
+                                chunks.append(self._create_chunk_dict(chunk_text, source_file, safe_source_id, current_header, len(chunks)))
+                                current_chunk = [sentence]
+                                current_len = s_len
+                            else:
+                                current_chunk.append(sentence)
+                                current_len += s_len + 1
+                    elif current_len + p_len > self.max_chunk_size and current_chunk:
                         chunk_text = "\n\n".join(current_chunk)
-                        chunks.append(self._create_chunk_dict(chunk_text, source_file, current_header, len(chunks)))
+                        chunks.append(self._create_chunk_dict(chunk_text, source_file, safe_source_id, current_header, len(chunks)))
                         current_chunk = [p]
                         current_len = p_len
                     else:
@@ -46,16 +61,16 @@ class SemanticChunker:
 
                 if current_chunk:
                     chunk_text = "\n\n".join(current_chunk)
-                    chunks.append(self._create_chunk_dict(chunk_text, source_file, current_header, len(chunks)))
+                    chunks.append(self._create_chunk_dict(chunk_text, source_file, safe_source_id, current_header, len(chunks)))
             else:
-                chunks.append(self._create_chunk_dict(sec_text, source_file, current_header, len(chunks)))
+                chunks.append(self._create_chunk_dict(sec_text, source_file, safe_source_id, current_header, len(chunks)))
 
         logger.info(f"Creados {len(chunks)} fragmentos semánticos para '{source_file}'")
         return chunks
 
-    def _create_chunk_dict(self, content: str, source_file: str, header: str, idx: int) -> Dict[str, Any]:
+    def _create_chunk_dict(self, content: str, source_file: str, safe_source_id: str, header: str, idx: int) -> Dict[str, Any]:
         return {
-            "id": f"{source_file}_chunk_{idx}",
+            "id": f"{safe_source_id}_chunk_{idx}",
             "content": content,
             "metadata": {
                 "source_file": source_file,

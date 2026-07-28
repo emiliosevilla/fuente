@@ -1,5 +1,6 @@
 import time
 import logging
+import threading
 from pathlib import Path
 
 from funes.config import AppConfig
@@ -19,6 +20,28 @@ try:
     HAS_WATCHDOG = True
 except ImportError:
     HAS_WATCHDOG = False
+
+
+def wait_until_file_stable(file_path: Path, max_wait_sec: float = 10.0, check_interval: float = 0.5) -> bool:
+    """Espera a que un archivo entrante en 1_entrada termine de escribirse ( Sharepoint/OneDrive/Red local )."""
+    if not file_path.exists():
+        return False
+
+    start_time = time.time()
+    last_size = -1
+
+    while time.time() - start_time < max_wait_sec:
+        try:
+            current_size = file_path.stat().st_size
+            if current_size == last_size and current_size > 0:
+                # El tamaño del archivo se ha mantenido constante y no es 0
+                return True
+            last_size = current_size
+        except OSError:
+            pass
+        time.sleep(check_interval)
+
+    return file_path.exists() and file_path.stat().st_size > 0
 
 
 class ETLPipeline:
@@ -43,6 +66,10 @@ class ETLPipeline:
             return False
 
         logger.info(f"=== Iniciando Pipeline ETL para: {raw_file_path.name} ===")
+
+        if not wait_until_file_stable(raw_file_path):
+            logger.warning(f"El archivo {raw_file_path.name} no se estabilizó o está vacío. Omitiendo.")
+            return False
 
         try:
             # Paso 1: Copiar a 2_sucio
@@ -74,10 +101,13 @@ class ETLPipeline:
             atomic_linked = self.linker.auto_link_content(atomic_raw, raw_file_path.stem)
             self.vault.save_atomic_note(raw_file_path.stem, atomic_linked)
 
-            # Eliminar el archivo procesado de 1_entrada
-            if raw_file_path.exists():
-                raw_file_path.unlink()
-                logger.info(f"Archivo limpiado de 1_entrada: {raw_file_path.name}")
+            # Eliminar el archivo procesado de 1_entrada de forma segura
+            try:
+                if raw_file_path.exists():
+                    raw_file_path.unlink()
+                    logger.info(f"Archivo limpiado de 1_entrada: {raw_file_path.name}")
+            except Exception as unl_err:
+                logger.warning(f"No se pudo eliminar {raw_file_path.name} de 1_entrada: {unl_err}")
 
             logger.info(f"=== Pipeline ETL finalizado con éxito para: {raw_file_path.name} ===")
             return True
@@ -96,30 +126,54 @@ if HAS_WATCHDOG:
         def on_created(self, event):
             if not event.is_directory:
                 p = Path(event.src_path)
-                time.sleep(0.5)
                 self.pipeline.process_file(p)
 
 
 class FolderMonitor:
-    """Administra la escucha activa en 1_entrada."""
+    """Administra la escucha activa en 1_entrada con soporte watchdog y polling automático."""
 
-    def __init__(self, pipeline: ETLPipeline):
+    def __init__(self, pipeline: ETLPipeline, poll_interval_sec: float = 2.0):
         self.pipeline = pipeline
+        self.poll_interval_sec = poll_interval_sec
         self.observer = Observer() if HAS_WATCHDOG else None
-        self._running = False
+        self._stop_event = threading.Event()
+        self._poll_thread = None
 
     def start(self) -> None:
         input_dir = str(self.pipeline.config.vault.input_dir)
+        self._stop_event.clear()
+
         if HAS_WATCHDOG and self.observer:
             handler = IngestionWatcher(self.pipeline)
             self.observer.schedule(handler, path=input_dir, recursive=False)
             self.observer.start()
             logger.info(f"Monitoreo activo (watchdog) en la carpeta 1_entrada: {input_dir}")
         else:
-            logger.info(f"Monitoreo activo (polling fallback) en la carpeta 1_entrada: {input_dir}")
+            self._poll_thread = threading.Thread(target=self._run_poll_loop, daemon=True, name="FolderPollingThread")
+            self._poll_thread.start()
+            logger.info(f"Monitoreo activo (polling loop thread) en la carpeta 1_entrada: {input_dir}")
 
     def stop(self) -> None:
+        self._stop_event.set()
         if HAS_WATCHDOG and self.observer:
             self.observer.stop()
             self.observer.join()
+        if self._poll_thread:
+            self._poll_thread.join(timeout=3)
         logger.info("Monitoreo de la carpeta 1_entrada detenido.")
+
+    def _run_poll_loop(self) -> None:
+        """Bucle de sondeo (polling) para cuando watchdog no está disponible."""
+        input_dir = self.pipeline.config.vault.input_dir
+
+        while not self._stop_event.is_set():
+            try:
+                files = [f for f in input_dir.glob("*") if f.is_file() and not f.name.startswith(".")]
+                for f in files:
+                    if self._stop_event.is_set():
+                        break
+                    self.pipeline.process_file(f)
+            except Exception as e:
+                logger.error(f"Error en el bucle de polling: {e}")
+
+            self._stop_event.wait(timeout=self.poll_interval_sec)

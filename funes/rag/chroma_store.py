@@ -1,6 +1,6 @@
 import logging
 from pathlib import Path
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any
 
 logger = logging.getLogger(__name__)
 
@@ -28,13 +28,27 @@ class ChromaStore:
             self.collection = None
 
     def add_chunks(self, chunks: List[str], metadatas: List[Dict[str, Any]], ids: List[str]) -> bool:
-        """Añade o actualiza fragmentos en ChromaDB."""
+        """Añade o actualiza fragmentos en ChromaDB con desinfección estricta de metadatos."""
         if not self.collection:
             logger.warning("ChromaDB no está activo. Se omitió la adición de vectores.")
             return False
 
+        if not chunks or not ids:
+            return True
+
+        # Saneado de metadatos para tipos primitivos aceptados por ChromaDB (str, int, float, bool)
+        safe_metadatas = []
+        for meta in metadatas:
+            safe_meta = {}
+            for k, v in meta.items():
+                if isinstance(v, (str, int, float, bool)):
+                    safe_meta[k] = v
+                else:
+                    safe_meta[k] = str(v)
+            safe_metadatas.append(safe_meta)
+
         try:
-            self.collection.upsert(documents=chunks, metadatas=metadatas, ids=ids)
+            self.collection.upsert(documents=chunks, metadatas=safe_metadatas, ids=ids)
             logger.info(f"Insertados/Actualizados {len(chunks)} vectores en ChromaDB.")
             return True
         except Exception as e:

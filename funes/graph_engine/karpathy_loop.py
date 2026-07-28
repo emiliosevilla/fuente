@@ -1,6 +1,7 @@
 import time
 import logging
 import threading
+from datetime import datetime
 from pathlib import Path
 from typing import List
 
@@ -82,16 +83,18 @@ class KarpathyGraphLoop:
         valid_notes = [n for n in notes if n.name != "_Indice_MOC.md"]
         valid_notes.sort(key=lambda x: x.name.lower())
 
+        now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
         lines = [
             "---",
             'title: "Índice MOC — Mapa de Conocimiento Global"',
-            'date: "2026-07-28"',
+            f'date: "{now_str}"',
             'tags: [moc, indice, funes]',
             "---",
             "",
             "# Map of Content (MOC) — Funes Knowledge Base",
             "",
-            "Este mapa es actualizado automáticamente por el bucle Karpathy de Funes.",
+            f"Mapa de contenido generado y refinado automáticamente el `{now_str}`.",
             "",
             f"**Total de Notas Atómicas:** {len(valid_notes)}",
             "",
@@ -107,4 +110,4 @@ class KarpathyGraphLoop:
         with open(moc_path, "w", encoding="utf-8") as f:
             f.write("\n".join(lines))
 
-        logger.info(f"Índice MOC actualizado con {len(valid_notes)} notas.")
+        logger.info(f"Índice MOC actualizado con {len(valid_notes)} notas en {now_str}.")

@@ -1,3 +1,6 @@
+import csv
+import json
+import re
 import logging
 from pathlib import Path
 from typing import Tuple, Dict, Any
@@ -8,14 +11,15 @@ logger = logging.getLogger(__name__)
 
 
 class TextAndOfficeExtractor(BaseExtractor):
-    """Extractor completo para TXT, PDF, DOCX, DOC, XLSX, XLS, PPTX, PPT, MSG con Docling y MarkItDown."""
+    """Extractor completo para TXT, PDF, DOCX, DOC, XLSX, XLS, PPTX, PPT, MSG, CSV, JSON, HTML con Docling y MarkItDown."""
 
     SUPPORTED_EXTENSIONS = {
         ".txt", ".md", ".pdf",
         ".docx", ".doc",
         ".xlsx", ".xls",
         ".pptx", ".ppt",
-        ".msg"
+        ".msg", ".csv",
+        ".json", ".html", ".htm"
     }
 
     def can_handle(self, file_path: Path) -> bool:
@@ -49,6 +53,12 @@ class TextAndOfficeExtractor(BaseExtractor):
                 return self._extract_pptx(file_path), metadata
             elif ext == ".msg":
                 return self._extract_msg(file_path), metadata
+            elif ext == ".csv":
+                return self._extract_csv(file_path), metadata
+            elif ext == ".json":
+                return self._extract_json(file_path), metadata
+            elif ext in {".html", ".htm"}:
+                return self._extract_html(file_path), metadata
             else:
                 return self._extract_fallback(file_path), metadata
         except Exception as e:
@@ -154,6 +164,41 @@ class TextAndOfficeExtractor(BaseExtractor):
             return output
         except Exception:
             return self._extract_fallback(path)
+
+    def _extract_csv(self, path: Path) -> str:
+        """Convierte archivos CSV a tabla Markdown legible."""
+        lines = []
+        with open(path, "r", encoding="utf-8", errors="replace") as f:
+            reader = csv.reader(f)
+            for idx, row in enumerate(reader):
+                line = " | ".join(row)
+                lines.append(f"| {line} |")
+                if idx == 0:
+                    lines.append("| " + " | ".join(["---"] * len(row)) + " |")
+        return "\n".join(lines)
+
+    def _extract_json(self, path: Path) -> str:
+        """Formatea un archivo JSON a bloque de código Markdown estructurado."""
+        with open(path, "r", encoding="utf-8", errors="replace") as f:
+            data = json.load(f)
+        formatted = json.dumps(data, indent=2, ensure_ascii=False)
+        return f"```json\n{formatted}\n```"
+
+    def _extract_html(self, path: Path) -> str:
+        """Limpia etiquetas HTML convirtiéndolas a texto Markdown estructurado."""
+        with open(path, "r", encoding="utf-8", errors="replace") as f:
+            raw_html = f.read()
+
+        # Reemplazar encabezados HTML por encabezados Markdown
+        text = re.sub(r"<h1[^>]*>(.*?)</h1>", r"# \1\n", raw_html, flags=re.DOTALL | re.IGNORECASE)
+        text = re.sub(r"<h2[^>]*>(.*?)</h2>", r"## \1\n", text, flags=re.DOTALL | re.IGNORECASE)
+        text = re.sub(r"<h3[^>]*>(.*?)</h3>", r"### \1\n", text, flags=re.DOTALL | re.IGNORECASE)
+        text = re.sub(r"<p[^>]*>(.*?)</p>", r"\1\n\n", text, flags=re.DOTALL | re.IGNORECASE)
+        text = re.sub(r"<br\s*/?>", "\n", text, flags=re.IGNORECASE)
+        
+        # Eliminar el resto de etiquetas HTML
+        clean_text = re.sub(r"<[^>]+>", "", text)
+        return clean_text.strip()
 
     def _extract_fallback(self, path: Path) -> str:
         """Lectura por defecto segura de caracteres binarios/texto."""

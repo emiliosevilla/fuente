@@ -1,9 +1,10 @@
+import re
 import time
 import logging
 import threading
 from datetime import datetime
 from pathlib import Path
-from typing import List
+from typing import List, Dict, Set
 
 from funes.graph_engine.linker import GraphLinker
 
@@ -44,18 +45,20 @@ class KarpathyGraphLoop:
             except Exception as e:
                 logger.error(f"Error durante el ciclo de KarpathyGraphLoop: {e}")
 
-            # Espera intervalo verificando eventos de parada
             self._stop_event.wait(timeout=self.interval_sec)
 
     def refine_knowledge_graph(self) -> None:
-        """Escanea 4_salida, detecta enlaces perdidos y genera notas MOC (Map of Content)."""
+        """Escanea 4_salida, detecta notas huérfanas, re-enlaza WikiLinks y agrupa la MOC por categorías."""
         logger.info("Ejecutando ciclo KarpathyGraphLoop: Refinando conexiones en 4_salida...")
 
         notes = list(self.output_dir.glob("*.md"))
         if not notes:
             return
 
-        # 1. Re-evalúa WikiLinks para interconectar notas recién llegadas con notas antiguas
+        note_contents: Dict[str, str] = {}
+        orphans: Set[str] = set()
+
+        # 1. Re-evalúa WikiLinks e identifica notas huérfanas
         for note_file in notes:
             if note_file.name == "_Indice_MOC.md":
                 continue
@@ -69,21 +72,38 @@ class KarpathyGraphLoop:
                 if updated_content != content:
                     with open(note_file, "w", encoding="utf-8") as f:
                         f.write(updated_content)
+                    content = updated_content
                     logger.info(f"KarpathyLoop: Enlaces actualizados en '{note_file.name}'")
+
+                note_contents[note_file.stem] = content
+
+                # Verificar si no tiene enlaces [[WikiLinks]] salientes
+                if "[[" not in content:
+                    orphans.add(note_file.stem)
             except Exception as e:
                 logger.error(f"Error procesando {note_file.name} en KarpathyLoop: {e}")
 
-        # 2. Genera / Actualiza la nota MOC (Map of Content) central
-        self._update_moc_index(notes)
+        # 2. Genera / Actualiza la nota MOC (Map of Content) organizada por categorías y huérfanos
+        self._update_moc_index(notes, note_contents, orphans)
 
-    def _update_moc_index(self, notes: List[Path]) -> None:
-        """Crea o actualiza el archivo _Indice_MOC.md con la estructura global del conocimiento."""
+    def _update_moc_index(self, notes: List[Path], note_contents: Dict[str, str], orphans: Set[str]) -> None:
+        """Crea o actualiza el archivo _Indice_MOC.md agrupando notas por tags y resaltando huérfanas."""
         moc_path = self.output_dir / "_Indice_MOC.md"
-
         valid_notes = [n for n in notes if n.name != "_Indice_MOC.md"]
         valid_notes.sort(key=lambda x: x.name.lower())
 
         now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+        # Extraer tags de notas
+        tag_clusters: Dict[str, List[str]] = {}
+        for stem, content in note_contents.items():
+            tags_match = re.search(r"tags:\s*\[(.*?)\]", content, re.IGNORECASE)
+            if tags_match:
+                extracted_tags = [t.strip().strip("'\"") for t in tags_match.group(1).split(",") if t.strip()]
+                for tag in extracted_tags:
+                    if tag not in tag_clusters:
+                        tag_clusters[tag] = []
+                    tag_clusters[tag].append(stem)
 
         lines = [
             "---",
@@ -96,12 +116,29 @@ class KarpathyGraphLoop:
             "",
             f"Mapa de contenido generado y refinado automáticamente el `{now_str}`.",
             "",
-            f"**Total de Notas Atómicas:** {len(valid_notes)}",
-            "",
-            "## Catálogo de Conocimiento",
+            f"- **Total de Notas Atómicas:** {len(valid_notes)}",
+            f"- **Notas Huérfanas (Sin hipervínculos):** {len(orphans)}",
             "",
         ]
 
+        if tag_clusters:
+            lines.append("## Agrupación por Temas")
+            lines.append("")
+            for tag, note_stems in sorted(tag_clusters.items()):
+                lines.append(f"### #{tag}")
+                for stem in sorted(note_stems):
+                    lines.append(f"- [[{stem}]]")
+                lines.append("")
+
+        if orphans:
+            lines.append("## Notas Huérfanas (Pendientes de Interconexión)")
+            lines.append("")
+            for orphan_stem in sorted(orphans):
+                lines.append(f"- [[{orphan_stem}]] ⚠️")
+            lines.append("")
+
+        lines.append("## Catálogo Completo de Conocimiento")
+        lines.append("")
         for note in valid_notes:
             lines.append(f"- [[{note.stem}]]")
 

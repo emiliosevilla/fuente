@@ -1,5 +1,6 @@
 import json
 import logging
+from datetime import datetime
 from typing import Dict, Any, Optional
 
 from funes.graph_engine.prompts import ATOMIC_NOTE_SYSTEM_PROMPT
@@ -71,11 +72,12 @@ class AtomicNoteGenerator:
         return result.strip()
 
     def _generate_fallback(self, clean_md_content: str, file_name: str) -> str:
-        """Plantilla de reserva en caso de indisponibilidad del LLM."""
+        """Plantilla de reserva dinámica en caso de indisponibilidad del LLM."""
         stem = file_name.rsplit(".", 1)[0]
+        today_str = datetime.now().strftime("%Y-%m-%d")
         return f"""---
 title: "{stem}"
-date: "2026-07-28"
+date: "{today_str}"
 author: "Funes Extractor"
 tags: [auto-generado, ingesta]
 problem: "Procesamiento automático de {file_name}"
@@ -85,7 +87,7 @@ problem: "Procesamiento automático de {file_name}"
 
 ## Resumen Ejecutivo
 - **¿Qué?**: Ingesta automática de {file_name}
-- **¿Cuándo?**: Procesado el 2026-07-28
+- **¿Cuándo?**: Procesado el {today_str}
 - **¿Quién?**: Sistema ETL Funes
 - **¿Cómo?**: Extracción verbatim y estructuración
 

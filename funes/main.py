@@ -18,37 +18,66 @@ logging.basicConfig(
 logger = logging.getLogger("funes")
 
 
+def select_vault_folder_gui() -> Path:
+    """Abre un diálogo gráfico nativo del sistema operativo para seleccionar la carpeta del Vault de Obsidian."""
+    try:
+        import tkinter as tk
+        from tkinter import filedialog
+
+        root = tk.Tk()
+        root.withdraw()
+        root.attributes("-topmost", True)
+
+        print("\n[+] Selecciona la carpeta de tu Vault de Obsidian en la ventana que se ha abierto...")
+        folder_selected = filedialog.askdirectory(title="Selecciona tu carpeta Vault de Obsidian para Funes")
+
+        if folder_selected:
+            return Path(folder_selected).resolve()
+    except Exception as e:
+        logger.debug(f"GUI dialog fallback error: {e}")
+
+    # Si se cancela o falla el GUI, usar directorio por defecto
+    default_dir = Path("./ObsidianVault").resolve()
+    default_dir.mkdir(parents=True, exist_ok=True)
+    return default_dir
+
+
 def main():
     parser = argparse.ArgumentParser(description="Funes — Knowledge Base ETL para Obsidian")
     parser.add_argument(
         "--vault",
         type=str,
-        default="./ObsidianVault",
+        default=None,
         help="Ruta absoluta o relativa al Vault de Obsidian.",
     )
     args = parser.parse_args()
 
-    vault_path = Path(args.vault).resolve()
+    if args.vault:
+        vault_path = Path(args.vault).resolve()
+    else:
+        # Para usuarios finales sin conocimientos técnicos, abre el navegador de carpetas nativo
+        vault_path = select_vault_folder_gui()
+
     logger.info(f"=== Iniciando Funes Knowledge Base en Vault: {vault_path} ===")
 
     config = get_default_config(vault_path)
     pipeline = ETLPipeline(config)
 
-    # 1. Procesamiento por lote de archivos que ya estén en 1_entrada
+    # 1. Procesamiento por lote de archivos existentes en 1_entrada
     input_files = [f for f in config.vault.input_dir.glob("*") if f.is_file() and not f.name.startswith(".")]
     if input_files:
         logger.info(f"Procesando {len(input_files)} archivos existentes en 1_entrada...")
         for file_path in input_files:
             pipeline.process_file(file_path)
 
-    # 2. Iniciar el bucle de refinamiento de grafo Karpathy
+    # 2. Iniciar bucle Karpathy en segundo plano
     karpathy_loop = KarpathyGraphLoop(
         output_dir=config.vault.output_dir,
         interval_sec=config.karpathy_loop_interval_sec,
     )
     karpathy_loop.start()
 
-    # 3. Iniciar el monitor de carpeta 1_entrada
+    # 3. Iniciar monitor de carpeta 1_entrada
     monitor = FolderMonitor(pipeline)
     monitor.start()
 

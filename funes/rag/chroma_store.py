@@ -1,8 +1,25 @@
+import sys
 import logging
 from pathlib import Path
 from typing import List, Dict, Any
 
 logger = logging.getLogger(__name__)
+
+
+def _patch_sqlite_for_chroma() -> None:
+    """Parche de compatibilidad para entornos con SQLite antiguo (< 3.35.0)."""
+    try:
+        import sqlite3
+        version_tuple = tuple(map(int, sqlite3.sqlite_version.split(".")))
+        if version_tuple < (3, 35, 0):
+            try:
+                import pysqlite3
+                sys.modules['sqlite3'] = pysqlite3
+                logger.info("Aplicado parche pysqlite3 para compatibilidad con ChromaDB.")
+            except ImportError:
+                logger.warning(f"Versión de SQLite {sqlite3.sqlite_version} es inferior a 3.35.0 y pysqlite3 no está disponible.")
+    except Exception as e:
+        logger.debug(f"Error verificando versión de SQLite: {e}")
 
 
 class ChromaStore:
@@ -16,6 +33,7 @@ class ChromaStore:
 
     def _init_chroma(self) -> None:
         """Inicializa ChromaDB embebido sin requerir servidor externo."""
+        _patch_sqlite_for_chroma()
         try:
             import chromadb
             self.persist_directory.mkdir(parents=True, exist_ok=True)
@@ -36,7 +54,6 @@ class ChromaStore:
         if not chunks or not ids:
             return True
 
-        # Saneado de metadatos para tipos primitivos aceptados por ChromaDB (str, int, float, bool)
         safe_metadatas = []
         for meta in metadatas:
             safe_meta = {}

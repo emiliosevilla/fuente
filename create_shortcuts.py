@@ -95,7 +95,19 @@ def create_shortcuts(base_dir: Path) -> bool:
     is_mac = sys.platform == "darwin"
 
     if is_windows:
-        target_bat = (base_dir / "instalar_funes.bat").resolve()
+        funes_exe = (base_dir / "Funes.exe").resolve()
+        pythonw_exe = (base_dir / "venv" / "Scripts" / "pythonw.exe").resolve()
+        
+        if funes_exe.exists():
+            target_path = str(funes_exe)
+            target_args = ""
+        elif pythonw_exe.exists():
+            target_path = str(pythonw_exe)
+            target_args = "-m funes.main"
+        else:
+            target_path = "pythonw"
+            target_args = "-m funes.main"
+
         funes_ico = (assets_dir / "funes_icon.ico").resolve()
         archive_ico = (assets_dir / "archive_icon.ico").resolve()
 
@@ -107,7 +119,8 @@ def create_shortcuts(base_dir: Path) -> bool:
 
         # 1. Acceso directo Funes (Gafas)
         $s1 = $WshShell.CreateShortcut("{shortcut_funes}")
-        $s1.TargetPath = "{target_bat}"
+        $s1.TargetPath = "{target_path}"
+        $s1.Arguments = '{target_args}'
         $s1.WorkingDirectory = "{base_dir}"
         $s1.IconLocation = "{funes_ico}"
         $s1.Description = "Ejecutable Habla con Funes"

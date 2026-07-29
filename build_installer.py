@@ -15,7 +15,18 @@ def build():
         import PyInstaller
     except ImportError:
         print("Instalando PyInstaller...")
-        subprocess.check_call([sys.executable, "-m", "pip", "install", "pyinstaller"])
+        try:
+            subprocess.check_call([sys.executable, "-m", "pip", "install", "pyinstaller"])
+        except subprocess.CalledProcessError:
+            print("[!] Aviso: Entorno gestionado externamente detectado. Intentando con --break-system-packages...")
+            try:
+                subprocess.check_call([sys.executable, "-m", "pip", "install", "pyinstaller", "--break-system-packages"])
+            except subprocess.CalledProcessError:
+                print("\n[!] ERROR: No se pudo instalar PyInstaller automáticamente.")
+                print("Por favor, instala PyInstaller manualmente ejecutando:")
+                print("  pip install pyinstaller")
+                print("O usa un entorno virtual (venv).")
+                sys.exit(1)
 
     spec_file = Path("funes.spec")
     if not spec_file.exists():

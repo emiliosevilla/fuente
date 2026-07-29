@@ -28,8 +28,12 @@ fi
 
 source venv/bin/activate
 pip install --upgrade pip
-pip install -r requirements.txt
-pip install -e .
+if [ -f "requirements.txt" ]; then
+    pip install -r requirements.txt
+fi
+if [ -f "pyproject.toml" ] || [ -f "setup.py" ]; then
+    pip install -e .
+fi
 
 echo ""
 echo "Creando acceso directo ejecutable Funes.command en el Escritorio..."
@@ -76,6 +80,10 @@ if ! curl -s http://localhost:11434/api/tags > /dev/null; then
     fi
 fi
 
-echo "Iniciando Asistente Gráfico de Instalación de Funes..."
-python3 -m funes.installer_gui
+echo "Iniciando Asistente Grafico de Instalacion de Funes..."
+if [ -f "Funes" ]; then
+    ./Funes
+else
+    python3 -m funes.installer_gui
+fi
 

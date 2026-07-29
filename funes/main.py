@@ -44,7 +44,7 @@ def select_vault_folder_gui() -> Path:
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Funes — Knowledge Base ETL para Obsidian (Evento Flush bajo demanda)")
+    parser = argparse.ArgumentParser(description="Habla con Funes — ETL para Obsidian (Evento Flush bajo demanda)")
     parser.add_argument(
         "--vault",
         type=str,
@@ -55,7 +55,7 @@ def main():
 
     # 1. Comprobación de seguridad: Asegurarse de que el usuario ha cerrado sus aplicaciones
     print("\n" + "=" * 65)
-    print("      FUNES KNOWLEDGE BASE — EVENTO FLUSH BAJO DEMANDA")
+    print("                HABLA CON FUNES — EVENTO FLUSH BAJO DEMANDA")
     print("=" * 65)
     if not check_and_prompt_user_apps_closed():
         sys.exit(0)
@@ -65,7 +65,7 @@ def main():
     else:
         vault_path = select_vault_folder_gui()
 
-    logger.info(f"=== Ejecutando Flush de Funes Knowledge Base en Vault: {vault_path} ===")
+    logger.info(f"=== Ejecutando Flush de Habla con Funes en Vault: {vault_path} ===")
 
     config = get_default_config(vault_path)
     pipeline = ETLPipeline(config)

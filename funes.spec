@@ -80,7 +80,7 @@ exe = EXE(
     a.zipfiles,
     a.datas,
     [],
-    name='Funes',
+    name='Funes_macOS',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,

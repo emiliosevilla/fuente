@@ -35,7 +35,7 @@ def build():
             sys.executable,
             "-m",
             "PyInstaller",
-            "--name=Funes",
+            "--name=Funes_macOS" if sys.platform == "darwin" else "--name=Funes_windows",
             "--onefile",
             "--clean",
             "funes/main.py",

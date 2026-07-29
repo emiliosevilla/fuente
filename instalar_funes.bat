@@ -98,17 +98,7 @@ if %errorlevel% neq 0 (
 )
 
 echo.
-echo 6. Configurando modelo LLM (Qwen) optimizado según la RAM...
-python -m funes.ram_governor.governor
-
-echo.
-echo 7. Iniciando Funes Knowledge Base...
-set /p VAULT_PATH="Introduce la ruta a tu Vault de Obsidian (presiona Enter para usar .\Funes_Vault): "
-if not "%VAULT_PATH%"=="" (
-    set VAULT_PATH=%VAULT_PATH:"=%
-    python funes\main.py --vault "!VAULT_PATH!"
-) else (
-    python funes\main.py --vault ".\Funes_Vault"
-)
+echo 6. Iniciando Asistente Gráfico de Instalación de Funes...
+python -m funes.installer_gui
 
 pause

@@ -5,8 +5,9 @@ import logging
 from pathlib import Path
 
 from funes.config import get_default_config
-from funes.watcher.watcher import ETLPipeline, FolderMonitor
+from funes.watcher.watcher import ETLPipeline
 from funes.graph_engine.karpathy_loop import KarpathyGraphLoop
+from funes.core.app_checker import check_and_prompt_user_apps_closed
 
 # Configuración básica de logging
 logging.basicConfig(
@@ -43,7 +44,7 @@ def select_vault_folder_gui() -> Path:
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Funes — Knowledge Base ETL para Obsidian")
+    parser = argparse.ArgumentParser(description="Funes — Knowledge Base ETL para Obsidian (Evento Flush bajo demanda)")
     parser.add_argument(
         "--vault",
         type=str,
@@ -52,45 +53,43 @@ def main():
     )
     args = parser.parse_args()
 
+    # 1. Comprobación de seguridad: Asegurarse de que el usuario ha cerrado sus aplicaciones
+    print("\n" + "=" * 65)
+    print("      FUNES KNOWLEDGE BASE — EVENTO FLUSH BAJO DEMANDA")
+    print("=" * 65)
+    if not check_and_prompt_user_apps_closed():
+        sys.exit(0)
+
     if args.vault:
         vault_path = Path(args.vault).resolve()
     else:
-        # Para usuarios finales sin conocimientos técnicos, abre el navegador de carpetas nativo
         vault_path = select_vault_folder_gui()
 
-    logger.info(f"=== Iniciando Funes Knowledge Base en Vault: {vault_path} ===")
+    logger.info(f"=== Ejecutando Flush de Funes Knowledge Base en Vault: {vault_path} ===")
 
     config = get_default_config(vault_path)
     pipeline = ETLPipeline(config)
 
-    # 1. Procesamiento por lote de archivos existentes en 1_entrada
+    # 2. Procesamiento por lote de todos los archivos existentes en 1_entrada
     input_files = [f for f in config.vault.input_dir.glob("*") if f.is_file() and not f.name.startswith(".")]
     if input_files:
-        logger.info(f"Procesando {len(input_files)} archivos existentes en 1_entrada...")
+        logger.info(f"Iniciando ingesta de {len(input_files)} archivo(s) en 1_entrada...")
         for file_path in input_files:
             pipeline.process_file(file_path)
+    else:
+        logger.info("No se encontraron archivos nuevos en 1_entrada para procesar.")
 
-    # 2. Iniciar bucle Karpathy en segundo plano
-    karpathy_loop = KarpathyGraphLoop(
-        output_dir=config.vault.output_dir,
-        interval_sec=config.karpathy_loop_interval_sec,
-    )
-    karpathy_loop.start()
+    # 3. Refinamiento de grafo (Karpathy Loop) puntual de una sola iteración
+    logger.info("Refinando interconexiones del grafo de conocimiento...")
+    karpathy_loop = KarpathyGraphLoop(output_dir=config.vault.output_dir)
+    karpathy_loop.refine_knowledge_graph()
 
-    # 3. Iniciar monitor de carpeta 1_entrada
-    monitor = FolderMonitor(pipeline)
-    monitor.start()
-
-    logger.info("Funes está funcionando activamente. Presiona Ctrl+C para salir.")
-
-    try:
-        while True:
-            time.sleep(1)
-    except KeyboardInterrupt:
-        logger.info("Deteniendo Funes Knowledge Base...")
-        monitor.stop()
-        karpathy_loop.stop()
-        logger.info("Funes se ha detenido correctamente.")
+    print("\n" + "=" * 65)
+    print(" ✅ INGESTA Y FLUSH FINALIZADOS CON ÉXITO")
+    print("=" * 65)
+    print(" Todos los archivos han sido procesados y el mapa de conocimiento")
+    print(" en Obsidian ha sido actualizado correctamente.")
+    print(" Ya puedes abrir de nuevo tus aplicaciones normalmente.\n")
 
 
 if __name__ == "__main__":

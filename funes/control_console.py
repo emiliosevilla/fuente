@@ -263,8 +263,8 @@ class FunesControlConsole(tk.Tk):
         actions_frame.grid_columnconfigure(2, weight=1)
 
         # 5. INTEGRATED LOG CONSOLE
-        log_frame = tk.Frame(self, bg=THEME["bg_root"], padx=25, pady=(0, 20))
-        log_frame.pack(side="top", fill="both", expand=True)
+        log_frame = tk.Frame(self, bg=THEME["bg_root"], padx=25)
+        log_frame.pack(side="top", fill="both", expand=True, pady=(0, 20))
 
         tk.Label(
             log_frame,

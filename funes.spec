@@ -11,6 +11,8 @@ hidden_imports = [
     'funes.config',
     'funes.core.vault',
     'funes.core.icon_generator',
+    'funes.core.app_checker',
+    'funes.installer_gui',
     'funes.extractors.base',
     'funes.extractors.office_pdf',
     'funes.extractors.tex_tm',

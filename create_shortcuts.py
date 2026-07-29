@@ -50,11 +50,16 @@ def create_desktop_shortcut(base_dir: Path) -> bool:
 
     elif is_mac:
         shortcut_command = desktop / "Funes.command"
-        target_mac = base_dir / "instalar_funes.command"
 
         shortcut_content = f"""#!/bin/bash
 cd "{base_dir}"
-exec "./instalar_funes.command"
+if [ -f "./venv/bin/python3" ]; then
+    ./venv/bin/python3 -m funes.main
+elif [ -f "./dist/Funes" ]; then
+    ./dist/Funes
+else
+    python3 -m funes.main
+fi
 """
         try:
             with open(shortcut_command, "w", encoding="utf-8") as f:

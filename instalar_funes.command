@@ -81,14 +81,7 @@ echo "Comprobando RAM y descargando el modelo Qwen óptimo..."
 python3 -m funes.ram_governor.governor
 
 echo ""
-echo "Iniciando Funes..."
-read -p "Arrastra tu carpeta Vault de Obsidian aqui (o presiona Enter para usar ./Funes_Vault): " VAULT_INPUT
+echo "Iniciando Funes (Vault: ./Funes)..."
+python3 funes/main.py --vault "./Funes"
 
-VAULT_INPUT=$(echo "$VAULT_INPUT" | sed "s/^'//;s/'$//;s/^\"//;s/\"$//")
-
-if [ -n "$VAULT_INPUT" ]; then
-    python3 funes/main.py --vault "$VAULT_INPUT"
-else
-    python3 funes/main.py --vault "./Funes_Vault"
-fi
 

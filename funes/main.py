@@ -47,7 +47,7 @@ from funes.control_console import launch_control_console
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Habla con Funes — Consola Central de Control y ETL para Obsidian")
+    parser = argparse.ArgumentParser(description="Funes — Consola de Control y ETL de Conocimiento para Obsidian")
     parser.add_argument(
         "--vault",
         type=str,
@@ -57,7 +57,7 @@ def main():
     parser.add_argument(
         "--flush",
         action="store_true",
-        help="Ejecuta directamente el Flush por línea de comandos sin abrir la Consola Central.",
+        help="Ejecuta directamente el Flush por línea de comandos sin abrir la Consola.",
     )
     args = parser.parse_args()
 
@@ -71,12 +71,12 @@ def main():
     if args.flush:
         # Modo Flush directo por consola
         print("\n" + "=" * 65)
-        print("                HABLA CON FUNES — EVENTO FLUSH BAJO DEMANDA")
+        print("                        FUNES — EVENTO FLUSH")
         print("=" * 65)
         if not check_and_prompt_user_apps_closed():
             sys.exit(0)
 
-        logger.info(f"=== Ejecutando Flush de Habla con Funes en Vault: {vault_path} ===")
+        logger.info(f"=== Ejecutando Flush de Funes en Vault: {vault_path} ===")
         config = get_default_config(vault_path)
         pipeline = ETLPipeline(config)
 

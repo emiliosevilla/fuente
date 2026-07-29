@@ -5,7 +5,7 @@ import subprocess
 import threading
 from pathlib import Path
 import tkinter as tk
-from tkinter import ttk, messagebox
+from tkinter import ttk, messagebox, font
 
 from funes.config import get_default_config, AppConfig
 from funes.core.vault import VaultManager
@@ -21,8 +21,94 @@ from funes.graph_engine.karpathy_loop import KarpathyGraphLoop
 from funes.ram_governor.governor import RAMGovernor
 
 
+# Paleta de colores inspirada en la identidad de marca de Anthropic (Warm Editorial & Clay)
+THEME = {
+    "bg_root": "#181816",        # Fondo principal negro cálido / carbón
+    "bg_card": "#232220",        # Tarjetas y paneles en arcilla oscura
+    "bg_card_hover": "#2D2C28",  # Hover de tarjetas
+    "bg_log": "#111110",         # Consola profunda
+    "border": "#34322E",         # Bordes neutros sutiles
+    "terracotta": "#D97757",     # Coral / Terracota característico de Anthropic
+    "terracotta_hover": "#C66547",
+    "sand": "#E8E4DF",           # Texto principal arena / beige cálido
+    "muted": "#9E9992",          # Texto secundario / explicativo
+    "green": "#4ADE80",          # Verde esmeralda atenuado para estado activo
+    "amber": "#FBBF24",          # Ámbar para advertencias
+    "red": "#F87171",            # Rojo para errores
+}
+
+
+class ActionCardButton(tk.Frame):
+    """Componente de botón estilo tarjeta elegante de Anthropic con icono, título y texto explicativo."""
+
+    def __init__(self, parent, icon_str: str, title_str: str, desc_str: str, command=None, is_primary=False):
+        bg_col = THEME["terracotta"] if is_primary else THEME["bg_card"]
+        bg_hover = THEME["terracotta_hover"] if is_primary else THEME["bg_card_hover"]
+        fg_title = "#FFFFFF" if is_primary else THEME["sand"]
+        fg_desc = "#F3EFEA" if is_primary else THEME["muted"]
+
+        super().__init__(
+            parent,
+            bg=bg_col,
+            highlightbackground=THEME["terracotta"] if not is_primary else THEME["border"],
+            highlightthickness=1 if not is_primary else 0,
+            padx=14,
+            pady=12,
+            cursor="hand2"
+        )
+        self.command = command
+        self.bg_col = bg_col
+        self.bg_hover = bg_hover
+
+        # Layout interno
+        top_frame = tk.Frame(self, bg=bg_col)
+        top_frame.pack(fill="x", anchor="w")
+
+        lbl_icon = tk.Label(top_frame, text=icon_str, font=("Helvetica", 14, "bold"), fg=fg_title, bg=bg_col)
+        lbl_icon.pack(side="left", padx=(0, 8))
+
+        lbl_title = tk.Label(top_frame, text=title_str, font=("Helvetica", 11, "bold"), fg=fg_title, bg=bg_col)
+        lbl_title.pack(side="left", fill="x", expand=True)
+
+        lbl_desc = tk.Label(
+            self,
+            text=desc_str,
+            font=("Helvetica", 9),
+            fg=fg_desc,
+            bg=bg_col,
+            justify="left",
+            anchor="w",
+            wraplength=210
+        )
+        lbl_desc.pack(fill="x", pady=(4, 0))
+
+        # Eventos hover y click
+        for widget in [self, top_frame, lbl_icon, lbl_title, lbl_desc]:
+            widget.bind("<Enter>", self._on_enter)
+            widget.bind("<Leave>", self._on_leave)
+            widget.bind("<Button-1>", self._on_click)
+
+    def _on_enter(self, event):
+        self.config(bg=self.bg_hover)
+        for child in self.winfo_children():
+            child.config(bg=self.bg_hover)
+            for gchild in child.winfo_children():
+                gchild.config(bg=self.bg_hover)
+
+    def _on_leave(self, event):
+        self.config(bg=self.bg_col)
+        for child in self.winfo_children():
+            child.config(bg=self.bg_col)
+            for gchild in child.winfo_children():
+                gchild.config(bg=self.bg_col)
+
+    def _on_click(self, event):
+        if self.command:
+            self.command()
+
+
 class FunesControlConsole(tk.Tk):
-    """Consola Central de Control Unificada para Habla con Funes."""
+    """Consola Central de Control de Funes con diseño estilo Anthropic."""
 
     def __init__(self, vault_path: Path):
         super().__init__()
@@ -31,12 +117,12 @@ class FunesControlConsole(tk.Tk):
         self.vault = VaultManager(self.config.vault)
         self.sync_manager = FolderSyncManager(self.vault_path)
 
-        self.title("Habla con Funes — Consola Central de Control")
-        self.geometry("820x620")
-        self.minsize(750, 550)
-        self.configure(bg="#0F172A")
+        self.title("Funes")
+        self.geometry("860x660")
+        self.minsize(800, 600)
+        self.configure(bg=THEME["bg_root"])
 
-        # Intentar establecer el icono de la ventana
+        # Intentar icono
         try:
             base_dir = Path(__file__).resolve().parent.parent
             icon_file = base_dir / "assets" / "funes_icon.ico"
@@ -59,166 +145,167 @@ class FunesControlConsole(tk.Tk):
 
     def _setup_ui(self):
         # 1. HEADER BRANDING
-        header_frame = tk.Frame(self, bg="#1E293B", height=70, padx=20, pady=10)
+        header_frame = tk.Frame(self, bg=THEME["bg_root"], padx=25, pady=20)
         header_frame.pack(side="top", fill="x")
-        header_frame.pack_propagate(False)
 
         title_lbl = tk.Label(
             header_frame,
-            text="Habla con Funes — Consola Central de Control",
-            font=("Helvetica", 16, "bold"),
-            fg="#F8FAFC",
-            bg="#1E293B",
+            text="Funes",
+            font=("Georgia", 24, "bold"),
+            fg=THEME["sand"],
+            bg=THEME["bg_root"],
             anchor="w"
         )
         title_lbl.pack(side="left")
 
         subtitle_lbl = tk.Label(
             header_frame,
-            text=f"Vault: {self.vault_path.name}",
-            font=("Helvetica", 10, "italic"),
-            fg="#94A3B8",
-            bg="#1E293B",
+            text=f"Vault: {self.vault_path.name}  •  Consola de Control",
+            font=("Helvetica", 10),
+            fg=THEME["muted"],
+            bg=THEME["bg_root"],
             anchor="e"
         )
-        subtitle_lbl.pack(side="right")
+        subtitle_lbl.pack(side="right", pady=(8, 0))
 
-        # 2. STATUS BAR (ESTADO DE SERVICIOS)
-        status_bar = tk.Frame(self, bg="#334155", height=35, padx=20)
-        status_bar.pack(side="top", fill="x")
-        status_bar.pack_propagate(False)
+        # 2. STATUS STRIP (ESTADO DE SERVICIOS)
+        status_strip = tk.Frame(self, bg=THEME["bg_card"], padx=25, pady=8, highlightbackground=THEME["border"], highlightthickness=1)
+        status_strip.pack(side="top", fill="x", padx=25, pady=(0, 15))
 
-        tk.Label(status_bar, text="Ollama AI:", font=("Helvetica", 9, "bold"), fg="#CBD5E1", bg="#334155").pack(side="left", padx=(0, 4))
-        tk.Label(status_bar, textvariable=self.status_ollama_var, font=("Helvetica", 9), fg="#38BDF8", bg="#334155").pack(side="left", padx=(0, 20))
+        # Ollama Status
+        tk.Label(status_strip, text="● Ollama AI:", font=("Helvetica", 9, "bold"), fg=THEME["terracotta"], bg=THEME["bg_card"]).pack(side="left", padx=(0, 4))
+        tk.Label(status_strip, textvariable=self.status_ollama_var, font=("Helvetica", 9), fg=THEME["sand"], bg=THEME["bg_card"]).pack(side="left", padx=(0, 25))
 
-        tk.Label(status_bar, text="AnythingLLM:", font=("Helvetica", 9, "bold"), fg="#CBD5E1", bg="#334155").pack(side="left", padx=(0, 4))
-        tk.Label(status_bar, textvariable=self.status_anything_var, font=("Helvetica", 9), fg="#38BDF8", bg="#334155").pack(side="left", padx=(0, 20))
+        # AnythingLLM Status
+        tk.Label(status_strip, text="● AnythingLLM:", font=("Helvetica", 9, "bold"), fg=THEME["terracotta"], bg=THEME["bg_card"]).pack(side="left", padx=(0, 4))
+        tk.Label(status_strip, textvariable=self.status_anything_var, font=("Helvetica", 9), fg=THEME["sand"], bg=THEME["bg_card"]).pack(side="left", padx=(0, 25))
 
-        tk.Label(status_bar, text="Obsidian:", font=("Helvetica", 9, "bold"), fg="#CBD5E1", bg="#334155").pack(side="left", padx=(0, 4))
-        tk.Label(status_bar, textvariable=self.status_obsidian_var, font=("Helvetica", 9), fg="#38BDF8", bg="#334155").pack(side="left")
+        # Obsidian Status
+        tk.Label(status_strip, text="● Obsidian:", font=("Helvetica", 9, "bold"), fg=THEME["terracotta"], bg=THEME["bg_card"]).pack(side="left", padx=(0, 4))
+        tk.Label(status_strip, textvariable=self.status_obsidian_var, font=("Helvetica", 9), fg=THEME["sand"], bg=THEME["bg_card"]).pack(side="left")
 
         # 3. STATS CARDS
-        stats_frame = tk.Frame(self, bg="#0F172A", padx=20, pady=15)
-        stats_frame.pack(side="top", fill="x")
+        stats_frame = tk.Frame(self, bg=THEME["bg_root"], padx=20)
+        stats_frame.pack(side="top", fill="x", pady=(0, 15))
 
-        self._create_stat_card(stats_frame, "Notas Atómicas en Salida", self.stat_notes_var, "#2563EB", 0)
-        self._create_stat_card(stats_frame, "Notas Huérfanas (Sin Links)", self.stat_orphans_var, "#D97706", 1)
-        self._create_stat_card(stats_frame, "Archivos en Entrada (1_entrada)", self.stat_input_var, "#059669", 2)
+        self._create_stat_card(stats_frame, "Notas Atómicas en Salida", self.stat_notes_var, THEME["terracotta"], 0)
+        self._create_stat_card(stats_frame, "Notas Huérfanas (Sin Links)", self.stat_orphans_var, THEME["amber"], 1)
+        self._create_stat_card(stats_frame, "Documentos en Entrada (1_entrada)", self.stat_input_var, THEME["green"], 2)
 
-        # 4. ACTION BUTTONS GRID
-        actions_frame = tk.Frame(self, bg="#0F172A", padx=20, pady=5)
-        actions_frame.pack(side="top", fill="x")
+        # 4. ACTION BUTTONS GRID CON TEXTOS EXPLICATIVOS
+        actions_frame = tk.Frame(self, bg=THEME["bg_root"], padx=20)
+        actions_frame.pack(side="top", fill="x", pady=(0, 15))
 
-        # Fila 1 de botones
-        btn_flush = tk.Button(
+        # Fila 1 de Tarjetas de Acción
+        card_flush = ActionCardButton(
             actions_frame,
-            text="⚡ REALIZAR FLUSH DE INGESTA",
-            font=("Helvetica", 11, "bold"),
-            bg="#2563EB",
-            fg="white",
-            height=2,
-            relief="raised",
-            bd=2,
-            command=self._on_flush_click
+            icon_str="📥",
+            title_str="Realizar Flush de Ingesta",
+            desc_str="Procesar archivos de 1_entrada hacia el Vault y generar notas atómicas",
+            command=self._on_flush_click,
+            is_primary=True
         )
-        btn_flush.grid(row=0, column=0, sticky="ew", padx=5, pady=5)
+        card_flush.grid(row=0, column=0, sticky="nsew", padx=5, pady=5)
 
-        btn_chat = tk.Button(
+        card_chat = ActionCardButton(
             actions_frame,
-            text="💬 ABRIR CHAT ANYTHINGLLM",
-            font=("Helvetica", 11, "bold"),
-            bg="#059669",
-            fg="white",
-            height=2,
-            relief="raised",
-            bd=2,
-            command=self._on_chat_click
+            icon_str="💬",
+            title_str="Abrir Chat AnythingLLM",
+            desc_str="Conversar mediante IA local con las notas procesadas en 4_salida",
+            command=self._on_chat_click,
+            is_primary=False
         )
-        btn_chat.grid(row=0, column=1, sticky="ew", padx=5, pady=5)
+        card_chat.grid(row=0, column=1, sticky="nsew", padx=5, pady=5)
 
-        btn_obsidian = tk.Button(
+        card_obsidian = ActionCardButton(
             actions_frame,
-            text="📓 ABRIR VAULT EN OBSIDIAN",
-            font=("Helvetica", 11, "bold"),
-            bg="#7C3AED",
-            fg="white",
-            height=2,
-            relief="raised",
-            bd=2,
-            command=self._on_obsidian_click
+            icon_str="📖",
+            title_str="Abrir Vault en Obsidian",
+            desc_str="Explorar el grafo visual de conocimiento y editar tus notas atómicas",
+            command=self._on_obsidian_click,
+            is_primary=False
         )
-        btn_obsidian.grid(row=0, column=2, sticky="ew", padx=5, pady=5)
+        card_obsidian.grid(row=0, column=2, sticky="nsew", padx=5, pady=5)
 
-        # Fila 2 de botones
-        btn_sync = tk.Button(
+        # Fila 2 de Tarjetas de Acción
+        card_sync = ActionCardButton(
             actions_frame,
-            text="🔗 FUENTES EXTERNAS",
-            font=("Helvetica", 10, "bold"),
-            bg="#334155",
-            fg="#F1F5F9",
-            height=2,
-            command=self._on_sync_click
+            icon_str="📡",
+            title_str="Fuentes Externas",
+            desc_str="Vincular carpetas compartidas de red, NAS o SharePoint a 1_entrada",
+            command=self._on_sync_click,
+            is_primary=False
         )
-        btn_sync.grid(row=1, column=0, sticky="ew", padx=5, pady=5)
+        card_sync.grid(row=1, column=0, sticky="nsew", padx=5, pady=5)
 
-        btn_audit = tk.Button(
+        card_audit = ActionCardButton(
             actions_frame,
-            text="🔍 AUDITORÍA DEL GRAFO",
-            font=("Helvetica", 10, "bold"),
-            bg="#334155",
-            fg="#F1F5F9",
-            height=2,
-            command=self._on_audit_click
+            icon_str="🛡️",
+            title_str="Auditoría del Grafo",
+            desc_str="Sembrar WikiLinks, eliminar notas huérfanas y regenerar el MOC",
+            command=self._on_audit_click,
+            is_primary=False
         )
-        btn_audit.grid(row=1, column=1, sticky="ew", padx=5, pady=5)
+        card_audit.grid(row=1, column=1, sticky="nsew", padx=5, pady=5)
 
-        btn_refresh = tk.Button(
+        card_refresh = ActionCardButton(
             actions_frame,
-            text="🔄 ACTUALIZAR ESTADO",
-            font=("Helvetica", 10),
-            bg="#334155",
-            fg="#F1F5F9",
-            height=2,
-            command=self.refresh_stats
+            icon_str="🔄",
+            title_str="Actualizar Estado",
+            desc_str="Refrescar métricas del sistema y verificar la salud de los procesos",
+            command=self.refresh_stats,
+            is_primary=False
         )
-        btn_refresh.grid(row=1, column=2, sticky="ew", padx=5, pady=5)
+        card_refresh.grid(row=1, column=2, sticky="nsew", padx=5, pady=5)
 
         actions_frame.grid_columnconfigure(0, weight=1)
         actions_frame.grid_columnconfigure(1, weight=1)
         actions_frame.grid_columnconfigure(2, weight=1)
 
         # 5. INTEGRATED LOG CONSOLE
-        log_frame = tk.Frame(self, bg="#0F172A", padx=20, pady=10)
+        log_frame = tk.Frame(self, bg=THEME["bg_root"], padx=25, pady=(0, 20))
         log_frame.pack(side="top", fill="both", expand=True)
 
         tk.Label(
             log_frame,
-            text="Registro de Actividad y Registro de Ingesta:",
+            text="Registro de Actividad de Funes:",
             font=("Helvetica", 10, "bold"),
-            fg="#94A3B8",
-            bg="#0F172A",
+            fg=THEME["muted"],
+            bg=THEME["bg_root"],
             anchor="w"
-        ).pack(fill="x", pady=(0, 5))
+        ).pack(fill="x", pady=(0, 6))
 
         self.log_console = tk.Text(
             log_frame,
             font=("Courier", 9),
-            bg="#020617",
-            fg="#38BDF8",
+            bg=THEME["bg_log"],
+            fg=THEME["sand"],
+            insertbackground=THEME["terracotta"],
             relief="solid",
-            bd=1
+            bd=1,
+            highlightbackground=THEME["border"],
+            highlightthickness=1,
+            padx=10,
+            pady=10
         )
         self.log_console.pack(fill="both", expand=True)
 
-        self._log("Consola Central de Control de Habla con Funes iniciada correctamente.")
+        self._log("Consola Funes iniciada correctamente. Sistema listo.")
 
     def _create_stat_card(self, parent, title: str, var: tk.StringVar, color: str, col: int):
-        card = tk.Frame(parent, bg="#1E293B", relief="solid", bd=1, padx=15, pady=10)
+        card = tk.Frame(
+            parent,
+            bg=THEME["bg_card"],
+            highlightbackground=THEME["border"],
+            highlightthickness=1,
+            padx=15,
+            pady=12
+        )
         card.grid(row=0, column=col, sticky="ew", padx=5)
         parent.grid_columnconfigure(col, weight=1)
 
-        tk.Label(card, text=title, font=("Helvetica", 9), fg="#94A3B8", bg="#1E293B", anchor="w").pack(fill="x")
-        tk.Label(card, textvariable=var, font=("Helvetica", 20, "bold"), fg=color, bg="#1E293B", anchor="w").pack(fill="x", pady=(5, 0))
+        tk.Label(card, text=title, font=("Helvetica", 9), fg=THEME["muted"], bg=THEME["bg_card"], anchor="w").pack(fill="x")
+        tk.Label(card, textvariable=var, font=("Georgia", 22, "bold"), fg=color, bg=THEME["bg_card"], anchor="w").pack(fill="x", pady=(4, 0))
 
     def _log(self, message: str):
         timestamp = time.strftime("%H:%M:%S")
@@ -253,15 +340,15 @@ class FunesControlConsole(tk.Tk):
             governor = RAMGovernor()
             rec_model = governor.recommend_model()
             if governor.check_ollama_alive():
-                self.status_ollama_var.set(f"🟢 Activo ({rec_model})")
+                self.status_ollama_var.set(f"Activo ({rec_model})")
             else:
-                self.status_ollama_var.set("🔴 Inactivo")
+                self.status_ollama_var.set("Inactivo")
 
             # 3. Comprobar AnythingLLM
             if is_anythingllm_installed():
-                self.status_anything_var.set("🟢 Instalado")
+                self.status_anything_var.set("Instalado")
             else:
-                self.status_anything_var.set("⚠️ No detectado")
+                self.status_anything_var.set("No detectado")
 
             # 4. Comprobar Obsidian
             is_mac = sys.platform == "darwin"
@@ -269,7 +356,7 @@ class FunesControlConsole(tk.Tk):
                 obs_installed = Path("/Applications/Obsidian.app").exists()
             else:
                 obs_installed = True
-            self.status_obsidian_var.set("🟢 Listo" if obs_installed else "⚠️ No detectado")
+            self.status_obsidian_var.set("Listo" if obs_installed else "No detectado")
 
         threading.Thread(target=_bg_check, daemon=True).start()
 
@@ -281,9 +368,8 @@ class FunesControlConsole(tk.Tk):
             return
 
         def _run_flush():
-            self._log("⚡ Iniciando evento Flush de ingesta...")
+            self._log("📥 Iniciando evento Flush de ingesta...")
             
-            # Sincronizar fuentes externas primero
             copied = self.sync_manager.sync_to_input(self.config.vault.input_dir)
             if copied > 0:
                 self._log(f"[+] Sincronizados {copied} archivo(s) desde fuentes externas a 1_entrada.")
@@ -303,10 +389,9 @@ class FunesControlConsole(tk.Tk):
             karpathy = KarpathyGraphLoop(self.config.vault.output_dir)
             karpathy.refine_knowledge_graph()
 
-            # Configurar/Actualizar AnythingLLM
             configure_anythingllm_integration(self.config.vault.output_dir)
 
-            self._log("✅ Flush completado con éxito. Grafo y AnythingLLM actualizados.")
+            self._log("✓ Flush completado con éxito. Grafo y AnythingLLM actualizados.")
             self.after(100, self.refresh_stats)
 
         threading.Thread(target=_run_flush, daemon=True).start()
@@ -338,10 +423,10 @@ class FunesControlConsole(tk.Tk):
     def _on_audit_click(self):
         """Ejecuta una auditoría y refinamiento global del grafo."""
         def _run_audit():
-            self._log("🔍 Ejecutando auditoría global del grafo en 4_salida...")
+            self._log("🛡️ Ejecutando auditoría global del grafo en 4_salida...")
             karpathy = KarpathyGraphLoop(self.config.vault.output_dir)
             karpathy.refine_knowledge_graph()
-            self._log("✅ Auditoría del grafo finalizada.")
+            self._log("✓ Auditoría del grafo finalizada.")
             self.after(100, self.refresh_stats)
 
         threading.Thread(target=_run_audit, daemon=True).start()

@@ -4,8 +4,9 @@ import time
 import subprocess
 import threading
 from pathlib import Path
+from typing import Optional
 import tkinter as tk
-from tkinter import ttk, messagebox, font
+from tkinter import ttk, messagebox
 
 from funes.config import get_default_config, AppConfig
 from funes.core.vault import VaultManager
@@ -39,7 +40,7 @@ THEME = {
 
 
 class ActionCardButton(tk.Frame):
-    """Componente de botón estilo tarjeta elegante de Anthropic con icono, título y texto explicativo."""
+    """Componente de botón estilo tarjeta elegante de Anthropic con tipografía grande y clara."""
 
     def __init__(self, parent, icon_str: str, title_str: str, desc_str: str, command=None, is_primary=False):
         bg_col = THEME["terracotta"] if is_primary else THEME["bg_card"]
@@ -52,8 +53,8 @@ class ActionCardButton(tk.Frame):
             bg=bg_col,
             highlightbackground=THEME["terracotta"] if not is_primary else THEME["border"],
             highlightthickness=1 if not is_primary else 0,
-            padx=14,
-            pady=12,
+            padx=18,
+            pady=16,
             cursor="hand2"
         )
         self.command = command
@@ -64,23 +65,23 @@ class ActionCardButton(tk.Frame):
         top_frame = tk.Frame(self, bg=bg_col)
         top_frame.pack(fill="x", anchor="w")
 
-        lbl_icon = tk.Label(top_frame, text=icon_str, font=("Helvetica", 14, "bold"), fg=fg_title, bg=bg_col)
-        lbl_icon.pack(side="left", padx=(0, 8))
+        lbl_icon = tk.Label(top_frame, text=icon_str, font=("Helvetica", 24, "bold"), fg=fg_title, bg=bg_col)
+        lbl_icon.pack(side="left", padx=(0, 10))
 
-        lbl_title = tk.Label(top_frame, text=title_str, font=("Helvetica", 11, "bold"), fg=fg_title, bg=bg_col)
+        lbl_title = tk.Label(top_frame, text=title_str, font=("Helvetica", 16, "bold"), fg=fg_title, bg=bg_col)
         lbl_title.pack(side="left", fill="x", expand=True)
 
         lbl_desc = tk.Label(
             self,
             text=desc_str,
-            font=("Helvetica", 9),
+            font=("Helvetica", 13),
             fg=fg_desc,
             bg=bg_col,
             justify="left",
             anchor="w",
-            wraplength=210
+            wraplength=380
         )
-        lbl_desc.pack(fill="x", pady=(4, 0))
+        lbl_desc.pack(fill="x", pady=(6, 0))
 
         # Eventos hover y click
         for widget in [self, top_frame, lbl_icon, lbl_title, lbl_desc]:
@@ -108,7 +109,7 @@ class ActionCardButton(tk.Frame):
 
 
 class FunesControlConsole(tk.Tk):
-    """Consola Central de Control de Funes con diseño estilo Anthropic."""
+    """Consola Principal de Funes a pantalla completa con tipografía x2 y textos amigables."""
 
     def __init__(self, vault_path: Path):
         super().__init__()
@@ -118,9 +119,21 @@ class FunesControlConsole(tk.Tk):
         self.sync_manager = FolderSyncManager(self.vault_path)
 
         self.title("Funes")
-        self.geometry("860x660")
-        self.minsize(800, 600)
         self.configure(bg=THEME["bg_root"])
+
+        # Expandir la ventana para ocupar todo el área de pantalla disponible por defecto
+        try:
+            self.update_idletasks()
+            if sys.platform == "win32":
+                self.state("zoomed")
+            else:
+                scr_w = self.winfo_screenwidth()
+                scr_h = self.winfo_screenheight()
+                self.geometry(f"{scr_w}x{scr_h}+0+0")
+        except Exception:
+            self.geometry("1280x850")
+
+        self.minsize(950, 680)
 
         # Intentar icono
         try:
@@ -145,13 +158,13 @@ class FunesControlConsole(tk.Tk):
 
     def _setup_ui(self):
         # 1. HEADER BRANDING
-        header_frame = tk.Frame(self, bg=THEME["bg_root"], padx=25, pady=20)
+        header_frame = tk.Frame(self, bg=THEME["bg_root"], padx=30, pady=24)
         header_frame.pack(side="top", fill="x")
 
         title_lbl = tk.Label(
             header_frame,
             text="Funes",
-            font=("Georgia", 24, "bold"),
+            font=("Georgia", 36, "bold"),
             fg=THEME["sand"],
             bg=THEME["bg_root"],
             anchor="w"
@@ -160,124 +173,124 @@ class FunesControlConsole(tk.Tk):
 
         subtitle_lbl = tk.Label(
             header_frame,
-            text=f"Vault: {self.vault_path.name}  •  Consola de Control",
-            font=("Helvetica", 10),
+            text=f"Bóveda: {self.vault_path.name}  •  Tu Memoria de Conocimiento e Inteligencia Artificial",
+            font=("Helvetica", 14),
             fg=THEME["muted"],
             bg=THEME["bg_root"],
             anchor="e"
         )
-        subtitle_lbl.pack(side="right", pady=(8, 0))
+        subtitle_lbl.pack(side="right", pady=(12, 0))
 
         # 2. STATUS STRIP (ESTADO DE SERVICIOS)
-        status_strip = tk.Frame(self, bg=THEME["bg_card"], padx=25, pady=8, highlightbackground=THEME["border"], highlightthickness=1)
-        status_strip.pack(side="top", fill="x", padx=25, pady=(0, 15))
+        status_strip = tk.Frame(self, bg=THEME["bg_card"], padx=30, pady=12, highlightbackground=THEME["border"], highlightthickness=1)
+        status_strip.pack(side="top", fill="x", padx=30, pady=(0, 20))
 
         # Ollama Status
-        tk.Label(status_strip, text="● Ollama AI:", font=("Helvetica", 9, "bold"), fg=THEME["terracotta"], bg=THEME["bg_card"]).pack(side="left", padx=(0, 4))
-        tk.Label(status_strip, textvariable=self.status_ollama_var, font=("Helvetica", 9), fg=THEME["sand"], bg=THEME["bg_card"]).pack(side="left", padx=(0, 25))
+        tk.Label(status_strip, text="● Inteligencia Local (Ollama):", font=("Helvetica", 13, "bold"), fg=THEME["terracotta"], bg=THEME["bg_card"]).pack(side="left", padx=(0, 6))
+        tk.Label(status_strip, textvariable=self.status_ollama_var, font=("Helvetica", 13), fg=THEME["sand"], bg=THEME["bg_card"]).pack(side="left", padx=(0, 35))
 
         # AnythingLLM Status
-        tk.Label(status_strip, text="● AnythingLLM:", font=("Helvetica", 9, "bold"), fg=THEME["terracotta"], bg=THEME["bg_card"]).pack(side="left", padx=(0, 4))
-        tk.Label(status_strip, textvariable=self.status_anything_var, font=("Helvetica", 9), fg=THEME["sand"], bg=THEME["bg_card"]).pack(side="left", padx=(0, 25))
+        tk.Label(status_strip, text="● Asistente de Chat (AnythingLLM):", font=("Helvetica", 13, "bold"), fg=THEME["terracotta"], bg=THEME["bg_card"]).pack(side="left", padx=(0, 6))
+        tk.Label(status_strip, textvariable=self.status_anything_var, font=("Helvetica", 13), fg=THEME["sand"], bg=THEME["bg_card"]).pack(side="left", padx=(0, 35))
 
         # Obsidian Status
-        tk.Label(status_strip, text="● Obsidian:", font=("Helvetica", 9, "bold"), fg=THEME["terracotta"], bg=THEME["bg_card"]).pack(side="left", padx=(0, 4))
-        tk.Label(status_strip, textvariable=self.status_obsidian_var, font=("Helvetica", 9), fg=THEME["sand"], bg=THEME["bg_card"]).pack(side="left")
+        tk.Label(status_strip, text="● Cuaderno de Notas (Obsidian):", font=("Helvetica", 13, "bold"), fg=THEME["terracotta"], bg=THEME["bg_card"]).pack(side="left", padx=(0, 6))
+        tk.Label(status_strip, textvariable=self.status_obsidian_var, font=("Helvetica", 13), fg=THEME["sand"], bg=THEME["bg_card"]).pack(side="left")
 
         # 3. STATS CARDS
-        stats_frame = tk.Frame(self, bg=THEME["bg_root"], padx=20)
-        stats_frame.pack(side="top", fill="x", pady=(0, 15))
+        stats_frame = tk.Frame(self, bg=THEME["bg_root"], padx=25)
+        stats_frame.pack(side="top", fill="x", pady=(0, 20))
 
-        self._create_stat_card(stats_frame, "Notas Atómicas en Salida", self.stat_notes_var, THEME["terracotta"], 0)
-        self._create_stat_card(stats_frame, "Notas Huérfanas (Sin Links)", self.stat_orphans_var, THEME["amber"], 1)
-        self._create_stat_card(stats_frame, "Documentos en Entrada (1_entrada)", self.stat_input_var, THEME["green"], 2)
+        self._create_stat_card(stats_frame, "Notas Creadas", self.stat_notes_var, THEME["terracotta"], 0)
+        self._create_stat_card(stats_frame, "Notas Pendientes de Conectar", self.stat_orphans_var, THEME["amber"], 1)
+        self._create_stat_card(stats_frame, "Documentos Listos para Ingestar", self.stat_input_var, THEME["green"], 2)
 
-        # 4. ACTION BUTTONS GRID CON TEXTOS EXPLICATIVOS
-        actions_frame = tk.Frame(self, bg=THEME["bg_root"], padx=20)
-        actions_frame.pack(side="top", fill="x", pady=(0, 15))
+        # 4. ACTION BUTTONS GRID CON REDACCIÓN CLARA Y AMIGABLE
+        actions_frame = tk.Frame(self, bg=THEME["bg_root"], padx=25)
+        actions_frame.pack(side="top", fill="x", pady=(0, 20))
 
         # Fila 1 de Tarjetas de Acción
         card_flush = ActionCardButton(
             actions_frame,
             icon_str="📥",
-            title_str="Realizar Flush de Ingesta",
-            desc_str="Procesar archivos de 1_entrada hacia el Vault y generar notas atómicas",
+            title_str="Procesar Documentos",
+            desc_str="Convierte tus archivos nuevos en notas inteligentes de conocimiento",
             command=self._on_flush_click,
             is_primary=True
         )
-        card_flush.grid(row=0, column=0, sticky="nsew", padx=5, pady=5)
+        card_flush.grid(row=0, column=0, sticky="nsew", padx=8, pady=8)
 
         card_chat = ActionCardButton(
             actions_frame,
             icon_str="💬",
-            title_str="Abrir Chat AnythingLLM",
-            desc_str="Conversar mediante IA local con las notas procesadas en 4_salida",
+            title_str="Chatear con tus Notas",
+            desc_str="Pregunta a la IA sobre todo tu conocimiento y documentación guardada",
             command=self._on_chat_click,
             is_primary=False
         )
-        card_chat.grid(row=0, column=1, sticky="nsew", padx=5, pady=5)
+        card_chat.grid(row=0, column=1, sticky="nsew", padx=8, pady=8)
 
         card_obsidian = ActionCardButton(
             actions_frame,
             icon_str="📖",
-            title_str="Abrir Vault en Obsidian",
-            desc_str="Explorar el grafo visual de conocimiento y editar tus notas atómicas",
+            title_str="Ver Notas en Obsidian",
+            desc_str="Abre tu cuaderno visual para explorar, buscar y escribir libremente",
             command=self._on_obsidian_click,
             is_primary=False
         )
-        card_obsidian.grid(row=0, column=2, sticky="nsew", padx=5, pady=5)
+        card_obsidian.grid(row=0, column=2, sticky="nsew", padx=8, pady=8)
 
         # Fila 2 de Tarjetas de Acción
         card_sync = ActionCardButton(
             actions_frame,
             icon_str="📡",
-            title_str="Fuentes Externas",
-            desc_str="Vincular carpetas compartidas de red, NAS o SharePoint a 1_entrada",
+            title_str="Carpetas Compartidas",
+            desc_str="Sincroniza carpetas compartidas de tu equipo, red local o la nube",
             command=self._on_sync_click,
             is_primary=False
         )
-        card_sync.grid(row=1, column=0, sticky="nsew", padx=5, pady=5)
+        card_sync.grid(row=1, column=0, sticky="nsew", padx=8, pady=8)
 
         card_audit = ActionCardButton(
             actions_frame,
             icon_str="🛡️",
-            title_str="Auditoría del Grafo",
-            desc_str="Sembrar WikiLinks, eliminar notas huérfanas y regenerar el MOC",
+            title_str="Conectar Conocimiento",
+            desc_str="Enlaza notas automáticamente y actualiza tu índice de contenidos",
             command=self._on_audit_click,
             is_primary=False
         )
-        card_audit.grid(row=1, column=1, sticky="nsew", padx=5, pady=5)
+        card_audit.grid(row=1, column=1, sticky="nsew", padx=8, pady=8)
 
         card_refresh = ActionCardButton(
             actions_frame,
             icon_str="🔄",
-            title_str="Actualizar Estado",
-            desc_str="Refrescar métricas del sistema y verificar la salud de los procesos",
+            title_str="Refrescar Pantalla",
+            desc_str="Actualizar los contadores y comprobar el estado de los servicios",
             command=self.refresh_stats,
             is_primary=False
         )
-        card_refresh.grid(row=1, column=2, sticky="nsew", padx=5, pady=5)
+        card_refresh.grid(row=1, column=2, sticky="nsew", padx=8, pady=8)
 
         actions_frame.grid_columnconfigure(0, weight=1)
         actions_frame.grid_columnconfigure(1, weight=1)
         actions_frame.grid_columnconfigure(2, weight=1)
 
         # 5. INTEGRATED LOG CONSOLE
-        log_frame = tk.Frame(self, bg=THEME["bg_root"], padx=25)
-        log_frame.pack(side="top", fill="both", expand=True, pady=(0, 20))
+        log_frame = tk.Frame(self, bg=THEME["bg_root"], padx=30)
+        log_frame.pack(side="top", fill="both", expand=True, pady=(0, 25))
 
         tk.Label(
             log_frame,
-            text="Registro de Actividad de Funes:",
-            font=("Helvetica", 10, "bold"),
+            text="Historial de Actividad:",
+            font=("Helvetica", 14, "bold"),
             fg=THEME["muted"],
             bg=THEME["bg_root"],
             anchor="w"
-        ).pack(fill="x", pady=(0, 6))
+        ).pack(fill="x", pady=(0, 8))
 
         self.log_console = tk.Text(
             log_frame,
-            font=("Courier", 9),
+            font=("Courier", 13),
             bg=THEME["bg_log"],
             fg=THEME["sand"],
             insertbackground=THEME["terracotta"],
@@ -285,12 +298,12 @@ class FunesControlConsole(tk.Tk):
             bd=1,
             highlightbackground=THEME["border"],
             highlightthickness=1,
-            padx=10,
-            pady=10
+            padx=14,
+            pady=14
         )
         self.log_console.pack(fill="both", expand=True)
 
-        self._log("Consola Funes iniciada correctamente. Sistema listo.")
+        self._log("Consola Funes lista. El sistema está preparado.")
 
     def _create_stat_card(self, parent, title: str, var: tk.StringVar, color: str, col: int):
         card = tk.Frame(
@@ -298,14 +311,14 @@ class FunesControlConsole(tk.Tk):
             bg=THEME["bg_card"],
             highlightbackground=THEME["border"],
             highlightthickness=1,
-            padx=15,
-            pady=12
+            padx=18,
+            pady=16
         )
-        card.grid(row=0, column=col, sticky="ew", padx=5)
+        card.grid(row=0, column=col, sticky="ew", padx=8)
         parent.grid_columnconfigure(col, weight=1)
 
-        tk.Label(card, text=title, font=("Helvetica", 9), fg=THEME["muted"], bg=THEME["bg_card"], anchor="w").pack(fill="x")
-        tk.Label(card, textvariable=var, font=("Georgia", 22, "bold"), fg=color, bg=THEME["bg_card"], anchor="w").pack(fill="x", pady=(4, 0))
+        tk.Label(card, text=title, font=("Helvetica", 13), fg=THEME["muted"], bg=THEME["bg_card"], anchor="w").pack(fill="x")
+        tk.Label(card, textvariable=var, font=("Georgia", 38, "bold"), fg=color, bg=THEME["bg_card"], anchor="w").pack(fill="x", pady=(6, 0))
 
     def _log(self, message: str):
         timestamp = time.strftime("%H:%M:%S")
@@ -315,14 +328,12 @@ class FunesControlConsole(tk.Tk):
     def refresh_stats(self):
         """Actualiza las estadísticas vivas y el estado de los servicios."""
         def _bg_check():
-            # 1. Contar archivos
             out_files = list(self.config.vault.output_dir.glob("*.md"))
             valid_notes = [f for f in out_files if f.name != "_Indice_MOC.md"]
             
             input_files = list(self.config.vault.input_dir.glob("*"))
             valid_input = [f for f in input_files if f.is_file() and not f.name.startswith(".")]
 
-            # Contar huérfanas (sin WikiLinks)
             orphans = 0
             for note in valid_notes:
                 try:
@@ -336,21 +347,18 @@ class FunesControlConsole(tk.Tk):
             self.stat_orphans_var.set(str(orphans))
             self.stat_input_var.set(str(len(valid_input)))
 
-            # 2. Comprobar Ollama
             governor = RAMGovernor()
             rec_model = governor.recommend_model()
             if governor.check_ollama_alive():
-                self.status_ollama_var.set(f"Activo ({rec_model})")
+                self.status_ollama_var.set(f"Activa ({rec_model})")
             else:
-                self.status_ollama_var.set("Inactivo")
+                self.status_ollama_var.set("Inactiva")
 
-            # 3. Comprobar AnythingLLM
             if is_anythingllm_installed():
-                self.status_anything_var.set("Instalado")
+                self.status_anything_var.set("Listo")
             else:
                 self.status_anything_var.set("No detectado")
 
-            # 4. Comprobar Obsidian
             is_mac = sys.platform == "darwin"
             if is_mac:
                 obs_installed = Path("/Applications/Obsidian.app").exists()
@@ -364,47 +372,47 @@ class FunesControlConsole(tk.Tk):
     def _on_flush_click(self):
         """Inicia el evento Flush bajo demanda."""
         if not check_and_prompt_user_apps_closed():
-            self._log("Flush cancelado: Hay aplicaciones del usuario abiertas.")
+            self._log("Proceso pausado: Hay aplicaciones abiertas.")
             return
 
         def _run_flush():
-            self._log("📥 Iniciando evento Flush de ingesta...")
+            self._log("📥 Procesando documentos en 1_entrada...")
             
             copied = self.sync_manager.sync_to_input(self.config.vault.input_dir)
             if copied > 0:
-                self._log(f"[+] Sincronizados {copied} archivo(s) desde fuentes externas a 1_entrada.")
+                self._log(f"[+] Traídos {copied} archivo(s) desde carpetas compartidas a 1_entrada.")
 
             pipeline = ETLPipeline(self.config)
             input_files = [f for f in self.config.vault.input_dir.glob("*") if f.is_file() and not f.name.startswith(".")]
 
             if input_files:
-                self._log(f"Procesando {len(input_files)} archivo(s) en 1_entrada...")
+                self._log(f"Procesando {len(input_files)} documento(s)...")
                 for file_path in input_files:
-                    self._log(f"  • Procesando: {file_path.name}")
+                    self._log(f"  • Leyendo: {file_path.name}")
                     pipeline.process_file(file_path)
             else:
-                self._log("No se encontraron archivos nuevos en 1_entrada.")
+                self._log("No se encontraron documentos nuevos en 1_entrada.")
 
-            self._log("Refinando interconexiones del grafo de conocimiento...")
+            self._log("Conectando notas y actualizando el índice de conocimiento...")
             karpathy = KarpathyGraphLoop(self.config.vault.output_dir)
             karpathy.refine_knowledge_graph()
 
             configure_anythingllm_integration(self.config.vault.output_dir)
 
-            self._log("✓ Flush completado con éxito. Grafo y AnythingLLM actualizados.")
+            self._log("✓ Proceso completado con éxito. Notas e IA listos para usar.")
             self.after(100, self.refresh_stats)
 
         threading.Thread(target=_run_flush, daemon=True).start()
 
     def _on_chat_click(self):
         """Abre AnythingLLM Desktop."""
-        self._log("Iniciando AnythingLLM Desktop...")
+        self._log("Abriendo asistente de chat AnythingLLM...")
         if not launch_anythingllm():
-            messagebox.showwarning("AnythingLLM", "No se pudo abrir AnythingLLM Desktop. Verifica si está instalado.")
+            messagebox.showwarning("AnythingLLM", "No se pudo abrir el asistente de chat. Verifica si está instalado.")
 
     def _on_obsidian_click(self):
-        """Abre Obsidian en el Vault 'La Memoria de Funes'."""
-        self._log(f"Abriendo Vault de Obsidian en {self.vault_path}...")
+        """Abre Obsidian en el Vault."""
+        self._log(f"Abriendo cuaderno de notas en {self.vault_path}...")
         is_mac = sys.platform == "darwin"
         try:
             if is_mac:
@@ -415,18 +423,18 @@ class FunesControlConsole(tk.Tk):
             self._log(f"Error abriendo Obsidian: {e}")
 
     def _on_sync_click(self):
-        """Abre el modal de gestión de carpetas compartidas/externas."""
+        """Abre el modal de gestión de carpetas compartidas."""
         modal = FolderSyncModal(self, self.sync_manager)
         self.wait_window(modal)
         self.refresh_stats()
 
     def _on_audit_click(self):
-        """Ejecuta una auditoría y refinamiento global del grafo."""
+        """Ejecuta una conexión y refinamiento del conocimiento."""
         def _run_audit():
-            self._log("🛡️ Ejecutando auditoría global del grafo en 4_salida...")
+            self._log("🛡️ Conectando notas y actualizando el índice...")
             karpathy = KarpathyGraphLoop(self.config.vault.output_dir)
             karpathy.refine_knowledge_graph()
-            self._log("✓ Auditoría del grafo finalizada.")
+            self._log("✓ Conexión e índice actualizados.")
             self.after(100, self.refresh_stats)
 
         threading.Thread(target=_run_audit, daemon=True).start()

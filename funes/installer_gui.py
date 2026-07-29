@@ -11,13 +11,18 @@ from tkinter import ttk, filedialog, messagebox
 try:
     from funes.core.icon_generator import ensure_app_icon
     from funes.ram_governor.governor import RAMGovernor
+    from funes.core.anythingllm_config import (
+        is_anythingllm_installed,
+        install_anythingllm_autonomously,
+        configure_anythingllm_integration
+    )
     from create_shortcuts import create_desktop_shortcut
 except ImportError:
     pass
 
 
 class FunesInstallerWizard(tk.Tk):
-    """Asistente de instalación gráfico estilo Wizard para Funes Knowledge Base."""
+    """Asistente de instalación gráfico estilo Wizard para Habla con Funes."""
 
     def __init__(self):
         super().__init__()
@@ -44,6 +49,7 @@ class FunesInstallerWizard(tk.Tk):
 
         self.obsidian_status_var = tk.StringVar(value="Comprobando...")
         self.ollama_status_var = tk.StringVar(value="Comprobando...")
+        self.anythingllm_status_var = tk.StringVar(value="Comprobando...")
 
         self.run_first_flush_var = tk.BooleanVar(value=True)
 
@@ -336,6 +342,28 @@ class FunesInstallerWizard(tk.Tk):
         )
         lbl_oll_stat.pack(side="left")
 
+        # Estado AnythingLLM
+        any_frame = tk.Frame(req_box, bg="#FFFFFF")
+        any_frame.pack(fill="x", pady=8)
+
+        tk.Label(
+            any_frame,
+            text="• AnythingLLM Desktop:",
+            font=("Helvetica", 11, "bold"),
+            bg="#FFFFFF",
+            width=18,
+            anchor="w"
+        ).pack(side="left")
+
+        lbl_any_stat = tk.Label(
+            any_frame,
+            textvariable=self.anythingllm_status_var,
+            font=("Helvetica", 11, "bold"),
+            bg="#FFFFFF",
+            fg="#2563EB"
+        )
+        lbl_any_stat.pack(side="left")
+
         # Verificar requisitos inmediatamente
         self._check_requirements()
 
@@ -353,7 +381,7 @@ class FunesInstallerWizard(tk.Tk):
         if has_obsidian:
             self.obsidian_status_var.set("✓ Detectado correctamente")
         else:
-            self.obsidian_status_var.set("⚠️ No detectado (Se abrirá descarga)")
+            self.obsidian_status_var.set("⚠️ No detectado (Se sugerirá descarga)")
 
         # Comprobar Ollama
         has_ollama = False
@@ -362,7 +390,6 @@ class FunesInstallerWizard(tk.Tk):
             req = urllib.request.urlopen("http://localhost:11434/api/tags", timeout=2)
             has_ollama = (req.getcode() == 200)
         except Exception:
-            # Comprobar comando ollama
             try:
                 res = subprocess.run(["ollama", "--version"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
                 has_ollama = (res.returncode == 0)
@@ -372,7 +399,13 @@ class FunesInstallerWizard(tk.Tk):
         if has_ollama:
             self.ollama_status_var.set("✓ Detectado y activo")
         else:
-            self.ollama_status_var.set("⚠️ No activo / No detectado (Se abrirá descarga)")
+            self.ollama_status_var.set("⚠️ No activo (Se iniciará/descargará)")
+
+        # Comprobar AnythingLLM
+        if is_anythingllm_installed():
+            self.anythingllm_status_var.set("✓ Detectado correctamente")
+        else:
+            self.anythingllm_status_var.set("⚠️ No detectado (Se instalará automáticamente)")
 
     # --- PASO 4: Progreso de Instalación ---
     def _render_step4_installation(self):
@@ -422,7 +455,7 @@ class FunesInstallerWizard(tk.Tk):
             # 1. Crear carpeta Vault de Obsidian si no existe
             vault = Path(self.vault_path_var.get()).resolve()
             self.lbl_install_status.config(text="1. Preparando estructura de carpetas Vault...")
-            self.progress_bar["value"] = 20
+            self.progress_bar["value"] = 15
             self._log(f"[+] Creando estructura de Vault en: {vault}")
             for sub in ["1_entrada", "2_sucio", "3_limpio", "4_salida"]:
                 (vault / sub).mkdir(parents=True, exist_ok=True)
@@ -431,7 +464,7 @@ class FunesInstallerWizard(tk.Tk):
 
             # 2. Configurar modelo LLM según la RAM
             self.lbl_install_status.config(text="2. Evaluando memoria RAM y modelo LLM recomendado...")
-            self.progress_bar["value"] = 50
+            self.progress_bar["value"] = 35
             try:
                 governor = RAMGovernor()
                 rec_model = governor.recommend_model()
@@ -443,12 +476,30 @@ class FunesInstallerWizard(tk.Tk):
 
             time.sleep(0.5)
 
-            # 3. Crear accesos directos en el escritorio
-            self.lbl_install_status.config(text="3. Generando botón de acceso directo en el Escritorio...")
-            self.progress_bar["value"] = 80
+            # 3. Comprobar e instalar AnythingLLM si no está presente
+            self.lbl_install_status.config(text="3. Verificando e instalando AnythingLLM Desktop...")
+            self.progress_bar["value"] = 60
+            if not is_anythingllm_installed():
+                self._log("[+] AnythingLLM no detectado. Intentando instalación autónoma desatendida...")
+                if install_anythingllm_autonomously():
+                    self._log("[✓] AnythingLLM Desktop instalado con éxito.")
+                else:
+                    self._log("[!] No se pudo instalar AnythingLLM de forma automática. Se abrirá la web oficial.")
+            else:
+                self._log("[✓] AnythingLLM Desktop ya está instalado en el equipo.")
+
+            # Auto-configurar AnythingLLM con Ollama y Workspace 4_salida
+            self._log("[+] Configurando integración de AnythingLLM con Ollama y carpeta 4_salida...")
+            configure_anythingllm_integration(vault / "4_salida")
+            self._log("[✓] AnythingLLM configurado correctamente.")
+            time.sleep(0.5)
+
+            # 4. Crear accesos directos en el escritorio
+            self.lbl_install_status.config(text="4. Generando botón de acceso directo en el Escritorio...")
+            self.progress_bar["value"] = 85
             try:
                 create_desktop_shortcut(self.base_dir)
-                self._log("[✓] Acceso directo 'Funes' creado con éxito en tu Escritorio.")
+                self._log("[✓] Acceso directo 'Habla con Funes' creado con éxito en tu Escritorio.")
             except Exception as e:
                 self._log(f"[!] Error creando acceso directo: {e}")
 
@@ -469,7 +520,7 @@ class FunesInstallerWizard(tk.Tk):
     def _render_step5_complete(self):
         title = tk.Label(
             self.content_frame,
-            text="🎉 ¡Funes está listo para usarse!",
+            text="🎉 ¡Habla con Funes está listo para usarse!",
             font=("Helvetica", 16, "bold"),
             fg="#059669",
             bg="#F5F5F7",
@@ -478,11 +529,12 @@ class FunesInstallerWizard(tk.Tk):
         title.pack(fill="x", pady=(0, 15))
 
         use_instructions = (
-            "📌 Instrucciones sencillas de uso cotidiano:\n\n"
-            "1. Arrastra tus archivos (PDFs, Word, fotos, notas) a la carpeta '1_entrada' dentro de tu Vault.\n"
-            "2. Cuando desees procesarlos, guarda y cierra tus otras aplicaciones.\n"
-            "3. Haz doble clic en el botón 'Funes' de tu Escritorio para realizar el Flush bajo demanda.\n"
-            "4. ¡Abre Obsidian y disfruta de tu grafo de conocimiento enriquecido!"
+            "📌 Tu entorno ha sido configurado por completo:\n\n"
+            "• Vault de Obsidian: 'La Memoria de Funes' preparado.\n"
+            "• Ollama AI + Qwen: Configurado según tu memoria RAM.\n"
+            "• AnythingLLM Desktop: Auto-configurado y vinculado a la carpeta '4_salida'.\n"
+            "• Acceso Directo: Se ha creado el botón 'Habla con Funes' en tu Escritorio.\n\n"
+            "Al hacer clic en 'Finalizar', se abrirá tu Consola Central de Control."
         )
 
         inst_box = tk.Label(
@@ -502,7 +554,7 @@ class FunesInstallerWizard(tk.Tk):
 
         chk_flush = tk.Checkbutton(
             self.content_frame,
-            text="Ejecutar el primer 'Flush' de prueba inmediatamente al finalizar",
+            text="Abrir la Consola Central de Control inmediatamente al finalizar",
             variable=self.run_first_flush_var,
             font=("Helvetica", 11, "bold"),
             fg="#1F2937",
@@ -513,15 +565,14 @@ class FunesInstallerWizard(tk.Tk):
     # --- Manejadores de Botones Navegación ---
     def _on_next(self):
         if self.current_step == 3:
-            # Antes de ir a paso 4, guardar configuración
             self.show_step(4)
         elif self.current_step == 5:
             # Finalizar
             if self.run_first_flush_var.get():
                 self.destroy()
-                # Lanzar Funes main.py
+                # Lanzar Consola Central de Control
                 vault_arg = self.vault_path_var.get()
-                subprocess.Popen([sys.executable, "-m", "funes.main", "--vault", vault_arg], cwd=self.base_dir)
+                subprocess.Popen([sys.executable, "-m", "funes.control_console", vault_arg], cwd=self.base_dir)
             else:
                 self.destroy()
         else:

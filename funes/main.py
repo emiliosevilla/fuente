@@ -43,53 +43,63 @@ def select_vault_folder_gui() -> Path:
     return default_dir
 
 
+from funes.control_console import launch_control_console
+
+
 def main():
-    parser = argparse.ArgumentParser(description="Habla con Funes — ETL para Obsidian (Evento Flush bajo demanda)")
+    parser = argparse.ArgumentParser(description="Habla con Funes — Consola Central de Control y ETL para Obsidian")
     parser.add_argument(
         "--vault",
         type=str,
         default=None,
         help="Ruta absoluta o relativa al Vault de Obsidian.",
     )
+    parser.add_argument(
+        "--flush",
+        action="store_true",
+        help="Ejecuta directamente el Flush por línea de comandos sin abrir la Consola Central.",
+    )
     args = parser.parse_args()
-
-    # 1. Comprobación de seguridad: Asegurarse de que el usuario ha cerrado sus aplicaciones
-    print("\n" + "=" * 65)
-    print("                HABLA CON FUNES — EVENTO FLUSH BAJO DEMANDA")
-    print("=" * 65)
-    if not check_and_prompt_user_apps_closed():
-        sys.exit(0)
 
     if args.vault:
         vault_path = Path(args.vault).resolve()
     else:
-        vault_path = select_vault_folder_gui()
+        vault_path = Path.home() / "Documents" / "Funes_Vault"
 
-    logger.info(f"=== Ejecutando Flush de Habla con Funes en Vault: {vault_path} ===")
+    vault_path.mkdir(parents=True, exist_ok=True)
 
-    config = get_default_config(vault_path)
-    pipeline = ETLPipeline(config)
+    if args.flush:
+        # Modo Flush directo por consola
+        print("\n" + "=" * 65)
+        print("                HABLA CON FUNES — EVENTO FLUSH BAJO DEMANDA")
+        print("=" * 65)
+        if not check_and_prompt_user_apps_closed():
+            sys.exit(0)
 
-    # 2. Procesamiento por lote de todos los archivos existentes en 1_entrada
-    input_files = [f for f in config.vault.input_dir.glob("*") if f.is_file() and not f.name.startswith(".")]
-    if input_files:
-        logger.info(f"Iniciando ingesta de {len(input_files)} archivo(s) en 1_entrada...")
-        for file_path in input_files:
-            pipeline.process_file(file_path)
+        logger.info(f"=== Ejecutando Flush de Habla con Funes en Vault: {vault_path} ===")
+        config = get_default_config(vault_path)
+        pipeline = ETLPipeline(config)
+
+        input_files = [f for f in config.vault.input_dir.glob("*") if f.is_file() and not f.name.startswith(".")]
+        if input_files:
+            logger.info(f"Iniciando ingesta de {len(input_files)} archivo(s) en 1_entrada...")
+            for file_path in input_files:
+                pipeline.process_file(file_path)
+        else:
+            logger.info("No se encontraron archivos nuevos en 1_entrada para procesar.")
+
+        logger.info("Refinando interconexiones del grafo de conocimiento...")
+        karpathy_loop = KarpathyGraphLoop(output_dir=config.vault.output_dir)
+        karpathy_loop.refine_knowledge_graph()
+
+        print("\n" + "=" * 65)
+        print(" ✅ INGESTA Y FLUSH FINALIZADOS CON ÉXITO")
+        print("=" * 65)
+        print(" Todos los archivos han sido procesados y el mapa de conocimiento")
+        print(" en Obsidian ha sido actualizado correctamente.\n")
     else:
-        logger.info("No se encontraron archivos nuevos en 1_entrada para procesar.")
-
-    # 3. Refinamiento de grafo (Karpathy Loop) puntual de una sola iteración
-    logger.info("Refinando interconexiones del grafo de conocimiento...")
-    karpathy_loop = KarpathyGraphLoop(output_dir=config.vault.output_dir)
-    karpathy_loop.refine_knowledge_graph()
-
-    print("\n" + "=" * 65)
-    print(" ✅ INGESTA Y FLUSH FINALIZADOS CON ÉXITO")
-    print("=" * 65)
-    print(" Todos los archivos han sido procesados y el mapa de conocimiento")
-    print(" en Obsidian ha sido actualizado correctamente.")
-    print(" Ya puedes abrir de nuevo tus aplicaciones normalmente.\n")
+        # Modo predeterminado: Lanzar la Consola Central de Control
+        launch_control_console(vault_path)
 
 
 if __name__ == "__main__":

@@ -12,10 +12,10 @@ SYSTEM_WHITELIST = {
     "notificationcenter", "spotlight", "loginwindow", "screentimeagent",
     "corelocationagent", "useractivityd", "lsd", "sharingd", "tccd",
     "launchd", "kernelmanagerd", "bird", "cloudd", "osanalyticsd",
-    # Terminales y ejecución de Funes / Ollama
+    # Terminales y ejecución de Funes / Ollama / Electron IDE
     "terminal", "iterm2", "iterm", "alacritty", "kitty", "ghostty",
     "cmd.exe", "powershell.exe", "windowsterminal.exe", "conhost.exe",
-    "ollama", "ollama_llama_server", "python", "python3", "funes",
+    "ollama", "ollama_llama_server", "python", "python3", "funes", "electron", "electron.exe",
     # Windows sistema
     "explorer.exe", "system", "svchost.exe", "csrss.exe", "winlogon.exe",
     "services.exe", "lsass.exe", "smss.exe", "taskhostw.exe", "ctfmon.exe",
@@ -56,7 +56,7 @@ IGNORED_GUI_APPS = {
     "finder", "dock", "system events", "terminal", "iterm", "iterm2",
     "alacritty", "kitty", "ghostty", "funes", "funes_macos", "funes_windows",
     "ollama", "anythingllm", "anythingllm desktop", "code", "visual studio code",
-    "cursor", "antigravity", "gemini", "python", "python3"
+    "cursor", "antigravity", "gemini", "python", "python3", "electron"
 }
 
 
@@ -89,7 +89,7 @@ def get_running_user_apps() -> List[Tuple[str, str]]:
         if visible_apps:
             for app_name in visible_apps:
                 app_lower = app_name.lower()
-                if app_lower in IGNORED_GUI_APPS or any(ign in app_lower for ign in ["terminal", "iterm", "funes", "ollama", "antigravity", "gemini", "code"]):
+                if app_lower in IGNORED_GUI_APPS or any(ign in app_lower for ign in ["terminal", "iterm", "funes", "ollama", "antigravity", "gemini", "code", "electron"]):
                     continue
                 display_name = APP_DISPLAY_NAMES.get(app_lower, app_name)
                 if display_name not in seen_names:

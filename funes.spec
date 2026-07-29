@@ -33,8 +33,10 @@ hidden_imports = [
     'tkinter',
     'tkinter.filedialog',
     'json',
+    'pyyaml',
     'yaml',
     'sqlite3',
+
 ]
 
 try:

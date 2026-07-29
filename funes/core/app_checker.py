@@ -49,14 +49,55 @@ APP_DISPLAY_NAMES = {
 }
 
 
+import subprocess
+
+
+IGNORED_GUI_APPS = {
+    "finder", "dock", "system events", "terminal", "iterm", "iterm2",
+    "alacritty", "kitty", "ghostty", "funes", "funes_macos", "funes_windows",
+    "ollama", "anythingllm", "anythingllm desktop", "code", "visual studio code",
+    "cursor", "antigravity", "gemini", "python", "python3"
+}
+
+
+def get_mac_visible_apps() -> List[str]:
+    """Obtiene la lista de aplicaciones con ventana GUI visible en la pantalla del usuario en macOS."""
+    try:
+        cmd = [
+            "osascript", "-e",
+            'tell application "System Events" to get name of every process whose visible is true'
+        ]
+        res = subprocess.run(cmd, capture_output=True, text=True, timeout=3)
+        if res.returncode == 0 and res.stdout.strip():
+            return [n.strip() for n in res.stdout.strip().split(",") if n.strip()]
+    except Exception as e:
+        logger.debug(f"Error consultando aplicaciones visibles en macOS: {e}")
+    return []
+
+
 def get_running_user_apps() -> List[Tuple[str, str]]:
     """
-    Escanea los procesos en ejecución y devuelve una lista de tuplas (PID, Nombre_Descriptivo)
-    correspondientes a aplicaciones de usuario que están abiertas.
+    Escanea las aplicaciones activas y devuelve una lista de tuplas (PID, Nombre_Descriptivo)
+    correspondientes a aplicaciones de usuario visibles con ventanas abiertas.
     """
     user_apps = []
     seen_names = set()
+    is_mac = sys.platform == "darwin"
 
+    if is_mac:
+        visible_apps = get_mac_visible_apps()
+        if visible_apps:
+            for app_name in visible_apps:
+                app_lower = app_name.lower()
+                if app_lower in IGNORED_GUI_APPS or any(ign in app_lower for ign in ["terminal", "iterm", "funes", "ollama", "antigravity", "gemini", "code"]):
+                    continue
+                display_name = APP_DISPLAY_NAMES.get(app_lower, app_name)
+                if display_name not in seen_names:
+                    seen_names.add(display_name)
+                    user_apps.append(("0", display_name))
+            return user_apps
+
+    # Fallback con psutil para Windows u otros entornos
     for proc in psutil.process_iter(['pid', 'name', 'exe']):
         try:
             name = proc.info['name']
@@ -66,33 +107,28 @@ def get_running_user_apps() -> List[Tuple[str, str]]:
             name_lower = name.lower()
             name_no_ext = name_lower.replace(".exe", "")
 
-            # Ignorar procesos de la lista blanca del sistema / Funes / Ollama
             if name_lower in SYSTEM_WHITELIST or name_no_ext in SYSTEM_WHITELIST:
                 continue
 
-            # En macOS, filtrar procesos que pertenecen a bundles de aplicaciones de usuario en /Applications o ~/Applications
-            is_mac = sys.platform == "darwin"
-            is_win = sys.platform == "win32"
-            exe_path = proc.info.get('exe') or ""
+            # Ignorar procesos de fondo, daemons y ayudantes (helpers/autoupdate/xpc)
+            if any(h in name_lower for h in ["helper", "daemon", "autoupdate", "service", "xpc", "plugin", "agent"]):
+                continue
 
+            exe_path = proc.info.get('exe') or ""
+            is_win = sys.platform == "win32"
             is_user_app = False
 
             if is_mac:
-                # Filtrar servicios internos del sistema operativo en /System/
                 if exe_path.startswith("/System/") or exe_path.startswith("/usr/"):
                     continue
-
-                # Comprobar si el binario pertenece a un paquete .app en /Applications o ~/Applications
                 if ".app/Contents/" in exe_path:
-                    app_bundle_name = exe_path.split(".app/Contents/")[0].split("/")[-1]
-                    app_bundle_name_clean = app_bundle_name.replace(".app", "")
-                    app_bundle_lower = app_bundle_name_clean.lower()
+                    app_bundle_name = exe_path.split(".app/Contents/")[0].split("/")[-1].replace(".app", "")
+                    app_bundle_lower = app_bundle_name.lower()
 
-                    # Excluir IDE actual (Antigravity), terminales y Ollama
-                    if any(ignored in app_bundle_lower for ignored in ["terminal", "iterm", "ollama", "antigravity", "gemini"]):
+                    if app_bundle_lower in IGNORED_GUI_APPS or any(ignored in app_bundle_lower for ignored in ["terminal", "iterm", "ollama", "antigravity", "gemini", "code", "funes"]):
                         continue
 
-                    display_name = APP_DISPLAY_NAMES.get(app_bundle_lower, app_bundle_name_clean)
+                    display_name = APP_DISPLAY_NAMES.get(app_bundle_lower, app_bundle_name)
                     is_user_app = True
                     name_key = display_name
             elif is_win:

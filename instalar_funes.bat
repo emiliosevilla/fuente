@@ -102,3 +102,4 @@ echo 6. Iniciando Asistente Gráfico de Instalación de Funes...
 python -m funes.installer_gui
 
 pause
+

@@ -76,7 +76,6 @@ if ! curl -s http://localhost:11434/api/tags > /dev/null; then
     fi
 fi
 
-echo ""
 echo "Iniciando Asistente Gráfico de Instalación de Funes..."
 python3 -m funes.installer_gui
 

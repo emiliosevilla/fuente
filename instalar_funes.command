@@ -3,7 +3,7 @@ DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 cd "$DIR"
 
 echo "======================================================="
-echo "       FUNES KNOWLEDGE BASE ETL FOR OBSIDIAN (macOS)"
+echo "               HABLA CON FUNES (macOS)"
 echo "======================================================="
 echo ""
 

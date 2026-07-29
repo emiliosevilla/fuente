@@ -22,7 +22,7 @@ class FunesInstallerWizard(tk.Tk):
     def __init__(self):
         super().__init__()
 
-        self.title("Instalador de Funes Knowledge Base")
+        self.title("Instalador de Habla con Funes")
         self.geometry("720x500")
         self.resizable(False, False)
         self.configure(bg="#F5F5F7")
@@ -62,7 +62,7 @@ class FunesInstallerWizard(tk.Tk):
 
         self.header_title = tk.Label(
             self.header_frame,
-            text="Funes Knowledge Base — Asistente de Instalación",
+            text="Habla con Funes — Asistente de Instalación",
             font=("Helvetica", 14, "bold"),
             fg="white",
             bg="#2C3E50",
@@ -154,7 +154,7 @@ class FunesInstallerWizard(tk.Tk):
     def _render_step1_welcome(self):
         title = tk.Label(
             self.content_frame,
-            text="Bienvenido al Instalador de Funes Knowledge Base",
+            text="Bienvenido al Instalador de Habla con Funes",
             font=("Helvetica", 15, "bold"),
             fg="#1F2937",
             bg="#F5F5F7",
@@ -378,7 +378,7 @@ class FunesInstallerWizard(tk.Tk):
     def _render_step4_installation(self):
         title = tk.Label(
             self.content_frame,
-            text="Instalando y Configurando Funes Knowledge Base",
+            text="Instalando y Configurando Habla con Funes",
             font=("Helvetica", 15, "bold"),
             fg="#1F2937",
             bg="#F5F5F7",

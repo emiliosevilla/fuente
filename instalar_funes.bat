@@ -4,7 +4,7 @@ cd /d "%~dp0"
 
 TITLE Funes — Auto Instalador y Ejecutable
 echo =======================================================
-echo          FUNES KNOWLEDGE BASE ETL FOR OBSIDIAN
+echo                  HABLA CON FUNES
 echo =======================================================
 echo.
 

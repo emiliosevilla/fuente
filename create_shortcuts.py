@@ -110,7 +110,7 @@ def create_shortcuts(base_dir: Path) -> bool:
         $s1.TargetPath = "{target_bat}"
         $s1.WorkingDirectory = "{base_dir}"
         $s1.IconLocation = "{funes_ico}"
-        $s1.Description = "Ejecutable Funes Knowledge Base"
+        $s1.Description = "Ejecutable Habla con Funes"
         $s1.Save()
 
         # 2. Acceso directo La Memoria de Funes (Archivador)

@@ -8,7 +8,7 @@ from pathlib import Path
 
 
 def build():
-    print("=== Compilador de Distribucion Funes Knowledge Base ===")
+    print("=== Compilador de Distribución Habla con Funes ===")
     
     # 1. Verificar/Instalar PyInstaller
     try:

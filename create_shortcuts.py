@@ -1,57 +1,143 @@
 """
-Script autónomo para crear accesos directos de Funes en el Escritorio (Desktop) de Windows y macOS.
+Script autónomo para crear los accesos directos de Funes:
+1. "Funes" (Icono de gafas) -> Ejecutable/Lanzador Funes.
+2. "La Memoria de Funes" (Icono de archivador) -> Bóveda/Vault Obsidian (./Funes).
 """
 import os
 import sys
 import subprocess
 from pathlib import Path
 
-from funes.core.icon_generator import ensure_app_icon
+from funes.core.icon_generator import ensure_app_icon, ensure_archive_icon
 
 
-def create_desktop_shortcut(base_dir: Path) -> bool:
+def prompt_folder_selection(default_desktop: Path) -> Path:
+    """Solicita al usuario elegir la carpeta de destino para los accesos directos (GUI o consola)."""
+    print("\n=======================================================")
+    print("    UBICACIÓN DE ACCESOS DIRECTOS")
+    print("=======================================================")
+    print("Se crearán 2 accesos directos en la carpeta que elijas:")
+    print(" 👓 'Funes' (Acceso directo al programa)")
+    print(" 🗄️ 'La Memoria de Funes' (Acceso directo a tu Vault de notas)")
+    print("-------------------------------------------------------")
+
+    # Intento 1: Tkinter GUI Dialog
+    try:
+        import tkinter as tk
+        from tkinter import filedialog
+        root = tk.Tk()
+        root.withdraw()
+        root.attributes("-topmost", True)
+        selected = filedialog.askdirectory(
+            title="Elige la carpeta donde crear los accesos directos (Funes y La Memoria de Funes)",
+            initialdir=str(default_desktop)
+        )
+        root.destroy()
+        if selected:
+            p = Path(selected).resolve()
+            if p.exists():
+                print(f"[+] Carpeta seleccionada vía diálogo gráfico: {p}")
+                return p
+    except Exception:
+        pass
+
+    # Intento 2: AppleScript en macOS
+    if sys.platform == "darwin":
+        try:
+            cmd = [
+                "osascript", "-e",
+                f'POSIX path of (choose folder with prompt "Selecciona la carpeta donde guardar los accesos directos (Funes y La Memoria de Funes):" default location "{default_desktop}")'
+            ]
+            res = subprocess.run(cmd, capture_output=True, text=True)
+            if res.returncode == 0 and res.stdout.strip():
+                p = Path(res.stdout.strip()).resolve()
+                if p.exists():
+                    print(f"[+] Carpeta seleccionada en macOS: {p}")
+                    return p
+        except Exception:
+            pass
+
+    # Intento 3: Console Prompt fallback
+    try:
+        user_input = input(f"Introduce la ruta de la carpeta elegida (presiona Enter para usar el Escritorio: '{default_desktop}'): ").strip()
+        user_input = user_input.strip("'\"")
+        if user_input:
+            chosen = Path(user_input).resolve()
+            if chosen.exists():
+                print(f"[+] Carpeta seleccionada: {chosen}")
+                return chosen
+            else:
+                print(f"[!] La carpeta '{chosen}' no existe. Usando el Escritorio por defecto.")
+    except Exception:
+        pass
+
+    return default_desktop
+
+
+def create_shortcuts(base_dir: Path) -> bool:
     assets_dir = base_dir / "assets"
     ensure_app_icon(assets_dir)
+    ensure_archive_icon(assets_dir)
+
+    vault_dir = (base_dir / "Funes").resolve()
+    vault_dir.mkdir(parents=True, exist_ok=True)
 
     home = Path.home()
-    desktop = home / "Desktop"
-    if not desktop.exists():
-        desktop = home / "Escritorio"
+    default_desktop = home / "Desktop"
+    if not default_desktop.exists():
+        default_desktop = home / "Escritorio"
+    if not default_desktop.exists():
+        default_desktop = home
 
-    if not desktop.exists():
-        print(f"[!] No se encontró carpeta de Escritorio en {home}")
-        return False
+    target_dir = prompt_folder_selection(default_desktop)
 
     is_windows = sys.platform == "win32"
     is_mac = sys.platform == "darwin"
 
     if is_windows:
-        shortcut_path = desktop / "Funes.lnk"
-        target_bat = base_dir / "instalar_funes.bat"
-        icon_path = assets_dir / "funes_icon.ico"
+        target_bat = (base_dir / "instalar_funes.bat").resolve()
+        funes_ico = (assets_dir / "funes_icon.ico").resolve()
+        archive_ico = (assets_dir / "archive_icon.ico").resolve()
+
+        shortcut_funes = target_dir / "Funes.lnk"
+        shortcut_memoria = target_dir / "La Memoria de Funes.lnk"
 
         ps_script = f"""
         $WshShell = New-Object -comObject WScript.Shell
-        $Shortcut = $WshShell.CreateShortcut("{shortcut_path}")
-        $Shortcut.TargetPath = "{target_bat}"
-        $Shortcut.WorkingDirectory = "{base_dir}"
-        $Shortcut.IconLocation = "{icon_path}"
-        $Shortcut.Description = "Funes Knowledge Base ETL for Obsidian"
-        $Shortcut.Save()
+
+        # 1. Acceso directo Funes (Gafas)
+        $s1 = $WshShell.CreateShortcut("{shortcut_funes}")
+        $s1.TargetPath = "{target_bat}"
+        $s1.WorkingDirectory = "{base_dir}"
+        $s1.IconLocation = "{funes_ico}"
+        $s1.Description = "Ejecutable Funes Knowledge Base"
+        $s1.Save()
+
+        # 2. Acceso directo La Memoria de Funes (Archivador)
+        $s2 = $WshShell.CreateShortcut("{shortcut_memoria}")
+        $s2.TargetPath = "explorer.exe"
+        $s2.Arguments = '"{vault_dir}"'
+        $s2.WorkingDirectory = "{vault_dir}"
+        $s2.IconLocation = "{archive_ico}"
+        $s2.Description = "Vault de Obsidian - La Memoria de Funes"
+        $s2.Save()
         """
         try:
             cmd = ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", ps_script]
             subprocess.run(cmd, check=True)
-            print(f"[+] Acceso directo creado en el Escritorio de Windows: {shortcut_path}")
+            print(f"\n[+] Accesos directos creados exitosamente en: {target_dir}")
+            print(f"    👓 'Funes' -> {shortcut_funes}")
+            print(f"    🗄️ 'La Memoria de Funes' -> {shortcut_memoria}")
             return True
         except Exception as e:
-            print(f"[!] Error creando acceso directo en Windows: {e}")
+            print(f"[!] Error creando accesos directos en Windows: {e}")
             return False
 
     elif is_mac:
-        shortcut_command = desktop / "Funes.command"
+        shortcut_funes = target_dir / "Funes.command"
+        shortcut_memoria = target_dir / "La Memoria de Funes.command"
 
-        shortcut_content = f"""#!/bin/bash
+        script_funes_content = f"""#!/bin/bash
 cd "{base_dir}"
 if [ -f "./venv/bin/python3" ]; then
     ./venv/bin/python3 -m funes.main
@@ -61,14 +147,30 @@ else
     python3 -m funes.main
 fi
 """
+
+        script_memoria_content = f"""#!/bin/bash
+VAULT_DIR="{vault_dir}"
+if [ -d "/Applications/Obsidian.app" ]; then
+    open -a Obsidian "$VAULT_DIR"
+else
+    open "$VAULT_DIR"
+fi
+"""
         try:
-            with open(shortcut_command, "w", encoding="utf-8") as f:
-                f.write(shortcut_content)
-            os.chmod(shortcut_command, 0o755)
-            print(f"[+] Acceso directo ejecutable creado en el Escritorio de macOS: {shortcut_command}")
+            with open(shortcut_funes, "w", encoding="utf-8") as f:
+                f.write(script_funes_content)
+            os.chmod(shortcut_funes, 0o755)
+
+            with open(shortcut_memoria, "w", encoding="utf-8") as f:
+                f.write(script_memoria_content)
+            os.chmod(shortcut_memoria, 0o755)
+
+            print(f"\n[+] Accesos directos ejecutables creados exitosamente en: {target_dir}")
+            print(f"    👓 'Funes' -> {shortcut_funes}")
+            print(f"    🗄️ 'La Memoria de Funes' -> {shortcut_memoria}")
             return True
         except Exception as e:
-            print(f"[!] Error creando acceso directo en macOS: {e}")
+            print(f"[!] Error creando accesos directos en macOS: {e}")
             return False
 
     return False
@@ -76,4 +178,5 @@ fi
 
 if __name__ == "__main__":
     base = Path(__file__).resolve().parent
-    create_desktop_shortcut(base)
+    create_shortcuts(base)
+

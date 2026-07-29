@@ -151,43 +151,188 @@ def get_running_user_apps() -> List[Tuple[str, str]]:
     return user_apps
 
 
-def prompt_user_apps_closed_gui(apps_list: List[str]) -> bool:
+import time
+
+
+def close_user_apps(apps_list: List[str]) -> bool:
     """
-    Muestra un diálogo gráfico modal con Tkinter solicitando al usuario cerrar sus aplicaciones.
-    Devuelve True si el usuario indica que ya las cerró (Reintentar), o False si cancela.
+    Cierra automáticamente las aplicaciones de usuario especificadas en apps_list.
+    Usa solicitudes de cierre limpias en macOS/Windows.
     """
+    is_mac = sys.platform == "darwin"
+    is_win = sys.platform == "win32"
+
+    for app_name in apps_list:
+        try:
+            if is_mac:
+                cmd = [
+                    "osascript", "-e",
+                    f'tell application "{app_name}" to quit'
+                ]
+                subprocess.run(cmd, capture_output=True, text=True, timeout=3)
+            elif is_win:
+                cmd = ["taskkill", "/FI", f"WINDOWTITLE eq {app_name}*"]
+                subprocess.run(cmd, capture_output=True, text=True, timeout=3)
+            else:
+                for proc in psutil.process_iter(['name']):
+                    if app_name.lower() in (proc.info['name'] or "").lower():
+                        proc.terminate()
+        except Exception as e:
+            logger.debug(f"Error al cerrar '{app_name}': {e}")
+
+    time.sleep(1)
+    return True
+
+
+def prompt_user_apps_closed_gui(apps_list: List[str]) -> str:
+    """
+    Muestra un diálogo gráfico modal elegante con opciones para:
+    - 'close_all': Cerrar automáticamente las aplicaciones activas.
+    - 'retry': Reintentar la verificación (tras cerrarlas manualmente).
+    - 'cancel': Cancelar la ingesta.
+    """
+    result = "cancel"
+
     try:
         import tkinter as tk
         from tkinter import messagebox
 
-        root = tk.Tk()
-        root.withdraw()
-        root.attributes("-topmost", True)
+        dialog = tk.Tk()
+        dialog.title("Funes — Aplicaciones Abiertas Detectadas")
+        dialog.geometry("540x420")
+        dialog.resizable(False, False)
+        dialog.configure(bg="#181816")
+        dialog.attributes("-topmost", True)
 
-        apps_str = "\n".join(f"  • {app}" for app in apps_list)
-        msg = (
-            "⚠️ FUNES REQUIERE EL 100% DE RECURSOS PARA EL FLUSH ⚠️\n\n"
-            "Para evitar congelamientos y proteger tu trabajo, guarda y cierra "
-            "las siguientes aplicaciones antes de continuar:\n\n"
-            f"{apps_str}\n\n"
-            "¿Has cerrado ya todas tus aplicaciones?\n"
-            "- Haz clic en 'Reintentar' cuando las hayas cerrado.\n"
-            "- Haz clic en 'Cancelar' para abortar la ingesta."
-        )
+        # Centrar en pantalla
+        dialog.update_idletasks()
+        width = dialog.winfo_width()
+        height = dialog.winfo_height()
+        x = (dialog.winfo_screenwidth() // 2) - (width // 2)
+        y = (dialog.winfo_screenheight() // 2) - (height // 2)
+        dialog.geometry(f"+{x}+{y}")
 
-        response = messagebox.askretrycancel(
-            title="Funes — Verificación de Aplicaciones Abiertas",
-            message=msg,
-            icon="warning"
+        # Cabecera / Advertencia
+        header_frame = tk.Frame(dialog, bg="#232220", padx=20, pady=15)
+        header_frame.pack(fill="x")
+
+        tk.Label(
+            header_frame,
+            text="⚠️  Funes Requiere el 100% de Recursos",
+            font=("Georgia", 14, "bold"),
+            fg="#D97757",
+            bg="#232220",
+            anchor="w"
+        ).pack(fill="x")
+
+        tk.Label(
+            header_frame,
+            text="Para evitar congelamientos y proteger tu trabajo, por favor cierra las siguientes aplicaciones antes del Flush:",
+            font=("Helvetica", 9),
+            fg="#E8E4DF",
+            bg="#232220",
+            wraplength=490,
+            justify="left",
+            anchor="w"
+        ).pack(fill="x", pady=(6, 0))
+
+        # Lista de aplicaciones
+        list_frame = tk.Frame(dialog, bg="#181816", padx=20, pady=12)
+        list_frame.pack(fill="both", expand=True)
+
+        apps_text = "\n".join(f"  •  {app}" for app in apps_list)
+        lbl_apps = tk.Label(
+            list_frame,
+            text=apps_text,
+            font=("Helvetica", 10, "bold"),
+            fg="#FBBF24",
+            bg="#181816",
+            justify="left",
+            anchor="nw"
         )
-        root.destroy()
-        return response
+        lbl_apps.pack(fill="both", expand=True)
+
+        # Botones de Acción
+        actions_frame = tk.Frame(dialog, bg="#181816", padx=20, pady=15)
+        actions_frame.pack(fill="x")
+
+        def _on_close_all():
+            nonlocal result
+            confirm = messagebox.askyesno(
+                "Confirmar Cierre de Aplicaciones",
+                f"¿Deseas solicitar el cierre automático de las siguientes aplicaciones?\n\n"
+                f"{apps_text}\n\n"
+                "Asegúrate de haber guardado cualquier trabajo importante antes de continuar.",
+                parent=dialog
+            )
+            if confirm:
+                close_user_apps(apps_list)
+                result = "retry"
+                dialog.destroy()
+
+        def _on_retry():
+            nonlocal result
+            result = "retry"
+            dialog.destroy()
+
+        def _on_cancel():
+            nonlocal result
+            result = "cancel"
+            dialog.destroy()
+
+        # Botón 1: Cerrar Automáticamente (Terracota)
+        btn_close_all = tk.Button(
+            actions_frame,
+            text="🚫 Cerrar todas las aplicaciones automáticamente",
+            font=("Helvetica", 10, "bold"),
+            bg="#D97757",
+            fg="white",
+            height=2,
+            relief="flat",
+            command=_on_close_all,
+            cursor="hand2"
+        )
+        btn_close_all.pack(fill="x", pady=(0, 8))
+
+        # Subframe para Reintentar y Cancelar
+        sub_btn_frame = tk.Frame(actions_frame, bg="#181816")
+        sub_btn_frame.pack(fill="x")
+
+        btn_retry = tk.Button(
+            sub_btn_frame,
+            text="🔄 Reintentar (Ya las he cerrado)",
+            font=("Helvetica", 9),
+            bg="#34322E",
+            fg="#E8E4DF",
+            height=2,
+            relief="flat",
+            command=_on_retry,
+            cursor="hand2"
+        )
+        btn_retry.pack(side="left", fill="x", expand=True, padx=(0, 4))
+
+        btn_cancel = tk.Button(
+            sub_btn_frame,
+            text="❌ Cancelar Flush",
+            font=("Helvetica", 9),
+            bg="#34322E",
+            fg="#E8E4DF",
+            height=2,
+            relief="flat",
+            command=_on_cancel,
+            cursor="hand2"
+        )
+        btn_cancel.pack(side="right", fill="x", expand=True, padx=(4, 0))
+
+        dialog.protocol("WM_DELETE_WINDOW", _on_cancel)
+        dialog.mainloop()
+        return result
     except Exception as e:
         logger.debug(f"Error mostrando diálogo GUI: {e}")
-        return False
+        return "cancel"
 
 
-def prompt_user_apps_closed_cli(apps_list: List[str]) -> bool:
+def prompt_user_apps_closed_cli(apps_list: List[str]) -> str:
     """Fallback por consola si no hay interfaz gráfica disponible."""
     print("\n" + "=" * 65)
     print(" ⚠️  FUNES REQUIERE EL 100% DE RECURSOS DEL EQUIPO PARA EL FLUSH  ⚠️")
@@ -197,9 +342,19 @@ def prompt_user_apps_closed_cli(apps_list: List[str]) -> bool:
     for app in apps_list:
         print(f"   • {app}")
     print("\n" + "-" * 65)
+    print(" Opciones:")
+    print("   [C] Cerrar automáticamente todas las aplicaciones detectadas")
+    print("   [R] Reintentar (si ya las has cerrado manualmente)")
+    print("   [X] Cancelar Flush\n")
 
-    ans = input("¿Has cerrado ya todas las aplicaciones? [s/N]: ").strip().lower()
-    return ans in ("s", "si", "sí", "y", "yes")
+    ans = input("Elige una opción [c/R/x]: ").strip().lower()
+    if ans in ("c", "cerrar", "close"):
+        close_user_apps(apps_list)
+        return "retry"
+    elif ans in ("r", "retry", "reintentar", "s", "si", "sí"):
+        return "retry"
+    else:
+        return "cancel"
 
 
 def check_and_prompt_user_apps_closed() -> bool:
@@ -217,10 +372,9 @@ def check_and_prompt_user_apps_closed() -> bool:
         apps_names = [app[1] for app in user_apps]
         logger.warning(f"Aplicaciones de usuario detectadas abiertas: {apps_names}")
 
-        # Intentar diálogo GUI primero
-        user_wants_retry = prompt_user_apps_closed_gui(apps_names)
+        action = prompt_user_apps_closed_gui(apps_names)
 
-        if not user_wants_retry:
+        if action == "cancel":
             print("\n[!] Operación de Flush cancelada por el usuario o aplicaciones aún abiertas.")
             print("    Funes no ha procesado ningún archivo para evitar interferir con tus aplicaciones.")
             return False

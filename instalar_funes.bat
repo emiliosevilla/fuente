@@ -13,12 +13,23 @@ python --version >nul 2>&1
 if %errorlevel% neq 0 (
     py --version >nul 2>&1
     if %errorlevel% neq 0 (
-        echo [!] Python 3 no se encuentra instalado en este equipo.
-        echo Por favor instala Python 3 desde https://www.python.org/
-        pause
-        exit /b 1
+        echo [!] Python 3 no esta instalado en este equipo.
+        where winget >nul 2>&1
+        if %errorlevel% equ 0 (
+            echo Instalando Python 3 automáticamente vía Winget...
+            winget install --id Python.Python.3.12 -e --accept-package-agreements --accept-source-agreements
+            echo [!] Python 3 ha sido instalado. Por favor vuelve a ejecutar este instalador.
+            pause
+            exit /b 0
+        ) else (
+            echo Abriendo la página oficial de descarga de Python (https://www.python.org/downloads/)...
+            start https://www.python.org/downloads/
+            pause
+            exit /b 1
+        )
     )
 )
+
 
 echo 2. Creando entorno virtual e instalando dependencias...
 if not exist "venv" (
@@ -61,6 +72,21 @@ if not exist "%LocalAppData%\Programs\obsidian\Obsidian.exe" (
 
 echo.
 echo 5. Comprobando servicio de IA Local (Ollama)...
+where ollama >nul 2>&1
+if %errorlevel% neq 0 (
+    echo [!] Ollama no esta instalado en este equipo.
+    where winget >nul 2>&1
+    if %errorlevel% equ 0 (
+        echo Instalando Ollama automaticamente via Winget...
+        winget install --id Ollama.Ollama -e --accept-package-agreements --accept-source-agreements
+    ) else (
+        echo Abriendo la página oficial de descarga de Ollama (https://ollama.com/download)...
+        start https://ollama.com/download
+    )
+) else (
+    echo [+] Ollama detectado en el sistema.
+)
+
 curl -s http://localhost:11434/api/tags >nul 2>&1
 if %errorlevel% neq 0 (
     where ollama >nul 2>&1
@@ -68,20 +94,21 @@ if %errorlevel% neq 0 (
         echo Iniciando servicio local Ollama en segundo plano...
         start /b ollama serve >nul 2>&1
         timeout /t 3 >nul
-    ) else (
-        echo [!] Nota: Ollama no responde en http://localhost:11434
-        echo     Para inferencia con IA local, descárgalo e inícialo desde https://ollama.com/
     )
 )
 
 echo.
-echo 6. Iniciando Funes Knowledge Base...
-set /p VAULT_PATH="Introduce la ruta a tu Vault de Obsidian (presiona Enter para usar ./Funes): "
+echo 6. Configurando modelo LLM (Qwen) optimizado según la RAM...
+python -m funes.ram_governor.governor
+
+echo.
+echo 7. Iniciando Funes Knowledge Base...
+set /p VAULT_PATH="Introduce la ruta a tu Vault de Obsidian (presiona Enter para usar .\Funes_Vault): "
 if not "%VAULT_PATH%"=="" (
     set VAULT_PATH=%VAULT_PATH:"=%
     python funes\main.py --vault "!VAULT_PATH!"
 ) else (
-    python funes\main.py --vault ".\Funes"
-fi
+    python funes\main.py --vault ".\Funes_Vault"
+)
 
 pause

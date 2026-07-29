@@ -153,3 +153,62 @@ class RAMGovernor:
         except Exception as e:
             logger.error(f"Error comprobando disponibilidad del modelo '{model_name}': {e}")
             return False
+
+    def setup_optimal_model(self) -> str:
+        """Detecta la RAM del sistema, selecciona el modelo Qwen óptimo manteniendo la holgura del 35% y asegura su descarga."""
+        ram_info = self.get_system_ram_info()
+        print("\n=======================================================")
+        print("    CONFIGURACION DE MODELO IA SEGÚN RAM DISPONIBLE")
+        print("=======================================================")
+        print(f"[+] RAM Total detectada: {ram_info['total_gb']} GB")
+        print(f"[+] RAM Libre/Disponible: {ram_info['available_gb']} GB")
+        print(f"[+] Margen de seguridad: 35% reservado para evitar lag en el sistema host.")
+
+        model = self.recommend_model()
+        print(f"[+] Modelo Qwen óptimo seleccionado: '{model}'")
+
+        if not self.check_ollama_status():
+            print("[!] Ollama no está respondiendo en http://localhost:11434. Asegúrate de iniciarlo.")
+            return model
+
+        already_installed = False
+        try:
+            if HAS_REQUESTS:
+                resp = requests.get(f"{self.ollama_url}/api/tags", timeout=5)
+                if resp.status_code == 200:
+                    models = [m.get("name") for m in resp.json().get("models", [])]
+                    if any(model in m for m in models):
+                        already_installed = True
+        except Exception:
+            pass
+
+        if already_installed:
+            print(f"[+] El modelo '{model}' ya está instalado y listo en Ollama.")
+            return model
+
+        print(f"[*] Descargando modelo '{model}' en Ollama (esto puede tardar unos minutos)...")
+        import shutil
+        import subprocess
+        ollama_bin = shutil.which("ollama")
+        if ollama_bin:
+            try:
+                res = subprocess.run([ollama_bin, "pull", model])
+                if res.returncode == 0:
+                    print(f"[+] Modelo '{model}' instalado exitosamente.")
+                    return model
+            except Exception as e:
+                logger.debug(f"CLI pull error: {e}")
+
+        if self.ensure_model_available(model):
+            print(f"[+] Modelo '{model}' descargado e instalado correctamente.")
+        else:
+            print(f"[!] No se pudo descargar automáticamente '{model}'. Puedes descargarlo con 'ollama pull {model}'.")
+
+        return model
+
+
+if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO)
+    gov = RAMGovernor()
+    gov.setup_optimal_model()
+

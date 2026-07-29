@@ -8,10 +8,18 @@ echo "======================================================="
 echo ""
 
 if ! command -v python3 &> /dev/null; then
-    echo "[!] Python 3 no esta instalado. Por favor instalalo desde https://www.python.org/"
-    read -p "Presiona Enter para salir..."
+    echo "[!] Python 3 no esta instalado en este Mac."
+    if command -v brew &> /dev/null; then
+        echo "Instalando Python 3 automaticamente via Homebrew..."
+        brew install python
+    else
+        echo "Abriendo la pagina oficial de descarga de Python (https://www.python.org/downloads/mac-osx/)..."
+        open "https://www.python.org/downloads/mac-osx/"
+    fi
+    read -p "Tras finalizar la instalacion de Python, vuelve a ejecutar este archivo. Presiona Enter para salir..."
     exit 1
 fi
+
 
 if [ ! -d "venv" ]; then
     echo "Creando entorno virtual Python..."
@@ -44,25 +52,43 @@ fi
 
 echo ""
 echo "Comprobando servicio de IA Local (Ollama)..."
+if ! command -v ollama &> /dev/null && [ ! -d "/Applications/Ollama.app" ]; then
+    echo "[!] Ollama no esta instalado en este Mac."
+    if command -v brew &> /dev/null; then
+        echo "Instalando Ollama automaticamente via Homebrew..."
+        brew install --cask ollama
+    else
+        echo "Abriendo la pagina oficial de descarga de Ollama (https://ollama.com/download)..."
+        open "https://ollama.com/download"
+    fi
+else
+    echo "[+] Ollama detectado correctamente."
+fi
+
 if ! curl -s http://localhost:11434/api/tags > /dev/null; then
+    echo "Iniciando servicio local Ollama en segundo plano..."
     if command -v ollama &> /dev/null; then
-        echo "Iniciando Ollama serve en segundo plano..."
         ollama serve > /dev/null 2>&1 &
         sleep 3
-    else
-        echo "[!] Nota: Ollama no esta instalado o respondiendo en http://localhost:11434"
-        echo "    Para inferencia con IA local, descargalo desde https://ollama.com/"
+    elif [ -d "/Applications/Ollama.app" ]; then
+        open -a Ollama
+        sleep 3
     fi
 fi
 
 echo ""
+echo "Comprobando RAM y descargando el modelo Qwen óptimo..."
+python3 -m funes.ram_governor.governor
+
+echo ""
 echo "Iniciando Funes..."
-read -p "Arrastra tu carpeta Vault de Obsidian aqui (o presiona Enter para usar ./Funes): " VAULT_INPUT
+read -p "Arrastra tu carpeta Vault de Obsidian aqui (o presiona Enter para usar ./Funes_Vault): " VAULT_INPUT
 
 VAULT_INPUT=$(echo "$VAULT_INPUT" | sed "s/^'//;s/'$//;s/^\"//;s/\"$//")
 
 if [ -n "$VAULT_INPUT" ]; then
     python3 funes/main.py --vault "$VAULT_INPUT"
 else
-    python3 funes/main.py --vault "./Funes"
+    python3 funes/main.py --vault "./Funes_Vault"
 fi
+

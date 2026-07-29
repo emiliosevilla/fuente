@@ -26,7 +26,7 @@ class VaultManager:
         self._ensure_directories()
 
     def _ensure_directories(self) -> None:
-        """Crea la jerarquía de carpetas si no existe."""
+        """Crea la jerarquía de carpetas si no existe y preconfigura reglas estrictas en Obsidian."""
         dirs = [
             self.config.input_dir,
             self.config.dirty_dir,
@@ -39,6 +39,35 @@ class VaultManager:
         for d in dirs:
             d.mkdir(parents=True, exist_ok=True)
             logger.info(f"Carpeta verificada: {d}")
+
+        # Configurar Obsidian (.obsidian/app.json) para evitar notas huérfanas o carpetas fuera de las 4 oficiales
+        try:
+            obsidian_dir = self.config.vault_path / ".obsidian"
+            obsidian_dir.mkdir(parents=True, exist_ok=True)
+            app_json = obsidian_dir / "app.json"
+
+            obsidian_rules = {
+                "newFileLocation": "folder",
+                "newFileFolderPath": self.config.input_dir_name,
+                "attachmentFolderPath": self.config.input_dir_name,
+                "useMarkdownLinks": True,
+            }
+
+            if app_json.exists():
+                try:
+                    with open(app_json, "r", encoding="utf-8") as f:
+                        current = json.load(f)
+                    current.update(obsidian_rules)
+                    obsidian_rules = current
+                except Exception:
+                    pass
+
+            with open(app_json, "w", encoding="utf-8") as f:
+                json.dump(obsidian_rules, f, indent=2, ensure_ascii=False)
+            logger.info("Configuradas reglas estrictas de ubicación de notas en .obsidian/app.json")
+        except Exception as e:
+            logger.warning(f"No se pudo escribir la configuración estricta de Obsidian: {e}")
+
 
     def copy_to_dirty(self, source_path: Path) -> Path:
         """Copia un archivo crudo desde 1_entrada hacia 2_sucio manteniendo el hash original."""

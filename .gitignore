@@ -1,5 +1,5 @@
 # Python
-__pycache__/
+**/__pycache__/
 *.py[cod]
 *$py.class
 *.so
@@ -34,3 +34,14 @@ Thumbs.db
 # Funes temporary data and Obsidian test vaults
 .funes/
 .obsidian/
+Funes/
+Funes_Vault/
+1_entrada/
+2_sucio/
+3_limpio/
+4_salida/
+funes/1_entrada/
+funes/2_sucio/
+funes/3_limpio/
+funes/4_salida/
+

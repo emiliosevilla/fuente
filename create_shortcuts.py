@@ -95,7 +95,9 @@ def create_shortcuts(base_dir: Path) -> bool:
     is_mac = sys.platform == "darwin"
 
     if is_windows:
-        funes_exe = (base_dir / "Funes.exe").resolve()
+        funes_exe = (base_dir / "Funes_windows.exe").resolve()
+        if not funes_exe.exists():
+            funes_exe = (base_dir / "dist" / "Funes_windows.exe").resolve()
         pythonw_exe = (base_dir / "venv" / "Scripts" / "pythonw.exe").resolve()
         
         if funes_exe.exists():
@@ -152,10 +154,10 @@ def create_shortcuts(base_dir: Path) -> bool:
 
         script_funes_content = f"""#!/bin/bash
 cd "{base_dir}"
-if [ -f "./venv/bin/python3" ]; then
+if [ -f "./dist/Funes_macOS" ]; then
+    ./dist/Funes_macOS
+elif [ -f "./venv/bin/python3" ]; then
     ./venv/bin/python3 -m funes.main
-elif [ -f "./dist/Funes" ]; then
-    ./dist/Funes
 else
     python3 -m funes.main
 fi

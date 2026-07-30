@@ -79,11 +79,16 @@ def build():
             with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
                 for file_path in files_to_bundle:
                     if file_path.exists() and file_path.is_file():
-                        zf.write(file_path, arcname=file_path.name)
-                        if sys.platform != "win32" and file_path.suffix in [".command", ""]:
-                            # Preservar permisos de ejecución en POSIX
-                            zinfo = zf.getinfo(file_path.name)
+                        if sys.platform != "win32" and (file_path.suffix in [".command", ""] or file_path.name == "Funes_macOS"):
+                            # Preservar permisos de ejecución (0755) en POSIX
+                            with open(file_path, "rb") as f_in:
+                                data = f_in.read()
+                            zinfo = zipfile.ZipInfo(file_path.name)
                             zinfo.external_attr = 0o755 << 16
+                            zinfo.compress_type = zipfile.ZIP_DEFLATED
+                            zf.writestr(zinfo, data)
+                        else:
+                            zf.write(file_path, arcname=file_path.name)
 
                 # Incluir carpeta assets/
                 assets_dir = Path("assets")

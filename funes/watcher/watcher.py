@@ -171,17 +171,26 @@ if HAS_WATCHDOG:
 
         def __init__(self, pipeline: ETLPipeline):
             self.pipeline = pipeline
+            self._recent_events: dict[str, float] = {}
+
+        def _should_process(self, path_str: str) -> bool:
+            now = time.time()
+            last_time = self._recent_events.get(path_str, 0.0)
+            if now - last_time < 2.0:
+                return False
+            self._recent_events[path_str] = now
+            return True
 
         def on_created(self, event):
-            if not event.is_directory:
+            if not event.is_directory and self._should_process(event.src_path):
                 self.pipeline.process_file(Path(event.src_path))
 
         def on_moved(self, event):
-            if not event.is_directory:
+            if not event.is_directory and self._should_process(event.dest_path):
                 self.pipeline.process_file(Path(event.dest_path))
 
         def on_modified(self, event):
-            if not event.is_directory:
+            if not event.is_directory and self._should_process(event.src_path):
                 self.pipeline.process_file(Path(event.src_path))
 
 

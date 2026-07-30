@@ -197,7 +197,14 @@ def prompt_user_apps_closed_gui(apps_list: List[str]) -> str:
         import tkinter as tk
         from tkinter import messagebox
 
-        dialog = tk.Tk()
+        root_exists = bool(getattr(tk, "_default_root", None))
+        if root_exists:
+            dialog = tk.Toplevel(tk._default_root)
+            dialog.transient(tk._default_root)
+            dialog.grab_set()
+        else:
+            dialog = tk.Tk()
+
         dialog.title("Funes — Aplicaciones Abiertas Detectadas")
         dialog.geometry("540x420")
         dialog.resizable(False, False)
@@ -325,7 +332,11 @@ def prompt_user_apps_closed_gui(apps_list: List[str]) -> str:
         btn_cancel.pack(side="right", fill="x", expand=True, padx=(4, 0))
 
         dialog.protocol("WM_DELETE_WINDOW", _on_cancel)
-        dialog.mainloop()
+        if root_exists:
+            dialog.wait_window()
+        else:
+            dialog.mainloop()
+        return result
         return result
     except Exception as e:
         logger.debug(f"Error mostrando diálogo GUI: {e}")

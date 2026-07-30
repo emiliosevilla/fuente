@@ -207,7 +207,7 @@ class FunesControlConsole(tk.Tk):
 
         subtitle_lbl = tk.Label(
             m_frame,
-            text=f"★ REGISTRO DE INTELICENCIA Y CONOCIMIENTO ★  •  Vault: {self.vault_path.name}",
+            text=f"★ REGISTRO DE INTELIGENCIA Y CONOCIMIENTO ★  •  Vault: {self.vault_path.name}",
             font=("Georgia", 13, "italic"),
             fg=THEME["gold"],
             bg=THEME["bg_root"],
@@ -402,6 +402,14 @@ class FunesControlConsole(tk.Tk):
         self.log_console.insert("end", f"[{timestamp}] {message}\n")
         self.log_console.see("end")
 
+    def _log_safe(self, message: str):
+        """Método seguro para llamar _log desde hilos secundarios en Tkinter."""
+        self.after(0, lambda: self._log(message))
+
+    def _set_var_safe(self, var: tk.StringVar, value: str):
+        """Método seguro para actualizar StringVar desde hilos secundarios."""
+        self.after(0, lambda: var.set(value))
+
     def refresh_stats(self):
         """Actualiza las estadísticas vivas y el estado de los servicios."""
         def _bg_check():
@@ -420,64 +428,75 @@ class FunesControlConsole(tk.Tk):
                 except Exception:
                     pass
 
-            self.stat_notes_var.set(str(len(valid_notes)))
-            self.stat_orphans_var.set(str(orphans))
-            self.stat_input_var.set(str(len(valid_input)))
+            self._set_var_safe(self.stat_notes_var, str(len(valid_notes)))
+            self._set_var_safe(self.stat_orphans_var, str(orphans))
+            self._set_var_safe(self.stat_input_var, str(len(valid_input)))
 
             governor = RAMGovernor()
             rec_model = governor.recommend_model()
-            if governor.check_ollama_alive():
-                self.status_ollama_var.set(f"Activa ({rec_model})")
+            if governor.check_ollama_status():
+                self._set_var_safe(self.status_ollama_var, f"Activa ({rec_model})")
             else:
-                self.status_ollama_var.set("Inactiva")
+                self._set_var_safe(self.status_ollama_var, "Inactiva")
 
             if is_anythingllm_installed():
-                self.status_anything_var.set("Listo")
+                self._set_var_safe(self.status_anything_var, "Listo")
             else:
-                self.status_anything_var.set("No detectado")
+                self._set_var_safe(self.status_anything_var, "No detectado")
 
             is_mac = sys.platform == "darwin"
             if is_mac:
                 obs_installed = Path("/Applications/Obsidian.app").exists()
             else:
-                obs_installed = True
-            self.status_obsidian_var.set("Listo" if obs_installed else "No detectado")
+                local_app = Path(os.environ.get("LOCALAPPDATA", "")) / "Programs" / "obsidian" / "Obsidian.exe"
+                prog_files = Path(os.environ.get("ProgramFiles", "")) / "Obsidian" / "Obsidian.exe"
+                obs_installed = local_app.exists() or prog_files.exists()
+            self._set_var_safe(self.status_obsidian_var, "Listo" if obs_installed else "No detectado")
 
         threading.Thread(target=_bg_check, daemon=True).start()
 
     # --- MANEJADORES DE ACCIONES ---
     def _on_flush_click(self):
         """Inicia el evento Flush bajo demanda."""
+        if getattr(self, "_flush_in_progress", False):
+            self._log("Proceso ocupado: Ya hay un Flush en ejecución...")
+            return
+
         if not check_and_prompt_user_apps_closed():
             self._log("Proceso pausado: Hay aplicaciones abiertas.")
             return
 
+        self._flush_in_progress = True
+
         def _run_flush():
-            self._log("📥 [PASO 2] Procesando documentos en 1_entrada...")
-            
-            copied = self.sync_manager.sync_to_input(self.config.vault.input_dir)
-            if copied > 0:
-                self._log(f"[+] Sincronizados {copied} archivo(s) desde fuentes externas a 1_entrada.")
+            try:
+                self._log_safe("📥 [PASO 2] Procesando documentos en 1_entrada...")
+                
+                copied = self.sync_manager.sync_to_input(self.config.vault.input_dir)
+                if copied > 0:
+                    self._log_safe(f"[+] Sincronizados {copied} archivo(s) desde fuentes externas a 1_entrada.")
 
-            pipeline = ETLPipeline(self.config)
-            input_files = [f for f in self.config.vault.input_dir.glob("*") if f.is_file() and not f.name.startswith(".")]
+                pipeline = ETLPipeline(self.config)
+                input_files = [f for f in self.config.vault.input_dir.glob("*") if f.is_file() and not f.name.startswith(".")]
 
-            if input_files:
-                self._log(f"Procesando {len(input_files)} documento(s)...")
-                for file_path in input_files:
-                    self._log(f"  • Leyendo: {file_path.name}")
-                    pipeline.process_file(file_path)
-            else:
-                self._log("No se encontraron documentos nuevos en 1_entrada.")
+                if input_files:
+                    self._log_safe(f"Procesando {len(input_files)} documento(s)...")
+                    for file_path in input_files:
+                        self._log_safe(f"  • Leyendo: {file_path.name}")
+                        pipeline.process_file(file_path)
+                else:
+                    self._log_safe("No se encontraron documentos nuevos en 1_entrada.")
 
-            self._log("📥 [PASO 3] Conectando notas y actualizando el índice de conocimiento...")
-            karpathy = KarpathyGraphLoop(self.config.vault.output_dir)
-            karpathy.refine_knowledge_graph()
+                self._log_safe("📥 [PASO 3] Conectando notas y actualizando el índice de conocimiento...")
+                karpathy = KarpathyGraphLoop(self.config.vault.output_dir)
+                karpathy.refine_knowledge_graph()
 
-            configure_anythingllm_integration(self.config.vault.output_dir)
+                configure_anythingllm_integration(self.config.vault.output_dir)
 
-            self._log("✓ Proceso completado con éxito. Notas e IA listos para consultar.")
-            self.after(100, self.refresh_stats)
+                self._log_safe("✓ Proceso completado con éxito. Notas e IA listos para consultar.")
+            finally:
+                self._flush_in_progress = False
+                self.after(100, self.refresh_stats)
 
         threading.Thread(target=_run_flush, daemon=True).start()
 
@@ -508,10 +527,10 @@ class FunesControlConsole(tk.Tk):
     def _on_audit_click(self):
         """Ejecuta una conexión y refinamiento del conocimiento."""
         def _run_audit():
-            self._log("🛡️ [PASO 3] Conectando notas y actualizando el índice...")
+            self._log_safe("🛡️ [PASO 3] Conectando notas y actualizando el índice...")
             karpathy = KarpathyGraphLoop(self.config.vault.output_dir)
             karpathy.refine_knowledge_graph()
-            self._log("✓ Conexión e índice actualizados.")
+            self._log_safe("✓ Conexión e índice actualizados.")
             self.after(100, self.refresh_stats)
 
         threading.Thread(target=_run_audit, daemon=True).start()

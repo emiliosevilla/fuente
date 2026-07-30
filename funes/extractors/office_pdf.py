@@ -123,7 +123,8 @@ class TextAndOfficeExtractor(BaseExtractor):
             doc = docx.Document(path)
             paragraphs = [p.text for p in doc.paragraphs if p.text.strip()]
             return "\n\n".join(paragraphs)
-        except Exception:
+        except Exception as e:
+            logger.warning(f"Error extrayendo DOCX {path.name}: {e}. Usando lectura de respaldo.")
             return self._extract_fallback(path)
 
     def _extract_xlsx(self, path: Path) -> str:
@@ -139,7 +140,8 @@ class TextAndOfficeExtractor(BaseExtractor):
                     if row_str.strip(" |"):
                         output.append(row_str)
             return "\n".join(output)
-        except Exception:
+        except Exception as e:
+            logger.warning(f"Error extrayendo XLSX {path.name}: {e}. Usando lectura de respaldo.")
             return self._extract_fallback(path)
 
     def _extract_pptx(self, path: Path) -> str:
@@ -153,7 +155,8 @@ class TextAndOfficeExtractor(BaseExtractor):
                     if hasattr(shape, "text") and shape.text.strip():
                         output.append(shape.text)
             return "\n\n".join(output)
-        except Exception:
+        except Exception as e:
+            logger.warning(f"Error extrayendo PPTX {path.name}: {e}. Usando lectura de respaldo.")
             return self._extract_fallback(path)
 
     def _extract_msg(self, path: Path) -> str:
@@ -162,14 +165,24 @@ class TextAndOfficeExtractor(BaseExtractor):
             msg = extract_msg.Message(path)
             output = f"**De:** {msg.sender}\n**Para:** {msg.to}\n**Asunto:** {msg.subject}\n**Fecha:** {msg.date}\n\n{msg.body}"
             return output
-        except Exception:
+        except Exception as e:
+            logger.warning(f"Error extrayendo MSG {path.name}: {e}. Usando lectura de respaldo.")
             return self._extract_fallback(path)
 
     def _extract_csv(self, path: Path) -> str:
-        """Convierte archivos CSV a tabla Markdown legible."""
+        """Convierte archivos CSV a tabla Markdown legible autodetectando el delimitador."""
         lines = []
         with open(path, "r", encoding="utf-8", errors="replace") as f:
-            reader = csv.reader(f)
+            sample = f.read(2048)
+            f.seek(0)
+            delimiter = ","
+            if sample:
+                try:
+                    dialect = csv.Sniffer().sniff(sample, delimiters=",;\t|")
+                    delimiter = dialect.delimiter
+                except Exception:
+                    pass
+            reader = csv.reader(f, delimiter=delimiter)
             for idx, row in enumerate(reader):
                 line = " | ".join(row)
                 lines.append(f"| {line} |")

@@ -80,7 +80,7 @@ exe = EXE(
     a.zipfiles,
     a.datas,
     [],
-    name='Funes_macOS',
+    name='Funes_macOS' if sys.platform == 'darwin' else 'Funes_windows',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,

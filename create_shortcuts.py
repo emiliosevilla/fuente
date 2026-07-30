@@ -7,6 +7,8 @@ import os
 import sys
 import subprocess
 from pathlib import Path
+from typing import Optional
+
 
 if sys.platform == "win32":
     if hasattr(sys.stdout, "reconfigure"):
@@ -85,7 +87,7 @@ def prompt_folder_selection(default_desktop: Path) -> Path:
     return default_desktop
 
 
-def create_shortcuts(base_dir: Path) -> bool:
+def create_shortcuts(base_dir: Path, target_dir: Optional[Path] = None) -> bool:
     assets_dir = base_dir / "assets"
     ensure_app_icon(assets_dir)
     ensure_archive_icon(assets_dir)
@@ -100,7 +102,9 @@ def create_shortcuts(base_dir: Path) -> bool:
     if not default_desktop.exists():
         default_desktop = home
 
-    target_dir = prompt_folder_selection(default_desktop)
+    if target_dir is None:
+        target_dir = prompt_folder_selection(default_desktop)
+
 
     is_windows = sys.platform == "win32"
     is_mac = sys.platform == "darwin"

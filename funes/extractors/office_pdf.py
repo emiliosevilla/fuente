@@ -29,6 +29,13 @@ class TextAndOfficeExtractor(BaseExtractor):
         ext = file_path.suffix.lower()
         metadata = {"original_file": file_path.name, "format": ext}
 
+        # Para CSV y JSON, utilizar extractores estructurados nativos para asegurar tablas y bloques ```json
+        if ext in {".csv", ".json"}:
+            if ext == ".csv":
+                return self._extract_csv(file_path), metadata
+            elif ext == ".json":
+                return self._extract_json(file_path), metadata
+
         # 1. Intenta primero Docling (IBM) si está instalado
         docling_res = self._try_docling(file_path)
         if docling_res:

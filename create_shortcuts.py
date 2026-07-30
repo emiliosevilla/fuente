@@ -110,6 +110,7 @@ def create_shortcuts(base_dir: Path, target_dir: Optional[Path] = None) -> bool:
     is_mac = sys.platform == "darwin"
 
     if is_windows:
+        funes_bat = (base_dir / "run_funes.bat").resolve()
         funes_exe = (base_dir / "Funes_windows.exe").resolve()
         if not funes_exe.exists():
             funes_exe = (base_dir / "dist" / "Funes_windows.exe").resolve()
@@ -118,12 +119,16 @@ def create_shortcuts(base_dir: Path, target_dir: Optional[Path] = None) -> bool:
         if funes_exe.exists():
             target_path = str(funes_exe)
             target_args = ""
+        elif funes_bat.exists():
+            target_path = str(funes_bat)
+            target_args = ""
         elif pythonw_exe.exists():
             target_path = str(pythonw_exe)
             target_args = "-m funes.main"
         else:
             target_path = "pythonw"
             target_args = "-m funes.main"
+
 
         funes_ico = (assets_dir / "funes_icon.ico").resolve()
         archive_ico = (assets_dir / "archive_icon.ico").resolve()

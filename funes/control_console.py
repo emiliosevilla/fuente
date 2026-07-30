@@ -29,20 +29,20 @@ from funes.graph_engine.karpathy_loop import KarpathyGraphLoop
 from funes.ram_governor.governor import RAMGovernor
 
 
-# Paleta de colores: Estética Periódico Vintage (Watergate / Washington Post) & Barbershop años 50
+# Paleta de colores: Estética Papiro (Claude Anthropic Framework)
 THEME = {
-    "bg_root": "#161412",         # Tinta profunda / Piel oscura de imprenta
-    "bg_card": "#24201D",         # Papel pergamino envejecido oscuro
-    "bg_card_hover": "#332B27",   # Prensado activo
-    "bg_log": "#0C0A09",          # Tinta de imprenta negra profunda
-    "border": "#443C35",          # Regla tipográfica de prensa
-    "border_gold": "#B45309",     # Bronce / Latón envejecido
-    "crimson": "#B91C1C",         # Rojo Barbershop Pole / Sello de Titular
-    "crimson_hover": "#991B1B",
-    "paper": "#F2ECE1",           # Papel periódico de imprenta (Watergate Gazette)
-    "muted": "#A69B8D",           # Gris mecanográfico antiguo
-    "gold": "#D97706",            # Latón y bronce de imprenta
-    "green": "#16A34A",           # Verde prensa
+    "bg_root": "#DCD4C7",         # Lienzo Papiro Antiguo
+    "bg_card": "#EAE2D5",         # Tarjetas Pergamino Papiro
+    "bg_card_hover": "#CDC3B3",   # Tostado Papiro Activo
+    "bg_log": "#E2DACD",          # Fondo Consola Log Papiro
+    "border": "#BFB4A3",          # Regla y Borde Papiro
+    "border_gold": "#161411",     # Acento Tinta Espresso
+    "crimson": "#161411",         # Tinta Espresso Profunda (Acciones Destacadas)
+    "crimson_hover": "#2E2B25",   # Hover Tinta Espresso
+    "paper": "#161411",           # Texto Tinta Espresso de Alto Contraste
+    "muted": "#5E564B",           # Texto Secundario Lino Papiro
+    "gold": "#2E2B25",            # Acento Monospace / Etiquetas
+    "green": "#16A34A",           # Verde Indicador Estado
 }
 
 
@@ -204,8 +204,8 @@ class FunesControlConsole(tk.Tk):
 
         title_lbl = tk.Label(
             m_frame,
-            text="T H E   F U N E S   G A Z E T T E",
-            font=("Georgia", 34, "bold"),
+            text="F U N E S   K N O W L E D G E   I N T E L L I G E N C E",
+            font=("Georgia", 30, "bold"),
             fg=THEME["paper"],
             bg=THEME["bg_root"],
             anchor="w"
@@ -214,8 +214,8 @@ class FunesControlConsole(tk.Tk):
 
         subtitle_lbl = tk.Label(
             m_frame,
-            text=f"★ REGISTRO DE INTELIGENCIA Y CONOCIMIENTO ★  •  Vault: {self.vault_path.name}",
-            font=("Georgia", 13, "italic"),
+            text=f"★ ESTÉTICA PAPIRO DEFINITIVA ★  •  Vault: {self.vault_path.name}",
+            font=("Georgia", 12, "italic"),
             fg=THEME["gold"],
             bg=THEME["bg_root"],
             anchor="e"
@@ -252,112 +252,178 @@ class FunesControlConsole(tk.Tk):
         self._create_stat_card(stats_frame, "Notas por Enlazar", self.stat_orphans_var, THEME["gold"], 1)
         self._create_stat_card(stats_frame, "Archivos de Entrada", self.stat_input_var, THEME["green"], 2)
 
-        # 4. DIAGRAMA VISUAL DE GRAFO LÓGICO DE PROCESO
+        # 4. DIAGRAMA VISUAL DE GRAFO LÓGICO DE PROCESO (4 ETAPAS DEL MODELO)
         graph_section = tk.LabelFrame(
             self,
-            text=" GRAFO DE FLUJO LÓGICO DE PROCESAMIENTO Y CONSULTA DE FUNES ",
+            text=" 📐 GRAFO DE ARQUITECTURA DE PROCESAMIENTO Y CONSULTA DE FUNES ",
             font=("Georgia", 13, "bold"),
             fg=THEME["paper"],
             bg=THEME["bg_root"],
-            padx=20,
-            pady=15,
+            padx=16,
+            pady=14,
             bd=1,
             relief="solid"
         )
         graph_section.pack(side="top", fill="x", padx=30, pady=(0, 15))
 
-        # Nodos Fase 1: Entrada ➔ Ingesta ➔ Conexión
-        flow_row1 = tk.Frame(graph_section, bg=THEME["bg_root"])
-        flow_row1.pack(fill="x", pady=(0, 10))
+        # Contenedor de 4 subgrafos alineados horizontalmente
+        flow_container = tk.Frame(graph_section, bg=THEME["bg_root"])
+        flow_container.pack(fill="x")
 
-        # Nodo 1: Fuentes
+        # --- SUBGRAFO 1: INGESTA CONTINUA ---
+        sg1 = tk.LabelFrame(
+            flow_container,
+            text=" 1. Ingesta Continua ",
+            font=("Georgia", 10, "bold"),
+            fg=THEME["gold"],
+            bg=THEME["bg_card"],
+            bd=1,
+            relief="solid",
+            padx=8,
+            pady=8
+        )
+        sg1.grid(row=0, column=0, sticky="nsew", padx=4)
+
         node1 = GraphProcessNode(
-            flow_row1,
-            step_tag="PASO 1: ENTRADA",
-            icon_str="📡",
-            title_str="Fuentes Externas",
-            desc_str="Conectar carpetas compartidas de red, NAS o disco",
+            sg1,
+            step_tag="PASO 1",
+            icon_str="📁",
+            title_str="1_entrada/",
+            desc_str="Archivos desestructurados en bruto & Monitor Watcher",
             command=self._on_sync_click
         )
-        node1.grid(row=0, column=0, sticky="nsew", padx=4)
+        node1.pack(fill="both", expand=True)
 
-        # Conector 1 ➔ 2
-        lbl_arr1 = tk.Label(flow_row1, text=" ══► ", font=("Courier", 18, "bold"), fg=THEME["gold"], bg=THEME["bg_root"])
-        lbl_arr1.grid(row=0, column=1, padx=2)
+        # Flecha conector 1 -> 2
+        lbl_arr1 = tk.Label(flow_container, text=" ═► ", font=("Courier", 16, "bold"), fg=THEME["gold"], bg=THEME["bg_root"])
+        lbl_arr1.grid(row=0, column=1, padx=1)
 
-        # Nodo 2: Ingesta (Acción Principal Destacada)
+        # --- SUBGRAFO 2: TRANSFORMACIÓN Y LIMPIEZA ---
+        sg2 = tk.LabelFrame(
+            flow_container,
+            text=" 2. Transformación & Limpieza ",
+            font=("Georgia", 10, "bold"),
+            fg=THEME["gold"],
+            bg=THEME["bg_card"],
+            bd=1,
+            relief="solid",
+            padx=8,
+            pady=8
+        )
+        sg2.grid(row=0, column=2, sticky="nsew", padx=4)
+
         node2 = GraphProcessNode(
-            flow_row1,
-            step_tag="PASO 2: INGESTA",
-            icon_str="📥",
-            title_str="Procesar Documentos",
-            desc_str="Extraer y convertir archivos nuevos en notas inteligentes",
+            sg2,
+            step_tag="PASO 2 (INGESTA)",
+            icon_str="⚙️",
+            title_str="2_sucio & 3_limpio",
+            desc_str="Backup verbatim, OCR Tesseract, Whisper & Extracción",
             command=self._on_flush_click,
             is_highlight=True
         )
-        node2.grid(row=0, column=2, sticky="nsew", padx=4)
+        node2.pack(fill="both", expand=True)
 
-        # Conector 2 ➔ 3
-        lbl_arr2 = tk.Label(flow_row1, text=" ══► ", font=("Courier", 18, "bold"), fg=THEME["gold"], bg=THEME["bg_root"])
-        lbl_arr2.grid(row=0, column=3, padx=2)
+        # Flecha conector 2 -> 3
+        lbl_arr2 = tk.Label(flow_container, text=" ═► ", font=("Courier", 16, "bold"), fg=THEME["gold"], bg=THEME["bg_root"])
+        lbl_arr2.grid(row=0, column=3, padx=1)
 
-        # Nodo 3: Conectar
+        # --- SUBGRAFO 3: GENERACIÓN ATÓMICA ---
+        sg3 = tk.LabelFrame(
+            flow_container,
+            text=" 3. Generación Atómica ",
+            font=("Georgia", 10, "bold"),
+            fg=THEME["gold"],
+            bg=THEME["bg_card"],
+            bd=1,
+            relief="solid",
+            padx=8,
+            pady=8
+        )
+        sg3.grid(row=0, column=4, sticky="nsew", padx=4)
+
         node3 = GraphProcessNode(
-            flow_row1,
-            step_tag="PASO 3: ENLACE",
-            icon_str="🛡️",
-            title_str="Conectar Notas",
-            desc_str="Sembrar hiperenlaces y organizar el índice general",
+            sg3,
+            step_tag="PASO 3 (GRAFO)",
+            icon_str="🔗",
+            title_str="4_salida & MOC",
+            desc_str="Notas atómicas, inserción WikiLinks & _Indice_MOC.md",
             command=self._on_audit_click
         )
-        node3.grid(row=0, column=4, sticky="nsew", padx=4)
+        node3.pack(fill="both", expand=True)
 
-        flow_row1.grid_columnconfigure(0, weight=1)
-        flow_row1.grid_columnconfigure(2, weight=1)
-        flow_row1.grid_columnconfigure(4, weight=1)
+        # Flecha conector 3 -> 4
+        lbl_arr3 = tk.Label(flow_container, text=" ═► ", font=("Courier", 16, "bold"), fg=THEME["gold"], bg=THEME["bg_root"])
+        lbl_arr3.grid(row=0, column=5, padx=1)
 
-        # Separador visual hacia la fase de consulta
-        sep_frame = tk.Frame(graph_section, bg=THEME["bg_root"])
-        sep_frame.pack(fill="x", pady=2)
-        tk.Label(sep_frame, text="║                                       ▼ SALIDAS DE CONOCIMIENTO RESULTANTE ▼                                       ║", font=("Courier", 11, "bold"), fg=THEME["gold"], bg=THEME["bg_root"]).pack()
-
-        # Nodos Fase 2: Salidas de Consulta y Utilidad
-        flow_row2 = tk.Frame(graph_section, bg=THEME["bg_root"])
-        flow_row2.pack(fill="x", pady=(6, 0))
-
-        node4a = GraphProcessNode(
-            flow_row2,
-            step_tag="SALIDA 4A: LECTURA",
-            icon_str="📖",
-            title_str="Ver en Obsidian",
-            desc_str="Explorar y escribir en tu cuaderno de notas visual",
-            command=self._on_obsidian_click
+        # --- SUBGRAFO 4: PERSISTENCIA Y CONSULTA ---
+        sg4 = tk.LabelFrame(
+            flow_container,
+            text=" 4. Persistencia & Consulta ",
+            font=("Georgia", 10, "bold"),
+            fg=THEME["gold"],
+            bg=THEME["bg_card"],
+            bd=1,
+            relief="solid",
+            padx=8,
+            pady=8
         )
-        node4a.grid(row=0, column=0, sticky="nsew", padx=4)
+        sg4.grid(row=0, column=6, sticky="nsew", padx=4)
 
-        node4b = GraphProcessNode(
-            flow_row2,
-            step_tag="SALIDA 4B: CONSULTA",
-            icon_str="💬",
-            title_str="Chatear con la IA",
-            desc_str="Hacer preguntas a la IA sobre todo tu conocimiento",
-            command=self._on_chat_click
+        sub_flow = tk.Frame(sg4, bg=THEME["bg_card"])
+        sub_flow.pack(fill="both", expand=True)
+
+        btn_obs = tk.Button(
+            sub_flow,
+            text="📖 Cuaderno Obsidian",
+            font=("Georgia", 11, "bold"),
+            fg=THEME["paper"],
+            bg=THEME["bg_card_hover"],
+            activebackground=THEME["crimson"],
+            activeforeground="#FFFFFF",
+            relief="solid",
+            bd=1,
+            cursor="hand2",
+            command=self._on_obsidian_click,
+            pady=6
         )
-        node4b.grid(row=0, column=1, sticky="nsew", padx=4)
+        btn_obs.pack(fill="x", pady=(0, 4))
 
-        node_ref = GraphProcessNode(
-            flow_row2,
-            step_tag="SISTEMA",
-            icon_str="🔄",
-            title_str="Refrescar Estado",
-            desc_str="Actualizar contadores y verificar la salud del sistema",
-            command=self.refresh_stats
+        btn_chat = tk.Button(
+            sub_flow,
+            text="💬 Chat IA AnythingLLM",
+            font=("Georgia", 11, "bold"),
+            fg=THEME["paper"],
+            bg=THEME["bg_card_hover"],
+            activebackground=THEME["crimson"],
+            activeforeground="#FFFFFF",
+            relief="solid",
+            bd=1,
+            cursor="hand2",
+            command=self._on_chat_click,
+            pady=6
         )
-        node_ref.grid(row=0, column=2, sticky="nsew", padx=4)
+        btn_chat.pack(fill="x", pady=(0, 4))
 
-        flow_row2.grid_columnconfigure(0, weight=1)
-        flow_row2.grid_columnconfigure(1, weight=1)
-        flow_row2.grid_columnconfigure(2, weight=1)
+        btn_ref = tk.Button(
+            sub_flow,
+            text="🔄 Refrescar Estado",
+            font=("Georgia", 10),
+            fg=THEME["muted"],
+            bg=THEME["bg_card"],
+            activebackground=THEME["bg_card_hover"],
+            activeforeground=THEME["paper"],
+            relief="flat",
+            cursor="hand2",
+            command=self.refresh_stats,
+            pady=2
+        )
+        btn_ref.pack(fill="x")
+
+        # Configurar proporciones relativas
+        flow_container.grid_columnconfigure(0, weight=1)
+        flow_container.grid_columnconfigure(2, weight=1)
+        flow_container.grid_columnconfigure(4, weight=1)
+        flow_container.grid_columnconfigure(6, weight=1)
 
         # 5. INTEGRATED LOG CONSOLE
         log_frame = tk.Frame(self, bg=THEME["bg_root"], padx=30)

@@ -20,7 +20,7 @@ Requires-Dist: pytesseract>=0.3.10
 
 <p align="center">
   <img src="assets/funes_icon.png" alt="Funes Icon" width="128" />
-  <h1 align="center">Funes — Knowledge Base ETL para Obsidian</h1>
+  <h1 align="center">Habla con Funes</h1>
 </p>
 
 <p align="center">

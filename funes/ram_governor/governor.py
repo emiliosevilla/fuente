@@ -92,7 +92,7 @@ class RAMGovernor:
 
         if total_gb <= 8.0 or available_gb <= 3.5:
             model = "qwen2.5:1.5b"
-            logger.info("⚡ [MODO ECO 8GB] Equipo con 8 GB RAM o baja memoria libre. Usando modelo ultraligero con descarga inmediata.")
+            logger.info("[MODO ECO 8GB] Equipo con 8 GB RAM o baja memoria libre. Usando modelo ultraligero con descarga inmediata.")
         elif available_gb <= 10.0 or total_gb <= 16.0:
             model = "qwen2.5:3b"
         elif available_gb <= 20.0 or total_gb <= 32.0:

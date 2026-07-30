@@ -6,7 +6,10 @@ Script autónomo para crear los accesos directos de Funes:
 import os
 import sys
 import subprocess
-from pathlib import Path
+# Asegurar que la ruta base esté en sys.path para poder importar el módulo 'funes'
+base_dir = Path(__file__).resolve().parent
+if str(base_dir) not in sys.path:
+    sys.path.insert(0, str(base_dir))
 
 from funes.core.icon_generator import ensure_app_icon, ensure_archive_icon
 

@@ -50,7 +50,7 @@ class VaultManager:
                 "newFileLocation": "folder",
                 "newFileFolderPath": self.config.input_dir_name,
                 "attachmentFolderPath": self.config.input_dir_name,
-                "useMarkdownLinks": True,
+                "useMarkdownLinks": False,
             }
 
             if app_json.exists():

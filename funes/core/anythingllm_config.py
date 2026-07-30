@@ -107,19 +107,18 @@ def launch_anythingllm() -> bool:
     is_win = sys.platform == "win32"
 
     try:
-        if is_mac and paths["app_path"]:
-            subprocess.Popen(["open", "-a", "AnythingLLM"])
-            return True
-        elif is_win and paths["app_path"]:
-            subprocess.Popen([str(paths["app_path"])])
-            return True
-        else:
-            # Intentar abrir por comando genérico
-            if is_mac:
+        if is_mac:
+            if paths["app_path"] or Path("/Applications/AnythingLLM.app").exists():
                 subprocess.Popen(["open", "-a", "AnythingLLM"])
-            elif is_win:
+                return True
+        elif is_win:
+            if paths["app_path"] and paths["app_path"].exists():
+                subprocess.Popen([str(paths["app_path"])])
+                return True
+            else:
                 subprocess.Popen(["cmd", "/c", "start", "anythingllm"])
-            return True
+                return True
+        return False
     except Exception as e:
         logger.error(f"Error abriendo AnythingLLM: {e}")
         return False

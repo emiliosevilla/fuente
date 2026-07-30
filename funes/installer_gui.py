@@ -16,7 +16,7 @@ try:
         install_anythingllm_autonomously,
         configure_anythingllm_integration
     )
-    from create_shortcuts import create_desktop_shortcut
+    from create_shortcuts import create_shortcuts
 except ImportError:
     pass
 
@@ -498,7 +498,7 @@ class FunesInstallerWizard(tk.Tk):
             self.lbl_install_status.config(text="4. Generando botón de acceso directo en el Escritorio...")
             self.progress_bar["value"] = 85
             try:
-                create_desktop_shortcut(self.base_dir)
+                create_shortcuts(self.base_dir)
                 self._log("[✓] Acceso directo 'Habla con Funes' creado con éxito en tu Escritorio.")
             except Exception as e:
                 self._log(f"[!] Error creando acceso directo: {e}")

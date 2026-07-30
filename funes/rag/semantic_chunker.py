@@ -45,16 +45,20 @@ class SemanticChunker:
                             if current_len + s_len > self.max_chunk_size and current_chunk:
                                 chunk_text = " ".join(current_chunk)
                                 chunks.append(self._create_chunk_dict(chunk_text, source_file, safe_source_id, current_header, len(chunks)))
-                                current_chunk = [sentence]
-                                current_len = s_len
+                                # Aplicar solapamiento (overlap) del fragmento anterior
+                                overlap_text = chunk_text[-self.overlap:] if len(chunk_text) > self.overlap else chunk_text
+                                current_chunk = [overlap_text, sentence] if self.overlap > 0 else [sentence]
+                                current_len = sum(len(x) for x in current_chunk) + len(current_chunk) - 1
                             else:
                                 current_chunk.append(sentence)
                                 current_len += s_len + 1
                     elif current_len + p_len > self.max_chunk_size and current_chunk:
                         chunk_text = "\n\n".join(current_chunk)
                         chunks.append(self._create_chunk_dict(chunk_text, source_file, safe_source_id, current_header, len(chunks)))
-                        current_chunk = [p]
-                        current_len = p_len
+                        # Aplicar solapamiento (overlap) del fragmento anterior
+                        overlap_text = chunk_text[-self.overlap:] if len(chunk_text) > self.overlap else chunk_text
+                        current_chunk = [overlap_text, p] if self.overlap > 0 else [p]
+                        current_len = sum(len(x) for x in current_chunk) + len(current_chunk) - 1
                     else:
                         current_chunk.append(p)
                         current_len += p_len + 2

@@ -80,6 +80,9 @@ class ChromaStore:
 
     def query_similar(self, query_text: str, n_results: int = 5) -> List[Dict[str, Any]]:
         """Busca fragmentos semánticamente similares en la base de datos."""
+        if not self._initialized:
+            self._init_chroma()
+
         if not self.collection:
             return []
 
@@ -99,6 +102,9 @@ class ChromaStore:
 
     def get_all_notes_titles(self) -> List[str]:
         """Recupera la lista de títulos de notas almacenados en los metadatos."""
+        if not self._initialized:
+            self._init_chroma()
+
         if not self.collection:
             return []
         try:

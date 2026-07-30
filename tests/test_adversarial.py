@@ -3,6 +3,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from funes.config import get_default_config
 from funes.core.vault import VaultManager
@@ -173,8 +174,10 @@ Esta es una Nota normal.
         self.assertNotIn("h[[Http]]s", linked)
         self.assertNotIn("f[[File]]://", linked)
 
-    def test_adversarial_concurrent_batch_ingestion(self):
+    @patch("funes.watcher.watcher.AtomicNoteGenerator.generate_atomic_note")
+    def test_adversarial_concurrent_batch_ingestion(self, mock_gen):
         """Prueba volcado simultáneo de 20 archivos en 1_entrada."""
+        mock_gen.side_effect = lambda clean_md_content, model_name, file_name: f"# {file_name}\n\n{clean_md_content}"
         for i in range(20):
             p = self.config.vault.input_dir / f"archivo_masivo_{i:02d}.txt"
             with open(p, "w", encoding="utf-8") as f:

@@ -2,6 +2,8 @@ README.md
 pyproject.toml
 funes/__init__.py
 funes/config.py
+funes/control_console.py
+funes/installer_gui.py
 funes/main.py
 funes.egg-info/PKG-INFO
 funes.egg-info/SOURCES.txt
@@ -10,6 +12,9 @@ funes.egg-info/entry_points.txt
 funes.egg-info/requires.txt
 funes.egg-info/top_level.txt
 funes/core/__init__.py
+funes/core/anythingllm_config.py
+funes/core/app_checker.py
+funes/core/folder_sync.py
 funes/core/icon_generator.py
 funes/core/vault.py
 funes/extractors/__init__.py

@@ -6,6 +6,8 @@ Script autónomo para crear los accesos directos de Funes:
 import os
 import sys
 import subprocess
+from pathlib import Path
+
 # Asegurar que la ruta base esté en sys.path para poder importar el módulo 'funes'
 base_dir = Path(__file__).resolve().parent
 if str(base_dir) not in sys.path:

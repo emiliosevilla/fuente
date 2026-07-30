@@ -9,7 +9,13 @@ from funes.watcher.watcher import ETLPipeline
 from funes.graph_engine.karpathy_loop import KarpathyGraphLoop
 from funes.core.app_checker import check_and_prompt_user_apps_closed
 
-# Configuración básica de logging
+# Configuración básica de logging y codificación UTF-8 para consola en Windows
+if sys.platform == "win32":
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    if hasattr(sys.stderr, "reconfigure"):
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",

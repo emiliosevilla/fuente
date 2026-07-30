@@ -8,6 +8,12 @@ import sys
 import subprocess
 from pathlib import Path
 
+if sys.platform == "win32":
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    if hasattr(sys.stderr, "reconfigure"):
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
 # Asegurar que la ruta base esté en sys.path para poder importar el módulo 'funes'
 base_dir = Path(__file__).resolve().parent
 if str(base_dir) not in sys.path:
@@ -22,8 +28,8 @@ def prompt_folder_selection(default_desktop: Path) -> Path:
     print("    UBICACIÓN DE ACCESOS DIRECTOS")
     print("=======================================================")
     print("Se crearán 2 accesos directos en la carpeta que elijas:")
-    print(" 👓 'Funes' (Acceso directo al programa)")
-    print(" 🗄️ 'La Memoria de Funes' (Acceso directo a tu Vault de notas)")
+    print("  [1] 'Funes' (Acceso directo al programa)")
+    print("  [2] 'La Memoria de Funes' (Acceso directo a tu Vault de notas)")
     print("-------------------------------------------------------")
 
     # Intento 1: Tkinter GUI Dialog
@@ -146,8 +152,8 @@ def create_shortcuts(base_dir: Path) -> bool:
             cmd = ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", ps_script]
             subprocess.run(cmd, check=True)
             print(f"\n[+] Accesos directos creados exitosamente en: {target_dir}")
-            print(f"    👓 'Funes' -> {shortcut_funes}")
-            print(f"    🗄️ 'La Memoria de Funes' -> {shortcut_memoria}")
+            print(f"    - 'Funes' -> {shortcut_funes}")
+            print(f"    - 'La Memoria de Funes' -> {shortcut_memoria}")
             return True
         except Exception as e:
             print(f"[!] Error creando accesos directos en Windows: {e}")

@@ -16,11 +16,18 @@ SYSTEM_WHITELIST = {
     "terminal", "iterm2", "iterm", "alacritty", "kitty", "ghostty",
     "cmd.exe", "powershell.exe", "windowsterminal.exe", "conhost.exe",
     "ollama", "ollama_llama_server", "python", "python3", "funes", "electron", "electron.exe",
-    # Windows sistema
+    # Windows sistema y servicios de fondo / antivirus / gestión empresarial
     "explorer.exe", "system", "svchost.exe", "csrss.exe", "winlogon.exe",
     "services.exe", "lsass.exe", "smss.exe", "taskhostw.exe", "ctfmon.exe",
     "dwm.exe", "fontdrvhost.exe", "sihost.exe", "searchhost.exe",
-    "startmenuexperiencehost.exe", "runtimebroker.exe", "shellexperiencehost.exe"
+    "startmenuexperiencehost.exe", "runtimebroker.exe", "shellexperiencehost.exe",
+    "msedgewebview2.exe", "msedgewebview2", "ecoresident.exe", "ecoresident",
+    "sophosfilescanner.exe", "sophosfilescanner", "jusched.exe", "jusched",
+    "mcsclient.exe", "mcsclient", "hmpalert.exe", "hmpalert", "ksnotifier.exe", "ksnotifier",
+    "scheduler.exe", "scheduler", "awacmclient.exe", "awacmclient", "armsvc.exe", "armsvc",
+    "ws1etlm.exe", "ws1etlm", "taskscheduler.exe", "taskscheduler",
+    "workspaceonehubhealthmonitoring.exe", "workspaceonehubhealthmonitoring",
+    "microclaudia.exe", "microclaudia", "ai.exe", "ai"
 }
 
 # Nombres descriptivos conocidos para mejorar los mensajes mostrados al usuario
@@ -75,6 +82,16 @@ def get_mac_visible_apps() -> List[str]:
     return []
 
 
+KNOWN_USER_APP_KEYWORDS = {
+    "chrome", "msedge", "firefox", "brave", "opera", "vivaldi", "safari",
+    "winword", "excel", "powerpnt", "outlook", "olk", "onenote", "access",
+    "obsidian", "slack", "teams", "discord", "spotify", "trello",
+    "acrobat", "photoshop", "illustrator", "indesign", "premiere",
+    "notepad", "wordpad", "calculator", "vlc", "mpc-hc", "zoom", "skype",
+    "code", "cursor", "devenv", "pycharm", "clion", "webstorm", "idea64"
+}
+
+
 def get_running_user_apps() -> List[Tuple[str, str]]:
     """
     Escanea las aplicaciones activas y devuelve una lista de tuplas (PID, Nombre_Descriptivo)
@@ -110,8 +127,13 @@ def get_running_user_apps() -> List[Tuple[str, str]]:
             if name_lower in SYSTEM_WHITELIST or name_no_ext in SYSTEM_WHITELIST:
                 continue
 
-            # Ignorar procesos de fondo, daemons y ayudantes (helpers/autoupdate/xpc)
-            if any(h in name_lower for h in ["helper", "daemon", "autoupdate", "service", "xpc", "plugin", "agent"]):
+            # Ignorar procesos de fondo, daemons, antivirus, servicios y ayudantes
+            if any(h in name_lower for h in [
+                "helper", "daemon", "autoupdate", "service", "xpc", "plugin", "agent",
+                "scanner", "monitor", "telemetry", "alert", "health", "updater", "webview",
+                "sched", "client", "security", "resident", "notifier", "arm", "broker",
+                "toast", "provider", "log", "netfilter", "sync", "host", "ipc", "ui", "query"
+            ]):
                 continue
 
             exe_path = proc.info.get('exe') or ""
@@ -132,7 +154,12 @@ def get_running_user_apps() -> List[Tuple[str, str]]:
                     is_user_app = True
                     name_key = display_name
             elif is_win:
-                if any(p in exe_path.lower() for p in ["program files", "localappdata", "appdata\\roaming"]):
+                # Solo considerar si coincide con aplicaciones de usuario conocidas (navegadores, ofimática, IDEs, etc.)
+                is_known_app = (
+                    name_no_ext in APP_DISPLAY_NAMES or
+                    any(k in name_no_ext for k in KNOWN_USER_APP_KEYWORDS)
+                )
+                if is_known_app:
                     display_name = APP_DISPLAY_NAMES.get(name_no_ext, name_no_ext.capitalize())
                     is_user_app = True
                     name_key = display_name
@@ -149,6 +176,7 @@ def get_running_user_apps() -> List[Tuple[str, str]]:
             continue
 
     return user_apps
+
 
 
 import time
@@ -206,8 +234,8 @@ def prompt_user_apps_closed_gui(apps_list: List[str]) -> str:
             dialog = tk.Tk()
 
         dialog.title("Funes — Aplicaciones Abiertas Detectadas")
-        dialog.geometry("540x420")
-        dialog.resizable(False, False)
+        dialog.geometry("560x520")
+        dialog.resizable(True, True)
         dialog.configure(bg="#181816")
         dialog.attributes("-topmost", True)
 
@@ -219,9 +247,9 @@ def prompt_user_apps_closed_gui(apps_list: List[str]) -> str:
         y = (dialog.winfo_screenheight() // 2) - (height // 2)
         dialog.geometry(f"+{x}+{y}")
 
-        # Cabecera / Advertencia
+        # Cabecera / Advertencia (Fija arriba)
         header_frame = tk.Frame(dialog, bg="#232220", padx=20, pady=15)
-        header_frame.pack(fill="x")
+        header_frame.pack(side="top", fill="x")
 
         tk.Label(
             header_frame,
@@ -238,30 +266,37 @@ def prompt_user_apps_closed_gui(apps_list: List[str]) -> str:
             font=("Helvetica", 9),
             fg="#E8E4DF",
             bg="#232220",
-            wraplength=490,
+            wraplength=500,
             justify="left",
             anchor="w"
         ).pack(fill="x", pady=(6, 0))
 
-        # Lista de aplicaciones
-        list_frame = tk.Frame(dialog, bg="#181816", padx=20, pady=12)
-        list_frame.pack(fill="both", expand=True)
+        # Botones de Acción (Fijos en la parte inferior)
+        actions_frame = tk.Frame(dialog, bg="#181816", padx=20, pady=15)
+        actions_frame.pack(side="bottom", fill="x")
+
+        # Lista de aplicaciones con Scrollbar (En el centro)
+        list_frame = tk.Frame(dialog, bg="#181816", padx=20, pady=10)
+        list_frame.pack(side="top", fill="both", expand=True)
+
+        scrollbar = tk.Scrollbar(list_frame)
+        scrollbar.pack(side="right", fill="y")
 
         apps_text = "\n".join(f"  •  {app}" for app in apps_list)
-        lbl_apps = tk.Label(
+        txt_apps = tk.Text(
             list_frame,
-            text=apps_text,
             font=("Helvetica", 10, "bold"),
             fg="#FBBF24",
             bg="#181816",
-            justify="left",
-            anchor="nw"
+            bd=0,
+            highlightthickness=0,
+            yscrollcommand=scrollbar.set,
+            wrap="word"
         )
-        lbl_apps.pack(fill="both", expand=True)
-
-        # Botones de Acción
-        actions_frame = tk.Frame(dialog, bg="#181816", padx=20, pady=15)
-        actions_frame.pack(fill="x")
+        txt_apps.pack(side="left", fill="both", expand=True)
+        scrollbar.config(command=txt_apps.yview)
+        txt_apps.insert("1.0", apps_text)
+        txt_apps.config(state="disabled")
 
         def _on_close_all():
             nonlocal result

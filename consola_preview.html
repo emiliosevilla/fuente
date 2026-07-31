@@ -138,6 +138,8 @@
             display: inline-flex;
             align-items: center;
             gap: 6px;
+            position: relative;
+            overflow: hidden;
         }
 
         .btn-secondary:hover, .btn-primary:hover {
@@ -318,22 +320,35 @@
             line-height: 1.3;
         }
 
+        /* EFECTO DE DESTELLO DIAGONAL OSCURO AL PULSAR (SHIMMER SWEEP) */
         .pulse-effect {
             position: absolute;
-            top: 50%;
-            left: 50%;
-            width: 8px;
-            height: 8px;
-            background: var(--accent);
-            border-radius: 50%;
-            transform: translate(-50%, -50%);
-            animation: wikilinkPulse 0.8s ease-out forwards;
+            top: 0;
+            left: -150%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(
+                115deg,
+                transparent 0%,
+                rgba(22, 20, 17, 0.05) 25%,
+                rgba(22, 20, 17, 0.35) 50%,
+                rgba(22, 20, 17, 0.05) 75%,
+                transparent 100%
+            );
+            transform: skewX(-25deg);
+            animation: diagonalShimmer 0.65s ease-out forwards;
             pointer-events: none;
         }
 
-        @keyframes wikilinkPulse {
-            0% { width: 4px; height: 4px; opacity: 1; box-shadow: 0 0 0 0 var(--accent); }
-            100% { width: 260px; height: 260px; opacity: 0; box-shadow: 0 0 40px 15px var(--accent); }
+        @keyframes diagonalShimmer {
+            0% {
+                left: -130%;
+                opacity: 0.9;
+            }
+            100% {
+                left: 170%;
+                opacity: 0;
+            }
         }
 
         /* 4. LOG CONSOLE */
@@ -400,25 +415,25 @@
             </div>
         </div>
 
-        <!-- NIVEL 2: TÍTULO EDITORIAL ERUDITO -->
+        <!-- NIVEL 2: TÍTULO EDITORIAL ERUDITO CON ACRÓNIMO F.U.N.E.S. -->
         <div class="masthead-main">
             <h1 class="masthead-title">F U N E S</h1>
-            <div class="masthead-tagline">Sistema Inteligente de Ingesta, Extracción & Arquitectura de Conocimiento</div>
+            <div class="masthead-tagline">Formateo Universal de Notas, Estructuración y Síntesis</div>
         </div>
 
         <!-- NIVEL 3: BARRA DE HERRAMIENTAS UNIFICADA -->
         <div class="toolbar-bar">
-            <button class="btn-primary" onclick="triggerWikiPulse(this, '⚡ Ejecutando Ingesta manual (Flush en 1_entrada)...')">
-                ⚡ Forzar Ingesta (Flush)
+            <button class="btn-secondary" onclick="triggerWikiPulse(this, 'Procesando documentos nuevos en carpeta de entrada...')">
+                Procesar Documentos Nuevos
             </button>
-            <button class="btn-secondary" onclick="triggerWikiPulse(this, '🔗 Abriendo modal de auto-detección de Fuentes Nube (SharePoint & OneDrive)...')">
-                🔗 Fuentes Nube (SharePoint)
+            <button class="btn-secondary" onclick="triggerWikiPulse(this, 'Abriendo modal de auto-detección de Fuentes Nube (SharePoint & OneDrive)...')">
+                Fuentes Nube (SharePoint)
             </button>
-            <button class="btn-secondary" onclick="triggerWikiPulse(this, '🔄 Re-evaluando hipervínculos Karpathy y regenerando _Indice_MOC.md...')">
-                🔄 Re-indexar MOC
+            <button class="btn-secondary" onclick="triggerWikiPulse(this, 'Re-evaluando hipervínculos de notas y actualizando mapa de contenidos...')">
+                Actualizar Índice de Notas
             </button>
-            <button class="btn-secondary" onclick="triggerWikiPulse(this, '⚙️ Abriendo panel de Ajustes Avanzados...')">
-                ⚙️ Ajustes Avanzados
+            <button class="btn-secondary" onclick="triggerWikiPulse(this, 'Abriendo panel de Ajustes Avanzados...')">
+                Ajustes Avanzados
             </button>
         </div>
     </div>
@@ -428,47 +443,47 @@
         <!-- STATUS STRIP -->
         <div class="status-strip">
             <div class="status-item">
-                <span class="status-label">● INTELIGENCIA LOCAL:</span>
-                <span class="status-val" id="status-ollama">Activa (Qwen 2.5 7B)</span>
+                <span class="status-label">● MOTOR DE IA LOCAL:</span>
+                <span class="status-val" id="status-ollama">Activo (Qwen 2.5 7B)</span>
             </div>
             <div class="status-item">
-                <span class="status-label">● CHAT ASISTENTE:</span>
+                <span class="status-label">● ASISTENTE DE CONSULTAS:</span>
                 <span class="status-val" id="status-anything">Listo (AnythingLLM)</span>
             </div>
             <div class="status-item">
-                <span class="status-label">● LA MEMORIA DE FUNES:</span>
-                <span class="status-val" id="status-obsidian">Listo (Obsidian Vault)</span>
+                <span class="status-label">● BASE DE CONOCIMIENTO:</span>
+                <span class="status-val" id="status-obsidian">Listo (Obsidian)</span>
             </div>
         </div>
 
         <!-- STATS GRID -->
         <div class="stats-grid">
             <div class="stat-card">
-                <div class="stat-title">Notas Archivadas en Vault</div>
-                <div class="stat-num" id="stat-notes">142</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-title">Notas por Enlazar Semánticamente</div>
-                <div class="stat-num" id="stat-orphans">4</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-title">Archivos de Entrada (1_entrada)</div>
+                <div class="stat-title">Archivos por Procesar</div>
                 <div class="stat-num" id="stat-input">3</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-title">Archivos Procesados</div>
+                <div class="stat-num" id="stat-processed">4</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-title">Notas Generadas</div>
+                <div class="stat-num" id="stat-notes">142</div>
             </div>
         </div>
 
         <!-- GRAFO VISUAL DE ARQUITECTURA (4 ETAPAS) -->
         <div class="graph-section" id="graph-section">
-            <div class="graph-title">📐 GRAFO DE ARQUITECTURA DE PROCESAMIENTO Y CONSULTA DE FUNES</div>
+            <div class="graph-title">FLUJO DE PROCESAMIENTO Y MEMORIA</div>
             
             <div class="subgraphs-container">
                 <!-- SUBGRAFO 1 -->
                 <div class="subgraph-box">
-                    <div class="subgraph-title">1. Ingesta Continua</div>
-                    <div class="node-card" onclick="triggerWikiPulse(this, 'Paso 1: Escaneando carpeta 1_entrada y fuentes externas...')">
+                    <div class="subgraph-title">1. Recepción</div>
+                    <div class="node-card" onclick="triggerWikiPulse(this, 'Paso 1: Escaneando carpeta 1_entrada y fuentes de nube...')">
                         <div class="node-tag">── PASO 1 ──</div>
-                        <div class="node-name">📁 1_entrada/</div>
-                        <div class="node-desc">Archivos desestructurados & Monitor Watcher</div>
+                        <div class="node-name">Entrada de Archivos</div>
+                        <div class="node-desc">Documentos, imágenes y audios en 1_entrada</div>
                     </div>
                 </div>
 
@@ -476,10 +491,10 @@
 
                 <!-- SUBGRAFO 2 -->
                 <div class="subgraph-box">
-                    <div class="subgraph-title">2. Transformación & Limpieza</div>
-                    <div class="node-card" onclick="triggerWikiPulse(this, 'Paso 2: Ingesta Flush (OCR Tesseract + Whisper Audio)...')">
-                        <div class="node-tag">── PASO 2 (INGESTA) ──</div>
-                        <div class="node-name">⚙️ 2_sucio & 3_limpio</div>
+                    <div class="subgraph-title">2. Lectura & Transcripción</div>
+                    <div class="node-card" onclick="triggerWikiPulse(this, 'Paso 2: Procesando lectura OCR Tesseract y transcripción de voz...')">
+                        <div class="node-tag">── PASO 2 ──</div>
+                        <div class="node-name">Resguardo & OCR/Voz</div>
                         <div class="node-desc">Backup verbatim, OCR Tesseract, Whisper</div>
                     </div>
                 </div>
@@ -488,11 +503,11 @@
 
                 <!-- SUBGRAFO 3 -->
                 <div class="subgraph-box">
-                    <div class="subgraph-title">3. Generación Atómica</div>
-                    <div class="node-card" onclick="triggerWikiPulse(this, 'Paso 3: Forjando WikiLinks y actualizando MOC...')">
-                        <div class="node-tag">── PASO 3 (GRAFO) ──</div>
-                        <div class="node-name">🔗 4_salida & MOC</div>
-                        <div class="node-desc">Notas atómicas & _Indice_MOC.md</div>
+                    <div class="subgraph-title">3. Estructuración</div>
+                    <div class="node-card" onclick="triggerWikiPulse(this, 'Paso 3: Generando notas atómicas e interconectando el índice...')">
+                        <div class="node-tag">── PASO 3 ──</div>
+                        <div class="node-name">Notas & Mapa Global</div>
+                        <div class="node-desc">Notas interconectadas e índice general</div>
                     </div>
                 </div>
 
@@ -500,12 +515,12 @@
 
                 <!-- SUBGRAFO 4 -->
                 <div class="subgraph-box">
-                    <div class="subgraph-title">4. Persistencia & Consulta</div>
-                    <button class="btn-secondary" style="width: 100%; justify-content: center;" onclick="triggerWikiPulse(this, 'Abriendo La Memoria de Funes (Obsidian)...')">
-                        📖 La Memoria de Funes
+                    <div class="subgraph-title">4. Consulta</div>
+                    <button class="btn-secondary" style="width: 100%; justify-content: center;" onclick="triggerWikiPulse(this, 'Lanzando aplicación Obsidian para abrir La Memoria de Funes...')">
+                        La Memoria de Funes
                     </button>
-                    <button class="btn-secondary" style="width: 100%; justify-content: center;" onclick="triggerWikiPulse(this, 'Iniciando chat RAG AnythingLLM...')">
-                        💬 Chat IA AnythingLLM
+                    <button class="btn-secondary" style="width: 100%; justify-content: center;" onclick="triggerWikiPulse(this, 'Lanzando aplicación de escritorio nativa de AnythingLLM...')">
+                        Chat IA AnythingLLM
                     </button>
                 </div>
             </div>
@@ -514,7 +529,7 @@
         <!-- LOG CONSOLE DE AUDITORÍA -->
         <div class="log-section">
             <div class="log-header">
-                <span>── REGISTRO DE ACTIVIDAD & AUDITORÍA DE MEMORIA ──</span>
+                <span>── REGISTRO DE ACTIVIDAD EN TIEMPO REAL ──</span>
                 <span class="badge-tag">LIVE AUDIT LOGS</span>
             </div>
             <div class="log-console" id="log-console">

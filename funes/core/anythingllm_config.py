@@ -32,12 +32,21 @@ def get_anythingllm_paths() -> Dict[str, Optional[Path]]:
                 break
         data_dir = home / "Library" / "Application Support" / "anythingllm-desktop"
     elif is_win:
-        local_app = Path(os.environ.get("LOCALAPPDATA", "")) / "Programs" / "anythingllm-desktop" / "AnythingLLM.exe"
-        prog_files = Path(os.environ.get("ProgramFiles", "")) / "AnythingLLM" / "AnythingLLM.exe"
-        if local_app.exists():
-            app_path = local_app
-        elif prog_files.exists():
-            app_path = prog_files
+        local_appdata = os.environ.get("LOCALAPPDATA", "")
+        program_files = os.environ.get("ProgramFiles", "")
+        program_files_x86 = os.environ.get("ProgramFiles(x86)", "")
+
+        candidates = [
+            Path(local_appdata) / "Programs" / "anythingllm-desktop" / "AnythingLLM.exe",
+            Path(local_appdata) / "Programs" / "AnythingLLM" / "AnythingLLM.exe",
+            Path(local_appdata) / "anythingllm-desktop" / "AnythingLLM.exe",
+            Path(program_files) / "AnythingLLM" / "AnythingLLM.exe",
+            Path(program_files_x86) / "AnythingLLM" / "AnythingLLM.exe",
+        ]
+        for c in candidates:
+            if c.exists():
+                app_path = c
+                break
         
         data_dir = Path(os.environ.get("APPDATA", "")) / "anythingllm-desktop"
     else:
@@ -101,27 +110,30 @@ def install_anythingllm_autonomously() -> bool:
 
 
 def launch_anythingllm() -> bool:
-    """Abre la aplicación AnythingLLM Desktop."""
+    """Abre la aplicación AnythingLLM Desktop de forma segura."""
     paths = get_anythingllm_paths()
+    app_path = paths.get("app_path")
     is_mac = sys.platform == "darwin"
-    is_win = sys.platform == "win32"
 
     try:
         if is_mac:
-            if paths["app_path"] or Path("/Applications/AnythingLLM.app").exists():
+            if app_path and app_path.exists():
                 subprocess.Popen(["open", "-a", "AnythingLLM"])
                 return True
-        elif is_win:
-            if paths["app_path"] and paths["app_path"].exists():
-                subprocess.Popen([str(paths["app_path"])])
+        else:
+            if app_path and app_path.exists():
+                subprocess.Popen([str(app_path)])
                 return True
-            else:
-                subprocess.Popen(["cmd", "/c", "start", "anythingllm"])
-                return True
+
+        # Fallback si no está instalado: abre la web oficial sin lanzar error de CMD
+        logger.warning("AnythingLLM Desktop no se encuentra instalado.")
+        import webbrowser
+        webbrowser.open("https://anythingllm.com/desktop")
         return False
     except Exception as e:
         logger.error(f"Error abriendo AnythingLLM: {e}")
         return False
+
 
 
 def configure_anythingllm_integration(output_dir: Path) -> bool:

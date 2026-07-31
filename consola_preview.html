@@ -3,12 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Funes Control Console — Estética Papiro (Conectado)</title>
+    <title>Funes Control Console — Estética Papiro (Vista Previa Definitiva)</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,600;0,700;0,800;1,400&family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
-        /* ESTÉTICA PAPIRO DEFINITIVA */
+        /* DESIGN SYSTEM ESTÉTICA PAPIRO DEFINITIVA */
         :root {
             --bg-root: #DCD4C7;
             --bg-card: #EAE2D5;
@@ -24,10 +24,10 @@
             --font-serif: 'Playfair Display', Georgia, serif;
             --font-mono: 'JetBrains Mono', monospace;
             --font-sans: 'Inter', sans-serif;
-            --card-radius: 10px;
+            --card-radius: 8px;
             --border-width: 1px;
             --shadow: 0 4px 18px rgba(0,0,0,0.06);
-            --badge-bg: rgba(22, 20, 17, 0.08);
+            --badge-bg: rgba(22, 20, 17, 0.07);
             --badge-fg: #161411;
         }
 
@@ -38,20 +38,36 @@
             color: var(--paper);
             font-family: var(--font-sans);
             min-height: 100vh;
-            padding: 20px 28px;
+            padding: 24px 36px;
             display: flex;
             flex-direction: column;
-            gap: 16px;
+            gap: 20px;
+        }
+
+        /* 1. CABECERA EDITORIAL PAPIRO (3 NIVELES) */
+        .masthead-container {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            border-bottom: 2px solid var(--border-accent);
+            padding-bottom: 16px;
+        }
+
+        .header-meta {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-family: var(--font-mono);
+            font-size: 0.76rem;
+            color: var(--muted);
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 8px;
         }
 
         .breadcrumbs {
-            font-family: var(--font-mono);
-            font-size: 0.75rem;
-            color: var(--muted);
             display: flex;
             align-items: center;
             gap: 6px;
-            margin-bottom: 2px;
         }
 
         .breadcrumb-active {
@@ -59,130 +75,99 @@
             font-weight: 700;
         }
 
-        .masthead {
-            border-top: var(--border-width) solid var(--border);
-            border-bottom: var(--border-width) solid var(--border);
-            padding: 14px 0;
+        .meta-right {
             display: flex;
-            justify-content: space-between;
-            align-items: flex-end;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .badge-tag {
+            background-color: var(--badge-bg);
+            color: var(--badge-fg);
+            font-family: var(--font-mono);
+            font-size: 0.72rem;
+            font-weight: 700;
+            padding: 3px 8px;
+            border-radius: 4px;
+            border: 1px solid var(--border);
+        }
+
+        .masthead-main {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
         }
 
         .masthead-title {
             font-family: var(--font-serif);
-            font-size: 2.4rem;
-            font-weight: 700;
-            letter-spacing: 0.5px;
+            font-size: 2.8rem;
+            font-weight: 800;
+            letter-spacing: 2px;
             color: var(--paper);
+            line-height: 1;
         }
 
-        .masthead-subtitle {
-            font-family: var(--font-mono);
-            font-size: 0.82rem;
-            color: var(--gold);
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .shortcut-badge {
-            background-color: var(--badge-bg);
-            color: var(--badge-fg);
-            font-family: var(--font-mono);
-            font-size: 0.7rem;
-            font-weight: 700;
-            padding: 2px 7px;
-            border-radius: 4px;
-            border: 1px solid var(--border-accent);
-        }
-
-        /* LAYOUT PRINCIPAL */
-        .layout-main {
-            display: grid;
-            grid-template-columns: 260px 1fr;
-            gap: 16px;
-            flex-grow: 1;
-        }
-
-        .sidebar-dense {
-            background-color: var(--bg-card);
-            border: var(--border-width) solid var(--border);
-            box-shadow: var(--shadow);
-            border-radius: var(--card-radius);
-            padding: 12px;
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-            font-size: 0.8rem;
-        }
-
-        .sidebar-header {
+        .masthead-tagline {
             font-family: var(--font-serif);
-            font-size: 0.9rem;
-            font-weight: 700;
-            color: var(--accent);
-            border-bottom: 1px solid var(--border);
-            padding-bottom: 6px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .memory-list {
-            display: flex;
-            flex-direction: column;
-            gap: 6px;
-            overflow-y: auto;
-            max-height: 480px;
-        }
-
-        .memory-item {
-            padding: 8px 10px;
-            border-radius: var(--card-radius);
-            background-color: var(--bg-root);
-            border: 1px solid var(--border);
-            cursor: pointer;
-            transition: all 0.15s ease;
-            display: flex;
-            flex-direction: column;
-            gap: 2px;
-        }
-
-        .memory-item:hover {
-            border-color: var(--border-accent);
-            background-color: var(--bg-card-hover);
-        }
-
-        .memory-name {
-            font-family: var(--font-serif);
-            font-weight: 700;
-            color: var(--paper);
-            font-size: 0.85rem;
-        }
-
-        .memory-meta {
-            display: flex;
-            justify-content: space-between;
-            font-family: var(--font-mono);
-            font-size: 0.68rem;
+            font-style: italic;
+            font-size: 0.95rem;
             color: var(--muted);
         }
 
-        .content-area {
+        /* BARRA DE HERRAMIENTAS UNIFICADA */
+        .toolbar-bar {
             display: flex;
-            flex-direction: column;
-            gap: 16px;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-top: 4px;
         }
 
+        /* DESIGN SYSTEM DE BOTONES UNIFICADOS PAPIRO */
+        .btn-secondary, .btn-primary {
+            background-color: var(--bg-card);
+            color: var(--paper);
+            border: 1px solid var(--border-accent);
+            font-family: var(--font-sans);
+            font-size: 0.82rem;
+            font-weight: 700;
+            padding: 9px 18px;
+            border-radius: var(--card-radius);
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .btn-secondary:hover, .btn-primary:hover {
+            background-color: var(--bg-card-hover);
+            border-color: var(--border-accent);
+            color: var(--paper); /* Texto tinta espresso 100% visible */
+            transform: translateY(-1px);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        }
+
+        /* 2. LAYOUT PRINCIPAL FULL-WIDTH (ANCHO COMPLETO) */
+        .layout-full {
+            display: flex;
+            flex-direction: column;
+            gap: 18px;
+            flex-grow: 1;
+        }
+
+        /* STATUS STRIP */
         .status-strip {
             background-color: var(--bg-card);
             border: var(--border-width) solid var(--border);
             box-shadow: var(--shadow);
             border-radius: var(--card-radius);
-            padding: 12px 18px;
+            padding: 12px 22px;
             display: flex;
             justify-content: space-between;
             align-items: center;
+            flex-wrap: wrap;
+            gap: 12px;
         }
 
         .status-item {
@@ -204,10 +189,11 @@
             color: var(--paper);
         }
 
+        /* STATS GRID */
         .stats-grid {
             display: grid;
             grid-template-columns: repeat(3, 1fr);
-            gap: 12px;
+            gap: 16px;
         }
 
         .stat-card {
@@ -215,86 +201,89 @@
             border: var(--border-width) solid var(--border);
             box-shadow: var(--shadow);
             border-radius: var(--card-radius);
-            padding: 14px 18px;
+            padding: 16px 20px;
             display: flex;
             flex-direction: column;
-            gap: 4px;
+            gap: 6px;
         }
 
         .stat-title {
             font-family: var(--font-serif);
-            font-size: 0.85rem;
+            font-size: 0.88rem;
             color: var(--muted);
         }
 
         .stat-num {
             font-family: var(--font-mono);
-            font-size: 2.2rem;
+            font-size: 2.3rem;
             font-weight: 700;
             color: var(--accent);
         }
 
+        /* 3. GRAFO VISUAL DE ARQUITECTURA (4 ETAPAS) */
         .graph-section {
             background-color: var(--bg-card);
             border: var(--border-width) solid var(--border);
             box-shadow: var(--shadow);
             border-radius: var(--card-radius);
-            padding: 16px;
+            padding: 20px;
             display: flex;
             flex-direction: column;
-            gap: 12px;
+            gap: 14px;
             position: relative;
         }
 
         .graph-title {
             font-family: var(--font-serif);
-            font-size: 0.98rem;
+            font-size: 1.05rem;
             font-weight: 700;
             color: var(--paper);
             letter-spacing: 0.5px;
             text-align: center;
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 8px;
         }
 
         .subgraphs-container {
             display: grid;
             grid-template-columns: 1fr auto 1fr auto 1fr auto 1fr;
             align-items: center;
-            gap: 8px;
+            gap: 12px;
         }
 
         .subgraph-box {
             background-color: var(--bg-root);
             border: var(--border-width) solid var(--border);
             border-radius: var(--card-radius);
-            padding: 10px;
+            padding: 12px;
             display: flex;
             flex-direction: column;
-            gap: 8px;
+            gap: 10px;
             height: 100%;
         }
 
         .subgraph-title {
             font-family: var(--font-mono);
-            font-size: 0.72rem;
+            font-size: 0.74rem;
             font-weight: 700;
             color: var(--gold);
             border-bottom: 1px solid var(--border);
-            padding-bottom: 4px;
+            padding-bottom: 6px;
         }
 
         .arrow-connector {
             color: var(--accent);
             font-family: var(--font-mono);
             font-weight: 700;
-            font-size: 1.2rem;
+            font-size: 1.3rem;
             text-align: center;
         }
 
         .node-card {
             background-color: var(--bg-card);
-            border: var(--border-width) solid var(--border);
+            border: var(--border-width) solid var(--border-accent);
             border-radius: var(--card-radius);
-            padding: 10px;
+            padding: 12px;
             cursor: pointer;
             transition: all 0.2s ease;
             position: relative;
@@ -307,18 +296,6 @@
             transform: translateY(-2px);
         }
 
-        .node-card.highlight {
-            background-color: var(--accent);
-            color: #FFFFFF;
-            border-color: var(--border-accent);
-        }
-
-        .node-card.highlight .node-tag,
-        .node-card.highlight .node-name,
-        .node-card.highlight .node-desc {
-            color: #FFFFFF !important;
-        }
-
         .node-tag {
             font-family: var(--font-mono);
             font-size: 0.68rem;
@@ -329,35 +306,16 @@
         .node-name {
             font-family: var(--font-serif);
             font-weight: 700;
-            font-size: 0.9rem;
+            font-size: 0.95rem;
             color: var(--paper);
-            margin: 2px 0;
+            margin: 4px 0 2px 0;
         }
 
         .node-desc {
             font-family: var(--font-sans);
-            font-size: 0.75rem;
+            font-size: 0.76rem;
             color: var(--muted);
             line-height: 1.3;
-        }
-
-        .action-btn {
-            background-color: var(--bg-card-hover);
-            border: var(--border-width) solid var(--border);
-            color: var(--paper);
-            font-family: var(--font-sans);
-            font-size: 0.8rem;
-            font-weight: 600;
-            padding: 8px;
-            border-radius: var(--card-radius);
-            cursor: pointer;
-            transition: all 0.15s ease;
-            text-align: center;
-        }
-
-        .action-btn:hover {
-            background-color: var(--accent);
-            color: #FFFFFF;
         }
 
         .pulse-effect {
@@ -375,43 +333,45 @@
 
         @keyframes wikilinkPulse {
             0% { width: 4px; height: 4px; opacity: 1; box-shadow: 0 0 0 0 var(--accent); }
-            100% { width: 220px; height: 220px; opacity: 0; box-shadow: 0 0 40px 15px var(--accent); }
+            100% { width: 260px; height: 260px; opacity: 0; box-shadow: 0 0 40px 15px var(--accent); }
         }
 
+        /* 4. LOG CONSOLE */
         .log-section {
             background-color: var(--bg-card);
             border: var(--border-width) solid var(--border);
             box-shadow: var(--shadow);
             border-radius: var(--card-radius);
-            padding: 12px 16px;
+            padding: 14px 18px;
             display: flex;
             flex-direction: column;
-            gap: 6px;
+            gap: 8px;
         }
 
         .log-header {
             font-family: var(--font-serif);
-            font-size: 0.85rem;
+            font-size: 0.88rem;
             font-weight: 700;
             color: var(--accent);
             display: flex;
             justify-content: space-between;
+            align-items: center;
         }
 
         .log-console {
             background-color: var(--bg-log);
             border: 1px solid var(--border);
             border-radius: 6px;
-            padding: 10px 14px;
+            padding: 12px 16px;
             font-family: var(--font-mono);
             font-size: 0.8rem;
             color: var(--paper);
-            min-height: 120px;
-            max-height: 160px;
+            min-height: 130px;
+            max-height: 180px;
             overflow-y: auto;
             display: flex;
             flex-direction: column;
-            gap: 4px;
+            gap: 5px;
         }
 
         .log-time {
@@ -427,181 +387,163 @@
 </head>
 <body>
 
-    <!-- BREADCRUMBS -->
-    <div class="breadcrumbs">
-        <span>Funes Intelligence Journal</span> / <span>ETL Architecture</span> / <span class="breadcrumb-active">Vault_Funes</span>
+    <!-- CABECERA EDITORIAL PAPIRO (3 NIVELES) -->
+    <div class="masthead-container">
+        <!-- NIVEL 1: NAV METADATOS & RELOJ -->
+        <div class="header-meta">
+            <div class="breadcrumbs">
+                <span>Funes Knowledge Intelligence</span> / <span>ETL Engine</span> / <span class="breadcrumb-active">La_Memoria_de_Funes</span>
+            </div>
+            <div class="meta-right">
+                <span class="badge-tag">★ ESTÉTICA PAPIRO DEFINITIVA</span>
+                <span class="badge-tag" id="clock">00:00:00</span>
+            </div>
+        </div>
+
+        <!-- NIVEL 2: TÍTULO EDITORIAL ERUDITO -->
+        <div class="masthead-main">
+            <h1 class="masthead-title">F U N E S</h1>
+            <div class="masthead-tagline">Sistema Inteligente de Ingesta, Extracción & Arquitectura de Conocimiento</div>
+        </div>
+
+        <!-- NIVEL 3: BARRA DE HERRAMIENTAS UNIFICADA -->
+        <div class="toolbar-bar">
+            <button class="btn-primary" onclick="triggerWikiPulse(this, '⚡ Ejecutando Ingesta manual (Flush en 1_entrada)...')">
+                ⚡ Forzar Ingesta (Flush)
+            </button>
+            <button class="btn-secondary" onclick="triggerWikiPulse(this, '🔗 Abriendo modal de auto-detección de Fuentes Nube (SharePoint & OneDrive)...')">
+                🔗 Fuentes Nube (SharePoint)
+            </button>
+            <button class="btn-secondary" onclick="triggerWikiPulse(this, '🔄 Re-evaluando hipervínculos Karpathy y regenerando _Indice_MOC.md...')">
+                🔄 Re-indexar MOC
+            </button>
+            <button class="btn-secondary" onclick="triggerWikiPulse(this, '⚙️ Abriendo panel de Ajustes Avanzados...')">
+                ⚙️ Ajustes Avanzados
+            </button>
+        </div>
     </div>
 
-    <!-- MASTHEAD HIGH CONTRAST -->
-    <div class="masthead">
-        <div>
-            <div class="masthead-title">Funes Knowledge Intelligence</div>
-        </div>
-        <div class="masthead-subtitle">
-            <span>★ ESTÉTICA PAPIRO DEFINITIVA</span>
-            <span class="shortcut-badge">Playfair Display</span>
-            <span class="shortcut-badge" id="clock">00:08:10</span>
-        </div>
-    </div>
-
-    <!-- LAYOUT PRINCIPAL -->
-    <div class="layout-main">
-        <!-- SIDEBAR DENSA DE MEMORIAS -->
-        <div class="sidebar-dense">
-            <div class="sidebar-header">
-                <span>📜 MEMORIA INFINITA</span>
-                <span class="shortcut-badge">Papiro</span>
+    <!-- LAYOUT PRINCIPAL FULL-WIDTH -->
+    <div class="layout-full">
+        <!-- STATUS STRIP -->
+        <div class="status-strip">
+            <div class="status-item">
+                <span class="status-label">● INTELIGENCIA LOCAL:</span>
+                <span class="status-val" id="status-ollama">Activa (Qwen 2.5 7B)</span>
             </div>
-            <div class="memory-list" id="memory-list">
-                <div class="memory-item" onclick="triggerWikiPulse(this)">
-                    <div class="memory-name">[[Informe_Financiero_2026]]</div>
-                    <div class="memory-meta"><span>2026-07-30</span> <span>14 enlaces</span></div>
-                </div>
-                <div class="memory-item" onclick="triggerWikiPulse(this)">
-                    <div class="memory-name">[[Karpathy_Graph_Loop]]</div>
-                    <div class="memory-meta"><span>2026-07-30</span> <span>32 enlaces</span></div>
-                </div>
-                <div class="memory-item" onclick="triggerWikiPulse(this)">
-                    <div class="memory-name">[[RAM_Governor_Ollama]]</div>
-                    <div class="memory-meta"><span>2026-07-30</span> <span>8 enlaces</span></div>
-                </div>
-                <div class="memory-item" onclick="triggerWikiPulse(this)">
-                    <div class="memory-name">[[Faster_Whisper_Audio]]</div>
-                    <div class="memory-meta"><span>2026-07-29</span> <span>19 enlaces</span></div>
-                </div>
-                <div class="memory-item" onclick="triggerWikiPulse(this)">
-                    <div class="memory-name">[[Tesseract_OCR_Scan]]</div>
-                    <div class="memory-meta"><span>2026-07-29</span> <span>5 enlaces</span></div>
-                </div>
-                <div class="memory-item" onclick="triggerWikiPulse(this)">
-                    <div class="memory-name">[[Obsidian_Vault_Sync]]</div>
-                    <div class="memory-meta"><span>2026-07-28</span> <span>41 enlaces</span></div>
-                </div>
-                <div class="memory-item" onclick="triggerWikiPulse(this)">
-                    <div class="memory-name">[[AnythingLLM_RAG_ChromaDB]]</div>
-                    <div class="memory-meta"><span>2026-07-28</span> <span>12 enlaces</span></div>
-                </div>
+            <div class="status-item">
+                <span class="status-label">● CHAT ASISTENTE:</span>
+                <span class="status-val" id="status-anything">Listo (AnythingLLM)</span>
+            </div>
+            <div class="status-item">
+                <span class="status-label">● LA MEMORIA DE FUNES:</span>
+                <span class="status-val" id="status-obsidian">Listo (Obsidian Vault)</span>
             </div>
         </div>
 
-        <!-- SECCIÓN DE GRAFO Y ESTADO -->
-        <div class="content-area">
-            <!-- STATUS STRIP -->
-            <div class="status-strip">
-                <div class="status-item">
-                    <span class="status-label">● INTELIGENCIA LOCAL:</span>
-                    <span class="status-val" id="status-ollama">Activa (Qwen 2.5 7B)</span>
+        <!-- STATS GRID -->
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-title">Notas Archivadas en Vault</div>
+                <div class="stat-num" id="stat-notes">142</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-title">Notas por Enlazar Semánticamente</div>
+                <div class="stat-num" id="stat-orphans">4</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-title">Archivos de Entrada (1_entrada)</div>
+                <div class="stat-num" id="stat-input">3</div>
+            </div>
+        </div>
+
+        <!-- GRAFO VISUAL DE ARQUITECTURA (4 ETAPAS) -->
+        <div class="graph-section" id="graph-section">
+            <div class="graph-title">📐 GRAFO DE ARQUITECTURA DE PROCESAMIENTO Y CONSULTA DE FUNES</div>
+            
+            <div class="subgraphs-container">
+                <!-- SUBGRAFO 1 -->
+                <div class="subgraph-box">
+                    <div class="subgraph-title">1. Ingesta Continua</div>
+                    <div class="node-card" onclick="triggerWikiPulse(this, 'Paso 1: Escaneando carpeta 1_entrada y fuentes externas...')">
+                        <div class="node-tag">── PASO 1 ──</div>
+                        <div class="node-name">📁 1_entrada/</div>
+                        <div class="node-desc">Archivos desestructurados & Monitor Watcher</div>
+                    </div>
                 </div>
-                <div class="status-item">
-                    <span class="status-label">● CHAT ASISTENTE:</span>
-                    <span class="status-val" id="status-anything">Listo (AnythingLLM)</span>
+
+                <div class="arrow-connector">═►</div>
+
+                <!-- SUBGRAFO 2 -->
+                <div class="subgraph-box">
+                    <div class="subgraph-title">2. Transformación & Limpieza</div>
+                    <div class="node-card" onclick="triggerWikiPulse(this, 'Paso 2: Ingesta Flush (OCR Tesseract + Whisper Audio)...')">
+                        <div class="node-tag">── PASO 2 (INGESTA) ──</div>
+                        <div class="node-name">⚙️ 2_sucio & 3_limpio</div>
+                        <div class="node-desc">Backup verbatim, OCR Tesseract, Whisper</div>
+                    </div>
                 </div>
-                <div class="status-item">
-                    <span class="status-label">● CUADERNO OBSIDIAN:</span>
-                    <span class="status-val" id="status-obsidian">Listo</span>
+
+                <div class="arrow-connector">═►</div>
+
+                <!-- SUBGRAFO 3 -->
+                <div class="subgraph-box">
+                    <div class="subgraph-title">3. Generación Atómica</div>
+                    <div class="node-card" onclick="triggerWikiPulse(this, 'Paso 3: Forjando WikiLinks y actualizando MOC...')">
+                        <div class="node-tag">── PASO 3 (GRAFO) ──</div>
+                        <div class="node-name">🔗 4_salida & MOC</div>
+                        <div class="node-desc">Notas atómicas & _Indice_MOC.md</div>
+                    </div>
+                </div>
+
+                <div class="arrow-connector">═►</div>
+
+                <!-- SUBGRAFO 4 -->
+                <div class="subgraph-box">
+                    <div class="subgraph-title">4. Persistencia & Consulta</div>
+                    <button class="btn-secondary" style="width: 100%; justify-content: center;" onclick="triggerWikiPulse(this, 'Abriendo La Memoria de Funes (Obsidian)...')">
+                        📖 La Memoria de Funes
+                    </button>
+                    <button class="btn-secondary" style="width: 100%; justify-content: center;" onclick="triggerWikiPulse(this, 'Iniciando chat RAG AnythingLLM...')">
+                        💬 Chat IA AnythingLLM
+                    </button>
                 </div>
             </div>
+        </div>
 
-            <!-- STATS GRID -->
-            <div class="stats-grid">
-                <div class="stat-card">
-                    <div class="stat-title">Notas Archivadas en Vault</div>
-                    <div class="stat-num" id="stat-notes">142</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-title">Notas por Enlazar Semánticamente</div>
-                    <div class="stat-num" id="stat-orphans">4</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-title">Archivos de Entrada (1_entrada)</div>
-                    <div class="stat-num" id="stat-input">3</div>
-                </div>
+        <!-- LOG CONSOLE DE AUDITORÍA -->
+        <div class="log-section">
+            <div class="log-header">
+                <span>── REGISTRO DE ACTIVIDAD & AUDITORÍA DE MEMORIA ──</span>
+                <span class="badge-tag">LIVE AUDIT LOGS</span>
             </div>
-
-            <!-- GRAFO VISUAL 4 ETAPAS -->
-            <div class="graph-section" id="graph-section">
-                <div class="graph-title">📐 ARQUITECTURA PAPIRO (CLIC EN CUALQUIER NODO PARA WIKILINK PULSE)</div>
-                
-                <div class="subgraphs-container">
-                    <!-- SUBGRAFO 1 -->
-                    <div class="subgraph-box">
-                        <div class="subgraph-title">1. Ingesta Continua</div>
-                        <div class="node-card" onclick="triggerWikiPulse(this, 'Paso 1: Sincronizando fuentes externas...')">
-                            <div class="node-tag">── PASO 1 ──</div>
-                            <div class="node-name">📁 1_entrada/</div>
-                            <div class="node-desc">Archivos desestructurados & Watcher</div>
-                        </div>
-                    </div>
-
-                    <div class="arrow-connector">═►</div>
-
-                    <!-- SUBGRAFO 2 -->
-                    <div class="subgraph-box">
-                        <div class="subgraph-title">2. Transformación & Limpieza</div>
-                        <div class="node-card highlight" onclick="triggerWikiPulse(this, 'Paso 2: Ingesta Flush (OCR + Whisper)...')">
-                            <div class="node-tag">── PASO 2 (INGESTA) ──</div>
-                            <div class="node-name">⚙️ 2_sucio & 3_limpio</div>
-                            <div class="node-desc">Backup verbatim, OCR Tesseract, Whisper</div>
-                        </div>
-                    </div>
-
-                    <div class="arrow-connector">═►</div>
-
-                    <!-- SUBGRAFO 3 -->
-                    <div class="subgraph-box">
-                        <div class="subgraph-title">3. Generación Atómica</div>
-                        <div class="node-card" onclick="triggerWikiPulse(this, 'Paso 3: Forjando WikiLinks y actualizando MOC...')">
-                            <div class="node-tag">── PASO 3 (GRAFO) ──</div>
-                            <div class="node-name">🔗 4_salida & MOC</div>
-                            <div class="node-desc">Notas atómicas & _Indice_MOC.md</div>
-                        </div>
-                    </div>
-
-                    <div class="arrow-connector">═►</div>
-
-                    <!-- SUBGRAFO 4 -->
-                    <div class="subgraph-box">
-                        <div class="subgraph-title">4. Persistencia & Consulta</div>
-                        <button class="action-btn" onclick="triggerWikiPulse(this, 'Abriendo cuaderno Obsidian...')">
-                            📖 Cuaderno Obsidian
-                        </button>
-                        <button class="action-btn" onclick="triggerWikiPulse(this, 'Iniciando chat RAG AnythingLLM...')">
-                            💬 Chat IA AnythingLLM
-                        </button>
-                    </div>
-                </div>
-            </div>
-
-            <!-- LOG CONSOLE -->
-            <div class="log-section">
-                <div class="log-header">
-                    <span>── REGISTRO DE ACTIVIDAD & AUDITORÍA DE MEMORIA ──</span>
-                    <span class="shortcut-badge">LIVE LOGS</span>
-                </div>
-                <div class="log-console" id="log-console">
-                    <div><span class="log-time">[00:08:10]</span> <span class="log-tag">[PAPIRO]</span> Estética Papiro seleccionada y activada como diseño principal de Funes.</div>
-                    <div><span class="log-time">[00:08:11]</span> <span class="log-tag">[UI/UX]</span> Fondo papiro (#DCD4C7) + Tarjetas pergamino (#EAE2D5) + Tinta espresso (#161411).</div>
-                </div>
+            <div class="log-console" id="log-console">
+                <div><span class="log-time">[21:35:00]</span> <span class="log-tag">[PAPIRO]</span> Estética Papiro Definitiva activada con Layout Full-Width.</div>
+                <div><span class="log-time">[21:35:01]</span> <span class="log-tag">[UI/UX]</span> Sistema Unificado de Botones configurado: Primario (Espresso) y Secundarios (Pergamino).</div>
             </div>
         </div>
     </div>
 
     <script>
+        // Actualizador de reloj
         setInterval(() => {
             const now = new Date();
             document.getElementById('clock').innerText = now.toTimeString().split(' ')[0];
         }, 1000);
+        document.getElementById('clock').innerText = new Date().toTimeString().split(' ')[0];
 
+        // Función de registro en la consola de logs
         function log(msg) {
             const consoleEl = document.getElementById('log-console');
             const now = new Date();
             const timeStr = now.toTimeString().split(' ')[0];
             const entry = document.createElement('div');
-            entry.innerHTML = `<span class="log-time">[${timeStr}]</span> <span class="log-tag">[PAPIRO]</span> ${msg}`;
+            entry.innerHTML = `<span class="log-time">[${timeStr}]</span> <span class="log-tag">[FUNES]</span> ${msg}`;
             consoleEl.appendChild(entry);
             consoleEl.scrollTop = consoleEl.scrollHeight;
         }
 
+        // Animación WikiLink Pulse & registro
         function triggerWikiPulse(element, msg) {
             const pulse = document.createElement('div');
             pulse.className = 'pulse-effect';
@@ -613,8 +555,8 @@
             if (msg) {
                 log(msg);
             } else {
-                const title = element.querySelector('.memory-name')?.innerText || 'Nota';
-                log(`Forjando hiperenlace de memoria hacia ${title}...`);
+                const title = element.querySelector('.node-name')?.innerText || 'Nodo';
+                log(`Acción ejecutada sobre ${title}...`);
             }
         }
     </script>

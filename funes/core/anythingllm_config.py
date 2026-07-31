@@ -157,7 +157,7 @@ def configure_anythingllm_integration(output_dir: Path) -> bool:
         # 1. Configurar archivo de entorno / preferencias de AnythingLLM
         env_file = data_dir / ".env"
         env_lines = [
-            "# Configuración Generada Automáticamente por Habla con Funes",
+            "# Configuración Generada Automáticamente por Funes",
             "LLM_PROVIDER=ollama",
             "OLLAMA_BASE_PATH=http://localhost:11434",
             f"OLLAMA_MODEL_PREF={rec_model}",

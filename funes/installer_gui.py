@@ -20,6 +20,7 @@ try:
         install_anythingllm_autonomously,
         configure_anythingllm_integration
     )
+    from funes.core.folder_sync import FolderSyncManager
     from create_shortcuts import create_shortcuts
 except ImportError:
     pass
@@ -27,12 +28,12 @@ except ImportError:
 
 
 class FunesInstallerWizard(tk.Tk):
-    """Asistente de instalación gráfico estilo Wizard para Habla con Funes."""
+    """Asistente de instalación gráfico estilo Wizard para Funes."""
 
     def __init__(self):
         super().__init__()
 
-        self.title("Instalador de Habla con Funes")
+        self.title("Instalador de Funes")
         self.geometry("720x500")
         self.resizable(False, False)
         self.configure(bg="#F5F5F7")
@@ -56,10 +57,11 @@ class FunesInstallerWizard(tk.Tk):
         self.ollama_status_var = tk.StringVar(value="Comprobando...")
         self.anythingllm_status_var = tk.StringVar(value="Comprobando...")
 
+        self.cloud_folders = []
         self.run_first_flush_var = tk.BooleanVar(value=True)
 
         self.current_step = 1
-        self.total_steps = 5
+        self.total_steps = 6
 
         # Construir la interfaz base
         self._setup_ui()
@@ -73,7 +75,7 @@ class FunesInstallerWizard(tk.Tk):
 
         self.header_title = tk.Label(
             self.header_frame,
-            text="Habla con Funes — Asistente de Instalación",
+            text="Funes — Asistente de Instalación",
             font=("Helvetica", 14, "bold"),
             fg="white",
             bg="#2C3E50",
@@ -141,8 +143,8 @@ class FunesInstallerWizard(tk.Tk):
         self.clear_content()
 
         # Ajustar botones según el paso
-        self.btn_back.config(state="normal" if step_num in (2, 3) else "disabled")
-        self.btn_cancel.config(state="normal" if step_num != 4 else "disabled")
+        self.btn_back.config(state="normal" if step_num in (2, 3, 4) else "disabled")
+        self.btn_cancel.config(state="normal" if step_num != 5 else "disabled")
 
         if step_num == 1:
             self._render_step1_welcome()
@@ -152,20 +154,23 @@ class FunesInstallerWizard(tk.Tk):
             self.btn_next.config(text="Siguiente >", state="normal")
         elif step_num == 3:
             self._render_step3_requirements()
-            self.btn_next.config(text="Instalar >", state="normal")
+            self.btn_next.config(text="Siguiente >", state="normal")
         elif step_num == 4:
-            self._render_step4_installation()
+            self._render_step4_cloud_sync()
+            self.btn_next.config(text="Instalar >", state="normal")
+        elif step_num == 5:
+            self._render_step5_installation()
             self.btn_next.config(text="Instalando...", state="disabled")
             self.btn_back.config(state="disabled")
-        elif step_num == 5:
-            self._render_step5_complete()
+        elif step_num == 6:
+            self._render_step6_complete()
             self.btn_next.config(text="Finalizar", state="normal", bg="#059669")
 
     # --- PASO 1: Bienvenida ---
     def _render_step1_welcome(self):
         title = tk.Label(
             self.content_frame,
-            text="Bienvenido al Instalador de Habla con Funes",
+            text="Bienvenido al Instalador de Funes",
             font=("Helvetica", 15, "bold"),
             fg="#1F2937",
             bg="#F5F5F7",
@@ -412,11 +417,149 @@ class FunesInstallerWizard(tk.Tk):
         else:
             self.anythingllm_status_var.set("⚠️ No detectado (Se instalará automáticamente)")
 
-    # --- PASO 4: Progreso de Instalación ---
-    def _render_step4_installation(self):
+    # --- PASO 4: Sincronización SharePoint & OneDrive ---
+    def _render_step4_cloud_sync(self):
         title = tk.Label(
             self.content_frame,
-            text="Instalando y Configurando Habla con Funes",
+            text="Conexión de Fuentes Nube — SharePoint & OneDrive",
+            font=("Helvetica", 15, "bold"),
+            fg="#1F2937",
+            bg="#F5F5F7",
+            anchor="w"
+        )
+        title.pack(fill="x", pady=(0, 5))
+
+        sub = tk.Label(
+            self.content_frame,
+            text="Vincular carpetas de OneDrive o SharePoint a '1_entrada' para procesar documentos de tu equipo.",
+            font=("Helvetica", 10),
+            fg="#4B5563",
+            bg="#F5F5F7",
+            anchor="w"
+        )
+        sub.pack(fill="x", pady=(0, 10))
+
+        frame_list = tk.LabelFrame(
+            self.content_frame,
+            text=" Carpetas Nube Vinculadas ",
+            font=("Helvetica", 10, "bold"),
+            bg="#F5F5F7",
+            fg="#1F2937",
+            padx=10,
+            pady=8
+        )
+        frame_list.pack(fill="both", expand=True, pady=(0, 10))
+
+        self.cloud_listbox = tk.Listbox(frame_list, font=("Helvetica", 9), height=4)
+        self.cloud_listbox.pack(side="left", fill="both", expand=True)
+
+        sc = tk.Scrollbar(frame_list, orient="vertical", command=self.cloud_listbox.yview)
+        sc.pack(side="right", fill="y")
+        self.cloud_listbox.config(yscrollcommand=sc.set)
+
+        self._refresh_cloud_listbox()
+
+        btn_bar = tk.Frame(self.content_frame, bg="#F5F5F7")
+        btn_bar.pack(fill="x", pady=(0, 10))
+
+        btn_detect = tk.Button(
+            btn_bar,
+            text="🔍 Auto-detectar Nube",
+            font=("Helvetica", 10, "bold"),
+            bg="#4F46E5",
+            fg="white",
+            command=lambda: self._on_detect_cloud_installer(silent=False)
+        )
+        btn_detect.pack(side="left", padx=(0, 8))
+
+        btn_add = tk.Button(
+            btn_bar,
+            text="📂 Examinar carpeta...",
+            font=("Helvetica", 10),
+            bg="#2563EB",
+            fg="white",
+            command=self._on_add_cloud_folder_installer
+        )
+        btn_add.pack(side="left", padx=(0, 8))
+
+        btn_clear = tk.Button(
+            btn_bar,
+            text="Eliminar Selección",
+            font=("Helvetica", 10),
+            fg="#DC2626",
+            command=self._on_remove_cloud_folder_installer
+        )
+        btn_clear.pack(side="left")
+
+        guide_box = tk.Label(
+            self.content_frame,
+            text="💡 ¿Cómo conectar SharePoint?\n"
+                 "1. Ve a tu SharePoint corporativo en el navegador y haz clic en 'Sincronizar'.\n"
+                 "2. Pulsa '🔍 Auto-detectar Nube' arriba para importar la carpeta automáticamente.\n"
+                 "3. Si prefieres, haz clic en 'Examinar carpeta...' para seleccionarla manualmente.",
+            font=("Helvetica", 9),
+            fg="#1E40AF",
+            bg="#EFF6FF",
+            justify="left",
+            anchor="w",
+            relief="solid",
+            bd=1,
+            padx=10,
+            pady=8
+        )
+        guide_box.pack(fill="x")
+
+        # Auto-detectar silenciosamente si la lista está vacía al cargar
+        if not self.cloud_folders:
+            self._on_detect_cloud_installer(silent=True)
+
+    def _refresh_cloud_listbox(self):
+        if hasattr(self, "cloud_listbox"):
+            self.cloud_listbox.delete(0, tk.END)
+            for f in self.cloud_folders:
+                self.cloud_listbox.insert(tk.END, str(f))
+
+    def _on_detect_cloud_installer(self, silent=False):
+        try:
+            detected = FolderSyncManager.detect_cloud_folders()
+            added = 0
+            existing = [f.resolve() for f in self.cloud_folders]
+            for folder in detected:
+                if folder.resolve() not in existing:
+                    self.cloud_folders.append(folder)
+                    added += 1
+            self._refresh_cloud_listbox()
+            if not silent:
+                if added > 0:
+                    messagebox.showinfo("Detección Nube", f"Se detectaron y agregaron {added} carpetas de OneDrive/SharePoint.")
+                else:
+                    messagebox.showinfo("Detección Nube", "No se encontraron nuevas carpetas sincronizadas en el sistema.")
+        except Exception as e:
+            if not silent:
+                messagebox.showwarning("Aviso", f"Error escaneando carpetas de la nube: {e}")
+
+    def _on_add_cloud_folder_installer(self):
+        sel = filedialog.askdirectory(title="Selecciona la carpeta de SharePoint o OneDrive")
+        if sel:
+            p = Path(sel).resolve()
+            if p not in self.cloud_folders:
+                self.cloud_folders.append(p)
+                self._refresh_cloud_listbox()
+
+    def _on_remove_cloud_folder_installer(self):
+        if hasattr(self, "cloud_listbox"):
+            try:
+                idx = self.cloud_listbox.curselection()[0]
+                del self.cloud_folders[idx]
+                self._refresh_cloud_listbox()
+            except IndexError:
+                pass
+
+    # --- PASO 5: Progreso de Instalación ---
+    def _render_step5_installation(self):
+        title = tk.Label(
+            self.content_frame,
+            text="Instalando y Configurando Funes",
             font=("Helvetica", 15, "bold"),
             fg="#1F2937",
             bg="#F5F5F7",
@@ -473,6 +616,15 @@ class FunesInstallerWizard(tk.Tk):
             self._log("[✓] Estructura de carpetas 1_entrada, 2_sucio, 3_limpio, 4_salida verificada.")
             time.sleep(0.5)
 
+            # Guardar carpetas de la nube vinculadas si existen
+            if self.cloud_folders:
+                try:
+                    sync_mgr = FolderSyncManager(vault)
+                    sync_mgr.save_connected_folders(self.cloud_folders)
+                    self._log(f"[✓] Guardadas {len(self.cloud_folders)} carpeta(s) vinculadas en .funes_connected_folders.json")
+                except Exception as e:
+                    self._log(f"[!] Aviso al guardar carpetas de la nube: {e}")
+
             # 2. Configurar modelo LLM según la RAM
             self.lbl_install_status.config(text="2. Evaluando memoria RAM y modelo LLM recomendado...")
             self.progress_bar["value"] = 35
@@ -510,7 +662,7 @@ class FunesInstallerWizard(tk.Tk):
             self.progress_bar["value"] = 85
             try:
                 create_shortcuts(self.base_dir, vault_dir=vault)
-                self._log("[✓] Acceso directo 'Habla con Funes' creado con éxito en tu Escritorio.")
+                self._log("[✓] Acceso directo 'Funes' creado con éxito en tu Escritorio.")
             except Exception as e:
                 self._log(f"[!] Error creando acceso directo: {e}")
 
@@ -519,19 +671,19 @@ class FunesInstallerWizard(tk.Tk):
             self._log("\n🎉 ¡TODAS LAS TAREAS DE INSTALACIÓN HAN FINALIZADO DE FORMA EXITOSA!")
             time.sleep(1)
 
-            # Avanzar automáticamente al paso 5
-            self.after(100, lambda: self.show_step(5))
+            # Avanzar automáticamente al paso 6
+            self.after(100, lambda: self.show_step(6))
 
         except Exception as err:
             self._log(f"\n[ERROR CRÍTICO]: {err}")
             self.lbl_install_status.config(text="Error durante la instalación.")
             messagebox.showerror("Error de Instalación", f"Ocurrió un error inesperado:\n{err}")
 
-    # --- PASO 5: Instalación Completada ---
-    def _render_step5_complete(self):
+    # --- PASO 6: Instalación Completada ---
+    def _render_step6_complete(self):
         title = tk.Label(
             self.content_frame,
-            text="🎉 ¡Habla con Funes está listo para usarse!",
+            text="🎉 ¡Funes está listo para usarse!",
             font=("Helvetica", 16, "bold"),
             fg="#059669",
             bg="#F5F5F7",
@@ -544,7 +696,7 @@ class FunesInstallerWizard(tk.Tk):
             "• Vault de Obsidian: 'La Memoria de Funes' preparado.\n"
             "• Ollama AI + Qwen: Configurado según tu memoria RAM.\n"
             "• AnythingLLM Desktop: Auto-configurado y vinculado a la carpeta '4_salida'.\n"
-            "• Acceso Directo: Se ha creado el botón 'Habla con Funes' en tu Escritorio.\n\n"
+            "• Acceso Directo: Se ha creado el botón 'Funes' en tu Escritorio.\n\n"
             "Al hacer clic en 'Finalizar', se abrirá tu Consola Central de Control."
         )
 
@@ -575,9 +727,7 @@ class FunesInstallerWizard(tk.Tk):
 
     # --- Manejadores de Botones Navegación ---
     def _on_next(self):
-        if self.current_step == 3:
-            self.show_step(4)
-        elif self.current_step == 5:
+        if self.current_step == 6:
             # Finalizar
             if self.run_first_flush_var.get():
                 self.destroy()

@@ -149,7 +149,7 @@ def create_shortcuts(base_dir: Path, target_dir: Optional[Path] = None, vault_di
         $s1.Arguments = '{target_args}'
         $s1.WorkingDirectory = "{base_dir}"
         $s1.IconLocation = "{funes_ico}"
-        $s1.Description = "Ejecutable Habla con Funes"
+        $s1.Description = "Ejecutable Funes"
         $s1.Save()
 
         # 2. Acceso directo La Memoria de Funes (Archivador)

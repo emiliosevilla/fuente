@@ -431,3 +431,62 @@ def check_and_prompt_user_apps_closed() -> bool:
             print("\n[!] Operación de Flush cancelada por el usuario o aplicaciones aún abiertas.")
             print("    Funes no ha procesado ningún archivo para evitar interferir con tus aplicaciones.")
             return False
+
+
+def launch_obsidian(vault_path: Path) -> bool:
+    """Abre la aplicación Obsidian con la carpeta Vault especificada de forma multiplataforma."""
+    vault_path = Path(vault_path).resolve()
+    is_mac = sys.platform == "darwin"
+    is_win = sys.platform == "win32"
+
+    if is_mac:
+        try:
+            if Path("/Applications/Obsidian.app").exists():
+                subprocess.Popen(["open", "-a", "Obsidian", str(vault_path)])
+                return True
+            else:
+                subprocess.Popen(["open", str(vault_path)])
+                return True
+        except Exception as e:
+            logger.debug(f"Error abriendo Obsidian en macOS: {e}")
+
+    if is_win:
+        import os
+        import urllib.parse
+
+        local_appdata = os.environ.get("LOCALAPPDATA", "")
+        program_files = os.environ.get("ProgramFiles", "")
+        program_files_x86 = os.environ.get("ProgramFiles(x86)", "")
+
+        candidates = [
+            Path(local_appdata) / "Programs" / "obsidian" / "Obsidian.exe",
+            Path(local_appdata) / "Obsidian" / "Obsidian.exe",
+            Path(program_files) / "Obsidian" / "Obsidian.exe",
+            Path(program_files_x86) / "Obsidian" / "Obsidian.exe",
+        ]
+
+        for exe in candidates:
+            if exe.exists():
+                try:
+                    subprocess.Popen([str(exe), str(vault_path)])
+                    return True
+                except Exception as e:
+                    logger.debug(f"Error al ejecutar {exe}: {e}")
+
+        # Fallback 1: Esquema URI obsidian://open?path=...
+        try:
+            uri = f"obsidian://open?path={urllib.parse.quote(str(vault_path))}"
+            os.startfile(uri)
+            return True
+        except Exception as e:
+            logger.debug(f"Error abriendo URI obsidian://: {e}")
+
+        # Fallback 2: Abrir carpeta en el Explorador de Windows
+        try:
+            os.startfile(str(vault_path))
+            return True
+        except Exception as e:
+            logger.debug(f"Error abriendo carpeta en Explorer: {e}")
+
+    return False
+

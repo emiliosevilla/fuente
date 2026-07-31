@@ -17,7 +17,7 @@ from tkinter import ttk, messagebox, filedialog
 
 from funes.config import get_default_config, AppConfig, save_config, load_config
 from funes.core.vault import VaultManager
-from funes.core.app_checker import check_and_prompt_user_apps_closed
+from funes.core.app_checker import check_and_prompt_user_apps_closed, launch_obsidian
 from funes.core.anythingllm_config import (
     is_anythingllm_installed,
     launch_anythingllm,
@@ -548,7 +548,7 @@ class FunesControlConsole(tk.Tk):
         tk.Label(status_strip, text="● Asistente de Chat:", font=("Georgia", 13, "bold"), fg=THEME["crimson"], bg=THEME["bg_card"]).pack(side="left", padx=(0, 6))
         tk.Label(status_strip, textvariable=self.status_anything_var, font=("Helvetica", 13), fg=THEME["paper"], bg=THEME["bg_card"]).pack(side="left", padx=(0, 35))
 
-        tk.Label(status_strip, text="● Cuaderno Obsidian:", font=("Georgia", 13, "bold"), fg=THEME["crimson"], bg=THEME["bg_card"]).pack(side="left", padx=(0, 6))
+        tk.Label(status_strip, text="● La Memoria de Funes:", font=("Georgia", 13, "bold"), fg=THEME["crimson"], bg=THEME["bg_card"]).pack(side="left", padx=(0, 6))
         tk.Label(status_strip, textvariable=self.status_obsidian_var, font=("Helvetica", 13), fg=THEME["paper"], bg=THEME["bg_card"]).pack(side="left")
 
         # 3. STATS CARDS
@@ -681,7 +681,7 @@ class FunesControlConsole(tk.Tk):
 
         btn_obs = tk.Button(
             sub_flow,
-            text="📖 Cuaderno Obsidian",
+            text="📖 La Memoria de Funes",
             font=("Georgia", 11, "bold"),
             fg=THEME["paper"],
             bg=THEME["bg_card_hover"],
@@ -889,18 +889,16 @@ class FunesControlConsole(tk.Tk):
     def _on_chat_click(self):
         self._log("Abriendo asistente de chat AnythingLLM...")
         if not launch_anythingllm():
-            messagebox.showwarning("AnythingLLM", "No se pudo abrir el asistente de chat. Verifica si está instalado.")
+            self._log("AnythingLLM no se encuentra instalado. Se ha abierto la página oficial para su descarga.")
 
     def _on_obsidian_click(self):
-        self._log(f"Abriendo cuaderno de notas en {self.vault_path}...")
-        is_mac = sys.platform == "darwin"
+        self._log(f"Abriendo La Memoria de Funes en {self.vault_path}...")
         try:
-            if is_mac:
-                subprocess.Popen(["open", "-a", "Obsidian", str(self.vault_path)])
-            else:
-                subprocess.Popen(["cmd", "/c", "start", "obsidian", str(self.vault_path)])
+            if not launch_obsidian(self.vault_path):
+                self._log("No se pudo abrir Obsidian automáticamente. Se abrió el explorador de archivos.")
         except Exception as e:
-            self._log(f"Error abriendo Obsidian: {e}")
+            self._log(f"Error abriendo La Memoria de Funes: {e}")
+
 
     def _on_sync_click(self):
         modal = FolderSyncModal(self, self.sync_manager)

@@ -572,7 +572,11 @@ class FunesInstallerWizard(tk.Tk):
                 self.destroy()
                 # Lanzar Consola Central de Control
                 vault_arg = self.vault_path_var.get()
-                subprocess.Popen([sys.executable, "-m", "funes.control_console", vault_arg], cwd=self.base_dir)
+                main_exe = self.base_dir / ("Funes_macOS" if sys.platform == "darwin" else "Funes_windows.exe")
+                if main_exe.exists():
+                    subprocess.Popen([str(main_exe), vault_arg], cwd=self.base_dir)
+                else:
+                    subprocess.Popen([sys.executable, "-m", "funes.control_console", vault_arg], cwd=self.base_dir)
             else:
                 self.destroy()
         else:
@@ -588,8 +592,11 @@ class FunesInstallerWizard(tk.Tk):
 
 
 def run_installer_gui():
-    app = FunesInstallerWizard()
-    app.mainloop()
+    try:
+        app = FunesInstallerWizard()
+        app.mainloop()
+    except Exception as e:
+        print(f"[!] Aviso al iniciar interfaz gráfica: {e}")
 
 
 if __name__ == "__main__":

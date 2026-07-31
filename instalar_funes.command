@@ -2,6 +2,7 @@
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 cd "$DIR"
 export PYTHONPATH="$DIR:$PYTHONPATH"
+export TK_SILENCE_DEPRECATION=1
 
 echo "======================================================="
 echo "               HABLA CON FUNES (macOS)"
@@ -28,6 +29,7 @@ fi
 
 source venv/bin/activate
 export PYTHONPATH="$DIR:$PYTHONPATH"
+export TK_SILENCE_DEPRECATION=1
 
 pip install --upgrade pip
 if [ -f "requirements.txt" ]; then
@@ -39,6 +41,9 @@ fi
 
 echo ""
 echo "Creando acceso directo ejecutable Funes.command en el Escritorio..."
+if [ -f "./Funes_macOS" ]; then
+    chmod +x ./Funes_macOS
+fi
 ./venv/bin/python3 create_shortcuts.py
 
 echo ""
@@ -84,10 +89,11 @@ fi
 
 echo ""
 echo "Iniciando Asistente Gráfico de Instalación de Funes..."
-if [ -f "./venv/bin/python3" ]; then
-    ./venv/bin/python3 -m funes.installer_gui
-elif [ -f "./Funes_macOS" ]; then
+if [ -f "./Funes_macOS" ]; then
+    chmod +x ./Funes_macOS
     ./Funes_macOS
+elif [ -f "./venv/bin/python3" ]; then
+    ./venv/bin/python3 -m funes.installer_gui
 else
     python3 -m funes.installer_gui
 fi

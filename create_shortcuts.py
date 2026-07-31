@@ -174,7 +174,10 @@ def create_shortcuts(base_dir: Path, target_dir: Optional[Path] = None) -> bool:
 
         script_funes_content = f"""#!/bin/bash
 cd "{base_dir}"
-if [ -f "./dist/Funes_macOS" ]; then
+export PYTHONPATH="{base_dir}:$PYTHONPATH"
+if [ -f "./Funes_macOS" ]; then
+    ./Funes_macOS
+elif [ -f "./dist/Funes_macOS" ]; then
     ./dist/Funes_macOS
 elif [ -f "./venv/bin/python3" ]; then
     ./venv/bin/python3 -m funes.main

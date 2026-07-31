@@ -99,10 +99,11 @@ class GraphProcessNode(tk.Frame):
         top_frame = tk.Frame(self, bg=bg_col)
         top_frame.pack(fill="x", anchor="w")
 
-        lbl_icon = tk.Label(top_frame, text=icon_str, font=("Helvetica", 22, "bold"), fg=fg_title, bg=bg_col)
-        lbl_icon.pack(side="left", padx=(0, 8))
+        if icon_str:
+            lbl_icon = tk.Label(top_frame, text=icon_str, font=("Helvetica", 18, "bold"), fg=fg_title, bg=bg_col)
+            lbl_icon.pack(side="left", padx=(0, 6))
 
-        lbl_title = tk.Label(top_frame, text=title_str, font=("Georgia", 16, "bold"), fg=fg_title, bg=bg_col)
+        lbl_title = tk.Label(top_frame, text=title_str, font=("Georgia", 15, "bold"), fg=fg_title, bg=bg_col)
         lbl_title.pack(side="left", fill="x", expand=True)
 
         # Descripción
@@ -463,9 +464,9 @@ class FunesControlConsole(tk.Tk):
             pass
 
         # Variables de estado
-        self.stat_notes_var = tk.StringVar(value="0")
-        self.stat_orphans_var = tk.StringVar(value="0")
         self.stat_input_var = tk.StringVar(value="0")
+        self.stat_processed_var = tk.StringVar(value="0")
+        self.stat_notes_var = tk.StringVar(value="0")
 
         self.status_ollama_var = tk.StringVar(value="Comprobando...")
         self.status_anything_var = tk.StringVar(value="Comprobando...")
@@ -493,8 +494,8 @@ class FunesControlConsole(tk.Tk):
 
         title_lbl = tk.Label(
             m_frame,
-            text="F U N E S   K N O W L E D G E   I N T E L L I G E N C E",
-            font=("Georgia", 26, "bold"),
+            text="F U N E S",
+            font=("Georgia", 28, "bold"),
             fg=THEME["paper"],
             bg=THEME["bg_root"],
             anchor="w"
@@ -503,7 +504,7 @@ class FunesControlConsole(tk.Tk):
 
         subtitle_lbl = tk.Label(
             m_frame,
-            text=f"★ ESTÉTICA PAPIRO DEFINITIVA ★  •  Vault: {self.vault_path.name}",
+            text=f"Formateo Universal de Notas, Estructuración y Síntesis  •  Vault: {self.vault_path.name}",
             font=("Georgia", 11, "italic"),
             fg=THEME["gold"],
             bg=THEME["bg_root"],
@@ -511,30 +512,13 @@ class FunesControlConsole(tk.Tk):
         )
         subtitle_lbl.pack(side="right", pady=(4, 0))
 
-        # BARRA DE HERRAMIENTAS PAPIRO (4 BOTONES DE ACCESO DIRECTO)
+        # BARRA DE HERRAMIENTAS PAPIRO (4 BOTONES DE ACCESO DIRECTO SIN ICONOS)
         toolbar = tk.Frame(header_container, bg=THEME["bg_root"], pady=8)
         toolbar.pack(fill="x")
 
-        btn_cloud = tk.Button(
-            toolbar,
-            text="🔗 Fuentes Nube (SharePoint)",
-            font=("Georgia", 10, "bold"),
-            fg=THEME["paper"],
-            bg=THEME["bg_card"],
-            activebackground=THEME["bg_card_hover"],
-            activeforeground=THEME["paper"],
-            relief="solid",
-            bd=1,
-            cursor="hand2",
-            padx=12,
-            pady=4,
-            command=self._on_cloud_sources_click
-        )
-        btn_cloud.pack(side="left", padx=(0, 8))
-
         btn_flush = tk.Button(
             toolbar,
-            text="⚡ Forzar Ingesta (Flush)",
+            text="Procesar Documentos Nuevos",
             font=("Georgia", 10, "bold"),
             fg=THEME["paper"],
             bg=THEME["bg_card"],
@@ -544,14 +528,14 @@ class FunesControlConsole(tk.Tk):
             bd=1,
             cursor="hand2",
             padx=12,
-            pady=4,
+            pady=5,
             command=self._on_flush_click
         )
         btn_flush.pack(side="left", padx=(0, 8))
 
-        btn_moc = tk.Button(
+        btn_cloud = tk.Button(
             toolbar,
-            text="🔄 Re-indexar MOC",
+            text="Fuentes Nube (SharePoint)",
             font=("Georgia", 10, "bold"),
             fg=THEME["paper"],
             bg=THEME["bg_card"],
@@ -561,14 +545,31 @@ class FunesControlConsole(tk.Tk):
             bd=1,
             cursor="hand2",
             padx=12,
-            pady=4,
+            pady=5,
+            command=self._on_cloud_sources_click
+        )
+        btn_cloud.pack(side="left", padx=(0, 8))
+
+        btn_moc = tk.Button(
+            toolbar,
+            text="Actualizar Índice de Notas",
+            font=("Georgia", 10, "bold"),
+            fg=THEME["paper"],
+            bg=THEME["bg_card"],
+            activebackground=THEME["bg_card_hover"],
+            activeforeground=THEME["paper"],
+            relief="solid",
+            bd=1,
+            cursor="hand2",
+            padx=12,
+            pady=5,
             command=self._on_reindex_click
         )
         btn_moc.pack(side="left", padx=(0, 8))
 
         btn_settings = tk.Button(
             toolbar,
-            text="⚙️ Ajustes Avanzados",
+            text="Ajustes Avanzados",
             font=("Georgia", 10, "bold"),
             fg=THEME["paper"],
             bg=THEME["bg_card"],
@@ -578,7 +579,7 @@ class FunesControlConsole(tk.Tk):
             bd=1,
             cursor="hand2",
             padx=12,
-            pady=4,
+            pady=5,
             command=self._on_settings_click
         )
         btn_settings.pack(side="left")
@@ -596,27 +597,27 @@ class FunesControlConsole(tk.Tk):
         status_strip = tk.Frame(self, bg=THEME["bg_card"], padx=25, pady=10, highlightbackground=THEME["border"], highlightthickness=1)
         status_strip.pack(side="top", fill="x", padx=30, pady=(0, 15))
 
-        tk.Label(status_strip, text="● Inteligencia Local:", font=("Georgia", 13, "bold"), fg=THEME["crimson"], bg=THEME["bg_card"]).pack(side="left", padx=(0, 6))
+        tk.Label(status_strip, text="● Motor de IA Local:", font=("Georgia", 13, "bold"), fg=THEME["crimson"], bg=THEME["bg_card"]).pack(side="left", padx=(0, 6))
         tk.Label(status_strip, textvariable=self.status_ollama_var, font=("Helvetica", 13), fg=THEME["paper"], bg=THEME["bg_card"]).pack(side="left", padx=(0, 35))
 
-        tk.Label(status_strip, text="● Asistente de Chat:", font=("Georgia", 13, "bold"), fg=THEME["crimson"], bg=THEME["bg_card"]).pack(side="left", padx=(0, 6))
+        tk.Label(status_strip, text="● Asistente de Consultas:", font=("Georgia", 13, "bold"), fg=THEME["crimson"], bg=THEME["bg_card"]).pack(side="left", padx=(0, 6))
         tk.Label(status_strip, textvariable=self.status_anything_var, font=("Helvetica", 13), fg=THEME["paper"], bg=THEME["bg_card"]).pack(side="left", padx=(0, 35))
 
-        tk.Label(status_strip, text="● La Memoria de Funes:", font=("Georgia", 13, "bold"), fg=THEME["crimson"], bg=THEME["bg_card"]).pack(side="left", padx=(0, 6))
+        tk.Label(status_strip, text="● Base de Conocimiento:", font=("Georgia", 13, "bold"), fg=THEME["crimson"], bg=THEME["bg_card"]).pack(side="left", padx=(0, 6))
         tk.Label(status_strip, textvariable=self.status_obsidian_var, font=("Helvetica", 13), fg=THEME["paper"], bg=THEME["bg_card"]).pack(side="left")
 
-        # 3. STATS CARDS
+        # 3. STATS CARDS (ORDEN: Archivos por Procesar, Archivos Procesados, Notas Generadas)
         stats_frame = tk.Frame(self, bg=THEME["bg_root"], padx=25)
         stats_frame.pack(side="top", fill="x", pady=(0, 15))
 
-        self._create_stat_card(stats_frame, "Notas Archivadas", self.stat_notes_var, THEME["crimson"], 0)
-        self._create_stat_card(stats_frame, "Notas por Enlazar", self.stat_orphans_var, THEME["gold"], 1)
-        self._create_stat_card(stats_frame, "Archivos de Entrada", self.stat_input_var, THEME["green"], 2)
+        self._create_stat_card(stats_frame, "Archivos por Procesar", self.stat_input_var, THEME["gold"], 0)
+        self._create_stat_card(stats_frame, "Archivos Procesados", self.stat_processed_var, THEME["green"], 1)
+        self._create_stat_card(stats_frame, "Notas Generadas", self.stat_notes_var, THEME["crimson"], 2)
 
         # 4. DIAGRAMA VISUAL DE GRAFO LÓGICO DE PROCESO (4 ETAPAS DEL MODELO)
         graph_section = tk.LabelFrame(
             self,
-            text=" 📐 GRAFO DE ARQUITECTURA DE PROCESAMIENTO Y CONSULTA DE FUNES ",
+            text=" FLUJO DE PROCESAMIENTO Y MEMORIA ",
             font=("Georgia", 13, "bold"),
             fg=THEME["paper"],
             bg=THEME["bg_root"],
@@ -631,10 +632,10 @@ class FunesControlConsole(tk.Tk):
         flow_container = tk.Frame(graph_section, bg=THEME["bg_root"])
         flow_container.pack(fill="x")
 
-        # --- SUBGRAFO 1: INGESTA CONTINUA ---
+        # --- SUBGRAFO 1: RECEPCIÓN ---
         sg1 = tk.LabelFrame(
             flow_container,
-            text=" 1. Ingesta Continua ",
+            text=" 1. Recepción ",
             font=("Georgia", 10, "bold"),
             fg=THEME["gold"],
             bg=THEME["bg_card"],
@@ -648,9 +649,9 @@ class FunesControlConsole(tk.Tk):
         node1 = GraphProcessNode(
             sg1,
             step_tag="PASO 1",
-            icon_str="📁",
-            title_str=f"{self.config.vault.input_dir_name}/",
-            desc_str="Archivos desestructurados en bruto & Monitor Watcher",
+            icon_str="",
+            title_str="Entrada de Archivos",
+            desc_str="Documentos, imágenes y audios en 1_entrada",
             command=self._on_sync_click
         )
         node1.pack(fill="both", expand=True)
@@ -659,10 +660,10 @@ class FunesControlConsole(tk.Tk):
         lbl_arr1 = tk.Label(flow_container, text=" ═► ", font=("Courier", 16, "bold"), fg=THEME["gold"], bg=THEME["bg_root"])
         lbl_arr1.grid(row=0, column=1, padx=1)
 
-        # --- SUBGRAFO 2: TRANSFORMACIÓN Y LIMPIEZA ---
+        # --- SUBGRAFO 2: LECTURA & TRANSCRIPCIÓN ---
         sg2 = tk.LabelFrame(
             flow_container,
-            text=" 2. Transformación & Limpieza ",
+            text=" 2. Lectura & Transcripción ",
             font=("Georgia", 10, "bold"),
             fg=THEME["gold"],
             bg=THEME["bg_card"],
@@ -675,12 +676,12 @@ class FunesControlConsole(tk.Tk):
 
         node2 = GraphProcessNode(
             sg2,
-            step_tag="PASO 2 (INGESTA)",
-            icon_str="⚙️",
-            title_str=f"{self.config.vault.dirty_dir_name} & {self.config.vault.clean_dir_name}",
-            desc_str="Backup verbatim, OCR Tesseract, Whisper & Extracción",
+            step_tag="PASO 2",
+            icon_str="",
+            title_str="Resguardo & OCR/Voz",
+            desc_str="Backup verbatim, OCR Tesseract, Whisper",
             command=self._on_flush_click,
-            is_highlight=True
+            is_highlight=False
         )
         node2.pack(fill="both", expand=True)
 
@@ -688,10 +689,10 @@ class FunesControlConsole(tk.Tk):
         lbl_arr2 = tk.Label(flow_container, text=" ═► ", font=("Courier", 16, "bold"), fg=THEME["gold"], bg=THEME["bg_root"])
         lbl_arr2.grid(row=0, column=3, padx=1)
 
-        # --- SUBGRAFO 3: GENERACIÓN ATÓMICA ---
+        # --- SUBGRAFO 3: ESTRUCTURACIÓN ---
         sg3 = tk.LabelFrame(
             flow_container,
-            text=" 3. Generación Atómica ",
+            text=" 3. Estructuración ",
             font=("Georgia", 10, "bold"),
             fg=THEME["gold"],
             bg=THEME["bg_card"],
@@ -704,10 +705,10 @@ class FunesControlConsole(tk.Tk):
 
         node3 = GraphProcessNode(
             sg3,
-            step_tag="PASO 3 (GRAFO)",
-            icon_str="🔗",
-            title_str=f"{self.config.vault.output_dir_name} & MOC",
-            desc_str="Notas atómicas, inserción WikiLinks & _Indice_MOC.md",
+            step_tag="PASO 3",
+            icon_str="",
+            title_str="Notas & Mapa Global",
+            desc_str="Notas interconectadas e índice general",
             command=self._on_audit_click
         )
         node3.pack(fill="both", expand=True)
@@ -716,10 +717,10 @@ class FunesControlConsole(tk.Tk):
         lbl_arr3 = tk.Label(flow_container, text=" ═► ", font=("Courier", 16, "bold"), fg=THEME["gold"], bg=THEME["bg_root"])
         lbl_arr3.grid(row=0, column=5, padx=1)
 
-        # --- SUBGRAFO 4: PERSISTENCIA Y CONSULTA ---
+        # --- SUBGRAFO 4: CONSULTA ---
         sg4 = tk.LabelFrame(
             flow_container,
-            text=" 4. Persistencia & Consulta ",
+            text=" 4. Consulta ",
             font=("Georgia", 10, "bold"),
             fg=THEME["gold"],
             bg=THEME["bg_card"],
@@ -735,12 +736,12 @@ class FunesControlConsole(tk.Tk):
 
         btn_obs = tk.Button(
             sub_flow,
-            text="📖 La Memoria de Funes",
+            text="La Memoria de Funes",
             font=("Georgia", 11, "bold"),
             fg=THEME["paper"],
-            bg=THEME["bg_card_hover"],
-            activebackground=THEME["crimson"],
-            activeforeground="#FFFFFF",
+            bg=THEME["bg_card"],
+            activebackground=THEME["bg_card_hover"],
+            activeforeground=THEME["paper"],
             relief="solid",
             bd=1,
             cursor="hand2",
@@ -751,12 +752,12 @@ class FunesControlConsole(tk.Tk):
 
         btn_chat = tk.Button(
             sub_flow,
-            text="💬 Chat IA AnythingLLM",
+            text="Chat IA AnythingLLM",
             font=("Georgia", 11, "bold"),
             fg=THEME["paper"],
-            bg=THEME["bg_card_hover"],
-            activebackground=THEME["crimson"],
-            activeforeground="#FFFFFF",
+            bg=THEME["bg_card"],
+            activebackground=THEME["bg_card_hover"],
+            activeforeground=THEME["paper"],
             relief="solid",
             bd=1,
             cursor="hand2",
@@ -767,7 +768,7 @@ class FunesControlConsole(tk.Tk):
 
         btn_ref = tk.Button(
             sub_flow,
-            text="🔄 Refrescar Estado",
+            text="Refrescar Estado",
             font=("Georgia", 10),
             fg=THEME["muted"],
             bg=THEME["bg_card"],
@@ -792,7 +793,7 @@ class FunesControlConsole(tk.Tk):
 
         tk.Label(
             log_frame,
-            text="── BOLETÍN DE PRENSA Y REGISTRO DE ACTIVIDAD ──",
+            text="── REGISTRO DE ACTIVIDAD EN TIEMPO REAL ──",
             font=("Georgia", 13, "bold"),
             fg=THEME["paper"],
             bg=THEME["bg_root"],
@@ -851,18 +852,12 @@ class FunesControlConsole(tk.Tk):
             input_files = list(self.config.vault.input_dir.glob("*"))
             valid_input = [f for f in input_files if f.is_file() and not f.name.startswith(".")]
 
-            orphans = 0
-            for note in valid_notes:
-                try:
-                    with open(note, "r", encoding="utf-8") as nf:
-                        if "[[" not in nf.read():
-                            orphans += 1
-                except Exception:
-                    pass
+            clean_files = list(self.config.vault.clean_dir.glob("*.md")) if self.config.vault.clean_dir.exists() else []
+            valid_clean = [f for f in clean_files if f.is_file() and not f.name.startswith(".")]
 
-            self._set_var_safe(self.stat_notes_var, str(len(valid_notes)))
-            self._set_var_safe(self.stat_orphans_var, str(orphans))
             self._set_var_safe(self.stat_input_var, str(len(valid_input)))
+            self._set_var_safe(self.stat_processed_var, str(len(valid_clean)))
+            self._set_var_safe(self.stat_notes_var, str(len(valid_notes)))
 
             rec_model = self.config.custom_model_override or self.ram_governor.recommend_model()
             if self.ram_governor.check_ollama_status():

@@ -44,6 +44,12 @@ hidden_imports = [
 
 ]
 
+for pkg in ['psutil', 'watchdog', 'requests', 'pydantic', 'pdfplumber', 'docx', 'pptx', 'openpyxl', 'extract_msg', 'PIL', 'pytesseract', 'markitdown']:
+    try:
+        hidden_imports += collect_submodules(pkg)
+    except Exception:
+        pass
+
 try:
     datas += collect_data_files('chromadb')
     hidden_imports += collect_submodules('chromadb')

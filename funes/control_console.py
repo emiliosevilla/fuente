@@ -13,9 +13,9 @@ if sys.platform == "win32":
         sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
 import tkinter as tk
-from tkinter import ttk, messagebox
+from tkinter import ttk, messagebox, filedialog
 
-from funes.config import get_default_config, AppConfig
+from funes.config import get_default_config, AppConfig, save_config, load_config
 from funes.core.vault import VaultManager
 from funes.core.app_checker import check_and_prompt_user_apps_closed
 from funes.core.anythingllm_config import (
@@ -27,6 +27,12 @@ from funes.core.folder_sync import FolderSyncManager, FolderSyncModal
 from funes.watcher.watcher import ETLPipeline
 from funes.graph_engine.karpathy_loop import KarpathyGraphLoop
 from funes.ram_governor.governor import RAMGovernor
+
+try:
+    from funes.installer_gui import FunesInstallerWizard
+    HAS_INSTALLER_WIZARD = True
+except ImportError:
+    HAS_INSTALLER_WIZARD = False
 
 
 # Paleta de colores: Estética Papiro (Claude Anthropic Framework)
@@ -47,7 +53,7 @@ THEME = {
 
 
 class GraphProcessNode(tk.Frame):
-    """Nodo interactivo del grafo de flujo lógico con diseño tipográfico de prensa vintage."""
+    """Nodo interactivo del grafo de flujo lógico con diseño Estética Papiro."""
 
     def __init__(
         self,
@@ -78,7 +84,7 @@ class GraphProcessNode(tk.Frame):
         self.bg_col = bg_col
         self.bg_hover = bg_hover
 
-        # Etiqueta de Paso Lógico (Paso 1, Paso 2, Salida 4A, etc.)
+        # Etiqueta de Paso Lógico
         lbl_tag = tk.Label(
             self,
             text=f"── {step_tag} ──",
@@ -137,8 +143,287 @@ class GraphProcessNode(tk.Frame):
             self.command()
 
 
+class FunesSettingsModal(tk.Toplevel):
+    """Diálogo modal de Ajustes Avanzados y Re-Setup del sistema Funes (Estética Papiro)."""
+
+    def __init__(self, parent: "FunesControlConsole"):
+        super().__init__(parent)
+        self.console = parent
+        self.config = parent.config
+        self.ram_governor = parent.ram_governor
+
+        self.title("Ajustes Avanzados & Re-Setup — Funes")
+        self.configure(bg=THEME["bg_root"])
+        self.geometry("780x680")
+        self.minsize(650, 550)
+        self.transient(parent)
+        self.grab_set()
+
+        # Variables de formulario
+        self.vault_path_var = tk.StringVar(value=str(self.config.vault.vault_path))
+        self.input_dir_var = tk.StringVar(value=self.config.vault.input_dir_name)
+        self.dirty_dir_var = tk.StringVar(value=self.config.vault.dirty_dir_name)
+        self.clean_dir_var = tk.StringVar(value=self.config.vault.clean_dir_name)
+        self.output_dir_var = tk.StringVar(value=self.config.vault.output_dir_name)
+
+        self.ollama_url_var = tk.StringVar(value=self.config.ollama_url)
+
+        # Modelos matemáticamente viables según RAM Governor
+        self.viable_models = self.ram_governor.get_viable_models()
+        model_options = ["Auto (Recomendado por RAM Governor)"] + [m["name"] for m in self.viable_models]
+
+        curr_override = self.config.custom_model_override
+        selected_display = "Auto (Recomendado por RAM Governor)"
+        if curr_override:
+            for vm in self.viable_models:
+                if vm["id"] == curr_override:
+                    selected_display = vm["name"]
+                    break
+
+        self.model_var = tk.StringVar(value=selected_display)
+        self.ram_margin_var = tk.StringVar(value=str(int(self.config.ram_safety_margin_pct * 100)))
+
+        self._setup_ui(model_options)
+
+    def _setup_ui(self, model_options: list):
+        # Cabecera Modal
+        hdr = tk.Frame(self, bg=THEME["bg_card"], padx=20, pady=12, highlightbackground=THEME["border"], highlightthickness=1)
+        hdr.pack(fill="x")
+        tk.Label(
+            hdr,
+            text="⚙️ AJUSTES AVANZADOS Y RE-SETUP DE FUNES",
+            font=("Georgia", 16, "bold"),
+            fg=THEME["paper"],
+            bg=THEME["bg_card"]
+        ).pack(side="left")
+        tk.Label(
+            hdr,
+            text="Configuración Técnica de Vault, IA y Plantillas",
+            font=("Georgia", 11, "italic"),
+            fg=THEME["muted"],
+            bg=THEME["bg_card"]
+        ).pack(side="right")
+
+        # Notebook / Pestañas estilizadas
+        style = ttk.Style()
+        style.theme_use("default")
+        style.configure("Papiro.TNotebook", background=THEME["bg_root"], borderwidth=0)
+        style.configure("Papiro.TNotebook.Tab", background=THEME["bg_card"], foreground=THEME["paper"], padding=[12, 6], font=("Georgia", 10, "bold"))
+        style.map("Papiro.TNotebook.Tab", background=[("selected", THEME["bg_card_hover"])], foreground=[("selected", THEME["paper"])])
+
+        notebook = ttk.Notebook(self, style="Papiro.TNotebook")
+        notebook.pack(fill="both", expand=True, padx=20, pady=15)
+
+        # TAB 1: Rutas y Carpetas
+        tab_folders = tk.Frame(notebook, bg=THEME["bg_card"], padx=20, pady=15)
+        notebook.add(tab_folders, text=" 📁 Rutas & Carpetas ")
+        self._build_folders_tab(tab_folders)
+
+        # TAB 2: Motor de IA & Servidor
+        tab_ai = tk.Frame(notebook, bg=THEME["bg_card"], padx=20, pady=15)
+        notebook.add(tab_ai, text=" 🤖 Servidor & Modelo IA ")
+        self._build_ai_tab(tab_ai, model_options)
+
+        # TAB 3: Plantilla de Nota Atómica
+        tab_template = tk.Frame(notebook, bg=THEME["bg_card"], padx=20, pady=15)
+        notebook.add(tab_template, text=" 📄 Plantilla Nota Atómica ")
+        self._build_template_tab(tab_template)
+
+        # TAB 4: Re-Setup Completo
+        tab_resetup = tk.Frame(notebook, bg=THEME["bg_card"], padx=20, pady=15)
+        notebook.add(tab_resetup, text=" 🚀 Re-Setup Completo ")
+        self._build_resetup_tab(tab_resetup)
+
+        # Footer con botones de Acción
+        footer = tk.Frame(self, bg=THEME["bg_root"], padx=20, pady=12)
+        footer.pack(fill="x")
+
+        btn_save = tk.Button(
+            footer,
+            text="✓ Guardar y Aplicar Ajustes",
+            font=("Georgia", 11, "bold"),
+            fg="#FFFFFF",
+            bg=THEME["crimson"],
+            activebackground=THEME["crimson_hover"],
+            activeforeground="#FFFFFF",
+            relief="solid",
+            bd=1,
+            cursor="hand2",
+            padx=16,
+            pady=6,
+            command=self._on_save
+        )
+        btn_save.pack(side="right", padx=(10, 0))
+
+        btn_cancel = tk.Button(
+            footer,
+            text="Cancelar",
+            font=("Georgia", 11),
+            fg=THEME["paper"],
+            bg=THEME["bg_card"],
+            activebackground=THEME["bg_card_hover"],
+            relief="solid",
+            bd=1,
+            cursor="hand2",
+            padx=14,
+            pady=6,
+            command=self.destroy
+        )
+        btn_cancel.pack(side="right")
+
+    def _build_folders_tab(self, parent):
+        # Vault Path
+        tk.Label(parent, text="Ruta Principal del Vault de Obsidian:", font=("Georgia", 11, "bold"), fg=THEME["paper"], bg=THEME["bg_card"], anchor="w").pack(fill="x", pady=(0, 4))
+        path_frame = tk.Frame(parent, bg=THEME["bg_card"])
+        path_frame.pack(fill="x", pady=(0, 12))
+
+        entry_vault = tk.Entry(path_frame, textvariable=self.vault_path_var, font=("Courier", 11), bg=THEME["bg_log"], fg=THEME["paper"], relief="solid", bd=1)
+        entry_vault.pack(side="left", fill="x", expand=True, padx=(0, 8))
+
+        btn_browse = tk.Button(path_frame, text="Examinar...", font=("Georgia", 10), fg=THEME["paper"], bg=THEME["bg_card_hover"], relief="solid", bd=1, command=self._browse_vault)
+        btn_browse.pack(side="right")
+
+        tk.Label(parent, text="Nombres Personalizados de Subcarpetas (Pipeline ETL):", font=("Georgia", 11, "bold"), fg=THEME["paper"], bg=THEME["bg_card"], anchor="w").pack(fill="x", pady=(8, 6))
+
+        grid_f = tk.Frame(parent, bg=THEME["bg_card"])
+        grid_f.pack(fill="x", pady=4)
+
+        items = [
+            ("1. Carpeta de Ingesta (1_entrada):", self.input_dir_var, 0),
+            ("2. Carpeta Respaldo Verbatim (2_sucio):", self.dirty_dir_var, 1),
+            ("3. Carpeta Texto Limpio (3_limpio):", self.clean_dir_var, 2),
+            ("4. Carpeta Notas Atómicas (4_salida):", self.output_dir_var, 3),
+        ]
+
+        for lbl, var, row in items:
+            tk.Label(grid_f, text=lbl, font=("Georgia", 10), fg=THEME["muted"], bg=THEME["bg_card"], anchor="w").grid(row=row, column=0, sticky="w", pady=4, padx=(0, 10))
+            ent = tk.Entry(grid_f, textvariable=var, font=("Courier", 11), bg=THEME["bg_log"], fg=THEME["paper"], relief="solid", bd=1, width=28)
+            ent.grid(row=row, column=1, sticky="e", pady=4)
+
+    def _build_ai_tab(self, parent, model_options: list):
+        tk.Label(parent, text="Servidor Local Ollama URL:", font=("Georgia", 11, "bold"), fg=THEME["paper"], bg=THEME["bg_card"], anchor="w").pack(fill="x", pady=(0, 4))
+        entry_url = tk.Entry(parent, textvariable=self.ollama_url_var, font=("Courier", 11), bg=THEME["bg_log"], fg=THEME["paper"], relief="solid", bd=1)
+        entry_url.pack(fill="x", pady=(0, 14))
+
+        tk.Label(parent, text="Selección de Modelo de IA (Filtrado por RAM Governor):", font=("Georgia", 11, "bold"), fg=THEME["paper"], bg=THEME["bg_card"], anchor="w").pack(fill="x", pady=(0, 4))
+
+        opt_menu = ttk.Combobox(parent, textvariable=self.model_var, values=model_options, state="readonly", font=("Georgia", 10))
+        opt_menu.pack(fill="x", pady=(0, 10))
+
+        info_box = tk.Label(
+            parent,
+            text="🔒 Seguridad Matemática: El RAM Governor filtra y descarta automáticamente "
+                 "cualquier modelo que sea inviable para la RAM física de tu equipo.",
+            font=("Georgia", 9, "italic"),
+            fg=THEME["muted"],
+            bg=THEME["bg_card"],
+            justify="left",
+            anchor="w",
+            wraplength=660
+        )
+        info_box.pack(fill="x", pady=(0, 14))
+
+        tk.Label(parent, text="Margen de Seguridad de RAM Libre (%):", font=("Georgia", 11, "bold"), fg=THEME["paper"], bg=THEME["bg_card"], anchor="w").pack(fill="x", pady=(0, 4))
+        entry_ram = tk.Entry(parent, textvariable=self.ram_margin_var, font=("Courier", 11), bg=THEME["bg_log"], fg=THEME["paper"], relief="solid", bd=1, width=10)
+        entry_ram.pack(anchor="w", pady=(0, 10))
+
+    def _build_template_tab(self, parent):
+        tk.Label(parent, text="Plantilla Personalizada de Nota Atómica (Markdown):", font=("Georgia", 11, "bold"), fg=THEME["paper"], bg=THEME["bg_card"], anchor="w").pack(fill="x", pady=(0, 4))
+
+        self.txt_template = tk.Text(parent, font=("Courier", 10), bg=THEME["bg_log"], fg=THEME["paper"], relief="solid", bd=1, height=18)
+        self.txt_template.pack(fill="both", expand=True, pady=(0, 6))
+        self.txt_template.insert("1.0", self.config.atomic_note_template)
+
+    def _build_resetup_tab(self, parent):
+        tk.Label(parent, text="Asistente de Instalación y Re-Setup Completo:", font=("Georgia", 12, "bold"), fg=THEME["paper"], bg=THEME["bg_card"], anchor="w").pack(fill="x", pady=(0, 8))
+
+        desc = (
+            "Si deseas volver a ejecutar el proceso completo de configuración inicial (comprobación de dependencias, "
+            "re-selección guiada de Vault y creación de accesos directos), puedes relanzar el instalador aquí."
+        )
+        tk.Label(parent, text=desc, font=("Georgia", 10), fg=THEME["muted"], bg=THEME["bg_card"], justify="left", anchor="w", wraplength=660).pack(fill="x", pady=(0, 16))
+
+        btn_run = tk.Button(
+            parent,
+            text="🚀 Relanzar Asistente de Instalación Completo (Re-Setup)",
+            font=("Georgia", 11, "bold"),
+            fg="#FFFFFF",
+            bg=THEME["crimson"],
+            activebackground=THEME["crimson_hover"],
+            activeforeground="#FFFFFF",
+            relief="solid",
+            bd=1,
+            cursor="hand2",
+            padx=16,
+            pady=10,
+            command=self._launch_resetup_wizard
+        )
+        btn_run.pack(anchor="w")
+
+    def _browse_vault(self):
+        chosen = filedialog.askdirectory(title="Seleccionar Carpeta de Vault Obsidian", initialdir=self.vault_path_var.get())
+        if chosen:
+            self.vault_path_var.set(chosen)
+
+    def _launch_resetup_wizard(self):
+        if HAS_INSTALLER_WIZARD:
+            self.destroy()
+            wizard = FunesInstallerWizard()
+            wizard.mainloop()
+        else:
+            messagebox.showinfo("Re-Setup", "El asistente de instalación (installer_gui.py) no está accesible en este paquete.")
+
+    def _on_save(self):
+        try:
+            new_vault = Path(self.vault_path_var.get()).resolve()
+            self.config.vault.vault_path = new_vault
+            self.config.vault.input_dir_name = self.input_dir_var.get().strip() or "1_entrada"
+            self.config.vault.dirty_dir_name = self.dirty_dir_var.get().strip() or "2_sucio"
+            self.config.vault.clean_dir_name = self.clean_dir_var.get().strip() or "3_limpio"
+            self.config.vault.output_dir_name = self.output_dir_var.get().strip() or "4_salida"
+
+            self.config.ollama_url = self.ollama_url_var.get().strip() or "http://localhost:11434"
+
+            # Parsear modelo seleccionado
+            sel_model_str = self.model_var.get()
+            if "Auto" in sel_model_str:
+                self.config.custom_model_override = None
+            else:
+                for vm in self.viable_models:
+                    if vm["name"] == sel_model_str:
+                        self.config.custom_model_override = vm["id"]
+                        break
+
+            try:
+                ram_margin = float(self.ram_margin_var.get()) / 100.0
+                self.config.ram_safety_margin_pct = max(0.10, min(0.60, ram_margin))
+            except Exception:
+                pass
+
+            if hasattr(self, "txt_template"):
+                self.config.atomic_note_template = self.txt_template.get("1.0", "end-1c")
+
+            # Persistir
+            save_config(self.config)
+
+            # Re-crear estructura de Vault si cambió
+            vm = VaultManager(self.config.vault)
+            vm.ensure_directories()
+
+            # Actualizar parent console
+            self.console.vault_path = new_vault
+            self.console.sync_manager = FolderSyncManager(new_vault)
+            self.console.vault = vm
+
+            self.console._log(f"[AJUSTES] Configuración guardada exitosamente en {new_vault}/.funes/config.json")
+            messagebox.showinfo("Ajustes Avanzados", "Ajustes guardados y aplicados correctamente.")
+            self.destroy()
+        except Exception as e:
+            messagebox.showerror("Error", f"No se pudieron guardar los ajustes: {e}")
+
+
 class FunesControlConsole(tk.Tk):
-    """Consola Funes estilo Washington Post Watergate & Barbershop con Grafo de Flujo Lógico."""
+    """Consola Funes Estética Papiro con Grafo de Arquitectura de 4 Etapas."""
 
     def __init__(self, vault_path: Path):
         super().__init__()
@@ -146,6 +431,10 @@ class FunesControlConsole(tk.Tk):
         self.config = get_default_config(self.vault_path)
         self.vault = VaultManager(self.config.vault)
         self.sync_manager = FolderSyncManager(self.vault_path)
+        self.ram_governor = RAMGovernor(
+            ollama_url=self.config.ollama_url,
+            safety_margin_pct=self.config.ram_safety_margin_pct
+        )
 
         self.title("Funes — Registro de Prensa de Conocimiento")
         self.configure(bg=THEME["bg_root"])
@@ -186,7 +475,7 @@ class FunesControlConsole(tk.Tk):
         self.refresh_stats()
 
     def _setup_ui(self):
-        # 1. CABECERA TIPO PERIÓDICO (MASTHEAD WATERGATE / WASHINGTON POST)
+        # 1. CABECERA CON ESTÉTICA PAPIRO
         header_container = tk.Frame(self, bg=THEME["bg_root"], padx=30, pady=16)
         header_container.pack(side="top", fill="x")
 
@@ -212,6 +501,24 @@ class FunesControlConsole(tk.Tk):
         )
         title_lbl.pack(side="left")
 
+        # Botón de Ajustes Avanzados
+        btn_settings = tk.Button(
+            m_frame,
+            text="⚙️ Ajustes",
+            font=("Georgia", 11, "bold"),
+            fg=THEME["paper"],
+            bg=THEME["bg_card"],
+            activebackground=THEME["bg_card_hover"],
+            activeforeground=THEME["paper"],
+            relief="solid",
+            bd=1,
+            cursor="hand2",
+            command=self._on_settings_click,
+            padx=10,
+            pady=3
+        )
+        btn_settings.pack(side="right", padx=(10, 0))
+
         subtitle_lbl = tk.Label(
             m_frame,
             text=f"★ ESTÉTICA PAPIRO DEFINITIVA ★  •  Vault: {self.vault_path.name}",
@@ -220,7 +527,7 @@ class FunesControlConsole(tk.Tk):
             bg=THEME["bg_root"],
             anchor="e"
         )
-        subtitle_lbl.pack(side="right", pady=(12, 0))
+        subtitle_lbl.pack(side="right", pady=(4, 0))
 
         # Regla tipográfica inferior
         tk.Label(
@@ -231,7 +538,7 @@ class FunesControlConsole(tk.Tk):
             bg=THEME["bg_root"]
         ).pack(fill="x")
 
-        # 2. STATUS STRIP (BARRA DE ESTADO VINTAGE)
+        # 2. STATUS STRIP (BARRA DE ESTADO VINTAGE PAPIRO)
         status_strip = tk.Frame(self, bg=THEME["bg_card"], padx=25, pady=10, highlightbackground=THEME["border"], highlightthickness=1)
         status_strip.pack(side="top", fill="x", padx=30, pady=(0, 15))
 
@@ -244,7 +551,7 @@ class FunesControlConsole(tk.Tk):
         tk.Label(status_strip, text="● Cuaderno Obsidian:", font=("Georgia", 13, "bold"), fg=THEME["crimson"], bg=THEME["bg_card"]).pack(side="left", padx=(0, 6))
         tk.Label(status_strip, textvariable=self.status_obsidian_var, font=("Helvetica", 13), fg=THEME["paper"], bg=THEME["bg_card"]).pack(side="left")
 
-        # 3. STATS CARDS (REGISTRO VINTAGE)
+        # 3. STATS CARDS
         stats_frame = tk.Frame(self, bg=THEME["bg_root"], padx=25)
         stats_frame.pack(side="top", fill="x", pady=(0, 15))
 
@@ -288,7 +595,7 @@ class FunesControlConsole(tk.Tk):
             sg1,
             step_tag="PASO 1",
             icon_str="📁",
-            title_str="1_entrada/",
+            title_str=f"{self.config.vault.input_dir_name}/",
             desc_str="Archivos desestructurados en bruto & Monitor Watcher",
             command=self._on_sync_click
         )
@@ -316,7 +623,7 @@ class FunesControlConsole(tk.Tk):
             sg2,
             step_tag="PASO 2 (INGESTA)",
             icon_str="⚙️",
-            title_str="2_sucio & 3_limpio",
+            title_str=f"{self.config.vault.dirty_dir_name} & {self.config.vault.clean_dir_name}",
             desc_str="Backup verbatim, OCR Tesseract, Whisper & Extracción",
             command=self._on_flush_click,
             is_highlight=True
@@ -345,7 +652,7 @@ class FunesControlConsole(tk.Tk):
             sg3,
             step_tag="PASO 3 (GRAFO)",
             icon_str="🔗",
-            title_str="4_salida & MOC",
+            title_str=f"{self.config.vault.output_dir_name} & MOC",
             desc_str="Notas atómicas, inserción WikiLinks & _Indice_MOC.md",
             command=self._on_audit_click
         )
@@ -453,7 +760,7 @@ class FunesControlConsole(tk.Tk):
         )
         self.log_console.pack(fill="both", expand=True)
 
-        self._log("The Funes Gazette — Imprenta y registro iniciados correctamente. Sistema listo.")
+        self._log("The Funes Gazette — Imprenta y registro iniciados correctamente. Estética Papiro activa.")
 
     def _create_stat_card(self, parent, title: str, var: tk.StringVar, color: str, col: int):
         card = tk.Frame(
@@ -476,11 +783,9 @@ class FunesControlConsole(tk.Tk):
         self.log_console.see("end")
 
     def _log_safe(self, message: str):
-        """Método seguro para llamar _log desde hilos secundarios en Tkinter."""
         self.after(0, lambda: self._log(message))
 
     def _set_var_safe(self, var: tk.StringVar, value: str):
-        """Método seguro para actualizar StringVar desde hilos secundarios."""
         self.after(0, lambda: var.set(value))
 
     def refresh_stats(self):
@@ -505,10 +810,12 @@ class FunesControlConsole(tk.Tk):
             self._set_var_safe(self.stat_orphans_var, str(orphans))
             self._set_var_safe(self.stat_input_var, str(len(valid_input)))
 
-            governor = RAMGovernor()
-            rec_model = governor.recommend_model()
-            if governor.check_ollama_status():
-                self._set_var_safe(self.status_ollama_var, f"Activa ({rec_model})")
+            rec_model = self.config.custom_model_override or self.ram_governor.recommend_model()
+            if self.ram_governor.check_ollama_status():
+                model_str = f"Activa ({rec_model})"
+                if self.config.custom_model_override:
+                    model_str += " [Fijo]"
+                self._set_var_safe(self.status_ollama_var, model_str)
             else:
                 self._set_var_safe(self.status_ollama_var, "Inactiva")
 
@@ -529,6 +836,12 @@ class FunesControlConsole(tk.Tk):
         threading.Thread(target=_bg_check, daemon=True).start()
 
     # --- MANEJADORES DE ACCIONES ---
+    def _on_settings_click(self):
+        """Abre el diálogo modal de Ajustes Avanzados y Re-Setup."""
+        modal = FunesSettingsModal(self)
+        self.wait_window(modal)
+        self.refresh_stats()
+
     def _on_flush_click(self):
         """Inicia el evento Flush bajo demanda."""
         if getattr(self, "_flush_in_progress", False):
@@ -543,11 +856,11 @@ class FunesControlConsole(tk.Tk):
 
         def _run_flush():
             try:
-                self._log_safe("📥 [PASO 2] Procesando documentos en 1_entrada...")
+                self._log_safe(f"📥 [PASO 2] Procesando documentos en {self.config.vault.input_dir_name}...")
                 
                 copied = self.sync_manager.sync_to_input(self.config.vault.input_dir)
                 if copied > 0:
-                    self._log_safe(f"[+] Sincronizados {copied} archivo(s) desde fuentes externas a 1_entrada.")
+                    self._log_safe(f"[+] Sincronizados {copied} archivo(s) desde fuentes externas a {self.config.vault.input_dir_name}.")
 
                 pipeline = ETLPipeline(self.config)
                 input_files = [f for f in self.config.vault.input_dir.glob("*") if f.is_file() and not f.name.startswith(".")]
@@ -558,7 +871,7 @@ class FunesControlConsole(tk.Tk):
                         self._log_safe(f"  • Leyendo: {file_path.name}")
                         pipeline.process_file(file_path)
                 else:
-                    self._log_safe("No se encontraron documentos nuevos en 1_entrada.")
+                    self._log_safe(f"No se encontraron documentos nuevos en {self.config.vault.input_dir_name}.")
 
                 self._log_safe("📥 [PASO 3] Conectando notas y actualizando el índice de conocimiento...")
                 karpathy = KarpathyGraphLoop(self.config.vault.output_dir)
@@ -574,13 +887,11 @@ class FunesControlConsole(tk.Tk):
         threading.Thread(target=_run_flush, daemon=True).start()
 
     def _on_chat_click(self):
-        """Abre AnythingLLM Desktop."""
         self._log("Abriendo asistente de chat AnythingLLM...")
         if not launch_anythingllm():
             messagebox.showwarning("AnythingLLM", "No se pudo abrir el asistente de chat. Verifica si está instalado.")
 
     def _on_obsidian_click(self):
-        """Abre Obsidian en el Vault."""
         self._log(f"Abriendo cuaderno de notas en {self.vault_path}...")
         is_mac = sys.platform == "darwin"
         try:
@@ -592,13 +903,11 @@ class FunesControlConsole(tk.Tk):
             self._log(f"Error abriendo Obsidian: {e}")
 
     def _on_sync_click(self):
-        """Abre el modal de gestión de carpetas compartidas."""
         modal = FolderSyncModal(self, self.sync_manager)
         self.wait_window(modal)
         self.refresh_stats()
 
     def _on_audit_click(self):
-        """Ejecuta una conexión y refinamiento del conocimiento."""
         def _run_audit():
             self._log_safe("🛡️ [PASO 3] Conectando notas y actualizando el índice...")
             karpathy = KarpathyGraphLoop(self.config.vault.output_dir)

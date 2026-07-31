@@ -105,6 +105,28 @@ class RAMGovernor:
         logger.info(f"Modelo seleccionado por RAMGovernor: '{model}'")
         return model
 
+    def get_viable_models(self) -> list[Dict[str, Any]]:
+        """Devuelve la lista de modelos de IA matemáticamente viables según la memoria RAM física.
+        Filtra y oculta automáticamente cualquier modelo que exceda la capacidad o margen de seguridad.
+        """
+        ram_info = self.get_system_ram_info()
+        total_gb = ram_info["total_gb"]
+
+        catalog = [
+            {"id": "qwen2.5:1.5b", "name": "Qwen 2.5 1.5B (Ultraligero - Eco 8GB)", "min_ram_gb": 3.0},
+            {"id": "qwen2.5:3b",   "name": "Qwen 2.5 3B (Ligero - Rápido)",       "min_ram_gb": 4.5},
+            {"id": "qwen2.5:7b",   "name": "Qwen 2.5 7B (Equilibrado - Estándar)",  "min_ram_gb": 7.0},
+            {"id": "qwen2.5:14b",  "name": "Qwen 2.5 14B (Avanzado - Razonamiento)","min_ram_gb": 14.0},
+            {"id": "command-r:35b","name": "Command-R 35B (Máximo Rendimiento)",   "min_ram_gb": 26.0},
+        ]
+
+        # Solo incluir modelos cuya exigencia mínima de RAM esté dentro de la RAM física utilizable
+        max_safe_ram = total_gb * (1.0 - (self.safety_margin_pct * 0.5))  # Tolerancia máxima segura
+        viable = [m for m in catalog if m["min_ram_gb"] <= max_safe_ram]
+        if not viable:
+            viable = [catalog[0]]  # Al menos el modelo ultraligero
+        return viable
+
     def check_ollama_status(self) -> bool:
         """Verifica si Ollama está en ejecución."""
         if HAS_REQUESTS:

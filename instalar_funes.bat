@@ -1,6 +1,7 @@
 @echo off
 setlocal enabledelayedexpansion
 cd /d "%~dp0"
+set PYTHONPATH=%~dp0;%PYTHONPATH%
 
 TITLE Funes — Auto Instalador y Ejecutable
 echo =======================================================
@@ -30,13 +31,15 @@ if !errorlevel! neq 0 (
     )
 )
 
-
+echo.
 echo 2. Creando entorno virtual e instalando dependencias...
 if not exist "venv" (
     python -m venv venv 2>nul || py -m venv venv
 )
 
 call venv\Scripts\activate.bat
+set PYTHONPATH=%~dp0;%PYTHONPATH%
+
 python -m pip install --upgrade pip
 if exist requirements.txt pip install -r requirements.txt
 if exist pyproject.toml (
@@ -103,11 +106,12 @@ if !errorlevel! neq 0 (
 
 echo.
 echo 6. Iniciando Asistente Grafico de Instalacion de Funes...
-if exist Funes.exe (
+if exist Funes_windows.exe (
+    start Funes_windows.exe
+) else if exist Funes.exe (
     start Funes.exe
 ) else (
     python -m funes.installer_gui
 )
 
 pause
-

@@ -45,45 +45,12 @@
 
 ## 📦 Instalación y Uso Rápido
 
-### Instalador y Lanzador de 1-Clic
-
 Puedes iniciar Funes de forma inmediata usando los scripts oficiales preconfigurados:
 
 - **Windows**: Haz doble clic en `instalar_funes.bat`
 - **macOS**: Haz doble clic en `instalar_funes.command`
 
 Estos scripts instalarán el entorno virtual, crearán los accesos directos de escritorio (`Funes.lnk` / `Funes.command`) y lanzarán la aplicación.
-
----
-
-### Opción 1: Ejecutar desde Código Fuente (Desarrolladores)
-
-```bash
-# 1. Clonar el repositorio
-git clone https://github.com/tu-usuario/funes.git
-cd funes
-
-# 2. Instalar dependencias
-pip install -r requirements.txt
-
-# 3. Ejecutar suite de pruebas de verificación
-PYTHONPATH=. python3 -m unittest discover -s tests
-
-# 4. Iniciar Funes en tu Vault de Obsidian
-python3 funes/main.py --vault "./Funes"
-```
-
----
-
-### Opción 2: Compilar Binario Autónomo
-
-Para generar el ejecutable sin dependencias externas:
-
-```bash
-python3 build_installer.py
-```
-
-El binario ejecutable `Funes.exe` (Windows) o ejecutable nativo (macOS) se creará en la carpeta `dist/`.
 
 ---
 

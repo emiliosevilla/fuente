@@ -25,7 +25,7 @@ def add_dir_to_zip(zf: zipfile.ZipFile, source_dir: Path, arc_dir_name: str):
 
 
 def build():
-    print("=== Compilador de Distribución Habla con Funes ===")
+    print("=== Compilador de Distribución Funes ===")
     
     base_dir = Path(__file__).resolve().parent
 

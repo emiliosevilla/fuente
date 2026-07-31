@@ -61,6 +61,34 @@ class FolderSyncManager:
 
         return copied_count
 
+    @staticmethod
+    def detect_cloud_folders() -> List[Path]:
+        """Detecta automáticamente carpetas sincronizadas de OneDrive y SharePoint en macOS y Windows."""
+        found: List[Path] = []
+        home = Path.home()
+
+        # macOS CloudStorage (~/Library/CloudStorage)
+        cloud_storage = home / "Library" / "CloudStorage"
+        if cloud_storage.exists() and cloud_storage.is_dir():
+            try:
+                for item in cloud_storage.iterdir():
+                    if item.is_dir() and not item.name.startswith("."):
+                        found.append(item.resolve())
+            except Exception as e:
+                logger.error(f"Error escaneando CloudStorage en macOS: {e}")
+
+        # Rutas OneDrive / SharePoint en Home (macOS y Windows)
+        potential_patterns = ["OneDrive*", "SharePoint*"]
+        for pattern in potential_patterns:
+            try:
+                for p in home.glob(pattern):
+                    if p.is_dir() and not p.name.startswith(".") and p.resolve() not in [f.resolve() for f in found]:
+                        found.append(p.resolve())
+            except Exception as e:
+                logger.error(f"Error escaneando patrones {pattern} en home: {e}")
+
+        return found
+
 
 class FolderSyncModal(tk.Toplevel):
     """Diálogo modal GUI para que el usuario añada o elimine carpetas compartidas/externas."""
@@ -68,8 +96,8 @@ class FolderSyncModal(tk.Toplevel):
     def __init__(self, parent: tk.Tk, sync_manager: FolderSyncManager):
         super().__init__(parent)
         self.sync_manager = sync_manager
-        self.title("Conexión de Fuentes y Carpetas Compartidas — Habla con Funes")
-        self.geometry("600x420")
+        self.title("Conexión de Fuentes y Carpetas Compartidas — Funes")
+        self.geometry("640x480")
         self.resizable(False, False)
         self.transient(parent)
         self.grab_set()
@@ -91,7 +119,7 @@ class FolderSyncModal(tk.Toplevel):
         info_lbl = tk.Label(
             self,
             text="Añade carpetas locales, de red (NAS) o de servicios en la nube (SharePoint / OneDrive).\n"
-                 "Habla con Funes copiará automáticamente sus documentos hacia '1_entrada' para el Flush.",
+                 "Funes copiará automáticamente sus documentos hacia '1_entrada' para el Flush.",
             font=("Helvetica", 10),
             justify="left",
             padx=15,
@@ -112,19 +140,29 @@ class FolderSyncModal(tk.Toplevel):
 
         self._refresh_listbox()
 
-        # Botones
+        # Botones de Acción principales
         btn_frame = tk.Frame(self, padx=15, pady=10)
         btn_frame.pack(fill="x")
+
+        btn_detect = tk.Button(
+            btn_frame,
+            text="🔍 Auto-detectar Nube",
+            font=("Helvetica", 10, "bold"),
+            bg="#4F46E5",
+            fg="white",
+            command=self._auto_detect_cloud
+        )
+        btn_detect.pack(side="left", padx=(0, 8))
 
         btn_add = tk.Button(
             btn_frame,
             text="+ Añadir Carpeta...",
-            font=("Helvetica", 10, "bold"),
+            font=("Helvetica", 10),
             bg="#2563EB",
             fg="white",
             command=self._add_folder
         )
-        btn_add.pack(side="left", padx=(0, 10))
+        btn_add.pack(side="left", padx=(0, 8))
 
         btn_remove = tk.Button(
             btn_frame,
@@ -145,13 +183,40 @@ class FolderSyncModal(tk.Toplevel):
         )
         btn_save.pack(side="right")
 
+    def _auto_detect_cloud(self):
+        detected = FolderSyncManager.detect_cloud_folders()
+        added_count = 0
+        existing_resolved = [f.resolve() for f in self.folders]
+
+        for folder in detected:
+            if folder.resolve() not in existing_resolved:
+                self.folders.append(folder)
+                added_count += 1
+
+        self._refresh_listbox()
+
+        if added_count > 0:
+            messagebox.showinfo(
+                "Auto-detección Completada",
+                f"Se han detectado y vinculado automáticamente {added_count} carpeta(s) de OneDrive / SharePoint."
+            )
+        else:
+            msg = (
+                "No se encontraron nuevas carpetas sincronizadas automáticas.\n\n"
+                "Para vincular SharePoint desde el navegador:\n"
+                "1. Entra a tu sitio de SharePoint en el navegador web.\n"
+                "2. Pulsa el botón 'Sincronizar' en la barra superior.\n"
+                "3. Haz clic en '+ Añadir Carpeta...' aquí para seleccionar la carpeta resultante."
+            )
+            messagebox.showinfo("Guiado de SharePoint / OneDrive", msg)
+
     def _refresh_listbox(self):
         self.listbox.delete(0, tk.END)
         for folder in self.folders:
             self.listbox.insert(tk.END, str(folder))
 
     def _add_folder(self):
-        selected = filedialog.askdirectory(title="Selecciona una carpeta externa para vincular a Habla con Funes")
+        selected = filedialog.askdirectory(title="Selecciona una carpeta externa para vincular a Funes")
         if selected:
             path = Path(selected).resolve()
             if path not in self.folders:
@@ -169,3 +234,4 @@ class FolderSyncModal(tk.Toplevel):
     def _save_and_close(self):
         self.sync_manager.save_connected_folders(self.folders)
         self.destroy()
+

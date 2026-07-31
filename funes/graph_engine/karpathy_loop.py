@@ -123,7 +123,7 @@ class KarpathyGraphLoop:
             'fuentes: [4_salida/]',
             "---",
             "",
-            "# Map of Content (MOC) — Habla con Funes",
+            "# Map of Content (MOC) — Funes",
             "",
             f"Mapa de contenido generado y refinado automáticamente el `{now_str}`.",
             "",

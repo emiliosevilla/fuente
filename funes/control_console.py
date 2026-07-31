@@ -494,18 +494,31 @@ class FunesControlConsole(tk.Tk):
         title_lbl = tk.Label(
             m_frame,
             text="F U N E S   K N O W L E D G E   I N T E L L I G E N C E",
-            font=("Georgia", 30, "bold"),
+            font=("Georgia", 26, "bold"),
             fg=THEME["paper"],
             bg=THEME["bg_root"],
             anchor="w"
         )
         title_lbl.pack(side="left")
 
-        # Botón de Ajustes Avanzados
-        btn_settings = tk.Button(
+        subtitle_lbl = tk.Label(
             m_frame,
-            text="⚙️ Ajustes",
-            font=("Georgia", 11, "bold"),
+            text=f"★ ESTÉTICA PAPIRO DEFINITIVA ★  •  Vault: {self.vault_path.name}",
+            font=("Georgia", 11, "italic"),
+            fg=THEME["gold"],
+            bg=THEME["bg_root"],
+            anchor="e"
+        )
+        subtitle_lbl.pack(side="right", pady=(4, 0))
+
+        # BARRA DE HERRAMIENTAS PAPIRO (4 BOTONES DE ACCESO DIRECTO)
+        toolbar = tk.Frame(header_container, bg=THEME["bg_root"], pady=8)
+        toolbar.pack(fill="x")
+
+        btn_cloud = tk.Button(
+            toolbar,
+            text="🔗 Fuentes Nube (SharePoint)",
+            font=("Georgia", 10, "bold"),
             fg=THEME["paper"],
             bg=THEME["bg_card"],
             activebackground=THEME["bg_card_hover"],
@@ -513,21 +526,62 @@ class FunesControlConsole(tk.Tk):
             relief="solid",
             bd=1,
             cursor="hand2",
-            command=self._on_settings_click,
-            padx=10,
-            pady=3
+            padx=12,
+            pady=4,
+            command=self._on_cloud_sources_click
         )
-        btn_settings.pack(side="right", padx=(10, 0))
+        btn_cloud.pack(side="left", padx=(0, 8))
 
-        subtitle_lbl = tk.Label(
-            m_frame,
-            text=f"★ ESTÉTICA PAPIRO DEFINITIVA ★  •  Vault: {self.vault_path.name}",
-            font=("Georgia", 12, "italic"),
-            fg=THEME["gold"],
-            bg=THEME["bg_root"],
-            anchor="e"
+        btn_flush = tk.Button(
+            toolbar,
+            text="⚡ Forzar Ingesta (Flush)",
+            font=("Georgia", 10, "bold"),
+            fg=THEME["paper"],
+            bg=THEME["bg_card"],
+            activebackground=THEME["bg_card_hover"],
+            activeforeground=THEME["paper"],
+            relief="solid",
+            bd=1,
+            cursor="hand2",
+            padx=12,
+            pady=4,
+            command=self._on_flush_click
         )
-        subtitle_lbl.pack(side="right", pady=(4, 0))
+        btn_flush.pack(side="left", padx=(0, 8))
+
+        btn_moc = tk.Button(
+            toolbar,
+            text="🔄 Re-indexar MOC",
+            font=("Georgia", 10, "bold"),
+            fg=THEME["paper"],
+            bg=THEME["bg_card"],
+            activebackground=THEME["bg_card_hover"],
+            activeforeground=THEME["paper"],
+            relief="solid",
+            bd=1,
+            cursor="hand2",
+            padx=12,
+            pady=4,
+            command=self._on_reindex_click
+        )
+        btn_moc.pack(side="left", padx=(0, 8))
+
+        btn_settings = tk.Button(
+            toolbar,
+            text="⚙️ Ajustes Avanzados",
+            font=("Georgia", 10, "bold"),
+            fg=THEME["paper"],
+            bg=THEME["bg_card"],
+            activebackground=THEME["bg_card_hover"],
+            activeforeground=THEME["paper"],
+            relief="solid",
+            bd=1,
+            cursor="hand2",
+            padx=12,
+            pady=4,
+            command=self._on_settings_click
+        )
+        btn_settings.pack(side="left")
 
         # Regla tipográfica inferior
         tk.Label(
@@ -904,6 +958,14 @@ class FunesControlConsole(tk.Tk):
         modal = FolderSyncModal(self, self.sync_manager)
         self.wait_window(modal)
         self.refresh_stats()
+
+    def _on_cloud_sources_click(self):
+        modal = FolderSyncModal(self, self.sync_manager)
+        self.wait_window(modal)
+        self.refresh_stats()
+
+    def _on_reindex_click(self):
+        self._on_audit_click()
 
     def _on_audit_click(self):
         def _run_audit():

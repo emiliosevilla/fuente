@@ -130,8 +130,8 @@ class ETLPipeline:
             chunk_ids = [c["id"] for c in chunks]
             self.chroma.add_chunks(chunk_texts, chunk_metas, chunk_ids)
 
-            # Paso 4: Evaluar RAM y seleccionar modelo LLM
-            selected_model = self.ram_governor.recommend_model()
+            # Paso 4: Evaluar RAM y seleccionar modelo LLM (respetando custom_model_override)
+            selected_model = self.config.custom_model_override or self.ram_governor.recommend_model()
             self.ram_governor.ensure_model_available(selected_model)
 
             # Paso 5: Generar nota atómica estructurada

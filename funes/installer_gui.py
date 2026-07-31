@@ -7,6 +7,10 @@ from pathlib import Path
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 
+base_dir = Path(__file__).resolve().parent.parent
+if str(base_dir) not in sys.path:
+    sys.path.insert(0, str(base_dir))
+
 # Intentar importar dependencias del proyecto
 try:
     from funes.core.icon_generator import ensure_app_icon
@@ -19,6 +23,7 @@ try:
     from create_shortcuts import create_shortcuts
 except ImportError:
     pass
+
 
 
 class FunesInstallerWizard(tk.Tk):
@@ -453,7 +458,13 @@ class FunesInstallerWizard(tk.Tk):
     def _run_installation_tasks(self):
         try:
             # 1. Crear carpeta Vault de Obsidian si no existe
-            vault = Path(self.vault_path_var.get()).resolve()
+            raw_vault = Path(self.vault_path_var.get()).resolve()
+            if raw_vault.name.lower() in ("funes", "funes_vault", "funes vault"):
+                vault = raw_vault
+            else:
+                vault = raw_vault / "Funes"
+            self.vault_path_var.set(str(vault))
+
             self.lbl_install_status.config(text="1. Preparando estructura de carpetas Vault...")
             self.progress_bar["value"] = 15
             self._log(f"[+] Creando estructura de Vault en: {vault}")
@@ -498,7 +509,7 @@ class FunesInstallerWizard(tk.Tk):
             self.lbl_install_status.config(text="4. Generando botón de acceso directo en el Escritorio...")
             self.progress_bar["value"] = 85
             try:
-                create_shortcuts(self.base_dir)
+                create_shortcuts(self.base_dir, vault_dir=vault)
                 self._log("[✓] Acceso directo 'Habla con Funes' creado con éxito en tu Escritorio.")
             except Exception as e:
                 self._log(f"[!] Error creando acceso directo: {e}")
@@ -576,7 +587,7 @@ class FunesInstallerWizard(tk.Tk):
                 if main_exe.exists():
                     subprocess.Popen([str(main_exe), vault_arg], cwd=self.base_dir)
                 else:
-                    subprocess.Popen([sys.executable, "-m", "funes.control_console", vault_arg], cwd=self.base_dir)
+                    subprocess.Popen([sys.executable, "-m", "funes.main", vault_arg], cwd=self.base_dir)
             else:
                 self.destroy()
         else:

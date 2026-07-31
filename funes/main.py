@@ -55,6 +55,12 @@ from funes.control_console import launch_control_console
 def main():
     parser = argparse.ArgumentParser(description="Funes — Consola de Control y ETL de Conocimiento para Obsidian")
     parser.add_argument(
+        "vault_pos",
+        nargs="?",
+        default=None,
+        help="Ruta opcional al Vault de Obsidian.",
+    )
+    parser.add_argument(
         "--vault",
         type=str,
         default=None,
@@ -67,12 +73,14 @@ def main():
     )
     args = parser.parse_args()
 
-    if args.vault:
-        vault_path = Path(args.vault).resolve()
+    vault_arg = args.vault or args.vault_pos
+    if vault_arg:
+        vault_path = Path(vault_arg).resolve()
     else:
         vault_path = Path.home() / "Documents" / "Funes_Vault"
 
     vault_path.mkdir(parents=True, exist_ok=True)
+
 
     if args.flush:
         # Modo Flush directo por consola

@@ -5,7 +5,7 @@ export PYTHONPATH="$DIR:$PYTHONPATH"
 export TK_SILENCE_DEPRECATION=1
 
 echo "======================================================="
-echo "               HABLA CON FUNES (macOS)"
+echo "             INSTALACIÓN DE FUNES (macOS)"
 echo "======================================================="
 echo ""
 
@@ -32,11 +32,11 @@ export PYTHONPATH="$DIR:$PYTHONPATH"
 export TK_SILENCE_DEPRECATION=1
 
 pip install --upgrade pip
-if [ -f "requirements.txt" ]; then
-    pip install -r requirements.txt
-fi
 if [ -f "pyproject.toml" ] || [ -f "setup.py" ]; then
     pip install -e .
+fi
+if [ -f "requirements.txt" ]; then
+    pip install -r requirements.txt
 fi
 
 echo ""
@@ -89,11 +89,9 @@ fi
 
 echo ""
 echo "Iniciando Asistente Gráfico de Instalación de Funes..."
-if [ -f "./Funes_macOS" ]; then
-    chmod +x ./Funes_macOS
-    ./Funes_macOS
-elif [ -f "./venv/bin/python3" ]; then
+if [ -f "./venv/bin/python3" ]; then
     ./venv/bin/python3 -m funes.installer_gui
 else
     python3 -m funes.installer_gui
 fi
+

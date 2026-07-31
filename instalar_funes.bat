@@ -1,11 +1,13 @@
 @echo off
 setlocal enabledelayedexpansion
-cd /d "%~dp0"
-set PYTHONPATH=%~dp0;%PYTHONPATH%
+set "ROOT_DIR=%~dp0"
+if "%ROOT_DIR:~-1%"=="\" set "ROOT_DIR=%ROOT_DIR:~0,-1%"
+cd /d "%ROOT_DIR%"
+set "PYTHONPATH=%ROOT_DIR%;%PYTHONPATH%"
 
 TITLE Funes — Auto Instalador y Ejecutable
 echo =======================================================
-echo                  HABLA CON FUNES
+echo               INSTALACION DE FUNES
 echo =======================================================
 echo.
 
@@ -38,15 +40,15 @@ if not exist "venv" (
 )
 
 call venv\Scripts\activate.bat
-set PYTHONPATH=%~dp0;%PYTHONPATH%
+set "PYTHONPATH=%ROOT_DIR%;%PYTHONPATH%"
 
 python -m pip install --upgrade pip
-if exist requirements.txt pip install -r requirements.txt
 if exist pyproject.toml (
     pip install -e .
 ) else if exist setup.py (
     pip install -e .
 )
+if exist requirements.txt pip install -r requirements.txt
 
 echo.
 echo 3. Creando acceso directo Funes.lnk en el Escritorio...
@@ -106,12 +108,7 @@ if !errorlevel! neq 0 (
 
 echo.
 echo 6. Iniciando Asistente Grafico de Instalacion de Funes...
-if exist Funes_windows.exe (
-    start Funes_windows.exe
-) else if exist Funes.exe (
-    start Funes.exe
-) else (
-    python -m funes.installer_gui
-)
+python -m funes.installer_gui
 
 pause
+

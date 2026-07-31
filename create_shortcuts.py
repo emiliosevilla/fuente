@@ -87,12 +87,16 @@ def prompt_folder_selection(default_desktop: Path) -> Path:
     return default_desktop
 
 
-def create_shortcuts(base_dir: Path, target_dir: Optional[Path] = None) -> bool:
+def create_shortcuts(base_dir: Path, target_dir: Optional[Path] = None, vault_dir: Optional[Path] = None) -> bool:
     assets_dir = base_dir / "assets"
     ensure_app_icon(assets_dir)
     ensure_archive_icon(assets_dir)
 
-    vault_dir = (base_dir / "Funes").resolve()
+    if vault_dir is None:
+        vault_dir = base_dir / "Funes"
+    vault_dir = Path(vault_dir).resolve()
+    if vault_dir.name.lower() not in ("funes", "funes_vault", "funes vault"):
+        vault_dir = vault_dir / "Funes"
     vault_dir.mkdir(parents=True, exist_ok=True)
 
     home = Path.home()
@@ -118,16 +122,16 @@ def create_shortcuts(base_dir: Path, target_dir: Optional[Path] = None) -> bool:
         
         if funes_exe.exists():
             target_path = str(funes_exe)
-            target_args = ""
+            target_args = f'"{vault_dir}"'
         elif funes_bat.exists():
             target_path = str(funes_bat)
-            target_args = ""
+            target_args = f'"{vault_dir}"'
         elif pythonw_exe.exists():
             target_path = str(pythonw_exe)
-            target_args = "-m funes.main"
+            target_args = f'-m funes.main "{vault_dir}"'
         else:
             target_path = "pythonw"
-            target_args = "-m funes.main"
+            target_args = f'-m funes.main "{vault_dir}"'
 
 
         funes_ico = (assets_dir / "funes_icon.ico").resolve()
@@ -176,13 +180,13 @@ def create_shortcuts(base_dir: Path, target_dir: Optional[Path] = None) -> bool:
 cd "{base_dir}"
 export PYTHONPATH="{base_dir}:$PYTHONPATH"
 if [ -f "./Funes_macOS" ]; then
-    ./Funes_macOS
+    ./Funes_macOS "{vault_dir}"
 elif [ -f "./dist/Funes_macOS" ]; then
-    ./dist/Funes_macOS
+    ./dist/Funes_macOS "{vault_dir}"
 elif [ -f "./venv/bin/python3" ]; then
-    ./venv/bin/python3 -m funes.main
+    ./venv/bin/python3 -m funes.main "{vault_dir}"
 else
-    python3 -m funes.main
+    python3 -m funes.main "{vault_dir}"
 fi
 """
 

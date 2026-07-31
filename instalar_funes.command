@@ -39,7 +39,7 @@ fi
 
 echo ""
 echo "Creando acceso directo ejecutable Funes.command en el Escritorio..."
-python3 create_shortcuts.py
+./venv/bin/python3 create_shortcuts.py
 
 echo ""
 echo "Comprobando instalación de Obsidian..."
@@ -84,10 +84,10 @@ fi
 
 echo ""
 echo "Iniciando Asistente Gráfico de Instalación de Funes..."
-if [ -f "./Funes_macOS" ]; then
+if [ -f "./venv/bin/python3" ]; then
+    ./venv/bin/python3 -m funes.installer_gui
+elif [ -f "./Funes_macOS" ]; then
     ./Funes_macOS
-elif [ -f "./Funes" ]; then
-    ./Funes
 else
     python3 -m funes.installer_gui
 fi

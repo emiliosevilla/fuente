@@ -1,7 +1,11 @@
 import sys
 import logging
 from typing import List, Tuple
-import psutil
+try:
+    import psutil
+    HAS_PSUTIL = True
+except ImportError:
+    HAS_PSUTIL = False
 
 logger = logging.getLogger(__name__)
 
@@ -115,6 +119,9 @@ def get_running_user_apps() -> List[Tuple[str, str]]:
             return user_apps
 
     # Fallback con psutil para Windows u otros entornos
+    if not HAS_PSUTIL:
+        return user_apps
+
     for proc in psutil.process_iter(['pid', 'name', 'exe']):
         try:
             name = proc.info['name']

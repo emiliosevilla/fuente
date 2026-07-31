@@ -1,10 +1,10 @@
 <p align="center">
   <img src="assets/funes_icon.png" alt="Funes Icon" width="128" />
-  <h1 align="center">Habla con Funes</h1>
+  <h1 align="center">Funes</h1>
 </p>
 
 <p align="center">
-  <b>Funes</b> es un sistema inteligente de ETL (Extracción, Transformación y Carga) e Ingesta de Conocimiento diseñado para procesar flujos diarios de archivos multiformato desestructurados y volcarlos automáticamente en tu <b>Vault de Obsidian</b> como notas atómicas hiperconectadas (<code>[[WikiLinks]]</code>).
+  <b>Funes</b> es un sistema inteligente de ETL (Extracción, Transformación y Carga) e Ingesta de Conocimiento diseñado para procesar flujos diarios de archivos multiformato desestructurados y volcarlos automáticamente en tu <b>Vault de Obsidian</b> como notas atómicas hiperconectadas (<code>[[WikiLinks]]</code>). Desarrollado para la gestión inteligente, local y privada del conocimiento personal y/o profesional.
 </p>
 
 ---
@@ -143,6 +143,6 @@ fuentes: [md_sucio_1, md_sucio_2]
 
 ---
 
-## 🛠️ Licencia e Información
+## 🛠️ Nota del autor
 
-Desarrollado bajo licencia MIT para la gestión inteligente, local y privada del conocimiento personal.
+Desarrollado por Emilio Sevilla Ortego. No se permite su distribución sin permiso del autor.

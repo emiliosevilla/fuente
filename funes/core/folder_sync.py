@@ -8,6 +8,24 @@ from tkinter import filedialog, messagebox
 
 logger = logging.getLogger(__name__)
 
+THEME = {
+    "bg_root": "#DCD4C7",
+    "bg_card": "#EAE2D5",
+    "bg_card_hover": "#CDC3B3",
+    "bg_log": "#E2DACD",
+    "border": "#BFB4A3",
+    "border_gold": "#161411",
+    "crimson": "#161411",
+    "crimson_hover": "#2E2B25",
+    "paper": "#161411",
+    "muted": "#5E564B",
+    "gold": "#2E2B25",
+    "green": "#16A34A",
+    "red": "#DC2626",
+}
+
+FONT_TYPEWRITER = "Courier"
+
 
 class FolderSyncManager:
     """Administra la lista de carpetas compartidas/externas vinculadas a 1_entrada."""
@@ -17,7 +35,6 @@ class FolderSyncManager:
         self.config_file = vault_root / ".funes_connected_folders.json"
 
     def load_connected_folders(self) -> List[Path]:
-        """Carga las rutas de carpetas externas vinculadas."""
         if not self.config_file.exists():
             return []
         try:
@@ -29,7 +46,6 @@ class FolderSyncManager:
             return []
 
     def save_connected_folders(self, folder_paths: List[Path]) -> bool:
-        """Guarda la lista de rutas vinculadas."""
         try:
             data = {"folders": [str(p.resolve()) for p in folder_paths]}
             with open(self.config_file, "w", encoding="utf-8") as f:
@@ -40,7 +56,6 @@ class FolderSyncManager:
             return False
 
     def sync_to_input(self, input_dir: Path) -> int:
-        """Copia archivos nuevos desde las carpetas externas vinculadas hacia 1_entrada."""
         connected = self.load_connected_folders()
         copied_count = 0
         input_dir.mkdir(parents=True, exist_ok=True)
@@ -63,11 +78,9 @@ class FolderSyncManager:
 
     @staticmethod
     def detect_cloud_folders() -> List[Path]:
-        """Detecta automáticamente carpetas sincronizadas de OneDrive y SharePoint en macOS y Windows."""
         found: List[Path] = []
         home = Path.home()
 
-        # macOS CloudStorage (~/Library/CloudStorage)
         cloud_storage = home / "Library" / "CloudStorage"
         if cloud_storage.exists() and cloud_storage.is_dir():
             try:
@@ -77,7 +90,6 @@ class FolderSyncManager:
             except Exception as e:
                 logger.error(f"Error escaneando CloudStorage en macOS: {e}")
 
-        # Rutas OneDrive / SharePoint en Home (macOS y Windows)
         potential_patterns = ["OneDrive*", "SharePoint*"]
         for pattern in potential_patterns:
             try:
@@ -91,12 +103,13 @@ class FolderSyncManager:
 
 
 class FolderSyncModal(tk.Toplevel):
-    """Diálogo modal GUI para que el usuario añada o elimine carpetas compartidas/externas."""
+    """Diálogo modal GUI de Fuentes y Carpetas Compartidas (100% tipografía Courier de máquina de escribir)."""
 
     def __init__(self, parent: tk.Tk, sync_manager: FolderSyncManager):
         super().__init__(parent)
         self.sync_manager = sync_manager
         self.title("Conexión de Fuentes y Carpetas Compartidas — Funes")
+        self.configure(bg=THEME["bg_root"])
         self.geometry("640x480")
         self.resizable(False, False)
         self.transient(parent)
@@ -108,11 +121,13 @@ class FolderSyncModal(tk.Toplevel):
     def _setup_ui(self):
         header = tk.Label(
             self,
-            text="🔗 Carpetas de Origen Vinculadas a '1_entrada'",
-            font=("Helvetica", 13, "bold"),
-            bg="#1E293B",
-            fg="white",
-            pady=10
+            text="Carpetas de Origen Vinculadas a '1_entrada'",
+            font=(FONT_TYPEWRITER, 12, "bold"),
+            bg=THEME["bg_card"],
+            fg=THEME["paper"],
+            pady=10,
+            highlightbackground=THEME["border"],
+            highlightthickness=1
         )
         header.pack(fill="x")
 
@@ -120,18 +135,28 @@ class FolderSyncModal(tk.Toplevel):
             self,
             text="Añade carpetas locales, de red (NAS) o de servicios en la nube (SharePoint / OneDrive).\n"
                  "Funes copiará automáticamente sus documentos hacia '1_entrada' para el Flush.",
-            font=("Helvetica", 10),
+            font=(FONT_TYPEWRITER, 9),
+            bg=THEME["bg_root"],
+            fg=THEME["muted"],
             justify="left",
             padx=15,
             pady=10
         )
         info_lbl.pack(fill="x")
 
-        # Lista visual
-        list_frame = tk.Frame(self, padx=15, pady=5)
+        list_frame = tk.Frame(self, bg=THEME["bg_root"], padx=15, pady=5)
         list_frame.pack(fill="both", expand=True)
 
-        self.listbox = tk.Listbox(list_frame, font=("Helvetica", 10), selectmode="single")
+        self.listbox = tk.Listbox(
+            list_frame,
+            font=(FONT_TYPEWRITER, 10),
+            bg=THEME["bg_log"],
+            fg=THEME["paper"],
+            selectbackground=THEME["bg_card_hover"],
+            selectforeground=THEME["paper"],
+            relief="solid",
+            bd=1
+        )
         self.listbox.pack(side="left", fill="both", expand=True)
 
         scrollbar = tk.Scrollbar(list_frame, orient="vertical", command=self.listbox.yview)
@@ -140,16 +165,19 @@ class FolderSyncModal(tk.Toplevel):
 
         self._refresh_listbox()
 
-        # Botones de Acción principales
-        btn_frame = tk.Frame(self, padx=15, pady=10)
+        btn_frame = tk.Frame(self, bg=THEME["bg_root"], padx=15, pady=12)
         btn_frame.pack(fill="x")
 
         btn_detect = tk.Button(
             btn_frame,
-            text="🔍 Auto-detectar Nube",
-            font=("Helvetica", 10, "bold"),
-            bg="#4F46E5",
-            fg="white",
+            text="Auto-detectar Nube",
+            font=(FONT_TYPEWRITER, 9, "bold"),
+            bg=THEME["bg_card"],
+            fg=THEME["paper"],
+            activebackground=THEME["bg_card_hover"],
+            relief="solid",
+            bd=1,
+            cursor="hand2",
             command=self._auto_detect_cloud
         )
         btn_detect.pack(side="left", padx=(0, 8))
@@ -157,9 +185,13 @@ class FolderSyncModal(tk.Toplevel):
         btn_add = tk.Button(
             btn_frame,
             text="+ Añadir Carpeta...",
-            font=("Helvetica", 10),
-            bg="#2563EB",
-            fg="white",
+            font=(FONT_TYPEWRITER, 9),
+            bg=THEME["bg_card"],
+            fg=THEME["paper"],
+            activebackground=THEME["bg_card_hover"],
+            relief="solid",
+            bd=1,
+            cursor="hand2",
             command=self._add_folder
         )
         btn_add.pack(side="left", padx=(0, 8))
@@ -167,8 +199,13 @@ class FolderSyncModal(tk.Toplevel):
         btn_remove = tk.Button(
             btn_frame,
             text="- Eliminar Selección",
-            font=("Helvetica", 10),
-            fg="#DC2626",
+            font=(FONT_TYPEWRITER, 9),
+            bg=THEME["bg_card"],
+            fg=THEME["red"],
+            activebackground=THEME["bg_card_hover"],
+            relief="solid",
+            bd=1,
+            cursor="hand2",
             command=self._remove_folder
         )
         btn_remove.pack(side="left")
@@ -176,9 +213,14 @@ class FolderSyncModal(tk.Toplevel):
         btn_save = tk.Button(
             btn_frame,
             text="Guardar y Cerrar",
-            font=("Helvetica", 10, "bold"),
-            bg="#059669",
-            fg="white",
+            font=(FONT_TYPEWRITER, 9, "bold"),
+            bg=THEME["crimson"],
+            fg="#FFFFFF",
+            activebackground=THEME["crimson_hover"],
+            activeforeground="#FFFFFF",
+            relief="solid",
+            bd=1,
+            cursor="hand2",
             command=self._save_and_close
         )
         btn_save.pack(side="right")
@@ -234,4 +276,3 @@ class FolderSyncModal(tk.Toplevel):
     def _save_and_close(self):
         self.sync_manager.save_connected_folders(self.folders)
         self.destroy()
-

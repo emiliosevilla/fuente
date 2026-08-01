@@ -1,32 +1,49 @@
 # Reglas de Proyecto Funes
 
-## Protocolo de Entrevista, Planificación Bucle-Goal y Autocrítica Adversarial (Default Grill-Me + Goal)
+## Protocolo de Entrevista, Planificación Progresiva Bucle-Goal y Autocrítica Adversarial (Default Grill-Me + Goal)
 
-A menos que el mensaje del usuario sea explícitamente un comando slash (como `/git`, `/schedule`, `/learn`, etc.), el agente debe tratar CUALQUIER solicitud, propuesta o tarea como si incluyera implícitamente las directivas **/grill-me** y **/goal**:
+A menos que el mensaje del usuario sea explícitamente un comando slash (como `/git`, `/schedule`, `/learn`, etc.), el agente debe tratar CUALQUIER solicitud, propuesta o tarea como si incluyera implícitamente las directivas **/grill-me** y **/goal** con un rango obligatorio de **mínimo 5 y máximo 10 iteraciones**:
 
-### 1. Entrevista de Diseño Inicial (`/grill-me`)
-- Antes de modificar código o arquitectura, explora primero la base de código.
-- Entrevista al usuario sobre cada rama de decisión utilizando la herramienta `ask_question` planteando las preguntas **de una en una**.
-- En cada opción presentada, incluye siempre la alternativa recomendada prefijada con `(Recomendada)`.
+---
 
-### 2. Elaboración del Plan de Implementación (`implementation_plan.md`)
-- Con las respuestas de la entrevista, redacta el artefacto `implementation_plan.md` detallando la arquitectura, cambios propuestos y plan de verificación.
+### 🔄 Bucle Progresivo de 5 a 10 Iteraciones (`PlanificaciónN ➔ EntrevistaN ➔ AutocríticaN`)
 
-### 3. Bucle Autónomo de Autocrítica Adversarial e Iteración (`/goal` - Máximo 10 Iteraciones)
-El agente debe actuar en un bucle iterativo donde su objetivo implícito (`/goal`) es alcanzar un **Veredicto 100% Favorable** sobre el plan antes de escribir código de producción.
+El agente no escribirá código de producción hasta haber completado como mínimo **5 iteraciones progresivas** de profundización técnica:
 
-Para cada iteración (hasta un **máximo de 10 iteraciones**):
-1. **Autocrítica Tripartita**: Analiza el `implementation_plan.md` bajo 3 roles estrictos:
-   - **Modo Escéptico y Honesto**: Cuestiona cada premisa, validez de datos y asunciones no probadas.
-   - **Modo Advisor Senior**: Evalúa mantenibilidad, patrones de diseño, rendimiento y escalabilidad a largo plazo.
-   - **Modo Sabotaje Adversarial**: Busca activamente vectores de fallo, ambigüedades, dependencias frágiles, edge cases y riesgos de ejecución.
-2. **Evaluación de Hallazgos**:
-   - Si se descubren puntos débiles, riesgos o dudas:
-     a) Plantea una nueva ronda de entrevista (`ask_question`) centrada en los hallazgos críticos.
-     b) Refina y actualiza el artefacto `implementation_plan.md`.
-     c) Incrementa el contador de iteración y repite la autocrítica tripartita.
-   - Si el veredicto es **100% Favorable** sin riesgos ni ambigüedades detectadas, o si se alcanza la **iteración 10 (CAP máximo)**:
-     - Presenta la autocrítica final y solicita la aprobación del usuario para proceder a la ejecución.
+1. **Iteración 1 (Arquitectura General)**:
+   - Entrevista de diseño inicial (`ask_question`, de una en una con `(Recomendada)`).
+   - Redacción inicial de `implementation_plan.md`.
+   - Autocrítica Tripartita (Escéptico, Senior Advisor, Sabotaje Adversarial).
 
-### 4. Excepción para Comandos Slash
-- Si la entrada del usuario inicia explícitamente con un comando slash (por ejemplo, `/git`), ejecuta de forma inmediata el flujo o skill asociado sin activar este protocolo.
+2. **Iteración 2 (Detalle Técnico y Estructuras)**:
+   - Expansión del plan hacia componentes que parecían sólidos para detallar firmas, clases y módulos.
+   - Entrevista sobre decisiones de estructuras de datos y tipos.
+   - Autocrítica Tripartita sobre rendimiento y legibilidad.
+
+3. **Iteración 3 (Edge Cases, Concurrencia y Resiliencia)**:
+   - Expansión hacia manejo de errores E/S, concurrencia, red (SharePoint/OneDrive), límites de memoria RAM e insumos corruptos.
+   - Entrevista sobre estrategias de fallback y tolerancia a fallos.
+   - Autocrítica Tripartita sobre robustez.
+
+4. **Iteración 4 (Estrategia de Pruebas y Cobertura)**:
+   - Expansión hacia diseño de pruebas unitarias, fixtures sintéticos con `tempfile` y aislamiento con `unittest.mock`.
+   - Entrevista sobre validación y prevención de regresiones.
+   - Autocrítica Tripartita sobre cobertura de tests.
+
+5. **Iteración 5 (Empaquetado, Portabilidad y Compatibilidad Multiplataforma)**:
+   - Expansión hacia scripts de build (`build_installer.py`), rutas relativas, `pyinstaller` y ejecución multiplataforma (macOS/Windows).
+   - Entrevista final de integración.
+   - Autocrítica Tripartita de cierre.
+
+6. **Iteraciones 6 a 10 (Opcionales de Cierre)**:
+   - Si tras la Iteración 5 se detectan riesgos no resueltos, continuar el bucle hasta lograr el **Veredicto 100% Favorable** o alcanzar el **CAP de 10 iteraciones**.
+
+---
+
+### 🛡️ Roles de la Autocrítica Tripartita (En cada iteración)
+- **Modo Escéptico y Honesto**: Cuestiona la validez de cada premisa, dato o asunción.
+- **Modo Advisor Senior**: Evalúa diseño, patrones, mantenibilidad y rendimiento a largo plazo.
+- **Modo Sabotaje Adversarial**: Trata de romper activamente el diseño buscando vectores de fallo, ambigüedades y edge cases.
+
+### ⚡ Excepción para Comandos Slash
+- Si la entrada del usuario inicia explícitamente con un comando slash (ej. `/git`), ejecuta de forma inmediata la habilidad asociada sin activar este protocolo.

@@ -1,11 +1,31 @@
 import json
 import logging
+from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 
 from funes.graph_engine.prompts import ATOMIC_NOTE_SYSTEM_PROMPT
 
 logger = logging.getLogger(__name__)
+
+@dataclass
+class AtomicNode:
+    node_id: str
+    concept: str
+    summary: str
+    content: str
+    source_file: str
+    parent_node_id: Optional[str] = None
+    child_node_ids: List[str] = field(default_factory=list)
+    tags: List[str] = field(default_factory=list)
+    metadata: Dict[str, Any] = field(default_factory=dict)
+
+@dataclass
+class GraphEdge:
+    source_id: str
+    target_id: str
+    relation_type: str  # p.ej: 'PARENT_CHILD', 'SIMILAR', 'DEPENDS_ON'
+    weight: float = 1.0
 
 try:
     import requests

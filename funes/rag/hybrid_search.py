@@ -126,3 +126,24 @@ class HybridSearcher:
             final_results.append(item)
 
         return final_results
+
+    def search(self, chroma_store, query_text: str, n_results: int = 5) -> List[Dict[str, Any]]:
+        """Búsqueda con fallback transparente a BM25 (< 50ms) si RAMGovernor detecta estrés de memoria."""
+        try:
+            from funes.ram_governor.governor import RAMGovernor
+            gov = RAMGovernor()
+            if gov.should_fallback_to_bm25():
+                logger.warning("[RAM GOVERNOR] Memoria RAM justa/crítica. Activando fallback degradado transparente BM25.")
+                if chroma_store and chroma_store.collection:
+                    all_data = chroma_store.collection.get()
+                    docs = []
+                    for d_id, doc, meta in zip(all_data.get("ids", []), all_data.get("documents", []), all_data.get("metadatas", [])):
+                        docs.append({"id": d_id, "content": doc, "metadata": meta})
+                    self.bm25.index_documents(docs)
+                return self.bm25.search(query_text, top_k=n_results)
+        except Exception as e:
+            logger.debug(f"Error consultando RAMGovernor para fallback BM25: {e}")
+
+        if chroma_store:
+            return chroma_store.query_hybrid(query_text, n_results=n_results)
+        return []

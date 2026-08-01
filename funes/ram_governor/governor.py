@@ -1,10 +1,25 @@
 import os
 import sys
+import time
 import ctypes
 import logging
-from typing import Dict, Any
+from typing import Dict, Any, List, Set
 
 logger = logging.getLogger(__name__)
+
+OS_WHITELIST: Dict[str, Set[str]] = {
+    "darwin": {
+        "launchd", "kernel_task", "WindowServer", "Finder", "Dock",
+        "systemmanagementd", "loginwindow", "ControlCenter", "coreaudiod", "syspolicyd"
+    },
+    "win32": {
+        "System", "svchost.exe", "explorer.exe", "lsass.exe", "services.exe",
+        "csrss.exe", "smss.exe", "winlogon.exe", "dwm.exe", "spoolsv.exe"
+    },
+    "linux": {
+        "systemd", "kthreadd", "dbus-daemon", "Xorg", "gnome-shell", "init"
+    }
+}
 
 try:
     import psutil
@@ -41,6 +56,108 @@ class RAMGovernor:
     def __init__(self, ollama_url: str = "http://localhost:11434", safety_margin_pct: float = 0.35):
         self.ollama_url = ollama_url.rstrip("/")
         self.safety_margin_pct = safety_margin_pct
+
+    def get_top_resource_hogs(self, limit: int = 5) -> List[Dict[str, Any]]:
+        """Obtiene la lista de los N procesos de usuario que más RAM consumen, excluyendo la whitelist del SO."""
+        if not HAS_PSUTIL:
+            return []
+
+        current_platform = sys.platform if sys.platform in OS_WHITELIST else ("darwin" if sys.platform == "darwin" else "win32")
+        whitelist = OS_WHITELIST.get(current_platform, OS_WHITELIST.get("darwin", set()))
+        my_pid = os.getpid()
+
+        hogs = []
+        try:
+            for proc in psutil.process_iter(['pid', 'name', 'memory_info']):
+                try:
+                    pinfo = proc.info
+                    pid = pinfo.get('pid')
+                    name = pinfo.get('name') or ''
+                    mem_info = pinfo.get('memory_info')
+
+                    if not pid or pid == my_pid:
+                        continue
+                    if name.lower() in {w.lower() for w in whitelist}:
+                        continue
+                    if mem_info is None:
+                        continue
+
+                    mem_mb = round(mem_info.rss / (1024 * 1024), 2)
+                    if mem_mb > 50.0:  # Filtrar procesos irrelevantes de menos de 50MB
+                        hogs.append({
+                            "pid": pid,
+                            "name": name,
+                            "memory_mb": mem_mb
+                        })
+                except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+                    continue
+        except Exception as e:
+            logger.warning(f"Error al listar procesos acaparadores de RAM: {e}")
+
+        hogs.sort(key=lambda x: x["memory_mb"], reverse=True)
+        return hogs[:limit]
+
+    def terminate_processes(self, pids: List[int]) -> Dict[str, List[int]]:
+        """Termina de forma segura los PIDs especificados en 2 fases (SIGTERM ➔ espera 2s ➔ SIGKILL).
+        Previene la terminación de procesos pertenecientes a la Whitelist del SO o al proceso propio.
+        """
+        results = {"terminated": [], "failed": [], "skipped_whitelisted": []}
+
+        current_platform = sys.platform if sys.platform in OS_WHITELIST else ("darwin" if sys.platform == "darwin" else "win32")
+        whitelist = OS_WHITELIST.get(current_platform, OS_WHITELIST.get("darwin", set()))
+        my_pid = os.getpid()
+
+        remaining_pids = []
+        for pid in pids:
+            if pid == my_pid:
+                results["skipped_whitelisted"].append(pid)
+            else:
+                remaining_pids.append(pid)
+
+        if not HAS_PSUTIL:
+            results["failed"].extend(remaining_pids)
+            return results
+
+        procs_to_terminate = []
+        for pid in remaining_pids:
+            try:
+                proc = psutil.Process(pid)
+                pname = proc.name() or ""
+                if pname.lower() in {w.lower() for w in whitelist}:
+                    results["skipped_whitelisted"].append(pid)
+                    continue
+                procs_to_terminate.append(proc)
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                results["failed"].append(pid)
+
+        # Fase 1: Suave (SIGTERM)
+        for proc in procs_to_terminate:
+            try:
+                proc.terminate()
+            except Exception as e:
+                logger.debug(f"SIGTERM error para PID {proc.pid}: {e}")
+
+        # Espera de 2 segundos para dar tiempo a guardar estado
+        time.sleep(2)
+
+        # Fase 2: Forzado (SIGKILL si persiste)
+        for proc in procs_to_terminate:
+            try:
+                if proc.is_running():
+                    proc.kill()
+                results["terminated"].append(proc.pid)
+            except (psutil.NoSuchProcess, psutil.ZombieProcess):
+                results["terminated"].append(proc.pid)
+            except Exception as e:
+                logger.warning(f"No se pudo forzar el cierre del PID {proc.pid}: {e}")
+                results["failed"].append(proc.pid)
+
+        return results
+
+    def should_fallback_to_bm25(self) -> bool:
+        """Determina si se debe aplicar la degradación transparente a búsqueda léxica BM25."""
+        info = self.get_system_ram_info()
+        return info["available_gb"] < 3.5 or info["used_pct"] > 85.0
 
     def get_system_ram_info(self) -> Dict[str, Any]:
         """Obtiene información precisa de RAM del sistema (compatible con macOS, Windows y Linux)."""

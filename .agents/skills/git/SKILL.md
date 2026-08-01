@@ -5,13 +5,14 @@ description: Ejecuta la receta determinista de publicación Git de 5 pasos (add,
 
 # Git - Workflow Determinista de Publicación (`/git`)
 
-Esta habilidad automatiza de forma 100% confiable y sin desviaciones la receta de publicación Git en el proyecto Funes:
+Esta habilidad automatiza de forma 100% confiable y sin desviaciones la receta oficial de 6 pasos de publicación Git en el proyecto Funes (con soporte para repositorios estándar y Git Worktrees):
 
-1. `git add .`
-2. `git commit -m "<mensaje>"`
-3. `git push origin dev`
-4. `git checkout main && git merge dev && git push origin main`
-5. `git checkout dev`
+1. `git checkout <WORK_BRANCH>` (Asegura estar en la rama de trabajo `dev` o del Worktree activo)
+2. `git add .`
+3. `git commit -m "<mensaje>"`
+4. `git push origin <WORK_BRANCH>`
+5. `git checkout main && git merge <WORK_BRANCH> && git push origin main`
+6. `git checkout <WORK_BRANCH>`
 
 ---
 
@@ -30,4 +31,4 @@ Esta secuencia de operaciones se dispara **invariablemente** cuando el usuario e
    ```
 
 3. **Confirmación**:
-   Confirma al usuario el resultado de la publicación en `dev` y `main`.
+   Confirma al usuario el resultado de la receta de 6 pasos.

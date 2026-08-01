@@ -1,7 +1,7 @@
-import sys
-import logging
 from pathlib import Path
 from typing import List, Dict, Any
+from functools import lru_cache
+import logging
 
 logger = logging.getLogger(__name__)
 
@@ -45,8 +45,21 @@ class ChromaStore:
             logger.info(f"ChromaDB inicializado con éxito en {self.persist_directory}")
         except Exception as e:
             logger.error(f"Error al inicializar ChromaDB: {e}")
-            self.client = None
-            self.collection = None
+    def get_adaptive_batch_size(self) -> int:
+        """Determina dinámicamente el tamaño de lote óptimo (64, 16 o 4) según la RAM libre."""
+        try:
+            from funes.ram_governor.governor import RAMGovernor
+            gov = RAMGovernor()
+            ram_info = gov.get_system_ram_info()
+            avail = ram_info.get("available_gb", 8.0)
+            if avail > 8.0:
+                return 64
+            elif avail >= 4.0:
+                return 16
+            else:
+                return 4
+        except Exception:
+            return 16
 
     def add_chunks(self, chunks: List[str], metadatas: List[Dict[str, Any]], ids: List[str]) -> bool:
         """Añade o actualiza fragmentos en ChromaDB con desinfección estricta de metadatos."""

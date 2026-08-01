@@ -70,6 +70,18 @@ class SemanticChunker:
                 chunks.append(self._create_chunk_dict(sec_text, source_file, safe_source_id, current_header, len(chunks)))
 
         logger.info(f"Creados {len(chunks)} fragmentos semánticos para '{source_file}'")
+        
+        # Enlazar metadatos jerárquicos padre-hijo entre chunks secuenciales
+        parent_id = f"{safe_source_id}_parent_root"
+        for idx, chk in enumerate(chunks):
+            chk["metadata"]["parent_node_id"] = parent_id
+            children = []
+            if idx > 0:
+                children.append(chunks[idx - 1]["id"])
+            if idx < len(chunks) - 1:
+                children.append(chunks[idx + 1]["id"])
+            chk["metadata"]["child_node_ids"] = ",".join(children)
+
         return chunks
 
     def _create_chunk_dict(self, content: str, source_file: str, safe_source_id: str, header: str, idx: int) -> Dict[str, Any]:
@@ -81,5 +93,7 @@ class SemanticChunker:
                 "header": header,
                 "chunk_idx": idx,
                 "char_length": len(content),
+                "parent_node_id": f"{safe_source_id}_parent_root",
+                "child_node_ids": "",
             },
         }

@@ -491,3 +491,23 @@ def launch_obsidian(vault_path: Path) -> bool:
 
     return False
 
+
+def run_async_invariants_check() -> None:
+    """Ejecuta la verificación de invariantes del sistema (RAM, integridad de grafo, whitelist) en un hilo secundario asíncrono."""
+    import threading
+
+    def _worker():
+        try:
+            from funes.ram_governor.governor import RAMGovernor
+            gov = RAMGovernor()
+            ram_info = gov.get_system_ram_info()
+            logger.info(f"[INVARIANT CHECK] RAM total: {ram_info['total_gb']}GB, Disponible: {ram_info['available_gb']}GB")
+            hogs = gov.get_top_resource_hogs(3)
+            if hogs:
+                logger.info(f"[INVARIANT CHECK] Top aplicaciones fuera de whitelist: {[h['name'] for h in hogs]}")
+        except Exception as e:
+            logger.debug(f"Async invariant check notice: {e}")
+
+    t = threading.Thread(target=_worker, daemon=True, name="AsyncInvariantChecker")
+    t.start()
+

@@ -1,9 +1,9 @@
 ---
 name: git-ship
-description: Executa la receta determinista de publicación Git de 5 pasos (add, commit, push dev, merge main, push main, checkout dev). Usar cuando el usuario pida "comitea, push, merge", "ship", "publicar" o similar.
+description: Ejecuta la receta determinista de publicación Git de 5 pasos (add, commit, push dev, merge main, push main, checkout dev) exclusivamente cuando el usuario ejecute el comando /ship.
 ---
 
-# Git Ship - Workflow Determinista de Publicación
+# Git Ship - Workflow Determinista de Publicación (`/ship`)
 
 Esta habilidad automatiza de forma 100% confiable y sin desviaciones la receta de publicación Git en el proyecto Funes:
 
@@ -17,15 +17,17 @@ Esta habilidad automatiza de forma 100% confiable y sin desviaciones la receta d
 
 ## 🚀 Instrucciones de Ejecución
 
-Cuando el usuario pida *"comitea, push, merge"*, *"publicar"*, *"ship"* o cualquier variante similar:
+Esta secuencia de operaciones se dispara **invariablemente** cuando el usuario introduzca el comando slash `/ship` (o `/ship "mensaje de commit"`):
 
-1. Determina el mensaje de commit:
-   - Si el usuario proporciona un mensaje o descripción en su solicitud, úsala.
-   - Si no proporciona ningún mensaje, omite el argumento y el script auto-generará un mensaje con la marca de fecha y hora actual: `"sesión YYYY-MM-DD HH:MM:SS"`.
+1. **Determinar mensaje de commit**:
+   - Si el usuario proporciona un mensaje junto al comando (ej. `/ship "feat: nuevas pruebas"`), utiliza ese mensaje.
+   - Si el usuario ejecuta simplemente `/ship`, omite el parámetro para que el script auto-genere el mensaje por fecha y hora: `"sesión YYYY-MM-DD HH:MM:SS"`.
 
-2. Ejecuta el script determinista mediante la herramienta `run_command`:
+2. **Ejecutar el script determinista**:
+   Ejecuta el script de publicación mediante `run_command`:
    ```bash
    ./scripts/git_ship.sh "mensaje de commit opcional"
    ```
 
-3. Confirma al usuario el resultado de la publicación.
+3. **Confirmación**:
+   Confirma al usuario el resultado de la publicación en `dev` y `main`.

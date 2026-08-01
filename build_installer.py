@@ -10,18 +10,19 @@ from pathlib import Path
 
 
 def add_dir_to_zip(zf: zipfile.ZipFile, source_dir: Path, arc_dir_name: str):
-    """Añade recursivamente un directorio al ZIP omitiendo archivos temporales, __pycache__ y muestras."""
+    """Añade recursivamente un directorio al ZIP omitiendo archivos temporales, __pycache__, muestras y recursos web (.html)."""
     if not source_dir.exists():
         return
     for root, dirs, files in os.walk(source_dir):
         dirs[:] = [d for d in dirs if d not in ("__pycache__", "1_entrada", "2_sucio", "3_limpio", "4_salida", ".funes", "chroma", "venv") and not d.startswith(".")]
         for file in files:
-            if file.endswith(".pyc") or file.startswith("."):
+            if file.endswith(".pyc") or file.endswith(".html") or file.startswith("."):
                 continue
             full_path = Path(root) / file
             rel_path = full_path.relative_to(source_dir)
             arcname = f"{arc_dir_name}/{rel_path}"
             zf.write(full_path, arcname=arcname)
+
 
 
 def build():

@@ -112,6 +112,45 @@ Más información detallada sobre la subsección.
         chunks = chunker.chunk_markdown("", "vacio.md")
         self.assertEqual(chunks, [])
 
+    # ------------------------------------------------------------------
+    # 3. HybridSearcher & BM25Okapi
+    # ------------------------------------------------------------------
+    def test_bm25_inverted_index(self):
+        from funes.rag.hybrid_search import BM25Okapi
+
+        bm25 = BM25Okapi()
+        docs = [
+            {"id": "doc1", "content": "Sistema ETL inteligente Funes en Python"},
+            {"id": "doc2", "content": "Base de datos vectorial ChromaDB y RAG semántico"},
+            {"id": "doc3", "content": "Generación de notas atómicas en Obsidian Vault con Python"},
+        ]
+        bm25.index_documents(docs)
+
+        results = bm25.search("Python ETL", top_k=2)
+        self.assertGreater(len(results), 0)
+        self.assertEqual(results[0]["id"], "doc1")
+        self.assertIn("bm25_score", results[0])
+
+    def test_hybrid_rrf_searcher(self):
+        from funes.rag.hybrid_search import HybridSearcher
+
+        searcher = HybridSearcher()
+        vector_res = [
+            {"id": "v1", "content": "Vector Match 1"},
+            {"id": "v2", "content": "Vector Match 2"},
+        ]
+        bm25_res = [
+            {"id": "b1", "content": "BM25 Match 1"},
+            {"id": "v1", "content": "Vector Match 1"},  # Coincidencia dual
+        ]
+
+        fused = searcher.reciprocal_rank_fusion(vector_res, bm25_res, top_k=3)
+        self.assertEqual(len(fused), 3)
+        # v1 debe tener el mayor RRF score al coincidir en ambos sistemas
+        self.assertEqual(fused[0]["id"], "v1")
+        self.assertIn("rrf_score", fused[0])
+
 
 if __name__ == "__main__":
     unittest.main()
+

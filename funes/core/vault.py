@@ -142,6 +142,47 @@ class VaultManager:
         logger.info(f"Nota atómica guardada en 4_salida: {output_path.name}")
         return output_path
 
+    def move_to_quarantine(self, file_path: Path, error_reason: str = "Error de lectura o formato corrupto") -> Path:
+        """Traslada de forma atómica un archivo problemático a .funes/quarantine/ registrando el error."""
+        if not file_path.exists():
+            return file_path
+
+        from datetime import datetime
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        safe_name = self.sanitize_filename(file_path.name)
+        target_path = self.quarantine_dir / f"{timestamp}_{safe_name}"
+
+        try:
+            shutil.move(str(file_path), str(target_path))
+            logger.warning(f"Archivo aislado en cuarentena {target_path.name}. Motivo: {error_reason}")
+        except Exception as e:
+            logger.error(f"Error al mover {file_path.name} a cuarentena: {e}")
+
+        # Registrar entrada en log de auditoría
+        try:
+            audit_file = self.config.system_dir / "audit_log.json"
+            audit_data = []
+            if audit_file.exists():
+                try:
+                    with open(audit_file, "r", encoding="utf-8") as f:
+                        audit_data = json.load(f)
+                except Exception:
+                    audit_data = []
+
+            audit_data.append({
+                "timestamp": timestamp,
+                "filename": file_path.name,
+                "quarantine_path": str(target_path),
+                "error": error_reason
+            })
+
+            with open(audit_file, "w", encoding="utf-8") as f:
+                json.dump(audit_data[-5000:], f, indent=2, ensure_ascii=False)
+        except Exception as e:
+            logger.debug(f"No se pudo actualizar el log de auditoría: {e}")
+
+        return target_path
+
     @staticmethod
     def sanitize_filename(name: str) -> str:
         """Saneador estricto de nombres de archivo compatible con Windows, macOS y Linux."""

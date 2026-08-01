@@ -118,3 +118,25 @@ class ChromaStore:
         except Exception as e:
             logger.error(f"Error obteniendo títulos de notas: {e}")
             return []
+
+    def query_hybrid(self, query_text: str, n_results: int = 5) -> List[Dict[str, Any]]:
+        """Realiza una búsqueda híbrida combinando la similitud semántica (ChromaDB) y léxica (BM25)."""
+        vector_results = self.query_similar(query_text, n_results=n_results * 2)
+
+        try:
+            from funes.rag.hybrid_search import HybridSearcher
+            searcher = HybridSearcher()
+
+            # Obtener todos los documentos guardados para construir el índice BM25 de forma transparente
+            if self.collection:
+                all_data = self.collection.get()
+                docs = []
+                for d_id, doc, meta in zip(all_data.get("ids", []), all_data.get("documents", []), all_data.get("metadatas", [])):
+                    docs.append({"id": d_id, "content": doc, "metadata": meta})
+                searcher.bm25.index_documents(docs)
+                bm25_results = searcher.bm25.search(query_text, top_k=n_results * 2)
+                return searcher.reciprocal_rank_fusion(vector_results, bm25_results, top_k=n_results)
+        except Exception as e:
+            logger.warning(f"No se pudo completar la búsqueda híbrida BM25 ({e}). Retornando resultados vectoriales.")
+
+        return vector_results[:n_results]

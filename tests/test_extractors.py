@@ -1,3 +1,4 @@
+import json
 import unittest
 import tempfile
 from pathlib import Path
@@ -157,6 +158,80 @@ Fin del documento.
         extracted, meta = extractor.extract(txt_file)
         self.assertEqual(extracted.strip(), "Contenido simple de nota")
         self.assertEqual(meta["format"], ".txt")
+
+    # ------------------------------------------------------------------
+    # 5. ExtendedFormatsExtractor (.ipynb, .epub, .eml)
+    # ------------------------------------------------------------------
+    def test_ipynb_extraction_with_base64_filtering(self):
+        from funes.extractors.extended_formats import ExtendedFormatsExtractor
+
+        ipynb_file = self.temp_path / "analisis.ipynb"
+        notebook_data = {
+            "cells": [
+                {
+                    "cell_type": "markdown",
+                    "source": ["# Análisis de Datos\n", "Este cuaderno realiza un análisis."]
+                },
+                {
+                    "cell_type": "code",
+                    "source": ["import pandas as pd\n", "print('Hola Funes')"],
+                    "outputs": [
+                        {"output_type": "stream", "text": ["Hola Funes\n"]},
+                        {"output_type": "execute_result", "data": {"text/plain": ["data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="]}}
+                    ]
+                }
+            ]
+        }
+        ipynb_file.write_text(json.dumps(notebook_data), encoding="utf-8")
+
+        extractor = ExtendedFormatsExtractor()
+        self.assertTrue(extractor.can_handle(ipynb_file))
+
+        extracted, meta = extractor.extract(ipynb_file)
+        self.assertIn("# Cuaderno Jupyter", extracted)
+        self.assertIn("Análisis de Datos", extracted)
+        self.assertIn("import pandas as pd", extracted)
+        self.assertIn("Hola Funes", extracted)
+        self.assertNotIn("data:image/png;base64", extracted)
+
+    def test_epub_extraction(self):
+        import zipfile
+        from funes.extractors.extended_formats import ExtendedFormatsExtractor
+
+        epub_file = self.temp_path / "libro.epub"
+        with zipfile.ZipFile(epub_file, "w") as z:
+            z.writestr("chapter1.html", "<html><body><h1>Capitulo 1</h1><p>Texto del primer capitulo del libro.</p></body></html>")
+
+        extractor = ExtendedFormatsExtractor()
+        self.assertTrue(extractor.can_handle(epub_file))
+
+        extracted, meta = extractor.extract(epub_file)
+        self.assertIn("# Libro EPUB", extracted)
+        self.assertIn("Capitulo 1", extracted)
+        self.assertIn("Texto del primer capitulo", extracted)
+
+    def test_eml_extraction(self):
+        import email
+        from email.message import EmailMessage
+        from funes.extractors.extended_formats import ExtendedFormatsExtractor
+
+        eml_file = self.temp_path / "mensaje.eml"
+        msg = EmailMessage()
+        msg["Subject"] = "Reunión de Proyecto"
+        msg["From"] = "remitente@ejemplo.com"
+        msg["To"] = "destino@ejemplo.com"
+        msg.set_content("Hola, adjunto el informe de avance.")
+        msg.add_attachment(b"Columna1,Columna2\nVal1,Val2", maintype="text", subtype="csv", filename="adjunto.csv")
+
+        eml_file.write_bytes(msg.as_bytes())
+
+        extractor = ExtendedFormatsExtractor()
+        self.assertTrue(extractor.can_handle(eml_file))
+
+        extracted, meta = extractor.extract(eml_file)
+        self.assertIn("# Email: Reunión de Proyecto", extracted)
+        self.assertIn("remitente@ejemplo.com", extracted)
+        self.assertIn("adjunto.csv", extracted)
 
 
 if __name__ == "__main__":

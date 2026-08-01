@@ -7,6 +7,7 @@ from funes.extractors.office_pdf import TextAndOfficeExtractor
 from funes.extractors.tex_tm import TeXAndTeXmacsExtractor
 from funes.extractors.audio import AudioExtractor
 from funes.extractors.ocr_image import ImageOCRExtractor
+from funes.extractors.extended_formats import ExtendedFormatsExtractor
 
 logger = logging.getLogger(__name__)
 
@@ -20,6 +21,7 @@ class ExtractorRegistry:
             TeXAndTeXmacsExtractor(),
             AudioExtractor(),
             ImageOCRExtractor(),
+            ExtendedFormatsExtractor(),
         ]
 
     def extract(self, file_path: Path) -> Tuple[str, Dict[str, Any]]:

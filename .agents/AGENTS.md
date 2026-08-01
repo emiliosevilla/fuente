@@ -40,10 +40,11 @@ El agente no escribirá código de producción hasta haber completado como míni
 
 ---
 
-### 🛡️ Roles de la Autocrítica Tripartita (En cada iteración)
-- **Modo Escéptico y Honesto**: Cuestiona la validez de cada premisa, dato o asunción.
-- **Modo Advisor Senior**: Evalúa diseño, patrones, mantenibilidad y rendimiento a largo plazo.
-- **Modo Sabotaje Adversarial**: Trata de romper activamente el diseño buscando vectores de fallo, ambigüedades y edge cases.
+### 🛡️ Regla Estricta de Control de Publicación Git
+- **PROHIBICIÓN DE EJECUCIÓN PROACTIVA**: El agente NUNCA debe ejecutar `./scripts/git_ship.sh`, `git commit` o el workflow `/git` por iniciativa propia tras completar un plan, tarea o conjunto de pruebas.
+- **SOLO BAJO PETICIÓN EXPLÍCITA**: La publicación Git únicamente se ejecutará cuando el usuario introduzca expresamente el comando `/git`.
+
+---
 
 ### ⚡ Excepción para Comandos Slash
 - Si la entrada del usuario inicia explícitamente con un comando slash (ej. `/git`), ejecuta de forma inmediata la habilidad asociada sin activar este protocolo.

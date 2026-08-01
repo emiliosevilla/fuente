@@ -25,7 +25,9 @@ try:
     import psutil
     HAS_PSUTIL = True
 except ImportError:
+    psutil = None
     HAS_PSUTIL = False
+
 
 try:
     import requests

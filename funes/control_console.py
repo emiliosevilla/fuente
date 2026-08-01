@@ -66,9 +66,11 @@ THEME = {
     "red": "#DC2626",             # Rojo Estado Atención/Cuarentena
 }
 
+FONT_TYPEWRITER = "Courier"
+
 
 class ToolTip:
-    """Tooltip flotante contextual con lenguaje coloquial en español plano."""
+    """Tooltip flotante contextual con lenguaje coloquial en tipografía de máquina de escribir."""
 
     def __init__(self, widget, text: str):
         self.widget = widget
@@ -96,7 +98,7 @@ class ToolTip:
             relief="solid",
             borderwidth=1,
             highlightbackground=THEME["border"],
-            font=("Inter", 10, "normal"),
+            font=(FONT_TYPEWRITER, 10, "normal"),
             padx=8,
             pady=4
         )
@@ -140,7 +142,6 @@ class QuarantineManager:
             logging.error(f"Error al guardar manifiesto de cuarentena: {e}")
 
     def recover_manifest(self) -> List[Dict[str, Any]]:
-        """Reconstruye manifest.json si está corrupto escaneando .funes_quarantine/."""
         items = []
         try:
             if self.quarantine_dir.exists():
@@ -161,14 +162,12 @@ class QuarantineManager:
         return items
 
     def quarantine_file(self, filepath: Path, reason: str, stack_trace: str = "") -> bool:
-        """Mueve un archivo a cuarentena conservando metadatos originales."""
         try:
             if not filepath.exists():
                 return False
             self.ensure_structure()
             dest_path = self.quarantine_dir / filepath.name
 
-            # Mover archivo conservando metadatos de atributos y fechas
             shutil.move(str(filepath), str(dest_path))
             try:
                 shutil.copystat(str(dest_path), str(dest_path))
@@ -196,7 +195,6 @@ class QuarantineManager:
             return False
 
     def restore_file(self, filename: str, target_dir: Path) -> bool:
-        """Restaura un archivo de cuarentena al directorio de entrada."""
         try:
             q_file = self.quarantine_dir / filename
             if not q_file.exists():
@@ -224,7 +222,6 @@ class QuarantineManager:
         return self._read_manifest()
 
     def clean_orphans(self):
-        """Elimina entradas huérfanas si el archivo físico ya no existe."""
         items = self._read_manifest()
         valid = []
         for i in items:
@@ -249,7 +246,7 @@ class QuarantineManager:
 
 
 class QuarantineModal(tk.Toplevel):
-    """Modal flotante en Estética Papiro para inspeccionar y restaurar archivos en Cuarentena."""
+    """Modal flotante Papiro (100% tipografía de máquina de escribir Courier)."""
 
     def __init__(self, parent, quarantine_mgr: QuarantineManager, on_restore_callback):
         super().__init__(parent)
@@ -270,8 +267,8 @@ class QuarantineModal(tk.Toplevel):
 
         tk.Label(
             hdr,
-            text="🛡️ ARCHIVOS EN CUARENTENA Y AVISOS DE INGESTA",
-            font=("Georgia", 15, "bold"),
+            text="ARCHIVOS EN CUARENTENA Y AVISOS DE INGESTA",
+            font=(FONT_TYPEWRITER, 13, "bold"),
             fg=THEME["red"],
             bg=THEME["bg_card"]
         ).pack(side="left")
@@ -279,7 +276,7 @@ class QuarantineModal(tk.Toplevel):
         tk.Label(
             hdr,
             text="Aislamiento Seguro de Documentos Ilegibles",
-            font=("Georgia", 10, "italic"),
+            font=(FONT_TYPEWRITER, 10, "italic"),
             fg=THEME["muted"],
             bg=THEME["bg_card"]
         ).pack(side="right")
@@ -291,8 +288,8 @@ class QuarantineModal(tk.Toplevel):
             empty_frame.pack(fill="both", expand=True)
             tk.Label(
                 empty_frame,
-                text="✓ No hay ningún archivo en cuarentena. La bóveda está limpia.",
-                font=("Georgia", 13, "bold"),
+                text="[OK] No hay ningún archivo en cuarentena. La bóveda está limpia.",
+                font=(FONT_TYPEWRITER, 11, "bold"),
                 fg=THEME["green"],
                 bg=THEME["bg_root"]
             ).pack()
@@ -308,13 +305,13 @@ class QuarantineModal(tk.Toplevel):
             top_line = tk.Frame(card, bg=THEME["bg_card"])
             top_line.pack(fill="x")
 
-            tk.Label(top_line, text=f"📄 {item['filename']}", font=("Georgia", 11, "bold"), fg=THEME["paper"], bg=THEME["bg_card"]).pack(side="left")
-            tk.Label(top_line, text=f"Fecha: {item['timestamp']}", font=("Inter", 9), fg=THEME["muted"], bg=THEME["bg_card"]).pack(side="right")
+            tk.Label(top_line, text=f"Archivo: {item['filename']}", font=(FONT_TYPEWRITER, 10, "bold"), fg=THEME["paper"], bg=THEME["bg_card"]).pack(side="left")
+            tk.Label(top_line, text=f"Fecha: {item['timestamp']}", font=(FONT_TYPEWRITER, 9), fg=THEME["muted"], bg=THEME["bg_card"]).pack(side="right")
 
             tk.Label(
                 card,
                 text=f"Causa: {item['error_reason']}",
-                font=("Inter", 10),
+                font=(FONT_TYPEWRITER, 10),
                 fg=THEME["paper"],
                 bg=THEME["bg_card"],
                 anchor="w",
@@ -326,8 +323,8 @@ class QuarantineModal(tk.Toplevel):
 
             btn_rest = tk.Button(
                 btn_box,
-                text="🔄 Restaurar y Reintentar (1 Clic)",
-                font=("Georgia", 9, "bold"),
+                text="Restaurar y Reintentar",
+                font=(FONT_TYPEWRITER, 9, "bold"),
                 fg="#FFFFFF",
                 bg=THEME["green"],
                 relief="solid",
@@ -339,8 +336,8 @@ class QuarantineModal(tk.Toplevel):
 
             btn_trace = tk.Button(
                 btn_box,
-                text="🔍 Más Detalles (Stack Trace)",
-                font=("Georgia", 9),
+                text="Más Detalles (Stack Trace)",
+                font=(FONT_TYPEWRITER, 9),
                 fg=THEME["paper"],
                 bg=THEME["bg_card_hover"],
                 relief="solid",
@@ -360,13 +357,13 @@ class QuarantineModal(tk.Toplevel):
         w.title("Detalles Técnicos del Error")
         w.configure(bg=THEME["bg_root"])
         w.geometry("600x400")
-        txt = tk.Text(w, font=("Courier", 10), bg=THEME["bg_log"], fg=THEME["paper"], padx=10, pady=10)
+        txt = tk.Text(w, font=(FONT_TYPEWRITER, 10), bg=THEME["bg_log"], fg=THEME["paper"], padx=10, pady=10)
         txt.pack(fill="both", expand=True)
         txt.insert("1.0", trace_text)
 
 
 class GraphProcessNode(tk.Frame):
-    """Nodo interactivo del grafo de flujo lógico con indicadores visuales de estado."""
+    """Nodo interactivo del grafo de flujo lógico (100% tipografía Courier)."""
 
     def __init__(
         self,
@@ -397,14 +394,13 @@ class GraphProcessNode(tk.Frame):
         self.bg_col = bg_col
         self.bg_hover = bg_hover
 
-        # Header tag y badge estado
         top_meta = tk.Frame(self, bg=bg_col)
         top_meta.pack(fill="x", pady=(0, 4))
 
         lbl_tag = tk.Label(
             top_meta,
             text=f"── {step_tag} ──",
-            font=("Georgia", 10, "bold"),
+            font=(FONT_TYPEWRITER, 10, "bold"),
             fg=THEME["gold"] if not is_highlight else "#FDE047",
             bg=bg_col,
             anchor="w"
@@ -414,37 +410,39 @@ class GraphProcessNode(tk.Frame):
         self.status_badge = tk.Label(
             top_meta,
             text="● Ok",
-            font=("Inter", 9, "bold"),
+            font=(FONT_TYPEWRITER, 9, "bold"),
             fg=THEME["green"],
             bg=bg_col
         )
         self.status_badge.pack(side="right")
 
-        # Título del Nodo
         top_frame = tk.Frame(self, bg=bg_col)
         top_frame.pack(fill="x", anchor="w")
 
-        lbl_title = tk.Label(top_frame, text=title_str, font=("Georgia", 13, "bold"), fg=fg_title, bg=bg_col)
+        lbl_title = tk.Label(top_frame, text=title_str, font=(FONT_TYPEWRITER, 12, "bold"), fg=fg_title, bg=bg_col)
         lbl_title.pack(side="left", fill="x", expand=True)
 
-        # Descripción
-        lbl_desc = tk.Label(
-            self,
-            text=desc_str,
-            font=("Inter", 10),
-            fg=fg_desc,
-            bg=bg_col,
-            justify="left",
-            anchor="w",
-            wraplength=230
-        )
-        lbl_desc.pack(fill="x", pady=(4, 0))
+        if desc_str:
+            lbl_desc = tk.Label(
+                self,
+                text=desc_str,
+                font=(FONT_TYPEWRITER, 9),
+                fg=fg_desc,
+                bg=bg_col,
+                justify="left",
+                anchor="w",
+                wraplength=230
+            )
+            lbl_desc.pack(fill="x", pady=(4, 0))
 
-        # Bindings
-        for widget in [self, top_meta, lbl_tag, self.status_badge, top_frame, lbl_title, lbl_desc]:
-            widget.bind("<Enter>", self._on_enter)
-            widget.bind("<Leave>", self._on_leave)
-            widget.bind("<Button-1>", self._on_click)
+        def _bind_recursive(w):
+            w.bind("<Enter>", self._on_enter)
+            w.bind("<Leave>", self._on_leave)
+            w.bind("<Button-1>", self._on_click)
+            for child in w.winfo_children():
+                _bind_recursive(child)
+
+        _bind_recursive(self)
 
     def set_status(self, text: str, color: str):
         self.status_badge.config(text=text, fg=color)
@@ -469,7 +467,7 @@ class GraphProcessNode(tk.Frame):
 
 
 class FunesSettingsModal(tk.Toplevel):
-    """Diálogo modal de Ajustes Avanzados Papiro con icono ⚙️."""
+    """Diálogo modal de Ajustes Avanzados Papiro (100% tipografía Courier)."""
 
     def __init__(self, parent: "FunesControlConsole"):
         super().__init__(parent)
@@ -484,7 +482,6 @@ class FunesSettingsModal(tk.Toplevel):
         self.transient(parent)
         self.grab_set()
 
-        # Variables
         self.vault_path_var = tk.StringVar(value=str(self.config.vault.vault_path))
         self.input_dir_var = tk.StringVar(value=self.config.vault.input_dir_name)
         self.dirty_dir_var = tk.StringVar(value=self.config.vault.dirty_dir_name)
@@ -514,15 +511,15 @@ class FunesSettingsModal(tk.Toplevel):
         hdr.pack(fill="x")
         tk.Label(
             hdr,
-            text="⚙️ AJUSTES AVANZADOS Y CONFIGURACIÓN FUNES",
-            font=("Georgia", 15, "bold"),
+            text="AJUSTES AVANZADOS Y CONFIGURACIÓN FUNES",
+            font=(FONT_TYPEWRITER, 13, "bold"),
             fg=THEME["paper"],
             bg=THEME["bg_card"]
         ).pack(side="left")
         tk.Label(
             hdr,
             text="Soberanía Local & Control Técnico",
-            font=("Georgia", 10, "italic"),
+            font=(FONT_TYPEWRITER, 10, "italic"),
             fg=THEME["muted"],
             bg=THEME["bg_card"]
         ).pack(side="right")
@@ -530,44 +527,43 @@ class FunesSettingsModal(tk.Toplevel):
         style = ttk.Style()
         style.theme_use("default")
         style.configure("Papiro.TNotebook", background=THEME["bg_root"], borderwidth=0)
-        style.configure("Papiro.TNotebook.Tab", background=THEME["bg_card"], foreground=THEME["paper"], padding=[12, 6], font=("Georgia", 10, "bold"))
+        style.configure("Papiro.TNotebook.Tab", background=THEME["bg_card"], foreground=THEME["paper"], padding=[12, 6], font=(FONT_TYPEWRITER, 10, "bold"))
         style.map("Papiro.TNotebook.Tab", background=[("selected", THEME["bg_card_hover"])], foreground=[("selected", THEME["paper"])])
 
         notebook = ttk.Notebook(self, style="Papiro.TNotebook")
         notebook.pack(fill="both", expand=True, padx=20, pady=15)
 
         tab_folders = tk.Frame(notebook, bg=THEME["bg_card"], padx=20, pady=15)
-        notebook.add(tab_folders, text=" 📁 Rutas & Vault ")
+        notebook.add(tab_folders, text=" Rutas & Vault ")
         self._build_folders_tab(tab_folders)
 
         tab_ai = tk.Frame(notebook, bg=THEME["bg_card"], padx=20, pady=15)
-        notebook.add(tab_ai, text=" 🤖 Servidor & IA ")
+        notebook.add(tab_ai, text=" Servidor & IA ")
         self._build_ai_tab(tab_ai, model_options)
 
         tab_template = tk.Frame(notebook, bg=THEME["bg_card"], padx=20, pady=15)
-        notebook.add(tab_template, text=" 📄 Plantilla Nota ")
+        notebook.add(tab_template, text=" Plantilla Nota ")
         self._build_template_tab(tab_template)
 
         tab_resetup = tk.Frame(notebook, bg=THEME["bg_card"], padx=20, pady=15)
-        notebook.add(tab_resetup, text=" 🚀 Re-Setup ")
+        notebook.add(tab_resetup, text=" Re-Setup ")
         self._build_resetup_tab(tab_resetup)
 
-        # Footer con aviso de soberanía de datos
         footer = tk.Frame(self, bg=THEME["bg_root"], padx=20, pady=12)
         footer.pack(fill="x")
 
         tk.Label(
             footer,
-            text="🛡️ Funes no transmite datos fuera de tu dispositivo (100% Local).",
-            font=("Inter", 9, "bold"),
+            text="Funes trabaja sin salir de tu dispositivo (100% Local).",
+            font=(FONT_TYPEWRITER, 9, "bold"),
             fg=THEME["muted"],
             bg=THEME["bg_root"]
         ).pack(side="left")
 
         btn_save = tk.Button(
             footer,
-            text="✓ Guardar Ajustes",
-            font=("Georgia", 11, "bold"),
+            text="Guardar Ajustes",
+            font=(FONT_TYPEWRITER, 10, "bold"),
             fg="#FFFFFF",
             bg=THEME["crimson"],
             activebackground=THEME["crimson_hover"],
@@ -584,7 +580,7 @@ class FunesSettingsModal(tk.Toplevel):
         btn_cancel = tk.Button(
             footer,
             text="Cancelar",
-            font=("Georgia", 11),
+            font=(FONT_TYPEWRITER, 10),
             fg=THEME["paper"],
             bg=THEME["bg_card"],
             activebackground=THEME["bg_card_hover"],
@@ -598,17 +594,17 @@ class FunesSettingsModal(tk.Toplevel):
         btn_cancel.pack(side="right")
 
     def _build_folders_tab(self, parent):
-        tk.Label(parent, text="Ruta Principal del Vault de Obsidian:", font=("Georgia", 11, "bold"), fg=THEME["paper"], bg=THEME["bg_card"], anchor="w").pack(fill="x", pady=(0, 4))
+        tk.Label(parent, text="Ruta Principal del Vault de Obsidian:", font=(FONT_TYPEWRITER, 10, "bold"), fg=THEME["paper"], bg=THEME["bg_card"], anchor="w").pack(fill="x", pady=(0, 4))
         path_frame = tk.Frame(parent, bg=THEME["bg_card"])
         path_frame.pack(fill="x", pady=(0, 12))
 
-        entry_vault = tk.Entry(path_frame, textvariable=self.vault_path_var, font=("Courier", 11), bg=THEME["bg_log"], fg=THEME["paper"], relief="solid", bd=1)
+        entry_vault = tk.Entry(path_frame, textvariable=self.vault_path_var, font=(FONT_TYPEWRITER, 10), bg=THEME["bg_log"], fg=THEME["paper"], relief="solid", bd=1)
         entry_vault.pack(side="left", fill="x", expand=True, padx=(0, 8))
 
-        btn_browse = tk.Button(path_frame, text="Examinar...", font=("Georgia", 10), fg=THEME["paper"], bg=THEME["bg_card_hover"], relief="solid", bd=1, command=self._browse_vault)
+        btn_browse = tk.Button(path_frame, text="Examinar...", font=(FONT_TYPEWRITER, 10), fg=THEME["paper"], bg=THEME["bg_card_hover"], relief="solid", bd=1, command=self._browse_vault)
         btn_browse.pack(side="right")
 
-        tk.Label(parent, text="Nombres Personalizados de Subcarpetas (Pipeline ETL):", font=("Georgia", 11, "bold"), fg=THEME["paper"], bg=THEME["bg_card"], anchor="w").pack(fill="x", pady=(8, 6))
+        tk.Label(parent, text="Nombres Personalizados de Subcarpetas (Pipeline ETL):", font=(FONT_TYPEWRITER, 10, "bold"), fg=THEME["paper"], bg=THEME["bg_card"], anchor="w").pack(fill="x", pady=(8, 6))
 
         grid_f = tk.Frame(parent, bg=THEME["bg_card"])
         grid_f.pack(fill="x", pady=4)
@@ -621,51 +617,51 @@ class FunesSettingsModal(tk.Toplevel):
         ]
 
         for lbl, var, row in items:
-            tk.Label(grid_f, text=lbl, font=("Georgia", 10), fg=THEME["muted"], bg=THEME["bg_card"], anchor="w").grid(row=row, column=0, sticky="w", pady=4, padx=(0, 10))
-            ent = tk.Entry(grid_f, textvariable=var, font=("Courier", 11), bg=THEME["bg_log"], fg=THEME["paper"], relief="solid", bd=1, width=28)
+            tk.Label(grid_f, text=lbl, font=(FONT_TYPEWRITER, 9), fg=THEME["muted"], bg=THEME["bg_card"], anchor="w").grid(row=row, column=0, sticky="w", pady=4, padx=(0, 10))
+            ent = tk.Entry(grid_f, textvariable=var, font=(FONT_TYPEWRITER, 10), bg=THEME["bg_log"], fg=THEME["paper"], relief="solid", bd=1, width=28)
             ent.grid(row=row, column=1, sticky="e", pady=4)
 
     def _build_ai_tab(self, parent, model_options: list):
-        tk.Label(parent, text="Servidor Local Ollama URL (Solo Localhost / 127.0.0.1):", font=("Georgia", 11, "bold"), fg=THEME["paper"], bg=THEME["bg_card"], anchor="w").pack(fill="x", pady=(0, 4))
-        entry_url = tk.Entry(parent, textvariable=self.ollama_url_var, font=("Courier", 11), bg=THEME["bg_log"], fg=THEME["paper"], relief="solid", bd=1)
+        tk.Label(parent, text="Servidor Local Ollama URL (Solo Localhost / 127.0.0.1):", font=(FONT_TYPEWRITER, 10, "bold"), fg=THEME["paper"], bg=THEME["bg_card"], anchor="w").pack(fill="x", pady=(0, 4))
+        entry_url = tk.Entry(parent, textvariable=self.ollama_url_var, font=(FONT_TYPEWRITER, 10), bg=THEME["bg_log"], fg=THEME["paper"], relief="solid", bd=1)
         entry_url.pack(fill="x", pady=(0, 14))
 
-        tk.Label(parent, text="Selección de Modelo de IA (Filtrado por RAM Governor):", font=("Georgia", 11, "bold"), fg=THEME["paper"], bg=THEME["bg_card"], anchor="w").pack(fill="x", pady=(0, 4))
+        tk.Label(parent, text="Selección de Modelo de IA (Filtrado por RAM Governor):", font=(FONT_TYPEWRITER, 10, "bold"), fg=THEME["paper"], bg=THEME["bg_card"], anchor="w").pack(fill="x", pady=(0, 4))
 
-        opt_menu = ttk.Combobox(parent, textvariable=self.model_var, values=model_options, state="readonly", font=("Georgia", 10))
+        opt_menu = ttk.Combobox(parent, textvariable=self.model_var, values=model_options, state="readonly", font=(FONT_TYPEWRITER, 9))
         opt_menu.pack(fill="x", pady=(0, 10))
 
         info_box = tk.Label(
             parent,
-            text="🔒 Seguridad Localhost: Las llamadas API están restringidas strictly a tu máquina local.",
-            font=("Georgia", 9, "italic"),
+            text="Seguridad Localhost: Las llamadas API están restringidas estrictamente a tu máquina local.",
+            font=(FONT_TYPEWRITER, 9, "italic"),
             fg=THEME["muted"],
             bg=THEME["bg_card"],
             anchor="w"
         )
         info_box.pack(fill="x", pady=(0, 14))
 
-        tk.Label(parent, text="Margen de Seguridad de RAM Libre (%):", font=("Georgia", 11, "bold"), fg=THEME["paper"], bg=THEME["bg_card"], anchor="w").pack(fill="x", pady=(0, 4))
-        entry_ram = tk.Entry(parent, textvariable=self.ram_margin_var, font=("Courier", 11), bg=THEME["bg_log"], fg=THEME["paper"], relief="solid", bd=1, width=10)
+        tk.Label(parent, text="Margen de Seguridad de RAM Libre (%):", font=(FONT_TYPEWRITER, 10, "bold"), fg=THEME["paper"], bg=THEME["bg_card"], anchor="w").pack(fill="x", pady=(0, 4))
+        entry_ram = tk.Entry(parent, textvariable=self.ram_margin_var, font=(FONT_TYPEWRITER, 10), bg=THEME["bg_log"], fg=THEME["paper"], relief="solid", bd=1, width=10)
         entry_ram.pack(anchor="w", pady=(0, 10))
 
     def _build_template_tab(self, parent):
-        tk.Label(parent, text="Plantilla Personalizada de Nota Atómica (Markdown):", font=("Georgia", 11, "bold"), fg=THEME["paper"], bg=THEME["bg_card"], anchor="w").pack(fill="x", pady=(0, 4))
+        tk.Label(parent, text="Plantilla Personalizada de Nota Atómica (Markdown):", font=(FONT_TYPEWRITER, 10, "bold"), fg=THEME["paper"], bg=THEME["bg_card"], anchor="w").pack(fill="x", pady=(0, 4))
 
-        self.txt_template = tk.Text(parent, font=("Courier", 10), bg=THEME["bg_log"], fg=THEME["paper"], relief="solid", bd=1, height=18)
+        self.txt_template = tk.Text(parent, font=(FONT_TYPEWRITER, 10), bg=THEME["bg_log"], fg=THEME["paper"], relief="solid", bd=1, height=18)
         self.txt_template.pack(fill="both", expand=True, pady=(0, 6))
         self.txt_template.insert("1.0", self.config.atomic_note_template)
 
     def _build_resetup_tab(self, parent):
-        tk.Label(parent, text="Asistente de Instalación y Re-Setup Completo:", font=("Georgia", 12, "bold"), fg=THEME["paper"], bg=THEME["bg_card"], anchor="w").pack(fill="x", pady=(0, 8))
+        tk.Label(parent, text="Asistente de Instalación y Re-Setup Completo:", font=(FONT_TYPEWRITER, 11, "bold"), fg=THEME["paper"], bg=THEME["bg_card"], anchor="w").pack(fill="x", pady=(0, 8))
 
         desc = "Si deseas volver a ejecutar el proceso completo de configuración inicial, puedes relanzar el instalador aquí."
-        tk.Label(parent, text=desc, font=("Georgia", 10), fg=THEME["muted"], bg=THEME["bg_card"], justify="left", anchor="w", wraplength=660).pack(fill="x", pady=(0, 16))
+        tk.Label(parent, text=desc, font=(FONT_TYPEWRITER, 9), fg=THEME["muted"], bg=THEME["bg_card"], justify="left", anchor="w", wraplength=660).pack(fill="x", pady=(0, 16))
 
         btn_run = tk.Button(
             parent,
-            text="🚀 Relanzar Asistente de Instalación Completo (Re-Setup)",
-            font=("Georgia", 11, "bold"),
+            text="Relanzar Asistente de Instalación Completo (Re-Setup)",
+            font=(FONT_TYPEWRITER, 10, "bold"),
             fg="#FFFFFF",
             bg=THEME["crimson"],
             activebackground=THEME["crimson_hover"],
@@ -744,7 +740,7 @@ class FunesSettingsModal(tk.Toplevel):
 
 
 class FunesControlConsole(tk.Tk):
-    """Consola Funes Estética Papiro con Concurrencia Desacoplada y Cuarentena."""
+    """Consola Funes 100% tipografía de máquina de escribir Courier."""
 
     def __init__(self, vault_path: Path):
         super().__init__()
@@ -813,7 +809,7 @@ class FunesControlConsole(tk.Tk):
         header_container = tk.Frame(self, bg=THEME["bg_root"], padx=30, pady=14)
         header_container.pack(side="top", fill="x")
 
-        tk.Label(header_container, text="═" * 120, font=("Courier", 10, "bold"), fg=THEME["border_gold"], bg=THEME["bg_root"]).pack(fill="x")
+        tk.Label(header_container, text="═" * 120, font=(FONT_TYPEWRITER, 10, "bold"), fg=THEME["border_gold"], bg=THEME["bg_root"]).pack(fill="x")
 
         m_frame = tk.Frame(header_container, bg=THEME["bg_root"], pady=4)
         m_frame.pack(fill="x")
@@ -821,17 +817,13 @@ class FunesControlConsole(tk.Tk):
         left_hdr = tk.Frame(m_frame, bg=THEME["bg_root"])
         left_hdr.pack(side="left")
 
-        title_lbl = tk.Label(left_hdr, text="F U N E S", font=("Georgia", 28, "bold"), fg=THEME["paper"], bg=THEME["bg_root"])
+        title_lbl = tk.Label(left_hdr, text="F U N E S", font=(FONT_TYPEWRITER, 26, "bold"), fg=THEME["paper"], bg=THEME["bg_root"])
         title_lbl.pack(side="left")
-
-        badge_privacy = tk.Label(left_hdr, text=" 🛡️ 100% Local & Privado ", font=("Inter", 9, "bold"), fg=THEME["green"], bg=THEME["bg_card"], relief="solid", bd=1)
-        badge_privacy.pack(side="left", padx=(12, 0))
-        ToolTip(badge_privacy, "Tus archivos y notas permanecen 100% en tu ordenador. Cero telemetría externa.")
 
         subtitle_lbl = tk.Label(
             m_frame,
-            text=f"Formateo Universal de Notas & Síntesis  •  Vault: {self.vault_path.name}",
-            font=("Georgia", 11, "italic"),
+            text="Formateo Universal de Notas & Síntesis",
+            font=(FONT_TYPEWRITER, 10, "italic"),
             fg=THEME["gold"],
             bg=THEME["bg_root"]
         )
@@ -842,8 +834,8 @@ class FunesControlConsole(tk.Tk):
 
         self.btn_flush = tk.Button(
             toolbar,
-            text="Procesar Documentos Nuevos",
-            font=("Georgia", 10, "bold"),
+            text="Actualizar Fuentes",
+            font=(FONT_TYPEWRITER, 10, "bold"),
             fg=THEME["paper"],
             bg=THEME["bg_card"],
             activebackground=THEME["bg_card_hover"],
@@ -855,29 +847,12 @@ class FunesControlConsole(tk.Tk):
             command=self._on_flush_click
         )
         self.btn_flush.pack(side="left", padx=(0, 8))
-        ToolTip(self.btn_flush, "Lee los documentos de 1_entrada, aplica OCR/Audio y genera notas en 4_salida.")
-
-        btn_cloud = tk.Button(
-            toolbar,
-            text="Fuentes Nube (SharePoint)",
-            font=("Georgia", 10, "bold"),
-            fg=THEME["paper"],
-            bg=THEME["bg_card"],
-            activebackground=THEME["bg_card_hover"],
-            relief="solid",
-            bd=1,
-            cursor="hand2",
-            padx=12,
-            pady=5,
-            command=self._on_cloud_sources_click
-        )
-        btn_cloud.pack(side="left", padx=(0, 8))
-        ToolTip(btn_cloud, "Configura carpetas de sincronización local o en la nube.")
+        ToolTip(self.btn_flush, "Sincroniza fuentes compartidas y procesa documentos nuevos.")
 
         btn_moc = tk.Button(
             toolbar,
             text="Actualizar Índice de Notas",
-            font=("Georgia", 10, "bold"),
+            font=(FONT_TYPEWRITER, 10, "bold"),
             fg=THEME["paper"],
             bg=THEME["bg_card"],
             activebackground=THEME["bg_card_hover"],
@@ -893,8 +868,8 @@ class FunesControlConsole(tk.Tk):
 
         btn_help = tk.Button(
             toolbar,
-            text="📖 Ayuda Rápida",
-            font=("Georgia", 10, "bold"),
+            text="Ayuda Rápida",
+            font=(FONT_TYPEWRITER, 10, "bold"),
             fg=THEME["paper"],
             bg=THEME["bg_card"],
             activebackground=THEME["bg_card_hover"],
@@ -910,8 +885,8 @@ class FunesControlConsole(tk.Tk):
 
         btn_settings = tk.Button(
             toolbar,
-            text="⚙️ Ajustes",
-            font=("Georgia", 10, "bold"),
+            text="Ajustes Avanzados",
+            font=(FONT_TYPEWRITER, 10, "bold"),
             fg=THEME["paper"],
             bg=THEME["bg_card"],
             activebackground=THEME["bg_card_hover"],
@@ -925,36 +900,37 @@ class FunesControlConsole(tk.Tk):
         btn_settings.pack(side="right")
         ToolTip(btn_settings, "Ajustes de Vault, modelo de IA, carpetas y re-instalador.")
 
-        tk.Label(header_container, text="═" * 120, font=("Courier", 10, "bold"), fg=THEME["border_gold"], bg=THEME["bg_root"]).pack(fill="x")
+        tk.Label(header_container, text="═" * 120, font=(FONT_TYPEWRITER, 10, "bold"), fg=THEME["border_gold"], bg=THEME["bg_root"]).pack(fill="x")
 
         status_strip = tk.Frame(self, bg=THEME["bg_card"], padx=20, pady=8, highlightbackground=THEME["border"], highlightthickness=1)
         status_strip.pack(side="top", fill="x", padx=30, pady=(0, 12))
 
-        tk.Label(status_strip, text="● Servidor IA Local:", font=("Georgia", 11, "bold"), fg=THEME["crimson"], bg=THEME["bg_card"]).pack(side="left", padx=(0, 4))
-        tk.Label(status_strip, textvariable=self.status_ollama_var, font=("Inter", 11), fg=THEME["paper"], bg=THEME["bg_card"]).pack(side="left", padx=(0, 25))
+        tk.Label(status_strip, text="● Motor de IA Local:", font=(FONT_TYPEWRITER, 10, "bold"), fg=THEME["crimson"], bg=THEME["bg_card"]).pack(side="left", padx=(0, 4))
+        tk.Label(status_strip, textvariable=self.status_ollama_var, font=(FONT_TYPEWRITER, 10), fg=THEME["paper"], bg=THEME["bg_card"]).pack(side="left", padx=(0, 25))
 
-        tk.Label(status_strip, text="● AnythingLLM:", font=("Georgia", 11, "bold"), fg=THEME["crimson"], bg=THEME["bg_card"]).pack(side="left", padx=(0, 4))
-        tk.Label(status_strip, textvariable=self.status_anything_var, font=("Inter", 11), fg=THEME["paper"], bg=THEME["bg_card"]).pack(side="left", padx=(0, 25))
+        tk.Label(status_strip, text="● Chat con Documentos:", font=(FONT_TYPEWRITER, 10, "bold"), fg=THEME["crimson"], bg=THEME["bg_card"]).pack(side="left", padx=(0, 4))
+        tk.Label(status_strip, textvariable=self.status_anything_var, font=(FONT_TYPEWRITER, 10), fg=THEME["paper"], bg=THEME["bg_card"]).pack(side="left", padx=(0, 25))
 
-        tk.Label(status_strip, text="● Obsidian Vault:", font=("Georgia", 11, "bold"), fg=THEME["crimson"], bg=THEME["bg_card"]).pack(side="left", padx=(0, 4))
-        tk.Label(status_strip, textvariable=self.status_obsidian_var, font=("Inter", 11), fg=THEME["paper"], bg=THEME["bg_card"]).pack(side="left")
+        tk.Label(status_strip, text="● Biblioteca de Notas:", font=(FONT_TYPEWRITER, 10, "bold"), fg=THEME["crimson"], bg=THEME["bg_card"]).pack(side="left", padx=(0, 4))
+        tk.Label(status_strip, textvariable=self.status_obsidian_var, font=(FONT_TYPEWRITER, 10), fg=THEME["paper"], bg=THEME["bg_card"]).pack(side="left")
 
         stats_frame = tk.Frame(self, bg=THEME["bg_root"], padx=25)
         stats_frame.pack(side="top", fill="x", pady=(0, 12))
 
-        self._create_stat_card(stats_frame, "Por Procesar", self.stat_input_var, THEME["gold"], 0)
-        self._create_stat_card(stats_frame, "Procesados", self.stat_processed_var, THEME["green"], 1)
-        self._create_stat_card(stats_frame, "Notas Atómicas", self.stat_notes_var, THEME["crimson"], 2)
-        
+        self._create_stat_card(stats_frame, "Archivos por Procesar", self.stat_input_var, THEME["gold"], 0)
+        self._create_stat_card(stats_frame, "Archivos Procesados", self.stat_processed_var, THEME["green"], 1)
+
         self.card_quarantine = self._create_stat_card_interactive(
             stats_frame,
             "En Cuarentena",
             self.stat_quarantine_var,
             THEME["red"],
-            3,
+            2,
             command=self._on_quarantine_click
         )
         ToolTip(self.card_quarantine, "Haz clic para ver y restaurar los archivos que tuvieron errores.")
+
+        self._create_stat_card(stats_frame, "Notas Preparadas", self.stat_notes_var, THEME["crimson"], 3)
 
         self.card_ram = self._create_stat_card_interactive(
             stats_frame,
@@ -967,8 +943,8 @@ class FunesControlConsole(tk.Tk):
 
         graph_section = tk.LabelFrame(
             self,
-            text=" FLUJO DE PROCESAMIENTO Y NODOS DE CONOCIMIENTO ",
-            font=("Georgia", 12, "bold"),
+            text=" FLUJO DE TRABAJO ",
+            font=(FONT_TYPEWRITER, 11, "bold"),
             fg=THEME["paper"],
             bg=THEME["bg_root"],
             padx=14,
@@ -981,38 +957,38 @@ class FunesControlConsole(tk.Tk):
         flow_container = tk.Frame(graph_section, bg=THEME["bg_root"])
         flow_container.pack(fill="x")
 
-        sg1 = tk.LabelFrame(flow_container, text=" 1. Recepción ", font=("Georgia", 9, "bold"), fg=THEME["gold"], bg=THEME["bg_card"], bd=1, relief="solid", padx=6, pady=6)
+        sg1 = tk.LabelFrame(flow_container, text=" 1. Recepción ", font=(FONT_TYPEWRITER, 9, "bold"), fg=THEME["gold"], bg=THEME["bg_card"], bd=1, relief="solid", padx=6, pady=6)
         sg1.grid(row=0, column=0, sticky="nsew", padx=3)
-        self.node1 = GraphProcessNode(sg1, step_tag="PASO 1", icon_str="", title_str="Entrada", desc_str="Documentos en 1_entrada", command=self._on_sync_click)
+        self.node1 = GraphProcessNode(sg1, step_tag="PASO 1", icon_str="", title_str="Recopilación de archivos en formato variado", desc_str="", command=self._on_sync_click)
         self.node1.pack(fill="both", expand=True)
 
-        lbl_arr1 = tk.Label(flow_container, text=" ═► ", font=("Courier", 14, "bold"), fg=THEME["gold"], bg=THEME["bg_root"])
+        lbl_arr1 = tk.Label(flow_container, text=" ═► ", font=(FONT_TYPEWRITER, 14, "bold"), fg=THEME["gold"], bg=THEME["bg_root"])
         lbl_arr1.grid(row=0, column=1)
 
-        sg2 = tk.LabelFrame(flow_container, text=" 2. Transcripción ", font=("Georgia", 9, "bold"), fg=THEME["gold"], bg=THEME["bg_card"], bd=1, relief="solid", padx=6, pady=6)
+        sg2 = tk.LabelFrame(flow_container, text=" 2. Transcripción ", font=(FONT_TYPEWRITER, 9, "bold"), fg=THEME["gold"], bg=THEME["bg_card"], bd=1, relief="solid", padx=6, pady=6)
         sg2.grid(row=0, column=2, sticky="nsew", padx=3)
-        self.node2 = GraphProcessNode(sg2, step_tag="PASO 2", icon_str="", title_str="OCR & Audio", desc_str="Backup verbatim y OCR", command=self._on_flush_click)
+        self.node2 = GraphProcessNode(sg2, step_tag="PASO 2", icon_str="", title_str="Traslado de la información a formato uniforme", desc_str="", command=self._on_flush_click)
         self.node2.pack(fill="both", expand=True)
 
-        lbl_arr2 = tk.Label(flow_container, text=" ═► ", font=("Courier", 14, "bold"), fg=THEME["gold"], bg=THEME["bg_root"])
+        lbl_arr2 = tk.Label(flow_container, text=" ═► ", font=(FONT_TYPEWRITER, 14, "bold"), fg=THEME["gold"], bg=THEME["bg_root"])
         lbl_arr2.grid(row=0, column=3)
 
-        sg3 = tk.LabelFrame(flow_container, text=" 3. Estructuración ", font=("Georgia", 9, "bold"), fg=THEME["gold"], bg=THEME["bg_card"], bd=1, relief="solid", padx=6, pady=6)
+        sg3 = tk.LabelFrame(flow_container, text=" 3. Estructuración ", font=(FONT_TYPEWRITER, 9, "bold"), fg=THEME["gold"], bg=THEME["bg_card"], bd=1, relief="solid", padx=6, pady=6)
         sg3.grid(row=0, column=4, sticky="nsew", padx=3)
-        self.node3 = GraphProcessNode(sg3, step_tag="PASO 3", icon_str="", title_str="Notas & Mapa", desc_str="Mapa e índice general", command=self._on_audit_click)
+        self.node3 = GraphProcessNode(sg3, step_tag="PASO 3", icon_str="", title_str="Preparación de notas inteligentes", desc_str="", command=self._on_audit_click)
         self.node3.pack(fill="both", expand=True)
 
-        lbl_arr3 = tk.Label(flow_container, text=" ═► ", font=("Courier", 14, "bold"), fg=THEME["gold"], bg=THEME["bg_root"])
+        lbl_arr3 = tk.Label(flow_container, text=" ═► ", font=(FONT_TYPEWRITER, 14, "bold"), fg=THEME["gold"], bg=THEME["bg_root"])
         lbl_arr3.grid(row=0, column=5)
 
-        sg4 = tk.LabelFrame(flow_container, text=" 4. Consulta ", font=("Georgia", 9, "bold"), fg=THEME["gold"], bg=THEME["bg_card"], bd=1, relief="solid", padx=6, pady=6)
+        sg4 = tk.LabelFrame(flow_container, text=" 4. Consulta ", font=(FONT_TYPEWRITER, 9, "bold"), fg=THEME["gold"], bg=THEME["bg_card"], bd=1, relief="solid", padx=6, pady=6)
         sg4.grid(row=0, column=6, sticky="nsew", padx=3)
         sub_flow = tk.Frame(sg4, bg=THEME["bg_card"])
         sub_flow.pack(fill="both", expand=True)
 
-        btn_obs = tk.Button(sub_flow, text="Memoria Obsidian", font=("Georgia", 10, "bold"), fg=THEME["paper"], bg=THEME["bg_card"], activebackground=THEME["bg_card_hover"], relief="solid", bd=1, cursor="hand2", command=self._on_obsidian_click, pady=4)
+        btn_obs = tk.Button(sub_flow, text="Funes el memorioso", font=(FONT_TYPEWRITER, 10, "bold"), fg=THEME["paper"], bg=THEME["bg_card"], activebackground=THEME["bg_card_hover"], relief="solid", bd=1, cursor="hand2", command=self._on_obsidian_click, pady=4)
         btn_obs.pack(fill="x", pady=(0, 2))
-        btn_chat = tk.Button(sub_flow, text="Chat AnythingLLM", font=("Georgia", 10, "bold"), fg=THEME["paper"], bg=THEME["bg_card"], activebackground=THEME["bg_card_hover"], relief="solid", bd=1, cursor="hand2", command=self._on_chat_click, pady=4)
+        btn_chat = tk.Button(sub_flow, text="Funes el conversador", font=(FONT_TYPEWRITER, 10, "bold"), fg=THEME["paper"], bg=THEME["bg_card"], activebackground=THEME["bg_card_hover"], relief="solid", bd=1, cursor="hand2", command=self._on_chat_click, pady=4)
         btn_chat.pack(fill="x")
 
         flow_container.grid_columnconfigure(0, weight=1)
@@ -1026,12 +1002,12 @@ class FunesControlConsole(tk.Tk):
         log_hdr = tk.Frame(log_frame, bg=THEME["bg_root"])
         log_hdr.pack(fill="x", pady=(0, 4))
 
-        tk.Label(log_hdr, text="── REGISTRO DE ACTIVIDAD Y PRENSA EN TIEMPO REAL ──", font=("Georgia", 12, "bold"), fg=THEME["paper"], bg=THEME["bg_root"]).pack(side="left")
+        tk.Label(log_hdr, text="── REGISTRO DE ACTIVIDAD ──", font=(FONT_TYPEWRITER, 11, "bold"), fg=THEME["paper"], bg=THEME["bg_root"]).pack(side="left")
 
         self.btn_toggle_path = tk.Button(
             log_hdr,
-            text="👁️ Rutas: Relativas",
-            font=("Inter", 9),
+            text="Rutas: Relativas",
+            font=(FONT_TYPEWRITER, 9),
             fg=THEME["paper"],
             bg=THEME["bg_card"],
             activebackground=THEME["bg_card_hover"],
@@ -1045,8 +1021,8 @@ class FunesControlConsole(tk.Tk):
 
         btn_clear_view = tk.Button(
             log_hdr,
-            text="Limpiar Vista",
-            font=("Inter", 9),
+            text="Limpiar Registro",
+            font=(FONT_TYPEWRITER, 9),
             fg=THEME["muted"],
             bg=THEME["bg_card"],
             activebackground=THEME["bg_card_hover"],
@@ -1060,7 +1036,7 @@ class FunesControlConsole(tk.Tk):
 
         self.log_console = tk.Text(
             log_frame,
-            font=("Courier", 11),
+            font=(FONT_TYPEWRITER, 11),
             bg=THEME["bg_log"],
             fg=THEME["paper"],
             insertbackground=THEME["crimson"],
@@ -1079,30 +1055,40 @@ class FunesControlConsole(tk.Tk):
         lbl_status_line = tk.Label(
             status_bar,
             textvariable=self.status_line_var,
-            font=("Inter", 9),
+            font=(FONT_TYPEWRITER, 9),
             fg=THEME["paper"],
             bg=THEME["bg_card"],
             anchor="w"
         )
         lbl_status_line.pack(side="left")
 
-        self._log("The Funes Gazette — Imprenta y registro iniciados correctamente. Estética Papiro activa.")
+        lbl_author = tk.Label(
+            status_bar,
+            text="'Funes' es una creación de Emilio Sevilla Ortego (funes_2026.1)",
+            font=(FONT_TYPEWRITER, 9),
+            fg=THEME["muted"],
+            bg=THEME["bg_card"],
+            anchor="e"
+        )
+        lbl_author.pack(side="right")
+
+        self._log("The Funes Gazette — Imprenta y registro iniciados correctamente.")
 
     def _create_stat_card(self, parent, title: str, var: tk.StringVar, color: str, col: int):
         card = tk.Frame(parent, bg=THEME["bg_card"], highlightbackground=THEME["border"], highlightthickness=1, padx=14, pady=10)
         card.grid(row=0, column=col, sticky="ew", padx=4)
         parent.grid_columnconfigure(col, weight=1)
-        tk.Label(card, text=title, font=("Georgia", 11), fg=THEME["muted"], bg=THEME["bg_card"], anchor="w").pack(fill="x")
-        tk.Label(card, textvariable=var, font=("Georgia", 28, "bold"), fg=color, bg=THEME["bg_card"], anchor="w").pack(fill="x", pady=(2, 0))
+        tk.Label(card, text=title, font=(FONT_TYPEWRITER, 10), fg=THEME["muted"], bg=THEME["bg_card"], anchor="w").pack(fill="x")
+        tk.Label(card, textvariable=var, font=(FONT_TYPEWRITER, 26, "bold"), fg=color, bg=THEME["bg_card"], anchor="w").pack(fill="x", pady=(2, 0))
         return card
 
     def _create_stat_card_interactive(self, parent, title: str, var: tk.StringVar, color: str, col: int, command=None):
         card = tk.Frame(parent, bg=THEME["bg_card"], highlightbackground=THEME["border"], highlightthickness=1, padx=14, pady=10, cursor="hand2" if command else "default")
         card.grid(row=0, column=col, sticky="ew", padx=4)
         parent.grid_columnconfigure(col, weight=1)
-        lbl_t = tk.Label(card, text=title, font=("Georgia", 11), fg=THEME["muted"], bg=THEME["bg_card"], anchor="w")
+        lbl_t = tk.Label(card, text=title, font=(FONT_TYPEWRITER, 10), fg=THEME["muted"], bg=THEME["bg_card"], anchor="w")
         lbl_t.pack(fill="x")
-        lbl_v = tk.Label(card, textvariable=var, font=("Georgia", 28, "bold"), fg=color, bg=THEME["bg_card"], anchor="w")
+        lbl_v = tk.Label(card, textvariable=var, font=(FONT_TYPEWRITER, 26, "bold"), fg=color, bg=THEME["bg_card"], anchor="w")
         lbl_v.pack(fill="x", pady=(2, 0))
 
         if command:
@@ -1141,7 +1127,7 @@ class FunesControlConsole(tk.Tk):
     def _on_toggle_path_mode(self):
         self.toggle_relative_paths = not self.toggle_relative_paths
         mode_str = "Rutas: Relativas" if self.toggle_relative_paths else "Rutas: Completas"
-        self.btn_toggle_path.config(text=f"👁️ {mode_str}")
+        self.btn_toggle_path.config(text=mode_str)
         self._log(f"[SISTEMA] Modo de visualización de rutas cambiado a: {mode_str}")
 
     def _on_clear_log_view(self):
@@ -1154,7 +1140,6 @@ class FunesControlConsole(tk.Tk):
         self.after(2000, _tick)
 
     def refresh_stats(self):
-        """Actualiza métricas y estado en hilo secundario."""
         def _bg_check():
             try:
                 out_files = list(self.config.vault.output_dir.glob("*.md")) if self.config.vault.output_dir.exists() else []
@@ -1184,14 +1169,14 @@ class FunesControlConsole(tk.Tk):
 
                 rec_model = self.config.custom_model_override or self.ram_governor.recommend_model()
                 if self.ram_governor.check_ollama_status():
-                    self.after(0, lambda: self.status_ollama_var.set(f"Activa ({rec_model})"))
+                    self.after(0, lambda: self.status_ollama_var.set(f"Disponible ({rec_model})"))
                 else:
-                    self.after(0, lambda: self.status_ollama_var.set("Inactiva"))
+                    self.after(0, lambda: self.status_ollama_var.set("No disponible"))
 
                 if is_anythingllm_installed():
-                    self.after(0, lambda: self.status_anything_var.set("Listo (Local)"))
+                    self.after(0, lambda: self.status_anything_var.set("Listo para usar (AnythingLLM)"))
                 else:
-                    self.after(0, lambda: self.status_anything_var.set("No detectado"))
+                    self.after(0, lambda: self.status_anything_var.set("No instalado"))
 
                 is_mac = sys.platform == "darwin"
                 if is_mac:
@@ -1201,7 +1186,7 @@ class FunesControlConsole(tk.Tk):
                     prog_files = Path(os.environ.get("ProgramFiles", "")) / "Obsidian" / "Obsidian.exe"
                     obs_installed = local_app.exists() or prog_files.exists()
 
-                self.after(0, lambda: self.status_obsidian_var.set("Listo" if obs_installed else "No detectado"))
+                self.after(0, lambda: self.status_obsidian_var.set("Conectada y lista (Obsidian)" if obs_installed else "No detectada"))
 
                 st_text = "En Proceso" if self._task_in_progress else "Listo"
                 curr_time = time.strftime("%H:%M")
@@ -1278,37 +1263,48 @@ class FunesControlConsole(tk.Tk):
 
         def _run_flush():
             try:
-                self._log("📥 [PASO 2] Procesando documentos en 1_entrada...")
-
+                # 1. Escaneo cuantitativo
+                local_files = [f for f in self.config.vault.input_dir.glob("*") if f.is_file() and not f.name.startswith(".")]
                 copied = self.sync_manager.sync_to_input(self.config.vault.input_dir)
-                if copied > 0:
-                    self._log(f"[+] Sincronizados {copied} archivo(s) desde fuentes externas.")
+                total_scanned = len(local_files) + copied
+                self._log(f"Se escanearon {total_scanned} archivos: {len(local_files)} en 1_entrada & {copied} en carpetas compartidas")
 
+                # 2. Procesamiento cuantitativo
                 pipeline = ETLPipeline(self.config)
                 input_files = [f for f in self.config.vault.input_dir.glob("*") if f.is_file() and not f.name.startswith(".")]
 
+                docs_count = 0
+                audio_count = 0
+
                 if input_files:
-                    self._log(f"Procesando {len(input_files)} documento(s)...")
                     for file_path in input_files:
-                        self._log(f"  • Leyendo: {file_path.name}")
+                        ext = file_path.suffix.lower()
+                        if ext in ['.mp3', '.wav', '.m4a', '.flac', '.ogg', '.aac']:
+                            audio_count += 1
+                        else:
+                            docs_count += 1
                         try:
                             pipeline.process_file(file_path)
                         except Exception as file_err:
-                            self._log(f"❌ Error al procesar {file_path.name}. Moviendo a Cuarentena...")
+                            self._log(f"[ERROR] Error al procesar {file_path.name}. Moviendo a Cuarentena...")
                             self.quarantine_mgr.quarantine_file(file_path, str(file_err))
 
+                    self._log(f"Se procesaron {len(input_files)} archivos: {docs_count} documentos & {audio_count} audios")
                 else:
-                    self._log("No se encontraron documentos nuevos en 1_entrada.")
+                    self._log("Se procesaron 0 archivos (1_entrada limpia).")
 
-                self._log("📥 [PASO 3] Conectando notas y actualizando el índice de conocimiento...")
+                # 3. Estructuración cuantitativa
+                notes_before = len(list(self.config.vault.output_dir.glob("*.md"))) if self.config.vault.output_dir.exists() else 0
                 karpathy = KarpathyGraphLoop(self.config.vault.output_dir)
                 karpathy.refine_knowledge_graph()
+                notes_after = len(list(self.config.vault.output_dir.glob("*.md"))) if self.config.vault.output_dir.exists() else 0
 
                 configure_anythingllm_integration(self.config.vault.output_dir)
 
-                self._log("✓ Proceso completado con éxito. Notas e IA listos para consultar.")
+                self._log(f"Se generaron {notes_after} notas preparadas")
+
             except Exception as e:
-                self._log(f"❌ Error en pipeline: {e}")
+                self._log(f"Error en procesamiento: {e}")
             finally:
                 self._task_in_progress = False
                 self.after(0, lambda: self.node2.set_status("● Ok", THEME["green"]))
@@ -1318,33 +1314,37 @@ class FunesControlConsole(tk.Tk):
         threading.Thread(target=_run_flush, daemon=True).start()
 
     def _on_chat_click(self):
-        self._log("Abriendo asistente de chat AnythingLLM...")
         if not launch_anythingllm():
-            self._log("AnythingLLM no se encuentra instalado. ¿Deseas descargarlo?")
+            self._log("AnythingLLM no se encuentra instalado o no pudo iniciarse.")
             ans = messagebox.askyesno("AnythingLLM no encontrado", "AnythingLLM no está instalado o no se encuentra. ¿Deseas abrir la página oficial para descargarlo?")
             if ans:
                 webbrowser.open("https://anythingllm.com")
+        else:
+            self._log("Aplicación de chat AnythingLLM iniciada")
 
     def _on_obsidian_click(self):
-        self._log(f"Abriendo La Memoria de Funes en {self.vault_path}...")
         try:
             if not launch_obsidian(self.vault_path):
                 self._log("Obsidian no se encuentra instalado o no pudo abrirse automáticamente.")
                 ans = messagebox.askyesno("Obsidian no encontrado", "Obsidian no está instalado o no se encuentra. ¿Deseas abrir la página de descarga oficial?")
                 if ans:
                     webbrowser.open("https://obsidian.md")
+            else:
+                self._log("Biblioteca de notas 'La Memoria de Funes' abierta en Obsidian")
         except Exception as e:
             self._log(f"Error abriendo La Memoria de Funes: {e}")
 
     def _on_sync_click(self):
         modal = FolderSyncModal(self, self.sync_manager)
         self.wait_window(modal)
+
+        local_files = [f for f in self.config.vault.input_dir.glob("*") if f.is_file() and not f.name.startswith(".")]
+        copied = self.sync_manager.load_connected_folders()
+        self._log(f"Se escanearon {len(local_files)} archivos en 1_entrada & {len(copied)} carpetas compartidas vinculadas")
         self.refresh_stats()
 
     def _on_cloud_sources_click(self):
-        modal = FolderSyncModal(self, self.sync_manager)
-        self.wait_window(modal)
-        self.refresh_stats()
+        self._on_sync_click()
 
     def _on_reindex_click(self):
         self._on_audit_click()
@@ -1359,12 +1359,12 @@ class FunesControlConsole(tk.Tk):
 
         def _run_audit():
             try:
-                self._log("🛡️ [PASO 3] Conectando notas y actualizando el índice de conocimiento...")
                 karpathy = KarpathyGraphLoop(self.config.vault.output_dir)
                 karpathy.refine_knowledge_graph()
-                self._log("✓ Conexión e índice actualizados correctamente.")
+                valid_notes = len(list(self.config.vault.output_dir.glob("*.md"))) if self.config.vault.output_dir.exists() else 0
+                self._log(f"Se generaron {valid_notes} notas preparadas")
             except Exception as e:
-                self._log(f"❌ Error en actualización de índice: {e}")
+                self._log(f"Error en actualización de índice: {e}")
             finally:
                 self._task_in_progress = False
                 self.after(0, lambda: self.node3.set_status("● Ok", THEME["green"]))

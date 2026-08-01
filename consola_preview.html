@@ -6,9 +6,9 @@
     <title>Funes Control Console — Estética Papiro (Vista Previa Definitiva)</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,600;0,700;0,800;1,400&family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
     <style>
-        /* DESIGN SYSTEM ESTÉTICA PAPIRO DEFINITIVA */
+        /* DESIGN SYSTEM ESTÉTICA PAPIRO - TIPOGRAFÍA MÁQUINA DE ESCRIBIR EN TODO EL TEXTO */
         :root {
             --bg-root: #DCD4C7;
             --bg-card: #EAE2D5;
@@ -21,30 +21,34 @@
             --paper: #161411;
             --muted: #5E564B;
             --gold: #2E2B25;
-            --font-serif: 'Playfair Display', Georgia, serif;
-            --font-mono: 'JetBrains Mono', monospace;
-            --font-sans: 'Inter', sans-serif;
-            --card-radius: 8px;
+            --green: #16A34A;
+            --amber: #D97706;
+            --red: #DC2626;
+            --font-mono: 'JetBrains Mono', 'Courier New', Courier, monospace;
+            --card-radius: 6px;
             --border-width: 1px;
             --shadow: 0 4px 18px rgba(0,0,0,0.06);
-            --badge-bg: rgba(22, 20, 17, 0.07);
-            --badge-fg: #161411;
         }
 
-        * { box-sizing: border-box; margin: 0; padding: 0; }
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: var(--font-mono) !important;
+        }
 
         body {
             background-color: var(--bg-root);
             color: var(--paper);
-            font-family: var(--font-sans);
+            font-family: var(--font-mono);
             min-height: 100vh;
             padding: 24px 36px;
             display: flex;
             flex-direction: column;
-            gap: 20px;
+            gap: 18px;
         }
 
-        /* 1. CABECERA EDITORIAL PAPIRO (3 NIVELES) */
+        /* 1. CABECERA EDITORIAL PAPIRO */
         .masthead-container {
             display: flex;
             flex-direction: column;
@@ -53,104 +57,65 @@
             padding-bottom: 16px;
         }
 
-        .header-meta {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            font-family: var(--font-mono);
-            font-size: 0.76rem;
-            color: var(--muted);
-            border-bottom: 1px solid var(--border);
-            padding-bottom: 8px;
-        }
-
-        .breadcrumbs {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-        }
-
-        .breadcrumb-active {
-            color: var(--accent);
-            font-weight: 700;
-        }
-
-        .meta-right {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-
-        .badge-tag {
-            background-color: var(--badge-bg);
-            color: var(--badge-fg);
-            font-family: var(--font-mono);
-            font-size: 0.72rem;
-            font-weight: 700;
-            padding: 3px 8px;
-            border-radius: 4px;
-            border: 1px solid var(--border);
-        }
-
         .masthead-main {
             display: flex;
-            flex-direction: column;
-            gap: 4px;
+            justify-content: space-between;
+            align-items: flex-end;
         }
 
         .masthead-title {
-            font-family: var(--font-serif);
-            font-size: 2.8rem;
+            font-size: 2.6rem;
             font-weight: 800;
-            letter-spacing: 2px;
+            letter-spacing: 3px;
             color: var(--paper);
             line-height: 1;
         }
 
         .masthead-tagline {
-            font-family: var(--font-serif);
             font-style: italic;
-            font-size: 0.95rem;
+            font-size: 0.9rem;
             color: var(--muted);
+            margin-top: 4px;
         }
 
         /* BARRA DE HERRAMIENTAS UNIFICADA */
         .toolbar-bar {
             display: flex;
             align-items: center;
+            justify-content: space-between;
             gap: 10px;
             flex-wrap: wrap;
             margin-top: 4px;
         }
 
-        /* DESIGN SYSTEM DE BOTONES UNIFICADOS PAPIRO */
+        .toolbar-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
         .btn-secondary, .btn-primary {
             background-color: var(--bg-card);
             color: var(--paper);
             border: 1px solid var(--border-accent);
-            font-family: var(--font-sans);
-            font-size: 0.82rem;
+            font-size: 0.8rem;
             font-weight: 700;
-            padding: 9px 18px;
+            padding: 8px 16px;
             border-radius: var(--card-radius);
             cursor: pointer;
             transition: all 0.2s ease;
             display: inline-flex;
             align-items: center;
             gap: 6px;
-            position: relative;
-            overflow: hidden;
         }
 
         .btn-secondary:hover, .btn-primary:hover {
             background-color: var(--bg-card-hover);
-            border-color: var(--border-accent);
-            color: var(--paper); /* Texto tinta espresso 100% visible */
             transform: translateY(-1px);
             box-shadow: 0 2px 8px rgba(0,0,0,0.08);
         }
 
-        /* 2. LAYOUT PRINCIPAL FULL-WIDTH (ANCHO COMPLETO) */
+        /* LAYOUT PRINCIPAL */
         .layout-full {
             display: flex;
             flex-direction: column;
@@ -179,23 +144,21 @@
         }
 
         .status-label {
-            font-family: var(--font-sans);
             font-weight: 700;
-            font-size: 0.82rem;
+            font-size: 0.8rem;
             color: var(--accent);
         }
 
         .status-val {
-            font-family: var(--font-mono);
-            font-size: 0.82rem;
+            font-size: 0.8rem;
             color: var(--paper);
         }
 
         /* STATS GRID */
         .stats-grid {
             display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 16px;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 14px;
         }
 
         .stat-card {
@@ -203,44 +166,53 @@
             border: var(--border-width) solid var(--border);
             box-shadow: var(--shadow);
             border-radius: var(--card-radius);
-            padding: 16px 20px;
+            padding: 14px 18px;
             display: flex;
             flex-direction: column;
-            gap: 6px;
+            gap: 4px;
+            transition: transform 0.2s ease;
+        }
+
+        .stat-card.interactive {
+            cursor: pointer;
+        }
+
+        .stat-card.interactive:hover {
+            transform: translateY(-2px);
+            background-color: var(--bg-card-hover);
         }
 
         .stat-title {
-            font-family: var(--font-serif);
-            font-size: 0.88rem;
+            font-size: 0.82rem;
             color: var(--muted);
         }
 
         .stat-num {
-            font-family: var(--font-mono);
-            font-size: 2.3rem;
+            font-size: 2rem;
             font-weight: 700;
             color: var(--accent);
         }
 
-        /* 3. GRAFO VISUAL DE ARQUITECTURA (4 ETAPAS) */
+        .stat-num.red { color: var(--red); }
+        .stat-num.green { color: var(--green); }
+        .stat-num.gold { color: var(--gold); }
+
+        /* GRAFO VISUAL */
         .graph-section {
             background-color: var(--bg-card);
             border: var(--border-width) solid var(--border);
             box-shadow: var(--shadow);
             border-radius: var(--card-radius);
-            padding: 20px;
+            padding: 18px;
             display: flex;
             flex-direction: column;
-            gap: 14px;
-            position: relative;
+            gap: 12px;
         }
 
         .graph-title {
-            font-family: var(--font-serif);
-            font-size: 1.05rem;
+            font-size: 0.95rem;
             font-weight: 700;
             color: var(--paper);
-            letter-spacing: 0.5px;
             text-align: center;
             border-bottom: 1px solid var(--border);
             padding-bottom: 8px;
@@ -260,24 +232,34 @@
             padding: 12px;
             display: flex;
             flex-direction: column;
-            gap: 10px;
+            gap: 8px;
             height: 100%;
         }
 
-        .subgraph-title {
-            font-family: var(--font-mono);
-            font-size: 0.74rem;
-            font-weight: 700;
-            color: var(--gold);
+        .subgraph-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
             border-bottom: 1px solid var(--border);
             padding-bottom: 6px;
         }
 
+        .subgraph-title {
+            font-size: 0.74rem;
+            font-weight: 700;
+            color: var(--gold);
+        }
+
+        .node-badge {
+            font-size: 0.7rem;
+            font-weight: 700;
+            color: var(--green);
+        }
+
         .arrow-connector {
             color: var(--accent);
-            font-family: var(--font-mono);
             font-weight: 700;
-            font-size: 1.3rem;
+            font-size: 1.2rem;
             text-align: center;
         }
 
@@ -285,11 +267,9 @@
             background-color: var(--bg-card);
             border: var(--border-width) solid var(--border-accent);
             border-radius: var(--card-radius);
-            padding: 12px;
+            padding: 10px 12px;
             cursor: pointer;
             transition: all 0.2s ease;
-            position: relative;
-            overflow: hidden;
         }
 
         .node-card:hover {
@@ -299,59 +279,25 @@
         }
 
         .node-tag {
-            font-family: var(--font-mono);
             font-size: 0.68rem;
             font-weight: 700;
             color: var(--gold);
         }
 
         .node-name {
-            font-family: var(--font-serif);
             font-weight: 700;
-            font-size: 0.95rem;
+            font-size: 0.9rem;
             color: var(--paper);
-            margin: 4px 0 2px 0;
+            margin: 3px 0 2px 0;
         }
 
         .node-desc {
-            font-family: var(--font-sans);
-            font-size: 0.76rem;
+            font-size: 0.74rem;
             color: var(--muted);
             line-height: 1.3;
         }
 
-        /* EFECTO DE DESTELLO DIAGONAL OSCURO AL PULSAR (SHIMMER SWEEP) */
-        .pulse-effect {
-            position: absolute;
-            top: 0;
-            left: -150%;
-            width: 100%;
-            height: 100%;
-            background: linear-gradient(
-                115deg,
-                transparent 0%,
-                rgba(22, 20, 17, 0.05) 25%,
-                rgba(22, 20, 17, 0.35) 50%,
-                rgba(22, 20, 17, 0.05) 75%,
-                transparent 100%
-            );
-            transform: skewX(-25deg);
-            animation: diagonalShimmer 0.65s ease-out forwards;
-            pointer-events: none;
-        }
-
-        @keyframes diagonalShimmer {
-            0% {
-                left: -130%;
-                opacity: 0.9;
-            }
-            100% {
-                left: 170%;
-                opacity: 0;
-            }
-        }
-
-        /* 4. LOG CONSOLE */
+        /* LOG CONSOLE */
         .log-section {
             background-color: var(--bg-card);
             border: var(--border-width) solid var(--border);
@@ -364,8 +310,7 @@
         }
 
         .log-header {
-            font-family: var(--font-serif);
-            font-size: 0.88rem;
+            font-size: 0.85rem;
             font-weight: 700;
             color: var(--accent);
             display: flex;
@@ -373,12 +318,31 @@
             align-items: center;
         }
 
+        .log-actions {
+            display: flex;
+            gap: 6px;
+        }
+
+        .btn-small {
+            background-color: var(--bg-root);
+            border: 1px solid var(--border);
+            color: var(--paper);
+            font-size: 0.74rem;
+            font-weight: 600;
+            padding: 3px 8px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        .btn-small:hover {
+            background-color: var(--bg-card-hover);
+        }
+
         .log-console {
             background-color: var(--bg-log);
             border: 1px solid var(--border);
             border-radius: 6px;
             padding: 12px 16px;
-            font-family: var(--font-mono);
             font-size: 0.8rem;
             color: var(--paper);
             min-height: 130px;
@@ -389,50 +353,111 @@
             gap: 5px;
         }
 
-        .log-time {
-            color: var(--gold);
-            font-weight: 700;
+        .log-time { color: var(--gold); font-weight: 700; }
+
+        /* BARRA DE ESTADO MINIMALISTA INFERIOR */
+        .bottom-status-bar {
+            background-color: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--card-radius);
+            padding: 6px 16px;
+            font-size: 0.78rem;
+            color: var(--paper);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
         }
 
-        .log-tag {
-            color: var(--accent);
-            font-weight: 700;
+        /* MODALES PAPIRO FLOTANTES */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background-color: rgba(22, 20, 17, 0.4);
+            backdrop-filter: blur(3px);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .modal-container {
+            background-color: var(--bg-root);
+            border: 2px solid var(--border-accent);
+            border-radius: var(--card-radius);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            width: 700px;
+            max-width: 90%;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .modal-header {
+            background-color: var(--bg-card);
+            border-bottom: 1px solid var(--border);
+            padding: 14px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .modal-title {
+            font-size: 1.05rem;
+            font-weight: 800;
+            color: var(--paper);
+        }
+
+        .modal-body {
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+            max-height: 450px;
+            overflow-y: auto;
+        }
+
+        .modal-footer {
+            background-color: var(--bg-card);
+            border-top: 1px solid var(--border);
+            padding: 12px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .close-btn {
+            background: none;
+            border: none;
+            font-size: 1.2rem;
+            cursor: pointer;
+            color: var(--muted);
         }
     </style>
 </head>
 <body>
 
-    <!-- CABECERA EDITORIAL PAPIRO (3 NIVELES) -->
+    <!-- CABECERA EDITORIAL PAPIRO -->
     <div class="masthead-container">
-        <!-- NIVEL 1: NAV METADATOS & RELOJ -->
-        <div class="header-meta">
-            <div class="breadcrumbs">
-                <span>Funes Knowledge Intelligence</span> / <span>ETL Engine</span> / <span class="breadcrumb-active">La_Memoria_de_Funes</span>
-            </div>
-            <div class="meta-right">
-                <span class="badge-tag">★ ESTÉTICA PAPIRO DEFINITIVA</span>
-                <span class="badge-tag" id="clock">00:00:00</span>
-            </div>
-        </div>
-
-        <!-- NIVEL 2: TÍTULO EDITORIAL ERUDITO CON ACRÓNIMO F.U.N.E.S. -->
         <div class="masthead-main">
-            <h1 class="masthead-title">F U N E S</h1>
-            <div class="masthead-tagline">Formateo Universal de Notas, Estructuración y Síntesis</div>
+            <div>
+                <h1 class="masthead-title">F U N E S</h1>
+                <div class="masthead-tagline">Formateo Universal de Notas, Estructuración y Síntesis</div>
+            </div>
         </div>
 
-        <!-- NIVEL 3: BARRA DE HERRAMIENTAS UNIFICADA -->
         <div class="toolbar-bar">
-            <button class="btn-secondary" onclick="triggerWikiPulse(this, 'Procesando documentos nuevos en carpeta de entrada...')">
-                Procesar Documentos Nuevos
-            </button>
-            <button class="btn-secondary" onclick="triggerWikiPulse(this, 'Abriendo modal de auto-detección de Fuentes Nube (SharePoint & OneDrive)...')">
-                Fuentes Nube (SharePoint)
-            </button>
-            <button class="btn-secondary" onclick="triggerWikiPulse(this, 'Re-evaluando hipervínculos de notas y actualizando mapa de contenidos...')">
-                Actualizar Índice de Notas
-            </button>
-            <button class="btn-secondary" onclick="triggerWikiPulse(this, 'Abriendo panel de Ajustes Avanzados...')">
+            <div class="toolbar-group">
+                <button class="btn-secondary" onclick="log('Se escanearon 12 archivos: 9 en 1_entrada & 3 en carpetas compartidas')">
+                    Actualizar Fuentes
+                </button>
+                <button class="btn-secondary" onclick="log('Se generaron 142 notas preparadas')">
+                    Actualizar Índice de Notas
+                </button>
+                <button class="btn-secondary" onclick="log('Guía de usuario local consultada')">
+                    Ayuda Rápida
+                </button>
+            </div>
+            <button class="btn-secondary" onclick="openModal('modal-settings')">
                 Ajustes Avanzados
             </button>
         </div>
@@ -444,15 +469,15 @@
         <div class="status-strip">
             <div class="status-item">
                 <span class="status-label">● MOTOR DE IA LOCAL:</span>
-                <span class="status-val" id="status-ollama">Activo (Qwen 2.5 7B)</span>
+                <span class="status-val" id="status-ollama">Disponible (Qwen 2.5 7B)</span>
             </div>
             <div class="status-item">
-                <span class="status-label">● ASISTENTE DE CONSULTAS:</span>
-                <span class="status-val" id="status-anything">Listo (AnythingLLM)</span>
+                <span class="status-label">● CHAT CON DOCUMENTOS:</span>
+                <span class="status-val" id="status-anything">Listo para usar (AnythingLLM)</span>
             </div>
             <div class="status-item">
-                <span class="status-label">● BASE DE CONOCIMIENTO:</span>
-                <span class="status-val" id="status-obsidian">Listo (Obsidian)</span>
+                <span class="status-label">● BIBLIOTECA DE NOTAS:</span>
+                <span class="status-val" id="status-obsidian">Conectada y lista (Obsidian)</span>
             </div>
         </div>
 
@@ -460,67 +485,80 @@
         <div class="stats-grid">
             <div class="stat-card">
                 <div class="stat-title">Archivos por Procesar</div>
-                <div class="stat-num" id="stat-input">3</div>
+                <div class="stat-num gold" id="stat-input">3</div>
             </div>
             <div class="stat-card">
                 <div class="stat-title">Archivos Procesados</div>
-                <div class="stat-num" id="stat-processed">4</div>
+                <div class="stat-num green" id="stat-processed">4</div>
+            </div>
+            <div class="stat-card interactive" onclick="openModal('modal-quarantine')">
+                <div class="stat-title">En Cuarentena</div>
+                <div class="stat-num red" id="stat-quarantine">1</div>
             </div>
             <div class="stat-card">
-                <div class="stat-title">Notas Generadas</div>
+                <div class="stat-title">Notas Preparadas</div>
                 <div class="stat-num" id="stat-notes">142</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-title">Consumo RAM</div>
+                <div class="stat-num" id="stat-ram">18%</div>
             </div>
         </div>
 
         <!-- GRAFO VISUAL DE ARQUITECTURA (4 ETAPAS) -->
         <div class="graph-section" id="graph-section">
-            <div class="graph-title">FLUJO DE PROCESAMIENTO Y MEMORIA</div>
+            <div class="graph-title">FLUJO DE TRABAJO</div>
             
             <div class="subgraphs-container">
-                <!-- SUBGRAFO 1 -->
                 <div class="subgraph-box">
-                    <div class="subgraph-title">1. Recepción</div>
-                    <div class="node-card" onclick="triggerWikiPulse(this, 'Paso 1: Escaneando carpeta 1_entrada y fuentes de nube...')">
+                    <div class="subgraph-header">
+                        <span class="subgraph-title">1. Recepción</span>
+                        <span class="node-badge">● Ok</span>
+                    </div>
+                    <div class="node-card" onclick="log('Se escanearon 12 archivos: 9 en 1_entrada & 3 en carpetas compartidas')">
                         <div class="node-tag">── PASO 1 ──</div>
-                        <div class="node-name">Entrada de Archivos</div>
-                        <div class="node-desc">Documentos, imágenes y audios en 1_entrada</div>
+                        <div class="node-name">Recopilación de archivos en formato variado</div>
                     </div>
                 </div>
 
                 <div class="arrow-connector">═►</div>
 
-                <!-- SUBGRAFO 2 -->
                 <div class="subgraph-box">
-                    <div class="subgraph-title">2. Lectura & Transcripción</div>
-                    <div class="node-card" onclick="triggerWikiPulse(this, 'Paso 2: Procesando lectura OCR Tesseract y transcripción de voz...')">
+                    <div class="subgraph-header">
+                        <span class="subgraph-title">2. Transcripción</span>
+                        <span class="node-badge">● Ok</span>
+                    </div>
+                    <div class="node-card" onclick="log('Se procesaron 11 archivos: 6 documentos & 5 audios')">
                         <div class="node-tag">── PASO 2 ──</div>
-                        <div class="node-name">Resguardo & OCR/Voz</div>
-                        <div class="node-desc">Backup verbatim, OCR Tesseract, Whisper</div>
+                        <div class="node-name">Traslado de la información a formato uniforme</div>
                     </div>
                 </div>
 
                 <div class="arrow-connector">═►</div>
 
-                <!-- SUBGRAFO 3 -->
                 <div class="subgraph-box">
-                    <div class="subgraph-title">3. Estructuración</div>
-                    <div class="node-card" onclick="triggerWikiPulse(this, 'Paso 3: Generando notas atómicas e interconectando el índice...')">
+                    <div class="subgraph-header">
+                        <span class="subgraph-title">3. Estructuración</span>
+                        <span class="node-badge">● Ok</span>
+                    </div>
+                    <div class="node-card" onclick="log('Se generaron 142 notas preparadas')">
                         <div class="node-tag">── PASO 3 ──</div>
-                        <div class="node-name">Notas & Mapa Global</div>
-                        <div class="node-desc">Notas interconectadas e índice general</div>
+                        <div class="node-name">Preparación de notas inteligentes</div>
                     </div>
                 </div>
 
                 <div class="arrow-connector">═►</div>
 
-                <!-- SUBGRAFO 4 -->
                 <div class="subgraph-box">
-                    <div class="subgraph-title">4. Consulta</div>
-                    <button class="btn-secondary" style="width: 100%; justify-content: center;" onclick="triggerWikiPulse(this, 'Lanzando aplicación Obsidian para abrir La Memoria de Funes...')">
-                        La Memoria de Funes
+                    <div class="subgraph-header">
+                        <span class="subgraph-title">4. Consulta</span>
+                        <span class="node-badge">● Ok</span>
+                    </div>
+                    <button class="btn-secondary" style="width: 100%; justify-content: center;" onclick="log('Biblioteca de notas \'La Memoria de Funes\' abierta en Obsidian')">
+                        Funes el memorioso
                     </button>
-                    <button class="btn-secondary" style="width: 100%; justify-content: center;" onclick="triggerWikiPulse(this, 'Lanzando aplicación de escritorio nativa de AnythingLLM...')">
-                        Chat IA AnythingLLM
+                    <button class="btn-secondary" style="width: 100%; justify-content: center;" onclick="log('Aplicación de chat AnythingLLM iniciada')">
+                        Funes el conversador
                     </button>
                 </div>
             </div>
@@ -529,50 +567,112 @@
         <!-- LOG CONSOLE DE AUDITORÍA -->
         <div class="log-section">
             <div class="log-header">
-                <span>── REGISTRO DE ACTIVIDAD EN TIEMPO REAL ──</span>
-                <span class="badge-tag">LIVE AUDIT LOGS</span>
+                <span>── REGISTRO DE ACTIVIDAD ──</span>
+                <div class="log-actions">
+                    <button class="btn-small" onclick="togglePathMode(this)">Rutas: Relativas</button>
+                    <button class="btn-small" onclick="clearLogView()">Limpiar Registro</button>
+                </div>
             </div>
             <div class="log-console" id="log-console">
-                <div><span class="log-time">[21:35:00]</span> <span class="log-tag">[PAPIRO]</span> Estética Papiro Definitiva activada con Layout Full-Width.</div>
-                <div><span class="log-time">[21:35:01]</span> <span class="log-tag">[UI/UX]</span> Sistema Unificado de Botones configurado: Primario (Espresso) y Secundarios (Pergamino).</div>
+                <div><span class="log-time">[17:35:00]</span> Se escanearon 12 archivos: 9 en 1_entrada & 3 en carpetas compartidas</div>
+                <div><span class="log-time">[17:35:01]</span> Se procesaron 4 archivos: 3 documentos & 1 audio</div>
+                <div><span class="log-time">[17:35:02]</span> Se generaron 142 notas preparadas</div>
+            </div>
+        </div>
+
+        <!-- LÍNEA DE ESTADO MINIMALISTA INFERIOR -->
+        <div class="bottom-status-bar">
+            <span>Estado: Listo • Vault: Funes_Vault • RAM: 18% • 16:56</span>
+            <span style="font-size: 0.78rem; color: var(--muted);">'Funes' es una creación de Emilio Sevilla Ortego (funes_2026.1)</span>
+        </div>
+    </div>
+
+    <!-- MODAL CUARENTENA -->
+    <div class="modal-overlay" id="modal-quarantine">
+        <div class="modal-container">
+            <div class="modal-header">
+                <div class="modal-title" style="color: var(--red);">ARCHIVOS EN CUARENTENA</div>
+                <button class="close-btn" onclick="closeModal('modal-quarantine')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div style="background-color: var(--bg-card); border: 1px solid var(--border); padding: 14px; border-radius: 6px;">
+                    <div style="display: flex; justify-content: space-between; font-weight: 700;">
+                        <span>Archivo: documento_corrupto.pdf</span>
+                        <span style="font-size: 0.78rem; color: var(--muted);">2026-08-01 14:20</span>
+                    </div>
+                    <div style="font-size: 0.85rem; margin-top: 6px; color: var(--paper);">
+                        Causa: El documento está protegido con contraseña o cifrado.
+                    </div>
+                    <div style="margin-top: 10px; display: flex; gap: 8px;">
+                        <button class="btn-secondary" style="background-color: var(--green); color: white; border: none;" onclick="alert('Archivo restaurado a 1_entrada')">Restaurar y Reintentar</button>
+                        <button class="btn-secondary" onclick="alert('Stack trace: PyPDF2.utils.PdfReadError: File has not been decrypted')">Más Detalles</button>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <span style="font-size: 0.8rem; color: var(--muted);">Aislamiento seguro de archivos ilegibles sin detener el motor.</span>
+                <button class="btn-secondary" onclick="closeModal('modal-quarantine')">Cerrar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL AJUSTES -->
+    <div class="modal-overlay" id="modal-settings">
+        <div class="modal-container">
+            <div class="modal-header">
+                <div class="modal-title">AJUSTES AVANZADOS Y CONFIGURACIÓN FUNES</div>
+                <button class="close-btn" onclick="closeModal('modal-settings')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div style="display: flex; gap: 10px; border-bottom: 1px solid var(--border); padding-bottom: 8px;">
+                    <button class="btn-small" style="font-weight: 700;">Rutas & Vault</button>
+                    <button class="btn-small">Servidor & IA</button>
+                    <button class="btn-small">Plantilla Nota</button>
+                    <button class="btn-small">Re-Setup</button>
+                </div>
+                <div style="display: flex; flex-direction: column; gap: 8px;">
+                    <label style="font-size: 0.85rem; font-weight: 700;">Ruta Principal del Vault:</label>
+                    <input type="text" value="/Users/usuario/Documents/Funes_Vault" style="padding: 8px; border: 1px solid var(--border); background-color: var(--bg-log); border-radius: 4px;">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <span style="font-size: 0.8rem; color: var(--muted); font-weight: 700;">Funes trabaja sin salir de tu dispositivo (100% Local).</span>
+                <button class="btn-secondary" style="background-color: var(--accent); color: white;" onclick="closeModal('modal-settings')">Guardar Ajustes</button>
             </div>
         </div>
     </div>
 
     <script>
-        // Actualizador de reloj
-        setInterval(() => {
-            const now = new Date();
-            document.getElementById('clock').innerText = now.toTimeString().split(' ')[0];
-        }, 1000);
-        document.getElementById('clock').innerText = new Date().toTimeString().split(' ')[0];
-
-        // Función de registro en la consola de logs
         function log(msg) {
             const consoleEl = document.getElementById('log-console');
             const now = new Date();
             const timeStr = now.toTimeString().split(' ')[0];
             const entry = document.createElement('div');
-            entry.innerHTML = `<span class="log-time">[${timeStr}]</span> <span class="log-tag">[FUNES]</span> ${msg}`;
+            entry.innerHTML = `<span class="log-time">[${timeStr}]</span> ${msg}`;
             consoleEl.appendChild(entry);
             consoleEl.scrollTop = consoleEl.scrollHeight;
         }
 
-        // Animación WikiLink Pulse & registro
-        function triggerWikiPulse(element, msg) {
-            const pulse = document.createElement('div');
-            pulse.className = 'pulse-effect';
-            element.style.position = 'relative';
-            element.appendChild(pulse);
-
-            setTimeout(() => pulse.remove(), 800);
-
-            if (msg) {
-                log(msg);
+        function togglePathMode(btn) {
+            if (btn.innerText.includes('Relativas')) {
+                btn.innerText = 'Rutas: Completas';
+                log('Modo de visualización de rutas cambiado a: Rutas Completas');
             } else {
-                const title = element.querySelector('.node-name')?.innerText || 'Nodo';
-                log(`Acción ejecutada sobre ${title}...`);
+                btn.innerText = 'Rutas: Relativas';
+                log('Modo de visualización de rutas cambiado a: Rutas Relativas');
             }
+        }
+
+        function clearLogView() {
+            document.getElementById('log-console').innerHTML = '';
+        }
+
+        function openModal(id) {
+            document.getElementById(id).style.display = 'flex';
+        }
+
+        function closeModal(id) {
+            document.getElementById(id).style.display = 'none';
         }
     </script>
 </body>

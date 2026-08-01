@@ -53,6 +53,8 @@ def is_temporary_or_system_file(file_path: Path) -> bool:
         return True
     if any(name_lower.endswith(suffix.lower()) for suffix in IGNORE_SUFFIXES):
         return True
+    if any(part.startswith(".") for part in file_path.parts):
+        return True
     return False
 
 

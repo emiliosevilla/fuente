@@ -35,7 +35,14 @@ from funes.graph_engine.karpathy_loop import KarpathyGraphLoop
 from funes.ram_governor.governor import RAMGovernor
 
 try:
-    import psutil
+    from funes.reader_modal import FunesReaderModal
+    from funes.chat_modal import FunesChatModal
+    from funes.category_modal import FunesCategoryModal
+except ImportError:
+    FunesReaderModal = None
+    FunesChatModal = None
+    FunesCategoryModal = None
+
     HAS_PSUTIL = True
 except ImportError:
     psutil = None
@@ -754,6 +761,10 @@ class FunesControlConsole(tk.Tk):
             safety_margin_pct=self.config.ram_safety_margin_pct
         )
 
+        self._reader_modal = None
+        self._chat_modal = None
+        self._category_modal = None
+
         self._setup_logging()
 
         self.title("Funes — Registro de Prensa de Conocimiento")
@@ -917,8 +928,25 @@ class FunesControlConsole(tk.Tk):
         stats_frame = tk.Frame(self, bg=THEME["bg_root"], padx=25)
         stats_frame.pack(side="top", fill="x", pady=(0, 12))
 
-        self._create_stat_card(stats_frame, "Archivos por Procesar", self.stat_input_var, THEME["gold"], 0)
-        self._create_stat_card(stats_frame, "Archivos Procesados", self.stat_processed_var, THEME["green"], 1)
+        self.card_input = self._create_stat_card_interactive(
+            stats_frame,
+            "Archivos por Procesar",
+            self.stat_input_var,
+            THEME["gold"],
+            0,
+            command=self._on_stat_input_click
+        )
+        ToolTip(self.card_input, "Haz clic para ver el desglose de archivos por carpeta de ingesta.")
+
+        self.card_processed = self._create_stat_card_interactive(
+            stats_frame,
+            "Archivos Procesados",
+            self.stat_processed_var,
+            THEME["green"],
+            1,
+            command=self._on_stat_processed_click
+        )
+        ToolTip(self.card_processed, "Haz clic para abrir el desglose por categorías de formato (.pdf, .docx, .mp3).")
 
         self.card_quarantine = self._create_stat_card_interactive(
             stats_frame,
@@ -930,7 +958,15 @@ class FunesControlConsole(tk.Tk):
         )
         ToolTip(self.card_quarantine, "Haz clic para ver y restaurar los archivos que tuvieron errores.")
 
-        self._create_stat_card(stats_frame, "Notas Preparadas", self.stat_notes_var, THEME["crimson"], 3)
+        self.card_notes = self._create_stat_card_interactive(
+            stats_frame,
+            "Notas Preparadas",
+            self.stat_notes_var,
+            THEME["crimson"],
+            3,
+            command=self._on_stat_notes_click
+        )
+        ToolTip(self.card_notes, "Haz clic para ver la telemetría completa del Grafo de Notas (#tags, enlaces, refs).")
 
         self.card_ram = self._create_stat_card_interactive(
             stats_frame,
@@ -938,8 +974,9 @@ class FunesControlConsole(tk.Tk):
             self.stat_ram_var,
             THEME["paper"],
             4,
-            command=None
+            command=self._on_ram_card_click
         )
+        ToolTip(self.card_ram, "Haz clic para consultar la memoria usada y liberar RAM con el Garbage Collector.")
 
         graph_section = tk.LabelFrame(
             self,
@@ -959,7 +996,7 @@ class FunesControlConsole(tk.Tk):
 
         sg1 = tk.LabelFrame(flow_container, text=" 1. Recepción ", font=(FONT_TYPEWRITER, 9, "bold"), fg=THEME["gold"], bg=THEME["bg_card"], bd=1, relief="solid", padx=6, pady=6)
         sg1.grid(row=0, column=0, sticky="nsew", padx=3)
-        self.node1 = GraphProcessNode(sg1, step_tag="PASO 1", icon_str="", title_str="Recopilación de archivos en formato variado", desc_str="", command=self._on_sync_click)
+        self.node1 = GraphProcessNode(sg1, step_tag="PASO 1", icon_str="", title_str="Recopilación de archivos en formato variado", desc_str="", command=self._on_manual_flush_click)
         self.node1.pack(fill="both", expand=True)
 
         lbl_arr1 = tk.Label(flow_container, text=" ═► ", font=(FONT_TYPEWRITER, 14, "bold"), fg=THEME["gold"], bg=THEME["bg_root"])
@@ -967,7 +1004,7 @@ class FunesControlConsole(tk.Tk):
 
         sg2 = tk.LabelFrame(flow_container, text=" 2. Transcripción ", font=(FONT_TYPEWRITER, 9, "bold"), fg=THEME["gold"], bg=THEME["bg_card"], bd=1, relief="solid", padx=6, pady=6)
         sg2.grid(row=0, column=2, sticky="nsew", padx=3)
-        self.node2 = GraphProcessNode(sg2, step_tag="PASO 2", icon_str="", title_str="Traslado de la información a formato uniforme", desc_str="", command=self._on_flush_click)
+        self.node2 = GraphProcessNode(sg2, step_tag="PASO 2", icon_str="", title_str="Traslado de la información a formato uniforme", desc_str="", command=self._on_transcribe_click)
         self.node2.pack(fill="both", expand=True)
 
         lbl_arr2 = tk.Label(flow_container, text=" ═► ", font=(FONT_TYPEWRITER, 14, "bold"), fg=THEME["gold"], bg=THEME["bg_root"])
@@ -1223,10 +1260,74 @@ class FunesControlConsole(tk.Tk):
             )
             if not ans:
                 return
+
+        # Cierre limpio explícito de modales abiertos
+        for m in [self._reader_modal, self._chat_modal, self._category_modal]:
+            if m is not None and m.winfo_exists():
+                try:
+                    m.destroy()
+                except Exception:
+                    pass
+
         self.destroy()
 
     def _on_quarantine_click(self):
         modal = QuarantineModal(self, self.quarantine_mgr, on_restore_callback=self._restore_quarantined_file)
+
+    def _on_stat_input_click(self):
+        inp_dir = self.config.vault.input_dir
+        files = [f for f in inp_dir.glob("*") if f.is_file() and not f.name.startswith(".")] if inp_dir.exists() else []
+        folders = self.sync_manager.load_connected_folders()
+        msg = f"ARCHIVOS POR PROCESAR EN 1_ENTRADA ({len(files)} archivos)\n\n"
+        msg += f"• Archivos locales directos: {len(files)}\n"
+        msg += f"• Carpetas compartidas vinculadas: {len(folders)}\n\n"
+        if folders:
+            msg += "Rutas de carpetas vinculadas:\n" + "\n".join([f"  - {f}" for f in folders])
+        messagebox.showinfo("Desglose — Archivos por Procesar", msg)
+
+    def _on_stat_processed_click(self):
+        proc_dir = self.vault_path / ".funes_processed"
+        files = list(proc_dir.glob("*")) if proc_dir.exists() else []
+        if FunesCategoryModal is not None:
+            if self._category_modal is not None and self._category_modal.winfo_exists():
+                self._category_modal.lift()
+                self._category_modal.focus_force()
+            else:
+                self._category_modal = FunesCategoryModal(self, "Archivos Procesados Historicos", files)
+        else:
+            messagebox.showinfo("Archivos Procesados", f"Total de archivos procesados históricamente: {len(files)}")
+
+    def _on_stat_notes_click(self):
+        out_dir = self.config.vault.output_dir
+        notes = list(out_dir.glob("*.md")) if out_dir.exists() else []
+        total_links = 0
+        total_tags = 0
+        for n in notes:
+            try:
+                txt = n.read_text(encoding="utf-8", errors="ignore")
+                total_links += txt.count("[[")
+                total_tags += txt.count("#")
+            except Exception:
+                pass
+        msg = f"TELEMETRÍA DEL GRAFO DE CONOCIMIENTO\n\n"
+        msg += f"• Notas inteligentes en 4_salida: {len(notes)}\n"
+        msg += f"• Interenlaces cruzados ([[nota]]): {total_links}\n"
+        msg += f"• Etiquetas registradas (#tag): {total_tags}\n"
+        messagebox.showinfo("Desglose — Notas Preparadas", msg)
+
+    def _on_ram_card_click(self):
+        import gc
+        before_ram = self.stat_ram_var.get()
+        collected = gc.collect()
+        self.refresh_stats()
+        after_ram = self.stat_ram_var.get()
+        messagebox.showinfo(
+            "Purga de Memoria RAM",
+            f"Purga del Garbage Collector ejecutada exitosamente.\n\n"
+            f"• Objetos liberados en memoria: {collected}\n"
+            f"• Consumo RAM previo: {before_ram}\n"
+            f"• Consumo RAM actual: {after_ram}"
+        )
 
     def _restore_quarantined_file(self, filename: str) -> bool:
         res = self.quarantine_mgr.restore_file(filename, self.config.vault.input_dir)
@@ -1249,6 +1350,33 @@ class FunesControlConsole(tk.Tk):
             messagebox.showinfo("Ayuda", "Documentación accesible en el repositorio del proyecto Funes.")
 
     def _on_flush_click(self):
+        self._on_sync_click()
+
+    def _on_manual_flush_click(self):
+        """Paso 1 del Flujo: Copia manual de las carpetas vinculadas a 1_entrada (Sin watchdog)."""
+        if self._task_in_progress:
+            self._log("Proceso ocupado: Ya hay una tarea de procesamiento en curso...")
+            return
+
+        self._task_in_progress = True
+        self.node1.set_status("● Ejecutando Flush", THEME["amber"])
+
+        def _run_manual_flush():
+            try:
+                copied = self.sync_manager.sync_to_input(self.config.vault.input_dir)
+                local_files = [f for f in self.config.vault.input_dir.glob("*") if f.is_file() and not f.name.startswith(".")]
+                self._log(f"[FLUSH MANUAL] Se transfirieron {copied} archivos desde carpetas vinculadas a 1_entrada (Total: {len(local_files)} archivos)")
+            except Exception as e:
+                self._log(f"Error en Flush Manual: {e}")
+            finally:
+                self._task_in_progress = False
+                self.after(0, lambda: self.node1.set_status("● Ok", THEME["green"]))
+                self.after(100, self.refresh_stats)
+
+        threading.Thread(target=_run_manual_flush, daemon=True).start()
+
+    def _on_transcribe_click(self):
+        """Paso 2 del Flujo: Transcripción (1_entrada -> 2_sucio -> 3_limpio) con captura a .quarantine."""
         if self._task_in_progress:
             self._log("Proceso ocupado: Ya hay una tarea de procesamiento en curso...")
             return
@@ -1258,18 +1386,10 @@ class FunesControlConsole(tk.Tk):
             return
 
         self._task_in_progress = True
-        self.node2.set_status("● Procesando", THEME["amber"])
-        self.btn_flush.config(state="disabled")
+        self.node2.set_status("● Transcribiendo", THEME["amber"])
 
-        def _run_flush():
+        def _run_transcribe():
             try:
-                # 1. Escaneo cuantitativo
-                local_files = [f for f in self.config.vault.input_dir.glob("*") if f.is_file() and not f.name.startswith(".")]
-                copied = self.sync_manager.sync_to_input(self.config.vault.input_dir)
-                total_scanned = len(local_files) + copied
-                self._log(f"Se escanearon {total_scanned} archivos: {len(local_files)} en 1_entrada & {copied} en carpetas compartidas")
-
-                # 2. Procesamiento cuantitativo
                 pipeline = ETLPipeline(self.config)
                 input_files = [f for f in self.config.vault.input_dir.glob("*") if f.is_file() and not f.name.startswith(".")]
 
@@ -1289,50 +1409,55 @@ class FunesControlConsole(tk.Tk):
                             self._log(f"[ERROR] Error al procesar {file_path.name}. Moviendo a Cuarentena...")
                             self.quarantine_mgr.quarantine_file(file_path, str(file_err))
 
-                    self._log(f"Se procesaron {len(input_files)} archivos: {docs_count} documentos & {audio_count} audios")
+                    self._log(f"[TRANSCRIPCIÓN] Se procesaron {len(input_files)} archivos (1_entrada -> 2_sucio -> 3_limpio): {docs_count} documentos & {audio_count} audios")
                 else:
-                    self._log("Se procesaron 0 archivos (1_entrada limpia).")
-
-                # 3. Estructuración cuantitativa
-                notes_before = len(list(self.config.vault.output_dir.glob("*.md"))) if self.config.vault.output_dir.exists() else 0
-                karpathy = KarpathyGraphLoop(self.config.vault.output_dir)
-                karpathy.refine_knowledge_graph()
-                notes_after = len(list(self.config.vault.output_dir.glob("*.md"))) if self.config.vault.output_dir.exists() else 0
-
-                configure_anythingllm_integration(self.config.vault.output_dir)
-
-                self._log(f"Se generaron {notes_after} notas preparadas")
+                    self._log("[TRANSCRIPCIÓN] Se procesaron 0 archivos (1_entrada limpia).")
 
             except Exception as e:
-                self._log(f"Error en procesamiento: {e}")
+                self._log(f"Error en Transcripción: {e}")
             finally:
                 self._task_in_progress = False
                 self.after(0, lambda: self.node2.set_status("● Ok", THEME["green"]))
-                self.after(0, lambda: self.btn_flush.config(state="normal"))
                 self.after(100, self.refresh_stats)
 
-        threading.Thread(target=_run_flush, daemon=True).start()
+        threading.Thread(target=_run_transcribe, daemon=True).start()
 
     def _on_chat_click(self):
-        if not launch_anythingllm():
-            self._log("AnythingLLM no se encuentra instalado o no pudo iniciarse.")
-            ans = messagebox.askyesno("AnythingLLM no encontrado", "AnythingLLM no está instalado o no se encuentra. ¿Deseas abrir la página oficial para descargarlo?")
-            if ans:
-                webbrowser.open("https://anythingllm.com")
+        if FunesChatModal is not None:
+            if self._chat_modal is not None and self._chat_modal.winfo_exists():
+                self._chat_modal.lift()
+                self._chat_modal.focus_force()
+            else:
+                self._chat_modal = FunesChatModal(self, self.config.vault.output_dir)
+            self._log("Modal Papiro 'Funes el conversador' abierto")
         else:
-            self._log("Aplicación de chat AnythingLLM iniciada")
+            if not launch_anythingllm():
+                self._log("AnythingLLM no se encuentra instalado o no pudo iniciarse.")
+                ans = messagebox.askyesno("AnythingLLM no encontrado", "AnythingLLM no está instalado o no se encuentra. ¿Deseas abrir la página oficial para descargarlo?")
+                if ans:
+                    webbrowser.open("https://anythingllm.com")
+            else:
+                self._log("Aplicación de chat AnythingLLM iniciada")
 
     def _on_obsidian_click(self):
-        try:
-            if not launch_obsidian(self.vault_path):
-                self._log("Obsidian no se encuentra instalado o no pudo abrirse automáticamente.")
-                ans = messagebox.askyesno("Obsidian no encontrado", "Obsidian no está instalado o no se encuentra. ¿Deseas abrir la página de descarga oficial?")
-                if ans:
-                    webbrowser.open("https://obsidian.md")
+        if FunesReaderModal is not None:
+            if self._reader_modal is not None and self._reader_modal.winfo_exists():
+                self._reader_modal.lift()
+                self._reader_modal.focus_force()
             else:
-                self._log("Biblioteca de notas 'La Memoria de Funes' abierta en Obsidian")
-        except Exception as e:
-            self._log(f"Error abriendo La Memoria de Funes: {e}")
+                self._reader_modal = FunesReaderModal(self, self.config.vault.output_dir)
+            self._log("Modal Papiro 'Funes el memorioso' abierto")
+        else:
+            try:
+                if not launch_obsidian(self.vault_path):
+                    self._log("Obsidian no se encuentra instalado o no pudo abrirse automáticamente.")
+                    ans = messagebox.askyesno("Obsidian no encontrado", "Obsidian no está instalado o no se encuentra. ¿Deseas abrir la página de descarga oficial?")
+                    if ans:
+                        webbrowser.open("https://obsidian.md")
+                else:
+                    self._log("Biblioteca de notas 'La Memoria de Funes' abierta en Obsidian")
+            except Exception as e:
+                self._log(f"Error abriendo La Memoria de Funes: {e}")
 
     def _on_sync_click(self):
         modal = FolderSyncModal(self, self.sync_manager)
@@ -1361,10 +1486,11 @@ class FunesControlConsole(tk.Tk):
             try:
                 karpathy = KarpathyGraphLoop(self.config.vault.output_dir)
                 karpathy.refine_knowledge_graph()
+                configure_anythingllm_integration(self.config.vault.output_dir)
                 valid_notes = len(list(self.config.vault.output_dir.glob("*.md"))) if self.config.vault.output_dir.exists() else 0
-                self._log(f"Se generaron {valid_notes} notas preparadas")
+                self._log(f"[ESTRUCTURACIÓN] Se vectorizaron e hiperinterenlazaron {valid_notes} notas preparadas en 4_salida")
             except Exception as e:
-                self._log(f"Error en actualización de índice: {e}")
+                self._log(f"Error en Estructuración: {e}")
             finally:
                 self._task_in_progress = False
                 self.after(0, lambda: self.node3.set_status("● Ok", THEME["green"]))

@@ -56,9 +56,16 @@ class FolderSyncManager:
             return False
 
     def sync_to_input(self, input_dir: Path) -> int:
+        """
+        Recopila hacia 1_entrada todo archivo de las carpetas vinculadas que:
+        1. No haya pasado anteriormente por el flujo de Funes (no existe en 2_sucio ni en 1_entrada).
+        2. O que sí haya pasado por 2_sucio (o esté en 1_entrada), pero la fecha de modificación (mtime)
+           en la carpeta fuente de origen sea más reciente que la del archivo llevado en su día a 2_sucio/1_entrada.
+        """
         connected = self.load_connected_folders()
         copied_count = 0
         input_dir.mkdir(parents=True, exist_ok=True)
+        dirty_dir = self.vault_root / "2_sucio"
 
         for folder in connected:
             if not folder.exists():
@@ -67,10 +74,26 @@ class FolderSyncManager:
                 for file_path in folder.glob("*"):
                     if file_path.is_file() and not file_path.name.startswith("."):
                         dest = input_dir / file_path.name
-                        if not dest.exists():
+                        dirty_file = dirty_dir / file_path.name
+                        
+                        should_copy = False
+                        
+                        # Caso 1: No ha pasado anteriormente por 2_sucio
+                        if not dirty_file.exists():
+                            if not dest.exists():
+                                should_copy = True
+                            else:
+                                if file_path.stat().st_mtime > dest.stat().st_mtime + 0.001:
+                                    should_copy = True
+                        else:
+                            # Caso 2: Sí ha pasado por 2_sucio, pero la versión en origen es más reciente que en 2_sucio
+                            if file_path.stat().st_mtime > dirty_file.stat().st_mtime + 0.001:
+                                should_copy = True
+
+                        if should_copy:
                             shutil.copy2(file_path, dest)
                             copied_count += 1
-                            logger.info(f"Sincronizado archivo externo a 1_entrada: {file_path.name}")
+                            logger.info(f"Recopilado archivo hacia 1_entrada: {file_path.name}")
             except Exception as e:
                 logger.error(f"Error sincronizando desde {folder}: {e}")
 

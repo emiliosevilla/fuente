@@ -6,7 +6,7 @@
     <title>Funes Control Console — Estética Papiro (Vista Previa Definitiva)</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,400;0,500;0,700;1,400&display=swap" rel="stylesheet">
     <style>
         /* DESIGN SYSTEM ESTÉTICA PAPIRO - TIPOGRAFÍA MÁQUINA DE ESCRIBIR EN TODO EL TEXTO */
         :root {
@@ -37,6 +37,11 @@
             font-family: var(--font-mono) !important;
         }
 
+        input, select, option, textarea, button {
+            font-family: var(--font-mono) !important;
+            color: var(--paper);
+        }
+
         body {
             background-color: var(--bg-root);
             color: var(--paper);
@@ -46,6 +51,7 @@
             display: flex;
             flex-direction: column;
             gap: 18px;
+            user-select: none;
         }
 
         /* 1. CABECERA EDITORIAL PAPIRO */
@@ -170,16 +176,14 @@
             display: flex;
             flex-direction: column;
             gap: 4px;
-            transition: transform 0.2s ease;
-        }
-
-        .stat-card.interactive {
+            transition: transform 0.2s ease, background-color 0.2s ease;
             cursor: pointer;
         }
 
-        .stat-card.interactive:hover {
+        .stat-card:hover {
             transform: translateY(-2px);
             background-color: var(--bg-card-hover);
+            border-color: var(--border-accent);
         }
 
         .stat-title {
@@ -238,22 +242,24 @@
 
         .subgraph-header {
             display: flex;
-            justify-content: space-between;
-            align-items: center;
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 2px;
             border-bottom: 1px solid var(--border);
             padding-bottom: 6px;
         }
 
         .subgraph-title {
-            font-size: 0.74rem;
+            font-size: 0.76rem;
             font-weight: 700;
             color: var(--gold);
         }
 
         .node-badge {
-            font-size: 0.7rem;
-            font-weight: 700;
-            color: var(--green);
+            font-size: 0.65rem;
+            font-weight: 600;
+            color: var(--muted);
+            font-family: var(--font-mono) !important;
         }
 
         .arrow-connector {
@@ -351,6 +357,7 @@
             display: flex;
             flex-direction: column;
             gap: 5px;
+            user-select: text;
         }
 
         .log-time { color: var(--gold); font-weight: 700; }
@@ -385,11 +392,12 @@
             border: 2px solid var(--border-accent);
             border-radius: var(--card-radius);
             box-shadow: 0 10px 30px rgba(0,0,0,0.2);
-            width: 700px;
-            max-width: 90%;
+            width: 760px;
+            max-width: 95%;
             display: flex;
             flex-direction: column;
             overflow: hidden;
+            max-height: 90vh;
         }
 
         .modal-header {
@@ -412,8 +420,9 @@
             display: flex;
             flex-direction: column;
             gap: 14px;
-            max-height: 450px;
+            max-height: 60vh;
             overflow-y: auto;
+            user-select: text;
         }
 
         .modal-footer {
@@ -432,6 +441,177 @@
             cursor: pointer;
             color: var(--muted);
         }
+
+        /* ESTILOS ESPECÍFICOS PARA LECTOR DE NOTAS */
+        #modal-reader .modal-container {
+            width: 1040px;
+            max-width: 96vw;
+        }
+
+        .reader-dual-pane {
+            display: grid;
+            grid-template-columns: 310px 1fr;
+            gap: 14px;
+            height: 520px;
+        }
+
+        .reader-sidebar {
+            background-color: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .reader-search-input {
+            width: 100%;
+            padding: 10px 12px;
+            background-color: var(--bg-log);
+            border: none;
+            border-bottom: 1px solid var(--border);
+            font-size: 0.82rem;
+            color: var(--paper);
+            outline: none;
+        }
+
+        .reader-note-list {
+            list-style: none;
+            overflow-y: auto;
+            flex-grow: 1;
+        }
+
+        .reader-note-item {
+            padding: 10px 14px;
+            font-size: 0.82rem;
+            cursor: pointer;
+            border-bottom: 1px solid var(--border);
+            transition: background 0.15s;
+            line-height: 1.35;
+        }
+
+        .reader-note-item:hover, .reader-note-item.active {
+            background-color: var(--bg-card-hover);
+            font-weight: 700;
+            color: var(--gold);
+        }
+
+        .reader-view-pane {
+            background-color: var(--bg-log);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            padding: 20px 26px;
+            overflow-y: auto;
+            font-size: 0.88rem;
+            line-height: 1.6;
+        }
+
+        .reader-view-pane ul, .reader-view-pane ol {
+            padding-left: 28px !important;
+            margin-top: 10px !important;
+            margin-bottom: 14px !important;
+        }
+
+        .reader-view-pane li {
+            margin-bottom: 6px !important;
+            line-height: 1.55 !important;
+            padding-left: 4px !important;
+        }
+
+        .reader-view-pane p {
+            margin-bottom: 12px !important;
+            line-height: 1.65 !important;
+        }
+
+        .wikilink {
+            color: var(--paper);
+            font-weight: 700;
+            text-decoration: underline;
+            cursor: pointer;
+        }
+
+        .wikilink-broken {
+            color: var(--red);
+            text-decoration: underline;
+            cursor: pointer;
+        }
+
+        /* ESTILOS ESPECÍFICOS PARA CHAT PAPIRO */
+        #modal-chat .modal-body {
+            max-height: none;
+            overflow: visible;
+            padding: 16px 20px;
+        }
+
+        .chat-container-box {
+            display: flex;
+            flex-direction: column;
+            height: 380px;
+            gap: 10px;
+        }
+
+        .chat-messages-scroll {
+            flex: 1;
+            min-height: 0;
+            background-color: var(--bg-log);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 14px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .chat-bubble {
+            padding: 10px 14px;
+            border-radius: 6px;
+            max-width: 85%;
+            font-size: 0.85rem;
+            line-height: 1.45;
+        }
+
+        .chat-bubble.user {
+            align-self: flex-start;
+            background-color: var(--bg-card);
+            border: 1px solid var(--border-accent);
+        }
+
+        .chat-bubble.ai {
+            align-self: flex-end;
+            background-color: var(--bg-card-hover);
+            border: 1px solid var(--border);
+        }
+
+        .chat-input-bar {
+            display: flex;
+            gap: 8px;
+            flex-shrink: 0;
+            padding-bottom: 2px;
+        }
+
+        .chat-input-field {
+            flex-grow: 1;
+            padding: 10px 14px;
+            background-color: var(--bg-log);
+            border: 1px solid var(--border-accent);
+            border-radius: 4px;
+            font-size: 0.85rem;
+            color: var(--paper);
+            outline: none;
+            font-family: inherit;
+            transition: border-color 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .chat-input-field:focus {
+            outline: none !important;
+            border-color: var(--gold) !important;
+            box-shadow: 0 0 0 2px rgba(139, 109, 56, 0.25) !important;
+        }
+
+        input:focus, select:focus, textarea:focus, button:focus {
+            outline: none !important;
+        }
     </style>
 </head>
 <body>
@@ -447,13 +627,13 @@
 
         <div class="toolbar-bar">
             <div class="toolbar-group">
-                <button class="btn-secondary" onclick="log('Se escanearon 12 archivos: 9 en 1_entrada & 3 en carpetas compartidas')">
+                <button class="btn-secondary" onclick="triggerAction('flush_sources')">
                     Actualizar Fuentes
                 </button>
-                <button class="btn-secondary" onclick="log('Se generaron 142 notas preparadas')">
+                <button class="btn-secondary" onclick="triggerAction('reindex_notes')">
                     Actualizar Índice de Notas
                 </button>
-                <button class="btn-secondary" onclick="log('Guía de usuario local consultada')">
+                <button class="btn-secondary" onclick="triggerAction('quick_help')">
                     Ayuda Rápida
                 </button>
             </div>
@@ -483,25 +663,25 @@
 
         <!-- STATS GRID -->
         <div class="stats-grid">
-            <div class="stat-card">
+            <div class="stat-card" onclick="openModal('modal-stat-input')">
                 <div class="stat-title">Archivos por Procesar</div>
-                <div class="stat-num gold" id="stat-input">3</div>
+                <div class="stat-num gold" id="stat-input">0</div>
             </div>
-            <div class="stat-card">
+            <div class="stat-card" onclick="openModal('modal-category')">
                 <div class="stat-title">Archivos Procesados</div>
-                <div class="stat-num green" id="stat-processed">4</div>
+                <div class="stat-num green" id="stat-processed">0</div>
             </div>
-            <div class="stat-card interactive" onclick="openModal('modal-quarantine')">
+            <div class="stat-card" onclick="openModal('modal-quarantine')">
                 <div class="stat-title">En Cuarentena</div>
-                <div class="stat-num red" id="stat-quarantine">1</div>
+                <div class="stat-num red" id="stat-quarantine">0</div>
             </div>
-            <div class="stat-card">
+            <div class="stat-card" onclick="openModal('modal-stat-notes')">
                 <div class="stat-title">Notas Preparadas</div>
-                <div class="stat-num" id="stat-notes">142</div>
+                <div class="stat-num" id="stat-notes">0</div>
             </div>
-            <div class="stat-card">
+            <div class="stat-card" onclick="openModal('modal-stat-ram')">
                 <div class="stat-title">Consumo RAM</div>
-                <div class="stat-num" id="stat-ram">18%</div>
+                <div class="stat-num" id="stat-ram">0%</div>
             </div>
         </div>
 
@@ -513,11 +693,12 @@
                 <div class="subgraph-box">
                     <div class="subgraph-header">
                         <span class="subgraph-title">1. Recepción</span>
-                        <span class="node-badge">● Ok</span>
+                        <span class="node-badge" id="badge-step1">Última acción:  --/--/----  --:--:--</span>
                     </div>
-                    <div class="node-card" onclick="log('Se escanearon 12 archivos: 9 en 1_entrada & 3 en carpetas compartidas')">
+                    <div class="node-card" onclick="triggerAction('step1_flush')">
                         <div class="node-tag">── PASO 1 ──</div>
                         <div class="node-name">Recopilación de archivos en formato variado</div>
+                        <div class="node-desc">Flush Manual desde carpetas vinculadas hacia 1_entrada</div>
                     </div>
                 </div>
 
@@ -526,11 +707,12 @@
                 <div class="subgraph-box">
                     <div class="subgraph-header">
                         <span class="subgraph-title">2. Transcripción</span>
-                        <span class="node-badge">● Ok</span>
+                        <span class="node-badge" id="badge-step2">Última acción:  --/--/----  --:--:--</span>
                     </div>
-                    <div class="node-card" onclick="log('Se procesaron 11 archivos: 6 documentos & 5 audios')">
+                    <div class="node-card" onclick="triggerAction('step2_transcribe')">
                         <div class="node-tag">── PASO 2 ──</div>
                         <div class="node-name">Traslado de la información a formato uniforme</div>
+                        <div class="node-desc">Procesado ETL: 1_entrada ➔ 2_sucio ➔ 3_limpio</div>
                     </div>
                 </div>
 
@@ -539,11 +721,12 @@
                 <div class="subgraph-box">
                     <div class="subgraph-header">
                         <span class="subgraph-title">3. Estructuración</span>
-                        <span class="node-badge">● Ok</span>
+                        <span class="node-badge" id="badge-step3">Última acción:  --/--/----  --:--:--</span>
                     </div>
-                    <div class="node-card" onclick="log('Se generaron 142 notas preparadas')">
+                    <div class="node-card" onclick="triggerAction('step3_structure')">
                         <div class="node-tag">── PASO 3 ──</div>
                         <div class="node-name">Preparación de notas inteligentes</div>
+                        <div class="node-desc">KarpathyLoop + Vectorización ChromaDB ➔ 4_salida</div>
                     </div>
                 </div>
 
@@ -552,12 +735,12 @@
                 <div class="subgraph-box">
                     <div class="subgraph-header">
                         <span class="subgraph-title">4. Consulta</span>
-                        <span class="node-badge">● Ok</span>
+                        <span class="node-badge" id="badge-step4">Última acción:  --/--/----  --:--:--</span>
                     </div>
-                    <button class="btn-secondary" style="width: 100%; justify-content: center;" onclick="log('Biblioteca de notas \'La Memoria de Funes\' abierta en Obsidian')">
+                    <button class="btn-secondary" style="width: 100%; justify-content: center;" onclick="openModal('modal-reader')">
                         Funes el memorioso
                     </button>
-                    <button class="btn-secondary" style="width: 100%; justify-content: center;" onclick="log('Aplicación de chat AnythingLLM iniciada')">
+                    <button class="btn-secondary" style="width: 100%; justify-content: center; margin-top: 4px;" onclick="openModal('modal-chat')">
                         Funes el conversador
                     </button>
                 </div>
@@ -569,21 +752,92 @@
             <div class="log-header">
                 <span>── REGISTRO DE ACTIVIDAD ──</span>
                 <div class="log-actions">
-                    <button class="btn-small" onclick="togglePathMode(this)">Rutas: Relativas</button>
+                    <button class="btn-small" id="btn-toggle-path" onclick="togglePathMode(this)">Rutas: Relativas</button>
                     <button class="btn-small" onclick="clearLogView()">Limpiar Registro</button>
                 </div>
             </div>
             <div class="log-console" id="log-console">
-                <div><span class="log-time">[17:35:00]</span> Se escanearon 12 archivos: 9 en 1_entrada & 3 en carpetas compartidas</div>
-                <div><span class="log-time">[17:35:01]</span> Se procesaron 4 archivos: 3 documentos & 1 audio</div>
-                <div><span class="log-time">[17:35:02]</span> Se generaron 142 notas preparadas</div>
+                <div><span class="log-time">[00:00:00]</span> The Funes Gazette — Imprenta y registro iniciados correctamente.</div>
             </div>
         </div>
 
         <!-- LÍNEA DE ESTADO MINIMALISTA INFERIOR -->
         <div class="bottom-status-bar">
-            <span>Estado: Listo • Vault: Funes_Vault • RAM: 18% • 16:56</span>
+            <span id="bottom-status-line">Estado: Listo • Vault: Funes_Vault • RAM: 0%</span>
             <span style="font-size: 0.78rem; color: var(--muted);">'Funes' es una creación de Emilio Sevilla Ortego (funes_2026.1)</span>
+        </div>
+    </div>
+
+    <!-- MODAL LECTOR (FUNES EL MEMORIOSO) -->
+    <div class="modal-overlay" id="modal-reader">
+        <div class="modal-container" style="width: 960px;">
+            <div class="modal-header">
+                <div class="modal-title">FUNES EL MEMORIOSO — LECTOR DE NOTAS</div>
+                <div style="display: flex; gap: 6px; align-items: center;">
+                    <button class="btn-small btn-toggle active" id="btn-reader-mode-list" onclick="switchReaderView('list')">Vista Notas</button>
+                    <button class="btn-small btn-toggle" id="btn-reader-mode-graph" onclick="switchReaderView('graph')">Vista Grafo (Obsidian)</button>
+                    <button class="btn-small btn-toggle" id="btn-reader-mode-moc" onclick="openMOCNote()">Mapa MOC</button>
+                    <span style="border-left: 1px solid var(--border); height: 16px; margin: 0 4px;"></span>
+                    <button class="btn-small" onclick="triggerAction('copy_reader_note')">Copiar</button>
+                    <button class="btn-small" onclick="triggerAction('export_reader_note')">Exportar</button>
+                    <button class="btn-small" onclick="triggerAction('open_obsidian')">Abrir en Obsidian</button>
+                    <button class="close-btn" onclick="closeModal('modal-reader')">&times;</button>
+                </div>
+            </div>
+            <div class="modal-body">
+                <div class="reader-dual-pane" id="reader-view-list">
+                    <div class="reader-sidebar">
+                        <input type="text" class="reader-search-input" id="reader-search" placeholder="Buscar notas..." oninput="filterReaderNotes()">
+                        <ul class="reader-note-list" id="reader-note-list">
+                            <li class="reader-note-item active">Cargando notas...</li>
+                        </ul>
+                    </div>
+                    <div class="reader-view-pane" id="reader-content">
+                        <h2 style="color: var(--gold); border-bottom: 1px solid var(--border); padding-bottom: 6px;">Selecciona una nota</h2>
+                        <p style="margin-top: 10px; color: var(--muted);">Explora el mapa de conocimiento generado en 4_salida.</p>
+                    </div>
+                </div>
+                <div class="reader-graph-container" id="reader-view-graph" style="display: none; width: 100%; height: 480px; position: relative; background: var(--bg-card); border-radius: var(--card-radius); border: 1px solid var(--border); overflow: hidden;">
+                    <canvas id="obsidian-graph-canvas" style="width: 100%; height: 100%; display: block;"></canvas>
+                    <div style="position: absolute; bottom: 10px; left: 12px; font-size: 0.76rem; color: var(--muted); background: rgba(220, 212, 199, 0.92); padding: 5px 12px; border-radius: 4px; border: 1px solid var(--border);">
+                        Nodos: <b id="graph-nodes-count" style="color: var(--gold);">0</b> | Enlaces: <b id="graph-links-count" style="color: var(--accent);">0</b> • Haz clic en un nodo para leer la nota. Arrastra los nodos para mover el mapa.
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer" style="justify-content: flex-end;">
+                <button class="btn-secondary" onclick="closeModal('modal-reader')">Cerrar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL CHAT (FUNES EL CONVERSADOR) -->
+    <div class="modal-overlay" id="modal-chat">
+        <div class="modal-container" style="width: 840px;">
+            <div class="modal-header">
+                <div class="modal-title">FUNES EL CONVERSADOR — CHAT INTEGRADO</div>
+                <div>
+                    <button class="btn-small" onclick="clearChatHistory()">Limpiar Historial</button>
+                    <button class="btn-small" onclick="triggerAction('open_anything_desktop')">Abrir AnythingLLM Desktop</button>
+                    <button class="close-btn" onclick="closeModal('modal-chat')">&times;</button>
+                </div>
+            </div>
+            <div class="modal-body">
+                <div class="chat-container-box">
+                    <div class="chat-messages-scroll" id="chat-messages">
+                        <div class="chat-bubble ai">
+                            <strong>Funes IA:</strong> Hola. Puedo responder preguntas sobre los documentos procesados en tu Vault 100% en local.
+                        </div>
+                    </div>
+                    <div class="chat-input-bar">
+                        <input type="text" class="chat-input-field" id="chat-input" placeholder="Escribe tu consulta sobre los documentos..." onkeypress="if(event.key==='Enter') sendChatMessage()">
+                        <button class="btn-primary" onclick="sendChatMessage()">Enviar</button>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <span style="font-size: 0.78rem; color: var(--muted);">Funes funciona con una IA 100% local, garantizando la privacidad</span>
+                <button class="btn-secondary" onclick="closeModal('modal-chat')">Cerrar</button>
+            </div>
         </div>
     </div>
 
@@ -594,24 +848,86 @@
                 <div class="modal-title" style="color: var(--red);">ARCHIVOS EN CUARENTENA</div>
                 <button class="close-btn" onclick="closeModal('modal-quarantine')">&times;</button>
             </div>
-            <div class="modal-body">
+            <div class="modal-body" id="quarantine-list">
                 <div style="background-color: var(--bg-card); border: 1px solid var(--border); padding: 14px; border-radius: 6px;">
-                    <div style="display: flex; justify-content: space-between; font-weight: 700;">
-                        <span>Archivo: documento_corrupto.pdf</span>
-                        <span style="font-size: 0.78rem; color: var(--muted);">2026-08-01 14:20</span>
-                    </div>
-                    <div style="font-size: 0.85rem; margin-top: 6px; color: var(--paper);">
-                        Causa: El documento está protegido con contraseña o cifrado.
-                    </div>
-                    <div style="margin-top: 10px; display: flex; gap: 8px;">
-                        <button class="btn-secondary" style="background-color: var(--green); color: white; border: none;" onclick="alert('Archivo restaurado a 1_entrada')">Restaurar y Reintentar</button>
-                        <button class="btn-secondary" onclick="alert('Stack trace: PyPDF2.utils.PdfReadError: File has not been decrypted')">Más Detalles</button>
-                    </div>
+                    <div style="font-size: 0.85rem; color: var(--muted);">No hay archivos en cuarentena actualmente.</div>
                 </div>
             </div>
             <div class="modal-footer">
                 <span style="font-size: 0.8rem; color: var(--muted);">Aislamiento seguro de archivos ilegibles sin detener el motor.</span>
                 <button class="btn-secondary" onclick="closeModal('modal-quarantine')">Cerrar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL ARCHIVOS POR PROCESAR -->
+    <div class="modal-overlay" id="modal-stat-input">
+        <div class="modal-container" style="width: 680px;">
+            <div class="modal-header">
+                <div class="modal-title" style="color: var(--gold);">ARCHIVOS POR PROCESAR (1_ENTRADA)</div>
+                <button class="close-btn" onclick="closeModal('modal-stat-input')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div style="background-color: var(--bg-card); border: 1px solid var(--border); padding: 14px; border-radius: 6px; display: flex; flex-direction: column; gap: 8px;">
+                    <div style="font-size: 0.88rem; font-weight: 700; color: var(--paper);">Desglose de la Carpeta de Ingesta:</div>
+                    <ul style="font-size: 0.8rem; color: var(--muted); margin: 0; padding-left: 18px; line-height: 1.6;">
+                        <li>Archivos locales directos en 1_entrada: <b id="stat-input-direct-count" style="color: var(--gold);">0</b></li>
+                        <li>Fuentes externas vinculadas: <b id="stat-input-sources-count" style="color: var(--gold);">0</b></li>
+                    </ul>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <span style="font-size: 0.8rem; color: var(--muted);">Archivos pendientes de transcripción y estructuración.</span>
+                <button class="btn-secondary" onclick="closeModal('modal-stat-input')">Cerrar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL NOTAS PREPARADAS -->
+    <div class="modal-overlay" id="modal-stat-notes">
+        <div class="modal-container" style="width: 680px;">
+            <div class="modal-header">
+                <div class="modal-title">TELEMETRÍA DEL GRAFO DE CONOCIMIENTO</div>
+                <button class="close-btn" onclick="closeModal('modal-stat-notes')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div style="background-color: var(--bg-card); border: 1px solid var(--border); padding: 14px; border-radius: 6px; display: flex; flex-direction: column; gap: 8px;">
+                    <div style="font-size: 0.88rem; font-weight: 700; color: var(--paper);">Resumen de Notas e Interconexiones:</div>
+                    <ul style="font-size: 0.8rem; color: var(--muted); margin: 0; padding-left: 18px; line-height: 1.6;">
+                        <li>Notas inteligentes en 4_salida: <b id="stat-notes-total-count" style="color: var(--gold);">0</b></li>
+                        <li>Hiperenlaces cruzados ([[nota]]): <b id="stat-notes-links-count" style="color: var(--accent);">0</b></li>
+                        <li>Base de datos vectorial: <b style="color: var(--green);">ChromaDB Activo</b></li>
+                    </ul>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <span style="font-size: 0.8rem; color: var(--muted);">Notas atómicas vectorizadas e hiperinterenlazadas en 4_salida.</span>
+                <button class="btn-secondary" onclick="closeModal('modal-stat-notes')">Cerrar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL CONSUMO RAM -->
+    <div class="modal-overlay" id="modal-stat-ram">
+        <div class="modal-container" style="width: 680px;">
+            <div class="modal-header">
+                <div class="modal-title">RECURSOS Y MEMORIA RAM DEL SISTEMA</div>
+                <button class="close-btn" onclick="closeModal('modal-stat-ram')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div style="background-color: var(--bg-card); border: 1px solid var(--border); padding: 14px; border-radius: 6px; display: flex; flex-direction: column; gap: 10px;">
+                    <div style="font-size: 0.88rem; font-weight: 700; color: var(--paper);">Telemetría de Memoria del Sistema:</div>
+                    <ul style="font-size: 0.8rem; color: var(--muted); margin: 0; padding-left: 18px; line-height: 1.6;">
+                        <li>Uso actual de memoria RAM: <b id="stat-ram-usage-pct" style="color: var(--gold);">0%</b></li>
+                        <li>Margen de seguridad configurado: <b id="stat-ram-margin-pct" style="color: var(--paper);">20%</b></li>
+                        <li>Estado del recolector de basura (GC): <b style="color: var(--green);">Optimizado</b></li>
+                    </ul>
+                    <button class="btn-secondary" style="align-self: flex-start; margin-top: 4px;" onclick="triggerAction('stat_ram')">Purgar Memoria RAM Ahora</button>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <span style="font-size: 0.8rem; color: var(--muted);">Gestión inteligente de memoria para modelos de IA local.</span>
+                <button class="btn-secondary" onclick="closeModal('modal-stat-ram')">Cerrar</button>
             </div>
         </div>
     </div>
@@ -625,19 +941,156 @@
             </div>
             <div class="modal-body">
                 <div style="display: flex; gap: 10px; border-bottom: 1px solid var(--border); padding-bottom: 8px;">
-                    <button class="btn-small" style="font-weight: 700;">Rutas & Vault</button>
-                    <button class="btn-small">Servidor & IA</button>
-                    <button class="btn-small">Plantilla Nota</button>
-                    <button class="btn-small">Re-Setup</button>
+                    <button class="btn-small tab-btn" id="tab-btn-routes" style="font-weight: 700; background-color: var(--bg-card-hover);" onclick="switchSettingsTab('routes')">Memoria & Conexiones</button>
+                    <button class="btn-small tab-btn" id="tab-btn-server" onclick="switchSettingsTab('server')">Servidor & IA</button>
+                    <button class="btn-small tab-btn" id="tab-btn-template" onclick="switchSettingsTab('template')">Plantilla Nota</button>
                 </div>
-                <div style="display: flex; flex-direction: column; gap: 8px;">
-                    <label style="font-size: 0.85rem; font-weight: 700;">Ruta Principal del Vault:</label>
-                    <input type="text" value="/Users/usuario/Documents/Funes_Vault" style="padding: 8px; border: 1px solid var(--border); background-color: var(--bg-log); border-radius: 4px;">
+
+                <!-- PESTAÑA 1: MEMORIA & CONEXIONES -->
+                <div class="tab-panel" id="tab-panel-routes" style="display: flex; flex-direction: column; gap: 12px; margin-top: 8px;">
+                    <!-- BÓVEDA PRINCIPAL -->
+                    <div>
+                        <label style="font-size: 0.85rem; font-weight: 700; display: block; margin-bottom: 4px;">Ruta Principal de la Memoria de Funes:</label>
+                        <div style="display: flex; gap: 8px;">
+                            <input type="text" id="setting-vault-path" value="" readonly style="flex-grow: 1; padding: 8px 12px; border: 1px solid var(--border); background-color: var(--bg-log); color: var(--paper); font-family: var(--font-mono) !important; font-size: 0.85rem; border-radius: 4px; outline: none; cursor: default;">
+                            <button class="btn-secondary" style="white-space: nowrap;" onclick="browseVaultFolder()">Explorar...</button>
+                        </div>
+                        <span style="font-size: 0.72rem; color: var(--muted); margin-top: 3px; display: block;">Las carpetas 1_entrada, 2_sucio, 3_limpio y 4_salida están estructuradas automáticamente por Funes en esta bóveda.</span>
+                    </div>
+
+                    <!-- CONEXIONES DE INGESTA (1_ENTRADA) -->
+                    <div style="border-top: 1px solid var(--border); padding-top: 10px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                            <label style="font-size: 0.85rem; font-weight: 700; color: var(--paper);">Fuentes Vinculadas a 1_entrada (Ingesta):</label>
+                            <button class="btn-small" onclick="addLinkedInputFolder()">+ Vincular Carpeta de Ingesta</button>
+                        </div>
+                        <span style="font-size: 0.72rem; color: var(--muted); display: block; margin-bottom: 6px;">Archivos volcados en estas carpetas locales/compartidas serán recopilados hacia 1_entrada:</span>
+                        <div id="linked-input-folders-list" style="background-color: var(--bg-log); border: 1px solid var(--border); border-radius: 4px; padding: 8px; min-height: 54px; max-height: 90px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px;">
+                            <div style="font-size: 0.78rem; color: var(--muted); font-style: italic;">No hay carpetas de ingesta vinculadas.</div>
+                        </div>
+                    </div>
+
+                    <!-- CONEXIONES DE SALIDA (4_SALIDA) -->
+                    <div style="border-top: 1px solid var(--border); padding-top: 10px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                            <label style="font-size: 0.85rem; font-weight: 700; color: var(--paper);">Destinos Vinculados a 4_salida (Difusión):</label>
+                            <button class="btn-small" onclick="addLinkedOutputFolder()">+ Vincular Carpeta de Destino</button>
+                        </div>
+                        <span style="font-size: 0.72rem; color: var(--muted); display: block; margin-bottom: 6px;">Notas preparadas en 4_salida se replicarán en estos destinos locales/compartidos:</span>
+                        <div id="linked-output-folders-list" style="background-color: var(--bg-log); border: 1px solid var(--border); border-radius: 4px; padding: 8px; min-height: 54px; max-height: 90px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px;">
+                            <div style="font-size: 0.78rem; color: var(--muted); font-style: italic;">No hay carpetas de destino vinculadas.</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- PESTAÑA 2: SERVIDOR & IA -->
+                <div class="tab-panel" id="tab-panel-server" style="display: none; flex-direction: column; gap: 12px; margin-top: 8px;">
+                    <div>
+                        <label style="font-size: 0.85rem; font-weight: 700; display: block; margin-bottom: 4px;">Modelo LLM Ollama (Qwen Local):</label>
+                        <select id="setting-ollama-model" style="width: 100%; padding: 8px 12px; border: 1px solid var(--border); background-color: var(--bg-log); color: var(--paper); font-family: var(--font-mono) !important; font-size: 0.85rem; border-radius: 4px; cursor: pointer; outline: none;">
+                            <option value="qwen2.5:7b">qwen2.5:7b (Recomendado Papiro)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label style="font-size: 0.85rem; font-weight: 700; display: block; margin-bottom: 4px;">URL Servidor:</label>
+                        <select id="setting-ollama-url" style="width: 100%; padding: 8px 12px; border: 1px solid var(--border); background-color: var(--bg-log); color: var(--paper); font-family: var(--font-mono) !important; font-size: 0.85rem; border-radius: 4px; cursor: pointer; outline: none;">
+                            <option value="http://localhost:11434">Ollama (http://localhost:11434)</option>
+                            <option value="http://localhost:1234">LM Studio (http://localhost:1234)</option>
+                            <option value="http://localhost:8000">vLLM / LocalAI (http://localhost:8000)</option>
+                            <option value="http://localhost:11435">Ollama Puerto Alternativo (http://localhost:11435)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label style="font-size: 0.85rem; font-weight: 700; display: block; margin-bottom: 4px;">Margen de Seguridad RAM:</label>
+                        <select id="setting-ram-margin" style="width: 100%; padding: 8px 12px; border: 1px solid var(--border); background-color: var(--bg-log); color: var(--paper); font-family: var(--font-mono) !important; font-size: 0.85rem; border-radius: 4px; cursor: pointer; outline: none;">
+                            <option value="10%">10%</option>
+                            <option value="20%" selected>20%</option>
+                            <option value="30%">30%</option>
+                            <option value="40%">40%</option>
+                            <option value="50%">50%</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- PESTAÑA 3: PLANTILLA NOTA -->
+                <div class="tab-panel" id="tab-panel-template" style="display: none; flex-direction: column; gap: 12px; margin-top: 8px;">
+                    <div>
+                        <label style="font-size: 0.85rem; font-weight: 700; display: block; margin-bottom: 4px;">Encabezado Metadatos YAML:</label>
+                        <select id="setting-yaml-header" style="width: 100%; padding: 8px 12px; border: 1px solid var(--border); background-color: var(--bg-log); color: var(--paper); font-family: var(--font-mono) !important; font-size: 0.85rem; border-radius: 4px; cursor: pointer; outline: none;">
+                            <option value="standard">Standard Funes (Completo con Tags e Interenlaces)</option>
+                            <option value="strict">Obsidian Strict (Estándar Obsidian Core)</option>
+                            <option value="minimal">Minimalista (Sólo Titular y Fecha)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label style="font-size: 0.85rem; font-weight: 700; display: block; margin-bottom: 4px;">Índice MOC Global:</label>
+                        <select id="setting-auto-moc" style="width: 100%; padding: 8px 12px; border: 1px solid var(--border); background-color: var(--bg-log); color: var(--paper); font-family: var(--font-mono) !important; font-size: 0.85rem; border-radius: 4px; cursor: pointer; outline: none;">
+                            <option value="enabled">Generación Automática Activada (Recomendado)</option>
+                            <option value="disabled">Generación Manual Únicamente</option>
+                        </select>
+                    </div>
                 </div>
             </div>
             <div class="modal-footer">
-                <span style="font-size: 0.8rem; color: var(--muted); font-weight: 700;">Funes trabaja sin salir de tu dispositivo (100% Local).</span>
-                <button class="btn-secondary" style="background-color: var(--accent); color: white;" onclick="closeModal('modal-settings')">Guardar Ajustes</button>
+                <button class="btn-secondary" style="background-color: var(--bg-card); border: 1px solid var(--border-accent);" onclick="resetDefaultSettings()">Restaurar por Defecto</button>
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <span style="font-size: 0.78rem; color: var(--muted); font-weight: 700;">100% Local</span>
+                    <button class="btn-secondary" style="background-color: var(--accent); color: white;" onclick="saveSettings()">Guardar Ajustes</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL CATEGORÍA -->
+    <div class="modal-overlay" id="modal-category">
+        <div class="modal-container">
+            <div class="modal-header">
+                <div class="modal-title" id="category-modal-title">DESGLOSE DE ARCHIVOS</div>
+                <button class="close-btn" onclick="closeModal('modal-category')">&times;</button>
+            </div>
+            <div class="modal-body" id="category-modal-body">
+                <p style="font-size: 0.85rem; color: var(--muted);">Cargando listado de archivos...</p>
+            </div>
+            <div class="modal-footer">
+                <span style="font-size: 0.78rem; color: var(--muted);">Doble clic abre el archivo con la app nativa del sistema.</span>
+                <button class="btn-secondary" onclick="closeModal('modal-category')">Cerrar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL AYUDA RÁPIDA -->
+    <div class="modal-overlay" id="modal-help">
+        <div class="modal-container" style="width: 800px;">
+            <div class="modal-header">
+                <div class="modal-title">GUÍA RÁPIDA DE USO — SISTEMA FUNES</div>
+                <button class="close-btn" onclick="closeModal('modal-help')">&times;</button>
+            </div>
+            <div class="modal-body" style="gap: 16px;">
+                <div style="background: var(--bg-card); padding: 14px; border: 1px solid var(--border); border-radius: var(--card-radius);">
+                    <h4 style="margin: 0 0 6px 0; color: var(--gold); font-size: 0.9rem;">1. Flujo de Trabajo Principal</h4>
+                    <p style="font-size: 0.8rem; color: var(--paper); line-height: 1.4; margin: 0 0 8px 0;">
+                        Funes procesa la información de tu biblioteca en 4 fases continuas:
+                    </p>
+                    <ul style="font-size: 0.78rem; color: var(--muted); margin: 0; padding-left: 18px; line-height: 1.5;">
+                        <li><b>Recepción (1_entrada):</b> Ingesta manual o recopilación desde fuentes vinculadas.</li>
+                        <li><b>Transcripción (2_sucio ➔ 3_limpio):</b> Procesado ETL de audios (Whisper), capturas (OCR) y documentos.</li>
+                        <li><b>Estructuración (4_salida):</b> KarpathyLoop y vectorización ChromaDB para notas inteligentes interenlazadas.</li>
+                        <li><b>Consulta:</b> Exploración en el Lector de Notas y Chat interactivo RAG con IA local.</li>
+                    </ul>
+                </div>
+
+                <div style="background: var(--bg-card); padding: 14px; border: 1px solid var(--border); border-radius: var(--card-radius);">
+                    <h4 style="margin: 0 0 6px 0; color: var(--gold); font-size: 0.9rem;">2. Barra de Acciones Rápida</h4>
+                    <ul style="font-size: 0.78rem; color: var(--paper); margin: 0; padding-left: 18px; line-height: 1.5;">
+                        <li><b>Actualizar Fuentes:</b> Trae automáticamente archivos nuevos o modificados desde carpetas externas conectadas.</li>
+                        <li><b>Actualizar Índice de Notas:</b> Reconstruye el grafo de relaciones e interenlaces <code>[[nota]]</code>.</li>
+                        <li><b>Ajustes Avanzados:</b> Configura el Servidor de IA Local (Ollama, LM Studio), margen de RAM y vinculación de rutas.</li>
+                    </ul>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <span style="font-size: 0.78rem; color: var(--muted);">Funes v2026.1 • Formateo Universal de Notas, Estructuración y Síntesis</span>
+                <button class="btn-secondary" onclick="closeModal('modal-help')">Cerrar</button>
             </div>
         </div>
     </div>
@@ -667,13 +1120,933 @@
             document.getElementById('log-console').innerHTML = '';
         }
 
+        function getFormattedTimestamp() {
+            const now = new Date();
+            const dd = String(now.getDate()).padStart(2, '0');
+            const mm = String(now.getMonth() + 1).padStart(2, '0');
+            const aaaa = now.getFullYear();
+            const hh = String(now.getHours()).padStart(2, '0');
+            const min = String(now.getMinutes()).padStart(2, '0');
+            const ss = String(now.getSeconds()).padStart(2, '0');
+            return `${dd}/${mm}/${aaaa}  ${hh}:${min}:${ss}`;
+        }
+
+        function updateStepBadge(badgeId) {
+            const el = document.getElementById(badgeId);
+            if (el) {
+                el.innerText = 'Última acción:  ' + getFormattedTimestamp();
+            }
+        }
+
         function openModal(id) {
             document.getElementById(id).style.display = 'flex';
+            if (id === 'modal-reader' || id === 'modal-chat') {
+                updateStepBadge('badge-step4');
+            }
+            if (id === 'modal-reader') { loadReaderNotes(); }
+            if (id === 'modal-settings') { loadSettingsData(); }
+            if (id === 'modal-stat-input') { loadStatInputData(); }
+            if (id === 'modal-stat-notes') { loadStatNotesData(); }
+            if (id === 'modal-stat-ram') { loadStatRamData(); }
+        }
+
+        function loadStatInputData() {
+            if (window.pywebview && window.pywebview.api) {
+                window.pywebview.api.get_initial_state().then(function(state) {
+                    if (state && state.stats) {
+                        document.getElementById('stat-input-direct-count').innerText = state.stats.input || '0';
+                    }
+                });
+                window.pywebview.api.get_settings_info().then(function(info) {
+                    if (info && info.input_connected_folders) {
+                        document.getElementById('stat-input-sources-count').innerText = info.input_connected_folders.length;
+                    }
+                });
+            } else {
+                document.getElementById('stat-input-direct-count').innerText = '0';
+                document.getElementById('stat-input-sources-count').innerText = '0';
+            }
+        }
+
+        function loadStatNotesData() {
+            if (window.pywebview && window.pywebview.api) {
+                window.pywebview.api.get_initial_state().then(function(state) {
+                    if (state && state.stats) {
+                        document.getElementById('stat-notes-total-count').innerText = state.stats.notes || '0';
+                    }
+                });
+                window.pywebview.api.get_graph_data().then(function(data) {
+                    if (data && data.links) {
+                        document.getElementById('stat-notes-links-count').innerText = data.links.length;
+                    }
+                });
+            } else {
+                document.getElementById('stat-notes-total-count').innerText = '0';
+                document.getElementById('stat-notes-links-count').innerText = '0';
+            }
+        }
+
+        function loadStatRamData() {
+            if (window.pywebview && window.pywebview.api) {
+                window.pywebview.api.get_initial_state().then(function(state) {
+                    if (state && state.stats) {
+                        document.getElementById('stat-ram-usage-pct').innerText = state.stats.ram || '0%';
+                    }
+                });
+                window.pywebview.api.get_settings_info().then(function(info) {
+                    if (info && info.ram_margin) {
+                        document.getElementById('stat-ram-margin-pct').innerText = info.ram_margin;
+                    }
+                });
+            } else {
+                document.getElementById('stat-ram-usage-pct').innerText = '0%';
+                document.getElementById('stat-ram-margin-pct').innerText = '20%';
+            }
         }
 
         function closeModal(id) {
             document.getElementById(id).style.display = 'none';
         }
+
+        function populateOllamaModels(models, currentModel) {
+            const select = document.getElementById('setting-ollama-model');
+            select.innerHTML = '';
+            if (!models || !models.length) {
+                models = ["qwen2.5:7b", "qwen2.5-coder:7b", "qwen2.5:14b", "llama3.2"];
+            }
+            models.forEach(function(m) {
+                const opt = document.createElement('option');
+                opt.value = m;
+                opt.innerText = m + (m.toLowerCase().includes('qwen') ? ' (Qwen Local)' : '');
+                if (m === currentModel || (!currentModel && m.toLowerCase().includes('qwen'))) {
+                    opt.selected = true;
+                }
+                select.appendChild(opt);
+            });
+        }
+
+        function switchSettingsTab(tabId) {
+            document.querySelectorAll('.tab-panel').forEach(function(el) {
+                el.style.display = 'none';
+            });
+            document.querySelectorAll('.tab-btn').forEach(function(el) {
+                el.style.fontWeight = '400';
+                el.style.backgroundColor = 'transparent';
+            });
+
+            const activePanel = document.getElementById('tab-panel-' + tabId);
+            if (activePanel) {
+                activePanel.style.display = 'flex';
+            }
+
+            const activeBtn = document.getElementById('tab-btn-' + tabId);
+            if (activeBtn) {
+                activeBtn.style.fontWeight = '700';
+                activeBtn.style.backgroundColor = 'var(--bg-card-hover)';
+            }
+        }
+
+        let linkedInputFolders = [];
+        let linkedOutputFolders = [];
+
+        function pickBrowserFolder(callback) {
+            let input = document.getElementById('browser-folder-picker');
+            if (!input) {
+                input = document.createElement('input');
+                input.type = 'file';
+                input.id = 'browser-folder-picker';
+                input.setAttribute('webkitdirectory', '');
+                input.setAttribute('directory', '');
+                input.style.display = 'none';
+                document.body.appendChild(input);
+            }
+            input.onchange = function(e) {
+                if (e.target.files && e.target.files.length > 0) {
+                    const file = e.target.files[0];
+                    let folderPath = file.path;
+                    if (!folderPath && file.webkitRelativePath) {
+                        folderPath = file.webkitRelativePath.split('/')[0];
+                    }
+                    if (!folderPath) {
+                        folderPath = file.name;
+                    }
+                    if (folderPath && !folderPath.startsWith('/') && !folderPath.includes(':\\')) {
+                        folderPath = '/Users/emiliosevillaortego/Documents/' + folderPath;
+                    }
+                    callback(folderPath);
+                }
+                input.value = '';
+            };
+            input.click();
+        }
+
+        function browseVaultFolder() {
+            log('Abriendo selector nativo del Finder de macOS para la Bóveda...');
+            if (window.pywebview && window.pywebview.api) {
+                window.pywebview.api.select_folder("Seleccionar Carpeta de la Memoria de Funes").then(function(folder) {
+                    if (folder) {
+                        document.getElementById('setting-vault-path').value = folder;
+                        log('Ruta de la Memoria de Funes actualizada: ' + folder);
+                    } else {
+                        log('Selección de Bóveda cancelada.');
+                    }
+                }).catch(function(err) {
+                    log('Error en selector de Bóveda: ' + err);
+                });
+            } else {
+                pickBrowserFolder(function(folder) {
+                    if (folder) {
+                        document.getElementById('setting-vault-path').value = folder;
+                        log('Ruta de la Memoria de Funes seleccionada: ' + folder);
+                    }
+                });
+            }
+        }
+
+        function addLinkedInputFolder() {
+            log('Abriendo selector nativo del Finder para Fuentes de Ingesta...');
+            if (window.pywebview && window.pywebview.api) {
+                window.pywebview.api.select_folder("Vincular Carpeta de Ingesta (1_entrada)").then(function(folder) {
+                    if (folder && !linkedInputFolders.includes(folder)) {
+                        linkedInputFolders.push(folder);
+                        renderLinkedFolders();
+                        log('Carpeta de ingesta vinculada: ' + folder);
+                    } else if (!folder) {
+                        log('Selección de ingesta cancelada.');
+                    }
+                }).catch(function(err) {
+                    log('Error en selector de ingesta: ' + err);
+                });
+            } else {
+                pickBrowserFolder(function(folder) {
+                    if (folder && !linkedInputFolders.includes(folder)) {
+                        linkedInputFolders.push(folder);
+                        renderLinkedFolders();
+                        log('Carpeta de ingesta vinculada: ' + folder);
+                    }
+                });
+            }
+        }
+
+        function removeLinkedInputFolder(idx) {
+            const removed = linkedInputFolders.splice(idx, 1);
+            renderLinkedFolders();
+            log('Carpeta de ingesta desvinculada: ' + removed);
+        }
+
+        function addLinkedOutputFolder() {
+            log('Abriendo selector nativo del Finder para Destinos de Difusión...');
+            if (window.pywebview && window.pywebview.api) {
+                window.pywebview.api.select_folder("Vincular Carpeta de Destino (4_salida)").then(function(folder) {
+                    if (folder && !linkedOutputFolders.includes(folder)) {
+                        linkedOutputFolders.push(folder);
+                        renderLinkedFolders();
+                        log('Carpeta de destino vinculada: ' + folder);
+                    } else if (!folder) {
+                        log('Selección de destino cancelada.');
+                    }
+                }).catch(function(err) {
+                    log('Error en selector de destino: ' + err);
+                });
+            } else {
+                pickBrowserFolder(function(folder) {
+                    if (folder && !linkedOutputFolders.includes(folder)) {
+                        linkedOutputFolders.push(folder);
+                        renderLinkedFolders();
+                        log('Carpeta de destino vinculada: ' + folder);
+                    }
+                });
+            }
+        }
+
+        function removeLinkedOutputFolder(idx) {
+            const removed = linkedOutputFolders.splice(idx, 1);
+            renderLinkedFolders();
+            log('Carpeta de destino desvinculada: ' + removed);
+        }
+
+        function renderLinkedFolders() {
+            const inputEl = document.getElementById('linked-input-folders-list');
+            const outputEl = document.getElementById('linked-output-folders-list');
+
+            if (inputEl) {
+                inputEl.innerHTML = '';
+                if (linkedInputFolders.length === 0) {
+                    inputEl.innerHTML = '<div style="font-size: 0.78rem; color: var(--muted); font-style: italic;">No hay carpetas de ingesta vinculadas.</div>';
+                } else {
+                    linkedInputFolders.forEach(function(f, idx) {
+                        const item = document.createElement('div');
+                        item.style.cssText = 'display: flex; justify-content: space-between; align-items: center; background-color: var(--bg-card); padding: 4px 8px; border-radius: 4px; font-size: 0.78rem; border: 1px solid var(--border);';
+                        item.innerHTML = '<span>' + f + '</span><span style="color: var(--red); cursor: pointer; font-weight: 700;" onclick="removeLinkedInputFolder(' + idx + ')">&times;</span>';
+                        inputEl.appendChild(item);
+                    });
+                }
+            }
+
+            if (outputEl) {
+                outputEl.innerHTML = '';
+                if (linkedOutputFolders.length === 0) {
+                    outputEl.innerHTML = '<div style="font-size: 0.78rem; color: var(--muted); font-style: italic;">No hay carpetas de destino vinculadas.</div>';
+                } else {
+                    linkedOutputFolders.forEach(function(f, idx) {
+                        const item = document.createElement('div');
+                        item.style.cssText = 'display: flex; justify-content: space-between; align-items: center; background-color: var(--bg-card); padding: 4px 8px; border-radius: 4px; font-size: 0.78rem; border: 1px solid var(--border);';
+                        item.innerHTML = '<span>' + f + '</span><span style="color: var(--red); cursor: pointer; font-weight: 700;" onclick="removeLinkedOutputFolder(' + idx + ')">&times;</span>';
+                        outputEl.appendChild(item);
+                    });
+                }
+            }
+        }
+
+        function loadSettingsData() {
+            if (window.pywebview && window.pywebview.api) {
+                window.pywebview.api.get_settings_info().then(function(info) {
+                    if (info.vault_path) { document.getElementById('setting-vault-path').value = info.vault_path; }
+                    if (info.input_connected_folders) { linkedInputFolders = info.input_connected_folders; }
+                    if (info.output_connected_folders) { linkedOutputFolders = info.output_connected_folders; }
+                    if (info.ollama_url) { document.getElementById('setting-ollama-url').value = info.ollama_url; }
+                    if (info.ram_margin) { document.getElementById('setting-ram-margin').value = info.ram_margin; }
+                    renderLinkedFolders();
+                    populateOllamaModels(info.models, info.current_model);
+                });
+            } else {
+                if (!document.getElementById('setting-vault-path').value || !document.getElementById('setting-vault-path').value.startsWith('/')) {
+                    document.getElementById('setting-vault-path').value = '/Users/emiliosevillaortego/Documents/Funes_Vault';
+                }
+                renderLinkedFolders();
+                populateOllamaModels(["qwen2.5:7b", "qwen2.5-coder:7b", "qwen2.5:14b", "llama3.2"], "qwen2.5:7b");
+            }
+        }
+
+        function triggerAction(actionName, payload) {
+            let logTitle = actionName;
+            if (actionName === 'flush_sources' || actionName === 'step1_flush') {
+                logTitle = 'recopilación de fuentes hacia la carpeta de ingesta de Funes';
+                updateStepBadge('badge-step1');
+            } else if (actionName === 'step2_transcribe') {
+                logTitle = 'procesado de datos desestructurados.';
+                updateStepBadge('badge-step2');
+            } else if (actionName === 'step3_structure' || actionName === 'reindex_notes') {
+                logTitle = 'preparación de notas inteligentes.';
+                updateStepBadge('badge-step3');
+            }
+
+            log('Acción ejecutada: ' + logTitle);
+            if (window.pywebview && window.pywebview.api) {
+                window.pywebview.api.trigger_action(actionName, payload || {}).then(function(res) {
+                    if (res && res.log) { log(res.log); }
+                    if (res && res.refresh) { updateDashboardStats(res.stats); }
+                    if (res && res.modal) { openModal(res.modal); }
+                    if (res && res.alert) { alert(res.alert); }
+                });
+            } else {
+                if (actionName === 'flush_sources' || actionName === 'step1_flush') { log('Recopilación completada hacia 1_entrada (modo vista previa).'); }
+                else if (actionName === 'step2_transcribe') { log('Estructuración de datos completada hacia 3_limpio.'); }
+                else if (actionName === 'step3_structure') { log('Preparación de notas inteligentes KarpathyLoop finalizada.'); }
+                else if (actionName === 'quick_help') { openModal('modal-help'); }
+                else if (actionName === 'stat_ram') { alert('Purga de memoria RAM ejecutada.'); }
+                else if (actionName === 'stat_notes') { alert('Telemetría del Grafo: 142 notas preparadas, 380 interenlaces.'); }
+                else if (actionName === 'stat_input') { alert('Archivos por procesar: 3 en 1_entrada.'); }
+                else if (actionName === 'stat_processed') { openModal('modal-category'); }
+            }
+        }
+
+        function sendChatMessage() {
+            const inputEl = document.getElementById('chat-input');
+            const msg = inputEl.value.trim();
+            if (!msg) return;
+
+            const chatScroll = document.getElementById('chat-messages');
+
+            const userBubble = document.createElement('div');
+            userBubble.className = 'chat-bubble user';
+            userBubble.innerHTML = '<strong>Tú:</strong> ' + msg;
+            chatScroll.appendChild(userBubble);
+            inputEl.value = '';
+            chatScroll.scrollTop = chatScroll.scrollHeight;
+
+            if (window.pywebview && window.pywebview.api) {
+                window.pywebview.api.send_chat_message(msg).then(function(reply) {
+                    const aiBubble = document.createElement('div');
+                    aiBubble.className = 'chat-bubble ai';
+                    aiBubble.innerHTML = '<strong>Funes IA:</strong> ' + reply.text;
+                    if (reply.sources && reply.sources.length) {
+                        aiBubble.innerHTML += '<div style="margin-top:6px; font-size:0.75rem; color: var(--muted);">Fuentes: ' + reply.sources.join(', ') + '</div>';
+                    }
+                    chatScroll.appendChild(aiBubble);
+                    chatScroll.scrollTop = chatScroll.scrollHeight;
+                });
+            } else {
+                setTimeout(function() {
+                    const aiBubble = document.createElement('div');
+                    aiBubble.className = 'chat-bubble ai';
+                    aiBubble.innerHTML = '<strong>Funes IA:</strong> Procesando tu consulta sobre "' + msg + '". Información derivada de las notas atómicas locales.';
+                    chatScroll.appendChild(aiBubble);
+                    chatScroll.scrollTop = chatScroll.scrollHeight;
+                }, 400);
+            }
+        }
+
+        function clearChatHistory() {
+            document.getElementById('chat-messages').innerHTML = '<div class="chat-bubble ai"><strong>Funes IA:</strong> Historial de chat limpiado.</div>';
+        }
+
+        function switchReaderView(view) {
+            const listBtn = document.getElementById('btn-reader-mode-list');
+            const graphBtn = document.getElementById('btn-reader-mode-graph');
+            const listView = document.getElementById('reader-view-list');
+            const graphView = document.getElementById('reader-view-graph');
+
+            if (view === 'list') {
+                if (listBtn) listBtn.classList.add('active');
+                if (graphBtn) graphBtn.classList.remove('active');
+                if (listView) listView.style.display = 'flex';
+                if (graphView) graphView.style.display = 'none';
+            } else {
+                if (graphBtn) graphBtn.classList.add('active');
+                if (listBtn) listBtn.classList.remove('active');
+                if (listView) listView.style.display = 'none';
+                if (graphView) graphView.style.display = 'block';
+                loadObsidianGraphView();
+            }
+        }
+
+        let obsidianGraphEngine = null;
+
+        function loadObsidianGraphView() {
+            if (window.pywebview && window.pywebview.api) {
+                window.pywebview.api.get_graph_data().then(function(data) {
+                    initObsidianGraphCanvas(data);
+                });
+            } else {
+                const demoData = {
+                    nodes: [
+                        { id: "KarpathyLoop", label: "KarpathyLoop" },
+                        { id: "Notas_Inteligentes", label: "Notas_Inteligentes" },
+                        { id: "Vectorización_ChromaDB", label: "Vectorización_ChromaDB" },
+                        { id: "Extractores_ETL", label: "Extractores_ETL" },
+                        { id: "Obsidian_Vault", label: "Obsidian_Vault" },
+                        { id: "Ingesta_Fuentes", label: "Ingesta_Fuentes" },
+                        { id: "Funes_Gazette", label: "Funes_Gazette" }
+                    ],
+                    links: [
+                        { source: "KarpathyLoop", target: "Notas_Inteligentes" },
+                        { source: "KarpathyLoop", target: "Vectorización_ChromaDB" },
+                        { source: "Extractores_ETL", target: "KarpathyLoop" },
+                        { source: "Notas_Inteligentes", target: "Obsidian_Vault" },
+                        { source: "Ingesta_Fuentes", target: "Extractores_ETL" },
+                        { source: "Funes_Gazette", target: "Obsidian_Vault" }
+                    ]
+                };
+                initObsidianGraphCanvas(demoData);
+            }
+        }
+
+        function initObsidianGraphCanvas(data) {
+            const canvas = document.getElementById('obsidian-graph-canvas');
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
+            const nodesCountEl = document.getElementById('graph-nodes-count');
+            const linksCountEl = document.getElementById('graph-links-count');
+
+            const width = canvas.width = canvas.parentElement.clientWidth || 800;
+            const height = canvas.height = canvas.parentElement.clientHeight || 480;
+
+            let nodes = data.nodes || [];
+            let links = data.links || [];
+
+            if (nodesCountEl) nodesCountEl.innerText = nodes.length;
+            if (linksCountEl) linksCountEl.innerText = links.length;
+
+            if (nodes.length === 0) {
+                ctx.clearRect(0, 0, width, height);
+                ctx.fillStyle = '#5E564B';
+                ctx.font = '14px Courier, monospace';
+                ctx.fillText('No hay notas en 4_salida para construir el grafo', width / 2 - 160, height / 2);
+                return;
+            }
+
+            // Estado de Pan & Zoom
+            let zoom = 1.0;
+            let panX = 0;
+            let panY = 0;
+            let isPanning = false;
+            let panStartX = 0;
+            let panStartY = 0;
+
+            const centerX = width / 2;
+            const centerY = height / 2;
+            const radius = Math.min(width, height) * 0.3;
+
+            nodes.forEach((n, idx) => {
+                const angle = (idx / nodes.length) * 2 * Math.PI;
+                n.x = centerX + radius * Math.cos(angle) + (Math.random() - 0.5) * 30;
+                n.y = centerY + radius * Math.sin(angle) + (Math.random() - 0.5) * 30;
+                n.radius = 6;
+            });
+
+            const nodeMap = {};
+            nodes.forEach(n => nodeMap[n.id] = n);
+
+            let activeLinks = [];
+            links.forEach(l => {
+                const s = typeof l.source === 'string' ? nodeMap[l.source] : l.source;
+                const t = typeof l.target === 'string' ? nodeMap[l.target] : l.target;
+                if (s && t) activeLinks.push({ source: s, target: t });
+            });
+
+            let draggedNode = null;
+            let hoveredNode = null;
+            let dragMoved = false;
+
+            function getMousePos(e) {
+                const rect = canvas.getBoundingClientRect();
+                return {
+                    sx: (e.clientX - rect.left) * (canvas.width / rect.width),
+                    sy: (e.clientY - rect.top) * (canvas.height / rect.height)
+                };
+            }
+
+            function screenToWorld(sx, sy) {
+                return {
+                    wx: (sx - panX) / zoom,
+                    wy: (sy - panY) / zoom
+                };
+            }
+
+            canvas.onmousedown = function(e) {
+                const { sx, sy } = getMousePos(e);
+                const { wx, wy } = screenToWorld(sx, sy);
+
+                draggedNode = null;
+                dragMoved = false;
+
+                for (let i = 0; i < nodes.length; i++) {
+                    const n = nodes[i];
+                    const dx = n.x - wx;
+                    const dy = n.y - wy;
+                    const hitRadius = (n.radius + 8) / zoom;
+                    if (Math.sqrt(dx * dx + dy * dy) < hitRadius) {
+                        draggedNode = n;
+                        break;
+                    }
+                }
+
+                if (!draggedNode) {
+                    isPanning = true;
+                    panStartX = sx - panX;
+                    panStartY = sy - panY;
+                    canvas.style.cursor = 'grabbing';
+                }
+            };
+
+            canvas.onmousemove = function(e) {
+                const { sx, sy } = getMousePos(e);
+                const { wx, wy } = screenToWorld(sx, sy);
+
+                if (draggedNode) {
+                    draggedNode.x = wx;
+                    draggedNode.y = wy;
+                    dragMoved = true;
+                } else if (isPanning) {
+                    panX = sx - panStartX;
+                    panY = sy - panStartY;
+                } else {
+                    hoveredNode = null;
+                    for (let i = 0; i < nodes.length; i++) {
+                        const n = nodes[i];
+                        const dx = n.x - wx;
+                        const dy = n.y - wy;
+                        const hitRadius = (n.radius + 8) / zoom;
+                        if (Math.sqrt(dx * dx + dy * dy) < hitRadius) {
+                            hoveredNode = n;
+                            break;
+                        }
+                    }
+                    canvas.style.cursor = hoveredNode ? 'pointer' : (isPanning ? 'grabbing' : 'grab');
+                }
+            };
+
+            canvas.onmouseup = function(e) {
+                if (draggedNode && !dragMoved && draggedNode.path) {
+                    switchReaderView('list');
+                    loadNoteContent(draggedNode.path);
+                }
+                draggedNode = null;
+                isPanning = false;
+                canvas.style.cursor = hoveredNode ? 'pointer' : 'grab';
+            };
+
+            canvas.onwheel = function(e) {
+                e.preventDefault();
+                const zoomFactor = Math.pow(0.9985, e.deltaY);
+                const newZoom = Math.max(0.3, Math.min(4.0, zoom * zoomFactor));
+                const { sx, sy } = getMousePos(e);
+                
+                panX = sx - (sx - panX) * (newZoom / zoom);
+                panY = sy - (sy - panY) * (newZoom / zoom);
+                zoom = newZoom;
+            };
+
+            function stepPhysics() {
+                for (let i = 0; i < nodes.length; i++) {
+                    for (let j = i + 1; j < nodes.length; j++) {
+                        const n1 = nodes[i];
+                        const n2 = nodes[j];
+                        let dx = n2.x - n1.x;
+                        let dy = n2.y - n1.y;
+                        let dist = Math.sqrt(dx * dx + dy * dy) || 1;
+                        if (dist < 180) {
+                            let force = (180 - dist) / dist * 0.12;
+                            let fx = dx * force;
+                            let fy = dy * force;
+                            if (n1 !== draggedNode) { n1.x -= fx; n1.y -= fy; }
+                            if (n2 !== draggedNode) { n2.x += fx; n2.y += fy; }
+                        }
+                    }
+                }
+
+                activeLinks.forEach(l => {
+                    let dx = l.target.x - l.source.x;
+                    let dy = l.target.y - l.source.y;
+                    let dist = Math.sqrt(dx * dx + dy * dy) || 1;
+                    let force = (dist - 110) * 0.012;
+                    let fx = (dx / dist) * force;
+                    let fy = (dy / dist) * force;
+                    if (l.source !== draggedNode) { l.source.x += fx; l.source.y += fy; }
+                    if (l.target !== draggedNode) { l.target.x -= fx; l.target.y -= fy; }
+                });
+
+                nodes.forEach(n => {
+                    if (n !== draggedNode) {
+                        n.x += (centerX - n.x) * 0.005;
+                        n.y += (centerY - n.y) * 0.005;
+                    }
+                });
+            }
+
+            if (obsidianGraphEngine) cancelAnimationFrame(obsidianGraphEngine);
+
+            function render() {
+                stepPhysics();
+
+                ctx.save();
+                ctx.clearRect(0, 0, width, height);
+                ctx.translate(panX, panY);
+                ctx.scale(zoom, zoom);
+
+                // Dibujar enlaces
+                activeLinks.forEach(l => {
+                    const isHighlighted = hoveredNode && (hoveredNode === l.source || hoveredNode === l.target);
+                    ctx.beginPath();
+                    ctx.moveTo(l.source.x, l.source.y);
+                    ctx.lineTo(l.target.x, l.target.y);
+                    ctx.strokeStyle = isHighlighted ? '#161411' : '#BFB4A3';
+                    ctx.lineWidth = (isHighlighted ? 2.5 : 1) / zoom;
+                    ctx.globalAlpha = isHighlighted ? 0.95 : 0.5;
+                    ctx.stroke();
+                    ctx.globalAlpha = 1.0;
+                });
+
+                // Dibujar nodos
+                nodes.forEach(n => {
+                    const isHovered = (hoveredNode === n);
+                    const drawRadius = (isHovered ? n.radius + 3 : n.radius) / zoom;
+                    ctx.beginPath();
+                    ctx.arc(n.x, n.y, Math.max(3, drawRadius), 0, 2 * Math.PI);
+                    ctx.fillStyle = isHovered ? '#161411' : '#2E2B25';
+                    ctx.fill();
+                    ctx.lineWidth = 1.5 / zoom;
+                    ctx.strokeStyle = '#DCD4C7';
+                    ctx.stroke();
+
+                    ctx.fillStyle = isHovered ? '#161411' : '#2E2B25';
+                    const fontSize = Math.max(9, Math.min(16, 12 / zoom));
+                    ctx.font = (isHovered ? 'bold ' : '') + fontSize + 'px Courier, monospace';
+                    ctx.fillText(n.label, n.x + 10 / zoom, n.y + 4 / zoom);
+                });
+
+                ctx.restore();
+
+                obsidianGraphEngine = requestAnimationFrame(render);
+            }
+
+            render();
+        }
+
+        let currentSelectedNoteTitle = '';
+        let currentSelectedNotePath = '';
+
+        function openMOCNote() {
+            switchReaderView('list');
+            document.querySelectorAll('.btn-toggle').forEach(el => el.classList.remove('active'));
+            const mocBtn = document.getElementById('btn-reader-mode-moc');
+            if (mocBtn) mocBtn.classList.add('active');
+            loadNoteContent('00_MOC_Funes.md');
+        }
+
+        function launchChatForSelectedNote() {
+            const noteName = currentSelectedNoteTitle || 'esta nota';
+            closeModal('modal-reader');
+            openModal('modal-chat');
+            
+            const scrollBox = document.getElementById('chat-messages-scroll');
+            if (scrollBox) {
+                const sysBubble = document.createElement('div');
+                sysBubble.className = 'chat-bubble ai';
+                sysBubble.style.cssText = 'border-color: var(--gold); background: var(--bg-card); font-size: 0.85rem; padding: 12px 14px; border-radius: 6px;';
+                sysBubble.innerHTML = '<b>Funes IA:</b> Contexto fijado en <i>"' + noteName + '"</i> y sus notas enlazadas. ¿Qué preguntas deseas consultar sobre este bloque de conocimiento?';
+                scrollBox.appendChild(sysBubble);
+                scrollBox.scrollTop = scrollBox.scrollHeight;
+            }
+        }
+
+        function injectNoteActionBar(noteTitle, innerHtml) {
+            currentSelectedNoteTitle = noteTitle;
+            const barHtml = `
+                <div id="note-action-bar" style="display: flex; justify-content: space-between; align-items: center; background: var(--bg-card); border: 1px solid var(--border); padding: 8px 14px; border-radius: 6px; margin-bottom: 16px;">
+                    <span style="font-size: 0.8rem; font-weight: 700; color: var(--gold);">Nota seleccionada: ${noteTitle}</span>
+                    <button class="btn-small" style="font-weight: 700; background: var(--bg-card-hover); border: 1px solid var(--border-accent);" onclick="launchChatForSelectedNote()">💬 Hablar con Funes sobre esta nota</button>
+                </div>
+            `;
+            return barHtml + innerHtml;
+        }
+
+        const LOCAL_MOCK_NOTES = [
+            {
+                title: "00 Mapa de Contenidos (MOC Funes)",
+                path: "00_MOC_Funes.md",
+                html: "<div class='note-content'><div class='note-badge'>YAML Metadata: moc, indice, mapa</div><h1 style='color:var(--gold);'>00 Mapa de Contenidos (MOC Funes)</h1><h3 style='color:var(--accent); margin-top:12px;'>Resumen Ejecutivo</h3><ul style='color:var(--muted); font-size:0.85rem;'><li><b>¿Qué?</b>: Índice central navegable de todas las notas atómicas.</li><li><b>¿Cuándo?</b>: Generado automáticamente.</li><li><b>¿Quién?</b>: Funes Vault Engine.</li><li><b>¿Cómo?</b>: Hiperenlaces Wiki cruzados.</li></ul><h3 style='color:var(--accent); margin-top:12px;'>Índice General de Conocimiento</h3><ul style='color:var(--paper); font-size:0.85rem;'><li><span class='wikilink' onclick='loadNoteContent(\"Nota_Arquitectura_Funes.md\")'>[[Nota_Arquitectura_Funes]]</span> — Arquitectura General de Funes</li><li><span class='wikilink' onclick='loadNoteContent(\"Nota_Motor_IA_Local.md\")'>[[Nota_Motor_IA_Local]]</span> — Motor de Inferencia IA Local y Ollama</li><li><span class='wikilink' onclick='loadNoteContent(\"Nota_Base_Datos_Vectorial.md\")'>[[Nota_Base_Datos_Vectorial]]</span> — Base de Datos Vectorial ChromaDB</li><li><span class='wikilink' onclick='loadNoteContent(\"Nota_Optimizacion_RAM.md\")'>[[Nota_Optimizacion_RAM]]</span> — Gobernador de Memoria RAM</li><li><span class='wikilink' onclick='loadNoteContent(\"Nota_Formato_Papiro.md\")'>[[Nota_Formato_Papiro]]</span> — Estética Editorial Papiro y UI</li><li><span class='wikilink' onclick='loadNoteContent(\"Nota_Notas_Atomicas.md\")'>[[Nota_Notas_Atomicas]]</span> — Estructuración en Notas Atómicas</li></ul></div>"
+            },
+            {
+                title: "Arquitectura General de Funes",
+                path: "Nota_Arquitectura_Funes.md",
+                html: "<div class='note-content'><div class='note-badge'>YAML Metadata: arquitectura, funes, pipeline</div><h1 style='color:var(--gold);'>Arquitectura General de Funes</h1><h3 style='color:var(--accent); margin-top:12px;'>Resumen Ejecutivo</h3><ul style='color:var(--muted); font-size:0.85rem;'><li><b>¿Qué?</b>: Sistema local de procesamiento de conocimiento de 4 etapas.</li><li><b>¿Cuándo?</b>: Versión 2026.</li><li><b>¿Quién?</b>: Funes Engine.</li><li><b>¿Cómo?</b>: Ingesta ➔ Transcripción ➔ Estructuración ➔ Consulta.</li></ul><h3 style='color:var(--accent); margin-top:12px;'>Desarrollo</h3><p style='font-size:0.85rem; color:var(--paper); line-height:1.5;'>El sistema Funes estructura la información desacoplando la ingesta del almacenamiento definitivo. Integra el <span class='wikilink' onclick='loadNoteContent(\"Nota_Motor_IA_Local.md\")'>[[Nota_Motor_IA_Local]]</span> para síntesis y la <span class='wikilink' onclick='loadNoteContent(\"Nota_Base_Datos_Vectorial.md\")'>[[Nota_Base_Datos_Vectorial]]</span> para la búsqueda semántica rápida, todo enmarcado en el diseño <span class='wikilink' onclick='loadNoteContent(\"Nota_Formato_Papiro.md\")'>[[Nota_Formato_Papiro]]</span>.</p></div>"
+            },
+            {
+                title: "Motor de IA Local y Ollama",
+                path: "Nota_Motor_IA_Local.md",
+                html: "<div class='note-content'><div class='note-badge'>YAML Metadata: ollama, qwen, ia-local</div><h1 style='color:var(--gold);'>Motor de IA Local y Ollama</h1><h3 style='color:var(--accent); margin-top:12px;'>Resumen Ejecutivo</h3><ul style='color:var(--muted); font-size:0.85rem;'><li><b>¿Qué?</b>: Inferencia 100% privada mediante modelos LLM locales.</li><li><b>¿Cuándo?</b>: En tiempo real durante el procesamiento.</li><li><b>¿Quién?</b>: Ollama API + Qwen 2.5.</li><li><b>¿Cómo?</b>: Conexión HTTP local en puerto 11434.</li></ul><h3 style='color:var(--accent); margin-top:12px;'>Desarrollo</h3><p style='font-size:0.85rem; color:var(--paper); line-height:1.5;'>El motor utiliza Ollama ejecutado en la máquina del usuario. Incluye gestión de memoria controlada por el <span class='wikilink' onclick='loadNoteContent(\"Nota_Optimizacion_RAM.md\")'>[[Nota_Optimizacion_RAM]]</span> para evitar saturación del sistema durante tareas intensivas de sintetizado.</p></div>"
+            },
+            {
+                title: "Base de Datos Vectorial ChromaDB",
+                path: "Nota_Base_Datos_Vectorial.md",
+                html: "<div class='note-content'><div class='note-badge'>YAML Metadata: chromadb, embeddings, vectorial</div><h1 style='color:var(--gold);'>Base de Datos Vectorial ChromaDB</h1><h3 style='color:var(--accent); margin-top:12px;'>Resumen Ejecutivo</h3><ul style='color:var(--muted); font-size:0.85rem;'><li><b>¿Qué?</b>: Almacenamiento vectorial embebido.</li><li><b>¿Cuándo?</b>: Durante la etapa 3 de estructuración.</li><li><b>¿Quién?</b>: ChromaDB Engine.</li><li><b>¿Cómo?</b>: Generación de embeddings semánticos para RAG.</li></ul><h3 style='color:var(--accent); margin-top:12px;'>Desarrollo</h3><p style='font-size:0.85rem; color:var(--paper); line-height:1.5;'>Permite la consulta directa en idioma natural desde el conversador local. Se integra con la generación de <span class='wikilink' onclick='loadNoteContent(\"Nota_Notas_Atomicas.md\")'>[[Nota_Notas_Atomicas]]</span> para mantener trazabilidad entre párrafos y documentos de origen.</p></div>"
+            },
+            {
+                title: "Gobernador de RAM y Memoria",
+                path: "Nota_Optimizacion_RAM.md",
+                html: "<div class='note-content'><div class='note-badge'>YAML Metadata: ram, gobernador, memoria</div><h1 style='color:var(--gold);'>Gobernador de RAM y Memoria</h1><h3 style='color:var(--accent); margin-top:12px;'>Resumen Ejecutivo</h3><ul style='color:var(--muted); font-size:0.85rem;'><li><b>¿Qué?</b>: Sistema de protección de recursos de hardware.</li><li><b>¿Cuándo?</b>: Monitorización continua.</li><li><b>¿Quién?</b>: RAM Governor.</li><li><b>¿Cómo?</b>: Cálculo dinámico del margen de seguridad.</li></ul><h3 style='color:var(--accent); margin-top:12px;'>Desarrollo</h3><p style='font-size:0.85rem; color:var(--paper); line-height:1.5;'>Regula la carga del <span class='wikilink' onclick='loadNoteContent(\"Nota_Motor_IA_Local.md\")'>[[Nota_Motor_IA_Local]]</span> según el porcentaje libre de memoria RAM, garantizando una experiencia fluida sin cuelgues del sistema operativo.</p></div>"
+            },
+            {
+                title: "Estética Editorial Papiro y Consola UI",
+                path: "Nota_Formato_Papiro.md",
+                html: "<div class='note-content'><div class='note-badge'>YAML Metadata: papiro, ui, diseno</div><h1 style='color:var(--gold);'>Estética Editorial Papiro y Consola UI</h1><h3 style='color:var(--accent); margin-top:12px;'>Resumen Ejecutivo</h3><ul style='color:var(--muted); font-size:0.85rem;'><li><b>¿Qué?</b>: Sistema de diseño visual anticuario-tecnológico.</li><li><b>¿Cuándo?</b>: Interfaz gráfica de la consola.</li><li><b>¿Quién?</b>: PyWebView + HTML5 Canvas.</li><li><b>¿Cómo?</b>: Colores pergamino, tipografía monoespaciada y bordes biselados.</li></ul><h3 style='color:var(--accent); margin-top:12px;'>Desarrollo</h3><p style='font-size:0.85rem; color:var(--paper); line-height:1.5;'>Ofrece una experiencia visual premium con soporte para Grafo Interactivo de Obsidian, navegación nativa e hiperenlaces bi-direccionales vinculados a <span class='wikilink' onclick='loadNoteContent(\"Nota_Notas_Atomicas.md\")'>[[Nota_Notas_Atomicas]]</span>.</p></div>"
+            },
+            {
+                title: "Estructuración en Notas Atómicas",
+                path: "Nota_Notas_Atomicas.md",
+                html: "<div class='note-content'><div class='note-badge'>YAML Metadata: notas-atomicas, zettelkasten, obsidian</div><h1 style='color:var(--gold);'>Estructuración en Notas Atómicas</h1><h3 style='color:var(--accent); margin-top:12px;'>Resumen Ejecutivo</h3><ul style='color:var(--muted); font-size:0.85rem;'><li><b>¿Qué?</b>: Formatos independientes y reusables de información.</li><li><b>¿Cuándo?</b>: Etapa final de síntesis.</li><li><b>¿Quién?</b>: Vault Funes.</li><li><b>¿Cómo?</b>: Plantilla YAML + resumen ejecutivo + hiperenlaces.</li></ul><h3 style='color:var(--accent); margin-top:12px;'>Desarrollo</h3><p style='font-size:0.85rem; color:var(--paper); line-height:1.5;'>Las notas atómicas permiten una navegación fluida dentro de la consola Papiro y su visualización en el mapa de conocimiento junto a la <span class='wikilink' onclick='loadNoteContent(\"Nota_Base_Datos_Vectorial.md\")'>[[Nota_Base_Datos_Vectorial]]</span> y el <span class='wikilink' onclick='loadNoteContent(\"Nota_Formato_Papiro.md\")'>[[Nota_Formato_Papiro]]</span>.</p></div>"
+            }
+        ];
+
+        function loadObsidianGraphView() {
+            if (window.pywebview && window.pywebview.api) {
+                window.pywebview.api.get_graph_data().then(function(data) {
+                    initObsidianGraphCanvas(data);
+                });
+            } else {
+                const demoData = {
+                    nodes: [
+                        { id: "00_MOC_Funes", label: "00 Mapa de Contenidos MOC", path: "00_MOC_Funes.md" },
+                        { id: "Nota_Arquitectura_Funes", label: "Arquitectura General", path: "Nota_Arquitectura_Funes.md" },
+                        { id: "Nota_Motor_IA_Local", label: "Motor IA Local", path: "Nota_Motor_IA_Local.md" },
+                        { id: "Nota_Base_Datos_Vectorial", label: "Base Datos Vectorial", path: "Nota_Base_Datos_Vectorial.md" },
+                        { id: "Nota_Optimizacion_RAM", label: "Gobernador de RAM", path: "Nota_Optimizacion_RAM.md" },
+                        { id: "Nota_Formato_Papiro", label: "Estética Papiro", path: "Nota_Formato_Papiro.md" },
+                        { id: "Nota_Notas_Atomicas", label: "Notas Atómicas", path: "Nota_Notas_Atomicas.md" }
+                    ],
+                    links: [
+                        { source: "00_MOC_Funes", target: "Nota_Arquitectura_Funes" },
+                        { source: "00_MOC_Funes", target: "Nota_Motor_IA_Local" },
+                        { source: "00_MOC_Funes", target: "Nota_Base_Datos_Vectorial" },
+                        { source: "00_MOC_Funes", target: "Nota_Optimizacion_RAM" },
+                        { source: "00_MOC_Funes", target: "Nota_Formato_Papiro" },
+                        { source: "00_MOC_Funes", target: "Nota_Notas_Atomicas" },
+                        { source: "Nota_Arquitectura_Funes", target: "Nota_Motor_IA_Local" },
+                        { source: "Nota_Arquitectura_Funes", target: "Nota_Base_Datos_Vectorial" },
+                        { source: "Nota_Arquitectura_Funes", target: "Nota_Formato_Papiro" },
+                        { source: "Nota_Motor_IA_Local", target: "Nota_Optimizacion_RAM" },
+                        { source: "Nota_Base_Datos_Vectorial", target: "Nota_Notas_Atomicas" },
+                        { source: "Nota_Formato_Papiro", target: "Nota_Notas_Atomicas" }
+                    ]
+                };
+                initObsidianGraphCanvas(demoData);
+            }
+        }
+
+        function loadReaderNotes() {
+            if (window.pywebview && window.pywebview.api) {
+                window.pywebview.api.get_notes_list().then(function(notes) {
+                    renderNoteList(notes);
+                });
+            } else {
+                renderNoteList(LOCAL_MOCK_NOTES.map(n => ({ title: n.title, path: n.path })));
+            }
+        }
+
+        function renderNoteList(notes) {
+            const ul = document.getElementById('reader-note-list');
+            ul.innerHTML = '';
+            if (!notes || !notes.length) {
+                ul.innerHTML = '<li class="reader-note-item">No se encontraron notas</li>';
+                return;
+            }
+            notes.forEach(function(n, idx) {
+                const li = document.createElement('li');
+                li.className = 'reader-note-item' + (idx === 0 ? ' active' : '');
+                li.innerText = n.title;
+                li.onclick = function() {
+                    document.querySelectorAll('.reader-note-item').forEach(el => el.classList.remove('active'));
+                    li.classList.add('active');
+                    loadNoteContent(n.path);
+                };
+                ul.appendChild(li);
+            });
+            if (notes.length > 0) loadNoteContent(notes[0].path);
+        }
+
+        function loadNoteContent(notePath) {
+            currentSelectedNotePath = notePath;
+            let displayTitle = notePath.replace(/\.md$/, '').replace(/^.*[\\\/]/, '').replace(/_/g, ' ');
+
+            if (window.pywebview && window.pywebview.api) {
+                window.pywebview.api.get_note_content(notePath).then(function(res) {
+                    if (res && res.title) displayTitle = res.title;
+                    currentSelectedNoteTitle = displayTitle;
+                    document.getElementById('reader-content').innerHTML = injectNoteActionBar(displayTitle, res.html);
+                });
+            } else {
+                const found = LOCAL_MOCK_NOTES.find(n => n.path === notePath || n.path.endsWith(notePath) || (n.title && notePath.includes(n.title)));
+                if (found) {
+                    currentSelectedNoteTitle = found.title;
+                    document.getElementById('reader-content').innerHTML = injectNoteActionBar(found.title, found.html);
+                } else {
+                    currentSelectedNoteTitle = displayTitle;
+                    document.getElementById('reader-content').innerHTML = injectNoteActionBar(displayTitle, '<h3 style="color:var(--gold);">' + displayTitle + '</h3><p style="color:var(--muted); margin-top:10px;">Nota cargada en la consola Funes.</p>');
+                }
+            }
+        }
+
+        function loadCategoryData(category) {
+            const titleEl = document.getElementById('category-modal-title');
+            if (titleEl) titleEl.innerText = 'DESGLOSE DE ARCHIVOS PROCESADOS (2_SUCIO Y 3_LIMPIO)';
+            
+            if (window.pywebview && window.pywebview.api) {
+                window.pywebview.api.get_category_files(category).then(function(files) {
+                    renderCategoryFiles(files);
+                });
+            } else {
+                const mockFiles = [
+                    { name: 'transcripcion_reunion_inicial_2026.txt', path: '/Users/emiliosevillaortego/Documents/Programación/funes/Vault_Funes/2_sucio/transcripcion_reunion_inicial_2026.txt', folder: '2_sucio' },
+                    { name: 'esquema_base_datos_vectorial.txt', path: '/Users/emiliosevillaortego/Documents/Programación/funes/Vault_Funes/2_sucio/esquema_base_datos_vectorial.txt', folder: '2_sucio' },
+                    { name: 'transcripcion_reunion_inicial_2026_limpio.txt', path: '/Users/emiliosevillaortego/Documents/Programación/funes/Vault_Funes/3_limpio/transcripcion_reunion_inicial_2026_limpio.txt', folder: '3_limpio' },
+                    { name: 'esquema_base_datos_vectorial_limpio.txt', path: '/Users/emiliosevillaortego/Documents/Programación/funes/Vault_Funes/3_limpio/esquema_base_datos_vectorial_limpio.txt', folder: '3_limpio' }
+                ];
+                renderCategoryFiles(mockFiles);
+            }
+        }
+
+        function renderCategoryFiles(files) {
+            const bodyEl = document.getElementById('category-modal-body');
+            if (!bodyEl) return;
+            bodyEl.innerHTML = '';
+            if (!files || !files.length) {
+                bodyEl.innerHTML = '<p style="font-size:0.85rem; color:var(--muted);">No hay archivos archivados en esta sección.</p>';
+                return;
+            }
+            const ul = document.createElement('ul');
+            ul.style.cssText = 'list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 8px;';
+            files.forEach(function(f) {
+                const li = document.createElement('li');
+                li.style.cssText = 'background: var(--bg-card); padding: 10px 14px; border: 1px solid var(--border); border-radius: 4px; display: flex; justify-content: space-between; align-items: center; cursor: pointer; font-size: 0.85rem;';
+                li.innerHTML = '<span>📄 ' + f.name + ' <small style="color:var(--muted); margin-left:8px;">(' + (f.folder || 'vault') + ')</small></span><button class="btn-small">Abrir en OS</button>';
+                li.ondblclick = function() {
+                    if (window.pywebview && window.pywebview.api) {
+                        window.pywebview.api.open_file_natively(f.path);
+                    } else {
+                        alert('Abriendo ' + f.name + ' con la aplicación nativa del sistema...');
+                    }
+                };
+                li.querySelector('button').onclick = function(e) {
+                    e.stopPropagation();
+                    if (window.pywebview && window.pywebview.api) {
+                        window.pywebview.api.open_file_natively(f.path);
+                    } else {
+                        alert('Abriendo ' + f.name + ' con la aplicación nativa del sistema...');
+                    }
+                };
+                ul.appendChild(li);
+            });
+            bodyEl.appendChild(ul);
+        }
+
+        function filterReaderNotes() {
+            const query = document.getElementById('reader-search').value.toLowerCase();
+            document.querySelectorAll('.reader-note-item').forEach(function(el) {
+                if (el.innerText.toLowerCase().includes(query)) {
+                    el.style.display = 'block';
+                } else {
+                    el.style.display = 'none';
+                }
+            });
+        }
+
+        function updateDashboardStats(stats) {
+            if (!stats) return;
+            if (stats.input !== undefined) document.getElementById('stat-input').innerText = stats.input;
+            if (stats.processed !== undefined) document.getElementById('stat-processed').innerText = stats.processed;
+            if (stats.quarantine !== undefined) document.getElementById('stat-quarantine').innerText = stats.quarantine;
+            if (stats.notes !== undefined) document.getElementById('stat-notes').innerText = stats.notes;
+            if (stats.ram !== undefined) document.getElementById('stat-ram').innerText = stats.ram;
+            if (stats.line !== undefined) document.getElementById('bottom-status-line').innerText = stats.line;
+        }
+
+        function saveSettings() {
+            const path = document.getElementById('setting-vault-path').value;
+            const model = document.getElementById('setting-ollama-model').value;
+            const ollamaUrl = document.getElementById('setting-ollama-url') ? document.getElementById('setting-ollama-url').value : 'http://localhost:11434';
+            const ramMargin = document.getElementById('setting-ram-margin') ? document.getElementById('setting-ram-margin').value : '20%';
+
+            triggerAction('save_settings', {
+                vault_path: path,
+                model: model,
+                input_connected_folders: linkedInputFolders,
+                output_connected_folders: linkedOutputFolders,
+                ollama_url: ollamaUrl,
+                ram_margin: ramMargin
+            });
+            closeModal('modal-settings');
+        }
+
+        function resetDefaultSettings() {
+            if (confirm('¿Deseas restaurar todos los ajustes a la configuración por defecto del sistema Funes?')) {
+                triggerAction('reset_default_settings');
+                setTimeout(loadSettingsData, 200);
+            }
+        }
+
+        window.addEventListener('pywebviewready', function() {
+            log('Conexión nativa PyWebView establecida con la Consola Funes');
+            if (window.pywebview && window.pywebview.api) {
+                window.pywebview.api.get_initial_state().then(function(state) {
+                    updateDashboardStats(state.stats);
+                    if (state.vault_path) {
+                        document.getElementById('setting-vault-path').value = state.vault_path;
+                    }
+                });
+            }
+        });
     </script>
 </body>
 </html>

@@ -932,12 +932,11 @@
                         <span class="subgraph-title">4. Consulta</span>
                         <span class="node-badge" id="badge-step4">Última acción:  --/--/----  --:--:--</span>
                     </div>
-                    <button class="btn-secondary" style="width: 100%; justify-content: center;" onclick="openModal('modal-reader')">
-                        Funes el memorioso
-                    </button>
-                    <button class="btn-secondary" style="width: 100%; justify-content: center; margin-top: 4px;" onclick="openModal('modal-chat')">
-                        Funes el conversador
-                    </button>
+                    <div class="node-card" onclick="openModal('modal-reader')">
+                        <div class="node-tag">── PASO 4 ──</div>
+                        <div class="node-name">Consulta de Notas Finales</div>
+                        <div class="node-desc">Funes el memorioso (Lector) y Funes el conversador (Chat)</div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -1051,6 +1050,10 @@
                     <button class="btn-small" onclick="triggerAction('open_anything_desktop')">Abrir AnythingLLM Desktop</button>
                     <button class="close-btn" onclick="closeModal('modal-chat')">&times;</button>
                 </div>
+            </div>
+            <div id="chat-context-badge" style="background: var(--bg-card); border-bottom: 1px solid var(--border-accent); padding: 8px 16px; font-size: 0.8rem; color: var(--paper); display: flex; align-items: center; justify-content: space-between;">
+                <span><b>Contexto Activo:</b> <span id="chat-context-label" style="color: var(--gold); font-weight: 700;">Toda la Bóveda (4_salida)</span></span>
+                <small id="chat-context-subtext" style="color: var(--muted); font-size: 0.74rem;">Acceso a la totalidad del conocimiento en 4_salida</small>
             </div>
             <div class="modal-body">
                 <div class="chat-container-box">
@@ -2111,11 +2114,17 @@
             inputEl.value = '';
             chatScroll.scrollTop = chatScroll.scrollHeight;
 
+            const contextPayload = {
+                context_mode: activeChatContextMode,
+                note_title: activeChatNoteTitle,
+                note_path: activeChatNotePath
+            };
+
             if (window.pywebview && window.pywebview.api) {
-                window.pywebview.api.send_chat_message(msg).then(function(reply) {
+                window.pywebview.api.send_chat_message(msg, contextPayload).then(function(reply) {
                     const aiBubble = document.createElement('div');
                     aiBubble.className = 'chat-bubble ai';
-                    aiBubble.innerHTML = '<strong>Funes IA:</strong> ' + reply.text;
+                    aiBubble.innerHTML = '<strong>Funes IA:</strong> ' + (reply.text || reply);
                     if (reply.sources && reply.sources.length) {
                         aiBubble.innerHTML += '<div style="margin-top:6px; font-size:0.75rem; color: var(--muted);">Fuentes: ' + reply.sources.join(', ') + '</div>';
                     }
@@ -2126,7 +2135,8 @@
                 setTimeout(function() {
                     const aiBubble = document.createElement('div');
                     aiBubble.className = 'chat-bubble ai';
-                    aiBubble.innerHTML = '<strong>Funes IA:</strong> Procesando tu consulta sobre "' + msg + '". Información derivada de las notas atómicas locales.';
+                    const ctxLabel = activeChatContextMode === 'single_note' ? 'la nota "' + activeChatNoteTitle + '"' : 'todas las notas de 4_salida';
+                    aiBubble.innerHTML = '<strong>Funes IA:</strong> Respuesta basada en ' + ctxLabel + '. Información derivada de las notas atómicas locales.';
                     chatScroll.appendChild(aiBubble);
                     chatScroll.scrollTop = chatScroll.scrollHeight;
                 }, 400);
@@ -2446,19 +2456,49 @@
             loadNoteContent('00_MOC_Funes.md');
         }
 
-        function launchChatForSelectedNote() {
-            const noteName = currentSelectedNoteTitle || 'esta nota';
+        let activeChatContextMode = 'all_notes'; // 'single_note' or 'all_notes'
+        let activeChatNoteTitle = '';
+        let activeChatNotePath = '';
+
+        function launchChatWithContext(mode) {
+            activeChatContextMode = mode;
+            activeChatNoteTitle = currentSelectedNoteTitle || 'esta nota';
+            activeChatNotePath = currentSelectedNotePath || '';
+
             closeModal('modal-reader');
             openModal('modal-chat');
-            
-            const scrollBox = document.getElementById('chat-messages-scroll');
-            if (scrollBox) {
-                const sysBubble = document.createElement('div');
-                sysBubble.className = 'chat-bubble ai';
-                sysBubble.style.cssText = 'border-color: var(--gold); background: var(--bg-card); font-size: 0.85rem; padding: 12px 14px; border-radius: 6px;';
-                sysBubble.innerHTML = '<b>Funes IA:</b> Contexto fijado en <i>"' + noteName + '"</i> y sus notas enlazadas. ¿Qué preguntas deseas consultar sobre este bloque de conocimiento?';
-                scrollBox.appendChild(sysBubble);
-                scrollBox.scrollTop = scrollBox.scrollHeight;
+
+            updateChatContextBadge();
+        }
+
+        function updateChatContextBadge() {
+            const labelEl = document.getElementById('chat-context-label');
+            const subtextEl = document.getElementById('chat-context-subtext');
+            const scrollBox = document.getElementById('chat-messages');
+
+            if (activeChatContextMode === 'single_note') {
+                const noteName = activeChatNoteTitle || 'esta nota';
+                if (labelEl) labelEl.innerText = 'Nota activa: "' + noteName + '"';
+                if (subtextEl) subtextEl.innerText = 'Contexto delimitado exclusivamente al archivo .md de esta nota';
+
+                if (scrollBox) {
+                    scrollBox.innerHTML = `
+                        <div class="chat-bubble ai" style="border-color: var(--gold); background: var(--bg-card); font-size: 0.85rem; padding: 12px 14px; border-radius: 6px;">
+                            <strong>Funes IA:</strong> Hilo de conversación iniciado. Contexto fijado exclusivamente en la nota <b>"${noteName}"</b>. ¿Qué deseas consultar sobre este documento?
+                        </div>
+                    `;
+                }
+            } else {
+                if (labelEl) labelEl.innerText = 'Toda la Bóveda de Notas (4_salida)';
+                if (subtextEl) subtextEl.innerText = 'Acceso a la totalidad del conocimiento en 4_salida';
+
+                if (scrollBox) {
+                    scrollBox.innerHTML = `
+                        <div class="chat-bubble ai" style="border-color: var(--gold); background: var(--bg-card); font-size: 0.85rem; padding: 12px 14px; border-radius: 6px;">
+                            <strong>Funes IA:</strong> Hilo de conversación iniciado. Contexto fijado en <b>todas las notas de la Bóveda (4_salida)</b>. Puedo responder preguntas relacionando cualquier documento procesado.
+                        </div>
+                    `;
+                }
             }
         }
 
@@ -2466,8 +2506,11 @@
             currentSelectedNoteTitle = noteTitle;
             const barHtml = `
                 <div id="note-action-bar" style="position: sticky; top: -24px; z-index: 20; display: flex; justify-content: space-between; align-items: center; background: var(--bg-card); border: 1px solid var(--border-accent); padding: 10px 16px; border-radius: 6px; margin: -24px -30px 16px -30px; box-shadow: 0 4px 12px rgba(0,0,0,0.12);">
-                    <span style="font-size: 0.8rem; font-weight: 700; color: var(--gold);">Nota: ${noteTitle}</span>
-                    <button class="btn-small" style="font-weight: 700; background: var(--bg-card-hover); border: 1px solid var(--border-accent);" onclick="launchChatForSelectedNote()">Hablar con Funes sobre esta nota</button>
+                    <span style="font-size: 0.85rem; font-weight: 700; color: var(--gold);">Nota: ${noteTitle}</span>
+                    <div style="display: flex; flex-direction: column; gap: 4px; align-items: flex-end;">
+                        <button class="btn-small" style="font-weight: 700; background: var(--bg-card-hover); border: 1px solid var(--border-accent); width: 240px; text-align: center;" onclick="launchChatWithContext('single_note')">Hablar con Funes sobre esta nota</button>
+                        <button class="btn-small" style="font-weight: 700; background: var(--bg-card-hover); border: 1px solid var(--border-accent); width: 240px; text-align: center;" onclick="launchChatWithContext('all_notes')">Hablar con Funes sobre todas las notas</button>
+                    </div>
                 </div>
             `;
             return barHtml + innerHtml;

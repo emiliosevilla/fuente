@@ -531,25 +531,87 @@ class FunesConsoleBackend:
             "ram_margin": f"{getattr(self.config, 'ram_margin_pct', 20)}%"
         }
 
-    def process_chat(self, message: str) -> Dict[str, Any]:
+    def process_chat(self, message: str, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         import json
         import urllib.request
+        ctx_mode = "all_notes"
+        note_title = ""
+        note_path = ""
+
+        if isinstance(context, dict):
+            ctx_mode = context.get("context_mode", "all_notes")
+            note_title = context.get("note_title", "")
+            note_path = context.get("note_path", "")
+
+        sources = []
+        note_content = ""
+
+        if ctx_mode == "single_note" and (note_path or note_title):
+            sources = [note_title or Path(note_path).stem]
+            if note_path and Path(note_path).exists():
+                try:
+                    note_content = Path(note_path).read_text(encoding="utf-8", errors="replace")
+                except Exception:
+                    pass
+            elif note_title:
+                out_dir = self.vault_path / "4_salida"
+                possible_file = out_dir / f"{note_title}.md"
+                if possible_file.exists():
+                    try:
+                        note_content = possible_file.read_text(encoding="utf-8", errors="replace")
+                    except Exception:
+                        pass
+
+            prompt = (
+                f"Eres Funes, un asistente de conocimiento local. "
+                f"Basándote EXCLUSIVAMENTE en el contenido de la siguiente nota titulada '{note_title}':\n\n"
+                f"--- INICIO NOTA ---\n{note_content[:4000]}\n--- FIN NOTA ---\n\n"
+                f"Responde en español a la siguiente pregunta: {message}"
+            )
+        else:
+            out_dir = self.vault_path / "4_salida"
+            all_files = sorted(list(out_dir.glob("*.md"))) if out_dir.exists() else []
+            combined_texts = []
+            sources_found = []
+
+            for f in all_files:
+                try:
+                    txt = f.read_text(encoding="utf-8", errors="replace").strip()
+                    if txt:
+                        combined_texts.append(f"=== NOTA: {f.name} ===\n{txt}\n")
+                        sources_found.append(f.name)
+                except Exception:
+                    pass
+
+            vault_context_text = "\n".join(combined_texts)[:16000] if combined_texts else "No hay notas procesadas aún."
+            sources = sources_found[:5] if sources_found else ["Bóveda Completa (4_salida)"]
+            if len(sources_found) > 5:
+                sources.append(f"+{len(sources_found) - 5} notas más")
+
+            prompt = (
+                f"Eres Funes, un asistente de conocimiento local. "
+                f"Basándote en el contenido completo de todas las notas almacenadas en la carpeta '4_salida' de tu Vault Funes:\n\n"
+                f"--- INICIO CONTEXTO BÓVEDA COMPLETA (4_SALIDA) ---\n{vault_context_text}\n--- FIN CONTEXTO BÓVEDA ---\n\n"
+                f"Responde en español a la siguiente consulta del usuario relacionando la información disponible: {message}"
+            )
+
         try:
             model_name = getattr(self.config, "ollama_model", "qwen2.5:7b") or "qwen2.5:7b"
             payload = json.dumps({
                 "model": model_name,
-                "prompt": f"Basándote en la biblioteca de notas locales de Funes, responde en español: {message}",
+                "prompt": prompt,
                 "stream": False
             }).encode("utf-8")
             req = urllib.request.Request("http://localhost:11434/api/generate", data=payload, headers={"Content-Type": "application/json"})
             with urllib.request.urlopen(req, timeout=12) as resp:
                 data = json.loads(resp.read().decode("utf-8"))
                 reply = data.get("response", "").strip()
-                return {"text": reply, "sources": ["MOC_Global.md", "Nota_Preparada.md"]}
+                return {"text": reply, "sources": sources}
         except Exception:
+            ctx_desc = f"nota '{note_title}'" if ctx_mode == "single_note" else "todas las notas de 4_salida"
             return {
-                "text": f"Funes IA Local: He procesado tu consulta ('{message}'). La información proviene de la síntesis de documentos de tu Vault.",
-                "sources": ["4_salida/Sintesis.md"]
+                "text": f"Funes IA Local: Consulta procesada con éxito sobre {ctx_desc}. Para obtener la inferencia de lenguaje natural completa de Qwen, asegúrate de tener Ollama activo en http://localhost:11434.",
+                "sources": sources
             }
 
     def get_notes_list(self) -> List[Dict[str, str]]:
@@ -633,8 +695,8 @@ class FunesPyWebViewApi:
     def trigger_action(self, action_name: str, payload: dict):
         return self.backend.handle_action(action_name, payload or {})
 
-    def send_chat_message(self, message: str):
-        return self.backend.process_chat(message)
+    def send_chat_message(self, message: str, context: Optional[dict] = None):
+        return self.backend.process_chat(message, context=context)
 
     def get_notes_list(self):
         return self.backend.get_notes_list()

@@ -973,9 +973,9 @@
                     <button class="btn-small btn-toggle" id="btn-reader-mode-graph" onclick="switchReaderView('graph')">Vista Gráfico</button>
                     <button class="btn-small btn-toggle" id="btn-reader-mode-moc" onclick="openMOCNote()">Mapa MOC</button>
                     <span style="border-left: 1px solid var(--border); height: 16px; margin: 0 4px;"></span>
-                    <button class="btn-small" onclick="triggerAction('copy_reader_note')">Copiar</button>
-                    <button class="btn-small" onclick="triggerAction('export_reader_note')">Exportar</button>
-                    <button class="btn-small" onclick="triggerAction('open_obsidian')">Abrir en Obsidian</button>
+                    <button class="btn-small" onclick="triggerAction('copy_reader_note', {}, this)">Copiar</button>
+                    <button class="btn-small" onclick="triggerAction('export_reader_note', {}, this)">Exportar</button>
+                    <button class="btn-small" onclick="triggerAction('open_obsidian', {}, this)">Abrir en Obsidian</button>
                     <button class="close-btn" onclick="closeModal('modal-reader')">&times;</button>
                 </div>
             </div>
@@ -1008,6 +1008,35 @@
             </div>
             <div class="modal-footer" style="justify-content: flex-end;">
                 <button class="btn-secondary" onclick="closeModal('modal-reader')">Cerrar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL OPCIONES DE EXPORTACIÓN -->
+    <div class="modal-overlay" id="modal-export-options" style="z-index: 1100;">
+        <div class="modal-container" style="max-width: 400px; padding: 22px;">
+            <div class="modal-header" style="border-bottom: 1px solid var(--border-accent); padding-bottom: 10px; margin-bottom: 14px;">
+                <div class="modal-title" style="font-size: 0.95rem; font-weight: 700; color: var(--gold);">EXPORTAR NOTA</div>
+                <button class="close-btn" onclick="closeModal('modal-export-options')">&times;</button>
+            </div>
+            <div class="modal-body" style="display: flex; flex-direction: column; gap: 14px;">
+                <p style="font-size: 0.85rem; color: var(--paper); line-height: 1.45; margin: 0;">
+                    Selecciona el formato de exportación para la nota <b id="export-modal-note-title" style="color: var(--gold);">"Nota"</b>:
+                </p>
+                <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 4px;">
+                    <button class="btn-primary" style="padding: 12px 16px; font-weight: 700; background: var(--bg-card); border: 1px solid var(--border-accent); border-radius: 6px; color: var(--paper); cursor: pointer; text-align: center;" onclick="executeExportFormat('markdown')">
+                        Exportar Markdown (.md)
+                    </button>
+                    <button class="btn-primary" style="padding: 12px 16px; font-weight: 700; background: var(--bg-card); border: 1px solid var(--border-accent); border-radius: 6px; color: var(--paper); cursor: pointer; text-align: center;" onclick="executeExportFormat('pdf')">
+                        Exportar PDF (.pdf)
+                    </button>
+                    <button class="btn-primary" style="padding: 12px 16px; font-weight: 700; background: var(--bg-card); border: 1px solid var(--border-accent); border-radius: 6px; color: var(--paper); cursor: pointer; text-align: center;" onclick="executeExportFormat('word')">
+                        Exportar Word (.doc)
+                    </button>
+                </div>
+            </div>
+            <div class="modal-footer" style="margin-top: 16px; padding-top: 10px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end;">
+                <button class="btn-secondary" onclick="closeModal('modal-export-options')">Cancelar</button>
             </div>
         </div>
     </div>
@@ -1643,7 +1672,390 @@
             }
         }
 
-        function triggerAction(actionName, payload) {
+        function showButtonFeedback(btnEl, feedbackText) {
+            if (!btnEl) return;
+            const originalText = btnEl.innerText;
+            btnEl.innerText = feedbackText;
+            btnEl.style.color = 'var(--gold)';
+            btnEl.style.borderColor = 'var(--gold)';
+            setTimeout(function() {
+                btnEl.innerText = originalText;
+                btnEl.style.color = '';
+                btnEl.style.borderColor = '';
+            }, 1500);
+        }
+
+        function getCleanNoteText() {
+            const readerContent = document.getElementById('reader-content');
+            if (!readerContent) return '';
+
+            const notePane = readerContent.querySelector('.note-content') || readerContent;
+            const clone = notePane.cloneNode(true);
+
+            // Eliminar insignias de metadata YAML y la barra de acciones superior
+            clone.querySelectorAll('.note-badge').forEach(el => el.remove());
+            const actionBar = clone.querySelector('#note-action-bar');
+            if (actionBar) actionBar.remove();
+
+            // Convertir elementos HTML a sintaxis Markdown con saltos de línea claros
+            clone.querySelectorAll('h1').forEach(el => { el.outerHTML = '\n\n# ' + el.innerText.trim() + '\n\n'; });
+            clone.querySelectorAll('h2').forEach(el => { el.outerHTML = '\n\n## ' + el.innerText.trim() + '\n\n'; });
+            clone.querySelectorAll('h3').forEach(el => { el.outerHTML = '\n\n### ' + el.innerText.trim() + '\n\n'; });
+            clone.querySelectorAll('h4, h5, h6').forEach(el => { el.outerHTML = '\n\n#### ' + el.innerText.trim() + '\n\n'; });
+            clone.querySelectorAll('p').forEach(el => { el.outerHTML = '\n\n' + el.innerText.trim() + '\n\n'; });
+            clone.querySelectorAll('li').forEach(el => { el.outerHTML = '\n* ' + el.innerText.trim(); });
+            clone.querySelectorAll('ul, ol').forEach(el => { el.outerHTML = '\n' + el.innerHTML + '\n\n'; });
+            clone.querySelectorAll('tr').forEach(el => { el.outerHTML = '\n' + el.innerText.trim(); });
+            clone.querySelectorAll('br').forEach(el => { el.outerHTML = '\n'; });
+            clone.querySelectorAll('.wikilink').forEach(el => { 
+                let linkTarget = el.getAttribute('onclick') || '';
+                let match = linkTarget.match(/loadNoteContent\(['"](.*?)['"]\)/);
+                let rawName = match ? match[1].replace(/\.md$/, '') : el.innerText.trim().replace(/\s+/g, '_');
+                el.outerHTML = '[[' + rawName + ']]'; 
+            });
+
+            let text = (clone.innerText || clone.textContent || '').trim();
+
+            // Limpiar múltiples saltos de línea consecutivos
+            text = text.replace(/\n{3,}/g, '\n\n');
+
+            // Filtrar explícitamente cualquier línea residual que comience por YAML Metadata:
+            text = text.split('\n').filter(line => !line.trim().startsWith('YAML Metadata:')).join('\n').trim();
+
+            return text;
+        }
+
+        function copyCurrentReaderNote(btnEl) {
+            const textToCopy = getCleanNoteText();
+
+            if (!textToCopy) {
+                alert('No hay ninguna nota seleccionada para copiar.');
+                return;
+            }
+
+            const title = currentSelectedNoteTitle || 'seleccionada';
+
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(textToCopy).then(function() {
+                    showButtonFeedback(btnEl, '✓ ¡Copiado!');
+                    log('Nota "' + title + '" copiada al portapapeles.');
+                }).catch(function() {
+                    fallbackCopyText(textToCopy, btnEl, title);
+                });
+            } else {
+                fallbackCopyText(textToCopy, btnEl, title);
+            }
+
+            if (window.pywebview && window.pywebview.api) {
+                window.pywebview.api.trigger_action('copy_reader_note', { note_title: title, note_path: currentSelectedNotePath });
+            }
+        }
+
+        function fallbackCopyText(text, btnEl, title) {
+            const textArea = document.createElement('textarea');
+            textArea.value = text;
+            textArea.style.position = 'fixed';
+            textArea.style.opacity = '0';
+            document.body.appendChild(textArea);
+            textArea.select();
+            try {
+                document.execCommand('copy');
+                showButtonFeedback(btnEl, '✓ ¡Copiado!');
+                log('Nota "' + title + '" copiada al portapapeles.');
+            } catch (err) {
+                alert('No se pudo copiar la nota automáticamente.');
+            }
+            document.body.removeChild(textArea);
+        }
+
+        let lastExportButtonRef = null;
+
+        function exportCurrentReaderNote(btnEl) {
+            lastExportButtonRef = btnEl;
+            const titleEl = document.getElementById('export-modal-note-title');
+            if (titleEl) {
+                titleEl.innerText = '"' + (currentSelectedNoteTitle || 'seleccionada') + '"';
+            }
+            openModal('modal-export-options');
+        }
+
+        function getFormattedTimestamp() {
+            const now = new Date();
+            const dd = String(now.getDate()).padStart(2, '0');
+            const mm = String(now.getMonth() + 1).padStart(2, '0');
+            const yyyy = now.getFullYear();
+            const hh = String(now.getHours()).padStart(2, '0');
+            const min = String(now.getMinutes()).padStart(2, '0');
+            const ss = String(now.getSeconds()).padStart(2, '0');
+            return `Sello de exportación [${dd}/${mm}/${yyyy} - ${hh}:${min}:${ss}]`;
+        }
+
+        function getFullNotePath(notePath) {
+            const defaultBase = "/Users/emiliosevillaortego/Documents/Programación/funes/Vault_Funes/4_salida/";
+            if (!notePath) return defaultBase + "00_MOC_Funes.md";
+            if (notePath.startsWith("/")) return notePath;
+            return defaultBase + (notePath.endsWith(".md") ? notePath : notePath + ".md");
+        }
+
+        function executeExportFormat(format) {
+            closeModal('modal-export-options');
+            if (format === 'markdown') {
+                downloadMarkdownFile();
+            } else if (format === 'pdf') {
+                downloadPdfFile();
+            } else if (format === 'word') {
+                downloadWordFile();
+            }
+        }
+
+        function downloadMarkdownFile() {
+            const textToExport = getCleanNoteText();
+
+            if (!textToExport) {
+                alert('No hay ninguna nota seleccionada para exportar.');
+                return;
+            }
+
+            const title = currentSelectedNoteTitle || 'nota_funes';
+            let fileName = (currentSelectedNotePath || title).replace(/\.md$/, '').replace(/^.*[\\\/]/, '') + '.md';
+
+            const blob = new Blob([textToExport], { type: 'text/markdown;charset=utf-8' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = fileName;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(link.href);
+
+            if (lastExportButtonRef) showButtonFeedback(lastExportButtonRef, '✓ ¡Exportado!');
+            log('Nota "' + title + '" exportada como archivo Markdown (' + fileName + ').');
+
+            if (window.pywebview && window.pywebview.api) {
+                window.pywebview.api.trigger_action('export_reader_note', { format: 'markdown', note_title: title, note_path: currentSelectedNotePath });
+            }
+        }
+
+        function downloadPdfFile() {
+            const readerContent = document.getElementById('reader-content');
+            if (!readerContent) return;
+
+            const title = currentSelectedNoteTitle || 'Nota Funes';
+            const fullPath = getFullNotePath(currentSelectedNotePath);
+            const timestamp = getFormattedTimestamp();
+            const notePane = readerContent.querySelector('.note-content') || readerContent;
+            const clone = notePane.cloneNode(true);
+
+            // Eliminar insignias y la barra de acciones superior
+            clone.querySelectorAll('.note-badge').forEach(el => el.remove());
+            const actionBar = clone.querySelector('#note-action-bar');
+            if (actionBar) actionBar.remove();
+
+            const printWindow = window.open('', '_blank', 'width=850,height=950');
+            if (!printWindow) {
+                alert('Por favor permite ventanas emergentes en tu navegador para generar el PDF.');
+                return;
+            }
+
+            printWindow.document.write(`
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <meta charset="utf-8">
+                    <title>${title} — Exportación PDF</title>
+                    <style>
+                        @page {
+                            size: A4;
+                            margin: 20mm;
+                        }
+                        body {
+                            font-family: Arial, Helvetica, sans-serif;
+                            font-size: 12pt;
+                            line-height: 1.55;
+                            color: #111111;
+                            text-align: justify;
+                            margin: 0;
+                            padding: 0;
+                        }
+                        .pdf-header {
+                            border-bottom: 1.5px solid #888888;
+                            padding-bottom: 8px;
+                            margin-bottom: 22px;
+                            font-family: Arial, sans-serif;
+                        }
+                        .pdf-header-title {
+                            font-size: 9pt;
+                            font-weight: bold;
+                            color: #222222;
+                            margin-bottom: 4px;
+                            line-height: 1.3;
+                        }
+                        .pdf-header-path {
+                            font-size: 7.8pt;
+                            color: #555555;
+                            word-break: break-all;
+                            line-height: 1.3;
+                        }
+                        .pdf-footer {
+                            margin-top: 35px;
+                            border-top: 1.5px solid #888888;
+                            padding-top: 8px;
+                            display: flex;
+                            justify-content: space-between;
+                            align-items: center;
+                            font-size: 8.5pt;
+                            color: #444444;
+                            font-family: Arial, sans-serif;
+                        }
+                        h1 { font-size: 20pt; font-weight: bold; margin-top: 0; margin-bottom: 14pt; text-align: left; color: #111111; border-bottom: 1px solid #CCCCCC; padding-bottom: 6px; }
+                        h2 { font-size: 16pt; font-weight: bold; margin-top: 18pt; margin-bottom: 8pt; text-align: left; color: #222222; }
+                        h3 { font-size: 14pt; font-weight: bold; margin-top: 14pt; margin-bottom: 6pt; text-align: left; color: #333333; }
+                        p { font-size: 12pt; margin-top: 0; margin-bottom: 10pt; text-align: justify; }
+                        ul, ol { font-size: 12pt; margin-top: 0; margin-bottom: 10pt; padding-left: 20pt; }
+                        li { margin-bottom: 4pt; text-align: justify; }
+                        .wikilink { font-weight: bold; border: 1px solid #999999; padding: 1px 5px; background: #F0F0F0; border-radius: 3px; color: #222222; }
+                    </style>
+                </head>
+                <body>
+                    <div class="pdf-header">
+                        <div class="pdf-header-title">Nota: ${title}</div>
+                        <div class="pdf-header-path">Ruta: ${fullPath}</div>
+                    </div>
+
+                    ${clone.innerHTML}
+
+                    <div class="pdf-footer">
+                        <span>${timestamp}</span>
+                        <span>Página 1 de 1</span>
+                    </div>
+                </body>
+                </html>
+            `);
+            printWindow.document.close();
+            printWindow.focus();
+            setTimeout(function() {
+                printWindow.print();
+                printWindow.close();
+            }, 350);
+
+            if (lastExportButtonRef) showButtonFeedback(lastExportButtonRef, '✓ ¡PDF Generado!');
+            log('Nota "' + title + '" exportada como documento PDF (.pdf).');
+
+            if (window.pywebview && window.pywebview.api) {
+                window.pywebview.api.trigger_action('export_reader_note', { format: 'pdf', note_title: title, note_path: currentSelectedNotePath });
+            }
+        }
+
+        function downloadWordFile() {
+            const readerContent = document.getElementById('reader-content');
+            if (!readerContent) return;
+
+            const title = currentSelectedNoteTitle || 'Nota Funes';
+            const fullPath = getFullNotePath(currentSelectedNotePath);
+            const timestamp = getFormattedTimestamp();
+            const notePane = readerContent.querySelector('.note-content') || readerContent;
+            const clone = notePane.cloneNode(true);
+
+            clone.querySelectorAll('.note-badge').forEach(el => el.remove());
+            const actionBar = clone.querySelector('#note-action-bar');
+            if (actionBar) actionBar.remove();
+
+            const fileName = (currentSelectedNotePath || title).replace(/\.md$/, '').replace(/^.*[\\\/]/, '') + '.doc';
+
+            const wordHtml = `
+                <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
+                <head>
+                    <meta charset='utf-8'>
+                    <title>${title}</title>
+                    <!--[if gte mso 9]>
+                    <xml>
+                        <w:WordDocument>
+                            <w:View>Print</w:View>
+                            <w:Zoom>100</w:Zoom>
+                            <w:DoNotOptimizeForBrowser/>
+                        </w:WordDocument>
+                    </xml>
+                    <![endif]-->
+                    <style>
+                        @page Section1 {
+                            size: 595.3pt 841.9pt;
+                            margin: 70.85pt 70.85pt 70.85pt 70.85pt;
+                        }
+                        div.Section1 { page: Section1; }
+                        body {
+                            font-family: Arial, Helvetica, sans-serif;
+                            font-size: 12pt;
+                            line-height: 1.5;
+                            color: #111111;
+                            text-align: justify;
+                            padding: 20pt;
+                        }
+                        h1 { font-size: 20pt; font-weight: bold; color: #111111; margin-top: 12pt; margin-bottom: 12pt; }
+                        h2 { font-size: 16pt; font-weight: bold; color: #222222; margin-top: 14pt; margin-bottom: 8pt; }
+                        h3 { font-size: 14pt; font-weight: bold; color: #333333; margin-top: 12pt; margin-bottom: 6pt; }
+                        p { font-size: 12pt; text-align: justify; margin-bottom: 10pt; }
+                        ul, ol { font-size: 12pt; }
+                        li { text-align: justify; margin-bottom: 4pt; }
+                        .wikilink { font-weight: bold; background: #F0F0F0; border: 1px solid #CCCCCC; padding: 1px 4px; }
+                    </style>
+                </head>
+                <body>
+                    <div class="Section1">
+                        <table style="width:100%; border-bottom:1.5px solid #888888; margin-bottom:18pt; font-family:Arial;">
+                            <tr>
+                                <td style="font-size:9pt; font-weight:bold; color:#222222; padding-bottom:3pt;">Nota: ${title}</td>
+                            </tr>
+                            <tr>
+                                <td style="font-size:7.8pt; color:#555555; word-break:break-all;">Ruta: ${fullPath}</td>
+                            </tr>
+                        </table>
+
+                        ${clone.innerHTML}
+
+                        <table style="width:100%; border-top:1.5px solid #888888; margin-top:30pt; font-size:8.5pt; color:#444; font-family:Arial;">
+                            <tr>
+                                <td>${timestamp}</td>
+                                <td style="text-align:right;">Página 1 de 1</td>
+                            </tr>
+                        </table>
+                    </div>
+                </body>
+                </html>
+            `;
+
+            const blob = new Blob(['\ufeff' + wordHtml], { type: 'application/msword;charset=utf-8' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = fileName;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(link.href);
+
+            if (lastExportButtonRef) showButtonFeedback(lastExportButtonRef, '✓ ¡Word Generado!');
+            log('Nota "' + title + '" exportada como documento Word (' + fileName + ').');
+
+            if (window.pywebview && window.pywebview.api) {
+                window.pywebview.api.trigger_action('export_reader_note', { format: 'word', note_title: title, note_path: currentSelectedNotePath });
+            }
+        }
+
+        function openCurrentNoteInObsidian(btnEl) {
+            const noteFile = currentSelectedNotePath ? (currentSelectedNotePath.endsWith('.md') ? currentSelectedNotePath : currentSelectedNotePath + '.md') : '00_MOC_Funes.md';
+            const obsidianUri = 'obsidian://open?vault=Vault_Funes&file=4_salida%2F' + encodeURIComponent(noteFile);
+            const title = currentSelectedNoteTitle || noteFile;
+
+            showButtonFeedback(btnEl, '✓ Abriendo...');
+            log('Abriendo nota "' + title + '" en Obsidian Vault (4_salida)...');
+
+            if (window.pywebview && window.pywebview.api) {
+                window.pywebview.api.trigger_action('open_obsidian', { note_path: noteFile, obsidian_uri: obsidianUri });
+            } else {
+                window.open(obsidianUri, '_self');
+            }
+        }
+
+        function triggerAction(actionName, payload, btnEl) {
             let logTitle = actionName;
             if (actionName === 'flush_sources' || actionName === 'step1_flush') {
                 logTitle = 'recopilación de fuentes hacia la carpeta de ingesta de Funes';
@@ -1654,6 +2066,15 @@
             } else if (actionName === 'step3_structure' || actionName === 'reindex_notes') {
                 logTitle = 'preparación de notas inteligentes.';
                 updateStepBadge('badge-step3');
+            } else if (actionName === 'copy_reader_note') {
+                copyCurrentReaderNote(btnEl);
+                return;
+            } else if (actionName === 'export_reader_note') {
+                exportCurrentReaderNote(btnEl);
+                return;
+            } else if (actionName === 'open_obsidian') {
+                openCurrentNoteInObsidian(btnEl);
+                return;
             }
 
             log('Acción ejecutada: ' + logTitle);

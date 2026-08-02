@@ -330,6 +330,22 @@ class FunesConsoleBackend:
                 "log": "Guía Rápida de Funes desplegada.",
                 "modal": "modal-help"
             }
+        elif action_name == "copy_reader_note":
+            note_title = payload.get("note_title", "seleccionada")
+            return {"log": f"Nota '{note_title}' copiada al portapapeles."}
+        elif action_name == "export_reader_note":
+            note_title = payload.get("note_title", "seleccionada")
+            return {"log": f"Nota '{note_title}' exportada como archivo Markdown."}
+        elif action_name == "open_obsidian":
+            obsidian_uri = payload.get("obsidian_uri", "")
+            note_path = payload.get("note_path", "")
+            if obsidian_uri:
+                import webbrowser
+                try:
+                    webbrowser.open(obsidian_uri)
+                except Exception:
+                    pass
+            return {"log": f"Abriendo nota '{note_path}' en Obsidian Vault."}
         elif action_name == "stat_ram":
             import gc
             collected = gc.collect()

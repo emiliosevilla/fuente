@@ -72,7 +72,20 @@
         .masthead-main {
             display: flex;
             justify-content: space-between;
-            align-items: flex-end;
+            align-items: flex-start;
+        }
+
+        .masthead-link {
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: var(--muted);
+            cursor: pointer;
+            transition: color 0.2s ease, text-decoration 0.2s ease;
+        }
+
+        .masthead-link:hover {
+            color: var(--paper);
+            text-decoration: underline;
         }
 
         .masthead-title {
@@ -818,35 +831,14 @@
                 <h1 class="masthead-title">F U N E S</h1>
                 <div class="masthead-tagline">Formateo Universal de Notas, Estructuración y Síntesis</div>
             </div>
-        </div>
-
-        <div class="toolbar-bar">
-            <div class="toolbar-group">
-                <span style="font-size:0.8rem; font-weight:700; color:var(--paper);">📜 Tema:</span>
-                <select id="theme-select" style="background:var(--bg-card); color:var(--paper); border:1px solid var(--border-accent); border-radius:var(--card-radius); padding:6px 12px; font-weight:700; cursor:pointer;" onchange="changeActiveTheme(this.value)">
-                    <option value="General">General</option>
-                </select>
-                <button class="btn-secondary" onclick="promptCreateTheme()">+ Nuevo Tema</button>
-                <span style="border-left:1px solid var(--border); height:18px; margin:0 4px;"></span>
-                <button class="btn-primary" id="btn-run-karpathy" onclick="triggerKarpathyCycle()">
-                    <span id="karpathy-spinner" style="display:none;">⚙️</span> 🔄 Lanzar Ciclo de Refinamiento (Karpathy Loop)
-                </button>
-                <button class="btn-secondary" onclick="triggerAction('flush_sources')">
-                    Actualizar Fuentes
-                </button>
-                <button class="btn-secondary" onclick="triggerAction('quick_help')">
-                    Ayuda Rápida
-                </button>
+            <div style="display:flex; gap:14px; align-items:center; margin-top:4px;">
+                <span class="masthead-link" onclick="triggerAction('quick_help')">Guía Rápida</span>
+                <span style="color:var(--border-accent); font-size:0.8rem;">|</span>
+                <span class="masthead-link" onclick="openModal('modal-settings')">Ajustes</span>
             </div>
-            <button class="btn-secondary" onclick="openModal('modal-settings')">
-                Ajustes Avanzados
-            </button>
         </div>
-    </div>
 
-    <!-- LAYOUT PRINCIPAL FULL-WIDTH -->
-    <div class="layout-full">
-        <!-- STATUS STRIP -->
+        <!-- STATUS STRIP (ESTADO DE FUNES EN CABECERA) -->
         <div class="status-strip">
             <div class="status-item">
                 <span class="status-label">● MOTOR DE IA LOCAL:</span>
@@ -859,6 +851,27 @@
             <div class="status-item">
                 <span class="status-label">● BIBLIOTECA DE NOTAS:</span>
                 <span class="status-val" id="status-obsidian">Conectada y lista (Obsidian)</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- LAYOUT PRINCIPAL FULL-WIDTH -->
+    <div class="layout-full">
+        <!-- BARRA DE HERRAMIENTAS Y ACCIONES (TEMA, FUENTES, KARPATHY LOOP) -->
+        <div class="toolbar-bar">
+            <div class="toolbar-group">
+                <span style="font-size:0.95rem; font-weight:800; color:var(--paper); letter-spacing:0.5px; margin-right:4px;">TEMA:</span>
+                <select id="theme-select" style="background:var(--bg-card); color:var(--paper); border:1px solid var(--border-accent); border-radius:var(--card-radius); padding:8px 16px; font-size:0.8rem; font-weight:700; height:36px; box-sizing:border-box; cursor:pointer; font-family:var(--font-mono);" onchange="changeActiveTheme(this.value)">
+                    <option value="General">General</option>
+                </select>
+                <button class="btn-secondary" onclick="promptCreateTheme()">+ Nuevo Tema</button>
+                <span style="border-left:1px solid var(--border); height:18px; margin:0 4px;"></span>
+                <button class="btn-primary" id="btn-run-karpathy" onclick="triggerKarpathyCycle()">
+                    <span id="karpathy-spinner" style="display:none;">⚙️</span> Nuevo Flujo de Trabajo
+                </button>
+                <button class="btn-secondary" onclick="triggerAction('flush_sources')">
+                    Actualizar Fuentes
+                </button>
             </div>
         </div>
 
@@ -1013,6 +1026,29 @@
             </div>
             <div class="modal-footer" style="justify-content: flex-end;">
                 <button class="btn-secondary" onclick="closeModal('modal-reader')">Cerrar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL CREAR NUEVO TEMA -->
+    <div class="modal-overlay" id="modal-create-theme" style="z-index: 1100;">
+        <div class="modal-container" style="max-width: 480px; padding: 22px;">
+            <div class="modal-header" style="border-bottom: 1px solid var(--border-accent); padding-bottom: 10px; margin-bottom: 14px;">
+                <div class="modal-title" style="font-size: 0.95rem; font-weight: 700; color: var(--paper);">CREAR NUEVO TEMA INDEPENDIENTE</div>
+                <button class="close-btn" onclick="closeModal('modal-create-theme')">&times;</button>
+            </div>
+            <div class="modal-body" style="display: flex; flex-direction: column; gap: 14px;">
+                <p style="font-size: 0.85rem; color: var(--muted); line-height: 1.45; margin: 0;">
+                    Ingresa el título del Tema para Funes. Se creará una bóveda Obsidian aislada con su correspondiente estructura de carpetas (1_entrada, 2_sucio, 3_limpio, 4_salida).
+                </p>
+                <div style="display: flex; flex-direction: column; gap: 6px; margin-top: 4px;">
+                    <label style="font-size: 0.8rem; font-weight: 700; color: var(--paper);">Título del Tema:</label>
+                    <input type="text" id="input-new-theme-name" placeholder="Ej: Derecho Civil, Historia Romana, Física Cuántica..." style="background: var(--bg-card); color: var(--paper); border: 1px solid var(--border-accent); border-radius: var(--card-radius); padding: 8px 12px; font-family: var(--font-mono); font-size: 0.85rem;" onkeydown="if(event.key==='Enter') submitCreateThemeModal()" />
+                </div>
+            </div>
+            <div class="modal-footer" style="margin-top: 18px; padding-top: 10px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: 10px;">
+                <button class="btn-secondary" onclick="closeModal('modal-create-theme')">Cancelar</button>
+                <button class="btn-primary" onclick="submitCreateThemeModal()">✓ Crear Tema</button>
             </div>
         </div>
     </div>
@@ -1371,10 +1407,21 @@
             return `${dd}/${mm}/${aaaa}  ${hh}:${min}:${ss}`;
         }
 
+        function getCleanTimestamp() {
+            const now = new Date();
+            const dd = String(now.getDate()).padStart(2, '0');
+            const mm = String(now.getMonth() + 1).padStart(2, '0');
+            const yyyy = now.getFullYear();
+            const hh = String(now.getHours()).padStart(2, '0');
+            const min = String(now.getMinutes()).padStart(2, '0');
+            const ss = String(now.getSeconds()).padStart(2, '0');
+            return `${dd}/${mm}/${yyyy} ${hh}:${min}:${ss}`;
+        }
+
         function updateStepBadge(badgeId) {
             const el = document.getElementById(badgeId);
             if (el) {
-                el.innerText = 'Última acción:  ' + getFormattedTimestamp();
+                el.innerText = 'Última acción: ' + getCleanTimestamp();
             }
         }
 
@@ -2049,6 +2096,161 @@
             }
         }
 
+        function showPapiroToast(message, isError) {
+            let toast = document.getElementById('papiro-toast');
+            if (!toast) {
+                toast = document.createElement('div');
+                toast.id = 'papiro-toast';
+                toast.style.cssText = `
+                    position: fixed;
+                    bottom: 24px;
+                    right: 24px;
+                    background: var(--bg-card);
+                    color: var(--paper);
+                    border: 1px solid var(--border-accent);
+                    border-radius: var(--card-radius);
+                    padding: 12px 20px;
+                    font-family: var(--font-mono);
+                    font-size: 0.85rem;
+                    font-weight: 700;
+                    box-shadow: 0 4px 18px rgba(0,0,0,0.35);
+                    z-index: 99999;
+                    display: flex;
+                    align-items: center;
+                    gap: 10px;
+                    transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+                    opacity: 0;
+                    transform: translateY(14px);
+                `;
+                document.body.appendChild(toast);
+            }
+            toast.style.borderColor = isError ? 'var(--red)' : 'var(--gold)';
+            toast.innerHTML = message;
+            toast.style.opacity = '1';
+            toast.style.transform = 'translateY(0)';
+
+            if (toast.timeoutId) clearTimeout(toast.timeoutId);
+            toast.timeoutId = setTimeout(() => {
+                toast.style.opacity = '0';
+                toast.style.transform = 'translateY(14px)';
+            }, 3800);
+        }
+
+        let availableThemes = ['General'];
+        let currentActiveTheme = 'General';
+
+        function loadThemes() {
+            if (window.pywebview && window.pywebview.api) {
+                window.pywebview.api.get_themes().then(function(res) {
+                    if (res && res.themes) {
+                        availableThemes = res.themes;
+                        currentActiveTheme = res.active_theme || 'General';
+                        renderThemeSelect();
+                    }
+                });
+            } else {
+                renderThemeSelect();
+            }
+        }
+
+        function renderThemeSelect() {
+            const select = document.getElementById('theme-select');
+            if (!select) return;
+            select.innerHTML = '';
+            availableThemes.forEach(function(t) {
+                const opt = document.createElement('option');
+                opt.value = t;
+                // Muestra la versión con espacios tal como la escribió el usuario (no la versión con guiones bajos)
+                opt.innerText = t.replace(/_/g, ' ');
+                if (t === currentActiveTheme || t.replace(/_/g, ' ') === currentActiveTheme.replace(/_/g, ' ')) {
+                    opt.selected = true;
+                }
+                select.appendChild(opt);
+            });
+        }
+
+        function changeActiveTheme(themeName) {
+            if (!themeName) return;
+            currentActiveTheme = themeName;
+            const displayTitle = themeName.replace(/_/g, ' ');
+            log('Cambiando Tema activo a: "' + displayTitle + '"...');
+            if (window.pywebview && window.pywebview.api) {
+                window.pywebview.api.set_theme(themeName).then(function(res) {
+                    if (res && res.log) log(res.log);
+                    if (res && res.stats) updateDashboardStats(res.stats);
+                    if (typeof loadReaderNotes === 'function') loadReaderNotes();
+                });
+            } else {
+                log('Tema activo (vista previa): ' + displayTitle);
+            }
+        }
+
+        function promptCreateTheme() {
+            const input = document.getElementById('input-new-theme-name');
+            if (input) input.value = '';
+            openModal('modal-create-theme');
+            setTimeout(() => { if (input) input.focus(); }, 150);
+        }
+
+        function submitCreateThemeModal() {
+            const input = document.getElementById('input-new-theme-name');
+            if (!input) return;
+            const rawTitle = input.value.trim();
+            if (!rawTitle) return;
+
+            closeModal('modal-create-theme');
+            log('Creando nuevo Tema: "' + rawTitle + '"...');
+
+            if (window.pywebview && window.pywebview.api) {
+                window.pywebview.api.create_theme(rawTitle).then(function(res) {
+                    if (res && res.log) log(res.log);
+                    loadThemes();
+                    if (res && res.stats) updateDashboardStats(res.stats);
+                    showPapiroToast('Tema "' + rawTitle + '" creado y activado exitosamente.');
+                });
+            } else {
+                if (!availableThemes.includes(rawTitle)) availableThemes.push(rawTitle);
+                currentActiveTheme = rawTitle;
+                renderThemeSelect();
+                log('Tema "' + rawTitle + '" creado y activado (vista previa).');
+                showPapiroToast('Tema "' + rawTitle + '" creado y activado.');
+            }
+        }
+
+        function triggerKarpathyCycle(issueName) {
+            const btn = document.getElementById('btn-run-karpathy');
+            const spinner = document.getElementById('karpathy-spinner');
+            if (btn) btn.disabled = true;
+            if (spinner) spinner.style.display = 'inline-block';
+
+            const activeDisplay = currentActiveTheme.replace(/_/g, ' ');
+            const issueLabel = issueName ? ' para la Cuestión "' + issueName + '"' : ' en el Tema "' + activeDisplay + '"';
+            log('🚀 Iniciando Nuevo Flujo de Trabajo' + issueLabel + '...');
+
+            if (window.pywebview && window.pywebview.api) {
+                window.pywebview.api.run_karpathy_cycle(issueName || '').then(function(res) {
+                    if (btn) btn.disabled = false;
+                    if (spinner) spinner.style.display = 'none';
+                    if (res && res.log) log(res.log);
+                    if (res && res.stats) updateDashboardStats(res.stats);
+                    if (typeof loadReaderNotes === 'function') loadReaderNotes();
+                    showPapiroToast('Nuevo Flujo de Trabajo completado exitosamente.');
+                }).catch(function(err) {
+                    if (btn) btn.disabled = false;
+                    if (spinner) spinner.style.display = 'none';
+                    log('Error al ejecutar Nuevo Flujo de Trabajo: ' + err);
+                    showPapiroToast('Error al ejecutar Flujo de Trabajo', true);
+                });
+            } else {
+                setTimeout(function() {
+                    if (btn) btn.disabled = false;
+                    if (spinner) spinner.style.display = 'none';
+                    log('Nuevo Flujo de Trabajo completado (vista previa). Se generaron notas marco e índice MOC.');
+                    showPapiroToast('Nuevo Flujo de Trabajo completado exitosamente.');
+                }, 1200);
+            }
+        }
+
         function openCurrentNoteInObsidian(btnEl) {
             const noteFile = currentSelectedNotePath ? (currentSelectedNotePath.endsWith('.md') ? currentSelectedNotePath : currentSelectedNotePath + '.md') : '00_MOC_Funes.md';
             const obsidianUri = 'obsidian://open?vault=Vault_Funes&file=4_salida%2F' + encodeURIComponent(noteFile);
@@ -2514,8 +2716,8 @@
                 <div id="note-action-bar" style="position: sticky; top: -24px; z-index: 20; display: flex; justify-content: space-between; align-items: center; background: var(--bg-card); border: 1px solid var(--border-accent); padding: 10px 16px; border-radius: 6px; margin: -24px -30px 16px -30px; box-shadow: 0 4px 12px rgba(0,0,0,0.12);">
                     <span style="font-size: 0.85rem; font-weight: 700; color: var(--gold);">Nota: ${noteTitle}</span>
                     <div style="display: flex; flex-direction: column; gap: 4px; align-items: flex-end;">
-                        <button class="btn-small" style="font-weight: 700; background: var(--bg-card-hover); border: 1px solid var(--border-accent); width: 240px; text-align: center;" onclick="launchChatWithContext('single_note')">Hablar con Funes sobre esta nota</button>
-                        <button class="btn-small" style="font-weight: 700; background: var(--bg-card-hover); border: 1px solid var(--border-accent); width: 240px; text-align: center;" onclick="launchChatWithContext('all_notes')">Hablar con Funes sobre todas las notas</button>
+                        <button class="btn-small" style="font-weight: 700; background: var(--bg-card-hover); border: 1px solid var(--border-accent); width: 220px; text-align: center;" onclick="launchChatWithContext('single_note')">Hablar con esta Nota</button>
+                        <button class="btn-small" style="font-weight: 700; background: var(--bg-card-hover); border: 1px solid var(--border-accent); width: 220px; text-align: center;" onclick="launchChatWithContext('all_notes')">Hablar con todas las Notas</button>
                     </div>
                 </div>
             `;
@@ -2919,10 +3121,12 @@
                         document.getElementById('setting-vault-path').value = state.vault_path;
                     }
                 });
+                loadThemes();
             }
         });
 
         document.addEventListener('DOMContentLoaded', function() {
+            loadThemes();
             document.querySelectorAll('.modal-overlay').forEach(function(overlay) {
                 overlay.addEventListener('click', function(e) {
                     if (e.target === overlay) {

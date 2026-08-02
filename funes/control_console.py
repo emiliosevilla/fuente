@@ -548,12 +548,23 @@ class FunesConsoleBackend:
         if not path.exists():
             return {"html": "<h3>Nota no encontrada</h3>"}
         content = path.read_text(encoding="utf-8", errors="replace")
+        import re
+        def replace_wikilink(match):
+            target = match.group(1).strip()
+            clean_display = re.sub(r'^Nota_', '', target).replace('_', ' ')
+            note_file = target if target.endswith('.md') else f"{target}.md"
+            return f"<span class='wikilink' onclick=\"loadNoteContent('{note_file}')\">{clean_display}</span>"
+
+        content = re.sub(r'\[\[(.*?)\]\]', replace_wikilink, content)
+
         html_lines = []
         for line in content.splitlines():
             if line.startswith("# "):
                 html_lines.append(f"<h1 style='color:var(--paper);'>{line[2:]}</h1>")
             elif line.startswith("## "):
                 html_lines.append(f"<h2 style='color:var(--gold);'>{line[3:]}</h2>")
+            elif line.startswith("### "):
+                html_lines.append(f"<h3 style='color:var(--accent); margin-top:12px;'>{line[4:]}</h3>")
             else:
                 html_lines.append(f"<p>{line}</p>")
         return {"html": "".join(html_lines)}

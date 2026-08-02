@@ -54,6 +54,12 @@
             user-select: none;
         }
 
+        body.modal-open {
+            overflow: hidden !important;
+            height: 100vh !important;
+            touch-action: none;
+        }
+
         /* 1. CABECERA EDITORIAL PAPIRO */
         .masthead-container {
             display: flex;
@@ -385,6 +391,7 @@
             z-index: 1000;
             justify-content: center;
             align-items: center;
+            overscroll-behavior: contain;
         }
 
         .modal-container {
@@ -398,6 +405,7 @@
             flex-direction: column;
             overflow: hidden;
             max-height: 90vh;
+            overscroll-behavior: contain;
         }
 
         .modal-header {
@@ -423,6 +431,7 @@
             max-height: 60vh;
             overflow-y: auto;
             user-select: text;
+            overscroll-behavior: contain;
         }
 
         .modal-footer {
@@ -444,66 +453,225 @@
 
         /* ESTILOS ESPECÍFICOS PARA LECTOR DE NOTAS */
         #modal-reader .modal-container {
-            width: 1040px;
-            max-width: 96vw;
+            width: 95vw;
+            height: 92vh;
+            max-width: 98vw;
+            max-height: 96vh;
+        }
+
+        #modal-reader .modal-body {
+            flex: 1;
+            height: calc(100% - 110px);
+            max-height: none;
+            padding: 16px 20px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
         }
 
         .reader-dual-pane {
-            display: grid;
-            grid-template-columns: 310px 1fr;
-            gap: 14px;
-            height: 520px;
+            display: flex;
+            gap: 16px;
+            height: 100%;
+            width: 100%;
+            overflow: hidden;
         }
 
         .reader-sidebar {
+            width: 310px;
+            min-width: 310px;
+            max-width: 310px;
+            flex-shrink: 0;
             background-color: var(--bg-card);
             border: 1px solid var(--border);
-            border-radius: 4px;
+            border-radius: var(--card-radius);
             display: flex;
             flex-direction: column;
             overflow: hidden;
+            height: 100%;
+        }
+
+        @keyframes flipHourglass {
+            0% { transform: rotate(0deg); }
+            70% { transform: rotate(0deg); }
+            88% { transform: rotate(180deg); }
+            100% { transform: rotate(180deg); }
+        }
+
+        @keyframes flowSandStream {
+            0% { stroke-dashoffset: 0; }
+            100% { stroke-dashoffset: -14; }
+        }
+
+        @keyframes drainTopSand {
+            0% { transform: scaleY(1); }
+            70% { transform: scaleY(0.05); }
+            71% { transform: scaleY(0); }
+            100% { transform: scaleY(0); }
+        }
+
+        @keyframes fillBottomSand {
+            0% { transform: scaleY(0); }
+            5% { transform: scaleY(0.05); }
+            70% { transform: scaleY(1); }
+            100% { transform: scaleY(1); }
+        }
+
+        @keyframes dropParticleDot {
+            0% { transform: translateY(0); opacity: 1; }
+            85% { transform: translateY(40px); opacity: 1; }
+            100% { transform: translateY(42px); opacity: 0; }
+        }
+
+        .reader-search-wrapper {
+            position: relative;
+            width: 100%;
+            padding: 8px 10px;
+            box-sizing: border-box;
+            background-color: var(--bg-root);
+            border-bottom: 1px solid var(--border-accent);
+            flex-shrink: 0;
+        }
+
+        .reader-search-icon {
+            position: absolute;
+            left: 20px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--gold);
+            font-size: 0.82rem;
+            pointer-events: none;
+            opacity: 0.85;
+            z-index: 5;
         }
 
         .reader-search-input {
             width: 100%;
-            padding: 10px 12px;
-            background-color: var(--bg-log);
-            border: none;
-            border-bottom: 1px solid var(--border);
+            padding: 8px 12px 8px 36px !important;
+            background-color: var(--bg-card) !important;
+            border: 1px solid var(--border-accent) !important;
+            border-radius: 6px !important;
             font-size: 0.82rem;
             color: var(--paper);
             outline: none;
+            box-shadow: inset 0 1px 3px rgba(0,0,0,0.06);
+            transition: all 0.15s ease;
+            box-sizing: border-box;
+        }
+
+        .reader-search-input:focus {
+            border-color: var(--gold) !important;
+            box-shadow: 0 0 0 2px rgba(197, 160, 89, 0.25), inset 0 1px 3px rgba(0,0,0,0.06);
+        }
+
+        .reader-pinned-container {
+            flex-shrink: 0;
+            padding: 8px 10px 4px 10px;
+        }
+
+        .reader-pinned-item {
+            padding: 10px 12px;
+            font-size: 0.82rem;
+            font-weight: 700;
+            cursor: pointer;
+            background-color: var(--bg-card-hover);
+            border: 1px solid var(--border-accent);
+            border-radius: 4px;
+            color: var(--gold);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            transition: background 0.15s, border-color 0.15s;
+        }
+
+        .reader-pinned-item:hover, .reader-pinned-item.active {
+            background-color: var(--bg-log);
+            border-color: var(--gold);
+            color: var(--paper);
+            box-shadow: 0 2px 6px rgba(0,0,0,0.06);
+        }
+
+        .reader-sidebar-divider {
+            font-size: 0.68rem;
+            font-weight: 800;
+            letter-spacing: 1px;
+            color: var(--muted);
+            padding: 8px 12px 4px 12px;
+            flex-shrink: 0;
+        }
+
+        .reader-note-list-scroll {
+            flex: 1;
+            overflow-y: scroll;
+            overscroll-behavior: contain;
+            padding: 0 10px 10px 10px;
+            scrollbar-width: thin;
+            scrollbar-color: var(--border-accent) var(--bg-card);
         }
 
         .reader-note-list {
             list-style: none;
-            overflow-y: auto;
-            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
         }
 
         .reader-note-item {
-            padding: 10px 14px;
+            padding: 9px 12px;
             font-size: 0.82rem;
             cursor: pointer;
-            border-bottom: 1px solid var(--border);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            background-color: var(--bg-card);
             transition: background 0.15s;
             line-height: 1.35;
         }
 
         .reader-note-item:hover, .reader-note-item.active {
             background-color: var(--bg-card-hover);
+            border-color: var(--border-accent);
             font-weight: 700;
             color: var(--gold);
         }
 
         .reader-view-pane {
+            flex: 1;
+            height: 100%;
             background-color: var(--bg-log);
             border: 1px solid var(--border);
-            border-radius: 4px;
-            padding: 20px 26px;
-            overflow-y: auto;
+            border-radius: var(--card-radius);
+            padding: 24px 30px;
+            overflow-y: scroll;
+            overscroll-behavior: contain;
             font-size: 0.88rem;
             line-height: 1.6;
+            position: relative;
+            scrollbar-width: thin;
+            scrollbar-color: var(--border-accent) var(--bg-card);
+        }
+
+        .reader-note-list-scroll::-webkit-scrollbar,
+        .reader-view-pane::-webkit-scrollbar {
+            width: 7px;
+            height: 7px;
+        }
+
+        .reader-note-list-scroll::-webkit-scrollbar-track,
+        .reader-view-pane::-webkit-scrollbar-track {
+            background: var(--bg-card);
+            border-radius: 4px;
+        }
+
+        .reader-note-list-scroll::-webkit-scrollbar-thumb,
+        .reader-view-pane::-webkit-scrollbar-thumb {
+            background-color: var(--border-accent);
+            border-radius: 4px;
+            border: 1px solid var(--bg-root);
+        }
+
+        .reader-note-list-scroll::-webkit-scrollbar-thumb:hover,
+        .reader-view-pane::-webkit-scrollbar-thumb:hover {
+            background-color: var(--gold);
         }
 
         .reader-view-pane ul, .reader-view-pane ol {
@@ -524,16 +692,43 @@
         }
 
         .wikilink {
-            color: var(--paper);
+            display: inline-flex;
+            align-items: center;
             font-weight: 700;
-            text-decoration: underline;
+            color: var(--paper);
+            background-color: var(--bg-card);
+            border: 1px solid var(--border-accent);
+            border-radius: 4px;
+            padding: 1px 7px;
+            margin: 0 3px;
+            font-size: 0.82rem;
             cursor: pointer;
+            text-decoration: none !important;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+            transition: all 0.15s ease;
+        }
+
+        .wikilink:hover {
+            background-color: var(--bg-card-hover);
+            color: var(--gold);
+            border-color: var(--border-accent);
+            transform: translateY(-1px);
+            box-shadow: 0 2px 6px rgba(0,0,0,0.08);
         }
 
         .wikilink-broken {
+            display: inline-flex;
+            align-items: center;
+            font-weight: 700;
             color: var(--red);
-            text-decoration: underline;
+            background-color: var(--bg-card);
+            border: 1px dashed var(--red);
+            border-radius: 4px;
+            padding: 1px 7px;
+            margin: 0 3px;
+            font-size: 0.82rem;
             cursor: pointer;
+            text-decoration: none !important;
         }
 
         /* ESTILOS ESPECÍFICOS PARA CHAT PAPIRO */
@@ -770,12 +965,12 @@
 
     <!-- MODAL LECTOR (FUNES EL MEMORIOSO) -->
     <div class="modal-overlay" id="modal-reader">
-        <div class="modal-container" style="width: 960px;">
+        <div class="modal-container">
             <div class="modal-header">
                 <div class="modal-title">FUNES EL MEMORIOSO — LECTOR DE NOTAS</div>
                 <div style="display: flex; gap: 6px; align-items: center;">
                     <button class="btn-small btn-toggle active" id="btn-reader-mode-list" onclick="switchReaderView('list')">Vista Notas</button>
-                    <button class="btn-small btn-toggle" id="btn-reader-mode-graph" onclick="switchReaderView('graph')">Vista Grafo (Obsidian)</button>
+                    <button class="btn-small btn-toggle" id="btn-reader-mode-graph" onclick="switchReaderView('graph')">Vista Gráfico</button>
                     <button class="btn-small btn-toggle" id="btn-reader-mode-moc" onclick="openMOCNote()">Mapa MOC</button>
                     <span style="border-left: 1px solid var(--border); height: 16px; margin: 0 4px;"></span>
                     <button class="btn-small" onclick="triggerAction('copy_reader_note')">Copiar</button>
@@ -787,17 +982,24 @@
             <div class="modal-body">
                 <div class="reader-dual-pane" id="reader-view-list">
                     <div class="reader-sidebar">
-                        <input type="text" class="reader-search-input" id="reader-search" placeholder="Buscar notas..." oninput="filterReaderNotes()">
-                        <ul class="reader-note-list" id="reader-note-list">
-                            <li class="reader-note-item active">Cargando notas...</li>
-                        </ul>
+                        <div class="reader-search-wrapper">
+                            <span class="reader-search-icon">🔍</span>
+                            <input type="text" class="reader-search-input" id="reader-search" placeholder="Buscar notas..." oninput="filterReaderNotes()">
+                        </div>
+                        <div class="reader-pinned-container" id="reader-pinned-moc"></div>
+                        <div class="reader-sidebar-divider">ÍNDICE DE NOTAS</div>
+                        <div class="reader-note-list-scroll">
+                            <ul class="reader-note-list" id="reader-note-list">
+                                <li class="reader-note-item active">Cargando notas...</li>
+                            </ul>
+                        </div>
                     </div>
                     <div class="reader-view-pane" id="reader-content">
                         <h2 style="color: var(--gold); border-bottom: 1px solid var(--border); padding-bottom: 6px;">Selecciona una nota</h2>
                         <p style="margin-top: 10px; color: var(--muted);">Explora el mapa de conocimiento generado en 4_salida.</p>
                     </div>
                 </div>
-                <div class="reader-graph-container" id="reader-view-graph" style="display: none; width: 100%; height: 480px; position: relative; background: var(--bg-card); border-radius: var(--card-radius); border: 1px solid var(--border); overflow: hidden;">
+                <div class="reader-graph-container" id="reader-view-graph" style="display: none; width: 100%; height: 100%; position: relative; background: var(--bg-card); border-radius: var(--card-radius); border: 1px solid var(--border); overflow: hidden;">
                     <canvas id="obsidian-graph-canvas" style="width: 100%; height: 100%; display: block;"></canvas>
                     <div style="position: absolute; bottom: 10px; left: 12px; font-size: 0.76rem; color: var(--muted); background: rgba(220, 212, 199, 0.92); padding: 5px 12px; border-radius: 4px; border: 1px solid var(--border);">
                         Nodos: <b id="graph-nodes-count" style="color: var(--gold);">0</b> | Enlaces: <b id="graph-links-count" style="color: var(--accent);">0</b> • Haz clic en un nodo para leer la nota. Arrastra los nodos para mover el mapa.
@@ -1138,8 +1340,27 @@
             }
         }
 
+        function updateModalBodyLock() {
+            const overlays = document.querySelectorAll('.modal-overlay');
+            let isOpen = false;
+            overlays.forEach(function(el) {
+                if (el.style.display === 'flex' || getComputedStyle(el).display === 'flex') {
+                    isOpen = true;
+                }
+            });
+            if (isOpen) {
+                document.body.classList.add('modal-open');
+            } else {
+                document.body.classList.remove('modal-open');
+            }
+        }
+
         function openModal(id) {
-            document.getElementById(id).style.display = 'flex';
+            const el = document.getElementById(id);
+            if (el) {
+                el.style.display = 'flex';
+            }
+            updateModalBodyLock();
             if (id === 'modal-reader' || id === 'modal-chat') {
                 updateStepBadge('badge-step4');
             }
@@ -1205,7 +1426,11 @@
         }
 
         function closeModal(id) {
-            document.getElementById(id).style.display = 'none';
+            const el = document.getElementById(id);
+            if (el) {
+                el.style.display = 'none';
+            }
+            updateModalBodyLock();
         }
 
         function populateOllamaModels(models, currentModel) {
@@ -1549,8 +1774,14 @@
             const nodesCountEl = document.getElementById('graph-nodes-count');
             const linksCountEl = document.getElementById('graph-links-count');
 
-            const width = canvas.width = canvas.parentElement.clientWidth || 800;
-            const height = canvas.height = canvas.parentElement.clientHeight || 480;
+            const dpr = window.devicePixelRatio || 1;
+            const width = canvas.parentElement.clientWidth || 800;
+            const height = canvas.parentElement.clientHeight || 480;
+
+            canvas.width = width * dpr;
+            canvas.height = height * dpr;
+            canvas.style.width = width + 'px';
+            canvas.style.height = height + 'px';
 
             let nodes = data.nodes || [];
             let links = data.links || [];
@@ -1559,10 +1790,10 @@
             if (linksCountEl) linksCountEl.innerText = links.length;
 
             if (nodes.length === 0) {
-                ctx.clearRect(0, 0, width, height);
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
                 ctx.fillStyle = '#5E564B';
-                ctx.font = '14px Courier, monospace';
-                ctx.fillText('No hay notas en 4_salida para construir el grafo', width / 2 - 160, height / 2);
+                ctx.font = '14px "JetBrains Mono", Courier, monospace';
+                ctx.fillText('No hay notas en 4_salida para construir el gráfico', width / 2 - 160, height / 2);
                 return;
             }
 
@@ -1602,8 +1833,8 @@
             function getMousePos(e) {
                 const rect = canvas.getBoundingClientRect();
                 return {
-                    sx: (e.clientX - rect.left) * (canvas.width / rect.width),
-                    sy: (e.clientY - rect.top) * (canvas.height / rect.height)
+                    sx: e.clientX - rect.left,
+                    sy: e.clientY - rect.top
                 };
             }
 
@@ -1731,7 +1962,8 @@
                 stepPhysics();
 
                 ctx.save();
-                ctx.clearRect(0, 0, width, height);
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                ctx.scale(dpr, dpr);
                 ctx.translate(panX, panY);
                 ctx.scale(zoom, zoom);
 
@@ -1742,13 +1974,13 @@
                     ctx.moveTo(l.source.x, l.source.y);
                     ctx.lineTo(l.target.x, l.target.y);
                     ctx.strokeStyle = isHighlighted ? '#161411' : '#BFB4A3';
-                    ctx.lineWidth = (isHighlighted ? 2.5 : 1) / zoom;
-                    ctx.globalAlpha = isHighlighted ? 0.95 : 0.5;
+                    ctx.lineWidth = (isHighlighted ? 2.5 : 1.2) / zoom;
+                    ctx.globalAlpha = isHighlighted ? 0.95 : 0.6;
                     ctx.stroke();
                     ctx.globalAlpha = 1.0;
                 });
 
-                // Dibujar nodos
+                // Dibujar nodos y texto con alta definición (HiDPI / Retina) y halo de contraste
                 nodes.forEach(n => {
                     const isHovered = (hoveredNode === n);
                     const drawRadius = (isHovered ? n.radius + 3 : n.radius) / zoom;
@@ -1760,9 +1992,17 @@
                     ctx.strokeStyle = '#DCD4C7';
                     ctx.stroke();
 
-                    ctx.fillStyle = isHovered ? '#161411' : '#2E2B25';
-                    const fontSize = Math.max(9, Math.min(16, 12 / zoom));
-                    ctx.font = (isHovered ? 'bold ' : '') + fontSize + 'px Courier, monospace';
+                    const fontSize = Math.max(10, Math.min(18, 12 / zoom));
+                    ctx.font = (isHovered ? '700 ' : '600 ') + fontSize + 'px "JetBrains Mono", "Courier New", monospace';
+
+                    // Stroke / Halo pergamino detrás del texto para que no se mezcle con las líneas
+                    ctx.lineWidth = 3.5 / zoom;
+                    ctx.strokeStyle = '#DCD4C7';
+                    ctx.lineJoin = 'round';
+                    ctx.strokeText(n.label, n.x + 10 / zoom, n.y + 4 / zoom);
+
+                    // Relleno de texto oscuro de alto contraste
+                    ctx.fillStyle = isHovered ? '#000000' : '#161411';
                     ctx.fillText(n.label, n.x + 10 / zoom, n.y + 4 / zoom);
                 });
 
@@ -1804,49 +2044,103 @@
         function injectNoteActionBar(noteTitle, innerHtml) {
             currentSelectedNoteTitle = noteTitle;
             const barHtml = `
-                <div id="note-action-bar" style="display: flex; justify-content: space-between; align-items: center; background: var(--bg-card); border: 1px solid var(--border); padding: 8px 14px; border-radius: 6px; margin-bottom: 16px;">
-                    <span style="font-size: 0.8rem; font-weight: 700; color: var(--gold);">Nota seleccionada: ${noteTitle}</span>
-                    <button class="btn-small" style="font-weight: 700; background: var(--bg-card-hover); border: 1px solid var(--border-accent);" onclick="launchChatForSelectedNote()">💬 Hablar con Funes sobre esta nota</button>
+                <div id="note-action-bar" style="position: sticky; top: -24px; z-index: 20; display: flex; justify-content: space-between; align-items: center; background: var(--bg-card); border: 1px solid var(--border-accent); padding: 10px 16px; border-radius: 6px; margin: -24px -30px 16px -30px; box-shadow: 0 4px 12px rgba(0,0,0,0.12);">
+                    <span style="font-size: 0.8rem; font-weight: 700; color: var(--gold);">Nota: ${noteTitle}</span>
+                    <button class="btn-small" style="font-weight: 700; background: var(--bg-card-hover); border: 1px solid var(--border-accent);" onclick="launchChatForSelectedNote()">Hablar con Funes sobre esta nota</button>
                 </div>
             `;
             return barHtml + innerHtml;
+        }
+
+        function formatWikilinksInHtml(rawHtml) {
+            if (!rawHtml) return '';
+            let html = rawHtml.replace(/<span class=['"]wikilink['"]([^>]*)>\[\[(.*?)\]\]<\/span>/g, function(match, attrs, target) {
+                let cleanDisplay = target.replace(/^Nota_/, '').replace(/_/g, ' ');
+                return `<span class='wikilink'${attrs}>${cleanDisplay}</span>`;
+            });
+            html = html.replace(/\[\[(.*?)\]\]/g, function(match, target) {
+                let cleanDisplay = target.replace(/^Nota_/, '').replace(/_/g, ' ');
+                let noteFile = target.endsWith('.md') ? target : target + '.md';
+                return `<span class='wikilink' onclick="loadNoteContent('${noteFile}')">${cleanDisplay}</span>`;
+            });
+            return html;
         }
 
         const LOCAL_MOCK_NOTES = [
             {
                 title: "00 Mapa de Contenidos (MOC Funes)",
                 path: "00_MOC_Funes.md",
-                html: "<div class='note-content'><div class='note-badge'>YAML Metadata: moc, indice, mapa</div><h1 style='color:var(--gold);'>00 Mapa de Contenidos (MOC Funes)</h1><h3 style='color:var(--accent); margin-top:12px;'>Resumen Ejecutivo</h3><ul style='color:var(--muted); font-size:0.85rem;'><li><b>¿Qué?</b>: Índice central navegable de todas las notas atómicas.</li><li><b>¿Cuándo?</b>: Generado automáticamente.</li><li><b>¿Quién?</b>: Funes Vault Engine.</li><li><b>¿Cómo?</b>: Hiperenlaces Wiki cruzados.</li></ul><h3 style='color:var(--accent); margin-top:12px;'>Índice General de Conocimiento</h3><ul style='color:var(--paper); font-size:0.85rem;'><li><span class='wikilink' onclick='loadNoteContent(\"Nota_Arquitectura_Funes.md\")'>[[Nota_Arquitectura_Funes]]</span> — Arquitectura General de Funes</li><li><span class='wikilink' onclick='loadNoteContent(\"Nota_Motor_IA_Local.md\")'>[[Nota_Motor_IA_Local]]</span> — Motor de Inferencia IA Local y Ollama</li><li><span class='wikilink' onclick='loadNoteContent(\"Nota_Base_Datos_Vectorial.md\")'>[[Nota_Base_Datos_Vectorial]]</span> — Base de Datos Vectorial ChromaDB</li><li><span class='wikilink' onclick='loadNoteContent(\"Nota_Optimizacion_RAM.md\")'>[[Nota_Optimizacion_RAM]]</span> — Gobernador de Memoria RAM</li><li><span class='wikilink' onclick='loadNoteContent(\"Nota_Formato_Papiro.md\")'>[[Nota_Formato_Papiro]]</span> — Estética Editorial Papiro y UI</li><li><span class='wikilink' onclick='loadNoteContent(\"Nota_Notas_Atomicas.md\")'>[[Nota_Notas_Atomicas]]</span> — Estructuración en Notas Atómicas</li></ul></div>"
+                html: "<div class='note-content'><div class='note-badge'>YAML Metadata: moc, indice, mapa</div><h1 style='color:var(--gold);'>00 Mapa de Contenidos (MOC Funes)</h1><h3 style='color:var(--accent); margin-top:12px;'>Resumen Ejecutivo</h3><ul style='color:var(--muted); font-size:0.85rem;'><li><b>¿Qué?</b>: Índice central navegable y estructurado del Vault Funes.</li><li><b>¿Cuándo?</b>: Generado automáticamente por el Vault Engine.</li><li><b>¿Quién?</b>: Funes Vault Engine.</li><li><b>¿Cómo?</b>: Hiperenlaces Wiki cruzados y navegación jerárquica.</li></ul><h3 style='color:var(--accent); margin-top:12px;'>Índice General de Conocimiento (15 Notas Atómicas)</h3><ul style='color:var(--paper); font-size:0.85rem;'><li>[[Nota_Arquitectura_Funes]] — Arquitectura General de Funes</li><li>[[Nota_ETL_Pipeline_Ingesta]] — Pipeline ETL de Ingesta y Procesamiento</li><li>[[Nota_Motor_IA_Local]] — Motor de Inferencia IA Local y Ollama</li><li>[[Nota_Base_Datos_Vectorial]] — Base de Datos Vectorial ChromaDB</li><li>[[Nota_Optimizacion_RAM]] — Gobernador de Memoria RAM</li><li>[[Nota_Formato_Papiro]] — Estética Editorial Papiro y Consola UI</li><li>[[Nota_Graph_Engine_Karpathy]] — Grafo Interactivo de Conocimiento</li><li>[[Nota_Notas_Atomicas]] — Estructuración en Notas Atómicas</li><li>[[Nota_Gestor_Cuarentena]] — Aislamiento y Recuperación de Cuarentena</li><li>[[Nota_Integracion_Obsidian]] — Sincronización Bidireccional Obsidian</li><li>[[Nota_AnythingLLM_Conexion]] — Integración Desktop AnythingLLM</li><li>[[Nota_Telemetria_y_Logs]] — Registros y Gazette Logging</li><li>[[Nota_Seguridad_y_Privacidad]] — Privacidad 100% Offline</li><li>[[Nota_Manual_Usuario_Avanzado]] — Manual de Uso Avanzado y Atajos</li></ul></div>"
             },
             {
                 title: "Arquitectura General de Funes",
                 path: "Nota_Arquitectura_Funes.md",
-                html: "<div class='note-content'><div class='note-badge'>YAML Metadata: arquitectura, funes, pipeline</div><h1 style='color:var(--gold);'>Arquitectura General de Funes</h1><h3 style='color:var(--accent); margin-top:12px;'>Resumen Ejecutivo</h3><ul style='color:var(--muted); font-size:0.85rem;'><li><b>¿Qué?</b>: Sistema local de procesamiento de conocimiento de 4 etapas.</li><li><b>¿Cuándo?</b>: Versión 2026.</li><li><b>¿Quién?</b>: Funes Engine.</li><li><b>¿Cómo?</b>: Ingesta ➔ Transcripción ➔ Estructuración ➔ Consulta.</li></ul><h3 style='color:var(--accent); margin-top:12px;'>Desarrollo</h3><p style='font-size:0.85rem; color:var(--paper); line-height:1.5;'>El sistema Funes estructura la información desacoplando la ingesta del almacenamiento definitivo. Integra el <span class='wikilink' onclick='loadNoteContent(\"Nota_Motor_IA_Local.md\")'>[[Nota_Motor_IA_Local]]</span> para síntesis y la <span class='wikilink' onclick='loadNoteContent(\"Nota_Base_Datos_Vectorial.md\")'>[[Nota_Base_Datos_Vectorial]]</span> para la búsqueda semántica rápida, todo enmarcado en el diseño <span class='wikilink' onclick='loadNoteContent(\"Nota_Formato_Papiro.md\")'>[[Nota_Formato_Papiro]]</span>.</p></div>"
+                html: "<div class='note-content'><div class='note-badge'>YAML Metadata: arquitectura, funes, pipeline</div><h1 style='color:var(--gold);'>Arquitectura General de Funes</h1><h3 style='color:var(--accent); margin-top:12px;'>Resumen Ejecutivo</h3><ul style='color:var(--muted); font-size:0.85rem;'><li><b>¿Qué?</b>: Sistema local de procesamiento de conocimiento de 4 etapas.</li><li><b>¿Cuándo?</b>: Versión 2026.</li><li><b>¿Quién?</b>: Funes Engine.</li><li><b>¿Cómo?</b>: Ingesta ➔ Transcripción ➔ Estructuración ➔ Consulta.</li></ul><h3 style='color:var(--accent); margin-top:12px;'>Desarrollo</h3><p style='font-size:0.85rem; color:var(--paper); line-height:1.5;'>El sistema Funes estructura la información desacoplando la ingesta del almacenamiento definitivo. Integra el [[Nota_Motor_IA_Local]] para síntesis y la [[Nota_Base_Datos_Vectorial]] para la búsqueda semántica rápida, todo enmarcado en el diseño [[Nota_Formato_Papiro]]. Véase también [[Nota_ETL_Pipeline_Ingesta]].</p></div>"
+            },
+            {
+                title: "Pipeline ETL de Ingesta y Procesamiento",
+                path: "Nota_ETL_Pipeline_Ingesta.md",
+                html: "<div class='note-content'><div class='note-badge'>YAML Metadata: etl, pipeline, ingesta</div><h1 style='color:var(--gold);'>Pipeline ETL de Ingesta y Procesamiento</h1><h3 style='color:var(--accent); margin-top:12px;'>Resumen Ejecutivo</h3><ul style='color:var(--muted); font-size:0.85rem;'><li><b>¿Qué?</b>: Ingesta multiformato de 4 estaciones independientes.</li><li><b>¿Cuándo?</b>: Monitoreo continuo mediante el módulo Watcher.</li><li><b>¿Quién?</b>: ETLPipeline + Extractores Especializados.</li><li><b>¿Cómo?</b>: Transición 1_entrada ➔ 2_sucio ➔ 3_limpio ➔ 4_salida.</li></ul><h3 style='color:var(--accent); margin-top:12px;'>Detalles del Flujo</h3><p style='font-size:0.85rem; color:var(--paper); line-height:1.5;'>El ciclo procesa archivos depositados en 1_entrada. En caso de fallos de lectura, se aíslan automáticamente según la norma descrita en [[Nota_Gestor_Cuarentena]].</p></div>"
             },
             {
                 title: "Motor de IA Local y Ollama",
                 path: "Nota_Motor_IA_Local.md",
-                html: "<div class='note-content'><div class='note-badge'>YAML Metadata: ollama, qwen, ia-local</div><h1 style='color:var(--gold);'>Motor de IA Local y Ollama</h1><h3 style='color:var(--accent); margin-top:12px;'>Resumen Ejecutivo</h3><ul style='color:var(--muted); font-size:0.85rem;'><li><b>¿Qué?</b>: Inferencia 100% privada mediante modelos LLM locales.</li><li><b>¿Cuándo?</b>: En tiempo real durante el procesamiento.</li><li><b>¿Quién?</b>: Ollama API + Qwen 2.5.</li><li><b>¿Cómo?</b>: Conexión HTTP local en puerto 11434.</li></ul><h3 style='color:var(--accent); margin-top:12px;'>Desarrollo</h3><p style='font-size:0.85rem; color:var(--paper); line-height:1.5;'>El motor utiliza Ollama ejecutado en la máquina del usuario. Incluye gestión de memoria controlada por el <span class='wikilink' onclick='loadNoteContent(\"Nota_Optimizacion_RAM.md\")'>[[Nota_Optimizacion_RAM]]</span> para evitar saturación del sistema durante tareas intensivas de sintetizado.</p></div>"
+                html: "<div class='note-content'><div class='note-badge'>YAML Metadata: ollama, qwen, ia-local</div><h1 style='color:var(--gold);'>Motor de IA Local y Ollama</h1><h3 style='color:var(--accent); margin-top:12px;'>Resumen Ejecutivo</h3><ul style='color:var(--muted); font-size:0.85rem;'><li><b>¿Qué?</b>: Inferencia 100% privada mediante modelos LLM locales.</li><li><b>¿Cuándo?</b>: En tiempo real durante el procesamiento.</li><li><b>¿Quién?</b>: Ollama API + Qwen 2.5.</li><li><b>¿Cómo?</b>: Conexión HTTP local en puerto 11434.</li></ul><h3 style='color:var(--accent); margin-top:12px;'>Desarrollo</h3><p style='font-size:0.85rem; color:var(--paper); line-height:1.5;'>El motor utiliza Ollama ejecutado en la máquina del usuario. Incluye gestión de memoria controlada por el [[Nota_Optimizacion_RAM]] para evitar saturación del sistema durante tareas intensivas de sintetizado.</p></div>"
             },
             {
                 title: "Base de Datos Vectorial ChromaDB",
                 path: "Nota_Base_Datos_Vectorial.md",
-                html: "<div class='note-content'><div class='note-badge'>YAML Metadata: chromadb, embeddings, vectorial</div><h1 style='color:var(--gold);'>Base de Datos Vectorial ChromaDB</h1><h3 style='color:var(--accent); margin-top:12px;'>Resumen Ejecutivo</h3><ul style='color:var(--muted); font-size:0.85rem;'><li><b>¿Qué?</b>: Almacenamiento vectorial embebido.</li><li><b>¿Cuándo?</b>: Durante la etapa 3 de estructuración.</li><li><b>¿Quién?</b>: ChromaDB Engine.</li><li><b>¿Cómo?</b>: Generación de embeddings semánticos para RAG.</li></ul><h3 style='color:var(--accent); margin-top:12px;'>Desarrollo</h3><p style='font-size:0.85rem; color:var(--paper); line-height:1.5;'>Permite la consulta directa en idioma natural desde el conversador local. Se integra con la generación de <span class='wikilink' onclick='loadNoteContent(\"Nota_Notas_Atomicas.md\")'>[[Nota_Notas_Atomicas]]</span> para mantener trazabilidad entre párrafos y documentos de origen.</p></div>"
+                html: "<div class='note-content'><div class='note-badge'>YAML Metadata: chromadb, embeddings, vectorial</div><h1 style='color:var(--gold);'>Base de Datos Vectorial ChromaDB</h1><h3 style='color:var(--accent); margin-top:12px;'>Resumen Ejecutivo</h3><ul style='color:var(--muted); font-size:0.85rem;'><li><b>¿Qué?</b>: Almacenamiento vectorial embebido.</li><li><b>¿Cuándo?</b>: Durante la etapa 3 de estructuración.</li><li><b>¿Quién?</b>: ChromaDB Engine.</li><li><b>¿Cómo?</b>: Generación de embeddings semánticos para RAG.</li></ul><h3 style='color:var(--accent); margin-top:12px;'>Desarrollo</h3><p style='font-size:0.85rem; color:var(--paper); line-height:1.5;'>Permite la consulta directa en idioma natural desde el conversador local. Se integra con la generación de [[Nota_Notas_Atomicas]] para mantener trazabilidad entre párrafos y documentos de origen.</p></div>"
             },
             {
                 title: "Gobernador de RAM y Memoria",
                 path: "Nota_Optimizacion_RAM.md",
-                html: "<div class='note-content'><div class='note-badge'>YAML Metadata: ram, gobernador, memoria</div><h1 style='color:var(--gold);'>Gobernador de RAM y Memoria</h1><h3 style='color:var(--accent); margin-top:12px;'>Resumen Ejecutivo</h3><ul style='color:var(--muted); font-size:0.85rem;'><li><b>¿Qué?</b>: Sistema de protección de recursos de hardware.</li><li><b>¿Cuándo?</b>: Monitorización continua.</li><li><b>¿Quién?</b>: RAM Governor.</li><li><b>¿Cómo?</b>: Cálculo dinámico del margen de seguridad.</li></ul><h3 style='color:var(--accent); margin-top:12px;'>Desarrollo</h3><p style='font-size:0.85rem; color:var(--paper); line-height:1.5;'>Regula la carga del <span class='wikilink' onclick='loadNoteContent(\"Nota_Motor_IA_Local.md\")'>[[Nota_Motor_IA_Local]]</span> según el porcentaje libre de memoria RAM, garantizando una experiencia fluida sin cuelgues del sistema operativo.</p></div>"
+                html: "<div class='note-content'><div class='note-badge'>YAML Metadata: ram, gobernador, memoria</div><h1 style='color:var(--gold);'>Gobernador de RAM y Memoria</h1><h3 style='color:var(--accent); margin-top:12px;'>Resumen Ejecutivo</h3><ul style='color:var(--muted); font-size:0.85rem;'><li><b>¿Qué?</b>: Sistema de protección de recursos de hardware.</li><li><b>¿Cuándo?</b>: Monitorización continua.</li><li><b>¿Quién?</b>: RAM Governor.</li><li><b>¿Cómo?</b>: Cálculo dinámico del margen de seguridad.</li></ul><h3 style='color:var(--accent); margin-top:12px;'>Desarrollo</h3><p style='font-size:0.85rem; color:var(--paper); line-height:1.5;'>Regula la carga del [[Nota_Motor_IA_Local]] según el porcentaje libre de memoria RAM, garantizando una experiencia fluida sin cuelgues del sistema operativo.</p></div>"
             },
             {
                 title: "Estética Editorial Papiro y Consola UI",
                 path: "Nota_Formato_Papiro.md",
-                html: "<div class='note-content'><div class='note-badge'>YAML Metadata: papiro, ui, diseno</div><h1 style='color:var(--gold);'>Estética Editorial Papiro y Consola UI</h1><h3 style='color:var(--accent); margin-top:12px;'>Resumen Ejecutivo</h3><ul style='color:var(--muted); font-size:0.85rem;'><li><b>¿Qué?</b>: Sistema de diseño visual anticuario-tecnológico.</li><li><b>¿Cuándo?</b>: Interfaz gráfica de la consola.</li><li><b>¿Quién?</b>: PyWebView + HTML5 Canvas.</li><li><b>¿Cómo?</b>: Colores pergamino, tipografía monoespaciada y bordes biselados.</li></ul><h3 style='color:var(--accent); margin-top:12px;'>Desarrollo</h3><p style='font-size:0.85rem; color:var(--paper); line-height:1.5;'>Ofrece una experiencia visual premium con soporte para Grafo Interactivo de Obsidian, navegación nativa e hiperenlaces bi-direccionales vinculados a <span class='wikilink' onclick='loadNoteContent(\"Nota_Notas_Atomicas.md\")'>[[Nota_Notas_Atomicas]]</span>.</p></div>"
+                html: "<div class='note-content'><div class='note-badge'>YAML Metadata: papiro, ui, diseno</div><h1 style='color:var(--gold);'>Estética Editorial Papiro y Consola UI</h1><h3 style='color:var(--accent); margin-top:12px;'>Resumen Ejecutivo</h3><ul style='color:var(--muted); font-size:0.85rem;'><li><b>¿Qué?</b>: Sistema de diseño visual anticuario-tecnológico.</li><li><b>¿Cuándo?</b>: Interfaz gráfica de la consola.</li><li><b>¿Quién?</b>: PyWebView + HTML5 Canvas.</li><li><b>¿Cómo?</b>: Colores pergamino, tipografía monoespaciada y bordes biselados.</li></ul><h3 style='color:var(--accent); margin-top:12px;'>Desarrollo</h3><p style='font-size:0.85rem; color:var(--paper); line-height:1.5;'>Ofrece una experiencia visual premium con soporte para Grafo Interactivo de Obsidian [[Nota_Graph_Engine_Karpathy]], navegación nativa e hiperenlaces bi-direccionales vinculados a [[Nota_Notas_Atomicas]].</p></div>"
+            },
+            {
+                title: "Grafo Interactivo de Conocimiento",
+                path: "Nota_Graph_Engine_Karpathy.md",
+                html: "<div class='note-content'><div class='note-badge'>YAML Metadata: grafo, canvas, karpathy</div><h1 style='color:var(--gold);'>Grafo Interactivo de Conocimiento</h1><h3 style='color:var(--accent); margin-top:12px;'>Resumen Ejecutivo</h3><ul style='color:var(--muted); font-size:0.85rem;'><li><b>¿Qué?</b>: Motor Force-Directed en HTML5 Canvas con soporte HiDPI Retina.</li><li><b>¿Cuándo?</b>: Modo Vista Gráfico del lector.</li><li><b>¿Quién?</b>: KarpathyGraphLoop.</li><li><b>¿Cómo?</b>: Simulación de física de muelles y repulsión de Coulomb.</li></ul><h3 style='color:var(--accent); margin-top:12px;'>Desarrollo</h3><p style='font-size:0.85rem; color:var(--paper); line-height:1.5;'>Permite explorar visualmente las conexiones de red entre [[Nota_Notas_Atomicas]] e hipervínculos bidireccionales.</p></div>"
             },
             {
                 title: "Estructuración en Notas Atómicas",
                 path: "Nota_Notas_Atomicas.md",
-                html: "<div class='note-content'><div class='note-badge'>YAML Metadata: notas-atomicas, zettelkasten, obsidian</div><h1 style='color:var(--gold);'>Estructuración en Notas Atómicas</h1><h3 style='color:var(--accent); margin-top:12px;'>Resumen Ejecutivo</h3><ul style='color:var(--muted); font-size:0.85rem;'><li><b>¿Qué?</b>: Formatos independientes y reusables de información.</li><li><b>¿Cuándo?</b>: Etapa final de síntesis.</li><li><b>¿Quién?</b>: Vault Funes.</li><li><b>¿Cómo?</b>: Plantilla YAML + resumen ejecutivo + hiperenlaces.</li></ul><h3 style='color:var(--accent); margin-top:12px;'>Desarrollo</h3><p style='font-size:0.85rem; color:var(--paper); line-height:1.5;'>Las notas atómicas permiten una navegación fluida dentro de la consola Papiro y su visualización en el mapa de conocimiento junto a la <span class='wikilink' onclick='loadNoteContent(\"Nota_Base_Datos_Vectorial.md\")'>[[Nota_Base_Datos_Vectorial]]</span> y el <span class='wikilink' onclick='loadNoteContent(\"Nota_Formato_Papiro.md\")'>[[Nota_Formato_Papiro]]</span>.</p></div>"
+                html: "<div class='note-content'><div class='note-badge'>YAML Metadata: notas-atomicas, zettelkasten, obsidian</div><h1 style='color:var(--gold);'>Estructuración en Notas Atómicas</h1><h3 style='color:var(--accent); margin-top:12px;'>Resumen Ejecutivo</h3><ul style='color:var(--muted); font-size:0.85rem;'><li><b>¿Qué?</b>: Formatos independientes y reusables de información.</li><li><b>¿Cuándo?</b>: Etapa final de síntesis.</li><li><b>¿Quién?</b>: Vault Funes.</li><li><b>¿Cómo?</b>: Plantilla YAML + resumen ejecutivo + hiperenlaces.</li></ul><h3 style='color:var(--accent); margin-top:12px;'>Desarrollo</h3><p style='font-size:0.85rem; color:var(--paper); line-height:1.5;'>Las notas atómicas permiten una navegación fluida dentro de la consola Papiro y su visualización en el mapa de conocimiento junto a la [[Nota_Base_Datos_Vectorial]] y el [[Nota_Formato_Papiro]].</p></div>"
+            },
+            {
+                title: "Aislamiento y Recuperación de Cuarentena",
+                path: "Nota_Gestor_Cuarentena.md",
+                html: "<div class='note-content'><div class='note-badge'>YAML Metadata: cuarentena, aislamiento, errores</div><h1 style='color:var(--gold);'>Aislamiento y Recuperación de Cuarentena</h1><h3 style='color:var(--accent); margin-top:12px;'>Resumen Ejecutivo</h3><ul style='color:var(--muted); font-size:0.85rem;'><li><b>¿Qué?</b>: Sub-sistema de contención preventiva de errores I/O.</li><li><b>¿Cuándo?</b>: Al detectar archivos ilegibles o corruptos.</li><li><b>¿Quién?</b>: QuarantineManager.</li><li><b>¿Cómo?</b>: Aislamiento en .quarantine/ con registro de fallos.</li></ul><h3 style='color:var(--accent); margin-top:12px;'>Desarrollo</h3><p style='font-size:0.85rem; color:var(--paper); line-height:1.5;'>Permite diagnosticar y restaurar documentos a 1_entrada/ cuando se corrigen permisos o formatos. Integrado con [[Nota_ETL_Pipeline_Ingesta]].</p></div>"
+            },
+            {
+                title: "Sincronización Bidireccional Obsidian",
+                path: "Nota_Integracion_Obsidian.md",
+                html: "<div class='note-content'><div class='note-badge'>YAML Metadata: obsidian, vault, uri</div><h1 style='color:var(--gold);'>Sincronización Bidireccional Obsidian</h1><h3 style='color:var(--accent); margin-top:12px;'>Resumen Ejecutivo</h3><ul style='color:var(--muted); font-size:0.85rem;'><li><b>¿Qué?</b>: Conexión nativa con Obsidian Vault.</li><li><b>¿Cuándo?</b>: Apertura nativa de archivos Markdown.</li><li><b>¿Quién?</b>: VaultManager + obsidian://open protocol.</li><li><b>¿Cómo?</b>: Apertura instantánea de notas Zettelkasten.</li></ul><h3 style='color:var(--accent); margin-top:12px;'>Desarrollo</h3><p style='font-size:0.85rem; color:var(--paper); line-height:1.5;'>Permite conmutar con un solo clic hacia la app Obsidian para edición avanzada. Consulte también [[Nota_Notas_Atomicas]].</p></div>"
+            },
+            {
+                title: "Integración Desktop AnythingLLM",
+                path: "Nota_AnythingLLM_Conexion.md",
+                html: "<div class='note-content'><div class='note-badge'>YAML Metadata: anythingllm, api, rag</div><h1 style='color:var(--gold);'>Integración Desktop AnythingLLM</h1><h3 style='color:var(--accent); margin-top:12px;'>Resumen Ejecutivo</h3><ul style='color:var(--muted); font-size:0.85rem;'><li><b>¿Qué?</b>: Vinculación de workspaces con AnythingLLM Desktop.</li><li><b>¿Cuándo?</b>: Sincronización multi-documento.</li><li><b>¿Quién?</b>: AnythingLLMConfigurator.</li><li><b>¿Cómo?</b>: API REST local en puerto 3001.</li></ul><h3 style='color:var(--accent); margin-top:12px;'>Desarrollo</h3><p style='font-size:0.85rem; color:var(--paper); line-height:1.5;'>Conecta las notas procesadas con el entorno AnythingLLM. Se apoya en [[Nota_Base_Datos_Vectorial]] y [[Nota_Motor_IA_Local]].</p></div>"
+            },
+            {
+                title: "Registros y Gazette Logging",
+                path: "Nota_Telemetria_y_Logs.md",
+                html: "<div class='note-content'><div class='note-badge'>YAML Metadata: gazette, logs, auditoria</div><h1 style='color:var(--gold);'>Registros y Gazette Logging</h1><h3 style='color:var(--accent); margin-top:12px;'>Resumen Ejecutivo</h3><ul style='color:var(--muted); font-size:0.85rem;'><li><b>¿Qué?</b>: Consola de actividad y auditoría en tiempo real.</li><li><b>¿Cuándo?</b>: Monitorización continua.</li><li><b>¿Quién?</b>: Gazette Logger.</li><li><b>¿Cómo?</b>: Almacenamiento local con rotación de archivos.</li></ul><h3 style='color:var(--accent); margin-top:12px;'>Desarrollo</h3><p style='font-size:0.85rem; color:var(--paper); line-height:1.5;'>Informa de la ingesta de archivos, síntesis con Ollama y avisos del [[Nota_Optimizacion_RAM]].</p></div>"
+            },
+            {
+                title: "Privacidad 100% Offline",
+                path: "Nota_Seguridad_y_Privacidad.md",
+                html: "<div class='note-content'><div class='note-badge'>YAML Metadata: privacidad, offline, local-first</div><h1 style='color:var(--gold);'>Privacidad 100% Offline</h1><h3 style='color:var(--accent); margin-top:12px;'>Resumen Ejecutivo</h3><ul style='color:var(--muted); font-size:0.85rem;'><li><b>¿Qué?</b>: Garantía estricta de procesamiento local sin telemetría.</li><li><b>¿Cuándo?</b>: En todas las operaciones.</li><li><b>¿Quién?</b>: Arquitectura Local-First.</li><li><b>¿Cómo?</b>: Modelos y almacenamiento en el equipo local.</li></ul><h3 style='color:var(--accent); margin-top:12px;'>Desarrollo</h3><p style='font-size:0.85rem; color:var(--paper); line-height:1.5;'>Todo el conocimiento se mantiene protegido en el equipo local. Véase también [[Nota_Motor_IA_Local]].</p></div>"
+            },
+            {
+                title: "Manual de Uso Avanzado y Atajos",
+                path: "Nota_Manual_Usuario_Avanzado.md",
+                html: "<div class='note-content'><div class='note-badge'>YAML Metadata: manual, atajos, guia, usuario</div><h1 style='color:var(--gold);'>Manual de Uso Avanzado y Atajos de Teclado</h1><h3 style='color:var(--accent); margin-top:12px;'>Resumen Ejecutivo</h3><ul style='color:var(--muted); font-size:0.85rem;'><li><b>¿Qué?</b>: Guía detallada de operación avanzada de la Consola Funes.</li><li><b>¿Cuándo?</b>: Versión 2026.1.</li><li><b>¿Quién?</b>: Funes User Documentation.</li><li><b>¿Cómo?</b>: Explicaciones extensas, tablas de atajos y flujo paso a paso.</li></ul><h3 style='color:var(--accent); margin-top:16px;'>1. Introducción a la Filosofía Papiro</h3><p style='font-size:0.85rem; color:var(--paper); line-height:1.6;'>La Consola Funes combina la calidez visual de una imprenta editorial anticuaria con la velocidad de un pipeline ETL local. Cualquier archivo depositado en 1_entrada es digerido y estructurado en notas atómicas independientes.</p><h3 style='color:var(--accent); margin-top:16px;'>2. Atajos de Teclado y Controles Rápidos</h3><table style='width:100%; border-collapse:collapse; font-size:0.82rem; margin-top:10px; color:var(--paper);'><tr style='border-bottom:1px solid var(--border-accent); text-align:left;'><th>Tecla / Combinación</th><th>Acción</th><th>Alcance</th></tr><tr><td><b>Escape</b></td><td>Cerrar modal o emergente activo</td><td>Global UI</td></tr><tr><td><b>Click Backdrop</b></td><td>Cerrar modal en primer plano</td><td>Modales Papiro</td></tr><tr><td><b>Rueda del Ratón</b></td><td>Zoom dinámico sobre el grafo</td><td>Vista Gráfico</td></tr><tr><td><b>Arrastrar Nodo</b></td><td>Reorganizar posición espacial de notas</td><td>Vista Gráfico</td></tr><tr><td><b>Doble Click Nodo</b></td><td>Abrir nota asociada en el lector</td><td>Vista Gráfico</td></tr></table><h3 style='color:var(--accent); margin-top:16px;'>3. Procedimiento de Ingesta Paso a Paso</h3><p style='font-size:0.85rem; color:var(--paper); line-height:1.6;'>Paso 1: Coloque los documentos en 1_entrada.<br>Paso 2: El sistema ejecuta el [[Nota_ETL_Pipeline_Ingesta]].<br>Paso 3: Si se producen errores de lectura, el archivo se transfiere a la [[Nota_Gestor_Cuarentena]].<br>Paso 4: Consulte los gráficos y resúmenes en el lector interactivo con el [[Nota_Graph_Engine_Karpathy]] y revise el [[00_MOC_Funes]].</p><h3 style='color:var(--accent); margin-top:16px;'>4. Preguntas Frecuentes (FAQ)</h3><p style='font-size:0.85rem; color:var(--paper); line-height:1.6;'><b>¿Los datos salen del equipo?</b> No. Funes cumple con el principio de privacidad local [[Nota_Seguridad_y_Privacidad]].<br><b>¿Se integra con Obsidian?</b> Sí, mediante el protocolo nativo descrito en [[Nota_Integracion_Obsidian]].<br><b>¿Cómo se protege el hardware?</b> Con el monitoreo de recursos del [[Nota_Optimizacion_RAM]].</p></div>"
             }
         ];
 
@@ -1858,27 +2152,46 @@
             } else {
                 const demoData = {
                     nodes: [
-                        { id: "00_MOC_Funes", label: "00 Mapa de Contenidos MOC", path: "00_MOC_Funes.md" },
+                        { id: "00_MOC_Funes", label: "00 Mapa MOC", path: "00_MOC_Funes.md" },
                         { id: "Nota_Arquitectura_Funes", label: "Arquitectura General", path: "Nota_Arquitectura_Funes.md" },
+                        { id: "Nota_ETL_Pipeline_Ingesta", label: "Pipeline ETL Ingesta", path: "Nota_ETL_Pipeline_Ingesta.md" },
                         { id: "Nota_Motor_IA_Local", label: "Motor IA Local", path: "Nota_Motor_IA_Local.md" },
-                        { id: "Nota_Base_Datos_Vectorial", label: "Base Datos Vectorial", path: "Nota_Base_Datos_Vectorial.md" },
+                        { id: "Nota_Base_Datos_Vectorial", label: "Base Vectorial ChromaDB", path: "Nota_Base_Datos_Vectorial.md" },
                         { id: "Nota_Optimizacion_RAM", label: "Gobernador de RAM", path: "Nota_Optimizacion_RAM.md" },
-                        { id: "Nota_Formato_Papiro", label: "Estética Papiro", path: "Nota_Formato_Papiro.md" },
-                        { id: "Nota_Notas_Atomicas", label: "Notas Atómicas", path: "Nota_Notas_Atomicas.md" }
+                        { id: "Nota_Formato_Papiro", label: "Estética Papiro UI", path: "Nota_Formato_Papiro.md" },
+                        { id: "Nota_Graph_Engine_Karpathy", label: "Grafo Interactivo", path: "Nota_Graph_Engine_Karpathy.md" },
+                        { id: "Nota_Notas_Atomicas", label: "Notas Atómicas", path: "Nota_Notas_Atomicas.md" },
+                        { id: "Nota_Gestor_Cuarentena", label: "Gestor Cuarentena", path: "Nota_Gestor_Cuarentena.md" },
+                        { id: "Nota_Integracion_Obsidian", label: "Integración Obsidian", path: "Nota_Integracion_Obsidian.md" },
+                        { id: "Nota_AnythingLLM_Conexion", label: "AnythingLLM Conexión", path: "Nota_AnythingLLM_Conexion.md" },
+                        { id: "Nota_Telemetria_y_Logs", label: "Gazette Logs", path: "Nota_Telemetria_y_Logs.md" },
+                        { id: "Nota_Seguridad_y_Privacidad", label: "Privacidad Offline", path: "Nota_Seguridad_y_Privacidad.md" },
+                        { id: "Nota_Manual_Usuario_Avanzado", label: "Manual de Usuario", path: "Nota_Manual_Usuario_Avanzado.md" }
                     ],
                     links: [
                         { source: "00_MOC_Funes", target: "Nota_Arquitectura_Funes" },
+                        { source: "00_MOC_Funes", target: "Nota_ETL_Pipeline_Ingesta" },
                         { source: "00_MOC_Funes", target: "Nota_Motor_IA_Local" },
                         { source: "00_MOC_Funes", target: "Nota_Base_Datos_Vectorial" },
                         { source: "00_MOC_Funes", target: "Nota_Optimizacion_RAM" },
                         { source: "00_MOC_Funes", target: "Nota_Formato_Papiro" },
+                        { source: "00_MOC_Funes", target: "Nota_Graph_Engine_Karpathy" },
                         { source: "00_MOC_Funes", target: "Nota_Notas_Atomicas" },
+                        { source: "00_MOC_Funes", target: "Nota_Gestor_Cuarentena" },
+                        { source: "00_MOC_Funes", target: "Nota_Integracion_Obsidian" },
+                        { source: "00_MOC_Funes", target: "Nota_AnythingLLM_Conexion" },
+                        { source: "00_MOC_Funes", target: "Nota_Telemetria_y_Logs" },
+                        { source: "00_MOC_Funes", target: "Nota_Seguridad_y_Privacidad" },
+                        { source: "00_MOC_Funes", target: "Nota_Manual_Usuario_Avanzado" },
+                        { source: "Nota_Arquitectura_Funes", target: "Nota_ETL_Pipeline_Ingesta" },
                         { source: "Nota_Arquitectura_Funes", target: "Nota_Motor_IA_Local" },
                         { source: "Nota_Arquitectura_Funes", target: "Nota_Base_Datos_Vectorial" },
-                        { source: "Nota_Arquitectura_Funes", target: "Nota_Formato_Papiro" },
+                        { source: "Nota_ETL_Pipeline_Ingesta", target: "Nota_Gestor_Cuarentena" },
                         { source: "Nota_Motor_IA_Local", target: "Nota_Optimizacion_RAM" },
-                        { source: "Nota_Base_Datos_Vectorial", target: "Nota_Notas_Atomicas" },
-                        { source: "Nota_Formato_Papiro", target: "Nota_Notas_Atomicas" }
+                        { source: "Nota_Base_Datos_Vectorial", target: "Nota_AnythingLLM_Conexion" },
+                        { source: "Nota_Formato_Papiro", target: "Nota_Graph_Engine_Karpathy" },
+                        { source: "Nota_Manual_Usuario_Avanzado", target: "Nota_Seguridad_y_Privacidad" },
+                        { source: "Nota_Manual_Usuario_Avanzado", target: "Nota_Integracion_Obsidian" }
                     ]
                 };
                 initObsidianGraphCanvas(demoData);
@@ -1895,42 +2208,79 @@
             }
         }
 
+        function highlightSidebarNote(notePath) {
+            document.querySelectorAll('.reader-note-item, .reader-pinned-item').forEach(function(el) {
+                el.classList.remove('active');
+                if (el.dataset.path && (el.dataset.path === notePath || el.dataset.path.endsWith(notePath) || notePath.endsWith(el.dataset.path))) {
+                    el.classList.add('active');
+                }
+            });
+        }
+
         function renderNoteList(notes) {
+            const pinnedContainer = document.getElementById('reader-pinned-moc');
             const ul = document.getElementById('reader-note-list');
-            ul.innerHTML = '';
+            if (ul) ul.innerHTML = '';
+            if (pinnedContainer) pinnedContainer.innerHTML = '';
+
             if (!notes || !notes.length) {
-                ul.innerHTML = '<li class="reader-note-item">No se encontraron notas</li>';
+                if (ul) ul.innerHTML = '<li class="reader-note-item">No se encontraron notas</li>';
                 return;
             }
-            notes.forEach(function(n, idx) {
+
+            // Identificar nota MOC para la cabecera fijada del sidebar
+            const mocNote = notes.find(n => n.path.includes('00_MOC') || n.title.includes('MOC')) || notes[0];
+            
+            if (mocNote && pinnedContainer) {
+                const mocDiv = document.createElement('div');
+                mocDiv.className = 'reader-pinned-item' + (currentSelectedNotePath === mocNote.path ? ' active' : '');
+                mocDiv.dataset.path = mocNote.path;
+                mocDiv.innerText = mocNote.title;
+                mocDiv.onclick = function() {
+                    loadNoteContent(mocNote.path);
+                };
+                pinnedContainer.appendChild(mocDiv);
+            }
+
+            // Filtrar las demás notas para el listado con scroll independiente
+            const otherNotes = notes.filter(n => n !== mocNote);
+            otherNotes.forEach(function(n) {
                 const li = document.createElement('li');
-                li.className = 'reader-note-item' + (idx === 0 ? ' active' : '');
+                li.className = 'reader-note-item' + (currentSelectedNotePath === n.path ? ' active' : '');
+                li.dataset.path = n.path;
                 li.innerText = n.title;
                 li.onclick = function() {
-                    document.querySelectorAll('.reader-note-item').forEach(el => el.classList.remove('active'));
-                    li.classList.add('active');
                     loadNoteContent(n.path);
                 };
                 ul.appendChild(li);
             });
-            if (notes.length > 0) loadNoteContent(notes[0].path);
+
+            if (!currentSelectedNotePath && notes.length > 0) {
+                loadNoteContent(notes[0].path);
+            } else if (currentSelectedNotePath) {
+                highlightSidebarNote(currentSelectedNotePath);
+            }
         }
 
         function loadNoteContent(notePath) {
             currentSelectedNotePath = notePath;
+            highlightSidebarNote(notePath);
+
             let displayTitle = notePath.replace(/\.md$/, '').replace(/^.*[\\\/]/, '').replace(/_/g, ' ');
 
             if (window.pywebview && window.pywebview.api) {
                 window.pywebview.api.get_note_content(notePath).then(function(res) {
                     if (res && res.title) displayTitle = res.title;
                     currentSelectedNoteTitle = displayTitle;
-                    document.getElementById('reader-content').innerHTML = injectNoteActionBar(displayTitle, res.html);
+                    const formattedHtml = formatWikilinksInHtml(res ? res.html : '');
+                    document.getElementById('reader-content').innerHTML = injectNoteActionBar(displayTitle, formattedHtml);
                 });
             } else {
                 const found = LOCAL_MOCK_NOTES.find(n => n.path === notePath || n.path.endsWith(notePath) || (n.title && notePath.includes(n.title)));
                 if (found) {
                     currentSelectedNoteTitle = found.title;
-                    document.getElementById('reader-content').innerHTML = injectNoteActionBar(found.title, found.html);
+                    const formattedHtml = formatWikilinksInHtml(found.html);
+                    document.getElementById('reader-content').innerHTML = injectNoteActionBar(found.title, formattedHtml);
                 } else {
                     currentSelectedNoteTitle = displayTitle;
                     document.getElementById('reader-content').innerHTML = injectNoteActionBar(displayTitle, '<h3 style="color:var(--gold);">' + displayTitle + '</h3><p style="color:var(--muted); margin-top:10px;">Nota cargada en la consola Funes.</p>');
@@ -1991,15 +2341,69 @@
             bodyEl.appendChild(ul);
         }
 
+        let lastSearchQuery = '';
+
         function filterReaderNotes() {
-            const query = document.getElementById('reader-search').value.toLowerCase();
-            document.querySelectorAll('.reader-note-item').forEach(function(el) {
-                if (el.innerText.toLowerCase().includes(query)) {
-                    el.style.display = 'block';
+            const rawInput = document.getElementById('reader-search').value;
+            const query = rawInput.toLowerCase().trim();
+
+            document.querySelectorAll('.reader-note-item, .reader-pinned-item').forEach(function(el) {
+                if (!query || el.innerText.toLowerCase().includes(query)) {
+                    el.style.display = 'flex';
                 } else {
                     el.style.display = 'none';
                 }
             });
+
+            if (query.length > 0 && query !== lastSearchQuery) {
+                lastSearchQuery = query;
+                document.querySelectorAll('.reader-note-item, .reader-pinned-item').forEach(el => el.classList.remove('active'));
+                currentSelectedNotePath = '';
+
+                const readerContent = document.getElementById('reader-content');
+                if (readerContent) {
+                    readerContent.innerHTML = `
+                        <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; min-height: 380px; text-align: center; color: var(--muted); gap: 18px; padding: 20px;">
+                            <svg width="110" height="130" viewBox="0 0 100 120" style="animation: flipHourglass 4s infinite cubic-bezier(0.65, 0, 0.35, 1); flex-shrink: 0;">
+                                <defs>
+                                    <pattern id="sandDotsPattern" width="7" height="7" patternUnits="userSpaceOnUse">
+                                        <circle cx="2" cy="2" r="1.1" fill="#787268"/>
+                                        <circle cx="5" cy="4" r="1.0" fill="#5C574F"/>
+                                        <circle cx="1.5" cy="5.5" r="0.9" fill="#8C867C"/>
+                                        <circle cx="5.5" cy="1.5" r="1.2" fill="#6E685E"/>
+                                    </pattern>
+                                    <clipPath id="topBulbClip">
+                                        <polygon points="22,18 78,18 50,60"/>
+                                    </clipPath>
+                                    <clipPath id="bottomBulbClip">
+                                        <polygon points="22,102 78,102 50,60"/>
+                                    </clipPath>
+                                </defs>
+                                <rect x="15" y="10" width="70" height="8" rx="2" fill="#59544D" stroke="#3D3934" stroke-width="1.5"/>
+                                <rect x="15" y="102" width="70" height="8" rx="2" fill="#59544D" stroke="#3D3934" stroke-width="1.5"/>
+                                <path d="M 22 18 L 78 18 Q 58 55 52 60 Q 58 65 78 102 L 22 102 Q 42 65 48 60 Q 42 55 22 18 Z" fill="none" stroke="#9C958B" stroke-width="2.5" stroke-linejoin="round"/>
+                                <g clip-path="url(#topBulbClip)">
+                                    <polygon points="22,18 78,18 50,60" fill="url(#sandDotsPattern)" style="animation: drainTopSand 4s infinite ease-in-out; transform-origin: 50px 60px;"/>
+                                </g>
+                                <g class="sand-falling-grains">
+                                    <circle cx="49" cy="58" r="1.3" fill="#787268" style="animation: dropParticleDot 0.65s infinite linear 0s;"/>
+                                    <circle cx="51" cy="58" r="1.1" fill="#5C574F" style="animation: dropParticleDot 0.65s infinite linear 0.13s;"/>
+                                    <circle cx="50" cy="58" r="1.4" fill="#8C867C" style="animation: dropParticleDot 0.65s infinite linear 0.26s;"/>
+                                    <circle cx="48.5" cy="58" r="1.0" fill="#6E685E" style="animation: dropParticleDot 0.65s infinite linear 0.39s;"/>
+                                    <circle cx="51.5" cy="58" r="1.2" fill="#787268" style="animation: dropParticleDot 0.65s infinite linear 0.52s;"/>
+                                </g>
+                                <g clip-path="url(#bottomBulbClip)">
+                                    <polygon points="22,102 78,102 50,60" fill="url(#sandDotsPattern)" style="animation: fillBottomSand 4s infinite ease-in-out; transform-origin: 50px 102px;"/>
+                                </g>
+                            </svg>
+                            <div style="font-size: 0.92rem; font-weight: 700; color: var(--paper); letter-spacing: 0.5px;">Búsqueda activa: "<span style="color: var(--gold);">${rawInput}</span>"</div>
+                            <div style="font-size: 0.8rem; color: var(--muted); max-width: 340px; line-height: 1.45;">Selecciona una de las notas filtradas en la columna izquierda para desplegar su lectura.</div>
+                        </div>
+                    `;
+                }
+            } else if (query.length === 0 && lastSearchQuery.length > 0) {
+                lastSearchQuery = '';
+            }
         }
 
         function updateDashboardStats(stats) {
@@ -2046,6 +2450,36 @@
                     }
                 });
             }
+        });
+
+        document.addEventListener('DOMContentLoaded', function() {
+            document.querySelectorAll('.modal-overlay').forEach(function(overlay) {
+                overlay.addEventListener('click', function(e) {
+                    if (e.target === overlay) {
+                        closeModal(overlay.id);
+                    }
+                });
+                overlay.addEventListener('wheel', function(e) {
+                    if (e.target === overlay) {
+                        e.preventDefault();
+                    }
+                }, { passive: false });
+                overlay.addEventListener('touchmove', function(e) {
+                    if (e.target === overlay) {
+                        e.preventDefault();
+                    }
+                }, { passive: false });
+            });
+
+            document.addEventListener('keydown', function(e) {
+                if (e.key === 'Escape') {
+                    document.querySelectorAll('.modal-overlay').forEach(function(overlay) {
+                        if (overlay.style.display === 'flex' || getComputedStyle(overlay).display === 'flex') {
+                            closeModal(overlay.id);
+                        }
+                    });
+                }
+            });
         });
     </script>
 </body>

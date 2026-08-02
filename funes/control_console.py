@@ -297,8 +297,201 @@ class FunesConsoleBackend:
         }
 
     def handle_action(self, action_name: str, payload: dict) -> Dict[str, Any]:
-        if action_name == "flush_sources":
-            copied_count = self.sync_manager.sync_to_input(self.config.vault.input_dir)
+        # --- TEMAS Y CUESTIONES ---
+        if action_name == "get_themes":
+            return {
+                "themes": self.vault.get_available_themes(),
+                "active": self.vault.active_theme
+            }
+        elif action_name == "set_theme":
+            theme_name = payload.get("theme_name", "General")
+            self.vault.set_active_theme(theme_name)
+            return {
+                "log": f"Tema activo cambiado a: '{self.vault.active_theme}'",
+                "refresh": True,
+                "stats": self.get_stats_dict()
+            }
+        elif action_name == "create_theme":
+            theme_name = payload.get("theme_name", "")
+            if theme_name:
+                self.vault.create_theme(theme_name)
+                return {
+                    "log": f"Nuevo Tema creado y activado: '{self.vault.active_theme}'",
+                    "refresh": True,
+                    "stats": self.get_stats_dict()
+                }
+            return {"error": "Nombre de Tema no proporcionado"}
+
+        elif action_name == "get_issues":
+            return {
+                "issues": self.vault.get_issues_in_theme(),
+                "active_theme": self.vault.active_theme
+            }
+        elif action_name == "create_issue":
+            issue_name = payload.get("issue_name", "")
+            if issue_name:
+                issue_path = self.vault.create_issue_in_theme(issue_name)
+                return {
+                    "log": f"Cuestión creada: '{issue_path.name}' en Tema '{self.vault.active_theme}'",
+                    "issues": self.vault.get_issues_in_theme()
+                }
+            return {"error": "Nombre de Cuestión no proporcionado"}
+
+        elif action_name == "get_step_metrics":
+            return self.vault.get_all_steps_metrics()
+
+        # --- BANDEJA INBOX & APROBACIÓN DE NOTAS ---
+        elif action_name == "get_pending_notes":
+            pending = []
+            out_dir = self.vault.output_dir
+            if out_dir.exists():
+                for md_file in out_dir.rglob("*.md"):
+                    if md_file.name.startswith("."):
+                        continue
+                    try:
+                        content = md_file.read_text(encoding="utf-8", errors="replace")
+                        if "estado: pendiente_aprobacion" in content or "estado: \"pendiente_aprobacion\"" in content:
+                            rel_path = str(md_file.relative_to(self.vault.current_theme_dir)) if self.vault.current_theme_dir in md_file.parents else md_file.name
+                            issue = md_file.parent.name if md_file.parent != out_dir else "_Sin_Cuestion"
+                            pending.append({
+                                "title": md_file.stem,
+                                "filename": md_file.name,
+                                "path": str(md_file.resolve()),
+                                "rel_path": rel_path,
+                                "issue": issue,
+                                "content": content[:1500]
+                            })
+                    except Exception:
+                        pass
+            return {"pending_notes": pending, "count": len(pending)}
+
+        elif action_name == "approve_note":
+            file_path_str = payload.get("file_path") or payload.get("path")
+            if file_path_str:
+                p = Path(file_path_str).resolve()
+                if p.exists():
+                    try:
+                        content = p.read_text(encoding="utf-8", errors="replace")
+                        content = content.replace("estado: pendiente_aprobacion", "estado: aprobada")
+                        content = content.replace("estado: \"pendiente_aprobacion\"", "estado: \"aprobada\"")
+                        if "historial:" not in content:
+                            hist_entry = f"\nhistorial:\n  - fecha: \"{time.strftime('%Y-%m-%d %H:%M:%S')}\"\n    accion: \"aprobada\"\n"
+                            content = content.replace("---\n\n", hist_entry + "---\n\n", 1)
+                        p.write_text(content, encoding="utf-8")
+                        return {"log": f"Nota '{p.name}' APROBADA con éxito.", "status": "approved"}
+                    except Exception as e:
+                        return {"error": f"Error al aprobar nota: {e}"}
+            return {"error": "Ruta de nota no proporcionada"}
+
+        # --- CRUD DE NOTAS (GUARDAR, FUSIONAR, MOVER, ELIMINAR) ---
+        elif action_name == "save_note":
+            file_path_str = payload.get("file_path") or payload.get("path")
+            new_content = payload.get("content")
+            title = payload.get("title")
+            issue_name = payload.get("issue", "_Sin_Cuestion")
+
+            if file_path_str:
+                p = Path(file_path_str).resolve()
+                if p.exists() and new_content is not None:
+                    p.write_text(new_content, encoding="utf-8")
+                    return {"log": f"Nota '{p.name}' guardada correctamente.", "status": "saved"}
+            elif title and new_content:
+                saved_path = self.vault.save_atomic_note(title=title, content=new_content, issue_name=issue_name)
+                return {"log": f"Nota nueva '{saved_path.name}' creada en {issue_name}.", "status": "created", "path": str(saved_path)}
+
+            return {"error": "Datos insuficientes para guardar nota"}
+
+        elif action_name == "merge_notes":
+            note_paths = payload.get("note_paths", [])
+            merged_title = payload.get("merged_title", "Nota_Fusionada")
+            target_issue = payload.get("target_issue", "_Sin_Cuestion")
+
+            if len(note_paths) < 2:
+                return {"error": "Se requieren al menos 2 notas para fusionar"}
+
+            contents = []
+            sources_set = set()
+            for np_str in note_paths:
+                p = Path(np_str).resolve()
+                if p.exists():
+                    txt = p.read_text(encoding="utf-8", errors="replace")
+                    contents.append(f"### Origen: {p.stem}\n{txt}\n")
+                    sources_set.add(p.name)
+
+            combined_body = "\n\n---\n\n".join(contents)
+            sources_fmt = json.dumps(sorted(list(sources_set)), ensure_ascii=False)
+            now_str = time.strftime("%Y-%m-%d %H:%M:%S")
+
+            merged_md = f"""---
+título: "{merged_title}"
+fecha: "{now_str}"
+autor: "Funes Merge Engine"
+estado: "aprobada"
+fuentes: {sources_fmt}
+historial:
+  - fecha: "{now_str}"
+    accion: "fusionada"
+---
+
+# {merged_title}
+
+{combined_body}
+"""
+            out_path = self.vault.save_atomic_note(title=merged_title, content=merged_md, issue_name=target_issue)
+            return {"log": f"Fusión completada. Nota resultante: '{out_path.name}' en Cuestión '{target_issue}'.", "path": str(out_path)}
+
+        elif action_name == "move_note":
+            file_path_str = payload.get("file_path") or payload.get("path")
+            target_issue = payload.get("target_issue", "_Sin_Cuestion")
+            if file_path_str:
+                p = Path(file_path_str).resolve()
+                if p.exists():
+                    target_dir = self.vault.output_dir / self.vault.sanitize_filename(target_issue)
+                    target_dir.mkdir(parents=True, exist_ok=True)
+                    dest_path = target_dir / p.name
+                    if p != dest_path:
+                        shutil.move(str(p), str(dest_path))
+                    return {"log": f"Nota '{p.name}' movida a Cuestión '{target_issue}'.", "new_path": str(dest_path)}
+            return {"error": "No se pudo mover la nota"}
+
+        elif action_name == "delete_note":
+            file_path_str = payload.get("file_path") or payload.get("path")
+            if file_path_str:
+                p = Path(file_path_str).resolve()
+                if p.exists():
+                    quar_path = self.vault.move_to_quarantine(p, reason="Eliminada por el usuario")
+                    return {"log": f"Nota '{p.name}' trasladada a Papelera de Cuarentena.", "quarantine_path": str(quar_path)}
+            return {"error": "Ruta de archivo no válida para eliminar"}
+
+        # --- PAPELERA CUARENTENA Y RESTAURACIÓN ---
+        elif action_name == "get_quarantine":
+            return {"quarantine_notes": self.vault.get_quarantine_notes()}
+
+        elif action_name == "restore_note":
+            q_filename = payload.get("filename")
+            target_issue = payload.get("target_issue", "_Sin_Cuestion")
+            if q_filename:
+                try:
+                    restored_path = self.vault.restore_from_quarantine(q_filename, target_issue=target_issue)
+                    return {"log": f"Nota restaurada con éxito en Cuestión '{target_issue}': {restored_path.name}", "path": str(restored_path)}
+                except Exception as e:
+                    return {"error": f"Error al restaurar: {e}"}
+            return {"error": "Nombre de archivo de cuarentena no especificado"}
+
+        # --- LANZAMIENTO EXPLÍCITO DE CICLOS KARPATHY ---
+        elif action_name == "run_karpathy_cycle":
+            target_issue = payload.get("target_issue")
+            try:
+                karpathy = KarpathyGraphLoop(self.vault.output_dir)
+                res = karpathy.refine_knowledge_graph(target_issue=target_issue)
+                msg = f"Ciclo Karpathy completado para Cuestión '{target_issue or 'Todas'}'. Notas procesadas: {res.get('processed_notes', 0)}."
+                return {"log": msg, "result": res, "refresh": True, "stats": self.get_stats_dict()}
+            except Exception as e:
+                return {"error": f"Error ejecutando ciclo Karpathy: {e}"}
+
+        # --- ACCIONES ANTERIORES DE CONSOLA ---
+        elif action_name == "flush_sources":
+            copied_count = self.sync_manager.sync_to_input(self.vault.input_dir)
             return {
                 "log": f"Recopilación completada hacia 1_entrada. Archivos nuevos o actualizados traídos: {copied_count}",
                 "refresh": True,
@@ -306,9 +499,9 @@ class FunesConsoleBackend:
             }
         elif action_name == "reindex_notes":
             try:
-                karpathy = KarpathyGraphLoop(self.config.vault.output_dir)
+                karpathy = KarpathyGraphLoop(self.vault.output_dir)
                 karpathy.refine_knowledge_graph()
-                notes_count = len(list(self.config.vault.output_dir.glob("*.md"))) if self.config.vault.output_dir.exists() else 0
+                notes_count = len(list(self.vault.output_dir.rglob("*.md"))) if self.vault.output_dir.exists() else 0
                 return {
                     "log": f"Se regeneró el mapa de notas e interconexiones. Total notas preparadas: {notes_count}",
                     "refresh": True,
@@ -356,14 +549,14 @@ class FunesConsoleBackend:
                 "stats": stats
             }
         elif action_name == "stat_input":
-            inp_files = [f for f in self.config.vault.input_dir.glob("*") if f.is_file() and not f.name.startswith(".")] if self.config.vault.input_dir.exists() else []
+            inp_files = [f for f in self.vault.input_dir.glob("*") if f.is_file() and not f.name.startswith(".")] if self.vault.input_dir.exists() else []
             return {"log": f"Desglose ingesta consultado: {len(inp_files)} archivos."}
         elif action_name == "stat_notes":
-            out_dir = self.config.vault.output_dir
-            notes = list(out_dir.glob("*.md")) if out_dir.exists() else []
+            out_dir = self.vault.output_dir
+            notes = list(out_dir.rglob("*.md")) if out_dir.exists() else []
             return {"log": f"Telemetría del Grafo consultada: {len(notes)} notas preparadas."}
         elif action_name == "step1_flush":
-            copied = self.sync_manager.sync_to_input(self.config.vault.input_dir)
+            copied = self.sync_manager.sync_to_input(self.vault.input_dir)
             return {
                 "log": f"[PASO 1 RECEPCIÓN] Flush Manual ejecutado. Transferidos {copied} archivos a 1_entrada.",
                 "refresh": True,
@@ -372,7 +565,7 @@ class FunesConsoleBackend:
         elif action_name == "step2_transcribe":
             try:
                 pipeline = ETLPipeline(self.config)
-                input_files = [f for f in self.config.vault.input_dir.glob("*") if f.is_file() and not f.name.startswith(".")]
+                input_files = [f for f in self.vault.input_dir.glob("*") if f.is_file() and not f.name.startswith(".")]
                 for f in input_files:
                     try:
                         pipeline.process_file(f)
@@ -387,10 +580,10 @@ class FunesConsoleBackend:
                 return {"log": f"Error en Transcripción: {e}"}
         elif action_name == "step3_structure":
             try:
-                karpathy = KarpathyGraphLoop(self.config.vault.output_dir)
+                karpathy = KarpathyGraphLoop(self.vault.output_dir)
                 karpathy.refine_knowledge_graph()
-                configure_anythingllm_integration(self.config.vault.output_dir)
-                notes_count = len(list(self.config.vault.output_dir.glob("*.md"))) if self.config.vault.output_dir.exists() else 0
+                configure_anythingllm_integration(self.vault.output_dir)
+                notes_count = len(list(self.vault.output_dir.rglob("*.md"))) if self.vault.output_dir.exists() else 0
                 return {
                     "log": f"[PASO 3 ESTRUCTURACIÓN] Grafo refinado e hiperinterenlazado. Notas en 4_salida: {notes_count}.",
                     "refresh": True,

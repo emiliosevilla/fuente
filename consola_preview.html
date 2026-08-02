@@ -822,11 +822,17 @@
 
         <div class="toolbar-bar">
             <div class="toolbar-group">
+                <span style="font-size:0.8rem; font-weight:700; color:var(--paper);">📜 Tema:</span>
+                <select id="theme-select" style="background:var(--bg-card); color:var(--paper); border:1px solid var(--border-accent); border-radius:var(--card-radius); padding:6px 12px; font-weight:700; cursor:pointer;" onchange="changeActiveTheme(this.value)">
+                    <option value="General">General</option>
+                </select>
+                <button class="btn-secondary" onclick="promptCreateTheme()">+ Nuevo Tema</button>
+                <span style="border-left:1px solid var(--border); height:18px; margin:0 4px;"></span>
+                <button class="btn-primary" id="btn-run-karpathy" onclick="triggerKarpathyCycle()">
+                    <span id="karpathy-spinner" style="display:none;">⚙️</span> 🔄 Lanzar Ciclo de Refinamiento (Karpathy Loop)
+                </button>
                 <button class="btn-secondary" onclick="triggerAction('flush_sources')">
                     Actualizar Fuentes
-                </button>
-                <button class="btn-secondary" onclick="triggerAction('reindex_notes')">
-                    Actualizar Índice de Notas
                 </button>
                 <button class="btn-secondary" onclick="triggerAction('quick_help')">
                     Ayuda Rápida

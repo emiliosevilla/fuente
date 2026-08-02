@@ -48,71 +48,118 @@ class KarpathyGraphLoop:
 
             self._stop_event.wait(timeout=self.interval_sec)
 
-    def refine_knowledge_graph(self) -> None:
-        """Escanea 4_salida, detecta notas huérfanas, re-enlaza WikiLinks y agrupa la MOC por categorías."""
-        notes = list(self.output_dir.glob("*.md"))
-        if not notes:
-            return
+    def refine_knowledge_graph(self, target_issue: str = None) -> dict:
+        """Escanea 4_salida y sus Cuestiones (subcarpetas), re-enlaza WikiLinks y agrupa el MOC."""
+        if not self.output_dir.exists():
+            return {"status": "empty", "processed_notes": 0}
 
-        # Omitir procesamiento si ningún archivo ha cambiado desde la última iteración
-        current_max_mtime = max((n.stat().st_mtime for n in notes), default=0.0)
-        moc_exists = (self.output_dir / "_Indice_MOC.md").exists()
-        if moc_exists and current_max_mtime <= self._last_max_mtime:
-            logger.debug("KarpathyGraphLoop: Sin cambios detectados en 4_salida. Omitiendo escaneo.")
-            return
+        # Obtener todas las subcarpetas de Cuestiones
+        issue_dirs = [d for d in self.output_dir.iterdir() if d.is_dir() and not d.name.startswith(".")]
+        if not issue_dirs:
+            issue_dirs = [self.output_dir]
 
-        self._last_max_mtime = current_max_mtime
-        logger.info("Ejecutando ciclo KarpathyGraphLoop: Refinando conexiones en 4_salida...")
-
-        note_contents: Dict[str, str] = {}
+        processed_notes_count = 0
+        all_valid_notes: List[Path] = []
         orphans: Set[str] = set()
+        note_contents: Dict[str, str] = {}
+        issue_summaries: Dict[str, List[str]] = {}
 
-        # 1. Re-evalúa WikiLinks e identifica notas huérfanas
-        for note_file in notes:
-            if note_file.name == "_Indice_MOC.md":
+        for issue_dir in issue_dirs:
+            issue_name = issue_dir.name if issue_dir != self.output_dir else "General"
+            
+            if target_issue and target_issue != issue_name:
                 continue
 
-            try:
-                with open(note_file, "r", encoding="utf-8") as f:
-                    content = f.read()
+            notes = [f for f in issue_dir.glob("*.md") if not f.name.startswith("_")]
+            if not notes:
+                continue
 
-                updated_content = self.linker.auto_link_content(content, note_file.stem)
+            issue_summaries[issue_name] = []
+            for note_file in notes:
+                try:
+                    with open(note_file, "r", encoding="utf-8") as f:
+                        content = f.read()
 
-                if updated_content != content:
-                    with open(note_file, "w", encoding="utf-8") as f:
-                        f.write(updated_content)
-                    content = updated_content
-                    logger.info(f"KarpathyLoop: Enlaces actualizados en '{note_file.name}'")
+                    updated_content = self.linker.auto_link_content(content, note_file.stem)
 
-                note_contents[note_file.stem] = content
+                    if updated_content != content:
+                        with open(note_file, "w", encoding="utf-8") as f:
+                            f.write(updated_content)
+                        content = updated_content
+                        logger.info(f"KarpathyLoop: Enlaces actualizados en '{note_file.name}'")
 
-                # Verificar si no tiene enlaces [[WikiLinks]] salientes
-                if "[[" not in content:
-                    orphans.add(note_file.stem)
-            except Exception as e:
-                logger.error(f"Error procesando {note_file.name} en KarpathyLoop: {e}")
+                    note_contents[note_file.stem] = content
+                    all_valid_notes.append(note_file)
+                    processed_notes_count += 1
+                    issue_summaries[issue_name].append(note_file.stem)
 
-        # 2. Genera / Actualiza la nota MOC (Map of Content) organizada por categorías y huérfanos
-        self._update_moc_index(notes, note_contents, orphans)
+                    if "[[" not in content:
+                        orphans.add(note_file.stem)
 
-    def _update_moc_index(self, notes: List[Path], note_contents: Dict[str, str], orphans: Set[str]) -> None:
-        """Crea o actualiza el archivo _Indice_MOC.md agrupando notas por tags y resaltando huérfanas."""
-        moc_path = self.output_dir / "_Indice_MOC.md"
-        valid_notes = [n for n in notes if n.name != "_Indice_MOC.md"]
-        valid_notes.sort(key=lambda x: x.name.lower())
+                except Exception as e:
+                    logger.error(f"Error procesando {note_file.name} en KarpathyLoop: {e}")
 
+            # Crear/actualizar nota marco de Cuestión
+            self._update_issue_master_note(issue_dir, issue_name, notes)
+
+        # Generar / Actualizar MOC global
+        self._update_moc_index(all_valid_notes, note_contents, orphans, issue_summaries)
+
+        return {
+            "status": "success",
+            "processed_notes": processed_notes_count,
+            "issues_processed": len(issue_summaries),
+            "orphans_count": len(orphans)
+        }
+
+    def _update_issue_master_note(self, issue_dir: Path, issue_name: str, notes: List[Path]) -> None:
+        """Crea o actualiza la nota marco _Cuestion_<Nombre>.md dentro de la carpeta de la Cuestión."""
+        if not notes or issue_name == "_Sin_Cuestion":
+            return
+
+        master_path = issue_dir / f"_Cuestion_{issue_name}.md"
         now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-        # Extraer claves / tags de notas
-        tag_clusters: Dict[str, List[str]] = {}
-        for stem, content in note_contents.items():
-            tags_match = re.search(r"(?:claves|tags):\s*\[(.*?)\]", content, re.IGNORECASE)
-            if tags_match:
-                extracted_tags = [t.strip().strip("'\"") for t in tags_match.group(1).split(",") if t.strip()]
-                for tag in extracted_tags:
-                    if tag not in tag_clusters:
-                        tag_clusters[tag] = []
-                    tag_clusters[tag].append(stem)
+        lines = [
+            "---",
+            f'título: "Marco de Cuestión — {issue_name}"',
+            f'fecha: "{now_str}"',
+            'autor: "Funes Karpathy Loop"',
+            f'claves: [cuestion, {issue_name.lower()}, marco]',
+            f'fuentes: [4_salida/{issue_name}/]',
+            "---",
+            "",
+            f"# 📌 Marco de Cuestión: {issue_name}",
+            "",
+            f"Nota marco de síntesis para la cuestión **{issue_name}**, generada el `{now_str}`.",
+            "",
+            f"- **Notas Atómicas Integradas:** {len(notes)}",
+            "",
+            "## 🔗 Notas Atómicas de esta Cuestión",
+            "",
+        ]
+
+        for n in sorted(notes, key=lambda x: x.name.lower()):
+            if not n.name.startswith("_"):
+                lines.append(f"- [[{n.stem}]]")
+
+        lines.append("")
+        lines.append("---")
+        lines.append("*Esta nota marco relaciona las notas atómicas de la Cuestión con el Tema General.*")
+
+        with open(master_path, "w", encoding="utf-8") as f:
+            f.write("\n".join(lines))
+
+    def _update_moc_index(
+        self,
+        notes: List[Path],
+        note_contents: Dict[str, str],
+        orphans: Set[str],
+        issue_summaries: Dict[str, List[str]] = None
+    ) -> None:
+        """Crea o actualiza el archivo _Indice_MOC.md agrupando por Cuestiones y Tags."""
+        moc_path = self.output_dir / "_Indice_MOC.md"
+        now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
         lines = [
             "---",
@@ -125,32 +172,33 @@ class KarpathyGraphLoop:
             "",
             "# Map of Content (MOC) — Funes",
             "",
-            f"Mapa de contenido generado y refinado automáticamente el `{now_str}`.",
+            f"Mapa de contenido del Tema generado y refinado el `{now_str}`.",
             "",
-            f"- **Total de Notas Atómicas:** {len(valid_notes)}",
-            f"- **Notas Huérfanas (Sin hipervínculos):** {len(orphans)}",
+            f"- **Total de Notas Atómicas:** {len(notes)}",
+            f"- **Notas Huérfanas:** {len(orphans)}",
             "",
         ]
 
-        if tag_clusters:
-            lines.append("## Agrupación por Temas")
+        if issue_summaries:
+            lines.append("## 📂 Agrupación por Cuestiones")
             lines.append("")
-            for tag, note_stems in sorted(tag_clusters.items()):
-                lines.append(f"### #{tag}")
+            for issue_name, note_stems in sorted(issue_summaries.items()):
+                lines.append(f"### Cuestión: {issue_name}")
+                lines.append(f"Nota Marco: [[_Cuestion_{issue_name}]]")
                 for stem in sorted(note_stems):
                     lines.append(f"- [[{stem}]]")
                 lines.append("")
 
         if orphans:
-            lines.append("## Notas Huérfanas (Pendientes de Interconexión)")
+            lines.append("## ⚠️ Notas Huérfanas (Pendientes de Interconexión)")
             lines.append("")
             for orphan_stem in sorted(orphans):
                 lines.append(f"- [[{orphan_stem}]] ⚠️")
             lines.append("")
 
-        lines.append("## Catálogo Completo de Conocimiento")
+        lines.append("## 📚 Catálogo Completo de Conocimiento")
         lines.append("")
-        for note in valid_notes:
+        for note in sorted(notes, key=lambda x: x.name.lower()):
             lines.append(f"- [[{note.stem}]]")
 
         lines.append("")
@@ -158,4 +206,4 @@ class KarpathyGraphLoop:
         with open(moc_path, "w", encoding="utf-8") as f:
             f.write("\n".join(lines))
 
-        logger.info(f"Índice MOC actualizado con {len(valid_notes)} notas en {now_str}.")
+        logger.info(f"Índice MOC actualizado con {len(notes)} notas en {now_str}.")

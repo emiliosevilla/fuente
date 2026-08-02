@@ -18,20 +18,51 @@ WINDOWS_RESERVED_NAMES = {
 
 
 class VaultManager:
-    """Gestiona la estructura de carpetas de Obsidian y las operaciones físicas de archivos."""
+    """Gestiona la estructura de carpetas de Obsidian, Temas, Cuestiones y la Papelera de Cuarentena."""
 
-    def __init__(self, config: VaultConfig):
+    def __init__(self, config: VaultConfig, active_theme: str = "General"):
         self.config = config
-        self.quarantine_dir = self.config.system_dir / "quarantine"
+        self.active_theme = active_theme
         self._ensure_directories()
 
+    @property
+    def current_theme_dir(self) -> Path:
+        """Devuelve el directorio del Tema activo en la Bóveda."""
+        if self.active_theme == "General" and not (self.config.vault_path / "General").exists():
+            return self.config.vault_path
+        theme_dir = self.config.vault_path / self.sanitize_filename(self.active_theme)
+        if not theme_dir.exists() and (self.config.vault_path / self.config.input_dir_name).exists():
+            return self.config.vault_path
+        return theme_dir
+
+    @property
+    def input_dir(self) -> Path:
+        return self.current_theme_dir / self.config.input_dir_name
+
+    @property
+    def dirty_dir(self) -> Path:
+        return self.current_theme_dir / self.config.dirty_dir_name
+
+    @property
+    def clean_dir(self) -> Path:
+        return self.current_theme_dir / self.config.clean_dir_name
+
+    @property
+    def output_dir(self) -> Path:
+        return self.current_theme_dir / self.config.output_dir_name
+
+    @property
+    def quarantine_dir(self) -> Path:
+        return self.current_theme_dir / ".funes_quarantine"
+
     def _ensure_directories(self) -> None:
-        """Crea la jerarquía de carpetas si no existe y preconfigura reglas estrictas en Obsidian."""
+        """Crea la jerarquía de carpetas del tema activo si no existe."""
         dirs = [
-            self.config.input_dir,
-            self.config.dirty_dir,
-            self.config.clean_dir,
-            self.config.output_dir,
+            self.input_dir,
+            self.dirty_dir,
+            self.clean_dir,
+            self.output_dir,
+            self.output_dir / "_Sin_Cuestion",
             self.config.system_dir,
             self.config.chroma_dir,
             self.quarantine_dir,
@@ -40,7 +71,7 @@ class VaultManager:
             d.mkdir(parents=True, exist_ok=True)
             logger.info(f"Carpeta verificada: {d}")
 
-        # Configurar Obsidian (.obsidian/app.json) para evitar notas huérfanas o carpetas fuera de las 4 oficiales
+        # Configurar Obsidian (.obsidian/app.json)
         try:
             obsidian_dir = self.config.vault_path / ".obsidian"
             obsidian_dir.mkdir(parents=True, exist_ok=True)
@@ -64,10 +95,76 @@ class VaultManager:
 
             with open(app_json, "w", encoding="utf-8") as f:
                 json.dump(obsidian_rules, f, indent=2, ensure_ascii=False)
-            logger.info("Configuradas reglas estrictas de ubicación de notas en .obsidian/app.json")
         except Exception as e:
-            logger.warning(f"No se pudo escribir la configuración estricta de Obsidian: {e}")
+            logger.warning(f"No se pudo escribir la configuración de Obsidian: {e}")
 
+    # --- GESTIÓN DE TEMAS ---
+    def get_available_themes(self) -> list[str]:
+        """Obtiene la lista de Temas disponibles en la Bóveda."""
+        themes = set()
+        if (self.config.vault_path / "1_entrada").exists():
+            themes.add("General")
+        
+        for item in self.config.vault_path.iterdir():
+            if item.is_dir() and not item.name.startswith(".") and item.name not in ["__pycache__"]:
+                if (item / "1_entrada").exists() or (item / "4_salida").exists():
+                    themes.add(item.name)
+
+        if not themes:
+            themes.add("General")
+        return sorted(list(themes))
+
+    def set_active_theme(self, theme_name: str) -> Path:
+        """Cambia el tema activo y asegura su estructura de carpetas."""
+        safe_theme = self.sanitize_filename(theme_name)
+        if not safe_theme:
+            safe_theme = "General"
+        self.active_theme = safe_theme
+        self._ensure_directories()
+        logger.info(f"Tema activo cambiado a: {self.active_theme}")
+        return self.current_theme_dir
+
+    def create_theme(self, theme_name: str) -> Path:
+        """Crea un nuevo Tema con sus 4 carpetas de pipeline y Cuestión _Sin_Cuestion."""
+        safe_theme = self.sanitize_filename(theme_name)
+        theme_dir = self.config.vault_path / safe_theme
+        theme_dir.mkdir(parents=True, exist_ok=True)
+        (theme_dir / self.config.input_dir_name).mkdir(exist_ok=True)
+        (theme_dir / self.config.dirty_dir_name).mkdir(exist_ok=True)
+        (theme_dir / self.config.clean_dir_name).mkdir(exist_ok=True)
+        (theme_dir / self.config.output_dir_name / "_Sin_Cuestion").mkdir(parents=True, exist_ok=True)
+        (theme_dir / ".funes_quarantine").mkdir(exist_ok=True)
+        
+        self.set_active_theme(safe_theme)
+        return theme_dir
+
+    # --- GESTIÓN DE CUESTIONES ---
+    def get_issues_in_theme(self) -> list[str]:
+        """Lista las Cuestiones (subcarpetas) dentro de 4_salida del Tema activo."""
+        out_dir = self.output_dir
+        if not out_dir.exists():
+            return ["_Sin_Cuestion"]
+
+        issues = []
+        for item in out_dir.iterdir():
+            if item.is_dir() and not item.name.startswith("."):
+                issues.append(item.name)
+
+        if "_Sin_Cuestion" not in issues:
+            issues.append("_Sin_Cuestion")
+
+        return sorted(issues)
+
+    def create_issue_in_theme(self, issue_name: str) -> Path:
+        """Crea una nueva Cuestión (subcarpeta sanitizada) en 4_salida del Tema activo."""
+        sanitized_issue = re.sub(r"[^\w\s-]", "", issue_name).strip().replace(" ", "_")
+        if not sanitized_issue:
+            sanitized_issue = "_Sin_Cuestion"
+
+        issue_dir = self.output_dir / sanitized_issue
+        issue_dir.mkdir(parents=True, exist_ok=True)
+        logger.info(f"Cuestión creada en Tema '{self.active_theme}': {sanitized_issue}")
+        return issue_dir
 
     def copy_to_dirty(self, source_path: Path) -> Path:
         """Copia un archivo crudo desde 1_entrada hacia 2_sucio manteniendo el hash original."""
@@ -77,39 +174,24 @@ class VaultManager:
         file_hash = self.calculate_file_hash(source_path)
         safe_stem = self.sanitize_filename(source_path.stem)
         dest_filename = f"{safe_stem}_{file_hash[:8]}{source_path.suffix}"
-        dest_path = self.config.dirty_dir / dest_filename
+        dest_path = self.dirty_dir / dest_filename
 
         shutil.copy2(source_path, dest_path)
         logger.info(f"Copiado a 2_sucio: {source_path.name} -> {dest_path.name}")
         return dest_path
 
-    def move_to_quarantine(self, source_path: Path, reason: str = "Error de extracción") -> Path:
-        """Mueve un archivo corrupto o no procesable a la carpeta de cuarentena .funes/quarantine."""
-        safe_name = self.sanitize_filename(source_path.name)
-        dest_path = self.quarantine_dir / f"FAILED_{safe_name}"
-
-        try:
-            if source_path.exists():
-                shutil.move(str(source_path), str(dest_path))
-                logger.warning(f"Archivo movido a cuarentena ({reason}): {source_path.name}")
-        except Exception as e:
-            logger.error(f"Error moviendo a cuarentena {source_path.name}: {e}")
-
-        return dest_path
-
     def save_clean_md(self, relative_name: str, content: str, metadata: dict) -> Path:
-        """Guarda un documento transformado a .md verbatim en 3_limpio evitando colisiones de nombre."""
+        """Guarda un documento transformado a .md verbatim en 3_limpio evitando colisiones."""
         p = Path(relative_name)
         safe_stem = self.sanitize_filename(p.stem)
         ext_clean = p.suffix.lstrip(".").lower()
         
         clean_filename = f"{safe_stem}.md"
-        clean_path = self.config.clean_dir / clean_filename
+        clean_path = self.clean_dir / clean_filename
 
-        # Si ya existe un archivo limpio con el mismo nombre pero otra extensión original, usar sufijo
         if clean_path.exists() and ext_clean:
             clean_filename = f"{safe_stem}_{ext_clean}.md"
-            clean_path = self.config.clean_dir / clean_filename
+            clean_path = self.clean_dir / clean_filename
 
         header = "---\n"
         for k, v in metadata.items():
@@ -125,63 +207,119 @@ class VaultManager:
         logger.info(f"Guardado en 3_limpio: {clean_path.name}")
         return clean_path
 
-    def save_atomic_note(self, title: str, content: str, source_ext: str = "") -> Path:
-        """Guarda una nota atómica final estructurada en 4_salida con gestión de colisiones."""
+    def save_atomic_note(self, title: str, content: str, issue_name: str = "", source_ext: str = "") -> Path:
+        """Guarda una nota atómica estructurada en 4_salida (o 4_salida/<issue_name> si se especifica)."""
         safe_title = self.sanitize_filename(title)
         if not safe_title:
             safe_title = "Nota_Sin_Titulo"
 
-        output_path = self.config.output_dir / f"{safe_title}.md"
-        
+        if issue_name:
+            target_issue_dir = self.output_dir / self.sanitize_filename(issue_name)
+        else:
+            target_issue_dir = self.output_dir
+
+        target_issue_dir.mkdir(parents=True, exist_ok=True)
+
+        output_path = target_issue_dir / f"{safe_title}.md"
         if output_path.exists() and source_ext:
-            output_path = self.config.output_dir / f"{safe_title}_{source_ext.lstrip('.')}.md"
+            output_path = target_issue_dir / f"{safe_title}_{source_ext.lstrip('.')}.md"
 
         with open(output_path, "w", encoding="utf-8") as f:
             f.write(content)
 
-        logger.info(f"Nota atómica guardada en 4_salida: {output_path.name}")
+        logger.info(f"Nota atómica guardada en {target_issue_dir.name}: {output_path.name}")
         return output_path
 
-    def move_to_quarantine(self, file_path: Path, error_reason: str = "Error de lectura o formato corrupto") -> Path:
-        """Traslada de forma atómica un archivo problemático a .funes/quarantine/ registrando el error."""
-        if not file_path.exists():
-            return file_path
+    # --- PAPELERA DE CUARENTENA Y RESTAURACIÓN ---
+    def move_to_quarantine(self, source_path: Path, reason: str = "Eliminación o error") -> Path:
+        """Mueve una nota o archivo a .funes_quarantine conservando su estructura."""
+        if not source_path.exists():
+            return source_path
 
         from datetime import datetime
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        safe_name = self.sanitize_filename(file_path.name)
-        target_path = self.quarantine_dir / f"{timestamp}_{safe_name}"
+        now_str = datetime.now().strftime("%Y%m%d_%H%M%S")
+        safe_name = self.sanitize_filename(source_path.name)
+        target_path = self.quarantine_dir / f"{now_str}_{safe_name}"
 
         try:
-            shutil.move(str(file_path), str(target_path))
-            logger.warning(f"Archivo aislado en cuarentena {target_path.name}. Motivo: {error_reason}")
+            shutil.move(str(source_path), str(target_path))
+            logger.warning(f"Archivo movido a cuarentena: {target_path.name}. Motivo: {reason}")
         except Exception as e:
-            logger.error(f"Error al mover {file_path.name} a cuarentena: {e}")
-
-        # Registrar entrada en log de auditoría
-        try:
-            audit_file = self.config.system_dir / "audit_log.json"
-            audit_data = []
-            if audit_file.exists():
-                try:
-                    with open(audit_file, "r", encoding="utf-8") as f:
-                        audit_data = json.load(f)
-                except Exception:
-                    audit_data = []
-
-            audit_data.append({
-                "timestamp": timestamp,
-                "filename": file_path.name,
-                "quarantine_path": str(target_path),
-                "error": error_reason
-            })
-
-            with open(audit_file, "w", encoding="utf-8") as f:
-                json.dump(audit_data[-5000:], f, indent=2, ensure_ascii=False)
-        except Exception as e:
-            logger.debug(f"No se pudo actualizar el log de auditoría: {e}")
+            logger.error(f"Error al mover {source_path.name} a cuarentena: {e}")
 
         return target_path
+
+    def get_quarantine_notes(self) -> list[dict]:
+        """Obtiene la lista de notas aisladas en .funes_quarantine del tema activo."""
+        if not self.quarantine_dir.exists():
+            return []
+
+        notes = []
+        for item in sorted(self.quarantine_dir.iterdir(), reverse=True):
+            if item.is_file() and not item.name.startswith("."):
+                stat = item.stat()
+                from datetime import datetime
+                mod_time = datetime.fromtimestamp(stat.st_mtime).strftime("%Y-%m-%d %H:%M:%S")
+                notes.append({
+                    "filename": item.name,
+                    "original_name": "_".join(item.name.split("_")[2:]) if "_" in item.name else item.name,
+                    "path": str(item.resolve()),
+                    "size_bytes": stat.st_size,
+                    "quarantined_at": mod_time
+                })
+        return notes
+
+    def restore_from_quarantine(self, quarantine_filename: str, target_issue: str = "_Sin_Cuestion") -> Path:
+        """Restaura una nota desde .funes_quarantine a 4_salida/<target_issue>."""
+        q_path = self.quarantine_dir / quarantine_filename
+        if not q_path.exists():
+            raise FileNotFoundError(f"Nota en cuarentena no encontrada: {quarantine_filename}")
+
+        original_name = "_".join(quarantine_filename.split("_")[2:]) if len(quarantine_filename.split("_")) > 2 else quarantine_filename
+        target_issue_dir = self.output_dir / self.sanitize_filename(target_issue)
+        target_issue_dir.mkdir(parents=True, exist_ok=True)
+        dest_path = target_issue_dir / original_name
+
+        shutil.move(str(q_path), str(dest_path))
+        logger.info(f"Nota restaurada de cuarentena: {q_path.name} -> {dest_path.name}")
+        return dest_path
+
+    # --- MÉTRICAS DE PASOS / CONTENEDORES ---
+    def get_all_steps_metrics(self) -> dict:
+        """Retorna contadores y marcas de tiempo de los 4 pasos del flujo."""
+        from datetime import datetime
+
+        def _dir_info(directory: Path) -> dict:
+            if not directory.exists():
+                return {"count": 0, "oldest": "N/A", "files": []}
+            
+            files = []
+            oldest_ts = None
+            for p in directory.rglob("*"):
+                if p.is_file() and not p.name.startswith("."):
+                    mtime = p.stat().st_mtime
+                    if oldest_ts is None or mtime < oldest_ts:
+                        oldest_ts = mtime
+                    
+                    rel_path = str(p.relative_to(self.current_theme_dir)) if self.current_theme_dir in p.parents else p.name
+                    files.append({
+                        "name": p.name,
+                        "rel_path": rel_path,
+                        "size": p.stat().st_size,
+                        "mtime": datetime.fromtimestamp(mtime).strftime("%Y-%m-%d %H:%M:%S")
+                    })
+
+            oldest_str = datetime.fromtimestamp(oldest_ts).strftime("%Y-%m-%d %H:%M:%S") if oldest_ts else "N/A"
+            return {"count": len(files), "oldest": oldest_str, "files": files[:100]}
+
+        return {
+            "active_theme": self.active_theme,
+            "1_entrada": _dir_info(self.input_dir),
+            "2_sucio": _dir_info(self.dirty_dir),
+            "3_limpio": _dir_info(self.clean_dir),
+            "4_salida": _dir_info(self.output_dir),
+            "quarantine": _dir_info(self.quarantine_dir)
+        }
 
     @staticmethod
     def sanitize_filename(name: str) -> str:

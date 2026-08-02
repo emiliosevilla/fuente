@@ -1334,33 +1334,59 @@
         </div>
     </div>
 
-    <!-- MODAL AYUDA RÁPIDA -->
+    <!-- MODAL GUÍA RÁPIDA -->
     <div class="modal-overlay" id="modal-help">
-        <div class="modal-container" style="width: 800px;">
+        <div class="modal-container" style="width: 840px;">
             <div class="modal-header">
                 <div class="modal-title">GUÍA RÁPIDA DE USO — SISTEMA FUNES</div>
                 <button class="close-btn" onclick="closeModal('modal-help')">&times;</button>
             </div>
-            <div class="modal-body" style="gap: 16px;">
-                <div style="background: var(--bg-card); padding: 14px; border: 1px solid var(--border); border-radius: var(--card-radius);">
-                    <h4 style="margin: 0 0 6px 0; color: var(--gold); font-size: 0.9rem;">1. Flujo de Trabajo Principal</h4>
-                    <p style="font-size: 0.8rem; color: var(--paper); line-height: 1.4; margin: 0 0 8px 0;">
-                        Funes procesa la información de tu biblioteca en 4 fases continuas:
+            <div class="modal-body" style="gap: 14px; max-height: 75vh; overflow-y: auto; padding-right: 6px;">
+                <!-- 1. ORGANIZACIÓN EN TEMAS Y CUESTIONES -->
+                <div style="background: var(--bg-card); padding: 14px 18px; border: 1px solid var(--border); border-radius: var(--card-radius);">
+                    <h4 style="margin: 0 0 6px 0; color: var(--gold); font-size: 0.9rem;">1. Organización en Temas y Cuestiones</h4>
+                    <p style="font-size: 0.8rem; color: var(--paper); line-height: 1.45; margin: 0 0 8px 0;">
+                        Funes te permite ordenar tu conocimiento en bloques independientes y asuntos específicos:
                     </p>
-                    <ul style="font-size: 0.78rem; color: var(--muted); margin: 0; padding-left: 18px; line-height: 1.5;">
-                        <li><b>Recepción (1_entrada):</b> Ingesta manual o recopilación desde fuentes vinculadas.</li>
-                        <li><b>Transcripción (2_sucio ➔ 3_limpio):</b> Procesado ETL de audios (Whisper), capturas (OCR) y documentos.</li>
-                        <li><b>Estructuración (4_salida):</b> KarpathyLoop y vectorización ChromaDB para notas inteligentes interenlazadas.</li>
-                        <li><b>Consulta:</b> Exploración en el Lector de Notas y Chat interactivo RAG con IA local.</li>
+                    <ul style="font-size: 0.78rem; color: var(--muted); margin: 0; padding-left: 18px; line-height: 1.55;">
+                        <li><b>Temas:</b> Grandes bloques de conocimiento independientes elegibles en el menú <code>TEMA</code> de la cabecera. Cada Tema trabaja con su propia bóveda de notas (<code>1_entrada</code>, <code>2_sucio</code>, <code>3_limpio</code>, <code>4_salida</code>).</li>
+                        <li><b>Cuestiones:</b> Subcarpetas temáticas dentro de <code>4_salida</code> que agrupan notas relacionadas entre sí. Las notas recién creadas sin clasificar quedan en <code>_Sin_Cuestion</code>.</li>
                     </ul>
                 </div>
 
-                <div style="background: var(--bg-card); padding: 14px; border: 1px solid var(--border); border-radius: var(--card-radius);">
-                    <h4 style="margin: 0 0 6px 0; color: var(--gold); font-size: 0.9rem;">2. Barra de Acciones Rápida</h4>
-                    <ul style="font-size: 0.78rem; color: var(--paper); margin: 0; padding-left: 18px; line-height: 1.5;">
-                        <li><b>Actualizar Fuentes:</b> Trae automáticamente archivos nuevos o modificados desde carpetas externas conectadas.</li>
-                        <li><b>Actualizar Índice de Notas:</b> Reconstruye el grafo de relaciones e interenlaces <code>[[nota]]</code>.</li>
-                        <li><b>Ajustes Avanzados:</b> Configura el Servidor de IA Local (Ollama, LM Studio), margen de RAM y vinculación de rutas.</li>
+                <!-- 2. PROCESAMIENTO Y NUEVO FLUJO -->
+                <div style="background: var(--bg-card); padding: 14px 18px; border: 1px solid var(--border); border-radius: var(--card-radius);">
+                    <h4 style="margin: 0 0 6px 0; color: var(--gold); font-size: 0.9rem;">2. Procesamiento de Información y Nuevo Flujo de Trabajo</h4>
+                    <p style="font-size: 0.8rem; color: var(--paper); line-height: 1.45; margin: 0 0 8px 0;">
+                        Transformación automática del material en bruto en notas inteligentes estructuradas:
+                    </p>
+                    <ul style="font-size: 0.78rem; color: var(--muted); margin: 0; padding-left: 18px; line-height: 1.55;">
+                        <li><b>De Entrada a Limpio (1_entrada ➔ 3_limpio):</b> Ingesta de archivos, transcripción de audios y lectura de imágenes para obtener texto claro preservando 100% de la información original.</li>
+                        <li><b>Nuevo Flujo de Trabajo:</b> Generación asistida por Inteligencia Artificial que analiza la información limpia, construye notas atómicas interconectadas, crea la <b>Nota Marco de Cuestión</b> y actualiza el <b>Mapa General de Contenidos (MOC)</b>.</li>
+                    </ul>
+                </div>
+
+                <!-- 3. EDICIÓN, FUSIÓN Y PAPELERA DE CUARENTENA -->
+                <div style="background: var(--bg-card); padding: 14px 18px; border: 1px solid var(--border); border-radius: var(--card-radius);">
+                    <h4 style="margin: 0 0 6px 0; color: var(--gold); font-size: 0.9rem;">3. Edición, Fusión y Gestión de Notas</h4>
+                    <p style="font-size: 0.8rem; color: var(--paper); line-height: 1.45; margin: 0 0 8px 0;">
+                        Control total sobre tus notas desde el Lector de Funes:
+                    </p>
+                    <ul style="font-size: 0.78rem; color: var(--muted); margin: 0; padding-left: 18px; line-height: 1.55;">
+                        <li><b>Aprobación:</b> Revisa las notas generadas diferenciando entre notas pendientes de revisión y notas aprobadas.</li>
+                        <li><b>Edición Guiada:</b> Modifica cómodamente el título, etiquetas, resumen ejecutivo y contenido de tus notas.</li>
+                        <li><b>Fusión de Notas:</b> Combina varias notas seleccionadas en una sola sin perder fuentes ni referencias.</li>
+                        <li><b>Papelera de Cuarentena:</b> Al eliminar una nota, esta se traslada a la carpeta de seguridad de Cuarentena, pudiendo <b>Restaurarla en 1 clic</b> cuando lo desees.</li>
+                    </ul>
+                </div>
+
+                <!-- 4. CONSULTA E INTERACCIÓN CON IA LOCAL -->
+                <div style="background: var(--bg-card); padding: 14px 18px; border: 1px solid var(--border); border-radius: var(--card-radius);">
+                    <h4 style="margin: 0 0 6px 0; color: var(--gold); font-size: 0.9rem;">4. Consulta e Interacción con IA Local</h4>
+                    <ul style="font-size: 0.78rem; color: var(--paper); margin: 0; padding-left: 18px; line-height: 1.55;">
+                        <li><b>Hablar con esta Nota:</b> Inicia una conversación con la Inteligencia Artificial Local centrada únicamente en la nota actual.</li>
+                        <li><b>Hablar con todas las Notas:</b> Consulta a la Inteligencia Artificial Local buscando respuestas en todas las notas de tu Tema activo.</li>
+                        <li><b>Exportación:</b> Descarga instantáneamente cualquier nota en formato Markdown, PDF o Word.</li>
                     </ul>
                 </div>
             </div>

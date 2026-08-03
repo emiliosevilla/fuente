@@ -30,7 +30,7 @@ hidden_imports = [
     'funes.graph_engine.prompts',
     'funes.graph_engine.atomic_generator',
     'funes.graph_engine.linker',
-    'funes.graph_engine.karpathy_loop',
+    'funes.graph_engine.optimized_loop',
     'funes.watcher.watcher',
     'watchdog',
     'watchdog.observers',

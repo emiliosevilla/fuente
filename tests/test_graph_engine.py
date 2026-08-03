@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, patch
 
 from funes.graph_engine.atomic_generator import AtomicNoteGenerator
 from funes.graph_engine.linker import GraphLinker
-from funes.graph_engine.karpathy_loop import KarpathyGraphLoop
+from funes.graph_engine.optimized_loop import OptimizadoGraphLoop
 
 
 class TestGraphEngine(unittest.TestCase):
@@ -83,9 +83,9 @@ También mencionamos `Redes Neuronales en código inline`.
         self.assertIn('`Redes Neuronales en código inline`', result)
 
     # ------------------------------------------------------------------
-    # 3. KarpathyGraphLoop
+    # 3. OptimizadoGraphLoop
     # ------------------------------------------------------------------
-    def test_karpathy_loop_execution(self):
+    def test_optimized_loop_execution(self):
         # Crear notas interrelacionadas
         nota_a = self.output_dir / "Obsidian Vault.md"
         nota_b = self.output_dir / "Gestión de Conocimiento.md"
@@ -93,7 +93,7 @@ También mencionamos `Redes Neuronales en código inline`.
         nota_a.write_text("---\ntitle: Obsidian Vault\n---\n# Obsidian Vault\nNotas para Gestión de Conocimiento.", encoding="utf-8")
         nota_b.write_text("---\ntitle: Gestión de Conocimiento\n---\n# Gestión de Conocimiento\nUso de Obsidian Vault.", encoding="utf-8")
 
-        loop = KarpathyGraphLoop(self.output_dir)
+        loop = OptimizadoGraphLoop(self.output_dir)
         loop.refine_knowledge_graph()
 
         # Verificar que se crearon los hipervínculos bidireccionales

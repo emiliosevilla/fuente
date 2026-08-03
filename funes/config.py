@@ -71,7 +71,7 @@ class AppConfig:
     ollama_url: str = "http://localhost:11434"
     custom_model_override: Optional[str] = None  # None = Auto (RAM Governor)
     ram_safety_margin_pct: float = 0.35  # Mantiene al menos 35% de RAM libre
-    karpathy_loop_interval_sec: int = 300  # 5 minutos entre pasadas de refinamiento
+    optimized_loop_interval_sec: int = 300  # 5 minutos entre pasadas de refinamiento
     atomic_note_template: str = DEFAULT_ATOMIC_NOTE_TEMPLATE
 
     def to_dict(self) -> dict:
@@ -85,7 +85,7 @@ class AppConfig:
             "ollama_url": self.ollama_url,
             "custom_model_override": self.custom_model_override,
             "ram_safety_margin_pct": self.ram_safety_margin_pct,
-            "karpathy_loop_interval_sec": self.karpathy_loop_interval_sec,
+            "optimized_loop_interval_sec": self.optimized_loop_interval_sec,
             "atomic_note_template": self.atomic_note_template,
         }
 
@@ -105,7 +105,7 @@ class AppConfig:
             ollama_url=data.get("ollama_url", "http://localhost:11434"),
             custom_model_override=data.get("custom_model_override"),
             ram_safety_margin_pct=float(data.get("ram_safety_margin_pct", 0.35)),
-            karpathy_loop_interval_sec=int(data.get("karpathy_loop_interval_sec", 300)),
+            optimized_loop_interval_sec=int(data.get("optimized_loop_interval_sec", data.get("karpathy_loop_interval_sec", 300))),
             atomic_note_template=data.get("atomic_note_template", DEFAULT_ATOMIC_NOTE_TEMPLATE),
         )
 

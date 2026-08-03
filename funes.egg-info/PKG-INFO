@@ -20,11 +20,11 @@ Requires-Dist: pytesseract>=0.3.10
 
 <p align="center">
   <img src="assets/funes_icon.png" alt="Funes Icon" width="128" />
-  <h1 align="center">Habla con Funes</h1>
+  <h1 align="center">Funes</h1>
 </p>
 
 <p align="center">
-  <b>Funes</b> es un sistema inteligente de ETL (Extracción, Transformación y Carga) e Ingesta de Conocimiento diseñado para procesar flujos diarios de archivos multiformato desestructurados y volcarlos automáticamente en tu <b>Vault de Obsidian</b> como notas atómicas hiperconectadas (<code>[[WikiLinks]]</code>).
+  <b>Funes "el memorioso"</b> es un sistema inteligente de ETL (Extracción, Transformación y Carga) e Ingesta de Conocimiento diseñado para procesar flujos diarios de archivos multiformato desestructurados y volcarlos automáticamente en tu <b>Vault de Obsidian</b> como notas atómicas hiperconectadas (<code>[[WikiLinks]]</code>). Desarrollado para la gestión inteligente, local y privada del conocimiento personal y/o profesional.
 </p>
 
 ---
@@ -52,7 +52,7 @@ Requires-Dist: pytesseract>=0.3.10
      - **RAM 16 – 32 GB**: `Qwen 2.5 14B` / `Command-R 35B`
      - **RAM > 32 GB**: `Qwen 2.5 32B` / `Command-R`
 
-4. **Bucle de Grafo Estilo Karpathy (`KarpathyGraphLoop`)**:
+4. **Bucle de Grafo Optimizado (`OptimizadoGraphLoop`)**:
    - Hilo autónomo en segundo plano que re-evalúa notas, inserta enlaces `[[WikiLinks]]` cruzados y genera/actualiza de forma continua el mapa de contenidos global **`4_salida/_Indice_MOC.md`**.
 
 5. **Tolerancia a Fallos y Alta Disponibilidad**:
@@ -65,45 +65,12 @@ Requires-Dist: pytesseract>=0.3.10
 
 ## 📦 Instalación y Uso Rápido
 
-### Instalador y Lanzador de 1-Clic
-
 Puedes iniciar Funes de forma inmediata usando los scripts oficiales preconfigurados:
 
 - **Windows**: Haz doble clic en `instalar_funes.bat`
 - **macOS**: Haz doble clic en `instalar_funes.command`
 
 Estos scripts instalarán el entorno virtual, crearán los accesos directos de escritorio (`Funes.lnk` / `Funes.command`) y lanzarán la aplicación.
-
----
-
-### Opción 1: Ejecutar desde Código Fuente (Desarrolladores)
-
-```bash
-# 1. Clonar el repositorio
-git clone https://github.com/tu-usuario/funes.git
-cd funes
-
-# 2. Instalar dependencias
-pip install -r requirements.txt
-
-# 3. Ejecutar suite de pruebas de verificación
-PYTHONPATH=. python3 -m unittest discover -s tests
-
-# 4. Iniciar Funes en tu Vault de Obsidian
-python3 funes/main.py --vault "./Funes"
-```
-
----
-
-### Opción 2: Compilar Binario Autónomo
-
-Para generar el ejecutable sin dependencias externas:
-
-```bash
-python3 build_installer.py
-```
-
-El binario ejecutable `Funes.exe` (Windows) o ejecutable nativo (macOS) se creará en la carpeta `dist/`.
 
 ---
 
@@ -163,6 +130,6 @@ fuentes: [md_sucio_1, md_sucio_2]
 
 ---
 
-## 🛠️ Licencia e Información
+## 🛠️ Nota del autor
 
-Desarrollado bajo licencia MIT para la gestión inteligente, local y privada del conocimiento personal.
+Desarrollado por Emilio Sevilla Ortego. No se permite su distribución sin permiso del autor.

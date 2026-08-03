@@ -479,7 +479,7 @@ historial:
             return {"error": "Nombre de archivo de cuarentena no especificado"}
 
         # --- LANZAMIENTO EXPLÍCITO DE CICLOS OPTIMIZADOS ---
-        elif action_name in ("run_optimized_cycle", "run_karpathy_cycle"):
+        elif action_name == "run_optimized_cycle":
             target_issue = payload.get("target_issue")
             try:
                 loop = OptimizadoGraphLoop(self.vault.output_dir)

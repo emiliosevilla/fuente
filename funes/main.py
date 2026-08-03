@@ -6,7 +6,7 @@ from pathlib import Path
 
 from funes.config import get_default_config
 from funes.watcher.watcher import ETLPipeline
-from funes.graph_engine.karpathy_loop import KarpathyGraphLoop
+from funes.graph_engine.optimized_loop import OptimizadoGraphLoop
 from funes.core.app_checker import check_and_prompt_user_apps_closed
 
 # Configuración básica de logging y codificación UTF-8 para consola en Windows
@@ -103,8 +103,8 @@ def main():
             logger.info("No se encontraron archivos nuevos en 1_entrada para procesar.")
 
         logger.info("Refinando interconexiones del grafo de conocimiento...")
-        karpathy_loop = KarpathyGraphLoop(output_dir=config.vault.output_dir)
-        karpathy_loop.refine_knowledge_graph()
+        optimized_loop = OptimizadoGraphLoop(output_dir=config.vault.output_dir)
+        optimized_loop.refine_knowledge_graph()
 
         print("\n" + "=" * 65)
         print(" ✅ INGESTA Y FLUSH FINALIZADOS CON ÉXITO")

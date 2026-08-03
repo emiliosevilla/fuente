@@ -38,7 +38,7 @@ from funes.core.anythingllm_config import (
 )
 from funes.core.folder_sync import FolderSyncManager, FolderSyncModal
 from funes.watcher.watcher import ETLPipeline
-from funes.graph_engine.karpathy_loop import KarpathyGraphLoop
+from funes.graph_engine.optimized_loop import OptimizadoGraphLoop
 from funes.ram_governor.governor import RAMGovernor
 
 try:
@@ -478,16 +478,16 @@ historial:
                     return {"error": f"Error al restaurar: {e}"}
             return {"error": "Nombre de archivo de cuarentena no especificado"}
 
-        # --- LANZAMIENTO EXPLÍCITO DE CICLOS KARPATHY ---
-        elif action_name == "run_karpathy_cycle":
+        # --- LANZAMIENTO EXPLÍCITO DE CICLOS OPTIMIZADOS ---
+        elif action_name in ("run_optimized_cycle", "run_karpathy_cycle"):
             target_issue = payload.get("target_issue")
             try:
-                karpathy = KarpathyGraphLoop(self.vault.output_dir)
-                res = karpathy.refine_knowledge_graph(target_issue=target_issue)
-                msg = f"Ciclo Karpathy completado para Cuestión '{target_issue or 'Todas'}'. Notas procesadas: {res.get('processed_notes', 0)}."
+                loop = OptimizadoGraphLoop(self.vault.output_dir)
+                res = loop.refine_knowledge_graph(target_issue=target_issue)
+                msg = f"Ciclo Optimizado completado para Cuestión '{target_issue or 'Todas'}'. Notas procesadas: {res.get('processed_notes', 0)}."
                 return {"log": msg, "result": res, "refresh": True, "stats": self.get_stats_dict()}
             except Exception as e:
-                return {"error": f"Error ejecutando ciclo Karpathy: {e}"}
+                return {"error": f"Error ejecutando ciclo optimizado: {e}"}
 
         # --- ACCIONES ANTERIORES DE CONSOLA ---
         elif action_name == "flush_sources":
@@ -499,8 +499,8 @@ historial:
             }
         elif action_name == "reindex_notes":
             try:
-                karpathy = KarpathyGraphLoop(self.vault.output_dir)
-                karpathy.refine_knowledge_graph()
+                loop = OptimizadoGraphLoop(self.vault.output_dir)
+                loop.refine_knowledge_graph()
                 notes_count = len(list(self.vault.output_dir.rglob("*.md"))) if self.vault.output_dir.exists() else 0
                 return {
                     "log": f"Se regeneró el mapa de notas e interconexiones. Total notas preparadas: {notes_count}",
@@ -580,8 +580,8 @@ historial:
                 return {"log": f"Error en Transcripción: {e}"}
         elif action_name == "step3_structure":
             try:
-                karpathy = KarpathyGraphLoop(self.vault.output_dir)
-                karpathy.refine_knowledge_graph()
+                loop = OptimizadoGraphLoop(self.vault.output_dir)
+                loop.refine_knowledge_graph()
                 configure_anythingllm_integration(self.vault.output_dir)
                 notes_count = len(list(self.vault.output_dir.rglob("*.md"))) if self.vault.output_dir.exists() else 0
                 return {

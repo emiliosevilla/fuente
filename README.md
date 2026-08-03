@@ -32,7 +32,7 @@
      - **RAM 16 – 32 GB**: `Qwen 2.5 14B` / `Command-R 35B`
      - **RAM > 32 GB**: `Qwen 2.5 32B` / `Command-R`
 
-4. **Bucle de Grafo Estilo Karpathy (`KarpathyGraphLoop`)**:
+4. **Bucle de Grafo Optimizado (`OptimizadoGraphLoop`)**:
    - Hilo autónomo en segundo plano que re-evalúa notas, inserta enlaces `[[WikiLinks]]` cruzados y genera/actualiza de forma continua el mapa de contenidos global **`4_salida/_Indice_MOC.md`**.
 
 5. **Tolerancia a Fallos y Alta Disponibilidad**:

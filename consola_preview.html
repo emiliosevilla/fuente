@@ -857,7 +857,7 @@
 
     <!-- LAYOUT PRINCIPAL FULL-WIDTH -->
     <div class="layout-full">
-        <!-- BARRA DE HERRAMIENTAS Y ACCIONES (TEMA, FUENTES, KARPATHY LOOP) -->
+        <!-- BARRA DE HERRAMIENTAS Y ACCIONES (TEMA, FUENTES, BUCLE OPTIMIZADO) -->
         <div class="toolbar-bar">
             <div class="toolbar-group">
                 <span style="font-size:0.95rem; font-weight:800; color:var(--paper); letter-spacing:0.5px; margin-right:4px;">TEMA:</span>
@@ -866,8 +866,8 @@
                 </select>
                 <button class="btn-secondary" onclick="promptCreateTheme()">+ Nuevo Tema</button>
                 <span style="border-left:1px solid var(--border); height:18px; margin:0 4px;"></span>
-                <button class="btn-primary" id="btn-run-karpathy" onclick="triggerKarpathyCycle()">
-                    <span id="karpathy-spinner" style="display:none;">⚙️</span> Nuevo Flujo de Trabajo
+                <button class="btn-primary" id="btn-run-optimized" onclick="triggerOptimizedCycle()">
+                    <span id="optimized-spinner" style="display:none;">⚙️</span> Nuevo Flujo de Trabajo
                 </button>
                 <button class="btn-secondary" onclick="triggerAction('flush_sources')">
                     Actualizar Fuentes
@@ -940,7 +940,7 @@
                     <div class="node-card" onclick="triggerAction('step3_structure')">
                         <div class="node-tag">── PASO 3 ──</div>
                         <div class="node-name">Preparación de notas inteligentes</div>
-                        <div class="node-desc">KarpathyLoop + Vectorización ChromaDB ➔ 4_salida</div>
+                        <div class="node-desc">Bucle Optimizado + Vectorización ChromaDB ➔ 4_salida</div>
                     </div>
                 </div>
 
@@ -2243,9 +2243,9 @@
             }
         }
 
-        function triggerKarpathyCycle(issueName) {
-            const btn = document.getElementById('btn-run-karpathy');
-            const spinner = document.getElementById('karpathy-spinner');
+        function triggerOptimizedCycle(issueName) {
+            const btn = document.getElementById('btn-run-optimized');
+            const spinner = document.getElementById('optimized-spinner');
             if (btn) btn.disabled = true;
             if (spinner) spinner.style.display = 'inline-block';
 
@@ -2254,7 +2254,7 @@
             log('🚀 Iniciando Nuevo Flujo de Trabajo' + issueLabel + '...');
 
             if (window.pywebview && window.pywebview.api) {
-                window.pywebview.api.run_karpathy_cycle(issueName || '').then(function(res) {
+                window.pywebview.api.run_optimized_cycle(issueName || '').then(function(res) {
                     if (btn) btn.disabled = false;
                     if (spinner) spinner.style.display = 'none';
                     if (res && res.log) log(res.log);
@@ -2325,7 +2325,7 @@
             } else {
                 if (actionName === 'flush_sources' || actionName === 'step1_flush') { log('Recopilación completada hacia 1_entrada (modo vista previa).'); }
                 else if (actionName === 'step2_transcribe') { log('Estructuración de datos completada hacia 3_limpio.'); }
-                else if (actionName === 'step3_structure') { log('Preparación de notas inteligentes KarpathyLoop finalizada.'); }
+                else if (actionName === 'step3_structure') { log('Preparación de notas inteligentes con Bucle Optimizado finalizada.'); }
                 else if (actionName === 'quick_help') { openModal('modal-help'); }
                 else if (actionName === 'stat_ram') { alert('Purga de memoria RAM ejecutada.'); }
                 else if (actionName === 'stat_notes') { alert('Telemetría del Grafo: 142 notas preparadas, 380 interenlaces.'); }
@@ -2411,7 +2411,7 @@
             } else {
                 const demoData = {
                     nodes: [
-                        { id: "KarpathyLoop", label: "KarpathyLoop" },
+                        { id: "OptimizedLoop", label: "Bucle Optimizado" },
                         { id: "Notas_Inteligentes", label: "Notas_Inteligentes" },
                         { id: "Vectorización_ChromaDB", label: "Vectorización_ChromaDB" },
                         { id: "Extractores_ETL", label: "Extractores_ETL" },
@@ -2420,9 +2420,9 @@
                         { id: "Funes_Gazette", label: "Funes_Gazette" }
                     ],
                     links: [
-                        { source: "KarpathyLoop", target: "Notas_Inteligentes" },
-                        { source: "KarpathyLoop", target: "Vectorización_ChromaDB" },
-                        { source: "Extractores_ETL", target: "KarpathyLoop" },
+                        { source: "OptimizedLoop", target: "Notas_Inteligentes" },
+                        { source: "OptimizedLoop", target: "Vectorización_ChromaDB" },
+                        { source: "Extractores_ETL", target: "OptimizedLoop" },
                         { source: "Notas_Inteligentes", target: "Obsidian_Vault" },
                         { source: "Ingesta_Fuentes", target: "Extractores_ETL" },
                         { source: "Funes_Gazette", target: "Obsidian_Vault" }
@@ -2768,7 +2768,7 @@
             {
                 title: "00 Mapa de Contenidos (MOC Funes)",
                 path: "00_MOC_Funes.md",
-                html: "<div class='note-content'><div class='note-badge'>YAML Metadata: moc, indice, mapa</div><h1 style='color:var(--gold);'>00 Mapa de Contenidos (MOC Funes)</h1><h3 style='color:var(--accent); margin-top:12px;'>Resumen Ejecutivo</h3><ul style='color:var(--muted); font-size:0.85rem;'><li><b>¿Qué?</b>: Índice central navegable y estructurado del Vault Funes.</li><li><b>¿Cuándo?</b>: Generado automáticamente por el Vault Engine.</li><li><b>¿Quién?</b>: Funes Vault Engine.</li><li><b>¿Cómo?</b>: Hiperenlaces Wiki cruzados y navegación jerárquica.</li></ul><h3 style='color:var(--accent); margin-top:12px;'>Índice General de Conocimiento (15 Notas Atómicas)</h3><ul style='color:var(--paper); font-size:0.85rem;'><li>[[Nota_Arquitectura_Funes]] — Arquitectura General de Funes</li><li>[[Nota_ETL_Pipeline_Ingesta]] — Pipeline ETL de Ingesta y Procesamiento</li><li>[[Nota_Motor_IA_Local]] — Motor de Inferencia IA Local y Ollama</li><li>[[Nota_Base_Datos_Vectorial]] — Base de Datos Vectorial ChromaDB</li><li>[[Nota_Optimizacion_RAM]] — Gobernador de Memoria RAM</li><li>[[Nota_Formato_Papiro]] — Estética Editorial Papiro y Consola UI</li><li>[[Nota_Graph_Engine_Karpathy]] — Grafo Interactivo de Conocimiento</li><li>[[Nota_Notas_Atomicas]] — Estructuración en Notas Atómicas</li><li>[[Nota_Gestor_Cuarentena]] — Aislamiento y Recuperación de Cuarentena</li><li>[[Nota_Integracion_Obsidian]] — Sincronización Bidireccional Obsidian</li><li>[[Nota_AnythingLLM_Conexion]] — Integración Desktop AnythingLLM</li><li>[[Nota_Telemetria_y_Logs]] — Registros y Gazette Logging</li><li>[[Nota_Seguridad_y_Privacidad]] — Privacidad 100% Offline</li><li>[[Nota_Manual_Usuario_Avanzado]] — Manual de Uso Avanzado y Atajos</li></ul></div>"
+                html: "<div class='note-content'><div class='note-badge'>YAML Metadata: moc, indice, mapa</div><h1 style='color:var(--gold);'>00 Mapa de Contenidos (MOC Funes)</h1><h3 style='color:var(--accent); margin-top:12px;'>Resumen Ejecutivo</h3><ul style='color:var(--muted); font-size:0.85rem;'><li><b>¿Qué?</b>: Índice central navegable y estructurado del Vault Funes.</li><li><b>¿Cuándo?</b>: Generado automáticamente por el Vault Engine.</li><li><b>¿Quién?</b>: Funes Vault Engine.</li><li><b>¿Cómo?</b>: Hiperenlaces Wiki cruzados y navegación jerárquica.</li></ul><h3 style='color:var(--accent); margin-top:12px;'>Índice General de Conocimiento (15 Notas Atómicas)</h3><ul style='color:var(--paper); font-size:0.85rem;'><li>[[Nota_Arquitectura_Funes]] — Arquitectura General de Funes</li><li>[[Nota_ETL_Pipeline_Ingesta]] — Pipeline ETL de Ingesta y Procesamiento</li><li>[[Nota_Motor_IA_Local]] — Motor de Inferencia IA Local y Ollama</li><li>[[Nota_Base_Datos_Vectorial]] — Base de Datos Vectorial ChromaDB</li><li>[[Nota_Optimizacion_RAM]] — Gobernador de Memoria RAM</li><li>[[Nota_Formato_Papiro]] — Estética Editorial Papiro y Consola UI</li><li>[[Nota_Graph_Engine_Optimizado]] — Grafo Interactivo de Conocimiento</li><li>[[Nota_Notas_Atomicas]] — Estructuración en Notas Atómicas</li><li>[[Nota_Gestor_Cuarentena]] — Aislamiento y Recuperación de Cuarentena</li><li>[[Nota_Integracion_Obsidian]] — Sincronización Bidireccional Obsidian</li><li>[[Nota_AnythingLLM_Conexion]] — Integración Desktop AnythingLLM</li><li>[[Nota_Telemetria_y_Logs]] — Registros y Gazette Logging</li><li>[[Nota_Seguridad_y_Privacidad]] — Privacidad 100% Offline</li><li>[[Nota_Manual_Usuario_Avanzado]] — Manual de Uso Avanzado y Atajos</li></ul></div>"
             },
             {
                 title: "Arquitectura General de Funes",
@@ -2798,12 +2798,12 @@
             {
                 title: "Estética Editorial Papiro y Consola UI",
                 path: "Nota_Formato_Papiro.md",
-                html: "<div class='note-content'><div class='note-badge'>YAML Metadata: papiro, ui, diseno</div><h1 style='color:var(--gold);'>Estética Editorial Papiro y Consola UI</h1><h3 style='color:var(--accent); margin-top:12px;'>Resumen Ejecutivo</h3><ul style='color:var(--muted); font-size:0.85rem;'><li><b>¿Qué?</b>: Sistema de diseño visual anticuario-tecnológico.</li><li><b>¿Cuándo?</b>: Interfaz gráfica de la consola.</li><li><b>¿Quién?</b>: PyWebView + HTML5 Canvas.</li><li><b>¿Cómo?</b>: Colores pergamino, tipografía monoespaciada y bordes biselados.</li></ul><h3 style='color:var(--accent); margin-top:12px;'>Desarrollo</h3><p style='font-size:0.85rem; color:var(--paper); line-height:1.5;'>Ofrece una experiencia visual premium con soporte para Grafo Interactivo de Obsidian [[Nota_Graph_Engine_Karpathy]], navegación nativa e hiperenlaces bi-direccionales vinculados a [[Nota_Notas_Atomicas]].</p></div>"
+                html: "<div class='note-content'><div class='note-badge'>YAML Metadata: papiro, ui, diseno</div><h1 style='color:var(--gold);'>Estética Editorial Papiro y Consola UI</h1><h3 style='color:var(--accent); margin-top:12px;'>Resumen Ejecutivo</h3><ul style='color:var(--muted); font-size:0.85rem;'><li><b>¿Qué?</b>: Sistema de diseño visual anticuario-tecnológico.</li><li><b>¿Cuándo?</b>: Interfaz gráfica de la consola.</li><li><b>¿Quién?</b>: PyWebView + HTML5 Canvas.</li><li><b>¿Cómo?</b>: Colores pergamino, tipografía monoespaciada y bordes biselados.</li></ul><h3 style='color:var(--accent); margin-top:12px;'>Desarrollo</h3><p style='font-size:0.85rem; color:var(--paper); line-height:1.5;'>Ofrece una experiencia visual premium con soporte para Grafo Interactivo de Obsidian [[Nota_Graph_Engine_Optimizado]], navegación nativa e hiperenlaces bi-direccionales vinculados a [[Nota_Notas_Atomicas]].</p></div>"
             },
             {
                 title: "Grafo Interactivo de Conocimiento",
-                path: "Nota_Graph_Engine_Karpathy.md",
-                html: "<div class='note-content'><div class='note-badge'>YAML Metadata: grafo, canvas, karpathy</div><h1 style='color:var(--gold);'>Grafo Interactivo de Conocimiento</h1><h3 style='color:var(--accent); margin-top:12px;'>Resumen Ejecutivo</h3><ul style='color:var(--muted); font-size:0.85rem;'><li><b>¿Qué?</b>: Motor Force-Directed en HTML5 Canvas con soporte HiDPI Retina.</li><li><b>¿Cuándo?</b>: Modo Vista Gráfico del lector.</li><li><b>¿Quién?</b>: KarpathyGraphLoop.</li><li><b>¿Cómo?</b>: Simulación de física de muelles y repulsión de Coulomb.</li></ul><h3 style='color:var(--accent); margin-top:12px;'>Desarrollo</h3><p style='font-size:0.85rem; color:var(--paper); line-height:1.5;'>Permite explorar visualmente las conexiones de red entre [[Nota_Notas_Atomicas]] e hipervínculos bidireccionales.</p></div>"
+                path: "Nota_Graph_Engine_Optimizado.md",
+                html: "<div class='note-content'><div class='note-badge'>YAML Metadata: grafo, canvas, optimizado</div><h1 style='color:var(--gold);'>Grafo Interactivo de Conocimiento</h1><h3 style='color:var(--accent); margin-top:12px;'>Resumen Ejecutivo</h3><ul style='color:var(--muted); font-size:0.85rem;'><li><b>¿Qué?</b>: Motor Force-Directed en HTML5 Canvas con soporte HiDPI Retina.</li><li><b>¿Cuándo?</b>: Modo Vista Gráfico del lector.</li><li><b>¿Quién?</b>: OptimizadoGraphLoop.</li><li><b>¿Cómo?</b>: Simulación de física de muelles y repulsión de Coulomb.</li></ul><h3 style='color:var(--accent); margin-top:12px;'>Desarrollo</h3><p style='font-size:0.85rem; color:var(--paper); line-height:1.5;'>Permite explorar visualmente las conexiones de red entre [[Nota_Notas_Atomicas]] e hipervínculos bidireccionales.</p></div>"
             },
             {
                 title: "Estructuración en Notas Atómicas",
@@ -2838,7 +2838,7 @@
             {
                 title: "Manual de Uso Avanzado y Atajos",
                 path: "Nota_Manual_Usuario_Avanzado.md",
-                html: "<div class='note-content'><div class='note-badge'>YAML Metadata: manual, atajos, guia, usuario</div><h1 style='color:var(--gold);'>Manual de Uso Avanzado y Atajos de Teclado</h1><h3 style='color:var(--accent); margin-top:12px;'>Resumen Ejecutivo</h3><ul style='color:var(--muted); font-size:0.85rem;'><li><b>¿Qué?</b>: Guía detallada de operación avanzada de la Consola Funes.</li><li><b>¿Cuándo?</b>: Versión 2026.1.</li><li><b>¿Quién?</b>: Funes User Documentation.</li><li><b>¿Cómo?</b>: Explicaciones extensas, tablas de atajos y flujo paso a paso.</li></ul><h3 style='color:var(--accent); margin-top:16px;'>1. Introducción a la Filosofía Papiro</h3><p style='font-size:0.85rem; color:var(--paper); line-height:1.6;'>La Consola Funes combina la calidez visual de una imprenta editorial anticuaria con la velocidad de un pipeline ETL local. Cualquier archivo depositado en 1_entrada es digerido y estructurado en notas atómicas independientes.</p><h3 style='color:var(--accent); margin-top:16px;'>2. Atajos de Teclado y Controles Rápidos</h3><table style='width:100%; border-collapse:collapse; font-size:0.82rem; margin-top:10px; color:var(--paper);'><tr style='border-bottom:1px solid var(--border-accent); text-align:left;'><th>Tecla / Combinación</th><th>Acción</th><th>Alcance</th></tr><tr><td><b>Escape</b></td><td>Cerrar modal o emergente activo</td><td>Global UI</td></tr><tr><td><b>Click Backdrop</b></td><td>Cerrar modal en primer plano</td><td>Modales Papiro</td></tr><tr><td><b>Rueda del Ratón</b></td><td>Zoom dinámico sobre el grafo</td><td>Vista Gráfico</td></tr><tr><td><b>Arrastrar Nodo</b></td><td>Reorganizar posición espacial de notas</td><td>Vista Gráfico</td></tr><tr><td><b>Doble Click Nodo</b></td><td>Abrir nota asociada en el lector</td><td>Vista Gráfico</td></tr></table><h3 style='color:var(--accent); margin-top:16px;'>3. Procedimiento de Ingesta Paso a Paso</h3><p style='font-size:0.85rem; color:var(--paper); line-height:1.6;'>Paso 1: Coloque los documentos en 1_entrada.<br>Paso 2: El sistema ejecuta el [[Nota_ETL_Pipeline_Ingesta]].<br>Paso 3: Si se producen errores de lectura, el archivo se transfiere a la [[Nota_Gestor_Cuarentena]].<br>Paso 4: Consulte los gráficos y resúmenes en el lector interactivo con el [[Nota_Graph_Engine_Karpathy]] y revise el [[00_MOC_Funes]].</p><h3 style='color:var(--accent); margin-top:16px;'>4. Preguntas Frecuentes (FAQ)</h3><p style='font-size:0.85rem; color:var(--paper); line-height:1.6;'><b>¿Los datos salen del equipo?</b> No. Funes cumple con el principio de privacidad local [[Nota_Seguridad_y_Privacidad]].<br><b>¿Se integra con Obsidian?</b> Sí, mediante el protocolo nativo descrito en [[Nota_Integracion_Obsidian]].<br><b>¿Cómo se protege el hardware?</b> Con el monitoreo de recursos del [[Nota_Optimizacion_RAM]].</p></div>"
+                html: "<div class='note-content'><div class='note-badge'>YAML Metadata: manual, atajos, guia, usuario</div><h1 style='color:var(--gold);'>Manual de Uso Avanzado y Atajos de Teclado</h1><h3 style='color:var(--accent); margin-top:12px;'>Resumen Ejecutivo</h3><ul style='color:var(--muted); font-size:0.85rem;'><li><b>¿Qué?</b>: Guía detallada de operación avanzada de la Consola Funes.</li><li><b>¿Cuándo?</b>: Versión 2026.1.</li><li><b>¿Quién?</b>: Funes User Documentation.</li><li><b>¿Cómo?</b>: Explicaciones extensas, tablas de atajos y flujo paso a paso.</li></ul><h3 style='color:var(--accent); margin-top:16px;'>1. Introducción a la Filosofía Papiro</h3><p style='font-size:0.85rem; color:var(--paper); line-height:1.6;'>La Consola Funes combina la calidez visual de una imprenta editorial anticuaria con la velocidad de un pipeline ETL local. Cualquier archivo depositado en 1_entrada es digerido y estructurado en notas atómicas independientes.</p><h3 style='color:var(--accent); margin-top:16px;'>2. Atajos de Teclado y Controles Rápidos</h3><table style='width:100%; border-collapse:collapse; font-size:0.82rem; margin-top:10px; color:var(--paper);'><tr style='border-bottom:1px solid var(--border-accent); text-align:left;'><th>Tecla / Combinación</th><th>Acción</th><th>Alcance</th></tr><tr><td><b>Escape</b></td><td>Cerrar modal o emergente activo</td><td>Global UI</td></tr><tr><td><b>Click Backdrop</b></td><td>Cerrar modal en primer plano</td><td>Modales Papiro</td></tr><tr><td><b>Rueda del Ratón</b></td><td>Zoom dinámico sobre el grafo</td><td>Vista Gráfico</td></tr><tr><td><b>Arrastrar Nodo</b></td><td>Reorganizar posición espacial de notas</td><td>Vista Gráfico</td></tr><tr><td><b>Doble Click Nodo</b></td><td>Abrir nota asociada en el lector</td><td>Vista Gráfico</td></tr></table><h3 style='color:var(--accent); margin-top:16px;'>3. Procedimiento de Ingesta Paso a Paso</h3><p style='font-size:0.85rem; color:var(--paper); line-height:1.6;'>Paso 1: Coloque los documentos en 1_entrada.<br>Paso 2: El sistema ejecuta el [[Nota_ETL_Pipeline_Ingesta]].<br>Paso 3: Si se producen errores de lectura, el archivo se transfiere a la [[Nota_Gestor_Cuarentena]].<br>Paso 4: Consulte los gráficos y resúmenes en el lector interactivo con el [[Nota_Graph_Engine_Optimizado]] y revise el [[00_MOC_Funes]].</p><h3 style='color:var(--accent); margin-top:16px;'>4. Preguntas Frecuentes (FAQ)</h3><p style='font-size:0.85rem; color:var(--paper); line-height:1.6;'><b>¿Los datos salen del equipo?</b> No. Funes cumple con el principio de privacidad local [[Nota_Seguridad_y_Privacidad]].<br><b>¿Se integra con Obsidian?</b> Sí, mediante el protocolo nativo descrito en [[Nota_Integracion_Obsidian]].<br><b>¿Cómo se protege el hardware?</b> Con el monitoreo de recursos del [[Nota_Optimizacion_RAM]].</p></div>"
             }
         ];
 
@@ -2857,7 +2857,7 @@
                         { id: "Nota_Base_Datos_Vectorial", label: "Base Vectorial ChromaDB", path: "Nota_Base_Datos_Vectorial.md" },
                         { id: "Nota_Optimizacion_RAM", label: "Gobernador de RAM", path: "Nota_Optimizacion_RAM.md" },
                         { id: "Nota_Formato_Papiro", label: "Estética Papiro UI", path: "Nota_Formato_Papiro.md" },
-                        { id: "Nota_Graph_Engine_Karpathy", label: "Grafo Interactivo", path: "Nota_Graph_Engine_Karpathy.md" },
+                        { id: "Nota_Graph_Engine_Optimizado", label: "Grafo Interactivo", path: "Nota_Graph_Engine_Optimizado.md" },
                         { id: "Nota_Notas_Atomicas", label: "Notas Atómicas", path: "Nota_Notas_Atomicas.md" },
                         { id: "Nota_Gestor_Cuarentena", label: "Gestor Cuarentena", path: "Nota_Gestor_Cuarentena.md" },
                         { id: "Nota_Integracion_Obsidian", label: "Integración Obsidian", path: "Nota_Integracion_Obsidian.md" },
@@ -2873,7 +2873,7 @@
                         { source: "00_MOC_Funes", target: "Nota_Base_Datos_Vectorial" },
                         { source: "00_MOC_Funes", target: "Nota_Optimizacion_RAM" },
                         { source: "00_MOC_Funes", target: "Nota_Formato_Papiro" },
-                        { source: "00_MOC_Funes", target: "Nota_Graph_Engine_Karpathy" },
+                        { source: "00_MOC_Funes", target: "Nota_Graph_Engine_Optimizado" },
                         { source: "00_MOC_Funes", target: "Nota_Notas_Atomicas" },
                         { source: "00_MOC_Funes", target: "Nota_Gestor_Cuarentena" },
                         { source: "00_MOC_Funes", target: "Nota_Integracion_Obsidian" },
@@ -2887,7 +2887,7 @@
                         { source: "Nota_ETL_Pipeline_Ingesta", target: "Nota_Gestor_Cuarentena" },
                         { source: "Nota_Motor_IA_Local", target: "Nota_Optimizacion_RAM" },
                         { source: "Nota_Base_Datos_Vectorial", target: "Nota_AnythingLLM_Conexion" },
-                        { source: "Nota_Formato_Papiro", target: "Nota_Graph_Engine_Karpathy" },
+                        { source: "Nota_Formato_Papiro", target: "Nota_Graph_Engine_Optimizado" },
                         { source: "Nota_Manual_Usuario_Avanzado", target: "Nota_Seguridad_y_Privacidad" },
                         { source: "Nota_Manual_Usuario_Avanzado", target: "Nota_Integracion_Obsidian" }
                     ]

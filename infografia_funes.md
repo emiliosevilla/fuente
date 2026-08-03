@@ -74,13 +74,13 @@ flowchart TD
 
 ---
 
-## 🔄 4. Bucle de Grafo Karpathy (`KarpathyGraphLoop`)
+## 🔄 4. Bucle de Grafo Optimizado (`OptimizadoGraphLoop`)
 
 En segundo plano, un hilo autónomo re-evalúa de forma continua la red de notas para descubrir relaciones implícitas y mantener el conocimiento vivo.
 
 ```mermaid
 flowchart LR
-    N1["📄 Nota Atómica Nueva"] -->|Evaluación semántica| KG["🌀 Karpathy Loop"]
+    N1["📄 Nota Atómica Nueva"] -->|Evaluación semántica| KG["🌀 Bucle Optimizado"]
     KG -->|Identifica conceptos clave| WL["🔗 Inserción de WikiLinks"]
     KG -->|Actualiza jerarquía| MOC["🗺️ _Indice_MOC.md (Map of Content)"]
     WL --> N2["📄 Notas Antiguas Relacionadas"]
@@ -128,7 +128,7 @@ fuentes: [3_limpio/documento_original.md]
 ## Referencias Cruzadas
 ### Notas Relacionadas
 - [[Nota_Sobre_RAM_Governor]]
-- [[Documento_Karpathy_Graph]]
+- [[Documento_Graph_Optimizado]]
 - [[Indice_MOC_General]]
 ```
 

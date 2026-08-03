@@ -11,8 +11,8 @@ from funes.graph_engine.linker import GraphLinker
 logger = logging.getLogger(__name__)
 
 
-class KarpathyGraphLoop:
-    """Bucle autónomo al estilo Karpathy para refinamiento continuo del grafo de notas en Obsidian."""
+class OptimizadoGraphLoop:
+    """Bucle autónomo optimizado para refinamiento continuo del grafo de notas en Obsidian."""
 
     def __init__(self, output_dir: Path, interval_sec: int = 600):
         self.output_dir = output_dir
@@ -27,16 +27,16 @@ class KarpathyGraphLoop:
         if self._thread and self._thread.is_alive():
             return
         self._stop_event.clear()
-        self._thread = threading.Thread(target=self._run_loop, daemon=True, name="KarpathyGraphLoop")
+        self._thread = threading.Thread(target=self._run_loop, daemon=True, name="OptimizadoGraphLoop")
         self._thread.start()
-        logger.info("KarpathyGraphLoop iniciado en segundo plano.")
+        logger.info("OptimizadoGraphLoop iniciado en segundo plano.")
 
     def stop(self) -> None:
         """Detiene el bucle de refinamiento."""
         self._stop_event.set()
         if self._thread:
             self._thread.join(timeout=5)
-        logger.info("KarpathyGraphLoop detenido.")
+        logger.info("OptimizadoGraphLoop detenido.")
 
     def _run_loop(self) -> None:
         """Bucle principal de iteración continua."""
@@ -44,7 +44,7 @@ class KarpathyGraphLoop:
             try:
                 self.refine_knowledge_graph()
             except Exception as e:
-                logger.error(f"Error durante el ciclo de KarpathyGraphLoop: {e}")
+                logger.error(f"Error durante el ciclo de OptimizadoGraphLoop: {e}")
 
             self._stop_event.wait(timeout=self.interval_sec)
 
@@ -86,7 +86,7 @@ class KarpathyGraphLoop:
                         with open(note_file, "w", encoding="utf-8") as f:
                             f.write(updated_content)
                         content = updated_content
-                        logger.info(f"KarpathyLoop: Enlaces actualizados en '{note_file.name}'")
+                        logger.info(f"Bucle Optimizado: Enlaces actualizados en '{note_file.name}'")
 
                     note_contents[note_file.stem] = content
                     all_valid_notes.append(note_file)
@@ -97,7 +97,7 @@ class KarpathyGraphLoop:
                         orphans.add(note_file.stem)
 
                 except Exception as e:
-                    logger.error(f"Error procesando {note_file.name} en KarpathyLoop: {e}")
+                    logger.error(f"Error procesando {note_file.name} en Bucle Optimizado: {e}")
 
             # Crear/actualizar nota marco de Cuestión
             self._update_issue_master_note(issue_dir, issue_name, notes)
@@ -124,7 +124,7 @@ class KarpathyGraphLoop:
             "---",
             f'título: "Marco de Cuestión — {issue_name}"',
             f'fecha: "{now_str}"',
-            'autor: "Funes Karpathy Loop"',
+            'autor: "Funes Bucle Optimizado"',
             f'claves: [cuestion, {issue_name.lower()}, marco]',
             f'fuentes: [4_salida/{issue_name}/]',
             "---",
@@ -165,7 +165,7 @@ class KarpathyGraphLoop:
             "---",
             'título: "Índice MOC — Mapa de Conocimiento Global"',
             f'fecha: "{now_str}"',
-            'autor: "Funes Karpathy Loop"',
+            'autor: "Funes Bucle Optimizado"',
             'claves: [moc, indice, funes]',
             'fuentes: [4_salida/]',
             "---",

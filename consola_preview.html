@@ -3,10 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; base-uri 'none'; connect-src 'self'; font-src 'self'; img-src 'self' data:; object-src 'none'; script-src 'self' 'nonce-funes-console'; style-src 'self' 'unsafe-inline'">
     <title>Funes Control Console — Estética Papiro (Vista Previa Definitiva)</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,400;0,500;0,700;1,400&display=swap" rel="stylesheet">
     <style>
         /* DESIGN SYSTEM ESTÉTICA PAPIRO - TIPOGRAFÍA MÁQUINA DE ESCRIBIR EN TODO EL TEXTO */
         :root {
@@ -24,7 +22,7 @@
             --green: #16A34A;
             --amber: #D97706;
             --red: #DC2626;
-            --font-mono: 'JetBrains Mono', 'Courier New', Courier, monospace;
+            --font-mono: 'Courier New', Courier, monospace;
             --card-radius: 6px;
             --border-width: 1px;
             --shadow: 0 4px 18px rgba(0,0,0,0.06);
@@ -832,9 +830,9 @@
                 <div class="masthead-tagline">Formateo Universal de Notas, Estructuración y Síntesis</div>
             </div>
             <div style="display:flex; gap:14px; align-items:center; margin-top:4px;">
-                <span class="masthead-link" onclick="triggerAction('quick_help')">Guía Rápida</span>
+                <span class="masthead-link" data-onclick-command="triggerAction('quick_help')">Guía Rápida</span>
                 <span style="color:var(--border-accent); font-size:0.8rem;">|</span>
-                <span class="masthead-link" onclick="openModal('modal-settings')">Ajustes</span>
+                <span class="masthead-link" data-onclick-command="openModal('modal-settings')">Ajustes</span>
             </div>
         </div>
 
@@ -861,15 +859,15 @@
         <div class="toolbar-bar">
             <div class="toolbar-group">
                 <span style="font-size:0.95rem; font-weight:800; color:var(--paper); letter-spacing:0.5px; margin-right:4px;">TEMA:</span>
-                <select id="theme-select" style="background:var(--bg-card); color:var(--paper); border:1px solid var(--border-accent); border-radius:var(--card-radius); padding:8px 16px; font-size:0.8rem; font-weight:700; height:36px; box-sizing:border-box; cursor:pointer; font-family:var(--font-mono);" onchange="changeActiveTheme(this.value)">
+                <select id="theme-select" style="background:var(--bg-card); color:var(--paper); border:1px solid var(--border-accent); border-radius:var(--card-radius); padding:8px 16px; font-size:0.8rem; font-weight:700; height:36px; box-sizing:border-box; cursor:pointer; font-family:var(--font-mono);" data-onchange-command="changeActiveTheme(this.value)">
                     <option value="General">General</option>
                 </select>
-                <button class="btn-secondary" onclick="promptCreateTheme()">+ Nuevo Tema</button>
+                <button class="btn-secondary" data-onclick-command="promptCreateTheme()">+ Nuevo Tema</button>
                 <span style="border-left:1px solid var(--border); height:18px; margin:0 4px;"></span>
-                <button class="btn-primary" id="btn-run-optimized" onclick="triggerOptimizedCycle()">
+                <button class="btn-primary" id="btn-run-optimized" data-onclick-command="triggerOptimizedCycle()">
                     <span id="optimized-spinner" style="display:none;">⚙️</span> Nuevo Flujo de Trabajo
                 </button>
-                <button class="btn-secondary" onclick="triggerAction('flush_sources')">
+                <button class="btn-secondary" data-onclick-command="triggerAction('flush_sources')">
                     Actualizar Fuentes
                 </button>
             </div>
@@ -877,23 +875,23 @@
 
         <!-- STATS GRID -->
         <div class="stats-grid">
-            <div class="stat-card" onclick="openModal('modal-stat-input')">
+            <div class="stat-card" data-onclick-command="openModal('modal-stat-input')">
                 <div class="stat-title">Archivos por Procesar</div>
                 <div class="stat-num gold" id="stat-input">0</div>
             </div>
-            <div class="stat-card" onclick="openModal('modal-category')">
+            <div class="stat-card" data-onclick-command="openModal('modal-category')">
                 <div class="stat-title">Archivos Procesados</div>
                 <div class="stat-num green" id="stat-processed">0</div>
             </div>
-            <div class="stat-card" onclick="openModal('modal-quarantine')">
+            <div class="stat-card" data-onclick-command="openModal('modal-quarantine')">
                 <div class="stat-title">En Cuarentena</div>
                 <div class="stat-num red" id="stat-quarantine">0</div>
             </div>
-            <div class="stat-card" onclick="openModal('modal-stat-notes')">
+            <div class="stat-card" data-onclick-command="openModal('modal-stat-notes')">
                 <div class="stat-title">Notas Preparadas</div>
                 <div class="stat-num" id="stat-notes">0</div>
             </div>
-            <div class="stat-card" onclick="openModal('modal-stat-ram')">
+            <div class="stat-card" data-onclick-command="openModal('modal-stat-ram')">
                 <div class="stat-title">Consumo RAM</div>
                 <div class="stat-num" id="stat-ram">0%</div>
             </div>
@@ -909,7 +907,7 @@
                         <span class="subgraph-title">1. Recepción</span>
                         <span class="node-badge" id="badge-step1">Última acción:  --/--/----  --:--:--</span>
                     </div>
-                    <div class="node-card" onclick="triggerAction('step1_flush')">
+                    <div class="node-card" data-onclick-command="triggerAction('step1_flush')">
                         <div class="node-tag">── PASO 1 ──</div>
                         <div class="node-name">Recopilación de archivos en formato variado</div>
                         <div class="node-desc">Flush Manual desde carpetas vinculadas hacia 1_entrada</div>
@@ -923,7 +921,7 @@
                         <span class="subgraph-title">2. Transcripción</span>
                         <span class="node-badge" id="badge-step2">Última acción:  --/--/----  --:--:--</span>
                     </div>
-                    <div class="node-card" onclick="triggerAction('step2_transcribe')">
+                    <div class="node-card" data-onclick-command="triggerAction('step2_transcribe')">
                         <div class="node-tag">── PASO 2 ──</div>
                         <div class="node-name">Traslado de la información a formato uniforme</div>
                         <div class="node-desc">Procesado ETL: 1_entrada ➔ 2_sucio ➔ 3_limpio</div>
@@ -937,7 +935,7 @@
                         <span class="subgraph-title">3. Estructuración</span>
                         <span class="node-badge" id="badge-step3">Última acción:  --/--/----  --:--:--</span>
                     </div>
-                    <div class="node-card" onclick="triggerAction('step3_structure')">
+                    <div class="node-card" data-onclick-command="triggerAction('step3_structure')">
                         <div class="node-tag">── PASO 3 ──</div>
                         <div class="node-name">Preparación de notas inteligentes</div>
                         <div class="node-desc">Bucle Optimizado + Vectorización ChromaDB ➔ 4_salida</div>
@@ -951,7 +949,7 @@
                         <span class="subgraph-title">4. Consulta</span>
                         <span class="node-badge" id="badge-step4">Última acción:  --/--/----  --:--:--</span>
                     </div>
-                    <div class="node-card" onclick="openModal('modal-reader')">
+                    <div class="node-card" data-onclick-command="openModal('modal-reader')">
                         <div class="node-tag">── PASO 4 ──</div>
                         <div class="node-name">Consulta de Notas Finales</div>
                         <div class="node-desc">Funes el memorioso (Lector) y Funes el conversador (Chat)</div>
@@ -965,8 +963,8 @@
             <div class="log-header">
                 <span>── REGISTRO DE ACTIVIDAD ──</span>
                 <div class="log-actions">
-                    <button class="btn-small" id="btn-toggle-path" onclick="togglePathMode(this)">Rutas: Relativas</button>
-                    <button class="btn-small" onclick="clearLogView()">Limpiar Registro</button>
+                    <button class="btn-small" id="btn-toggle-path" data-onclick-command="togglePathMode(this)">Rutas: Relativas</button>
+                    <button class="btn-small" data-onclick-command="clearLogView()">Limpiar Registro</button>
                 </div>
             </div>
             <div class="log-console" id="log-console">
@@ -987,14 +985,14 @@
             <div class="modal-header">
                 <div class="modal-title">FUNES EL MEMORIOSO — LECTOR DE NOTAS</div>
                 <div style="display: flex; gap: 6px; align-items: center;">
-                    <button class="btn-small btn-toggle active" id="btn-reader-mode-list" onclick="switchReaderView('list')">Vista Notas</button>
-                    <button class="btn-small btn-toggle" id="btn-reader-mode-graph" onclick="switchReaderView('graph')">Vista Gráfico</button>
-                    <button class="btn-small btn-toggle" id="btn-reader-mode-moc" onclick="openMOCNote()">Mapa MOC</button>
+                    <button class="btn-small btn-toggle active" id="btn-reader-mode-list" data-onclick-command="switchReaderView('list')">Vista Notas</button>
+                    <button class="btn-small btn-toggle" id="btn-reader-mode-graph" data-onclick-command="switchReaderView('graph')">Vista Gráfico</button>
+                    <button class="btn-small btn-toggle" id="btn-reader-mode-moc" data-onclick-command="openMOCNote()">Mapa MOC</button>
                     <span style="border-left: 1px solid var(--border); height: 16px; margin: 0 4px;"></span>
-                    <button class="btn-small" onclick="triggerAction('copy_reader_note', {}, this)">Copiar</button>
-                    <button class="btn-small" onclick="triggerAction('export_reader_note', {}, this)">Exportar</button>
-                    <button class="btn-small" onclick="triggerAction('open_obsidian', {}, this)">Abrir en Obsidian</button>
-                    <button class="close-btn" onclick="closeModal('modal-reader')">&times;</button>
+                    <button class="btn-small" data-onclick-command="triggerAction('copy_reader_note', {}, this)">Copiar</button>
+                    <button class="btn-small" data-onclick-command="triggerAction('export_reader_note', {}, this)">Exportar</button>
+                    <button class="btn-small" data-onclick-command="triggerAction('open_obsidian', {}, this)">Abrir en Obsidian</button>
+                    <button class="close-btn" data-onclick-command="closeModal('modal-reader')">&times;</button>
                 </div>
             </div>
             <div class="modal-body">
@@ -1002,7 +1000,7 @@
                     <div class="reader-sidebar">
                         <div class="reader-search-wrapper">
                             <span class="reader-search-icon">🔍</span>
-                            <input type="text" class="reader-search-input" id="reader-search" placeholder="Buscar notas..." oninput="filterReaderNotes()">
+                            <input type="text" class="reader-search-input" id="reader-search" placeholder="Buscar notas..." data-oninput-command="filterReaderNotes()">
                         </div>
                         <div class="reader-pinned-container" id="reader-pinned-moc"></div>
                         <div class="reader-sidebar-divider">ÍNDICE DE NOTAS</div>
@@ -1025,7 +1023,7 @@
                 </div>
             </div>
             <div class="modal-footer" style="justify-content: flex-end;">
-                <button class="btn-secondary" onclick="closeModal('modal-reader')">Cerrar</button>
+                <button class="btn-secondary" data-onclick-command="closeModal('modal-reader')">Cerrar</button>
             </div>
         </div>
     </div>
@@ -1035,7 +1033,7 @@
         <div class="modal-container" style="max-width: 480px; padding: 22px;">
             <div class="modal-header" style="border-bottom: 1px solid var(--border-accent); padding-bottom: 10px; margin-bottom: 14px;">
                 <div class="modal-title" style="font-size: 0.95rem; font-weight: 700; color: var(--paper);">CREAR NUEVO TEMA INDEPENDIENTE</div>
-                <button class="close-btn" onclick="closeModal('modal-create-theme')">&times;</button>
+                <button class="close-btn" data-onclick-command="closeModal('modal-create-theme')">&times;</button>
             </div>
             <div class="modal-body" style="display: flex; flex-direction: column; gap: 14px;">
                 <p style="font-size: 0.85rem; color: var(--muted); line-height: 1.45; margin: 0;">
@@ -1043,12 +1041,12 @@
                 </p>
                 <div style="display: flex; flex-direction: column; gap: 6px; margin-top: 4px;">
                     <label style="font-size: 0.8rem; font-weight: 700; color: var(--paper);">Título del Tema:</label>
-                    <input type="text" id="input-new-theme-name" placeholder="Ej: Derecho Civil, Historia Romana, Física Cuántica..." style="background: var(--bg-card); color: var(--paper); border: 1px solid var(--border-accent); border-radius: var(--card-radius); padding: 8px 12px; font-family: var(--font-mono); font-size: 0.85rem;" onkeydown="if(event.key==='Enter') submitCreateThemeModal()" />
+                    <input type="text" id="input-new-theme-name" placeholder="Ej: Derecho Civil, Historia Romana, Física Cuántica..." style="background: var(--bg-card); color: var(--paper); border: 1px solid var(--border-accent); border-radius: var(--card-radius); padding: 8px 12px; font-family: var(--font-mono); font-size: 0.85rem;" data-onkeydown-command="if(event.key==='Enter') submitCreateThemeModal()" />
                 </div>
             </div>
             <div class="modal-footer" style="margin-top: 18px; padding-top: 10px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: 10px;">
-                <button class="btn-secondary" onclick="closeModal('modal-create-theme')">Cancelar</button>
-                <button class="btn-primary" onclick="submitCreateThemeModal()">✓ Crear Tema</button>
+                <button class="btn-secondary" data-onclick-command="closeModal('modal-create-theme')">Cancelar</button>
+                <button class="btn-primary" data-onclick-command="submitCreateThemeModal()">✓ Crear Tema</button>
             </div>
         </div>
     </div>
@@ -1058,26 +1056,26 @@
         <div class="modal-container" style="max-width: 400px; padding: 22px;">
             <div class="modal-header" style="border-bottom: 1px solid var(--border-accent); padding-bottom: 10px; margin-bottom: 14px;">
                 <div class="modal-title" style="font-size: 0.95rem; font-weight: 700; color: var(--gold);">EXPORTAR NOTA</div>
-                <button class="close-btn" onclick="closeModal('modal-export-options')">&times;</button>
+                <button class="close-btn" data-onclick-command="closeModal('modal-export-options')">&times;</button>
             </div>
             <div class="modal-body" style="display: flex; flex-direction: column; gap: 14px;">
                 <p style="font-size: 0.85rem; color: var(--paper); line-height: 1.45; margin: 0;">
                     Selecciona el formato de exportación para la nota <b id="export-modal-note-title" style="color: var(--gold);">"Nota"</b>:
                 </p>
                 <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 4px;">
-                    <button class="btn-primary" style="padding: 12px 16px; font-weight: 700; background: var(--bg-card); border: 1px solid var(--border-accent); border-radius: 6px; color: var(--paper); cursor: pointer; text-align: center;" onclick="executeExportFormat('markdown')">
+                    <button class="btn-primary" style="padding: 12px 16px; font-weight: 700; background: var(--bg-card); border: 1px solid var(--border-accent); border-radius: 6px; color: var(--paper); cursor: pointer; text-align: center;" data-onclick-command="executeExportFormat('markdown')">
                         Exportar Markdown (.md)
                     </button>
-                    <button class="btn-primary" style="padding: 12px 16px; font-weight: 700; background: var(--bg-card); border: 1px solid var(--border-accent); border-radius: 6px; color: var(--paper); cursor: pointer; text-align: center;" onclick="executeExportFormat('pdf')">
+                    <button class="btn-primary" style="padding: 12px 16px; font-weight: 700; background: var(--bg-card); border: 1px solid var(--border-accent); border-radius: 6px; color: var(--paper); cursor: pointer; text-align: center;" data-onclick-command="executeExportFormat('pdf')">
                         Exportar PDF (.pdf)
                     </button>
-                    <button class="btn-primary" style="padding: 12px 16px; font-weight: 700; background: var(--bg-card); border: 1px solid var(--border-accent); border-radius: 6px; color: var(--paper); cursor: pointer; text-align: center;" onclick="executeExportFormat('word')">
+                    <button class="btn-primary" style="padding: 12px 16px; font-weight: 700; background: var(--bg-card); border: 1px solid var(--border-accent); border-radius: 6px; color: var(--paper); cursor: pointer; text-align: center;" data-onclick-command="executeExportFormat('word')">
                         Exportar Word (.doc)
                     </button>
                 </div>
             </div>
             <div class="modal-footer" style="margin-top: 16px; padding-top: 10px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end;">
-                <button class="btn-secondary" onclick="closeModal('modal-export-options')">Cancelar</button>
+                <button class="btn-secondary" data-onclick-command="closeModal('modal-export-options')">Cancelar</button>
             </div>
         </div>
     </div>
@@ -1088,9 +1086,9 @@
             <div class="modal-header">
                 <div class="modal-title">FUNES EL CONVERSADOR — CHAT INTEGRADO</div>
                 <div>
-                    <button class="btn-small" onclick="clearChatHistory()">Limpiar Historial</button>
-                    <button class="btn-small" onclick="triggerAction('open_anything_desktop')">Abrir AnythingLLM Desktop</button>
-                    <button class="close-btn" onclick="closeModal('modal-chat')">&times;</button>
+                    <button class="btn-small" data-onclick-command="clearChatHistory()">Limpiar Historial</button>
+                    <button class="btn-small" data-onclick-command="triggerAction('open_anything_desktop')">Abrir AnythingLLM Desktop</button>
+                    <button class="close-btn" data-onclick-command="closeModal('modal-chat')">&times;</button>
                 </div>
             </div>
             <div id="chat-context-badge" style="background: var(--bg-card); border-bottom: 1px solid var(--border-accent); padding: 8px 16px; font-size: 0.8rem; color: var(--paper); display: flex; align-items: center; justify-content: space-between;">
@@ -1105,14 +1103,14 @@
                         </div>
                     </div>
                     <div class="chat-input-bar">
-                        <input type="text" class="chat-input-field" id="chat-input" placeholder="Escribe tu consulta sobre los documentos..." onkeypress="if(event.key==='Enter') sendChatMessage()">
-                        <button class="btn-primary" onclick="sendChatMessage()">Enviar</button>
+                        <input type="text" class="chat-input-field" id="chat-input" placeholder="Escribe tu consulta sobre los documentos..." data-onkeypress-command="if(event.key==='Enter') sendChatMessage()">
+                        <button class="btn-primary" data-onclick-command="sendChatMessage()">Enviar</button>
                     </div>
                 </div>
             </div>
             <div class="modal-footer">
                 <span style="font-size: 0.78rem; color: var(--muted);">Funes funciona con una IA 100% local, garantizando la privacidad</span>
-                <button class="btn-secondary" onclick="closeModal('modal-chat')">Cerrar</button>
+                <button class="btn-secondary" data-onclick-command="closeModal('modal-chat')">Cerrar</button>
             </div>
         </div>
     </div>
@@ -1122,7 +1120,7 @@
         <div class="modal-container">
             <div class="modal-header">
                 <div class="modal-title" style="color: var(--red);">ARCHIVOS EN CUARENTENA</div>
-                <button class="close-btn" onclick="closeModal('modal-quarantine')">&times;</button>
+                <button class="close-btn" data-onclick-command="closeModal('modal-quarantine')">&times;</button>
             </div>
             <div class="modal-body" id="quarantine-list">
                 <div style="background-color: var(--bg-card); border: 1px solid var(--border); padding: 14px; border-radius: 6px;">
@@ -1131,7 +1129,7 @@
             </div>
             <div class="modal-footer">
                 <span style="font-size: 0.8rem; color: var(--muted);">Aislamiento seguro de archivos ilegibles sin detener el motor.</span>
-                <button class="btn-secondary" onclick="closeModal('modal-quarantine')">Cerrar</button>
+                <button class="btn-secondary" data-onclick-command="closeModal('modal-quarantine')">Cerrar</button>
             </div>
         </div>
     </div>
@@ -1141,7 +1139,7 @@
         <div class="modal-container" style="width: 680px;">
             <div class="modal-header">
                 <div class="modal-title" style="color: var(--gold);">ARCHIVOS POR PROCESAR (1_ENTRADA)</div>
-                <button class="close-btn" onclick="closeModal('modal-stat-input')">&times;</button>
+                <button class="close-btn" data-onclick-command="closeModal('modal-stat-input')">&times;</button>
             </div>
             <div class="modal-body">
                 <div style="background-color: var(--bg-card); border: 1px solid var(--border); padding: 14px; border-radius: 6px; display: flex; flex-direction: column; gap: 8px;">
@@ -1154,7 +1152,7 @@
             </div>
             <div class="modal-footer">
                 <span style="font-size: 0.8rem; color: var(--muted);">Archivos pendientes de transcripción y estructuración.</span>
-                <button class="btn-secondary" onclick="closeModal('modal-stat-input')">Cerrar</button>
+                <button class="btn-secondary" data-onclick-command="closeModal('modal-stat-input')">Cerrar</button>
             </div>
         </div>
     </div>
@@ -1164,7 +1162,7 @@
         <div class="modal-container" style="width: 680px;">
             <div class="modal-header">
                 <div class="modal-title">TELEMETRÍA DEL GRAFO DE CONOCIMIENTO</div>
-                <button class="close-btn" onclick="closeModal('modal-stat-notes')">&times;</button>
+                <button class="close-btn" data-onclick-command="closeModal('modal-stat-notes')">&times;</button>
             </div>
             <div class="modal-body">
                 <div style="background-color: var(--bg-card); border: 1px solid var(--border); padding: 14px; border-radius: 6px; display: flex; flex-direction: column; gap: 8px;">
@@ -1178,7 +1176,7 @@
             </div>
             <div class="modal-footer">
                 <span style="font-size: 0.8rem; color: var(--muted);">Notas atómicas vectorizadas e hiperinterenlazadas en 4_salida.</span>
-                <button class="btn-secondary" onclick="closeModal('modal-stat-notes')">Cerrar</button>
+                <button class="btn-secondary" data-onclick-command="closeModal('modal-stat-notes')">Cerrar</button>
             </div>
         </div>
     </div>
@@ -1188,7 +1186,7 @@
         <div class="modal-container" style="width: 680px;">
             <div class="modal-header">
                 <div class="modal-title">RECURSOS Y MEMORIA RAM DEL SISTEMA</div>
-                <button class="close-btn" onclick="closeModal('modal-stat-ram')">&times;</button>
+                <button class="close-btn" data-onclick-command="closeModal('modal-stat-ram')">&times;</button>
             </div>
             <div class="modal-body">
                 <div style="background-color: var(--bg-card); border: 1px solid var(--border); padding: 14px; border-radius: 6px; display: flex; flex-direction: column; gap: 10px;">
@@ -1198,12 +1196,12 @@
                         <li>Margen de seguridad configurado: <b id="stat-ram-margin-pct" style="color: var(--paper);">20%</b></li>
                         <li>Estado del recolector de basura (GC): <b style="color: var(--green);">Optimizado</b></li>
                     </ul>
-                    <button class="btn-secondary" style="align-self: flex-start; margin-top: 4px;" onclick="triggerAction('stat_ram')">Purgar Memoria RAM Ahora</button>
+                    <button class="btn-secondary" style="align-self: flex-start; margin-top: 4px;" data-onclick-command="triggerAction('stat_ram')">Purgar Memoria RAM Ahora</button>
                 </div>
             </div>
             <div class="modal-footer">
                 <span style="font-size: 0.8rem; color: var(--muted);">Gestión inteligente de memoria para modelos de IA local.</span>
-                <button class="btn-secondary" onclick="closeModal('modal-stat-ram')">Cerrar</button>
+                <button class="btn-secondary" data-onclick-command="closeModal('modal-stat-ram')">Cerrar</button>
             </div>
         </div>
     </div>
@@ -1213,13 +1211,13 @@
         <div class="modal-container">
             <div class="modal-header">
                 <div class="modal-title">AJUSTES AVANZADOS Y CONFIGURACIÓN FUNES</div>
-                <button class="close-btn" onclick="closeModal('modal-settings')">&times;</button>
+                <button class="close-btn" data-onclick-command="closeModal('modal-settings')">&times;</button>
             </div>
             <div class="modal-body">
                 <div style="display: flex; gap: 10px; border-bottom: 1px solid var(--border); padding-bottom: 8px;">
-                    <button class="btn-small tab-btn" id="tab-btn-routes" style="font-weight: 700; background-color: var(--bg-card-hover);" onclick="switchSettingsTab('routes')">Memoria & Conexiones</button>
-                    <button class="btn-small tab-btn" id="tab-btn-server" onclick="switchSettingsTab('server')">Servidor & IA</button>
-                    <button class="btn-small tab-btn" id="tab-btn-template" onclick="switchSettingsTab('template')">Plantilla Nota</button>
+                    <button class="btn-small tab-btn" id="tab-btn-routes" style="font-weight: 700; background-color: var(--bg-card-hover);" data-onclick-command="switchSettingsTab('routes')">Memoria & Conexiones</button>
+                    <button class="btn-small tab-btn" id="tab-btn-server" data-onclick-command="switchSettingsTab('server')">Servidor & IA</button>
+                    <button class="btn-small tab-btn" id="tab-btn-template" data-onclick-command="switchSettingsTab('template')">Plantilla Nota</button>
                 </div>
 
                 <!-- PESTAÑA 1: MEMORIA & CONEXIONES -->
@@ -1229,7 +1227,7 @@
                         <label style="font-size: 0.85rem; font-weight: 700; display: block; margin-bottom: 4px;">Ruta Principal de la Memoria de Funes:</label>
                         <div style="display: flex; gap: 8px;">
                             <input type="text" id="setting-vault-path" value="" readonly style="flex-grow: 1; padding: 8px 12px; border: 1px solid var(--border); background-color: var(--bg-log); color: var(--paper); font-family: var(--font-mono) !important; font-size: 0.85rem; border-radius: 4px; outline: none; cursor: default;">
-                            <button class="btn-secondary" style="white-space: nowrap;" onclick="browseVaultFolder()">Explorar...</button>
+                            <button class="btn-secondary" style="white-space: nowrap;" data-onclick-command="browseVaultFolder()">Explorar...</button>
                         </div>
                         <span style="font-size: 0.72rem; color: var(--muted); margin-top: 3px; display: block;">Las carpetas 1_entrada, 2_sucio, 3_limpio y 4_salida están estructuradas automáticamente por Funes en esta bóveda.</span>
                     </div>
@@ -1238,7 +1236,7 @@
                     <div style="border-top: 1px solid var(--border); padding-top: 10px;">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
                             <label style="font-size: 0.85rem; font-weight: 700; color: var(--paper);">Fuentes Vinculadas a 1_entrada (Ingesta):</label>
-                            <button class="btn-small" onclick="addLinkedInputFolder()">+ Vincular Carpeta de Ingesta</button>
+                            <button class="btn-small" data-onclick-command="addLinkedInputFolder()">+ Vincular Carpeta de Ingesta</button>
                         </div>
                         <span style="font-size: 0.72rem; color: var(--muted); display: block; margin-bottom: 6px;">Archivos volcados en estas carpetas locales/compartidas serán recopilados hacia 1_entrada:</span>
                         <div id="linked-input-folders-list" style="background-color: var(--bg-log); border: 1px solid var(--border); border-radius: 4px; padding: 8px; min-height: 54px; max-height: 90px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px;">
@@ -1250,7 +1248,7 @@
                     <div style="border-top: 1px solid var(--border); padding-top: 10px;">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
                             <label style="font-size: 0.85rem; font-weight: 700; color: var(--paper);">Destinos Vinculados a 4_salida (Difusión):</label>
-                            <button class="btn-small" onclick="addLinkedOutputFolder()">+ Vincular Carpeta de Destino</button>
+                            <button class="btn-small" data-onclick-command="addLinkedOutputFolder()">+ Vincular Carpeta de Destino</button>
                         </div>
                         <span style="font-size: 0.72rem; color: var(--muted); display: block; margin-bottom: 6px;">Notas preparadas en 4_salida se replicarán en estos destinos locales/compartidos:</span>
                         <div id="linked-output-folders-list" style="background-color: var(--bg-log); border: 1px solid var(--border); border-radius: 4px; padding: 8px; min-height: 54px; max-height: 90px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px;">
@@ -1308,10 +1306,10 @@
                 </div>
             </div>
             <div class="modal-footer">
-                <button class="btn-secondary" style="background-color: var(--bg-card); border: 1px solid var(--border-accent);" onclick="resetDefaultSettings()">Restaurar por Defecto</button>
+                <button class="btn-secondary" style="background-color: var(--bg-card); border: 1px solid var(--border-accent);" data-onclick-command="resetDefaultSettings()">Restaurar por Defecto</button>
                 <div style="display: flex; align-items: center; gap: 10px;">
                     <span style="font-size: 0.78rem; color: var(--muted); font-weight: 700;">100% Local</span>
-                    <button class="btn-secondary" style="background-color: var(--accent); color: white;" onclick="saveSettings()">Guardar Ajustes</button>
+                    <button class="btn-secondary" style="background-color: var(--accent); color: white;" data-onclick-command="saveSettings()">Guardar Ajustes</button>
                 </div>
             </div>
         </div>
@@ -1322,14 +1320,14 @@
         <div class="modal-container">
             <div class="modal-header">
                 <div class="modal-title" id="category-modal-title">DESGLOSE DE ARCHIVOS</div>
-                <button class="close-btn" onclick="closeModal('modal-category')">&times;</button>
+                <button class="close-btn" data-onclick-command="closeModal('modal-category')">&times;</button>
             </div>
             <div class="modal-body" id="category-modal-body">
                 <p style="font-size: 0.85rem; color: var(--muted);">Cargando listado de archivos...</p>
             </div>
             <div class="modal-footer">
                 <span style="font-size: 0.78rem; color: var(--muted);">Doble clic abre el archivo con la app nativa del sistema.</span>
-                <button class="btn-secondary" onclick="closeModal('modal-category')">Cerrar</button>
+                <button class="btn-secondary" data-onclick-command="closeModal('modal-category')">Cerrar</button>
             </div>
         </div>
     </div>
@@ -1339,7 +1337,7 @@
         <div class="modal-container" style="width: 840px;">
             <div class="modal-header">
                 <div class="modal-title">GUÍA RÁPIDA DE USO — SISTEMA FUNES</div>
-                <button class="close-btn" onclick="closeModal('modal-help')">&times;</button>
+                <button class="close-btn" data-onclick-command="closeModal('modal-help')">&times;</button>
             </div>
             <div class="modal-body" style="gap: 14px; max-height: 75vh; overflow-y: auto; padding-right: 6px;">
                 <!-- 1. ORGANIZACIÓN EN TEMAS Y CUESTIONES -->
@@ -1392,18 +1390,62 @@
             </div>
             <div class="modal-footer">
                 <span style="font-size: 0.78rem; color: var(--muted);">Funes v2026.1 • Formateo Universal de Notas, Estructuración y Síntesis</span>
-                <button class="btn-secondary" onclick="closeModal('modal-help')">Cerrar</button>
+                <button class="btn-secondary" data-onclick-command="closeModal('modal-help')">Cerrar</button>
             </div>
         </div>
     </div>
 
-    <script>
+    <script nonce="funes-console">
+        function runStaticCommand(command, element, event) {
+            if (command.startsWith("if(event.key==='Enter')")) {
+                if (event.key !== 'Enter') return;
+                command = command.replace("if(event.key==='Enter') ", '');
+            }
+            const args = Array.from(command.matchAll(/'([^']*)'/g), match => match[1]);
+            if (command.startsWith('triggerAction(')) return triggerAction(args[0], {}, element);
+            if (command.startsWith('openModal(')) return openModal(args[0]);
+            if (command.startsWith('closeModal(')) return closeModal(args[0]);
+            if (command.startsWith('switchReaderView(')) return switchReaderView(args[0]);
+            if (command.startsWith('switchSettingsTab(')) return switchSettingsTab(args[0]);
+            if (command.startsWith('executeExportFormat(')) return executeExportFormat(args[0]);
+            if (command.startsWith('changeActiveTheme(')) return changeActiveTheme(element.value);
+            if (command === 'togglePathMode(this)') return togglePathMode(element);
+
+            const handlers = {
+                'promptCreateTheme()': promptCreateTheme,
+                'triggerOptimizedCycle()': triggerOptimizedCycle,
+                'clearLogView()': clearLogView,
+                'openMOCNote()': openMOCNote,
+                'filterReaderNotes()': filterReaderNotes,
+                'submitCreateThemeModal()': submitCreateThemeModal,
+                'clearChatHistory()': clearChatHistory,
+                'sendChatMessage()': sendChatMessage,
+                'browseVaultFolder()': browseVaultFolder,
+                'addLinkedInputFolder()': addLinkedInputFolder,
+                'addLinkedOutputFolder()': addLinkedOutputFolder,
+                'resetDefaultSettings()': resetDefaultSettings,
+                'saveSettings()': saveSettings,
+            };
+            if (handlers[command]) handlers[command]();
+        }
+
+        ['click', 'change', 'input', 'keydown', 'keypress'].forEach(function(eventName) {
+            document.querySelectorAll(`[data-on${eventName}-command]`).forEach(function(element) {
+                element.addEventListener(eventName, function(event) {
+                    runStaticCommand(element.dataset[`on${eventName}Command`], element, event);
+                });
+            });
+        });
+
         function log(msg) {
             const consoleEl = document.getElementById('log-console');
             const now = new Date();
             const timeStr = now.toTimeString().split(' ')[0];
             const entry = document.createElement('div');
-            entry.innerHTML = `<span class="log-time">[${timeStr}]</span> ${msg}`;
+            const timestamp = document.createElement('span');
+            timestamp.className = 'log-time';
+            timestamp.textContent = `[${timeStr}]`;
+            entry.append(timestamp, document.createTextNode(` ${msg}`));
             consoleEl.appendChild(entry);
             consoleEl.scrollTop = consoleEl.scrollHeight;
         }
@@ -1419,7 +1461,7 @@
         }
 
         function clearLogView() {
-            document.getElementById('log-console').innerHTML = '';
+            document.getElementById('log-console').replaceChildren();
         }
 
         function getFormattedTimestamp() {
@@ -1596,7 +1638,7 @@
                 input.style.display = 'none';
                 document.body.appendChild(input);
             }
-            input.onchange = function(e) {
+            input.addEventListener('change', function(e) {
                 if (e.target.files && e.target.files.length > 0) {
                     const file = e.target.files[0];
                     let folderPath = file.path;
@@ -1612,7 +1654,7 @@
                     callback(folderPath);
                 }
                 input.value = '';
-            };
+            }, { once: true });
             input.click();
         }
 
@@ -1705,33 +1747,33 @@
             const inputEl = document.getElementById('linked-input-folders-list');
             const outputEl = document.getElementById('linked-output-folders-list');
 
-            if (inputEl) {
-                inputEl.innerHTML = '';
-                if (linkedInputFolders.length === 0) {
-                    inputEl.innerHTML = '<div style="font-size: 0.78rem; color: var(--muted); font-style: italic;">No hay carpetas de ingesta vinculadas.</div>';
-                } else {
-                    linkedInputFolders.forEach(function(f, idx) {
-                        const item = document.createElement('div');
-                        item.style.cssText = 'display: flex; justify-content: space-between; align-items: center; background-color: var(--bg-card); padding: 4px 8px; border-radius: 4px; font-size: 0.78rem; border: 1px solid var(--border);';
-                        item.innerHTML = '<span>' + f + '</span><span style="color: var(--red); cursor: pointer; font-weight: 700;" onclick="removeLinkedInputFolder(' + idx + ')">&times;</span>';
-                        inputEl.appendChild(item);
-                    });
+            function renderFolderList(container, folders, emptyMessage, removeFolder) {
+                if (!container) return;
+                container.replaceChildren();
+                if (folders.length === 0) {
+                    const empty = document.createElement('div');
+                    empty.style.cssText = 'font-size: 0.78rem; color: var(--muted); font-style: italic;';
+                    empty.textContent = emptyMessage;
+                    container.appendChild(empty);
+                    return;
                 }
+                folders.forEach(function(folder, index) {
+                    const item = document.createElement('div');
+                    item.style.cssText = 'display: flex; justify-content: space-between; align-items: center; background-color: var(--bg-card); padding: 4px 8px; border-radius: 4px; font-size: 0.78rem; border: 1px solid var(--border);';
+                    const label = document.createElement('span');
+                    label.textContent = folder;
+                    const remove = document.createElement('button');
+                    remove.type = 'button';
+                    remove.style.cssText = 'color: var(--red); cursor: pointer; font-weight: 700; border: 0; background: transparent;';
+                    remove.textContent = '×';
+                    remove.addEventListener('click', function() { removeFolder(index); });
+                    item.append(label, remove);
+                    container.appendChild(item);
+                });
             }
 
-            if (outputEl) {
-                outputEl.innerHTML = '';
-                if (linkedOutputFolders.length === 0) {
-                    outputEl.innerHTML = '<div style="font-size: 0.78rem; color: var(--muted); font-style: italic;">No hay carpetas de destino vinculadas.</div>';
-                } else {
-                    linkedOutputFolders.forEach(function(f, idx) {
-                        const item = document.createElement('div');
-                        item.style.cssText = 'display: flex; justify-content: space-between; align-items: center; background-color: var(--bg-card); padding: 4px 8px; border-radius: 4px; font-size: 0.78rem; border: 1px solid var(--border);';
-                        item.innerHTML = '<span>' + f + '</span><span style="color: var(--red); cursor: pointer; font-weight: 700;" onclick="removeLinkedOutputFolder(' + idx + ')">&times;</span>';
-                        outputEl.appendChild(item);
-                    });
-                }
-            }
+            renderFolderList(inputEl, linkedInputFolders, 'No hay carpetas de ingesta vinculadas.', removeLinkedInputFolder);
+            renderFolderList(outputEl, linkedOutputFolders, 'No hay carpetas de destino vinculadas.', removeLinkedOutputFolder);
         }
 
         function loadSettingsData() {
@@ -1879,6 +1921,12 @@
             return defaultBase + (notePath.endsWith(".md") ? notePath : notePath + ".md");
         }
 
+        function escapeHtml(value) {
+            const node = document.createElement('span');
+            node.textContent = String(value);
+            return node.innerHTML;
+        }
+
         function executeExportFormat(format) {
             closeModal('modal-export-options');
             if (format === 'markdown') {
@@ -1944,7 +1992,7 @@
                 <html>
                 <head>
                     <meta charset="utf-8">
-                    <title>${title} — Exportación PDF</title>
+                    <title>${escapeHtml(title)} — Exportación PDF</title>
                     <style>
                         @page {
                             size: A4;
@@ -2000,14 +2048,14 @@
                 </head>
                 <body>
                     <div class="pdf-header">
-                        <div class="pdf-header-title">Nota: ${title}</div>
-                        <div class="pdf-header-path">Ruta: ${fullPath}</div>
+                        <div class="pdf-header-title">Nota: ${escapeHtml(title)}</div>
+                        <div class="pdf-header-path">Ruta: ${escapeHtml(fullPath)}</div>
                     </div>
 
                     ${clone.innerHTML}
 
                     <div class="pdf-footer">
-                        <span>${timestamp}</span>
+                        <span>${escapeHtml(timestamp)}</span>
                         <span>Página 1 de 1</span>
                     </div>
                 </body>
@@ -2048,7 +2096,7 @@
                 <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
                 <head>
                     <meta charset='utf-8'>
-                    <title>${title}</title>
+                    <title>${escapeHtml(title)}</title>
                     <!--[if gte mso 9]>
                     <xml>
                         <w:WordDocument>
@@ -2085,10 +2133,10 @@
                     <div class="Section1">
                         <table style="width:100%; border-bottom:1.5px solid #888888; margin-bottom:18pt; font-family:Arial;">
                             <tr>
-                                <td style="font-size:9pt; font-weight:bold; color:#222222; padding-bottom:3pt;">Nota: ${title}</td>
+                                <td style="font-size:9pt; font-weight:bold; color:#222222; padding-bottom:3pt;">Nota: ${escapeHtml(title)}</td>
                             </tr>
                             <tr>
-                                <td style="font-size:7.8pt; color:#555555; word-break:break-all;">Ruta: ${fullPath}</td>
+                                <td style="font-size:7.8pt; color:#555555; word-break:break-all;">Ruta: ${escapeHtml(fullPath)}</td>
                             </tr>
                         </table>
 
@@ -2096,7 +2144,7 @@
 
                         <table style="width:100%; border-top:1.5px solid #888888; margin-top:30pt; font-size:8.5pt; color:#444; font-family:Arial;">
                             <tr>
-                                <td>${timestamp}</td>
+                                <td>${escapeHtml(timestamp)}</td>
                                 <td style="text-align:right;">Página 1 de 1</td>
                             </tr>
                         </table>
@@ -2151,7 +2199,7 @@
                 document.body.appendChild(toast);
             }
             toast.style.borderColor = isError ? 'var(--red)' : 'var(--gold)';
-            toast.innerHTML = message;
+            toast.textContent = message;
             toast.style.opacity = '1';
             toast.style.transform = 'translateY(0)';
 
@@ -2334,6 +2382,22 @@
             }
         }
 
+        function appendChatBubble(container, kind, label, text, sources) {
+            const bubble = document.createElement('div');
+            bubble.className = 'chat-bubble ' + kind;
+            const sender = document.createElement('strong');
+            sender.textContent = label;
+            bubble.append(sender, document.createTextNode(' ' + text));
+            if (sources && sources.length) {
+                const sourceText = document.createElement('div');
+                sourceText.style.cssText = 'margin-top:6px; font-size:0.75rem; color: var(--muted);';
+                sourceText.textContent = 'Fuentes: ' + sources.join(', ');
+                bubble.appendChild(sourceText);
+            }
+            container.appendChild(bubble);
+            container.scrollTop = container.scrollHeight;
+        }
+
         function sendChatMessage() {
             const inputEl = document.getElementById('chat-input');
             const msg = inputEl.value.trim();
@@ -2341,12 +2405,8 @@
 
             const chatScroll = document.getElementById('chat-messages');
 
-            const userBubble = document.createElement('div');
-            userBubble.className = 'chat-bubble user';
-            userBubble.innerHTML = '<strong>Tú:</strong> ' + msg;
-            chatScroll.appendChild(userBubble);
+            appendChatBubble(chatScroll, 'user', 'Tú:', msg);
             inputEl.value = '';
-            chatScroll.scrollTop = chatScroll.scrollHeight;
 
             const contextPayload = {
                 context_mode: activeChatContextMode,
@@ -2356,29 +2416,20 @@
 
             if (window.pywebview && window.pywebview.api) {
                 window.pywebview.api.send_chat_message(msg, contextPayload).then(function(reply) {
-                    const aiBubble = document.createElement('div');
-                    aiBubble.className = 'chat-bubble ai';
-                    aiBubble.innerHTML = '<strong>Funes IA:</strong> ' + (reply.text || reply);
-                    if (reply.sources && reply.sources.length) {
-                        aiBubble.innerHTML += '<div style="margin-top:6px; font-size:0.75rem; color: var(--muted);">Fuentes: ' + reply.sources.join(', ') + '</div>';
-                    }
-                    chatScroll.appendChild(aiBubble);
-                    chatScroll.scrollTop = chatScroll.scrollHeight;
+                    appendChatBubble(chatScroll, 'ai', 'Funes IA:', reply.text || reply, reply.sources);
                 });
             } else {
                 setTimeout(function() {
-                    const aiBubble = document.createElement('div');
-                    aiBubble.className = 'chat-bubble ai';
                     const ctxLabel = activeChatContextMode === 'single_note' ? 'la nota "' + activeChatNoteTitle + '"' : 'todas las notas de 4_salida';
-                    aiBubble.innerHTML = '<strong>Funes IA:</strong> Respuesta basada en ' + ctxLabel + '. Información derivada de las notas atómicas locales.';
-                    chatScroll.appendChild(aiBubble);
-                    chatScroll.scrollTop = chatScroll.scrollHeight;
+                    appendChatBubble(chatScroll, 'ai', 'Funes IA:', 'Respuesta basada en ' + ctxLabel + '. Información derivada de las notas atómicas locales.');
                 }, 400);
             }
         }
 
         function clearChatHistory() {
-            document.getElementById('chat-messages').innerHTML = '<div class="chat-bubble ai"><strong>Funes IA:</strong> Historial de chat limpiado.</div>';
+            const chat = document.getElementById('chat-messages');
+            chat.replaceChildren();
+            appendChatBubble(chat, 'ai', 'Funes IA:', 'Historial de chat limpiado.');
         }
 
         function switchReaderView(view) {
@@ -2716,52 +2767,80 @@
                 if (subtextEl) subtextEl.innerText = 'Contexto delimitado exclusivamente al archivo .md de esta nota';
 
                 if (scrollBox) {
-                    scrollBox.innerHTML = `
-                        <div class="chat-bubble ai" style="border-color: var(--gold); background: var(--bg-card); font-size: 0.85rem; padding: 12px 14px; border-radius: 6px;">
-                            <strong>Funes IA:</strong> Hilo de conversación iniciado. Contexto fijado exclusivamente en la nota <b>"${noteName}"</b>. ¿Qué deseas consultar sobre este documento?
-                        </div>
-                    `;
+                    scrollBox.replaceChildren();
+                    appendChatBubble(
+                        scrollBox,
+                        'ai',
+                        'Funes IA:',
+                        'Hilo de conversación iniciado. Contexto fijado exclusivamente en la nota "' + noteName + '". ¿Qué deseas consultar sobre este documento?'
+                    );
                 }
             } else {
                 if (labelEl) labelEl.innerText = 'Toda la Bóveda de Notas (4_salida)';
                 if (subtextEl) subtextEl.innerText = 'Acceso a la totalidad del conocimiento en 4_salida';
 
                 if (scrollBox) {
-                    scrollBox.innerHTML = `
-                        <div class="chat-bubble ai" style="border-color: var(--gold); background: var(--bg-card); font-size: 0.85rem; padding: 12px 14px; border-radius: 6px;">
-                            <strong>Funes IA:</strong> Hilo de conversación iniciado. Contexto fijado en <b>todas las notas de la Bóveda (4_salida)</b>. Puedo responder preguntas relacionando cualquier documento procesado.
-                        </div>
-                    `;
+                    scrollBox.replaceChildren();
+                    appendChatBubble(
+                        scrollBox,
+                        'ai',
+                        'Funes IA:',
+                        'Hilo de conversación iniciado. Contexto fijado en todas las notas de la Bóveda (4_salida). Puedo responder preguntas relacionando cualquier documento procesado.'
+                    );
                 }
             }
         }
 
-        function injectNoteActionBar(noteTitle, innerHtml) {
+        function createNoteActionBar(noteTitle) {
             currentSelectedNoteTitle = noteTitle;
-            const barHtml = `
-                <div id="note-action-bar" style="position: sticky; top: -24px; z-index: 20; display: flex; justify-content: space-between; align-items: center; background: var(--bg-card); border: 1px solid var(--border-accent); padding: 10px 16px; border-radius: 6px; margin: -24px -30px 16px -30px; box-shadow: 0 4px 12px rgba(0,0,0,0.12);">
-                    <span style="font-size: 0.85rem; font-weight: 700; color: var(--gold);">Nota: ${noteTitle}</span>
-                    <div style="display: flex; flex-direction: column; gap: 4px; align-items: flex-end;">
-                        <button class="btn-small" style="font-weight: 700; background: var(--bg-card-hover); border: 1px solid var(--border-accent); width: 220px; text-align: center;" onclick="launchChatWithContext('single_note')">Hablar con esta Nota</button>
-                        <button class="btn-small" style="font-weight: 700; background: var(--bg-card-hover); border: 1px solid var(--border-accent); width: 220px; text-align: center;" onclick="launchChatWithContext('all_notes')">Hablar con todas las Notas</button>
-                    </div>
-                </div>
-            `;
-            return barHtml + innerHtml;
+            const bar = document.createElement('div');
+            bar.id = 'note-action-bar';
+            bar.style.cssText = 'position: sticky; top: -24px; z-index: 20; display: flex; justify-content: space-between; align-items: center; background: var(--bg-card); border: 1px solid var(--border-accent); padding: 10px 16px; border-radius: 6px; margin: -24px -30px 16px -30px; box-shadow: 0 4px 12px rgba(0,0,0,0.12);';
+            const title = document.createElement('span');
+            title.style.cssText = 'font-size: 0.85rem; font-weight: 700; color: var(--gold);';
+            title.textContent = 'Nota: ' + noteTitle;
+            const actions = document.createElement('div');
+            actions.style.cssText = 'display: flex; flex-direction: column; gap: 4px; align-items: flex-end;';
+            [['single_note', 'Hablar con esta Nota'], ['all_notes', 'Hablar con todas las Notas']].forEach(function(action) {
+                const button = document.createElement('button');
+                button.type = 'button';
+                button.className = 'btn-small';
+                button.style.cssText = 'font-weight: 700; background: var(--bg-card-hover); border: 1px solid var(--border-accent); width: 220px; text-align: center;';
+                button.textContent = action[1];
+                button.addEventListener('click', function() { launchChatWithContext(action[0]); });
+                actions.appendChild(button);
+            });
+            bar.append(title, actions);
+            return bar;
         }
 
-        function formatWikilinksInHtml(rawHtml) {
-            if (!rawHtml) return '';
-            let html = rawHtml.replace(/<span class=['"]wikilink['"]([^>]*)>\[\[(.*?)\]\]<\/span>/g, function(match, attrs, target) {
-                let cleanDisplay = target.replace(/^Nota_/, '').replace(/_/g, ' ');
-                return `<span class='wikilink'${attrs}>${cleanDisplay}</span>`;
+        function renderNoteDocument(title, documentModel) {
+            const reader = document.getElementById('reader-content');
+            reader.replaceChildren(createNoteActionBar(title));
+            const noteContent = document.createElement('div');
+            noteContent.className = 'note-content';
+            (documentModel || []).forEach(function(block) {
+                const tag = block.type === 'heading' ? 'h' + Math.min(Math.max(block.level || 3, 1), 3) : 'p';
+                const node = document.createElement(tag);
+                if (block.children) {
+                    block.children.forEach(function(token) {
+                        if (token.type === 'wikilink') {
+                            const link = document.createElement('span');
+                            link.className = 'wikilink';
+                            link.dataset.documentId = token.document_id;
+                            link.textContent = token.text;
+                            link.addEventListener('click', function() { loadNoteContent(token.document_id); });
+                            node.appendChild(link);
+                        } else {
+                            node.appendChild(document.createTextNode(token.text));
+                        }
+                    });
+                } else {
+                    node.textContent = block.text || '';
+                }
+                noteContent.appendChild(node);
             });
-            html = html.replace(/\[\[(.*?)\]\]/g, function(match, target) {
-                let cleanDisplay = target.replace(/^Nota_/, '').replace(/_/g, ' ');
-                let noteFile = target.endsWith('.md') ? target : target + '.md';
-                return `<span class='wikilink' onclick="loadNoteContent('${noteFile}')">${cleanDisplay}</span>`;
-            });
-            return html;
+            reader.appendChild(noteContent);
         }
 
         const LOCAL_MOCK_NOTES = [
@@ -2934,9 +3013,9 @@
                 mocDiv.className = 'reader-pinned-item' + (currentSelectedNotePath === mocNote.path ? ' active' : '');
                 mocDiv.dataset.path = mocNote.path;
                 mocDiv.innerText = mocNote.title;
-                mocDiv.onclick = function() {
+                mocDiv.addEventListener('click', function() {
                     loadNoteContent(mocNote.path);
-                };
+                });
                 pinnedContainer.appendChild(mocDiv);
             }
 
@@ -2947,9 +3026,9 @@
                 li.className = 'reader-note-item' + (currentSelectedNotePath === n.path ? ' active' : '');
                 li.dataset.path = n.path;
                 li.innerText = n.title;
-                li.onclick = function() {
+                li.addEventListener('click', function() {
                     loadNoteContent(n.path);
-                };
+                });
                 ul.appendChild(li);
             });
 
@@ -2970,18 +3049,21 @@
                 window.pywebview.api.get_note_content(notePath).then(function(res) {
                     if (res && res.title) displayTitle = res.title;
                     currentSelectedNoteTitle = displayTitle;
-                    const formattedHtml = formatWikilinksInHtml(res ? res.html : '');
-                    document.getElementById('reader-content').innerHTML = injectNoteActionBar(displayTitle, formattedHtml);
+                    renderNoteDocument(displayTitle, res ? res.document : []);
                 });
             } else {
                 const found = LOCAL_MOCK_NOTES.find(n => n.path === notePath || n.path.endsWith(notePath) || (n.title && notePath.includes(n.title)));
                 if (found) {
                     currentSelectedNoteTitle = found.title;
-                    const formattedHtml = formatWikilinksInHtml(found.html);
-                    document.getElementById('reader-content').innerHTML = injectNoteActionBar(found.title, formattedHtml);
+                    const reader = document.getElementById('reader-content');
+                    reader.innerHTML = found.html;
+                    reader.prepend(createNoteActionBar(found.title));
                 } else {
                     currentSelectedNoteTitle = displayTitle;
-                    document.getElementById('reader-content').innerHTML = injectNoteActionBar(displayTitle, '<h3 style="color:var(--gold);">' + displayTitle + '</h3><p style="color:var(--muted); margin-top:10px;">Nota cargada en la consola Funes.</p>');
+                    renderNoteDocument(displayTitle, [
+                        {"type": "heading", "level": 3, "text": displayTitle},
+                        {"type": "paragraph", "text": "Nota cargada en la consola Funes."}
+                    ]);
                 }
             }
         }
@@ -3008,9 +3090,12 @@
         function renderCategoryFiles(files) {
             const bodyEl = document.getElementById('category-modal-body');
             if (!bodyEl) return;
-            bodyEl.innerHTML = '';
+            bodyEl.replaceChildren();
             if (!files || !files.length) {
-                bodyEl.innerHTML = '<p style="font-size:0.85rem; color:var(--muted);">No hay archivos archivados en esta sección.</p>';
+                const empty = document.createElement('p');
+                empty.style.cssText = 'font-size:0.85rem; color:var(--muted);';
+                empty.textContent = 'No hay archivos archivados en esta sección.';
+                bodyEl.appendChild(empty);
                 return;
             }
             const ul = document.createElement('ul');
@@ -3018,7 +3103,17 @@
             files.forEach(function(f) {
                 const li = document.createElement('li');
                 li.style.cssText = 'background: var(--bg-card); padding: 10px 14px; border: 1px solid var(--border); border-radius: 4px; display: flex; justify-content: space-between; align-items: center; cursor: pointer; font-size: 0.85rem;';
-                li.innerHTML = '<span>📄 ' + f.name + ' <small style="color:var(--muted); margin-left:8px;">(' + (f.folder || 'vault') + ')</small></span><button class="btn-small">Abrir en OS</button>';
+                const description = document.createElement('span');
+                description.textContent = '📄 ' + f.name + ' ';
+                const folder = document.createElement('small');
+                folder.style.cssText = 'color:var(--muted); margin-left:8px;';
+                folder.textContent = '(' + (f.folder || 'vault') + ')';
+                description.appendChild(folder);
+                const open = document.createElement('button');
+                open.className = 'btn-small';
+                open.type = 'button';
+                open.textContent = 'Abrir en OS';
+                li.append(description, open);
                 li.ondblclick = function() {
                     if (window.pywebview && window.pywebview.api) {
                         window.pywebview.api.open_file_natively(f.path);
@@ -3026,14 +3121,14 @@
                         alert('Abriendo ' + f.name + ' con la aplicación nativa del sistema...');
                     }
                 };
-                li.querySelector('button').onclick = function(e) {
+                open.addEventListener('click', function(e) {
                     e.stopPropagation();
                     if (window.pywebview && window.pywebview.api) {
                         window.pywebview.api.open_file_natively(f.path);
                     } else {
                         alert('Abriendo ' + f.name + ' con la aplicación nativa del sistema...');
                     }
-                };
+                });
                 ul.appendChild(li);
             });
             bodyEl.appendChild(ul);
@@ -3060,44 +3155,19 @@
 
                 const readerContent = document.getElementById('reader-content');
                 if (readerContent) {
-                    readerContent.innerHTML = `
-                        <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; min-height: 380px; text-align: center; color: var(--muted); gap: 18px; padding: 20px;">
-                            <svg width="110" height="130" viewBox="0 0 100 120" style="animation: flipHourglass 4s infinite cubic-bezier(0.65, 0, 0.35, 1); flex-shrink: 0;">
-                                <defs>
-                                    <pattern id="sandDotsPattern" width="7" height="7" patternUnits="userSpaceOnUse">
-                                        <circle cx="2" cy="2" r="1.1" fill="#787268"/>
-                                        <circle cx="5" cy="4" r="1.0" fill="#5C574F"/>
-                                        <circle cx="1.5" cy="5.5" r="0.9" fill="#8C867C"/>
-                                        <circle cx="5.5" cy="1.5" r="1.2" fill="#6E685E"/>
-                                    </pattern>
-                                    <clipPath id="topBulbClip">
-                                        <polygon points="22,18 78,18 50,60"/>
-                                    </clipPath>
-                                    <clipPath id="bottomBulbClip">
-                                        <polygon points="22,102 78,102 50,60"/>
-                                    </clipPath>
-                                </defs>
-                                <rect x="15" y="10" width="70" height="8" rx="2" fill="#59544D" stroke="#3D3934" stroke-width="1.5"/>
-                                <rect x="15" y="102" width="70" height="8" rx="2" fill="#59544D" stroke="#3D3934" stroke-width="1.5"/>
-                                <path d="M 22 18 L 78 18 Q 58 55 52 60 Q 58 65 78 102 L 22 102 Q 42 65 48 60 Q 42 55 22 18 Z" fill="none" stroke="#9C958B" stroke-width="2.5" stroke-linejoin="round"/>
-                                <g clip-path="url(#topBulbClip)">
-                                    <polygon points="22,18 78,18 50,60" fill="url(#sandDotsPattern)" style="animation: drainTopSand 4s infinite ease-in-out; transform-origin: 50px 60px;"/>
-                                </g>
-                                <g class="sand-falling-grains">
-                                    <circle cx="49" cy="58" r="1.3" fill="#787268" style="animation: dropParticleDot 0.65s infinite linear 0s;"/>
-                                    <circle cx="51" cy="58" r="1.1" fill="#5C574F" style="animation: dropParticleDot 0.65s infinite linear 0.13s;"/>
-                                    <circle cx="50" cy="58" r="1.4" fill="#8C867C" style="animation: dropParticleDot 0.65s infinite linear 0.26s;"/>
-                                    <circle cx="48.5" cy="58" r="1.0" fill="#6E685E" style="animation: dropParticleDot 0.65s infinite linear 0.39s;"/>
-                                    <circle cx="51.5" cy="58" r="1.2" fill="#787268" style="animation: dropParticleDot 0.65s infinite linear 0.52s;"/>
-                                </g>
-                                <g clip-path="url(#bottomBulbClip)">
-                                    <polygon points="22,102 78,102 50,60" fill="url(#sandDotsPattern)" style="animation: fillBottomSand 4s infinite ease-in-out; transform-origin: 50px 102px;"/>
-                                </g>
-                            </svg>
-                            <div style="font-size: 0.92rem; font-weight: 700; color: var(--paper); letter-spacing: 0.5px;">Búsqueda activa: "<span style="color: var(--gold);">${rawInput}</span>"</div>
-                            <div style="font-size: 0.8rem; color: var(--muted); max-width: 340px; line-height: 1.45;">Selecciona una de las notas filtradas en la columna izquierda para desplegar su lectura.</div>
-                        </div>
-                    `;
+                    const emptyState = document.createElement('div');
+                    emptyState.style.cssText = 'display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; min-height: 380px; text-align: center; color: var(--muted); gap: 18px; padding: 20px;';
+                    const hourglass = document.createElement('div');
+                    hourglass.style.cssText = 'font-size: 4rem; animation: flipHourglass 4s infinite cubic-bezier(0.65, 0, 0.35, 1);';
+                    hourglass.textContent = '⌛';
+                    const title = document.createElement('div');
+                    title.style.cssText = 'font-size: 0.92rem; font-weight: 700; color: var(--paper); letter-spacing: 0.5px;';
+                    title.append('Búsqueda activa: "', document.createTextNode(rawInput), '"');
+                    const help = document.createElement('div');
+                    help.style.cssText = 'font-size: 0.8rem; color: var(--muted); max-width: 340px; line-height: 1.45;';
+                    help.textContent = 'Selecciona una de las notas filtradas en la columna izquierda para desplegar su lectura.';
+                    emptyState.append(hourglass, title, help);
+                    readerContent.replaceChildren(emptyState);
                 }
             } else if (query.length === 0 && lastSearchQuery.length > 0) {
                 lastSearchQuery = '';

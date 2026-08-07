@@ -221,7 +221,20 @@ def test_wikilink_callback_uses_unique_vault_relative_note_path(temp_vault_path)
 
     result = backend.get_note_content_html("4_salida/source.md")
 
-    assert "loadNoteContent('4_salida/Topic/nested.md')" in result["html"]
+    assert result["document"] == [
+        {
+            "type": "paragraph",
+            "children": [
+                {
+                    "type": "wikilink",
+                    "text": "nested",
+                    "document_id": "4_salida/Topic/nested.md",
+                }
+            ],
+        }
+    ]
+    assert 'data-document-id="4_salida/Topic/nested.md"' in result["html"]
+    assert "onclick=" not in result["html"]
 
 
 def test_wikilink_rejects_ambiguous_basename(temp_vault_path):

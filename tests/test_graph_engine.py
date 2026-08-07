@@ -3,6 +3,8 @@ import tempfile
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+from funes.control_console import FunesConsoleBackend
+from funes.domain.frontmatter import parse_frontmatter, serialize_frontmatter
 from funes.graph_engine.atomic_generator import AtomicNoteGenerator
 from funes.graph_engine.linker import GraphLinker
 from funes.graph_engine.optimized_loop import OptimizadoGraphLoop
@@ -27,8 +29,10 @@ class TestGraphEngine(unittest.TestCase):
         note = generator.generate_atomic_note(clean_text, "llama3", "informe.pdf")
 
         self.assertIn("---", note)
-        self.assertIn("título: \"informe\"", note)
-        self.assertIn("autor: \"Funes Extractor\"", note)
+        metadata, _ = parse_frontmatter(note)
+        self.assertEqual(metadata["schema_version"], 1)
+        self.assertEqual(metadata["title"], "informe")
+        self.assertEqual(metadata["author"], "Funes Extractor")
         self.assertIn(clean_text, note)
 
     def test_atomic_generator_mock_ollama_requests(self):
@@ -50,8 +54,19 @@ class TestGraphEngine(unittest.TestCase):
     # ------------------------------------------------------------------
     def test_linker_autolinking_and_protection(self):
         # Crear notas de destino en 4_salida
-        (self.output_dir / "Inteligencia Artificial.md").write_text("Contenido IA", encoding="utf-8")
-        (self.output_dir / "Redes Neuronales.md").write_text("Contenido RN", encoding="utf-8")
+        target_metadata = {
+            "schema_version": 1, "date": "2026-08-07", "author": "Funes",
+            "tags": [], "issue": "_Sin_Cuestion", "status": "approved",
+            "sources": [], "history": [],
+        }
+        (self.output_dir / "Inteligencia Artificial.md").write_text(
+            serialize_frontmatter({**target_metadata, "title": "Inteligencia Artificial"}),
+            encoding="utf-8",
+        )
+        (self.output_dir / "Redes Neuronales.md").write_text(
+            serialize_frontmatter({**target_metadata, "title": "Redes Neuronales"}),
+            encoding="utf-8",
+        )
 
         linker = GraphLinker(self.output_dir)
 
@@ -78,7 +93,8 @@ También mencionamos `Redes Neuronales en código inline`.
         self.assertIn("y [[Redes Neuronales]]", result)
 
         # Verificar que Frontmatter, bloques de código e inline no se tocaron
-        self.assertIn("tags: [inteligencia artificial, test]", result)
+        metadata, _ = parse_frontmatter(result)
+        self.assertEqual(metadata["tags"], ["inteligencia artificial", "test"])
         self.assertIn('ia = "Inteligencia Artificial"', result)
         self.assertIn('`Redes Neuronales en código inline`', result)
 
@@ -102,6 +118,42 @@ También mencionamos `Redes Neuronales en código inline`.
 
         self.assertIn("[[Gestión de Conocimiento]]", updated_a)
         self.assertIn("[[Obsidian Vault]]", updated_b)
+
+    def test_invalid_notes_are_excluded_from_graph_outputs(self):
+        valid = serialize_frontmatter({
+            "schema_version": 1,
+            "title": "Nota válida",
+            "date": "2026-08-07",
+            "author": "Funes",
+            "tags": [],
+            "issue": "Cuestion",
+            "status": "approved",
+            "sources": [],
+            "history": [],
+        }) + "# Nota válida\n"
+        issue_dir = self.output_dir / "Cuestion"
+        issue_dir.mkdir()
+        (issue_dir / "valida.md").write_text(valid, encoding="utf-8")
+        (issue_dir / "invalida.md").write_text("---\ntitle: duplicada\ntitle: inválida\n---\n", encoding="utf-8")
+        (self.output_dir / "grafo_valida.md").write_text(valid, encoding="utf-8")
+        (self.output_dir / "grafo_invalida.md").write_text("sin frontmatter", encoding="utf-8")
+
+        OptimizadoGraphLoop(self.output_dir).refine_knowledge_graph()
+
+        master = (issue_dir / "_Cuestion_Cuestion.md").read_text(encoding="utf-8")
+        moc = (self.output_dir / "_Indice_MOC.md").read_text(encoding="utf-8")
+        graph = FunesConsoleBackend(self.output_dir.parent).get_graph_data()
+
+        self.assertIn("[[valida]]", master)
+        self.assertNotIn("invalida", master)
+        self.assertIn("[[valida]]", moc)
+        self.assertNotIn("invalida", moc)
+        discovered = GraphLinker(self.output_dir).get_existing_note_titles()
+        graph_nodes = [node["id"] for node in graph["nodes"]]
+        self.assertIn("grafo_valida", discovered)
+        self.assertNotIn("grafo_invalida", discovered)
+        self.assertIn("grafo_valida", graph_nodes)
+        self.assertNotIn("grafo_invalida", graph_nodes)
 
 
 if __name__ == "__main__":

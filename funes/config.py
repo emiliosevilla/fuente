@@ -4,17 +4,22 @@ from dataclasses import dataclass, field, asdict
 from pathlib import Path
 from typing import Optional
 
+from funes.domain.frontmatter import serialize_frontmatter
+
 logger = logging.getLogger(__name__)
 
 
-DEFAULT_ATOMIC_NOTE_TEMPLATE = """---
-título: "{title}"
-fecha: "{date}"
-autor: "{author}"
-claves: {keywords}
-fuentes: {sources}
----
-
+DEFAULT_ATOMIC_NOTE_TEMPLATE = serialize_frontmatter({
+    "schema_version": 1,
+    "title": "{title}",
+    "date": "{date}",
+    "author": "{author}",
+    "tags": [],
+    "issue": "_Sin_Cuestion",
+    "status": "pending_review",
+    "sources": [],
+    "history": [],
+}) + """
 # {title}
 
 ## Resumen Ejecutivo

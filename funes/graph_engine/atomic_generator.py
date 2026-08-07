@@ -4,6 +4,8 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Dict, Any, Optional, List
 
+from funes.domain.documents import MarkdownDocument
+from funes.domain.frontmatter import serialize_frontmatter
 from funes.graph_engine.prompts import ATOMIC_NOTE_SYSTEM_PROMPT
 
 logger = logging.getLogger(__name__)
@@ -65,7 +67,7 @@ class AtomicNoteGenerator:
                 )
                 if resp.status_code == 200:
                     result = resp.json().get("response", "").strip()
-                    return self._clean_llm_markdown(result)
+                    return self._validated_llm_candidate(result)
             else:
                 data = json.dumps(payload).encode("utf-8")
                 req = urllib.request.Request(
@@ -76,7 +78,7 @@ class AtomicNoteGenerator:
                 with urllib.request.urlopen(req, timeout=180) as resp:
                     if resp.status == 200:
                         body = json.loads(resp.read().decode("utf-8"))
-                        return self._clean_llm_markdown(body.get("response", "").strip())
+                        return self._validated_llm_candidate(body.get("response", "").strip())
 
             return self._generate_fallback(clean_md_content, file_name)
         except Exception as e:
@@ -92,18 +94,25 @@ class AtomicNoteGenerator:
             result = result[:-3]
         return result.strip()
 
+    def _validated_llm_candidate(self, result: str) -> str:
+        """Treat LLM text as an untrusted candidate, never a final note."""
+        return MarkdownDocument.from_markdown(self._clean_llm_markdown(result)).to_markdown()
+
     def _generate_fallback(self, clean_md_content: str, file_name: str) -> str:
         """Plantilla de reserva dinámica en caso de indisponibilidad del LLM."""
         stem = file_name.rsplit(".", 1)[0]
         today_str = datetime.now().strftime("%Y-%m-%d")
-        return f"""---
-título: "{stem}"
-fecha: "{today_str}"
-autor: "Funes Extractor"
-claves: [auto-generado, ingesta]
-fuentes: [{file_name}]
----
-
+        return serialize_frontmatter({
+            "schema_version": 1,
+            "title": stem,
+            "date": today_str,
+            "author": "Funes Extractor",
+            "tags": ["auto-generado", "ingesta"],
+            "issue": "_Sin_Cuestion",
+            "status": "pending_review",
+            "sources": [file_name],
+            "history": [],
+        }) + f"""
 # {stem}
 
 ## Resumen Ejecutivo

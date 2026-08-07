@@ -6,6 +6,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import List, Dict, Set
 
+from funes.domain.frontmatter import serialize_frontmatter
 from funes.graph_engine.linker import GraphLinker
 
 logger = logging.getLogger(__name__)
@@ -75,6 +76,7 @@ class OptimizadoGraphLoop:
                 continue
 
             issue_summaries[issue_name] = []
+            valid_notes: List[Path] = []
             for note_file in notes:
                 try:
                     with open(note_file, "r", encoding="utf-8") as f:
@@ -89,6 +91,7 @@ class OptimizadoGraphLoop:
                         logger.info(f"Bucle Optimizado: Enlaces actualizados en '{note_file.name}'")
 
                     note_contents[note_file.stem] = content
+                    valid_notes.append(note_file)
                     all_valid_notes.append(note_file)
                     processed_notes_count += 1
                     issue_summaries[issue_name].append(note_file.stem)
@@ -100,7 +103,7 @@ class OptimizadoGraphLoop:
                     logger.error(f"Error procesando {note_file.name} en Bucle Optimizado: {e}")
 
             # Crear/actualizar nota marco de Cuestión
-            self._update_issue_master_note(issue_dir, issue_name, notes)
+            self._update_issue_master_note(issue_dir, issue_name, valid_notes)
 
         # Generar / Actualizar MOC global
         self._update_moc_index(all_valid_notes, note_contents, orphans, issue_summaries)
@@ -121,13 +124,17 @@ class OptimizadoGraphLoop:
         now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
         lines = [
-            "---",
-            f'título: "Marco de Cuestión — {issue_name}"',
-            f'fecha: "{now_str}"',
-            'autor: "Funes Bucle Optimizado"',
-            f'claves: [cuestion, {issue_name.lower()}, marco]',
-            f'fuentes: [4_salida/{issue_name}/]',
-            "---",
+            serialize_frontmatter({
+                "schema_version": 1,
+                "title": f"Marco de Cuestión — {issue_name}",
+                "date": now_str,
+                "author": "Funes Bucle Optimizado",
+                "tags": ["cuestion", issue_name.lower(), "marco"],
+                "issue": issue_name,
+                "status": "approved",
+                "sources": [f"4_salida/{issue_name}/"],
+                "history": [],
+            }).rstrip(),
             "",
             f"# 📌 Marco de Cuestión: {issue_name}",
             "",
@@ -162,13 +169,17 @@ class OptimizadoGraphLoop:
         now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
         lines = [
-            "---",
-            'título: "Índice MOC — Mapa de Conocimiento Global"',
-            f'fecha: "{now_str}"',
-            'autor: "Funes Bucle Optimizado"',
-            'claves: [moc, indice, funes]',
-            'fuentes: [4_salida/]',
-            "---",
+            serialize_frontmatter({
+                "schema_version": 1,
+                "title": "Índice MOC — Mapa de Conocimiento Global",
+                "date": now_str,
+                "author": "Funes Bucle Optimizado",
+                "tags": ["moc", "indice", "funes"],
+                "issue": "_Sin_Cuestion",
+                "status": "approved",
+                "sources": ["4_salida/"],
+                "history": [],
+            }).rstrip(),
             "",
             "# Map of Content (MOC) — Funes",
             "",

@@ -333,24 +333,26 @@ Acceptance:
 
 Steps:
 
-- [ ] Define typed methods for initial state, settings, note listing, note retrieval, chat, graph data, approval, save draft, quarantine and restore.
-- [ ] Make every method accept IDs and validated scalar payloads.
-- [ ] Reject unknown actions instead of returning a generic success log.
-- [ ] Temporarily keep `trigger_action` as a compatibility adapter that delegates only to an explicit allowlist.
-- [ ] Implement or remove every direct frontend API call:
+- [x] Define typed methods for initial state, settings, note listing, note retrieval, chat, graph data, approval, save draft, quarantine and restore.
+- [x] Make every method accept IDs and validated scalar payloads.
+- [x] Reject unknown actions instead of returning a generic success log.
+- [x] Temporarily keep `trigger_action` as a compatibility adapter that delegates only to an explicit allowlist.
+- [x] Implement or remove every direct frontend API call:
   - `get_themes`
   - `set_theme`
   - `create_theme`
   - `run_optimized_cycle`
   - `get_category_files`
   - `open_file_natively`
-- [ ] Add contract tests that compare frontend-called methods with bridge methods.
+- [x] Add contract tests that compare frontend-called methods with bridge methods.
 
 Acceptance:
 
 - Every UI call has a real implementation or is removed.
 - Unknown methods and malformed payloads fail closed.
 - No bridge method exposes arbitrary path mutation.
+
+**Checkpoint 0.4 (2026-08-07):** Typed `FunesPyWebViewApi` facade; allowlisted `trigger_action` with per-action schemas; missing frontend APIs implemented. Review clean after fix round 1. Deferred: direct `handle_action` generic success; AnythingLLM helper website fallback.
 
 ### Task 0.5 — Remove shell injection from native selectors
 

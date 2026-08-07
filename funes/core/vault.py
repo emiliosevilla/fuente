@@ -11,6 +11,7 @@ from funes.domain.documents import MarkdownDocument
 from funes.domain.frontmatter import FrontmatterError, serialize_frontmatter
 from funes.domain.errors import PathAuthorizationError
 from funes.domain.paths import AuthorizedPathResolver
+from funes.infrastructure.atomic_files import atomic_write_json, atomic_write_text
 
 logger = logging.getLogger(__name__)
 
@@ -97,8 +98,7 @@ class VaultManager:
                 except Exception:
                     pass
 
-            with open(app_json, "w", encoding="utf-8") as f:
-                json.dump(obsidian_rules, f, indent=2, ensure_ascii=False)
+            atomic_write_json(app_json, obsidian_rules)
         except Exception as e:
             logger.warning(f"No se pudo escribir la configuración de Obsidian: {e}")
 
@@ -227,8 +227,7 @@ class VaultManager:
         }
         full_content = serialize_frontmatter(document_metadata) + content
 
-        with open(clean_path, "w", encoding="utf-8") as f:
-            f.write(full_content)
+        atomic_write_text(clean_path, full_content)
 
         logger.info(f"Guardado en 3_limpio: {clean_path.name}")
         return clean_path
@@ -271,8 +270,7 @@ class VaultManager:
                 },
                 body=content,
             )
-        with open(output_path, "w", encoding="utf-8") as f:
-            f.write(document.to_markdown())
+        atomic_write_text(output_path, document.to_markdown())
 
         logger.info(f"Nota atómica guardada en {target_issue_dir.name}: {output_path.name}")
         return output_path

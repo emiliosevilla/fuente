@@ -34,6 +34,7 @@ from funes.core.vault import VaultManager
 from funes.domain.documents import MarkdownDocument
 from funes.domain.errors import PathAuthorizationError
 from funes.domain.paths import AuthorizedPathResolver
+from funes.infrastructure.atomic_files import atomic_write_json, atomic_write_text
 from funes.ui.bridge import FunesPyWebViewApi
 from funes.core.app_checker import check_and_prompt_user_apps_closed, launch_obsidian
 from funes.core.anythingllm_config import (
@@ -124,8 +125,7 @@ class QuarantineManager:
 
     def _save_manifest(self, items: List[Dict[str, Any]]):
         try:
-            with open(self.manifest_file, "w", encoding="utf-8") as f:
-                json.dump(items, f, indent=2, ensure_ascii=False)
+            atomic_write_json(self.manifest_file, items)
         except Exception as e:
             logging.error(f"Error guardando manifiesto de cuarentena: {e}")
 
@@ -415,9 +415,9 @@ class FunesConsoleBackend:
                                 "action": "approved",
                             },
                         ]
-                        p.write_text(
+                        atomic_write_text(
+                            p,
                             MarkdownDocument(metadata=metadata, body=document.body).to_markdown(),
-                            encoding="utf-8",
                         )
                         return {"log": f"Nota '{p.name}' APROBADA con éxito.", "status": "approved"}
                     except Exception as e:
@@ -437,7 +437,7 @@ class FunesConsoleBackend:
                 except PathAuthorizationError as error:
                     return self._path_error(error)
                 if p.exists() and new_content is not None:
-                    p.write_text(new_content, encoding="utf-8")
+                    atomic_write_text(p, new_content)
                     return {"log": f"Nota '{p.name}' guardada correctamente.", "status": "saved"}
             elif title and new_content:
                 try:
@@ -707,8 +707,10 @@ historial:
             output_folders = payload.get("output_connected_folders", [])
             out_config_file = self.vault_path / ".funes_output_connected_folders.json"
             try:
-                with open(out_config_file, "w", encoding="utf-8") as f:
-                    json.dump({"folders": [str(Path(p).resolve()) for p in output_folders if p]}, f, indent=2, ensure_ascii=False)
+                atomic_write_json(
+                    out_config_file,
+                    {"folders": [str(Path(p).resolve()) for p in output_folders if p]},
+                )
             except Exception as e:
                 logging.error(f"Error guardando carpetas de salida vinculadas: {e}")
 

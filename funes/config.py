@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Optional
 
 from funes.domain.frontmatter import serialize_frontmatter
+from funes.infrastructure.atomic_files import atomic_write_json
 
 logger = logging.getLogger(__name__)
 
@@ -123,9 +124,7 @@ def get_config_file_path(vault_path: str | Path) -> Path:
 def save_config(config: AppConfig) -> Path:
     """Guarda la configuración persistente en .funes/config.json."""
     config_file = get_config_file_path(config.vault.vault_path)
-    config_file.parent.mkdir(parents=True, exist_ok=True)
-    with open(config_file, "w", encoding="utf-8") as f:
-        json.dump(config.to_dict(), f, indent=2, ensure_ascii=False)
+    atomic_write_json(config_file, config.to_dict())
     logger.info(f"Configuración guardada en: {config_file}")
     return config_file
 

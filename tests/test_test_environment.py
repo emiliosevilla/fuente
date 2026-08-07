@@ -12,7 +12,7 @@ from funes.core.vault import VaultManager
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 REPO_VAULT = REPO_ROOT / "Vault_Funes"
-REPO_MANIFEST = REPO_VAULT / ".funes_quarantine" / "manifest.json"
+REPO_MANIFEST = REPO_VAULT / ".funes" / "quarantine" / "manifest.json"
 
 
 class TestTestEnvironment(unittest.TestCase):

@@ -467,17 +467,17 @@ Acceptance:
 
 Steps:
 
-- [ ] Select one canonical location: `<vault>/.funes/quarantine/`.
-- [ ] Store one manifest in SQLite or an atomic JSON file.
-- [ ] Generate a stable `quarantine_id`; do not reconstruct original names by splitting underscores.
-- [ ] Record source hash, original relative path, error code, attempt count and timestamp.
-- [ ] Define retry policy:
+- [x] Select one canonical location: `<vault>/.funes/quarantine/`.
+- [x] Store one manifest in SQLite or an atomic JSON file.
+- [x] Generate a stable `quarantine_id`; do not reconstruct original names by splitting underscores.
+- [x] Record source hash, original relative path, error code, attempt count and timestamp.
+- [x] Define retry policy:
   - transient I/O: retry with bounded exponential backoff;
   - unsupported/corrupt content: quarantine after configured attempts;
   - invalid model output: mark job failed for review, do not silently quarantine the source;
   - cancellation: preserve input and job state.
-- [ ] Make restore require a quarantine ID and target issue validated by `AuthorizedPathResolver`.
-- [ ] Remove both old managers after migration tests pass.
+- [x] Make restore require a quarantine ID and target issue validated by `AuthorizedPathResolver`.
+- [x] Remove both old managers after migration tests pass.
 
 Acceptance:
 
@@ -485,6 +485,8 @@ Acceptance:
 - Restore preserves provenance.
 - Attempt counts represent actual attempts.
 - A collision cannot overwrite an unrelated quarantine item.
+
+**Checkpoint 1.3 (2026-08-07):** Single `QuarantineService` at `<vault>/.funes/quarantine/`; UUID IDs; retry accounting; restore provenance retained. Review clean after fix round 1. Deferred: job-store persistence / UI for `failed_for_review` (Task 2.x).
 
 ### Task 1.4 — Correct configuration persistence
 

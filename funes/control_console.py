@@ -34,6 +34,7 @@ from funes.core.vault import VaultManager
 from funes.domain.documents import MarkdownDocument
 from funes.domain.errors import PathAuthorizationError
 from funes.domain.paths import AuthorizedPathResolver
+from funes.domain.quarantine import QuarantineService
 from funes.infrastructure.atomic_files import atomic_write_json, atomic_write_text
 from funes.ui.bridge import FunesPyWebViewApi
 from funes.core.app_checker import check_and_prompt_user_apps_closed, launch_obsidian
@@ -100,101 +101,12 @@ THEME = {
 FONT_TYPEWRITER = "Courier"
 
 
-class QuarantineManager:
-    """Gestor persistente de archivos aislados en .funes_quarantine/manifest.json."""
-
-    def __init__(self, vault_path: Path):
-        self.vault_path = vault_path.resolve()
-        self.quarantine_dir = self.vault_path / ".funes_quarantine"
-        self.manifest_file = self.quarantine_dir / "manifest.json"
-        self.ensure_structure()
-
-    def ensure_structure(self):
-        self.quarantine_dir.mkdir(parents=True, exist_ok=True)
-        if not self.manifest_file.exists():
-            self._save_manifest([])
-
-    def _read_manifest(self) -> List[Dict[str, Any]]:
-        try:
-            if self.manifest_file.exists():
-                with open(self.manifest_file, "r", encoding="utf-8") as f:
-                    return json.load(f)
-        except Exception:
-            pass
-        return []
-
-    def _save_manifest(self, items: List[Dict[str, Any]]):
-        try:
-            atomic_write_json(self.manifest_file, items)
-        except Exception as e:
-            logging.error(f"Error guardando manifiesto de cuarentena: {e}")
-
-    def quarantine_file(self, filepath: Path, reason: str, stack_trace: str = "") -> bool:
-        try:
-            if not filepath.exists():
-                return False
-            self.ensure_structure()
-            dest_path = self.quarantine_dir / filepath.name
-            shutil.move(str(filepath), str(dest_path))
-
-            items = self._read_manifest()
-            items = [i for i in items if i["filename"] != filepath.name]
-            items.append({
-                "filename": filepath.name,
-                "orig_path": str(filepath),
-                "quarantine_path": str(dest_path),
-                "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
-                "error_reason": self._map_plain_spanish_reason(reason),
-                "stack_trace": stack_trace or reason,
-                "attempts": 3
-            })
-            self._save_manifest(items)
-            return True
-        except Exception as e:
-            logging.error(f"Error al mover a cuarentena {filepath}: {e}")
-            return False
-
-    def restore_file(self, filename: str, target_dir: Path) -> bool:
-        try:
-            q_file = self.quarantine_dir / filename
-            if not q_file.exists():
-                return False
-
-            target_dir.mkdir(parents=True, exist_ok=True)
-            dest_file = target_dir / filename
-            shutil.move(str(q_file), str(dest_file))
-
-            items = self._read_manifest()
-            items = [i for i in items if i["filename"] != filename]
-            self._save_manifest(items)
-            return True
-        except Exception as e:
-            logging.error(f"Error al restaurar archivo {filename}: {e}")
-            return False
-
-    def get_quarantined_items(self) -> List[Dict[str, Any]]:
-        return self._read_manifest()
-
-    def _map_plain_spanish_reason(self, error_str: str) -> str:
-        err_lower = error_str.lower()
-        if "permission" in err_lower or "permiso" in err_lower:
-            return "El archivo está abierto por otra aplicación o no tiene permisos de lectura."
-        elif "password" in err_lower or "encrypted" in err_lower or "contraseña" in err_lower:
-            return "El documento está protegido con contraseña o cifrado."
-        elif "utf-8" in err_lower or "decode" in err_lower or "codificación" in err_lower:
-            return "Formato o codificación de texto ilegible en este archivo."
-        elif "corrupt" in err_lower or "invalid" in err_lower:
-            return "El archivo parece estar incompleto o dañado."
-        else:
-            return f"Error en extracción: {error_str[:120]}"
-
-
 class QuarantineModal(tk.Toplevel):
     """Modal flotante Papiro para Cuarentena."""
 
-    def __init__(self, parent, quarantine_mgr: QuarantineManager, on_restore_callback):
+    def __init__(self, parent, quarantine_service: QuarantineService, on_restore_callback):
         super().__init__(parent)
-        self.quarantine_mgr = quarantine_mgr
+        self.quarantine_service = quarantine_service
         self.on_restore_callback = on_restore_callback
 
         self.title("Archivos en Cuarentena — Funes")
@@ -209,7 +121,7 @@ class QuarantineModal(tk.Toplevel):
 
         tk.Label(hdr, text="ARCHIVOS EN CUARENTENA Y AVISOS DE INGESTA", font=(FONT_TYPEWRITER, 13, "bold"), fg=THEME["red"], bg=THEME["bg_card"]).pack(side="left")
 
-        items = self.quarantine_mgr.get_quarantined_items()
+        items = self.quarantine_service.list_active_items()
 
         if not items:
             empty_frame = tk.Frame(self, bg=THEME["bg_root"], pady=60)
@@ -227,10 +139,10 @@ class QuarantineModal(tk.Toplevel):
             top_line = tk.Frame(card, bg=THEME["bg_card"])
             top_line.pack(fill="x")
 
-            tk.Label(top_line, text=f"Archivo: {item['filename']}", font=(FONT_TYPEWRITER, 10, "bold"), fg=THEME["paper"], bg=THEME["bg_card"]).pack(side="left")
+            tk.Label(top_line, text=f"Archivo: {item['original_filename']}", font=(FONT_TYPEWRITER, 10, "bold"), fg=THEME["paper"], bg=THEME["bg_card"]).pack(side="left")
             tk.Label(top_line, text=f"Fecha: {item['timestamp']}", font=(FONT_TYPEWRITER, 9), fg=THEME["muted"], bg=THEME["bg_card"]).pack(side="right")
 
-            tk.Label(card, text=f"Causa: {item['error_reason']}", font=(FONT_TYPEWRITER, 10), fg=THEME["paper"], bg=THEME["bg_card"], anchor="w", justify="left").pack(fill="x", pady=(4, 6))
+            tk.Label(card, text=f"Causa: {item['error_message']}", font=(FONT_TYPEWRITER, 10), fg=THEME["paper"], bg=THEME["bg_card"], anchor="w", justify="left").pack(fill="x", pady=(4, 6))
 
             btn_rest = tk.Button(
                 card,
@@ -241,13 +153,13 @@ class QuarantineModal(tk.Toplevel):
                 relief="solid",
                 bd=1,
                 cursor="hand2",
-                command=lambda fname=item['filename']: self._restore_action(fname)
+                command=lambda qid=item['quarantine_id']: self._restore_action(qid)
             )
             btn_rest.pack(side="left")
 
-    def _restore_action(self, filename: str):
-        if self.on_restore_callback(filename):
-            messagebox.showinfo("Restauración", f"El archivo '{filename}' ha sido devuelto a 1_entrada.")
+    def _restore_action(self, quarantine_id: str):
+        if self.on_restore_callback(quarantine_id):
+            messagebox.showinfo("Restauración", "El archivo ha sido restaurado.")
             self.destroy()
 
 
@@ -262,7 +174,7 @@ class FunesConsoleBackend:
         self.config = get_default_config(self.vault_path)
         self.vault = VaultManager(self.config.vault)
         self.sync_manager = FolderSyncManager(self.vault_path)
-        self.quarantine_mgr = QuarantineManager(self.vault_path)
+        self.quarantine_service = self.vault.quarantine_service
         self.ram_governor = RAMGovernor(
             ollama_url=self.config.ollama_url,
             safety_margin_pct=self.config.ram_safety_margin_pct
@@ -300,7 +212,7 @@ class FunesConsoleBackend:
         inp_files = [f for f in self.config.vault.input_dir.glob("*") if f.is_file() and not f.name.startswith(".")] if self.config.vault.input_dir.exists() else []
         proc_dir = self.vault_path / ".funes_processed"
         proc_files = list(proc_dir.glob("*")) if proc_dir.exists() else []
-        quar_items = self.quarantine_mgr.get_quarantined_items()
+        quar_items = self.quarantine_service.list_active_items()
         notes_files = list(self.config.vault.output_dir.glob("*.md")) if self.config.vault.output_dir.exists() else []
 
         ram_pct = 0
@@ -672,7 +584,7 @@ historial:
                     try:
                         pipeline.process_file(f)
                     except Exception as err:
-                        self.quarantine_mgr.quarantine_file(f, str(err))
+                        self.quarantine_service.handle_failure(f, err, attempt_count=1)
                 return {
                     "log": "Estructuración de datos completada hacia 3_limpio.",
                     "refresh": True,
@@ -1139,7 +1051,7 @@ class FunesControlConsole(tk.Tk):
         self.backend = FunesConsoleBackend(vault_path)
         self.vault_path = self.backend.vault_path
         self.config = self.backend.config
-        self.quarantine_mgr = self.backend.quarantine_mgr
+        self.quarantine_service = self.backend.quarantine_service
         self.sync_manager = self.backend.sync_manager
 
         self.title("Funes — Registro de Prensa de Conocimiento")
@@ -1217,7 +1129,18 @@ class FunesControlConsole(tk.Tk):
         self.refresh_stats()
 
     def _on_quarantine_click(self):
-        QuarantineModal(self, self.quarantine_mgr, on_restore_callback=lambda f: self.refresh_stats())
+        def restore(quarantine_id: str) -> bool:
+            result = self.backend.handle_action(
+                "restore_note",
+                {"filename": quarantine_id, "target_issue": "_Sin_Cuestion"},
+            )
+            if "error" in result:
+                messagebox.showerror("Restauración", result["error"])
+                return False
+            self.refresh_stats()
+            return True
+
+        QuarantineModal(self, self.quarantine_service, on_restore_callback=restore)
 
 
 def launch_control_console(vault_path: Optional[Path] = None):

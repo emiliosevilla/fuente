@@ -15,6 +15,26 @@ from funes.graph_engine.linker import GraphLinker
 
 logger = logging.getLogger(__name__)
 
+
+class RetryExhaustedError(OSError):
+    """An I/O operation exhausted its bounded retry budget."""
+
+    code = "transient_io"
+
+    def __init__(self, error: OSError, attempt_count: int) -> None:
+        super().__init__(str(error))
+        self.attempt_count = attempt_count
+
+
+class ContentRetryExhaustedError(ValueError):
+    """Unsupported or corrupt content persisted through its retry budget."""
+
+    def __init__(self, error: Exception, error_code: str, attempt_count: int) -> None:
+        super().__init__(str(error))
+        self.code = error_code
+        self.attempt_count = attempt_count
+
+
 try:
     from watchdog.observers import Observer
     from watchdog.events import FileSystemEventHandler
@@ -37,11 +57,12 @@ def retry_on_io_error(max_retries: int = 3, delay_sec: float = 0.5) -> Callable:
                     return func(*args, **kwargs)
                 except (OSError, PermissionError) as e:
                     last_err = e
-                    logger.warning(f"Intento {attempt}/{max_retries} falló por error de red/ES ({e}). Reintentando en {current_delay}s...")
-                    time.sleep(current_delay)
-                    current_delay *= 2
+                    if attempt < max_retries:
+                        logger.warning(f"Intento {attempt}/{max_retries} falló por error de red/ES ({e}). Reintentando en {current_delay}s...")
+                        time.sleep(current_delay)
+                        current_delay *= 2
             logger.error(f"Operación falló definitivamente tras {max_retries} intentos: {last_err}")
-            raise last_err
+            raise RetryExhaustedError(last_err, max_retries) from last_err
         return wrapper
     return decorator
 
@@ -122,7 +143,7 @@ class ETLPipeline:
             dirty_path = self._safe_copy_to_dirty(raw_file_path)
 
             # Paso 2: Extraer a verbatim .md y guardar en 3_limpio
-            content_verbatim, metadata = self.extractors.extract(dirty_path)
+            content_verbatim, metadata = self._extract_with_content_retries(dirty_path)
             clean_path = self.vault.save_clean_md(raw_file_path.name, content_verbatim, metadata)
 
             # Paso 3: Chunking semántico e indexación en ChromaDB
@@ -159,12 +180,45 @@ class ETLPipeline:
             return True
         except Exception as e:
             logger.error(f"Error procesando {raw_file_path.name}: {e}", exc_info=True)
-            self.vault.move_to_quarantine(raw_file_path, reason=str(e))
+            self.vault.quarantine_service.handle_failure(
+                raw_file_path,
+                e,
+                attempt_count=getattr(e, "attempt_count", 1),
+            )
             return False
 
     @retry_on_io_error(max_retries=3, delay_sec=0.5)
     def _safe_copy_to_dirty(self, raw_file_path: Path) -> Path:
         return self.vault.copy_to_dirty(raw_file_path)
+
+    def _extract_with_content_retries(self, dirty_path: Path) -> tuple[str, dict]:
+        """Retry known corrupt/unsupported extraction failures before quarantine."""
+        last_error: Exception | None = None
+        error_code = ""
+        max_attempts = self.vault.quarantine_service.UNSUPPORTED_CONTENT_MAX_ATTEMPTS
+        for attempt in range(1, max_attempts + 1):
+            try:
+                return self.extractors.extract(dirty_path)
+            except Exception as error:
+                error_code = self._content_error_code(error)
+                if not error_code:
+                    raise
+                last_error = error
+        assert last_error is not None
+        raise ContentRetryExhaustedError(
+            last_error, error_code, max_attempts
+        ) from last_error
+
+    @staticmethod
+    def _content_error_code(error: Exception) -> str:
+        if isinstance(error, UnicodeDecodeError):
+            return "corrupt_content"
+        message = str(error).lower()
+        if "corrupt" in message or "malformed" in message:
+            return "corrupt_content"
+        if "unsupported" in message or "not supported" in message:
+            return "unsupported_content"
+        return ""
 
 
 if HAS_WATCHDOG:

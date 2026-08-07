@@ -13,3 +13,8 @@ pillow>=10.0.0
 pytesseract>=0.3.10
 markitdown>=0.0.1a2
 pysqlite3-binary; platform_system == "Linux"
+
+# Test-only dependencies (install: pip install -e ".[test]" or pip install pytest)
+# Run tests with: PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -p 'test_*.py' -v
+#              or PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -q
+pytest>=8.0.0

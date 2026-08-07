@@ -500,13 +500,13 @@ Acceptance:
 
 Steps:
 
-- [ ] Use `custom_model_override` for the selected model.
-- [ ] Use `ram_safety_margin_pct` for the RAM margin.
-- [ ] Validate `ollama_url` against loopback by default.
-- [ ] Migrate any old `ollama_model` and `ram_margin_pct` keys.
-- [ ] Apply the new settings to active services after save.
-- [ ] Remove hardcoded model and URL reads from chat/model discovery.
-- [ ] Add save/reload tests for model, URL, margin, Vault and connected folders.
+- [x] Use `custom_model_override` for the selected model.
+- [x] Use `ram_safety_margin_pct` for the RAM margin.
+- [x] Validate `ollama_url` against loopback by default.
+- [x] Migrate any old `ollama_model` and `ram_margin_pct` keys.
+- [x] Apply the new settings to active services after save.
+- [x] Remove hardcoded model and URL reads from chat/model discovery.
+- [x] Add save/reload tests for model, URL, margin, Vault and connected folders.
 
 Acceptance:
 
@@ -515,6 +515,8 @@ Acceptance:
 - A non-loopback URL is rejected unless an explicit opt-in flag is present.
 
 ---
+
+**Checkpoint 1.4 (2026-08-07):** Canonical settings keys + loopback guard on save/load; legacy migration; live apply. Review clean after fix round 1. Phase 1 complete pending this commit.
 
 ## 5. Phase 2 — Recoverable and Idempotent ETL
 

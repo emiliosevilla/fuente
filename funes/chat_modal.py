@@ -14,6 +14,9 @@ from tkinter import ttk, messagebox
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 
+from funes.config import AppConfig, get_default_config
+from funes.ram_governor.governor import RAMGovernor
+
 try:
     from funes.control_console import THEME, FONT_TYPEWRITER
 except ImportError:
@@ -39,9 +42,15 @@ class FunesChatModal(tk.Toplevel):
     Ventana Modal Nativa Papiro para 'Funes el conversador'.
     """
 
-    def __init__(self, parent: tk.Widget, output_dir: Path):
+    def __init__(
+        self,
+        parent: tk.Widget,
+        output_dir: Path,
+        config: Optional[AppConfig] = None,
+    ):
         super().__init__(parent)
         self.output_dir = Path(output_dir).resolve()
+        self.config = config or get_default_config(self.output_dir.parent)
         self.title("Funes el Conversador — Chat Inteligente Local")
         self.geometry("880x640")
         self.minsize(750, 480)
@@ -218,7 +227,10 @@ class FunesChatModal(tk.Toplevel):
 
         def _worker():
             anything_ok = self._ping_url("http://localhost:3001/api/ping") or self._ping_url("http://localhost:3001")
-            ollama_ok = self._ping_url("http://localhost:11434/api/version") or self._ping_url("http://localhost:11434")
+            ollama_base_url = self.config.ollama_url.rstrip("/")
+            ollama_ok = self._ping_url(
+                f"{ollama_base_url}/api/version"
+            ) or self._ping_url(ollama_base_url)
 
             self.after(0, lambda: self._update_service_status(anything_ok, ollama_ok))
 
@@ -267,12 +279,20 @@ class FunesChatModal(tk.Toplevel):
 
             # 1. Intentar Ollama primero/fallback
             try:
+                model_name = self.config.custom_model_override or RAMGovernor(
+                    ollama_url=self.config.ollama_url,
+                    safety_margin_pct=self.config.ram_safety_margin_pct,
+                ).recommend_model()
                 payload = json.dumps({
-                    "model": "llama3.2",
+                    "model": model_name,
                     "prompt": f"Basándote en las notas de la biblioteca, responde en español: {prompt}",
                     "stream": False
                 }).encode("utf-8")
-                req = urllib.request.Request("http://localhost:11434/api/generate", data=payload, headers={"Content-Type": "application/json"})
+                req = urllib.request.Request(
+                    f"{self.config.ollama_url.rstrip('/')}/api/generate",
+                    data=payload,
+                    headers={"Content-Type": "application/json"},
+                )
                 with urllib.request.urlopen(req, timeout=15) as resp:
                     data = json.loads(resp.read().decode("utf-8"))
                     reply_text = data.get("response", "").strip()

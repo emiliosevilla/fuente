@@ -72,12 +72,40 @@ class FunesPyWebViewApi:
         if isinstance(parsed, dict) and "error" in parsed:
             return parsed
         assert isinstance(parsed, dict)
-        allowed = {"model", "ollama_url", "ram_margin"}
+        allowed = {
+            "vault_path",
+            "custom_model_override",
+            "ram_safety_margin_pct",
+            "ollama_url",
+            "allow_non_loopback_ollama",
+            "input_connected_folders",
+            "output_connected_folders",
+        }
         if set(parsed) - allowed:
             return self._error("invalid_payload", "Unsupported settings field")
-        if any(not isinstance(value, str) for value in parsed.values()):
-            return self._error("invalid_payload", "Settings values must be strings")
-        return self.backend.handle_action("save_settings", parsed)
+        string_fields = {"vault_path", "custom_model_override", "ollama_url"}
+        for field in string_fields & set(parsed):
+            if not isinstance(parsed[field], str):
+                return self._error("invalid_payload", f"{field} must be a string")
+        if "ram_safety_margin_pct" in parsed and (
+            isinstance(parsed["ram_safety_margin_pct"], bool)
+            or not isinstance(parsed["ram_safety_margin_pct"], (int, float))
+        ):
+            return self._error(
+                "invalid_payload", "ram_safety_margin_pct must be a number"
+            )
+        if "allow_non_loopback_ollama" in parsed and not isinstance(
+            parsed["allow_non_loopback_ollama"], bool
+        ):
+            return self._error(
+                "invalid_payload", "allow_non_loopback_ollama must be a boolean"
+            )
+        for field in {"input_connected_folders", "output_connected_folders"} & set(parsed):
+            if not isinstance(parsed[field], list) or not all(
+                isinstance(folder, str) for folder in parsed[field]
+            ):
+                return self._error("invalid_payload", f"{field} must be a list of strings")
+        return self.backend.save_settings(parsed)
 
     def select_folder(self, title: object = "Seleccionar Carpeta") -> str | ErrorResult:
         valid_title = self._text(title, "title", required=False)

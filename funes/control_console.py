@@ -29,6 +29,7 @@ if sys.platform == "win32":
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
 
+from funes.application.settings import SettingsService, SettingsValidationError
 from funes.config import get_default_config, AppConfig, save_config, load_config
 from funes.core.vault import VaultManager
 from funes.domain.documents import MarkdownDocument
@@ -179,7 +180,42 @@ class FunesConsoleBackend:
             ollama_url=self.config.ollama_url,
             safety_margin_pct=self.config.ram_safety_margin_pct
         )
+        self.settings_service = SettingsService(
+            self.config, on_applied=self._apply_settings_config
+        )
         self._task_in_progress = False
+
+    def _apply_settings_config(self, config: AppConfig) -> None:
+        """Refresh settings consumers after their durable config has been written."""
+        vault_changed = self.vault_path != config.vault.vault_path
+        self.config = config
+        self.vault_path = config.vault.vault_path
+        self.ram_governor = RAMGovernor(
+            ollama_url=config.ollama_url,
+            safety_margin_pct=config.ram_safety_margin_pct,
+        )
+        if vault_changed:
+            self.vault = VaultManager(config.vault)
+            self.sync_manager = FolderSyncManager(self.vault_path)
+            self.quarantine_service = self.vault.quarantine_service
+
+    def save_settings(self, settings: Dict[str, Any]) -> Dict[str, Any]:
+        """Apply validated canonical settings from the typed UI bridge."""
+        try:
+            result = self.settings_service.apply(**settings)
+        except (SettingsValidationError, TypeError, ValueError) as error:
+            return {"error": "invalid_settings", "message": str(error)}
+        response = {
+            "log": (
+                "[AJUSTES] Memoria y conexiones guardadas. "
+                f"Vault: '{self.vault_path.name}'."
+            ),
+            "refresh": True,
+            "stats": self.get_stats_dict(),
+        }
+        if result.non_loopback_warning:
+            response["warning"] = result.non_loopback_warning
+        return response
 
     def _path_resolver(self) -> AuthorizedPathResolver:
         return AuthorizedPathResolver(
@@ -606,49 +642,15 @@ historial:
             except Exception as e:
                 return {"log": f"Error en Estructuración: {e}"}
         elif action_name == "save_settings":
-            new_vault_str = payload.get("vault_path")
-            if new_vault_str:
-                new_v = Path(new_vault_str).resolve()
-                if new_v.exists():
-                    self.vault_path = new_v
-                    self.config = get_default_config(self.vault_path)
-
-            input_folders = payload.get("input_connected_folders", [])
-            self.sync_manager.save_connected_folders([Path(p) for p in input_folders if p])
-
-            output_folders = payload.get("output_connected_folders", [])
-            out_config_file = self.vault_path / ".funes_output_connected_folders.json"
-            try:
-                atomic_write_json(
-                    out_config_file,
-                    {"folders": [str(Path(p).resolve()) for p in output_folders if p]},
+            canonical_settings = dict(payload)
+            if "model" in canonical_settings:
+                canonical_settings["custom_model_override"] = canonical_settings.pop(
+                    "model"
                 )
-            except Exception as e:
-                logging.error(f"Error guardando carpetas de salida vinculadas: {e}")
-
-            new_model = payload.get("model")
-            if new_model:
-                self.config.ollama_model = new_model
-
-            new_url = payload.get("ollama_url")
-            if new_url:
-                self.config.ollama_url = new_url
-
-            new_ram = payload.get("ram_margin")
-            if new_ram:
-                try:
-                    pct = int(str(new_ram).replace("%", "").strip())
-                    self.config.ram_margin_pct = pct
-                except Exception:
-                    pass
-
-            save_config(self.config)
-
-            return {
-                "log": f"[AJUSTES] Memoria & Conexiones guardadas. Vault: '{self.vault_path.name}'. Fuentes Ingesta: {len(input_folders)}, Destinos Difusión: {len(output_folders)}.",
-                "refresh": True,
-                "stats": self.get_stats_dict()
-            }
+            if "ram_margin" in canonical_settings:
+                margin = str(canonical_settings.pop("ram_margin")).replace("%", "").strip()
+                canonical_settings["ram_safety_margin_pct"] = float(margin) / 100
+            return self.save_settings(canonical_settings)
         elif action_name == "reset_default_settings":
             default_cfg = get_default_config(self.vault_path)
             self.config = default_cfg
@@ -732,7 +734,7 @@ historial:
         models = []
         try:
             import urllib.request
-            req = urllib.request.Request("http://localhost:11434/api/tags")
+            req = urllib.request.Request(f"{self.config.ollama_url.rstrip('/')}/api/tags")
             with urllib.request.urlopen(req, timeout=2.0) as resp:
                 data = json.loads(resp.read().decode("utf-8"))
                 fetched = [m["name"] for m in data.get("models", [])]
@@ -762,9 +764,10 @@ historial:
             "input_connected_folders": connected_input,
             "output_connected_folders": connected_output,
             "models": self.get_ollama_models(),
-            "current_model": getattr(self.config, "ollama_model", "qwen2.5:7b") or "qwen2.5:7b",
+            "current_model": self.config.custom_model_override,
             "ollama_url": str(self.config.ollama_url),
-            "ram_margin": f"{getattr(self.config, 'ram_margin_pct', 20)}%"
+            "ram_margin": f"{self.config.ram_safety_margin_pct * 100:g}%",
+            "allow_non_loopback_ollama": self.config.allow_non_loopback_ollama,
         }
 
     def process_chat(self, message: str, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
@@ -835,13 +838,17 @@ historial:
             )
 
         try:
-            model_name = getattr(self.config, "ollama_model", "qwen2.5:7b") or "qwen2.5:7b"
+            model_name = self.config.custom_model_override or self.ram_governor.recommend_model()
             payload = json.dumps({
                 "model": model_name,
                 "prompt": prompt,
                 "stream": False
             }).encode("utf-8")
-            req = urllib.request.Request("http://localhost:11434/api/generate", data=payload, headers={"Content-Type": "application/json"})
+            req = urllib.request.Request(
+                f"{self.config.ollama_url.rstrip('/')}/api/generate",
+                data=payload,
+                headers={"Content-Type": "application/json"},
+            )
             with urllib.request.urlopen(req, timeout=12) as resp:
                 data = json.loads(resp.read().decode("utf-8"))
                 reply = data.get("response", "").strip()
@@ -849,7 +856,7 @@ historial:
         except Exception:
             ctx_desc = f"nota '{note_title}'" if ctx_mode == "single_note" else "todas las notas de 4_salida"
             return {
-                "text": f"Funes IA Local: Consulta procesada con éxito sobre {ctx_desc}. Para obtener la inferencia de lenguaje natural completa de Qwen, asegúrate de tener Ollama activo en http://localhost:11434.",
+                "text": f"No se pudo completar la consulta local sobre {ctx_desc}. Comprueba que Ollama esté disponible en {self.config.ollama_url}.",
                 "sources": sources
             }
 

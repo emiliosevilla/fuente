@@ -16,7 +16,7 @@ def resolver(temp_vault_path):
         "input": temp_vault_path / "1_entrada",
         "dirty": temp_vault_path / "2_sucio",
         "clean": temp_vault_path / "3_limpio",
-        "quarantine": temp_vault_path / ".funes_quarantine",
+        "quarantine": temp_vault_path / ".funes" / "quarantine",
     }
     for root in roots.values():
         root.mkdir(parents=True)
@@ -64,7 +64,7 @@ def test_rejects_symlink_to_external_file(resolver, temp_vault_path):
 
 def test_resolves_quarantine_basename_only(resolver, temp_vault_path):
     filename = "20260807_120000_nota.md"
-    quarantined = temp_vault_path / ".funes_quarantine" / filename
+    quarantined = temp_vault_path / ".funes" / "quarantine" / filename
     quarantined.write_text("# Nota", encoding="utf-8")
 
     assert resolver.resolve_quarantine(filename) == quarantined.resolve()
@@ -198,15 +198,18 @@ def test_move_rejects_escaping_destination_symlink_with_stable_error(temp_vault_
 
 def test_restore_rejects_escaping_destination_symlink_with_stable_error(temp_vault_path):
     vault = VaultManager(VaultConfig(vault_path=temp_vault_path))
-    filename = "20260807_120000_nota.md"
-    quarantined = vault.quarantine_dir / filename
-    quarantined.write_text("content", encoding="utf-8")
+    source = vault.output_dir / "nota.md"
+    source.write_text("content", encoding="utf-8")
+    item = vault.quarantine_service.quarantine(
+        source, error_code="user_deleted", attempt_count=1
+    )
+    quarantined = vault.quarantine_dir / item["stored_filename"]
     external_dir = temp_vault_path.parent / "external_notes"
     external_dir.mkdir()
     (vault.output_dir / "Escaping").symlink_to(external_dir, target_is_directory=True)
 
     with pytest.raises(PathAuthorizationError):
-        vault.restore_from_quarantine(filename, target_issue="Escaping")
+        vault.restore_from_quarantine(item["quarantine_id"], target_issue="Escaping")
 
     assert quarantined.read_text(encoding="utf-8") == "content"
 

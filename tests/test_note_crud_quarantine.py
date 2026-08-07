@@ -31,7 +31,9 @@ class TestNoteCRUDAndQuarantine(unittest.TestCase):
         quar_notes = self.vault_mgr.get_quarantine_notes()
         self.assertGreaterEqual(len(quar_notes), 1)
 
-        restored_path = self.vault_mgr.restore_from_quarantine(quar_path.name, target_issue="Cuestion1")
+        restored_path = self.vault_mgr.restore_from_quarantine(
+            quar_notes[0]["quarantine_id"], target_issue="Cuestion1"
+        )
         self.assertTrue(restored_path.exists())
         self.assertEqual(restored_path.name, "Nota_Prueba_Quarantine.md")
         self.assertEqual(restored_path.parent.name, "Cuestion1")

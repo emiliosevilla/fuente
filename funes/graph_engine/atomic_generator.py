@@ -6,6 +6,7 @@ from typing import Dict, Any, Optional, List
 
 from funes.domain.documents import MarkdownDocument
 from funes.domain.frontmatter import serialize_frontmatter
+from funes.domain.quarantine import InvalidModelOutputError
 from funes.graph_engine.prompts import ATOMIC_NOTE_SYSTEM_PROMPT
 
 logger = logging.getLogger(__name__)
@@ -67,7 +68,7 @@ class AtomicNoteGenerator:
                 )
                 if resp.status_code == 200:
                     result = resp.json().get("response", "").strip()
-                    return self._validated_llm_candidate(result)
+                    return self._validated_llm_candidate_or_raise(result)
             else:
                 data = json.dumps(payload).encode("utf-8")
                 req = urllib.request.Request(
@@ -78,9 +79,13 @@ class AtomicNoteGenerator:
                 with urllib.request.urlopen(req, timeout=180) as resp:
                     if resp.status == 200:
                         body = json.loads(resp.read().decode("utf-8"))
-                        return self._validated_llm_candidate(body.get("response", "").strip())
+                        return self._validated_llm_candidate_or_raise(
+                            body.get("response", "").strip()
+                        )
 
             return self._generate_fallback(clean_md_content, file_name)
+        except InvalidModelOutputError:
+            raise
         except Exception as e:
             logger.error(f"Error al conectar con Ollama para generar nota atómica: {e}")
             return self._generate_fallback(clean_md_content, file_name)
@@ -97,6 +102,13 @@ class AtomicNoteGenerator:
     def _validated_llm_candidate(self, result: str) -> str:
         """Treat LLM text as an untrusted candidate, never a final note."""
         return MarkdownDocument.from_markdown(self._clean_llm_markdown(result)).to_markdown()
+
+    def _validated_llm_candidate_or_raise(self, result: str) -> str:
+        """Keep a malformed successful model response visible for human review."""
+        try:
+            return self._validated_llm_candidate(result)
+        except Exception as error:
+            raise InvalidModelOutputError(str(error)) from error
 
     def _generate_fallback(self, clean_md_content: str, file_name: str) -> str:
         """Plantilla de reserva dinámica en caso de indisponibilidad del LLM."""

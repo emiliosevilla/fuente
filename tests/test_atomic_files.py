@@ -5,7 +5,7 @@ import stat
 import pytest
 
 from funes.config import AppConfig, VaultConfig, get_config_file_path, save_config
-from funes.control_console import FunesConsoleBackend, QuarantineManager
+from funes.control_console import FunesConsoleBackend
 from funes.core.vault import VaultManager
 from funes.infrastructure.atomic_files import atomic_write_json, atomic_write_text
 
@@ -78,10 +78,13 @@ def test_vault_writes_notes_and_obsidian_settings_atomically(tmp_path):
 
 def test_console_persists_manifest_note_and_output_settings_atomically(tmp_path):
     backend = FunesConsoleBackend(tmp_path)
-    manifest = backend.quarantine_mgr.manifest_file
+    manifest = backend.quarantine_service.manifest_file
 
-    backend.quarantine_mgr._save_manifest([{"filename": "document.txt"}])
-    assert json.loads(manifest.read_text(encoding="utf-8")) == [{"filename": "document.txt"}]
+    backend.quarantine_service._write_items([{"quarantine_id": "document-id"}])
+    assert json.loads(manifest.read_text(encoding="utf-8")) == {
+        "version": 1,
+        "items": [{"quarantine_id": "document-id"}],
+    }
 
     note = backend.vault.save_atomic_note("Editable", "original")
     response = backend.handle_action(

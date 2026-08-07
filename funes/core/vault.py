@@ -11,6 +11,7 @@ from funes.domain.documents import MarkdownDocument
 from funes.domain.frontmatter import FrontmatterError, serialize_frontmatter
 from funes.domain.errors import PathAuthorizationError
 from funes.domain.paths import AuthorizedPathResolver
+from funes.domain.quarantine import QuarantineService
 from funes.infrastructure.atomic_files import atomic_write_json, atomic_write_text
 
 logger = logging.getLogger(__name__)
@@ -28,6 +29,13 @@ class VaultManager:
     def __init__(self, config: VaultConfig, active_theme: str = "General"):
         self.config = config
         self.active_theme = active_theme
+        self.quarantine_service = QuarantineService(
+            self.config.vault_path,
+            legacy_directories=[
+                self.config.vault_path / ".funes_quarantine",
+                self.current_theme_dir / ".funes_quarantine",
+            ],
+        )
         self._ensure_directories()
 
     @property
@@ -58,7 +66,7 @@ class VaultManager:
 
     @property
     def quarantine_dir(self) -> Path:
-        return self.current_theme_dir / ".funes_quarantine"
+        return self.quarantine_service.quarantine_dir
 
     def _ensure_directories(self) -> None:
         """Crea la jerarquía de carpetas del tema activo si no existe."""
@@ -70,7 +78,6 @@ class VaultManager:
             self.output_dir / "_Sin_Cuestion",
             self.config.system_dir,
             self.config.chroma_dir,
-            self.quarantine_dir,
         ]
         for d in dirs:
             d.mkdir(parents=True, exist_ok=True)
@@ -140,6 +147,9 @@ class VaultManager:
         if not safe_theme:
             safe_theme = "General"
         self.active_theme = safe_theme
+        self.quarantine_service.migrate_legacy(
+            [self.current_theme_dir / ".funes_quarantine"]
+        )
         self._ensure_directories()
         logger.info(f"Tema activo cambiado a: {self.active_theme}")
         return self.current_theme_dir
@@ -153,8 +163,6 @@ class VaultManager:
         (theme_dir / self.config.dirty_dir_name).mkdir(exist_ok=True)
         (theme_dir / self.config.clean_dir_name).mkdir(exist_ok=True)
         (theme_dir / self.config.output_dir_name / "_Sin_Cuestion").mkdir(parents=True, exist_ok=True)
-        (theme_dir / ".funes_quarantine").mkdir(exist_ok=True)
-        
         self.set_active_theme(safe_theme)
         return theme_dir
 
@@ -277,67 +285,46 @@ class VaultManager:
 
     # --- PAPELERA DE CUARENTENA Y RESTAURACIÓN ---
     def move_to_quarantine(self, source_path: Path, reason: str = "Eliminación o error") -> Path:
-        """Mueve una nota o archivo a .funes_quarantine conservando su estructura."""
+        """Move one authorized Vault file through the canonical quarantine service."""
         resolver = self._path_resolver()
         source_path = resolver.resolve(
             self._vault_relative_identity(source_path),
             root_name="vault",
         )
-        if not source_path.exists():
-            return source_path
-
-        from datetime import datetime
-        now_str = datetime.now().strftime("%Y%m%d_%H%M%S")
-        safe_name = self.sanitize_filename(source_path.name)
-        target_path = self.quarantine_dir / f"{now_str}_{safe_name}"
-        target_path = resolver.resolve(
-            self._vault_relative_identity(target_path),
-            root_name="quarantine",
+        item = self.quarantine_service.quarantine(
+            source_path,
+            error_code="user_deleted" if reason == "Eliminada por el usuario" else "processing_error",
+            attempt_count=1,
+            error_message=reason,
         )
-
-        try:
-            shutil.move(str(source_path), str(target_path))
-            logger.warning(f"Archivo movido a cuarentena: {target_path.name}. Motivo: {reason}")
-        except Exception as e:
-            logger.error(f"Error al mover {source_path.name} a cuarentena: {e}")
-
+        target_path = self.quarantine_dir / item["stored_filename"]
+        logger.warning("Archivo movido a cuarentena: %s. Motivo: %s", item["quarantine_id"], reason)
         return target_path
 
     def get_quarantine_notes(self) -> list[dict]:
-        """Obtiene la lista de notas aisladas en .funes_quarantine del tema activo."""
-        if not self.quarantine_dir.exists():
-            return []
+        """Return canonical quarantine entries, identified only by opaque IDs."""
+        return [
+            {
+                **item,
+                "filename": item["original_filename"],
+                "path": item["quarantine_id"],
+                "original_name": item["original_filename"],
+                "quarantined_at": item["timestamp"],
+            }
+            for item in self.quarantine_service.list_active_items()
+        ]
 
-        notes = []
-        for item in sorted(self.quarantine_dir.iterdir(), reverse=True):
-            if item.is_file() and not item.name.startswith("."):
-                stat = item.stat()
-                from datetime import datetime
-                mod_time = datetime.fromtimestamp(stat.st_mtime).strftime("%Y-%m-%d %H:%M:%S")
-                notes.append({
-                    "filename": item.name,
-                    "original_name": "_".join(item.name.split("_")[2:]) if "_" in item.name else item.name,
-                    "path": item.name,
-                    "size_bytes": stat.st_size,
-                    "quarantined_at": mod_time
-                })
-        return notes
-
-    def restore_from_quarantine(self, quarantine_filename: str, target_issue: str = "_Sin_Cuestion") -> Path:
-        """Restaura una nota desde .funes_quarantine a 4_salida/<target_issue>."""
+    def restore_from_quarantine(self, quarantine_id: str, target_issue: str = "_Sin_Cuestion") -> Path:
+        """Restore an opaque quarantine ID to an authorized output issue."""
         resolver = self._path_resolver()
-        q_path = resolver.resolve_quarantine(quarantine_filename)
-        if not q_path.exists():
-            raise FileNotFoundError(f"Nota en cuarentena no encontrada: {quarantine_filename}")
-
-        original_name = "_".join(quarantine_filename.split("_")[2:]) if len(quarantine_filename.split("_")) > 2 else quarantine_filename
-        target_issue_dir = self.output_dir / self.sanitize_filename(target_issue)
-        dest_path = target_issue_dir / original_name
-        dest_path = resolver.resolve_note(self._vault_relative_identity(dest_path))
-        target_issue_dir.mkdir(parents=True, exist_ok=True)
-
-        shutil.move(str(q_path), str(dest_path))
-        logger.info(f"Nota restaurada de cuarentena: {q_path.name} -> {dest_path.name}")
+        safe_target_issue = self.sanitize_filename(target_issue)
+        dest_path = self.quarantine_service.restore(
+            quarantine_id,
+            target_issue=safe_target_issue,
+            resolver=resolver,
+            output_dir=self.output_dir,
+        )
+        logger.info("Nota restaurada de cuarentena: %s -> %s", quarantine_id, dest_path.name)
         return dest_path
 
     # --- MÉTRICAS DE PASOS / CONTENEDORES ---
@@ -374,7 +361,11 @@ class VaultManager:
             "2_sucio": _dir_info(self.dirty_dir),
             "3_limpio": _dir_info(self.clean_dir),
             "4_salida": _dir_info(self.output_dir),
-            "quarantine": _dir_info(self.quarantine_dir)
+            "quarantine": {
+                "count": len(self.quarantine_service.list_active_items()),
+                "oldest": "N/A",
+                "files": self.get_quarantine_notes()[:100],
+            }
         }
 
     @staticmethod

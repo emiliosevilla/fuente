@@ -8,6 +8,49 @@
 
 **Tech Stack:** Python 3.10+, Tkinter fallback, optional PyWebView, HTML5/CSS3/JavaScript, PyYAML, SQLite, ChromaDB, BM25, Ollama, watchdog, pytest-compatible tests, PyInstaller, Obsidian Vault.
 
+## Progress Status (session pause 2026-08-07)
+
+**Branch:** `feature/funes-hardening-2026-08-07` (worktree `.worktrees/funes-hardening-2026-08-07`)  
+**Tip:** `1c07a95` — pushed to `origin/feature/funes-hardening-2026-08-07`  
+**Not merged** into `dev` / `main` yet. Main checkout still has a dirty partial `consola_preview.html`; discard before any `/supagit` promote.
+
+### Completed
+
+| Phase | Status | Tasks | Tip commit |
+|---|---|---|---|
+| Phase 0 — Safety Baseline | **Done** | 0.1–0.5 | `cdbb81e` |
+| Phase 1 — Domain Contracts | **Done** | 1.1–1.4 | `1c07a95` |
+
+Commits on this branch since `1bb66b8`:
+
+1. `0d7e5fa` — Task 0.1 test harness / pytest  
+2. `fcb8070` — Task 0.2 authorized paths  
+3. `c2bb0e0` — Task 0.3 HTML safety / CSP  
+4. `f6c3bdb` — Task 0.4 typed bridge  
+5. `cdbb81e` — Task 0.5 native selector safety  
+6. `e6713b7` — Task 1.1 versioned frontmatter  
+7. `df079c9` — Task 1.2 atomic persistence  
+8. `4c09f45` — Task 1.3 unified quarantine  
+9. `1c07a95` — Task 1.4 canonical settings  
+
+### Not started (do not begin until the next session explicitly resumes)
+
+- Phase 2 — Recoverable ETL (`2.1` onward)  
+- Phases 3–8  
+
+**Resume at:** Task `2.1` — Create the job store.  
+**SDD ledger:** `.worktrees/funes-hardening-2026-08-07/.superpowers/sdd/2026-08-07-funes-hardening-and-implementation/progress.md`
+
+### Deferred minors (triage at final branch review)
+
+- Path-style wikilinks `[[dir/note]]` (basename-only resolution)  
+- `style-src 'unsafe-inline'`; mock-path / export `innerHTML`  
+- Direct `handle_action` generic success; AnythingLLM helper website fallback  
+- `failed_for_review` not listed in active quarantine UI; job-store persistence (Task 2.x)  
+- Direct `pytest` launcher Unicode-path quirk (use `python3 -m pytest`)
+
+---
+
 ## Global Constraints
 
 - All LLM inference is local by default and must use loopback endpoints only: `http://localhost:11434`.
@@ -219,6 +262,8 @@ class RetrievalApplicationService:
 
 **Exit gate:** no untrusted note, title, path, chat message or model response can execute JavaScript or access a file outside the authorized Vault.
 
+**Phase status (2026-08-07):** complete — exit gate met for Tasks 0.1–0.5 on `feature/funes-hardening-2026-08-07` (`cdbb81e`).
+
 ### Task 0.1 — Establish a reproducible test command
 
 **Files:**
@@ -374,7 +419,7 @@ Acceptance:
 - No production subprocess call uses `shell=True`.
 - A malicious title remains data and cannot add AppleScript statements.
 
-**Checkpoint 0.5 (2026-08-07):** Native selectors pass titles/app names as argv/env data; no production `shell=True`. Review approved. Phase 0 complete pending this commit.
+**Checkpoint 0.5 (2026-08-07):** Native selectors pass titles/app names as argv/env data; no production `shell=True`. Review approved. Committed as `cdbb81e`. Phase 0 complete.
 
 ---
 
@@ -383,6 +428,8 @@ Acceptance:
 **Objective:** Establish one canonical document model and one durable state model.
 
 **Exit gate:** notes, frontmatter, approvals, configuration and quarantine are validated, atomic and recoverable.
+
+**Phase status (2026-08-07):** complete — exit gate met for Tasks 1.1–1.4 on `feature/funes-hardening-2026-08-07` (`1c07a95`).
 
 ### Task 1.1 — Introduce versioned frontmatter
 
@@ -516,13 +563,15 @@ Acceptance:
 
 ---
 
-**Checkpoint 1.4 (2026-08-07):** Canonical settings keys + loopback guard on save/load; legacy migration; live apply. Review clean after fix round 1. Phase 1 complete pending this commit.
+**Checkpoint 1.4 (2026-08-07):** Canonical settings keys + loopback guard on save/load; legacy migration; live apply. Review clean after fix round 1. Committed as `1c07a95`. Phase 1 complete.
 
 ## 5. Phase 2 — Recoverable and Idempotent ETL
 
 **Objective:** Turn the sequential pipeline into a durable state machine without introducing concurrency prematurely.
 
 **Exit gate:** interrupting any stage allows safe resume without duplicate notes, stale vectors or lost source files.
+
+**Phase status (2026-08-07):** **not started** — paused after Phase 1. Next session resumes at Task 2.1.
 
 ### Task 2.1 — Create the job store
 
@@ -1210,16 +1259,16 @@ Release only when all conditions are true:
 
 Execute tasks in this order. Do not start a later phase merely because its UI is attractive; each phase depends on the contracts before it.
 
-1. `0.1` Test environment.
-2. `0.2` Authorized paths.
-3. `0.3` HTML safety.
-4. `0.4` Bridge contract.
-5. `0.5` Native command safety.
-6. `1.1` Frontmatter.
-7. `1.2` Atomic persistence.
-8. `1.3` Quarantine.
-9. `1.4` Configuration.
-10. `2.1` Job store.
+1. [x] `0.1` Test environment. (`0d7e5fa`)
+2. [x] `0.2` Authorized paths. (`fcb8070`)
+3. [x] `0.3` HTML safety. (`c2bb0e0`)
+4. [x] `0.4` Bridge contract. (`f6c3bdb`)
+5. [x] `0.5` Native command safety. (`cdbb81e`)
+6. [x] `1.1` Frontmatter. (`e6713b7`)
+7. [x] `1.2` Atomic persistence. (`df079c9`)
+8. [x] `1.3` Quarantine. (`4c09f45`)
+9. [x] `1.4` Configuration. (`1c07a95`)
+10. [ ] `2.1` Job store. ← **resume here**
 11. `2.2` State machine.
 12. `2.3` Recoverable ETL.
 13. `2.4` Lifecycle.

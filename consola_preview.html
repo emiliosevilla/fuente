@@ -3185,19 +3185,23 @@
         }
 
         function saveSettings() {
-            const path = document.getElementById('setting-vault-path').value;
             const model = document.getElementById('setting-ollama-model').value;
             const ollamaUrl = document.getElementById('setting-ollama-url') ? document.getElementById('setting-ollama-url').value : 'http://localhost:11434';
             const ramMargin = document.getElementById('setting-ram-margin') ? document.getElementById('setting-ram-margin').value : '20%';
 
-            triggerAction('save_settings', {
-                vault_path: path,
-                model: model,
-                input_connected_folders: linkedInputFolders,
-                output_connected_folders: linkedOutputFolders,
-                ollama_url: ollamaUrl,
-                ram_margin: ramMargin
-            });
+            const settings = { model: model, ollama_url: ollamaUrl, ram_margin: ramMargin };
+            if (window.pywebview && window.pywebview.api) {
+                window.pywebview.api.save_settings(settings).then(function(res) {
+                    if (res && res.error) {
+                        log('Error guardando ajustes: ' + res.message);
+                    } else if (res && res.log) {
+                        log(res.log);
+                        if (res.stats) updateDashboardStats(res.stats);
+                    }
+                });
+            } else {
+                log('Ajustes actualizados (vista previa).');
+            }
             closeModal('modal-settings');
         }
 

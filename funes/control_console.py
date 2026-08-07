@@ -33,6 +33,7 @@ from funes.config import get_default_config, AppConfig, save_config, load_config
 from funes.core.vault import VaultManager
 from funes.domain.errors import PathAuthorizationError
 from funes.domain.paths import AuthorizedPathResolver
+from funes.ui.bridge import FunesPyWebViewApi
 from funes.core.app_checker import check_and_prompt_user_apps_closed, launch_obsidian
 from funes.core.anythingllm_config import (
     is_anythingllm_installed,
@@ -614,6 +615,18 @@ historial:
                 except Exception:
                     pass
             return {"log": f"Abriendo nota '{note_path}' en Obsidian Vault."}
+        elif action_name == "open_anything_desktop":
+            if not is_anythingllm_installed():
+                return {
+                    "error": "anythingllm_unavailable",
+                    "message": "AnythingLLM Desktop is not installed",
+                }
+            if not launch_anythingllm():
+                return {
+                    "error": "anythingllm_launch_failed",
+                    "message": "AnythingLLM Desktop could not be opened",
+                }
+            return {"log": "AnythingLLM Desktop abierto."}
         elif action_name == "stat_ram":
             import gc
             collected = gc.collect()
@@ -978,6 +991,67 @@ historial:
             "html": "".join(fallback_html),
         }
 
+    def get_category_files(self, category: str) -> List[Dict[str, Any]]:
+        """Return authorized, vault-relative identities for a pipeline category."""
+        categories = {
+            "1_entrada": ("input", self.vault.input_dir),
+            "2_sucio": ("dirty", self.vault.dirty_dir),
+            "3_limpio": ("clean", self.vault.clean_dir),
+            "4_salida": ("output", self.vault.output_dir),
+        }
+        if category not in categories:
+            return []
+
+        root_name, directory = categories[category]
+        resolver = self._path_resolver()
+        files = []
+        for candidate in sorted(directory.rglob("*")) if directory.exists() else []:
+            if not candidate.is_file() or candidate.name.startswith("."):
+                continue
+            try:
+                identity = self._vault_relative_identity(candidate)
+                authorized = resolver.resolve(identity, root_name=root_name)
+            except PathAuthorizationError:
+                continue
+            files.append(
+                {
+                    "name": authorized.name,
+                    "path": identity,
+                    "folder": category,
+                }
+            )
+        return files
+
+    def open_file_natively(self, file_identity: str) -> Dict[str, Any]:
+        """Open an existing file only after resolving its Vault-relative identity."""
+        if not isinstance(file_identity, str):
+            return {"error": "path_not_authorized", "message": "Path is not authorized"}
+        root_names = {
+            "1_entrada": "input",
+            "2_sucio": "dirty",
+            "3_limpio": "clean",
+            "4_salida": "output",
+        }
+        try:
+            top_level = Path(file_identity).parts[0]
+            root_name = root_names[top_level]
+            file_path = self._path_resolver().resolve(file_identity, root_name=root_name)
+        except (KeyError, IndexError, PathAuthorizationError):
+            return {"error": "path_not_authorized", "message": "Path is not authorized"}
+
+        if not file_path.is_file():
+            return {"error": "file_not_found", "message": "File was not found"}
+        try:
+            if sys.platform == "darwin":
+                subprocess.Popen(["open", str(file_path)])
+            elif sys.platform == "win32":
+                os.startfile(str(file_path))
+            else:
+                subprocess.Popen(["xdg-open", str(file_path)])
+        except OSError as error:
+            return {"error": "open_failed", "message": str(error)}
+        return {"status": "opened", "file_id": file_identity}
+
     def get_graph_data(self) -> Dict[str, Any]:
         out_dir = self.config.vault.output_dir
         if not out_dir.exists():
@@ -1006,40 +1080,6 @@ historial:
                 pass
 
         return {"nodes": nodes, "links": links}
-
-
-class FunesPyWebViewApi:
-    """Bridge JavaScript <-> Python para PyWebView."""
-    def __init__(self, backend: FunesConsoleBackend):
-        self.backend = backend
-        self._window = None
-
-    def set_window(self, window):
-        self._window = window
-
-    def get_initial_state(self):
-        return self.backend.get_initial_state_dict()
-
-    def get_settings_info(self):
-        return self.backend.get_settings_info()
-
-    def select_folder(self, title: str = "Seleccionar Carpeta") -> str:
-        return self.backend.select_folder(title)
-
-    def trigger_action(self, action_name: str, payload: dict):
-        return self.backend.handle_action(action_name, payload or {})
-
-    def send_chat_message(self, message: str, context: Optional[dict] = None):
-        return self.backend.process_chat(message, context=context)
-
-    def get_notes_list(self):
-        return self.backend.get_notes_list()
-
-    def get_note_content(self, note_path: str):
-        return self.backend.get_note_content_html(note_path)
-
-    def get_graph_data(self):
-        return self.backend.get_graph_data()
 
 
 class FunesControlConsole(tk.Tk):

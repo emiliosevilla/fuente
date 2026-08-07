@@ -442,16 +442,18 @@ Acceptance:
 
 Steps:
 
-- [ ] Implement `atomic_write_text(path, content)` using a temporary file in the same directory, flush, `fsync`, then `os.replace`.
-- [ ] Implement atomic JSON writes for settings and manifests.
-- [ ] Preserve file permissions where supported.
-- [ ] Ensure failed writes leave the previous file intact.
-- [ ] Add tests that inject write failures before replacement.
+- [x] Implement `atomic_write_text(path, content)` using a temporary file in the same directory, flush, `fsync`, then `os.replace`.
+- [x] Implement atomic JSON writes for settings and manifests.
+- [x] Preserve file permissions where supported.
+- [x] Ensure failed writes leave the previous file intact.
+- [x] Add tests that inject write failures before replacement.
 
 Acceptance:
 
 - A simulated failure never leaves a truncated note, config or manifest.
 - Concurrent readers see either the old or new complete content.
+
+**Checkpoint 1.2 (2026-08-07):** Shared `atomic_write_text`/`atomic_write_json` with fsync+replace; config/vault/console routed. Review approved.
 
 ### Task 1.3 — Unify quarantine
 

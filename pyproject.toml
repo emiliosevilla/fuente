@@ -27,7 +27,16 @@ dependencies = [
 [project.scripts]
 funes = "funes.main:main"
 
+[project.optional-dependencies]
+test = [
+    "pytest>=8.0.0",
+]
+
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["funes*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
 

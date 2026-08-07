@@ -230,28 +230,30 @@ class RetrievalApplicationService:
 
 Steps:
 
-- [ ] Add the test runner and test-only dependencies to a clearly separated test configuration.
-- [ ] Preserve the existing `unittest` suite while adding a single documented command:
+- [x] Add the test runner and test-only dependencies to a clearly separated test configuration.
+- [x] Preserve the existing `unittest` suite while adding a single documented command:
 
 ```bash
-python3 -m unittest discover -s tests -p 'test_*.py' -v
+PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -p 'test_*.py' -v
 ```
 
-- [ ] Add a second command for new focused tests:
+- [x] Add a second command for new focused tests:
 
 ```bash
-python3 -m pytest -q
+PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -q
 ```
 
-- [ ] Ensure test execution does not modify tracked bytecode or generated artifacts.
-- [ ] Add a cleanup test fixture that uses a temporary Vault and never the repository Vault.
-- [ ] Run both commands and record the expected result in `README.md`.
+- [x] Ensure test execution does not modify tracked bytecode or generated artifacts.
+- [x] Add a cleanup test fixture that uses a temporary Vault and never the repository Vault.
+- [x] Run both commands and record the expected result in `README.md`.
 
 Acceptance:
 
 - Existing 70-test suite remains green.
 - New tests run without Ollama, Obsidian, AnythingLLM or a display.
 - `git status --short` remains empty after testing.
+
+**Checkpoint 0.1 (2026-08-07):** Implemented in worktree `feature/funes-hardening-2026-08-07`. Review clean after fix round 1. Extra file `tests/test_a.py` kept as early unittest bytecode guard. Human must `git restore` tracked `*.pyc` before commit. Deferred minor: pytest also listed under a separated comment block in `requirements.txt` (plan-mandated).
 
 ### Task 0.2 — Add authorized path resolution
 

@@ -110,6 +110,34 @@ fuentes: [md_sucio_1, md_sucio_2]
 
 ---
 
+## 🧪 Pruebas
+
+Instala las dependencias de test (pytest) si aún no están disponibles:
+
+```bash
+pip install -e ".[test]"
+```
+
+Usa `PYTHONDONTWRITEBYTECODE=1` en ambos comandos para no modificar bytecode rastreado (`*.pyc`, `__pycache__`).
+
+Ejecuta la suite histórica basada en `unittest` (debe terminar con `OK`):
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -p 'test_*.py' -v
+```
+
+Ejecuta la suite orientada a pytest (salida silenciosa con resumen al final):
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -q
+```
+
+**Resultado esperado (checkpoint 0.1):** ambos comandos pasan en verde; la suite `unittest` reporta 74 pruebas en `OK`; `pytest` reporta 75 pruebas pasadas. Tras ejecutar ambos comandos desde un checkpoint limpio, `git status --short` debe permanecer vacío (sin cambios en bytecode rastreado ni en `Vault_Funes`).
+
+Si el árbol ya tenía `.pyc` modificados antes de las pruebas, restáuralos desde el índice antes de commitear (ver informe de la tarea 0.1).
+
+---
+
 ## 🛠️ Nota del autor
 
 Desarrollado por Emilio Sevilla Ortego. No se permite su distribución sin permiso del autor.

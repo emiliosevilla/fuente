@@ -21,6 +21,9 @@ wheels/
 .installed.cfg
 *.egg
 
+# Isolated worktrees (superpowers SDD)
+.worktrees/
+
 # System files
 .DS_Store
 .DS_Store?

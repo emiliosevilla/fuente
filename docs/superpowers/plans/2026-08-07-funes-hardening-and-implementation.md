@@ -267,13 +267,13 @@ Acceptance:
 
 Steps:
 
-- [ ] Implement a resolver with separate roots for the Vault, `4_salida`, input, dirty, clean and quarantine directories.
-- [ ] Accept only relative paths and opaque document/quarantine IDs from UI callers.
-- [ ] Reject absolute paths, empty paths, `..`, null bytes, directories and unsupported extensions.
-- [ ] Resolve the candidate and verify `candidate.is_relative_to(root.resolve())`.
-- [ ] Reject symlinks whose resolved target escapes the root.
-- [ ] Use the resolver in `get_note_content`, `save_note`, `approve_note`, `merge_notes`, `move_note`, `delete_note`, chat single-note context and restore.
-- [ ] Add tests for:
+- [x] Implement a resolver with separate roots for the Vault, `4_salida`, input, dirty, clean and quarantine directories.
+- [x] Accept only relative paths and opaque document/quarantine IDs from UI callers.
+- [x] Reject absolute paths, empty paths, `..`, null bytes, directories and unsupported extensions.
+- [x] Resolve the candidate and verify `candidate.is_relative_to(root.resolve())`.
+- [x] Reject symlinks whose resolved target escapes the root.
+- [x] Use the resolver in `get_note_content`, `save_note`, `approve_note`, `merge_notes`, `move_note`, `delete_note`, chat single-note context and restore.
+- [x] Add tests for:
   - `../outside.md`
   - `/tmp/outside.md`
   - Windows-style paths
@@ -287,6 +287,8 @@ Acceptance:
 - Every invalid path raises a stable domain error and performs no filesystem mutation.
 - A valid nested note works.
 - No handler accepts a client-supplied absolute filesystem path.
+
+**Checkpoint 0.2 (2026-08-07):** `AuthorizedPathResolver` + `PathAuthorizationError`; handlers and vault write/move/restore authorized; wiki-links emit Vault-relative IDs. Review clean after fix round 1. Deferred minor: path-style `[[dir/note]]` wikilinks remain basename-only.
 
 ### Task 0.3 — Remove dynamic HTML injection
 

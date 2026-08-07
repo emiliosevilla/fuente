@@ -741,8 +741,20 @@ historial:
         """
         if sys.platform == "darwin":
             try:
-                cmd = f'osascript -e \'tell application "System Events" to activate\' -e \'posix path of (choose folder with prompt "{title}")\''
-                res = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=120)
+                cmd = [
+                    "osascript",
+                    "-e",
+                    "on run argv",
+                    "-e",
+                    'tell application "System Events" to activate',
+                    "-e",
+                    "return POSIX path of (choose folder with prompt (item 1 of argv))",
+                    "-e",
+                    "end run",
+                    "--",
+                    title,
+                ]
+                res = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
                 if res.returncode == 0:
                     folder = res.stdout.strip()
                     if folder:
@@ -752,8 +764,23 @@ historial:
 
         if sys.platform == "win32":
             try:
-                ps_cmd = '[System.Reflection.Assembly]::LoadWithPartialName("System.windows.forms") | Out-Null; $dialog = New-Object System.Windows.Forms.FolderBrowserDialog; $dialog.Description = "' + title + '"; if($dialog.ShowDialog() -eq "OK"){ $dialog.SelectedPath }'
-                res = subprocess.run(["powershell", "-Command", ps_cmd], capture_output=True, text=True, timeout=120)
+                ps_cmd = (
+                    "Add-Type -AssemblyName System.Windows.Forms; "
+                    "$dialog = New-Object System.Windows.Forms.FolderBrowserDialog; "
+                    "$dialog.Description = "
+                    "[Environment]::GetEnvironmentVariable('FUNES_FOLDER_DIALOG_TITLE'); "
+                    "if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) "
+                    "{ $dialog.SelectedPath }"
+                )
+                env = os.environ.copy()
+                env["FUNES_FOLDER_DIALOG_TITLE"] = title
+                res = subprocess.run(
+                    ["powershell", "-NoProfile", "-Command", ps_cmd],
+                    capture_output=True,
+                    text=True,
+                    timeout=120,
+                    env=env,
+                )
                 if res.returncode == 0 and res.stdout.strip():
                     return res.stdout.strip()
             except Exception as e:

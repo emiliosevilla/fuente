@@ -364,15 +364,17 @@ Acceptance:
 
 Steps:
 
-- [ ] Replace `shell=True` AppleScript construction with a subprocess argument strategy that does not concatenate untrusted strings into a shell command.
-- [ ] Restrict dialog titles to constant values or escape them using an AppleScript-safe serializer.
-- [ ] Apply the same rule to application names passed to `osascript`.
-- [ ] Test titles containing quotes, backslashes, newlines and AppleScript syntax.
+- [x] Replace `shell=True` AppleScript construction with a subprocess argument strategy that does not concatenate untrusted strings into a shell command.
+- [x] Restrict dialog titles to constant values or escape them using an AppleScript-safe serializer.
+- [x] Apply the same rule to application names passed to `osascript`.
+- [x] Test titles containing quotes, backslashes, newlines and AppleScript syntax.
 
 Acceptance:
 
 - No production subprocess call uses `shell=True`.
 - A malicious title remains data and cannot add AppleScript statements.
+
+**Checkpoint 0.5 (2026-08-07):** Native selectors pass titles/app names as argv/env data; no production `shell=True`. Review approved. Phase 0 complete pending this commit.
 
 ---
 

@@ -30,6 +30,8 @@ from tkinter import ttk, messagebox, filedialog
 
 from funes.config import get_default_config, AppConfig, save_config, load_config
 from funes.core.vault import VaultManager
+from funes.domain.errors import PathAuthorizationError
+from funes.domain.paths import AuthorizedPathResolver
 from funes.core.app_checker import check_and_prompt_user_apps_closed, launch_obsidian
 from funes.core.anythingllm_config import (
     is_anythingllm_installed,
@@ -262,6 +264,26 @@ class FunesConsoleBackend:
         )
         self._task_in_progress = False
 
+    def _path_resolver(self) -> AuthorizedPathResolver:
+        return AuthorizedPathResolver(
+            vault_root=self.vault.config.vault_path,
+            output=self.vault.output_dir,
+            input=self.vault.input_dir,
+            dirty=self.vault.dirty_dir,
+            clean=self.vault.clean_dir,
+            quarantine=self.vault.quarantine_dir,
+        )
+
+    @staticmethod
+    def _path_error(error: PathAuthorizationError) -> Dict[str, str]:
+        return {"error": error.code, "message": str(error)}
+
+    def _vault_relative_identity(self, path: Path) -> str:
+        try:
+            return path.resolve().relative_to(self.vault.config.vault_path.resolve()).as_posix()
+        except ValueError as error:
+            raise PathAuthorizationError() from error
+
     def get_initial_state_dict(self) -> Dict[str, Any]:
         stats = self.get_stats_dict()
         return {
@@ -356,7 +378,7 @@ class FunesConsoleBackend:
                             pending.append({
                                 "title": md_file.stem,
                                 "filename": md_file.name,
-                                "path": str(md_file.resolve()),
+                                "path": self._vault_relative_identity(md_file),
                                 "rel_path": rel_path,
                                 "issue": issue,
                                 "content": content[:1500]
@@ -368,7 +390,10 @@ class FunesConsoleBackend:
         elif action_name == "approve_note":
             file_path_str = payload.get("file_path") or payload.get("path")
             if file_path_str:
-                p = Path(file_path_str).resolve()
+                try:
+                    p = self._path_resolver().resolve_note(file_path_str)
+                except PathAuthorizationError as error:
+                    return self._path_error(error)
                 if p.exists():
                     try:
                         content = p.read_text(encoding="utf-8", errors="replace")
@@ -391,13 +416,27 @@ class FunesConsoleBackend:
             issue_name = payload.get("issue", "_Sin_Cuestion")
 
             if file_path_str:
-                p = Path(file_path_str).resolve()
+                try:
+                    p = self._path_resolver().resolve_note(file_path_str)
+                except PathAuthorizationError as error:
+                    return self._path_error(error)
                 if p.exists() and new_content is not None:
                     p.write_text(new_content, encoding="utf-8")
                     return {"log": f"Nota '{p.name}' guardada correctamente.", "status": "saved"}
             elif title and new_content:
-                saved_path = self.vault.save_atomic_note(title=title, content=new_content, issue_name=issue_name)
-                return {"log": f"Nota nueva '{saved_path.name}' creada en {issue_name}.", "status": "created", "path": str(saved_path)}
+                try:
+                    saved_path = self.vault.save_atomic_note(
+                        title=title,
+                        content=new_content,
+                        issue_name=issue_name,
+                    )
+                except PathAuthorizationError as error:
+                    return self._path_error(error)
+                return {
+                    "log": f"Nota nueva '{saved_path.name}' creada en {issue_name}.",
+                    "status": "created",
+                    "path": self._vault_relative_identity(saved_path),
+                }
 
             return {"error": "Datos insuficientes para guardar nota"}
 
@@ -412,7 +451,10 @@ class FunesConsoleBackend:
             contents = []
             sources_set = set()
             for np_str in note_paths:
-                p = Path(np_str).resolve()
+                try:
+                    p = self._path_resolver().resolve_note(np_str)
+                except PathAuthorizationError as error:
+                    return self._path_error(error)
                 if p.exists():
                     txt = p.read_text(encoding="utf-8", errors="replace")
                     contents.append(f"### Origen: {p.stem}\n{txt}\n")
@@ -437,30 +479,57 @@ historial:
 
 {combined_body}
 """
-            out_path = self.vault.save_atomic_note(title=merged_title, content=merged_md, issue_name=target_issue)
-            return {"log": f"Fusión completada. Nota resultante: '{out_path.name}' en Cuestión '{target_issue}'.", "path": str(out_path)}
+            try:
+                out_path = self.vault.save_atomic_note(
+                    title=merged_title,
+                    content=merged_md,
+                    issue_name=target_issue,
+                )
+            except PathAuthorizationError as error:
+                return self._path_error(error)
+            return {
+                "log": f"Fusión completada. Nota resultante: '{out_path.name}' en Cuestión '{target_issue}'.",
+                "path": self._vault_relative_identity(out_path),
+            }
 
         elif action_name == "move_note":
             file_path_str = payload.get("file_path") or payload.get("path")
             target_issue = payload.get("target_issue", "_Sin_Cuestion")
             if file_path_str:
-                p = Path(file_path_str).resolve()
+                try:
+                    resolver = self._path_resolver()
+                    p = resolver.resolve_note(file_path_str)
+                except PathAuthorizationError as error:
+                    return self._path_error(error)
                 if p.exists():
                     target_dir = self.vault.output_dir / self.vault.sanitize_filename(target_issue)
-                    target_dir.mkdir(parents=True, exist_ok=True)
                     dest_path = target_dir / p.name
+                    try:
+                        resolver.resolve_note(self._vault_relative_identity(dest_path))
+                    except PathAuthorizationError as error:
+                        return self._path_error(error)
+                    target_dir.mkdir(parents=True, exist_ok=True)
                     if p != dest_path:
                         shutil.move(str(p), str(dest_path))
-                    return {"log": f"Nota '{p.name}' movida a Cuestión '{target_issue}'.", "new_path": str(dest_path)}
+                    return {
+                        "log": f"Nota '{p.name}' movida a Cuestión '{target_issue}'.",
+                        "new_path": self._vault_relative_identity(dest_path),
+                    }
             return {"error": "No se pudo mover la nota"}
 
         elif action_name == "delete_note":
             file_path_str = payload.get("file_path") or payload.get("path")
             if file_path_str:
-                p = Path(file_path_str).resolve()
+                try:
+                    p = self._path_resolver().resolve_note(file_path_str)
+                except PathAuthorizationError as error:
+                    return self._path_error(error)
                 if p.exists():
                     quar_path = self.vault.move_to_quarantine(p, reason="Eliminada por el usuario")
-                    return {"log": f"Nota '{p.name}' trasladada a Papelera de Cuarentena.", "quarantine_path": str(quar_path)}
+                    return {
+                        "log": f"Nota '{p.name}' trasladada a Papelera de Cuarentena.",
+                        "quarantine_path": quar_path.name,
+                    }
             return {"error": "Ruta de archivo no válida para eliminar"}
 
         # --- PAPELERA CUARENTENA Y RESTAURACIÓN ---
@@ -473,7 +542,12 @@ historial:
             if q_filename:
                 try:
                     restored_path = self.vault.restore_from_quarantine(q_filename, target_issue=target_issue)
-                    return {"log": f"Nota restaurada con éxito en Cuestión '{target_issue}': {restored_path.name}", "path": str(restored_path)}
+                    return {
+                        "log": f"Nota restaurada con éxito en Cuestión '{target_issue}': {restored_path.name}",
+                        "path": self._vault_relative_identity(restored_path),
+                    }
+                except PathAuthorizationError as error:
+                    return self._path_error(error)
                 except Exception as e:
                     return {"error": f"Error al restaurar: {e}"}
             return {"error": "Nombre de archivo de cuarentena no especificado"}
@@ -740,20 +814,23 @@ historial:
         note_content = ""
 
         if ctx_mode == "single_note" and (note_path or note_title):
-            sources = [note_title or Path(note_path).stem]
-            if note_path and Path(note_path).exists():
+            try:
+                if note_path:
+                    note_file = self._path_resolver().resolve_note(note_path)
+                else:
+                    note_file = self.vault.output_dir / f"{note_title}.md"
+                    note_file = self._path_resolver().resolve_note(
+                        self._vault_relative_identity(note_file)
+                    )
+            except PathAuthorizationError as error:
+                return self._path_error(error)
+
+            sources = [note_title or note_file.stem]
+            if note_file.exists():
                 try:
-                    note_content = Path(note_path).read_text(encoding="utf-8", errors="replace")
+                    note_content = note_file.read_text(encoding="utf-8", errors="replace")
                 except Exception:
                     pass
-            elif note_title:
-                out_dir = self.vault_path / "4_salida"
-                possible_file = out_dir / f"{note_title}.md"
-                if possible_file.exists():
-                    try:
-                        note_content = possible_file.read_text(encoding="utf-8", errors="replace")
-                    except Exception:
-                        pass
 
             prompt = (
                 f"Eres Funes, un asistente de conocimiento local. "
@@ -812,21 +889,31 @@ historial:
         if not out_dir.exists():
             return []
         notes = sorted(list(out_dir.glob("*.md")), key=lambda p: p.name.lower())
-        return [{"title": n.stem, "path": str(n)} for n in notes]
+        return [{"title": n.stem, "path": self._vault_relative_identity(n)} for n in notes]
 
     def get_note_content_html(self, note_path: str) -> Dict[str, str]:
-        path = Path(note_path)
+        try:
+            path = self._path_resolver().resolve_note(note_path)
+        except PathAuthorizationError as error:
+            return self._path_error(error)
         if not path.exists():
             return {"html": "<h3>Nota no encontrada</h3>"}
         content = path.read_text(encoding="utf-8", errors="replace")
         import re
+
         def replace_wikilink(match):
             target = match.group(1).strip()
             clean_display = re.sub(r'^Nota_', '', target).replace('_', ' ')
-            note_file = target if target.endswith('.md') else f"{target}.md"
-            return f"<span class='wikilink' onclick=\"loadNoteContent('{note_file}')\">{clean_display}</span>"
+            note_name = target.split("|", 1)[0].split("#", 1)[0].strip()
+            note_file = note_name if note_name.endswith(".md") else f"{note_name}.md"
+            resolved_note = self._path_resolver().resolve_unique_note_basename(note_file)
+            note_identity = self._vault_relative_identity(resolved_note)
+            return f"<span class='wikilink' onclick=\"loadNoteContent('{note_identity}')\">{clean_display}</span>"
 
-        content = re.sub(r'\[\[(.*?)\]\]', replace_wikilink, content)
+        try:
+            content = re.sub(r'\[\[(.*?)\]\]', replace_wikilink, content)
+        except PathAuthorizationError as error:
+            return self._path_error(error)
 
         html_lines = []
         for line in content.splitlines():
@@ -846,7 +933,10 @@ historial:
             return {"nodes": [], "links": []}
         notes = sorted(list(out_dir.glob("*.md")), key=lambda p: p.name.lower())
         node_names = set(n.stem for n in notes)
-        nodes = [{"id": n.stem, "label": n.stem, "path": str(n)} for n in notes]
+        nodes = [
+            {"id": n.stem, "label": n.stem, "path": self._vault_relative_identity(n)}
+            for n in notes
+        ]
         
         links = []
         import re

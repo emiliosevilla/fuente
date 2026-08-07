@@ -7,6 +7,8 @@ from pathlib import Path
 import logging
 
 from funes.config import VaultConfig
+from funes.domain.errors import PathAuthorizationError
+from funes.domain.paths import AuthorizedPathResolver
 
 logger = logging.getLogger(__name__)
 
@@ -97,6 +99,22 @@ class VaultManager:
                 json.dump(obsidian_rules, f, indent=2, ensure_ascii=False)
         except Exception as e:
             logger.warning(f"No se pudo escribir la configuración de Obsidian: {e}")
+
+    def _path_resolver(self) -> AuthorizedPathResolver:
+        return AuthorizedPathResolver(
+            vault_root=self.config.vault_path,
+            output=self.output_dir,
+            input=self.input_dir,
+            dirty=self.dirty_dir,
+            clean=self.clean_dir,
+            quarantine=self.quarantine_dir,
+        )
+
+    def _vault_relative_identity(self, path: Path) -> str:
+        try:
+            return path.resolve().relative_to(self.config.vault_path.resolve()).as_posix()
+        except ValueError as error:
+            raise PathAuthorizationError() from error
 
     # --- GESTIÓN DE TEMAS ---
     def get_available_themes(self) -> list[str]:
@@ -218,11 +236,15 @@ class VaultManager:
         else:
             target_issue_dir = self.output_dir
 
-        target_issue_dir.mkdir(parents=True, exist_ok=True)
-
         output_path = target_issue_dir / f"{safe_title}.md"
         if output_path.exists() and source_ext:
             output_path = target_issue_dir / f"{safe_title}_{source_ext.lstrip('.')}.md"
+
+        output_path = self._path_resolver().resolve_note(
+            self._vault_relative_identity(output_path)
+        )
+        target_issue_dir = output_path.parent
+        target_issue_dir.mkdir(parents=True, exist_ok=True)
 
         with open(output_path, "w", encoding="utf-8") as f:
             f.write(content)
@@ -233,6 +255,11 @@ class VaultManager:
     # --- PAPELERA DE CUARENTENA Y RESTAURACIÓN ---
     def move_to_quarantine(self, source_path: Path, reason: str = "Eliminación o error") -> Path:
         """Mueve una nota o archivo a .funes_quarantine conservando su estructura."""
+        resolver = self._path_resolver()
+        source_path = resolver.resolve(
+            self._vault_relative_identity(source_path),
+            root_name="vault",
+        )
         if not source_path.exists():
             return source_path
 
@@ -240,6 +267,10 @@ class VaultManager:
         now_str = datetime.now().strftime("%Y%m%d_%H%M%S")
         safe_name = self.sanitize_filename(source_path.name)
         target_path = self.quarantine_dir / f"{now_str}_{safe_name}"
+        target_path = resolver.resolve(
+            self._vault_relative_identity(target_path),
+            root_name="quarantine",
+        )
 
         try:
             shutil.move(str(source_path), str(target_path))
@@ -263,7 +294,7 @@ class VaultManager:
                 notes.append({
                     "filename": item.name,
                     "original_name": "_".join(item.name.split("_")[2:]) if "_" in item.name else item.name,
-                    "path": str(item.resolve()),
+                    "path": item.name,
                     "size_bytes": stat.st_size,
                     "quarantined_at": mod_time
                 })
@@ -271,14 +302,16 @@ class VaultManager:
 
     def restore_from_quarantine(self, quarantine_filename: str, target_issue: str = "_Sin_Cuestion") -> Path:
         """Restaura una nota desde .funes_quarantine a 4_salida/<target_issue>."""
-        q_path = self.quarantine_dir / quarantine_filename
+        resolver = self._path_resolver()
+        q_path = resolver.resolve_quarantine(quarantine_filename)
         if not q_path.exists():
             raise FileNotFoundError(f"Nota en cuarentena no encontrada: {quarantine_filename}")
 
         original_name = "_".join(quarantine_filename.split("_")[2:]) if len(quarantine_filename.split("_")) > 2 else quarantine_filename
         target_issue_dir = self.output_dir / self.sanitize_filename(target_issue)
-        target_issue_dir.mkdir(parents=True, exist_ok=True)
         dest_path = target_issue_dir / original_name
+        dest_path = resolver.resolve_note(self._vault_relative_identity(dest_path))
+        target_issue_dir.mkdir(parents=True, exist_ok=True)
 
         shutil.move(str(q_path), str(dest_path))
         logger.info(f"Nota restaurada de cuarentena: {q_path.name} -> {dest_path.name}")

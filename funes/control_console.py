@@ -9,6 +9,7 @@ import os
 import sys
 import time
 import json
+import html
 import shutil
 import queue
 import logging
@@ -891,41 +892,91 @@ historial:
         notes = sorted(list(out_dir.glob("*.md")), key=lambda p: p.name.lower())
         return [{"title": n.stem, "path": self._vault_relative_identity(n)} for n in notes]
 
-    def get_note_content_html(self, note_path: str) -> Dict[str, str]:
+    def get_note_content_html(self, note_path: str) -> Dict[str, Any]:
+        """Return safe, structured Markdown display tokens for the WebView."""
         try:
             path = self._path_resolver().resolve_note(note_path)
         except PathAuthorizationError as error:
             return self._path_error(error)
         if not path.exists():
-            return {"html": "<h3>Nota no encontrada</h3>"}
+            return {
+                "title": Path(note_path).stem,
+                "document": [{"type": "heading", "level": 3, "text": "Nota no encontrada"}],
+                "html": "<h3>Nota no encontrada</h3>",
+            }
         content = path.read_text(encoding="utf-8", errors="replace")
         import re
 
-        def replace_wikilink(match):
+        def wikilink_token(match: re.Match[str]) -> Dict[str, str]:
             target = match.group(1).strip()
-            clean_display = re.sub(r'^Nota_', '', target).replace('_', ' ')
-            note_name = target.split("|", 1)[0].split("#", 1)[0].strip()
+            note_name, separator, label = target.partition("|")
+            note_name = note_name.split("#", 1)[0].strip()
+            clean_display = (label.strip() if separator else re.sub(r"^Nota_", "", note_name).replace("_", " "))
             note_file = note_name if note_name.endswith(".md") else f"{note_name}.md"
             resolved_note = self._path_resolver().resolve_unique_note_basename(note_file)
-            note_identity = self._vault_relative_identity(resolved_note)
-            return f"<span class='wikilink' onclick=\"loadNoteContent('{note_identity}')\">{clean_display}</span>"
+            return {
+                "type": "wikilink",
+                "text": clean_display,
+                "document_id": self._vault_relative_identity(resolved_note),
+            }
+
+        def text_tokens(line: str) -> List[Dict[str, str]]:
+            tokens: List[Dict[str, str]] = []
+            offset = 0
+            for match in re.finditer(r"\[\[(.*?)\]\]", line):
+                if match.start() > offset:
+                    tokens.append({"type": "text", "text": line[offset:match.start()]})
+                tokens.append(wikilink_token(match))
+                offset = match.end()
+            if offset < len(line) or not tokens:
+                tokens.append({"type": "text", "text": line[offset:]})
+            return tokens
 
         try:
-            content = re.sub(r'\[\[(.*?)\]\]', replace_wikilink, content)
+            document = []
+            for line in content.splitlines():
+                if line.startswith("# "):
+                    document.append({"type": "heading", "level": 1, "text": line[2:]})
+                elif line.startswith("## "):
+                    document.append({"type": "heading", "level": 2, "text": line[3:]})
+                elif line.startswith("### "):
+                    document.append({"type": "heading", "level": 3, "text": line[4:]})
+                else:
+                    children = text_tokens(line)
+                    if all(token["type"] == "text" for token in children):
+                        document.append({"type": "paragraph", "text": line})
+                    else:
+                        document.append({"type": "paragraph", "children": children})
         except PathAuthorizationError as error:
             return self._path_error(error)
 
-        html_lines = []
-        for line in content.splitlines():
-            if line.startswith("# "):
-                html_lines.append(f"<h1 style='color:var(--paper);'>{line[2:]}</h1>")
-            elif line.startswith("## "):
-                html_lines.append(f"<h2 style='color:var(--gold);'>{line[3:]}</h2>")
-            elif line.startswith("### "):
-                html_lines.append(f"<h3 style='color:var(--accent); margin-top:12px;'>{line[4:]}</h3>")
+        def fallback_children(tokens: List[Dict[str, str]]) -> str:
+            return "".join(
+                (
+                    f'<span class="wikilink" data-document-id="{html.escape(token["document_id"], quote=True)}">'
+                    f'{html.escape(token["text"])}</span>'
+                    if token["type"] == "wikilink"
+                    else html.escape(token["text"])
+                )
+                for token in tokens
+            )
+
+        fallback_html = []
+        for block in document:
+            if block["type"] == "heading":
+                fallback_html.append(
+                    f'<h{block["level"]}>{html.escape(block["text"])}</h{block["level"]}>'
+                )
             else:
-                html_lines.append(f"<p>{line}</p>")
-        return {"html": "".join(html_lines)}
+                children = block.get("children")
+                if children is None:
+                    children = [{"type": "text", "text": block["text"]}]
+                fallback_html.append(f"<p>{fallback_children(children)}</p>")
+        return {
+            "title": path.stem,
+            "document": document,
+            "html": "".join(fallback_html),
+        }
 
     def get_graph_data(self) -> Dict[str, Any]:
         out_dir = self.config.vault.output_dir

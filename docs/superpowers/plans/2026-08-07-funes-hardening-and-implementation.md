@@ -300,14 +300,14 @@ Acceptance:
 
 Steps:
 
-- [ ] Change `get_note_content_html()` to return a structured document model or escaped text tokens, not raw interpolated HTML.
-- [ ] Escape text with `html.escape()` when a server-rendered HTML fallback is unavoidable.
-- [ ] Render note titles, paths, logs and chat messages with `textContent` and explicit DOM nodes.
-- [ ] Keep `innerHTML` only for static, source-controlled templates with no interpolated data.
-- [ ] Replace inline `onclick` generation for WikiLinks with event listeners and a `data-document-id` attribute.
-- [ ] Add a strict Content Security Policy for the WebView HTML.
-- [ ] Remove external Google Fonts in strict offline mode and ship a local fallback.
-- [ ] Test payloads containing:
+- [x] Change `get_note_content_html()` to return a structured document model or escaped text tokens, not raw interpolated HTML.
+- [x] Escape text with `html.escape()` when a server-rendered HTML fallback is unavoidable.
+- [x] Render note titles, paths, logs and chat messages with `textContent` and explicit DOM nodes.
+- [x] Keep `innerHTML` only for static, source-controlled templates with no interpolated data.
+- [x] Replace inline `onclick` generation for WikiLinks with event listeners and a `data-document-id` attribute.
+- [x] Add a strict Content Security Policy for the WebView HTML.
+- [x] Remove external Google Fonts in strict offline mode and ship a local fallback.
+- [x] Test payloads containing:
   - `<script>alert(1)</script>`
   - `<img src=x onerror=alert(1)>`
   - `<svg onload=alert(1)>`
@@ -319,6 +319,8 @@ Acceptance:
 - Payloads render as text or safe sanitized content.
 - No payload creates executable attributes or script nodes.
 - The bridge is never called as a side effect of rendering a note.
+
+**Checkpoint 0.3 (2026-08-07):** Structured note document + safe DOM rendering; CSP `script-src` nonce-only (no unsafe-inline scripts); Google Fonts removed. Review clean after fix round 1. Deferred minors: `style-src 'unsafe-inline'`; mock-path/`export` innerHTML.
 
 ### Task 0.4 — Replace the generic bridge boundary
 

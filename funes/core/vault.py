@@ -7,6 +7,8 @@ from pathlib import Path
 import logging
 
 from funes.config import VaultConfig
+from funes.domain.documents import MarkdownDocument
+from funes.domain.frontmatter import FrontmatterError, serialize_frontmatter
 from funes.domain.errors import PathAuthorizationError
 from funes.domain.paths import AuthorizedPathResolver
 
@@ -211,13 +213,19 @@ class VaultManager:
             clean_filename = f"{safe_stem}_{ext_clean}.md"
             clean_path = self.clean_dir / clean_filename
 
-        header = "---\n"
-        for k, v in metadata.items():
-            safe_val = json.dumps(str(v), ensure_ascii=False)
-            header += f"{k}: {safe_val}\n"
-        header += "---\n\n"
-
-        full_content = header + content
+        document_metadata = {
+            "schema_version": 1,
+            "title": safe_stem,
+            "date": "",
+            "author": "",
+            "tags": [],
+            "issue": "_Sin_Cuestion",
+            "status": "pending_review",
+            "sources": [],
+            "history": [],
+            **metadata,
+        }
+        full_content = serialize_frontmatter(document_metadata) + content
 
         with open(clean_path, "w", encoding="utf-8") as f:
             f.write(full_content)
@@ -246,8 +254,25 @@ class VaultManager:
         target_issue_dir = output_path.parent
         target_issue_dir.mkdir(parents=True, exist_ok=True)
 
+        if content.startswith("---"):
+            document = MarkdownDocument.from_markdown(content)
+        else:
+            document = MarkdownDocument(
+                metadata={
+                    "schema_version": 1,
+                    "title": title,
+                    "date": "",
+                    "author": "Funes",
+                    "tags": [],
+                    "issue": issue_name or "_Sin_Cuestion",
+                    "status": "pending_review",
+                    "sources": [],
+                    "history": [],
+                },
+                body=content,
+            )
         with open(output_path, "w", encoding="utf-8") as f:
-            f.write(content)
+            f.write(document.to_markdown())
 
         logger.info(f"Nota atómica guardada en {target_issue_dir.name}: {output_path.name}")
         return output_path

@@ -31,6 +31,7 @@ from tkinter import ttk, messagebox, filedialog
 
 from funes.config import get_default_config, AppConfig, save_config, load_config
 from funes.core.vault import VaultManager
+from funes.domain.documents import MarkdownDocument
 from funes.domain.errors import PathAuthorizationError
 from funes.domain.paths import AuthorizedPathResolver
 from funes.ui.bridge import FunesPyWebViewApi
@@ -44,6 +45,8 @@ from funes.core.folder_sync import FolderSyncManager, FolderSyncModal
 from funes.watcher.watcher import ETLPipeline
 from funes.graph_engine.optimized_loop import OptimizadoGraphLoop
 from funes.ram_governor.governor import RAMGovernor
+
+logger = logging.getLogger(__name__)
 
 try:
     from funes.reader_modal import FunesReaderModal
@@ -374,7 +377,8 @@ class FunesConsoleBackend:
                         continue
                     try:
                         content = md_file.read_text(encoding="utf-8", errors="replace")
-                        if "estado: pendiente_aprobacion" in content or "estado: \"pendiente_aprobacion\"" in content:
+                        document = MarkdownDocument.from_markdown(content)
+                        if document.metadata["status"] == "pending_review":
                             rel_path = str(md_file.relative_to(self.vault.current_theme_dir)) if self.vault.current_theme_dir in md_file.parents else md_file.name
                             issue = md_file.parent.name if md_file.parent != out_dir else "_Sin_Cuestion"
                             pending.append({
@@ -399,12 +403,22 @@ class FunesConsoleBackend:
                 if p.exists():
                     try:
                         content = p.read_text(encoding="utf-8", errors="replace")
-                        content = content.replace("estado: pendiente_aprobacion", "estado: aprobada")
-                        content = content.replace("estado: \"pendiente_aprobacion\"", "estado: \"aprobada\"")
-                        if "historial:" not in content:
-                            hist_entry = f"\nhistorial:\n  - fecha: \"{time.strftime('%Y-%m-%d %H:%M:%S')}\"\n    accion: \"aprobada\"\n"
-                            content = content.replace("---\n\n", hist_entry + "---\n\n", 1)
-                        p.write_text(content, encoding="utf-8")
+                        document = MarkdownDocument.from_markdown(content)
+                        if document.metadata["status"] != "pending_review":
+                            return {"error": "La nota no está pendiente de aprobación"}
+                        metadata = dict(document.metadata)
+                        metadata["status"] = "approved"
+                        metadata["history"] = [
+                            *metadata["history"],
+                            {
+                                "date": time.strftime("%Y-%m-%d %H:%M:%S"),
+                                "action": "approved",
+                            },
+                        ]
+                        p.write_text(
+                            MarkdownDocument(metadata=metadata, body=document.body).to_markdown(),
+                            encoding="utf-8",
+                        )
                         return {"log": f"Nota '{p.name}' APROBADA con éxito.", "status": "approved"}
                     except Exception as e:
                         return {"error": f"Error al aprobar nota: {e}"}
@@ -1083,7 +1097,14 @@ historial:
         out_dir = self.config.vault.output_dir
         if not out_dir.exists():
             return {"nodes": [], "links": []}
-        notes = sorted(list(out_dir.glob("*.md")), key=lambda p: p.name.lower())
+        notes = []
+        for note in sorted(out_dir.glob("*.md"), key=lambda p: p.name.lower()):
+            try:
+                MarkdownDocument.from_markdown(note.read_text(encoding="utf-8"))
+            except (OSError, UnicodeError, ValueError):
+                logger.warning("Skipping invalid note during graph indexing: %s", note.name)
+                continue
+            notes.append(note)
         node_names = set(n.stem for n in notes)
         nodes = [
             {"id": n.stem, "label": n.stem, "path": self._vault_relative_identity(n)}

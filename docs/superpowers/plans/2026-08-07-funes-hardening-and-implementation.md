@@ -413,20 +413,22 @@ history: []
 
 Steps:
 
-- [ ] Implement `parse_frontmatter(markdown: str) -> tuple[dict, str]` using a delimiter parser and `yaml.safe_load`.
-- [ ] Reject malformed YAML, duplicate keys, non-mapping roots and invalid status values.
-- [ ] Implement `serialize_frontmatter(metadata: dict) -> str` using `yaml.safe_dump(..., allow_unicode=True, sort_keys=False)`.
-- [ ] Validate title, date, tags, issue, sources and history types.
-- [ ] Make the parser distinguish frontmatter delimiters from `---` in the body.
-- [ ] Add a `schema_version` migration from existing keys (`título`, `fecha`, `claves`, `fuentes`, `estado`).
-- [ ] Make the LLM output an input candidate that is parsed and validated, never a trusted final document.
-- [ ] Make `GraphLinker` operate on parsed body text and preserve serialized frontmatter.
+- [x] Implement `parse_frontmatter(markdown: str) -> tuple[dict, str]` using a delimiter parser and `yaml.safe_load`.
+- [x] Reject malformed YAML, duplicate keys, non-mapping roots and invalid status values.
+- [x] Implement `serialize_frontmatter(metadata: dict) -> str` using `yaml.safe_dump(..., allow_unicode=True, sort_keys=False)`.
+- [x] Validate title, date, tags, issue, sources and history types.
+- [x] Make the parser distinguish frontmatter delimiters from `---` in the body.
+- [x] Add a `schema_version` migration from existing keys (`título`, `fecha`, `claves`, `fuentes`, `estado`).
+- [x] Make the LLM output an input candidate that is parsed and validated, never a trusted final document.
+- [x] Make `GraphLinker` operate on parsed body text and preserve serialized frontmatter.
 
 Acceptance:
 
 - Invalid frontmatter cannot be approved or indexed.
 - Unicode, lists, quotes, multiline values and body separators round-trip correctly.
 - Existing notes can be read without data loss.
+
+**Checkpoint 1.1 (2026-08-07):** Versioned frontmatter schema v1 + migration; invalid notes excluded from approval/index/graph. Review clean after fix round 1. Atomic writers deferred to 1.2.
 
 ### Task 1.2 — Add atomic file persistence
 

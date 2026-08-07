@@ -3,6 +3,8 @@ import logging
 from pathlib import Path
 from typing import List
 
+from funes.domain.documents import MarkdownDocument
+
 logger = logging.getLogger(__name__)
 
 
@@ -19,6 +21,11 @@ class GraphLinker:
 
         titles = []
         for file_path in self.output_dir.glob("*.md"):
+            try:
+                MarkdownDocument.from_markdown(file_path.read_text(encoding="utf-8"))
+            except (OSError, UnicodeError, ValueError):
+                logger.warning("Skipping invalid note during title discovery: %s", file_path.name)
+                continue
             titles.append(file_path.stem)
         return titles
 
@@ -28,15 +35,8 @@ class GraphLinker:
         # Ordenar por longitud descendente para dar prioridad a títulos más largos y específicos
         titles.sort(key=len, reverse=True)
 
-        # Separar frontmatter YAML si existe
-        frontmatter = ""
-        body = note_content
-
-        if note_content.startswith("---"):
-            parts = note_content.split("---", 2)
-            if len(parts) >= 3:
-                frontmatter = f"---{parts[1]}---"
-                body = parts[2]
+        document = MarkdownDocument.from_markdown(note_content)
+        body = document.body
 
         # Extraer bloques de código para evitar reemplazos en código
         code_blocks = []
@@ -71,4 +71,4 @@ class GraphLinker:
         for idx, code_str in enumerate(code_blocks):
             body = body.replace(f"__CODE_BLOCK_{idx}__", code_str)
 
-        return frontmatter + body
+        return MarkdownDocument(metadata=document.metadata, body=body).to_markdown()

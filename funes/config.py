@@ -1,13 +1,49 @@
+import ipaddress
 import json
 import logging
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
+from urllib.parse import urlparse
 
 from funes.domain.frontmatter import serialize_frontmatter
 from funes.infrastructure.atomic_files import atomic_write_json
 
 logger = logging.getLogger(__name__)
+DEFAULT_OLLAMA_URL = "http://localhost:11434"
+
+
+def is_loopback_ollama_url(url: str) -> bool:
+    """Return whether an absolute HTTP URL targets this device."""
+    parsed = urlparse(url)
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        return False
+    if parsed.username or parsed.password:
+        return False
+    if parsed.hostname and parsed.hostname.lower() == "localhost":
+        return True
+    try:
+        return bool(parsed.hostname) and ipaddress.ip_address(
+            parsed.hostname
+        ).is_loopback
+    except ValueError:
+        return False
+
+
+def validate_ollama_url(url: str, allow_non_loopback: bool) -> str | None:
+    """Validate an Ollama endpoint and return the remote-access warning if needed."""
+    parsed = urlparse(url)
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        raise ValueError("ollama_url must be an absolute HTTP URL")
+    if parsed.username or parsed.password:
+        raise ValueError("ollama_url must not include credentials")
+    if is_loopback_ollama_url(url):
+        return None
+    if not allow_non_loopback:
+        raise ValueError(
+            "ollama_url must target a loopback address unless non-loopback access is enabled"
+        )
+    return "Ollama is configured on a non-loopback address; requests may leave this device."
 
 
 DEFAULT_ATOMIC_NOTE_TEMPLATE = serialize_frontmatter({
@@ -74,9 +110,10 @@ class VaultConfig:
 @dataclass
 class AppConfig:
     vault: VaultConfig
-    ollama_url: str = "http://localhost:11434"
+    ollama_url: str = DEFAULT_OLLAMA_URL
     custom_model_override: Optional[str] = None  # None = Auto (RAM Governor)
     ram_safety_margin_pct: float = 0.35  # Mantiene al menos 35% de RAM libre
+    allow_non_loopback_ollama: bool = False
     optimized_loop_interval_sec: int = 300  # 5 minutos entre pasadas de refinamiento
     atomic_note_template: str = DEFAULT_ATOMIC_NOTE_TEMPLATE
 
@@ -91,12 +128,27 @@ class AppConfig:
             "ollama_url": self.ollama_url,
             "custom_model_override": self.custom_model_override,
             "ram_safety_margin_pct": self.ram_safety_margin_pct,
+            "allow_non_loopback_ollama": self.allow_non_loopback_ollama,
             "optimized_loop_interval_sec": self.optimized_loop_interval_sec,
             "atomic_note_template": self.atomic_note_template,
         }
 
     @classmethod
     def from_dict(cls, data: dict) -> "AppConfig":
+        legacy_margin = data.get("ram_margin_pct")
+        margin = data.get("ram_safety_margin_pct", legacy_margin if legacy_margin is not None else 0.35)
+        margin = float(margin)
+        if margin > 1:
+            margin /= 100
+        raw_opt_in = data.get("allow_non_loopback_ollama", False)
+        allow_non_loopback = raw_opt_in if isinstance(raw_opt_in, bool) else False
+        raw_url = data.get("ollama_url", DEFAULT_OLLAMA_URL)
+        ollama_url = raw_url if isinstance(raw_url, str) else DEFAULT_OLLAMA_URL
+        try:
+            validate_ollama_url(ollama_url, allow_non_loopback)
+        except ValueError:
+            ollama_url = DEFAULT_OLLAMA_URL
+            allow_non_loopback = False
         vault_path = Path(data.get("vault_path", Path.home() / "Documents" / "Funes_Vault")).resolve()
         vault_cfg = VaultConfig(
             vault_path=vault_path,
@@ -108,9 +160,12 @@ class AppConfig:
         )
         return cls(
             vault=vault_cfg,
-            ollama_url=data.get("ollama_url", "http://localhost:11434"),
-            custom_model_override=data.get("custom_model_override"),
-            ram_safety_margin_pct=float(data.get("ram_safety_margin_pct", 0.35)),
+            ollama_url=ollama_url,
+            custom_model_override=data.get(
+                "custom_model_override", data.get("ollama_model")
+            ),
+            ram_safety_margin_pct=margin,
+            allow_non_loopback_ollama=allow_non_loopback,
             optimized_loop_interval_sec=int(data.get("optimized_loop_interval_sec", 300)),
             atomic_note_template=data.get("atomic_note_template", DEFAULT_ATOMIC_NOTE_TEMPLATE),
         )
@@ -138,7 +193,10 @@ def load_config(vault_path: str | Path) -> AppConfig:
             with open(config_file, "r", encoding="utf-8") as f:
                 data = json.load(f)
                 data["vault_path"] = str(vpath)
-                return AppConfig.from_dict(data)
+                config = AppConfig.from_dict(data)
+                if config.to_dict() != data:
+                    save_config(config)
+                return config
         except Exception as e:
             logger.warning(f"Error leyendo {config_file}, usando valores por defecto: {e}")
     return AppConfig(vault=VaultConfig(vault_path=vpath))

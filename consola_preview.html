@@ -1267,12 +1267,7 @@
                     </div>
                     <div>
                         <label style="font-size: 0.85rem; font-weight: 700; display: block; margin-bottom: 4px;">URL Servidor:</label>
-                        <select id="setting-ollama-url" style="width: 100%; padding: 8px 12px; border: 1px solid var(--border); background-color: var(--bg-log); color: var(--paper); font-family: var(--font-mono) !important; font-size: 0.85rem; border-radius: 4px; cursor: pointer; outline: none;">
-                            <option value="http://localhost:11434">Ollama (http://localhost:11434)</option>
-                            <option value="http://localhost:1234">LM Studio (http://localhost:1234)</option>
-                            <option value="http://localhost:8000">vLLM / LocalAI (http://localhost:8000)</option>
-                            <option value="http://localhost:11435">Ollama Puerto Alternativo (http://localhost:11435)</option>
-                        </select>
+                        <input id="setting-ollama-url" type="url" value="http://localhost:11434" style="width: 100%; box-sizing: border-box; padding: 8px 12px; border: 1px solid var(--border); background-color: var(--bg-log); color: var(--paper); font-family: var(--font-mono) !important; font-size: 0.85rem; border-radius: 4px; outline: none;">
                     </div>
                     <div>
                         <label style="font-size: 0.85rem; font-weight: 700; display: block; margin-bottom: 4px;">Margen de Seguridad RAM:</label>
@@ -1284,6 +1279,10 @@
                             <option value="50%">50%</option>
                         </select>
                     </div>
+                    <label style="font-size: 0.78rem; color: var(--muted); display: flex; gap: 8px; align-items: flex-start;">
+                        <input id="setting-allow-non-loopback-ollama" type="checkbox">
+                        <span>Permitir Ollama fuera de este equipo. Las solicitudes pueden salir del dispositivo.</span>
+                    </label>
                 </div>
 
                 <!-- PESTAÑA 3: PLANTILLA NOTA -->
@@ -1308,7 +1307,7 @@
             <div class="modal-footer">
                 <button class="btn-secondary" style="background-color: var(--bg-card); border: 1px solid var(--border-accent);" data-onclick-command="resetDefaultSettings()">Restaurar por Defecto</button>
                 <div style="display: flex; align-items: center; gap: 10px;">
-                    <span style="font-size: 0.78rem; color: var(--muted); font-weight: 700;">100% Local</span>
+                    <span style="font-size: 0.78rem; color: var(--muted); font-weight: 700;">Local por defecto</span>
                     <button class="btn-secondary" style="background-color: var(--accent); color: white;" data-onclick-command="saveSettings()">Guardar Ajustes</button>
                 </div>
             </div>
@@ -1784,6 +1783,7 @@
                     if (info.output_connected_folders) { linkedOutputFolders = info.output_connected_folders; }
                     if (info.ollama_url) { document.getElementById('setting-ollama-url').value = info.ollama_url; }
                     if (info.ram_margin) { document.getElementById('setting-ram-margin').value = info.ram_margin; }
+                    document.getElementById('setting-allow-non-loopback-ollama').checked = !!info.allow_non_loopback_ollama;
                     renderLinkedFolders();
                     populateOllamaModels(info.models, info.current_model);
                 });
@@ -3188,14 +3188,22 @@
             const model = document.getElementById('setting-ollama-model').value;
             const ollamaUrl = document.getElementById('setting-ollama-url') ? document.getElementById('setting-ollama-url').value : 'http://localhost:11434';
             const ramMargin = document.getElementById('setting-ram-margin') ? document.getElementById('setting-ram-margin').value : '20%';
-
-            const settings = { model: model, ollama_url: ollamaUrl, ram_margin: ramMargin };
+            const settings = {
+                vault_path: document.getElementById('setting-vault-path').value,
+                custom_model_override: model,
+                ollama_url: ollamaUrl,
+                ram_safety_margin_pct: Number.parseFloat(ramMargin) / 100,
+                allow_non_loopback_ollama: document.getElementById('setting-allow-non-loopback-ollama').checked,
+                input_connected_folders: linkedInputFolders,
+                output_connected_folders: linkedOutputFolders
+            };
             if (window.pywebview && window.pywebview.api) {
                 window.pywebview.api.save_settings(settings).then(function(res) {
                     if (res && res.error) {
                         log('Error guardando ajustes: ' + res.message);
                     } else if (res && res.log) {
                         log(res.log);
+                        if (res.warning) log('Advertencia: ' + res.warning);
                         if (res.stats) updateDashboardStats(res.stats);
                     }
                 });

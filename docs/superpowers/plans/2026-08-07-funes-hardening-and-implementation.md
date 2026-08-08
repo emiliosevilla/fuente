@@ -8,10 +8,10 @@
 
 **Tech Stack:** Python 3.10+, Tkinter fallback, optional PyWebView, HTML5/CSS3/JavaScript, PyYAML, SQLite, ChromaDB, BM25, Ollama, watchdog, pytest-compatible tests, PyInstaller, Obsidian Vault.
 
-## Progress Status (session pause 2026-08-07)
+## Progress Status (2026-08-08)
 
 **Branch:** `feature/funes-hardening-2026-08-07` (worktree `.worktrees/funes-hardening-2026-08-07`)  
-**Tip:** `1c07a95` — pushed to `origin/feature/funes-hardening-2026-08-07`  
+**Tip:** `2a0f472` — pushed to `origin/feature/funes-hardening-2026-08-07`  
 **Not merged** into `dev` / `main` yet. Main checkout still has a dirty partial `consola_preview.html`; discard before any `/supagit` promote.
 
 ### Completed
@@ -20,6 +20,8 @@
 |---|---|---|---|
 | Phase 0 — Safety Baseline | **Done** | 0.1–0.5 | `cdbb81e` |
 | Phase 1 — Domain Contracts | **Done** | 1.1–1.4 | `1c07a95` |
+| Phase 2 — Recoverable ETL | **Done** | 2.1–2.4 | `d8d38ba` |
+| Phase 3 — Themes / Graph / Reader | **Done** | 3.1–3.3 | `2a0f472` |
 
 Commits on this branch since `1bb66b8`:
 
@@ -32,22 +34,33 @@ Commits on this branch since `1bb66b8`:
 7. `df079c9` — Task 1.2 atomic persistence  
 8. `4c09f45` — Task 1.3 unified quarantine  
 9. `1c07a95` — Task 1.4 canonical settings  
+10. `bde44e4` — docs: Phase 0–1 progress / pause before Phase 2  
+11. `f81a1d0` — Task 2.1 durable SQLite job store  
+12. `ea23bc1` — Task 2.2 ETL transition graph  
+13. `bada86f` — Task 2.3 resumable ingestion jobs  
+14. `d8d38ba` — Task 2.4 ApplicationLifecycle modes  
+15. `62c5663` — Task 3.1 theme-scoped pipeline / FolderSync  
+16. `4561585` — Task 3.2 recursive graph linking  
+17. `2a0f472` — Task 3.3 reader/bridge document IDs  
 
-### Not started (do not begin until the next session explicitly resumes)
+### Not started / next
 
-- Phase 2 — Recoverable ETL (`2.1` onward)  
-- Phases 3–8  
+- Phase 4 — Real RAG and Local Chat (`4.1` onward)  
+- Phases 5–8  
 
-**Resume at:** Task `2.1` — Create the job store.  
-**SDD ledger:** `.worktrees/funes-hardening-2026-08-07/.superpowers/sdd/2026-08-07-funes-hardening-and-implementation/progress.md`
+**Resume at:** Task `4.1` — Define index identity and reconciliation.  
+**SDD ledger:** `.worktrees/funes-hardening-2026-08-07/.superpowers/sdd/2026-08-07-funes-hardening-and-implementation/progress.md`  
+**Process note:** After each completed task, update this Progress Status section, mark that task's step checkboxes `[x]`, and refresh §12 Recommended Execution Order — do not leave the plan stale between checkpoints.
 
 ### Deferred minors (triage at final branch review)
 
 - Path-style wikilinks `[[dir/note]]` (basename-only resolution)  
 - `style-src 'unsafe-inline'`; mock-path / export `innerHTML`  
 - Direct `handle_action` generic success; AnythingLLM helper website fallback  
-- `failed_for_review` not listed in active quarantine UI; job-store persistence (Task 2.x)  
-- Direct `pytest` launcher Unicode-path quirk (use `python3 -m pytest`)
+- `failed_for_review` not listed in active quarantine UI  
+- Direct `pytest` launcher Unicode-path quirk (use `python3 -m pytest`)  
+- Task 3.2 minors: ingestion auto_link without current_relative_path; O(n²) enumerate per note  
+- Task 2.x minors: COALESCE/orphan-clean edge cases; flush banner honesty; dual ETLPipeline in console vs lifecycle; `assert` graph invariants under `python -O`
 
 ---
 
@@ -571,7 +584,7 @@ Acceptance:
 
 **Exit gate:** interrupting any stage allows safe resume without duplicate notes, stale vectors or lost source files.
 
-**Phase status (2026-08-07):** **not started** — paused after Phase 1. Next session resumes at Task 2.1.
+**Phase status (2026-08-08):** **complete** — Tasks 2.1–2.4 through `d8d38ba`. Next was Phase 3.
 
 ### Task 2.1 — Create the job store
 
@@ -584,18 +597,20 @@ Acceptance:
 
 Steps:
 
-- [ ] Create a Vault-local SQLite database at `.funes/state.db`.
-- [ ] Add tables for jobs, stage events, document identities and index artifacts.
-- [ ] Add indexes on `source_hash`, `status`, `stage` and `updated_at`.
-- [ ] Implement optimistic update using `revision` or conditional `WHERE status = ?`.
-- [ ] Store pipeline version with every job.
-- [ ] Add migration execution with a schema version table.
+- [x] Create a Vault-local SQLite database at `.funes/state.db`.
+- [x] Add tables for jobs, stage events, document identities and index artifacts.
+- [x] Add indexes on `source_hash`, `status`, `stage` and `updated_at`.
+- [x] Implement optimistic update using `revision` or conditional `WHERE status = ?`.
+- [x] Store pipeline version with every job.
+- [x] Add migration execution with a schema version table.
 
 Acceptance:
 
 - Job state survives process restart.
 - Two workers cannot claim the same pending job.
 - Every state transition has a timestamp and event record.
+
+**Checkpoint 2.1 (2026-08-08):** Vault-local `.funes/state.db`, CAS claim/update, stage events, `JobStoreBusyError`. Review clean after fix round 1. Committed as `f81a1d0`.
 
 ### Task 2.2 — Model the ETL state machine
 
@@ -624,17 +639,19 @@ quarantined
 
 Steps:
 
-- [ ] Define allowed transitions and reject illegal transitions.
-- [ ] Make each transition idempotent.
-- [ ] Define compensation for partial artifacts.
-- [ ] Persist error codes rather than only formatted strings.
-- [ ] Add tests for every legal and illegal transition.
+- [x] Define allowed transitions and reject illegal transitions.
+- [x] Make each transition idempotent.
+- [x] Define compensation for partial artifacts.
+- [x] Persist error codes rather than only formatted strings.
+- [x] Add tests for every legal and illegal transition.
 
 Acceptance:
 
 - A job cannot jump from `discovered` to `completed`.
 - Replaying a completed transition returns the existing result.
 - Illegal transitions do not mutate the record.
+
+**Checkpoint 2.2 (2026-08-08):** Pure `transition()` graph + compensation plans. Review approved. Committed as `ea23bc1`.
 
 ### Task 2.3 — Refactor `ETLPipeline` around jobs
 
@@ -646,20 +663,22 @@ Acceptance:
 
 Steps:
 
-- [ ] Replace direct path-driven processing with `submit(relative_path)` and `resume(job_id)`.
-- [ ] Compute a source hash after stabilization.
-- [ ] Reuse an existing completed job for the same hash unless the user explicitly requests reprocessing.
-- [ ] Keep source, dirty copy and clean artifact identities in the job record.
-- [ ] Validate generated Markdown before saving the output note.
-- [ ] Save the note atomically before publishing its index entries.
-- [ ] Make Chroma indexing reconcile by document ID and remove obsolete chunk IDs.
-- [ ] Decide and test failure behavior at every stage.
+- [x] Replace direct path-driven processing with `submit(relative_path)` and `resume(job_id)`.
+- [x] Compute a source hash after stabilization.
+- [x] Reuse an existing completed job for the same hash unless the user explicitly requests reprocessing.
+- [x] Keep source, dirty copy and clean artifact identities in the job record.
+- [x] Validate generated Markdown before saving the output note.
+- [x] Save the note atomically before publishing its index entries.
+- [x] Make Chroma indexing reconcile by document ID and remove obsolete chunk IDs.
+- [x] Decide and test failure behavior at every stage.
 
 Acceptance:
 
 - Reprocessing the same source hash does not create duplicate notes.
 - A failure after Chroma insertion is reconciled on resume.
 - The original source is not deleted until the job is completed and artifacts are durable.
+
+**Checkpoint 2.3 (2026-08-08):** `IngestionApplicationService` with durable resume; Chroma reconcile-by-document-id. Review approved. Committed as `bada86f`.
 
 ### Task 2.4 — Start lifecycle services explicitly
 
@@ -672,18 +691,20 @@ Acceptance:
 
 Steps:
 
-- [ ] Define `ApplicationLifecycle.start()` and `.stop()`.
-- [ ] Start `FolderMonitor` only in continuous mode.
-- [ ] Start `OptimizadoGraphLoop` only after the Vault is initialized.
-- [ ] Keep `--flush` deterministic and non-background.
-- [ ] Stop threads before closing the UI.
-- [ ] Add a headless mode for Docker and CI that never opens Tkinter/PyWebView.
+- [x] Define `ApplicationLifecycle.start()` and `.stop()`.
+- [x] Start `FolderMonitor` only in continuous mode.
+- [x] Start `OptimizadoGraphLoop` only after the Vault is initialized.
+- [x] Keep `--flush` deterministic and non-background.
+- [x] Stop threads before closing the UI.
+- [x] Add a headless mode for Docker and CI that never opens Tkinter/PyWebView.
 
 Acceptance:
 
 - Normal continuous mode processes new files.
 - Flush mode exits after all jobs finish.
 - Stop is bounded and does not leave worker threads behind.
+
+**Checkpoint 2.4 (2026-08-08):** Modes continuous/flush/headless; failed-start cleanup. Review clean after fix round 1. Committed as `d8d38ba`. Phase 2 complete.
 
 ---
 
@@ -704,16 +725,18 @@ Acceptance:
 
 Steps:
 
-- [ ] Make the active `VaultManager` theme paths the only source of input, dirty, clean, output and quarantine roots.
-- [ ] Remove direct `config.vault.input_dir` use where a theme-aware manager is required.
-- [ ] Make FolderSync resolve the active theme input and dirty directories.
-- [ ] Add recursive enumeration helpers returning `DocumentId` and relative paths.
-- [ ] Exclude `.funes`, hidden files, MOC metadata artifacts and quarantine from normal note lists.
+- [x] Make the active `VaultManager` theme paths the only source of input, dirty, clean, output and quarantine roots.
+- [x] Remove direct `config.vault.input_dir` use where a theme-aware manager is required.
+- [x] Make FolderSync resolve the active theme input and dirty directories.
+- [x] Add recursive enumeration helpers returning `DocumentId` and relative paths.
+- [x] Exclude `.funes`, hidden files, MOC metadata artifacts and quarantine from normal note lists.
 
 Acceptance:
 
 - Processing a file in an active Theme writes only inside that Theme.
 - A connected folder cannot silently write to the General root.
+
+**Checkpoint 3.1 (2026-08-08):** Theme-aware monitor/sync/ETL; shared lifecycle vault; theme switch rebinds services. Review clean after fix round 1. Committed as `62c5663`.
 
 ### Task 3.2 — Make graph linking recursive and safe
 
@@ -726,18 +749,20 @@ Acceptance:
 
 Steps:
 
-- [ ] Enumerate notes with `rglob("*.md")` within the authorized output root.
-- [ ] Use document IDs and relative paths rather than only stem names.
-- [ ] Preserve issue-qualified links when duplicate stems exist.
-- [ ] Parse frontmatter before linking body content.
-- [ ] Generate the MOC from the full scope even when refining one issue; only update the selected issue's artifacts incrementally.
-- [ ] Use one canonical MOC filename in backend, UI, README and tests.
+- [x] Enumerate notes with `rglob("*.md")` within the authorized output root.
+- [x] Use document IDs and relative paths rather than only stem names.
+- [x] Preserve issue-qualified links when duplicate stems exist.
+- [x] Parse frontmatter before linking body content.
+- [x] Generate the MOC from the full scope even when refining one issue; only update the selected issue's artifacts incrementally.
+- [x] Use one canonical MOC filename in backend, UI, README and tests.
 
 Acceptance:
 
 - Notes in two issues with the same stem do not collide.
 - Partial issue refresh cannot erase unrelated MOC entries.
 - No WikiLink is inserted into frontmatter or fenced code.
+
+**Checkpoint 3.2 (2026-08-08):** Recursive linker + issue-qualified duplicates; full-scope MOC on partial refresh; own-stem never cross-links; canonical `_Indice_MOC.md`. Review clean after fix round 1. Committed as `4561585`.
 
 ### Task 3.3 — Align reader and bridge
 
@@ -750,12 +775,12 @@ Acceptance:
 
 Steps:
 
-- [ ] Return note metadata and `document_id` from `get_notes_list`.
-- [ ] Load notes by ID.
-- [ ] Render nested issues in the sidebar.
-- [ ] Make the native reader use the same parser and authorization service as PyWebView.
-- [ ] Fix fallback `alert`/`log` response mismatches.
-- [ ] Implement safe file opening only for authorized artifacts.
+- [x] Return note metadata and `document_id` from `get_notes_list`.
+- [x] Load notes by ID.
+- [x] Render nested issues in the sidebar.
+- [x] Make the native reader use the same parser and authorization service as PyWebView.
+- [x] Fix fallback `alert`/`log` response mismatches.
+- [x] Implement safe file opening only for authorized artifacts.
 
 Acceptance:
 
@@ -764,6 +789,8 @@ Acceptance:
 - A missing note produces a controlled error, not a traceback.
 
 ---
+
+**Checkpoint 3.3 (2026-08-08):** Shared opaque document_id list/load; nested issue sidebar; WebView Back pops history; controlled missing-note errors. Review clean after fix round 1. Committed as `2a0f472`. Phase 3 complete.
 
 ## 7. Phase 4 — Real RAG and Local Chat
 
@@ -1268,14 +1295,14 @@ Execute tasks in this order. Do not start a later phase merely because its UI is
 7. [x] `1.2` Atomic persistence. (`df079c9`)
 8. [x] `1.3` Quarantine. (`4c09f45`)
 9. [x] `1.4` Configuration. (`1c07a95`)
-10. [ ] `2.1` Job store. ← **resume here**
-11. `2.2` State machine.
-12. `2.3` Recoverable ETL.
-13. `2.4` Lifecycle.
-14. `3.1` Vault scope.
-15. `3.2` Graph scope.
-16. `3.3` Reader contract.
-17. `4.1` Index reconciliation.
+10. [x] `2.1` Job store. (`f81a1d0`)
+11. [x] `2.2` State machine. (`ea23bc1`)
+12. [x] `2.3` Recoverable ETL. (`bada86f`)
+13. [x] `2.4` Lifecycle. (`d8d38ba`)
+14. [x] `3.1` Vault scope. (`62c5663`)
+15. [x] `3.2` Graph scope. (`4561585`)
+16. [x] `3.3` Reader contract. (`2a0f472`)
+17. [ ] `4.1` Index reconciliation. ← **resume here**
 18. `4.2` Retrieval service.
 19. `4.3` Chat integration.
 20. `5.1` Resource budgets.

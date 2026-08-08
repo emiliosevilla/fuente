@@ -11,7 +11,7 @@
 ## Progress Status (2026-08-08)
 
 **Branch:** `feature/funes-hardening-2026-08-07` (worktree `.worktrees/funes-hardening-2026-08-07`)  
-**Tip:** `5b3108c` — pushed to `origin/feature/funes-hardening-2026-08-07`  
+**Tip:** `c594bb6` — pushed to `origin/feature/funes-hardening-2026-08-07`  
 **Not merged** into `dev` / `main` yet. Main checkout still has a dirty partial `consola_preview.html`; discard before any `/supagit` promote.
 
 ### Completed
@@ -22,7 +22,7 @@
 | Phase 1 — Domain Contracts | **Done** | 1.1–1.4 | `1c07a95` |
 | Phase 2 — Recoverable ETL | **Done** | 2.1–2.4 | `d8d38ba` |
 | Phase 3 — Themes / Graph / Reader | **Done** | 3.1–3.3 | `b6aec0d` |
-| Phase 4 — RAG / Local Chat | **In progress** | 4.1–4.2 done (4.2 commit pending); 4.3 open | `5b3108c` |
+| Phase 4 — RAG / Local Chat | **In progress** | 4.1–4.3 done (4.3 commit pending) | `c594bb6` |
 
 Commits on this branch since `1bb66b8`:
 
@@ -43,13 +43,16 @@ Commits on this branch since `1bb66b8`:
 15. `62c5663` — Task 3.1 theme-scoped pipeline / FolderSync  
 16. `4561585` — Task 3.2 recursive graph linking  
 17. `2a0f472` — Task 3.3 reader/bridge document IDs  
+18. `543b6e1` — Task 4.1 deterministic chunk IDs / reconcile  
+19. `5b3108c` — docs: record Task 4.1  
+20. `1a16a92` — Task 4.2 scoped hybrid retrieval  
+21. `c594bb6` — docs: record Task 4.2  
 
 ### Not started / next
 
-- Tasks `4.2`–`4.3` (retrieval + chat)  
-- Phases 5–8  
+- Task `4.3` commit pending; then Phases 5–8  
 
-**Resume at:** Task `4.3` — Integrate chat with retrieval and Ollama (once 4.2 is committed).  
+**Resume at:** Task `5.1` — Define resource budgets (once 4.3 is committed).  
 **SDD ledger:** `.worktrees/funes-hardening-2026-08-07/.superpowers/sdd/2026-08-07-funes-hardening-and-implementation/progress.md`  
 **Process note:** After each completed task, update this Progress Status section, mark that task's step checkboxes `[x]`, and refresh §12 Recommended Execution Order — do not leave the plan stale between checkpoints.
 
@@ -825,7 +828,9 @@ Acceptance:
 
 **Checkpoint 4.1 (2026-08-08):** Deterministic chunk IDs + required metadata; N→N-2 reconcile; explicit ChromaInitError; SQLite sys import fixed. Review approved. Committed as `543b6e1`.
 
-**Checkpoint 4.2 (2026-08-08):** Scoped hybrid retrieval + BM25 cache/invalidate; RAM degradation recorded; bounds + source snippets. Review approved. **Commit pending**.
+**Checkpoint 4.2 (2026-08-08):** Scoped hybrid retrieval + BM25 cache/invalidate; RAM degradation recorded; bounds + source snippets. Review approved. Committed as `1a16a92`.
+
+**Checkpoint 4.3 (2026-08-08):** Shared ChatApplicationService + retrieval; Ollama failures actionable; escaped rendering; FakeChatProvider. Review approved. **Commit pending**.
 
 ### Task 4.2 — Build the retrieval service
 
@@ -861,13 +866,13 @@ Acceptance:
 
 Steps:
 
-- [ ] Replace direct file concatenation with `RetrievalApplicationService`.
-- [ ] Use the configured model and loopback URL.
-- [ ] Include explicit instructions that the model must distinguish evidence from uncertainty.
-- [ ] Return answer, sources, retrieval mode and error state.
-- [ ] Never return “processed successfully” when Ollama failed.
-- [ ] Escape all answer text before rendering.
-- [ ] Add an offline fake provider for tests.
+- [x] Replace direct file concatenation with `RetrievalApplicationService`.
+- [x] Use the configured model and loopback URL.
+- [x] Include explicit instructions that the model must distinguish evidence from uncertainty.
+- [x] Return answer, sources, retrieval mode and error state.
+- [x] Never return “processed successfully” when Ollama failed.
+- [x] Escape all answer text before rendering.
+- [x] Add an offline fake provider for tests.
 
 Acceptance:
 
@@ -1309,10 +1314,9 @@ Execute tasks in this order. Do not start a later phase merely because its UI is
 15. [x] `3.2` Graph scope. (`4561585`)
 16. [x] `3.3` Reader contract. (`2a0f472`)
 17. [x] `4.1` Index reconciliation. (`543b6e1`)
-18. [x] `4.2` Retrieval service. (commit pending)
-19. [ ] `4.3` Chat + Ollama. ← **resume here** (after 4.2 commit)
-19. `4.3` Chat integration.
-20. `5.1` Resource budgets.
+18. [x] `4.2` Retrieval service. (`1a16a92`)
+19. [x] `4.3` Chat + Ollama. (commit pending)
+20. [ ] `5.1` Resource budgets. ← **resume here** (after 4.3 commit)
 21. `5.2` Scheduler.
 22. `5.3` Retry policy.
 23. `6.1` Approval.

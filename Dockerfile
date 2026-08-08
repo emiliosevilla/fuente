@@ -30,6 +30,6 @@ RUN pip install --no-cache-dir -e .
 # Definir volumen predeterminado para el Vault de Obsidian
 VOLUME ["/vault"]
 
-# Comando por defecto: procesar el Vault montado en /vault
+# Comando por defecto: worker headless continuo sobre el Vault montado en /vault
 ENTRYPOINT ["funes"]
-CMD ["--vault", "/vault"]
+CMD ["--headless", "--vault", "/vault"]

@@ -1,7 +1,8 @@
 import ipaddress
 import json
 import logging
-from dataclasses import dataclass
+import os
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Optional
 from urllib.parse import urlparse
@@ -184,6 +185,69 @@ def save_config(config: AppConfig) -> Path:
     return config_file
 
 
+def _env_bool(name: str) -> bool | None:
+    """Parse a boolean environment variable, or return None if unset/invalid."""
+    raw = os.environ.get(name)
+    if raw is None:
+        return None
+    normalized = raw.strip().lower()
+    if normalized in {"1", "true", "yes", "on"}:
+        return True
+    if normalized in {"0", "false", "no", "off"}:
+        return False
+    return None
+
+
+def apply_environment_overrides(config: AppConfig) -> AppConfig:
+    """Apply validated OLLAMA_URL / ALLOW_NON_LOOPBACK_OLLAMA from the environment.
+
+    Environment values use the same validation rules as persisted settings.
+    Invalid values are ignored with a warning so container misconfiguration
+    does not silently fall back to loopback-only defaults.
+    """
+    env_url = os.environ.get("OLLAMA_URL")
+    env_allow = _env_bool("ALLOW_NON_LOOPBACK_OLLAMA")
+    allow_non_loopback = (
+        config.allow_non_loopback_ollama
+        if env_allow is None
+        else env_allow
+    )
+
+    if env_url is not None:
+        candidate = env_url.strip()
+        if not candidate:
+            logger.warning("Ignoring empty OLLAMA_URL from environment.")
+            return config
+        try:
+            validate_ollama_url(candidate, allow_non_loopback)
+        except ValueError as error:
+            logger.warning(
+                "Ignoring invalid OLLAMA_URL from environment (%s): %r",
+                error,
+                env_url,
+            )
+            return config
+        return replace(
+            config,
+            ollama_url=candidate,
+            allow_non_loopback_ollama=allow_non_loopback,
+        )
+
+    if env_allow is not None:
+        try:
+            validate_ollama_url(config.ollama_url, env_allow)
+        except ValueError as error:
+            logger.warning(
+                "Ignoring ALLOW_NON_LOOPBACK_OLLAMA=%r (%s); keeping stored URL.",
+                os.environ.get("ALLOW_NON_LOOPBACK_OLLAMA"),
+                error,
+            )
+            return config
+        return replace(config, allow_non_loopback_ollama=env_allow)
+
+    return config
+
+
 def load_config(vault_path: str | Path) -> AppConfig:
     """Carga la configuración desde .funes/config.json o devuelve los valores por defecto si no existe."""
     vpath = Path(vault_path).resolve()
@@ -196,10 +260,10 @@ def load_config(vault_path: str | Path) -> AppConfig:
                 config = AppConfig.from_dict(data)
                 if config.to_dict() != data:
                     save_config(config)
-                return config
+                return apply_environment_overrides(config)
         except Exception as e:
             logger.warning(f"Error leyendo {config_file}, usando valores por defecto: {e}")
-    return AppConfig(vault=VaultConfig(vault_path=vpath))
+    return apply_environment_overrides(AppConfig(vault=VaultConfig(vault_path=vpath)))
 
 
 def get_default_config(vault_path: str | Path) -> AppConfig:

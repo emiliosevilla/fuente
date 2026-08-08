@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import dataclasses
 from dataclasses import dataclass
+from enum import Enum
 from typing import Optional
 
 #: Bumped when the ETL pipeline's behavior changes in a way that should
@@ -192,7 +193,8 @@ _ACTIVE_STAGES: tuple[str, ...] = (
 )
 
 #: Stages with no outgoing transitions: once reached, a job only moves again
-#: via a brand-new job (retry policy is out of scope for this task).
+#: via a brand-new job or an explicit reprocess. In-flight retry decisions are
+#: owned by the retry policy below (Task 5.3), not by edges out of these stages.
 _TERMINAL_STAGES: tuple[str, ...] = ("completed", "failed", "quarantined")
 
 _TERMINAL_FAILURE_STAGES: tuple[str, ...] = ("failed", "quarantined")
@@ -382,3 +384,190 @@ def transition(
         compensation = NO_COMPENSATION
 
     return TransitionResult(job=new_job, compensation=compensation, is_replay=False)
+
+
+# ---------------------------------------------------------------------------
+# Retry policy (Task 5.3)
+# ---------------------------------------------------------------------------
+#
+# Product policy (confirmed and encoded here, not inferred from legacy
+# three-attempt watcher behavior): corrupt / unsupported media gets exactly
+# TWO automatic attempts. The original source is preserved until that
+# threshold; only then is the file quarantined with a user-readable reason.
+# Transient network/I/O errors are a separate class and must never be labeled
+# as corrupt content. Permanent parse/processing failures quarantine on the
+# first recorded attempt so they cannot loop indefinitely.
+
+
+class ErrorClass(str, Enum):
+    """Stable classification used to pick a retry budget."""
+
+    TRANSIENT_IO = "transient_io"
+    CORRUPT_OR_UNSUPPORTED = "corrupt_or_unsupported"
+    INVALID_MODEL_OUTPUT = "invalid_model_output"
+    PERMANENT = "permanent"
+
+
+class FailureAction(str, Enum):
+    """What the quarantine / ingestion layer should do after a failure."""
+
+    RETRY = "retry"
+    QUARANTINE = "quarantine"
+    FAILED_FOR_REVIEW = "failed_for_review"
+    FAIL = "fail"
+
+
+#: Product default: two attempts for corrupt/unsupported media (Task 5.3).
+CORRUPT_OR_UNSUPPORTED_MAX_ATTEMPTS = 2
+TRANSIENT_IO_MAX_ATTEMPTS = 3
+TRANSIENT_IO_INITIAL_BACKOFF_SECONDS = 0.5
+TRANSIENT_IO_BACKOFF_MULTIPLIER = 2
+INVALID_MODEL_OUTPUT_MAX_ATTEMPTS = 1
+PERMANENT_MAX_ATTEMPTS = 1
+
+_MAX_ATTEMPTS_BY_CLASS: dict[ErrorClass, int] = {
+    ErrorClass.TRANSIENT_IO: TRANSIENT_IO_MAX_ATTEMPTS,
+    ErrorClass.CORRUPT_OR_UNSUPPORTED: CORRUPT_OR_UNSUPPORTED_MAX_ATTEMPTS,
+    ErrorClass.INVALID_MODEL_OUTPUT: INVALID_MODEL_OUTPUT_MAX_ATTEMPTS,
+    ErrorClass.PERMANENT: PERMANENT_MAX_ATTEMPTS,
+}
+
+_ERROR_CODE_TO_CLASS: dict[str, ErrorClass] = {
+    "transient_io": ErrorClass.TRANSIENT_IO,
+    "corrupt_content": ErrorClass.CORRUPT_OR_UNSUPPORTED,
+    "unsupported_content": ErrorClass.CORRUPT_OR_UNSUPPORTED,
+    "invalid_model_output": ErrorClass.INVALID_MODEL_OUTPUT,
+}
+
+
+@dataclass(frozen=True)
+class FailureDecision:
+    """Policy outcome for one recorded failure attempt."""
+
+    error_class: ErrorClass
+    error_code: str
+    attempt_count: int
+    max_attempts: int
+    action: FailureAction
+    user_reason: str
+    preserve_source: bool
+
+
+def classify_error_code(error_code: str) -> ErrorClass:
+    """Map a stable `error_code` to its retry class.
+
+    Unknown codes are permanent: they must not inherit the corrupt-media
+    two-attempt budget or the transient I/O backoff loop.
+    """
+    if not error_code:
+        return ErrorClass.PERMANENT
+    return _ERROR_CODE_TO_CLASS.get(error_code, ErrorClass.PERMANENT)
+
+
+def max_attempts_for_error_class(error_class: ErrorClass) -> int:
+    """Configured maximum attempts for *error_class*."""
+    return _MAX_ATTEMPTS_BY_CLASS[error_class]
+
+
+def classify_exception(error: BaseException) -> tuple[str, ErrorClass]:
+    """Derive `(error_code, error_class)` from a raised exception."""
+    code = getattr(error, "code", None)
+    if isinstance(code, str) and code:
+        return code, classify_error_code(code)
+    if isinstance(error, OSError):
+        return "transient_io", ErrorClass.TRANSIENT_IO
+    return "processing_error", ErrorClass.PERMANENT
+
+
+def evaluate_failure(
+    *,
+    error_code: str,
+    attempt_count: int,
+    error_message: str = "",
+) -> FailureDecision:
+    """Decide whether to retry, quarantine, fail, or hold for review.
+
+    *attempt_count* is the number of attempts already performed (including the
+    current failure). Callers must persist that count so it stays inspectable.
+    """
+    if attempt_count < 1:
+        raise ValueError("attempt_count must be at least 1")
+
+    error_class = classify_error_code(error_code)
+    max_attempts = max_attempts_for_error_class(error_class)
+    detail = (error_message or error_code).strip() or error_code
+
+    if error_class is ErrorClass.INVALID_MODEL_OUTPUT:
+        return FailureDecision(
+            error_class=error_class,
+            error_code=error_code or "invalid_model_output",
+            attempt_count=attempt_count,
+            max_attempts=max_attempts,
+            action=FailureAction.FAILED_FOR_REVIEW,
+            user_reason=(
+                "Model output failed validation and needs human review; "
+                f"source preserved. ({detail})"
+            ),
+            preserve_source=True,
+        )
+
+    if attempt_count < max_attempts:
+        return FailureDecision(
+            error_class=error_class,
+            error_code=error_code or "processing_error",
+            attempt_count=attempt_count,
+            max_attempts=max_attempts,
+            action=FailureAction.RETRY,
+            user_reason=(
+                f"{_class_label(error_class)} (attempt {attempt_count}/{max_attempts}); "
+                f"original source preserved for another try. ({detail})"
+            ),
+            preserve_source=True,
+        )
+
+    if error_class is ErrorClass.PERMANENT and max_attempts == 1:
+        # Permanent failures still quarantine the source so the user can
+        # inspect it, but they never enter an automatic retry loop.
+        action = FailureAction.QUARANTINE
+        user_reason = (
+            f"Permanent processing failure; quarantined without further "
+            f"automatic retries. ({detail})"
+        )
+    elif error_class is ErrorClass.TRANSIENT_IO:
+        action = FailureAction.QUARANTINE
+        user_reason = (
+            f"Transient network/I/O error after {attempt_count} attempts; "
+            f"quarantined for manual recovery. ({detail})"
+        )
+    elif error_class is ErrorClass.CORRUPT_OR_UNSUPPORTED:
+        action = FailureAction.QUARANTINE
+        user_reason = (
+            f"Corrupt or unsupported media after {attempt_count} attempts; "
+            f"quarantined for manual review. ({detail})"
+        )
+    else:
+        action = FailureAction.FAIL
+        user_reason = (
+            f"Processing failed after {attempt_count} attempts. ({detail})"
+        )
+
+    return FailureDecision(
+        error_class=error_class,
+        error_code=error_code or "processing_error",
+        attempt_count=attempt_count,
+        max_attempts=max_attempts,
+        action=action,
+        user_reason=user_reason,
+        preserve_source=False,
+    )
+
+
+def _class_label(error_class: ErrorClass) -> str:
+    if error_class is ErrorClass.TRANSIENT_IO:
+        return "Transient network/I/O error"
+    if error_class is ErrorClass.CORRUPT_OR_UNSUPPORTED:
+        return "Corrupt or unsupported media"
+    if error_class is ErrorClass.INVALID_MODEL_OUTPUT:
+        return "Invalid model output"
+    return "Processing error"
+

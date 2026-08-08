@@ -13,6 +13,11 @@ from funes.application.ingestion import (
 from funes.config import AppConfig
 from funes.core.vault import VaultManager
 from funes.domain.errors import PathAuthorizationError
+from funes.domain.jobs import (
+    TRANSIENT_IO_INITIAL_BACKOFF_SECONDS,
+    TRANSIENT_IO_MAX_ATTEMPTS,
+)
+from funes.domain.quarantine import QuarantineService
 from funes.extractors.registry import ExtractorRegistry
 from funes.infrastructure.sqlite_store import JobStore
 from funes.ram_governor.governor import RAMGovernor
@@ -38,7 +43,10 @@ IGNORE_PREFIXES = (".", "~$", ".~", "desktop.ini", "Thumbs.db", ".DS_Store")
 IGNORE_SUFFIXES = (".tmp", ".lock", ".crdownload", ".part", ".githistory", ".swp", ".tmp_proj")
 
 
-def retry_on_io_error(max_retries: int = 3, delay_sec: float = 0.5) -> Callable:
+def retry_on_io_error(
+    max_retries: int = TRANSIENT_IO_MAX_ATTEMPTS,
+    delay_sec: float = TRANSIENT_IO_INITIAL_BACKOFF_SECONDS,
+) -> Callable:
     """Decorador para reintentar operaciones E/S en carpetas de red (NAS, SharePoint, OneDrive)."""
     def decorator(func: Callable) -> Callable:
         def wrapper(*args, **kwargs) -> Any:
@@ -215,7 +223,10 @@ class ETLPipeline:
     def _wait_until_stable(self, raw_file_path: Path) -> bool:
         return wait_until_file_stable(raw_file_path)
 
-    @retry_on_io_error(max_retries=3, delay_sec=0.5)
+    @retry_on_io_error(
+        max_retries=QuarantineService.TRANSIENT_IO_MAX_ATTEMPTS,
+        delay_sec=QuarantineService.TRANSIENT_IO_INITIAL_BACKOFF_SECONDS,
+    )
     def _safe_copy_to_dirty(self, raw_file_path: Path) -> Path:
         return self.vault.copy_to_dirty(raw_file_path)
 

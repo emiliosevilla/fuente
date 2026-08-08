@@ -3,7 +3,9 @@ import re
 import shutil
 import hashlib
 import json
+import uuid
 from pathlib import Path
+from typing import Literal
 import logging
 
 from funes.config import VaultConfig
@@ -21,6 +23,14 @@ WINDOWS_RESERVED_NAMES = {
     "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9",
     "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
 }
+
+ThemeRootName = Literal["input", "dirty", "clean", "output"]
+SYSTEM_DIR_NAME = ".funes"
+
+
+def document_id_for_relative_path(relative_path: str) -> str:
+    """Opaque, stable document id derived from a Vault-relative path."""
+    return str(uuid.uuid5(uuid.NAMESPACE_URL, f"funes:vault:{relative_path}"))
 
 
 class VaultManager:
@@ -119,11 +129,78 @@ class VaultManager:
             quarantine=self.quarantine_dir,
         )
 
+    def theme_root(self, root: ThemeRootName) -> Path:
+        """Return the active-theme directory for one pipeline root."""
+        return {
+            "input": self.input_dir,
+            "dirty": self.dirty_dir,
+            "clean": self.clean_dir,
+            "output": self.output_dir,
+        }[root]
+
     def _vault_relative_identity(self, path: Path) -> str:
         try:
             return path.resolve().relative_to(self.config.vault_path.resolve()).as_posix()
         except ValueError as error:
             raise PathAuthorizationError() from error
+
+    def document_id_for_path(self, path: Path) -> str:
+        """Opaque document id for an authorized path inside the Vault."""
+        return document_id_for_relative_path(self._vault_relative_identity(path))
+
+    def _is_excluded_from_note_lists(self, path: Path) -> bool:
+        """Exclude system, hidden, quarantine and MOC/metadata artifacts."""
+        vault_root = self.config.vault_path.resolve()
+        try:
+            relative = path.resolve().relative_to(vault_root)
+        except ValueError:
+            return True
+
+        if any(part.startswith(".") for part in relative.parts):
+            return True
+        if SYSTEM_DIR_NAME in relative.parts:
+            return True
+
+        try:
+            path.resolve().relative_to(self.quarantine_dir.resolve())
+            return True
+        except ValueError:
+            pass
+
+        # MOC / metadata artifacts: underscore-prefixed Markdown such as
+        # `_Indice_MOC.md`. Notes that live *inside* `_Sin_Cuestion/` keep
+        # normal names and remain part of the note list.
+        if path.name.startswith("_") and path.suffix.lower() == ".md":
+            return True
+        return False
+
+    def enumerate_documents(
+        self,
+        root: ThemeRootName = "output",
+        *,
+        extensions: frozenset[str] | None = frozenset({".md"}),
+    ) -> list[tuple[str, str]]:
+        """Recursively list documents under an active-theme root.
+
+        Returns ``(document_id, vault_relative_path)`` pairs. Hidden files,
+        ``.funes``, quarantine, and underscore-prefixed MOC/metadata Markdown
+        are omitted from normal note lists.
+        """
+        base = self.theme_root(root)
+        if not base.exists():
+            return []
+
+        results: list[tuple[str, str]] = []
+        for candidate in sorted(base.rglob("*")):
+            if not candidate.is_file():
+                continue
+            if extensions is not None and candidate.suffix.lower() not in extensions:
+                continue
+            if self._is_excluded_from_note_lists(candidate):
+                continue
+            relative = self._vault_relative_identity(candidate)
+            results.append((document_id_for_relative_path(relative), relative))
+        return results
 
     # --- GESTIÓN DE TEMAS ---
     def get_available_themes(self) -> list[str]:

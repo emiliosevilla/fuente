@@ -108,9 +108,9 @@ class ETLPipeline:
     interrupted ingestion resumes instead of restarting.
     """
 
-    def __init__(self, config: AppConfig):
+    def __init__(self, config: AppConfig, active_theme: str = "General"):
         self.config = config
-        self.vault = VaultManager(config.vault)
+        self.vault = VaultManager(config.vault, active_theme=active_theme)
         self.extractors = ExtractorRegistry()
         self.ram_governor = RAMGovernor(
             ollama_url=config.ollama_url,
@@ -119,7 +119,8 @@ class ETLPipeline:
         self.chroma = ChromaStore(config.vault.chroma_dir)
         self.chunker = SemanticChunker()
         self.atomic_gen = AtomicNoteGenerator(ollama_url=config.ollama_url)
-        self.linker = GraphLinker(config.vault.output_dir)
+        # Theme-aware output root — never the flat AppConfig General path.
+        self.linker = GraphLinker(self.vault.output_dir)
         self.job_store = JobStore(config.vault.vault_path)
         self.ingestion = IngestionApplicationService(
             config=config,
@@ -134,6 +135,13 @@ class ETLPipeline:
             copy_to_dirty=self._safe_copy_to_dirty,
             stabilize=self._wait_until_stable,
         )
+
+    def set_active_theme(self, theme_name: str) -> Path:
+        """Switch the Vault theme and rebind collaborators that cache roots."""
+        theme_dir = self.vault.set_active_theme(theme_name)
+        self.linker = GraphLinker(self.vault.output_dir)
+        self.ingestion.linker = self.linker
+        return theme_dir
 
     def close(self) -> None:
         self.job_store.close()
@@ -251,7 +259,7 @@ class FolderMonitor:
         self._poll_thread = None
 
     def start(self) -> None:
-        input_dir = str(self.pipeline.config.vault.input_dir)
+        input_dir = str(self.pipeline.vault.input_dir)
         self._stop_event.clear()
 
         # 1. Escaneo e ingesta inmediata de archivos que ya estaban en 1_entrada antes de arrancar Funes
@@ -264,7 +272,8 @@ class FolderMonitor:
 
     def process_existing_files(self) -> None:
         """Procesa de inmediato los archivos que ya se encontraban en 1_entrada al iniciar Funes."""
-        input_dir = self.pipeline.config.vault.input_dir
+        # Active VaultManager theme paths — never flat AppConfig General roots.
+        input_dir = self.pipeline.vault.input_dir
         # Los jobs interrumpidos por un cierre anterior continúan desde su
         # última etapa durable antes de admitir archivos nuevos.
         self.pipeline.resume_pending_jobs()
@@ -288,9 +297,9 @@ class FolderMonitor:
 
     def _run_poll_loop(self) -> None:
         """Bucle de sondeo (polling) híbrido con cedido explícito de hilo (thread yield)."""
-        input_dir = self.pipeline.config.vault.input_dir
-
         while not self._stop_event.is_set():
+            # Re-read each poll so a mid-run theme switch retargets 1_entrada.
+            input_dir = self.pipeline.vault.input_dir
             try:
                 files = [f for f in input_dir.glob("*") if f.is_file() and not is_temporary_or_system_file(f)]
                 for f in files:

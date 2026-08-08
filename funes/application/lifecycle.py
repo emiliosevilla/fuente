@@ -112,7 +112,8 @@ class ApplicationLifecycle:
             self.monitor = self._monitor_factory(self.pipeline)
             self.monitor.start()
 
-            self.graph_loop = self._graph_loop_factory(self.config.vault.output_dir)
+            # Theme-aware VaultManager output — not flat AppConfig General root.
+            self.graph_loop = self._graph_loop_factory(self.pipeline.vault.output_dir)
             self.graph_loop.start()
 
             self._started = True
@@ -153,11 +154,34 @@ class ApplicationLifecycle:
         self._started = False
         logger.info("ApplicationLifecycle detenido (modo '%s').", self.mode)
 
+    def set_active_theme(self, theme_name: str) -> Path:
+        """Switch the owned pipeline's theme and rebind continuous graph roots.
+
+        FolderMonitor already re-reads ``pipeline.vault.input_dir`` each poll,
+        so sharing/updating the pipeline vault is enough for ingestion. The
+        graph loop caches ``output_dir`` at construction, so it is retargeted
+        here via ``set_output_dir``.
+        """
+        if self.pipeline is None:
+            raise RuntimeError(
+                "ApplicationLifecycle.set_active_theme() requires a started pipeline"
+            )
+        theme_dir = self.pipeline.set_active_theme(theme_name)
+        if self.graph_loop is not None:
+            self.graph_loop.set_output_dir(self.pipeline.vault.output_dir)
+        logger.info(
+            "ApplicationLifecycle tema activo: %s (output=%s)",
+            self.pipeline.vault.active_theme,
+            self.pipeline.vault.output_dir,
+        )
+        return theme_dir
+
     def _run_flush_once(self) -> dict:
         assert self.pipeline is not None
         self.pipeline.resume_pending_jobs()
 
-        input_dir = self.config.vault.input_dir
+        # Active theme 1_entrada via VaultManager — required for Theme scope.
+        input_dir = self.pipeline.vault.input_dir
         input_files = (
             [f for f in input_dir.glob("*") if f.is_file() and not f.name.startswith(".")]
             if input_dir.exists()
@@ -170,7 +194,7 @@ class ApplicationLifecycle:
 
         refine_result = None
         if self.refine_graph_on_flush:
-            graph_loop = self._graph_loop_factory(self.config.vault.output_dir)
+            graph_loop = self._graph_loop_factory(self.pipeline.vault.output_dir)
             refine_result = graph_loop.refine_knowledge_graph()
 
         return {

@@ -11,18 +11,30 @@ import pytest
 
 from funes.application.lifecycle import ApplicationLifecycle
 from funes.config import get_default_config
+from funes.core.vault import VaultManager
 from funes.graph_engine.optimized_loop import OptimizadoGraphLoop
 from funes.watcher.watcher import FolderMonitor
 
 
 class FakePipeline:
-    """Stand-in for `ETLPipeline` that never touches Ollama/Chroma/SQLite."""
+    """Stand-in for `ETLPipeline` that never touches Ollama/Chroma/SQLite.
+
+    Exposes a real `VaultManager` so lifecycle/FolderMonitor can read
+    theme-aware input/output roots the same way production does (Task 3.1).
+    """
 
     def __init__(self, config):
         self.config = config
+        self.vault = VaultManager(config.vault)
         self.processed: list = []
         self.resume_calls = 0
         self.closed = False
+        self.linker_output_dirs: list = []
+
+    def set_active_theme(self, theme_name: str):
+        theme_dir = self.vault.set_active_theme(theme_name)
+        self.linker_output_dirs.append(self.vault.output_dir)
+        return theme_dir
 
     def resume_pending_jobs(self, limit: int = 25) -> int:
         self.resume_calls += 1
@@ -59,6 +71,11 @@ class FakeGraphLoop:
         self.started = False
         self.stopped = False
         self.refine_calls = 0
+        self.output_dir_history = [output_dir]
+
+    def set_output_dir(self, output_dir) -> None:
+        self.output_dir = output_dir
+        self.output_dir_history.append(output_dir)
 
     def start(self) -> None:
         self.started = True

@@ -11,7 +11,7 @@
 ## Progress Status (2026-08-08)
 
 **Branch:** `feature/funes-hardening-2026-08-07` (worktree `.worktrees/funes-hardening-2026-08-07`)  
-**Tip:** `cf0160c` — pushed to `origin/feature/funes-hardening-2026-08-07`  
+**Tip:** `9dbcc58` — pushed to `origin/feature/funes-hardening-2026-08-07`  
 **Not merged** into `dev` / `main` yet. Main checkout still has a dirty partial `consola_preview.html`; discard before any `/supagit` promote.
 
 ### Completed
@@ -23,7 +23,7 @@
 | Phase 2 — Recoverable ETL | **Done** | 2.1–2.4 | `d8d38ba` |
 | Phase 3 — Themes / Graph / Reader | **Done** | 3.1–3.3 | `b6aec0d` |
 | Phase 4 — RAG / Local Chat | **Done** | 4.1–4.3 | `2b64861` |
-| Phase 5 — Resource scheduling | **In progress** | 5.1–5.2 done (5.2 commit pending); 5.3 open | `cf0160c` |
+| Phase 5 — Resource scheduling | **In progress** | 5.1–5.3 done (5.3 commit pending) | `9dbcc58` |
 
 Commits on this branch since `1bb66b8`:
 
@@ -52,12 +52,14 @@ Commits on this branch since `1bb66b8`:
 23. `b47d234` — docs: record Task 4.3  
 24. `2a39ef8` — Task 5.1 resource budgets  
 25. `cf0160c` — docs: record Task 5.1  
+26. `5ab37d1` — Task 5.2 durable scheduler  
+27. `9dbcc58` — docs: record Task 5.2  
 
 ### Not started / next
 
-- Task `5.2` commit pending; then `5.3` and Phases 6–8  
+- Task `5.3` commit pending; then Phases 6–8  
 
-**Resume at:** Task `5.3` — Retry policy (once 5.2 is committed).  
+**Resume at:** Task `6.1` — Approval (once 5.3 is committed).  
 **SDD ledger:** `.worktrees/funes-hardening-2026-08-07/.superpowers/sdd/2026-08-07-funes-hardening-and-implementation/progress.md`  
 **Process note:** After each completed task, update this Progress Status section, mark that task's step checkboxes `[x]`, and refresh §12 Recommended Execution Order — do not leave the plan stale between checkpoints.
 
@@ -951,7 +953,7 @@ Acceptance:
 - A memory-constrained environment queues or degrades instead of exceeding the budget.
 - Two simultaneous tasks cannot corrupt the same document or Chroma records.
 
-**Checkpoint 5.2 (2026-08-08):** Durable scheduler + task classes; evaluate_resource gate; orphaned-lease resume fix; atomic lease claim. Review approved after fix round 1. **Commit pending**.
+**Checkpoint 5.2 (2026-08-08):** Durable scheduler + task classes; evaluate_resource gate; orphaned-lease resume fix; atomic lease claim. Review approved after fix round 1. Committed as `5ab37d1`.
 
 ### Task 5.3 — Validate the two-attempt rule as a policy
 
@@ -963,12 +965,12 @@ Acceptance:
 
 Steps:
 
-- [ ] Persist every attempt.
-- [ ] Classify retryable and permanent errors.
-- [ ] Configure the maximum attempts per error class.
-- [ ] Default corrupt/unsupported media to two attempts only if the product decision confirms that policy.
-- [ ] Preserve the original source on first failure.
-- [ ] Quarantine only after the policy threshold and write a user-readable reason.
+- [x] Persist every attempt.
+- [x] Classify retryable and permanent errors.
+- [x] Configure the maximum attempts per error class.
+- [x] Default corrupt/unsupported media to two attempts only if the product decision confirms that policy.
+- [x] Preserve the original source on first failure.
+- [x] Quarantine only after the policy threshold and write a user-readable reason.
 
 Acceptance:
 
@@ -983,6 +985,8 @@ Acceptance:
 **Objective:** Implement the Stage-Gate and Gemini's strict metadata concept on top of the stable domain.
 
 **Exit gate:** a user can review, edit, approve, reject, restore and export a note without corrupting frontmatter or losing content.
+
+**Checkpoint 5.3 (2026-08-08):** Domain retry policy (corrupt/unsupported = 2); attempt persistence; quarantine at threshold. Review approved. **Commit pending**.
 
 ### Task 6.1 — Implement approval as a state transition
 
@@ -1326,9 +1330,9 @@ Execute tasks in this order. Do not start a later phase merely because its UI is
 18. [x] `4.2` Retrieval service. (`1a16a92`)
 19. [x] `4.3` Chat + Ollama. (`2b64861`)
 20. [x] `5.1` Resource budgets. (`2a39ef8`)
-21. [x] `5.2` Scheduler. (commit pending)
-22. [ ] `5.3` Retry policy. ← **resume here** (after 5.2 commit)
-23. `6.1` Approval.
+21. [x] `5.2` Scheduler. (`5ab37d1`)
+22. [x] `5.3` Retry policy. (commit pending)
+23. [ ] `6.1` Approval. ← **resume here** (after 5.3 commit)
 24. `6.2` Metadata forms.
 25. `6.3` TipTap evaluation.
 26. `6.4` Export.

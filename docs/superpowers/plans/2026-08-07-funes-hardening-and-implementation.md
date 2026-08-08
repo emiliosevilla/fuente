@@ -11,7 +11,7 @@
 ## Progress Status (2026-08-08)
 
 **Branch:** `feature/funes-hardening-2026-08-07` (worktree `.worktrees/funes-hardening-2026-08-07`)  
-**Tip:** `286f4c0` — pushed to `origin/feature/funes-hardening-2026-08-07`  
+**Tip:** `a970fb0` — pushed to `origin/feature/funes-hardening-2026-08-07`  
 **Not merged** into `dev` / `main` yet. Main checkout still has a dirty partial `consola_preview.html`; discard before any `/supagit` promote.
 
 ### Completed
@@ -25,7 +25,7 @@
 | Phase 4 — RAG / Local Chat | **Done** | 4.1–4.3 | `2b64861` |
 | Phase 5 — Resource scheduling | **Done** | 5.1–5.3 | `7d47d2a` |
 | Phase 6 — Human Review / YAML / Editorial | **Done** | 6.1–6.4 | `3d46902` |
-| Phase 7 — Installers / Packaging / Offline | **In progress** | 7.1 done (commit pending); 7.2–7.4 open | `286f4c0` |
+| Phase 7 — Installers / Packaging / Offline | **In progress** | 7.1–7.2 done (7.2 commit pending); 7.3–7.4 open | `a970fb0` |
 
 Commits on this branch since `1bb66b8`:
 
@@ -67,12 +67,14 @@ Commits on this branch since `1bb66b8`:
 36. `feea4ad` — docs: record Task 6.3  
 37. `3d46902` — Task 6.4 deterministic export  
 38. `286f4c0` — docs: record Task 6.4 / Phase 6  
+39. `167e4b0` — Task 7.1 dependency manifests  
+40. `a970fb0` — docs: record Task 7.1  
 
 ### Not started / next
 
-- Task `7.1` commit pending; then `7.2`–`7.4` and Phase 8  
+- Task `7.2` commit pending; then `7.3`–`7.4` and Phase 8  
 
-**Resume at:** Task `7.2` — Installers (once 7.1 is committed).  
+**Resume at:** Task `7.3` — Headless mode (once 7.2 is committed).  
 **SDD ledger:** `.worktrees/funes-hardening-2026-08-07/.superpowers/sdd/2026-08-07-funes-hardening-and-implementation/progress.md`  
 **Process note:** After each completed task, update this Progress Status section, mark that task's step checkboxes `[x]`, and refresh §12 Recommended Execution Order — do not leave the plan stale between checkpoints.
 
@@ -1136,7 +1138,7 @@ Acceptance:
 - A clean installation has the dependencies needed for the selected feature set.
 - The packager does not reference missing assets.
 
-**Checkpoint 7.1 (2026-08-09):** Extras (webview/audio/ocr/office/dev); pins; dependency-matrix; icon guard; pywebview/faster-whisper gap closed. Review approved. **Commit pending**.
+**Checkpoint 7.1 (2026-08-09):** Extras (webview/audio/ocr/office/dev); pins; dependency-matrix; icon guard; pywebview/faster-whisper gap closed. Review approved. Committed as `167e4b0`.
 
 ### Task 7.2 — Make installer actions explicit and idempotent
 
@@ -1149,20 +1151,22 @@ Acceptance:
 
 Steps:
 
-- [ ] Detect existing installations without reinstalling them.
-- [ ] Ask for confirmation before installing large models or system applications.
-- [ ] Verify service readiness after starting Ollama.
-- [ ] Report failed model installation as a failed step, not success.
-- [ ] Move Tkinter widget updates onto the main thread using `after`.
-- [ ] Correct the wizard step count.
-- [ ] Store an installation receipt with versions and paths.
-- [ ] Make rerunning the installer safe.
+- [x] Detect existing installations without reinstalling them.
+- [x] Ask for confirmation before installing large models or system applications.
+- [x] Verify service readiness after starting Ollama.
+- [x] Report failed model installation as a failed step, not success.
+- [x] Move Tkinter widget updates onto the main thread using `after`.
+- [x] Correct the wizard step count.
+- [x] Store an installation receipt with versions and paths.
+- [x] Make rerunning the installer safe.
 
 Acceptance:
 
 - A second run does not duplicate configuration or workspaces.
 - A failed dependency is visible and actionable.
 - No system mutation occurs without the required user confirmation.
+
+**Checkpoint 7.2 (2026-08-09):** Idempotent installers + confirmation gates; Ollama readiness; receipt; Tk `after`; fix `_default_log`/progress. Review approved after fix round 1. **Commit pending**.
 
 ### Task 7.3 — Separate GUI and headless execution
 
@@ -1359,9 +1363,9 @@ Execute tasks in this order. Do not start a later phase merely because its UI is
 24. [x] `6.2` Metadata forms. (`d48fa40`)
 25. [x] `6.3` TipTap evaluation. (`b45a31c` — TipTap excluded)
 26. [x] `6.4` Export. (`3d46902`)
-27. [x] `7.1` Dependencies. (commit pending)
-28. [ ] `7.2` Installers. ← **resume here** (after 7.1 commit)
-29. `7.3` Headless mode.
+27. [x] `7.1` Dependencies. (`167e4b0`)
+28. [x] `7.2` Installers. (commit pending)
+29. [ ] `7.3` Headless mode. ← **resume here** (after 7.2 commit)
 30. `7.4` Offline mode.
 31. `8.1` Security matrix.
 32. `8.2` Recovery matrix.

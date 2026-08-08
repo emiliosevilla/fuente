@@ -29,6 +29,7 @@ if sys.platform == "win32":
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
 
+from funes.application.lifecycle import ApplicationLifecycle
 from funes.application.settings import SettingsService, SettingsValidationError
 from funes.config import get_default_config, AppConfig, save_config, load_config
 from funes.core.vault import VaultManager
@@ -1157,6 +1158,11 @@ def launch_control_console(vault_path: Optional[Path] = None):
     """
     Lanza la Consola Funes oficial 100% IDÉNTICA a consola_preview.html
     vía PyWebView / Native WebKit engine con fallback Tkinter.
+
+    Owns the lifecycle of the console's background services: the
+    `ApplicationLifecycle` (FolderMonitor + OptimizadoGraphLoop) is started
+    before the window opens and stopped — bounded, no leftover threads —
+    once the window is closed, regardless of which UI backend was used.
     """
     if not vault_path:
         vault_path = Path.home() / "Documents" / "Funes_Vault"
@@ -1164,24 +1170,29 @@ def launch_control_console(vault_path: Optional[Path] = None):
     vault_path = Path(vault_path).resolve()
     backend = FunesConsoleBackend(vault_path)
 
+    lifecycle = ApplicationLifecycle(backend.config, mode="continuous")
     html_file = Path(__file__).resolve().parent.parent / "consola_preview.html"
 
-    if HAS_WEBVIEW and html_file.exists():
-        api = FunesPyWebViewApi(backend)
-        window = webview.create_window(
-            "Funes Control Console — Estética Papiro",
-            url=html_file.as_uri(),
-            js_api=api,
-            width=1280,
-            height=850,
-            min_size=(980, 680),
-            background_color="#DCD4C7"
-        )
-        api.set_window(window)
-        webview.start(debug=False)
-    else:
-        app = FunesControlConsole(vault_path)
-        app.mainloop()
+    try:
+        lifecycle.start()
+        if HAS_WEBVIEW and html_file.exists():
+            api = FunesPyWebViewApi(backend)
+            window = webview.create_window(
+                "Funes Control Console — Estética Papiro",
+                url=html_file.as_uri(),
+                js_api=api,
+                width=1280,
+                height=850,
+                min_size=(980, 680),
+                background_color="#DCD4C7"
+            )
+            api.set_window(window)
+            webview.start(debug=False)
+        else:
+            app = FunesControlConsole(vault_path)
+            app.mainloop()
+    finally:
+        lifecycle.stop()
 
 
 if __name__ == "__main__":

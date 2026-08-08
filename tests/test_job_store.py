@@ -367,7 +367,7 @@ def test_migrations_are_recorded_and_not_reapplied(tmp_path):
             row[0]
             for row in raw_connection.execute("SELECT version FROM schema_migrations")
         ]
-        assert versions == [1]
+        assert versions == [1, 2]
     finally:
         raw_connection.close()
 
@@ -380,7 +380,7 @@ def test_migrations_are_recorded_and_not_reapplied(tmp_path):
             for row in raw_connection.execute("SELECT version FROM schema_migrations")
         ]
         raw_connection.close()
-        assert versions == [1]
+        assert versions == [1, 2]
     finally:
         reopened.close()
 
@@ -400,6 +400,9 @@ def test_schema_has_required_tables_and_indexes(tmp_path):
             "document_identities",
             "index_artifacts",
             "schema_migrations",
+            "schedule_decisions",
+            "resource_leases",
+            "document_locks",
         }.issubset(tables)
 
         indexes = {

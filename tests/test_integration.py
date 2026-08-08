@@ -13,10 +13,13 @@ from unittest.mock import patch
 class TestIntegration(unittest.TestCase):
 
     def setUp(self):
+        from tests.conftest import patch_abundant_ram
+
         self.temp_dir = tempfile.TemporaryDirectory()
         self.vault_path = Path(self.temp_dir.name)
         self.config = get_default_config(self.vault_path)
         self.pipeline = ETLPipeline(self.config)
+        patch_abundant_ram(self.pipeline.ram_governor)
 
     def tearDown(self):
         self.temp_dir.cleanup()

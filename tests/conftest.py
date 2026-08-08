@@ -9,9 +9,17 @@ import pytest
 
 from funes.config import get_default_config
 from funes.core.vault import VaultManager
+from funes.ram_governor.budget import measured_snapshot
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 REPO_VAULT = REPO_ROOT / "Vault_Funes"
+
+
+def patch_abundant_ram(governor) -> None:
+    """Make ETL/scheduler tests independent of the host's free RAM."""
+    governor.measure_memory = lambda: measured_snapshot(
+        total_gb=32.0, available_gb=24.0, safety_margin_pct=0.35
+    )
 
 
 @pytest.fixture

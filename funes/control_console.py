@@ -31,6 +31,11 @@ from tkinter import ttk, messagebox, filedialog
 
 from funes.application.chat import ChatApplicationService, OllamaChatProvider
 from funes.application.lifecycle import ApplicationLifecycle
+from funes.application.export import (
+    ExportApplicationService,
+    ExportFileExistsError,
+    UnsupportedExportFormatError,
+)
 from funes.application.notes import NotesApplicationService
 from funes.application.retrieval import RetrievalApplicationService
 from funes.application.settings import SettingsService, SettingsValidationError
@@ -209,6 +214,7 @@ class FunesConsoleBackend:
         self._retrieval_service: Optional[RetrievalApplicationService] = None
         self._chat_service: Optional[ChatApplicationService] = None
         self._notes_service: Optional[NotesApplicationService] = None
+        self._export_service: Optional[ExportApplicationService] = None
         self._job_store: Optional[JobStore] = None
 
     def attach_lifecycle(self, lifecycle: ApplicationLifecycle) -> None:
@@ -225,6 +231,7 @@ class FunesConsoleBackend:
         self._retrieval_service = None
         self._chat_service = None
         self._notes_service = None
+        self._export_service = None
         self._job_store = None
 
     def _apply_theme(self, theme_name: str) -> str:
@@ -301,6 +308,45 @@ class FunesConsoleBackend:
                 index_notifier=self.notify_index_changed,
             )
         return self._notes_service
+
+    def get_export_service(self) -> ExportApplicationService:
+        """Canonical note export service (Task 6.4)."""
+        if self._export_service is None:
+            self._export_service = ExportApplicationService(
+                notes_service=self.get_notes_service(),
+                path_resolver=self._path_resolver(),
+            )
+        return self._export_service
+
+    def export_note(
+        self,
+        document_id: str,
+        export_format: str,
+        *,
+        destination_path: Optional[str] = None,
+        confirm_overwrite: bool = False,
+    ) -> Dict[str, Any]:
+        """Export a note from canonical NoteDocument, not rendered DOM."""
+        try:
+            service = self.get_export_service()
+            if destination_path:
+                return service.write_export(
+                    document_id,
+                    export_format,
+                    destination_path,
+                    confirm_overwrite=confirm_overwrite,
+                )
+            return service.prepare_download(document_id, export_format).as_dict()
+        except ExportFileExistsError as error:
+            return {
+                "error": error.code,
+                "message": str(error),
+                "destination": error.destination,
+            }
+        except UnsupportedExportFormatError as error:
+            return {"error": error.code, "message": str(error)}
+        except PathAuthorizationError as error:
+            return {"error": error.code, "message": str(error)}
 
     def notify_index_changed(self) -> None:
         """Invalidate BM25 caches after ingestion writes (parked Task 4.2 wiring)."""
@@ -780,8 +826,42 @@ historial:
             note_title = payload.get("note_title", "seleccionada")
             return {"log": f"Nota '{note_title}' copiada al portapapeles."}
         elif action_name == "export_reader_note":
+            export_format = str(payload.get("format") or "markdown")
+            document_id = str(payload.get("document_id") or payload.get("note_path") or "")
             note_title = payload.get("note_title", "seleccionada")
-            return {"log": f"Nota '{note_title}' exportada como archivo Markdown."}
+            destination_path = payload.get("destination_path")
+            confirm_overwrite = bool(payload.get("confirm_overwrite"))
+            if not document_id.strip():
+                return {
+                    "error": "invalid_payload",
+                    "message": "document_id is required",
+                }
+            result = self.export_note(
+                document_id,
+                export_format,
+                destination_path=destination_path,
+                confirm_overwrite=confirm_overwrite,
+            )
+            if "error" in result:
+                return result
+            if result.get("status") == "exported":
+                return {
+                    "log": (
+                        f"Nota '{note_title}' exportada como {export_format} "
+                        f"en {result.get('path', '')}."
+                    ),
+                    **result,
+                }
+            format_labels = {
+                "markdown": "Markdown (.md)",
+                "docx": "Word (.docx)",
+                "pdf": "PDF (impresión asistida)",
+            }
+            label = format_labels.get(export_format, export_format)
+            return {
+                "log": f"Nota '{note_title}' preparada para exportación como {label}.",
+                **result,
+            }
         elif action_name == "open_obsidian":
             obsidian_uri = payload.get("obsidian_uri", "")
             note_path = payload.get("note_path", "")

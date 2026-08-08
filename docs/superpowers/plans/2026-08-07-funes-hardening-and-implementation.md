@@ -11,7 +11,7 @@
 ## Progress Status (2026-08-08)
 
 **Branch:** `feature/funes-hardening-2026-08-07` (worktree `.worktrees/funes-hardening-2026-08-07`)  
-**Tip:** `596c9a2` — pushed to `origin/feature/funes-hardening-2026-08-07`  
+**Tip:** `0fa0c46` — pushed to `origin/feature/funes-hardening-2026-08-07`  
 **Not merged** into `dev` / `main` yet. Main checkout still has a dirty partial `consola_preview.html`; discard before any `/supagit` promote.
 
 ### Completed
@@ -24,7 +24,7 @@
 | Phase 3 — Themes / Graph / Reader | **Done** | 3.1–3.3 | `b6aec0d` |
 | Phase 4 — RAG / Local Chat | **Done** | 4.1–4.3 | `2b64861` |
 | Phase 5 — Resource scheduling | **Done** | 5.1–5.3 | `7d47d2a` |
-| Phase 6 — Human Review / YAML / Editorial | **In progress** | 6.1 done (commit pending); 6.2–6.4 open | `596c9a2` |
+| Phase 6 — Human Review / YAML / Editorial | **In progress** | 6.1–6.2 done (6.2 commit pending); 6.3–6.4 open | `0fa0c46` |
 
 Commits on this branch since `1bb66b8`:
 
@@ -58,12 +58,14 @@ Commits on this branch since `1bb66b8`:
 28. `7d47d2a` — Task 5.3 retry policy  
 29. `c76dd08` — docs: record Task 5.3 / Phase 5  
 30. `596c9a2` — docs: Phase 5 done / pause at 6.1  
+31. `b05e997` — Task 6.1 note approval transitions  
+32. `0fa0c46` — docs: record Task 6.1  
 
 ### Not started / next
 
-- Task `6.1` commit pending; then `6.2`–`6.4` and Phases 7–8  
+- Task `6.2` commit pending; then `6.3`–`6.4` and Phases 7–8  
 
-**Resume at:** Task `6.2` — Metadata forms (once 6.1 is committed).  
+**Resume at:** Task `6.3` — TipTap evaluation (once 6.2 is committed).  
 **SDD ledger:** `.worktrees/funes-hardening-2026-08-07/.superpowers/sdd/2026-08-07-funes-hardening-and-implementation/progress.md`  
 **Process note:** After each completed task, update this Progress Status section, mark that task's step checkboxes `[x]`, and refresh §12 Recommended Execution Order — do not leave the plan stale between checkpoints.
 
@@ -1017,7 +1019,7 @@ Acceptance:
 - A stale editor cannot overwrite a newer note.
 - A rejected note remains recoverable with reason and history.
 
-**Checkpoint 6.1 (2026-08-08):** NotesApplicationService approve/reject with revision CAS; inbox path+document_id; file rollback on CAS fail. Review approved after fix round 1. **Commit pending**.
+**Checkpoint 6.1 (2026-08-08):** NotesApplicationService approve/reject with revision CAS; inbox path+document_id; file rollback on CAS fail. Review approved after fix round 1. Committed as `b05e997`.
 
 ### Task 6.2 — Add safe metadata forms
 
@@ -1029,18 +1031,20 @@ Acceptance:
 
 Steps:
 
-- [ ] Provide title, tags, issue, date, sources and status as typed controls.
-- [ ] Sanitize tags into a bounded list of strings.
-- [ ] Validate issue names through the Vault service.
-- [ ] Do not expose raw YAML editing in the approval modal.
-- [ ] Display validation errors adjacent to the invalid field.
-- [ ] Keep the raw frontmatter available only in a diagnostic/export view.
+- [x] Provide title, tags, issue, date, sources and status as typed controls.
+- [x] Sanitize tags into a bounded list of strings.
+- [x] Validate issue names through the Vault service.
+- [x] Do not expose raw YAML editing in the approval modal.
+- [x] Display validation errors adjacent to the invalid field.
+- [x] Keep the raw frontmatter available only in a diagnostic/export view.
 
 Acceptance:
 
 - Invalid metadata cannot be committed.
 - Tags and issue names cannot inject YAML or paths.
 - The approval UI does not directly edit serialized frontmatter.
+
+**Checkpoint 6.2 (2026-08-08):** Safe typed metadata forms; injection blocked; save cannot set approved (approve-only). Review approved after fix round 1. **Commit pending**.
 
 ### Task 6.3 — Evaluate TipTap without making it the source of truth
 
@@ -1338,9 +1342,9 @@ Execute tasks in this order. Do not start a later phase merely because its UI is
 20. [x] `5.1` Resource budgets. (`2a39ef8`)
 21. [x] `5.2` Scheduler. (`5ab37d1`)
 22. [x] `5.3` Retry policy. (`7d47d2a`)
-23. [x] `6.1` Approval. (commit pending)
-24. [ ] `6.2` Metadata forms. ← **resume here** (after 6.1 commit)
-25. `6.3` TipTap evaluation.
+23. [x] `6.1` Approval. (`b05e997`)
+24. [x] `6.2` Metadata forms. (commit pending)
+25. [ ] `6.3` TipTap evaluation. ← **resume here** (after 6.2 commit)
 26. `6.4` Export.
 27. `7.1` Dependencies.
 28. `7.2` Installers.

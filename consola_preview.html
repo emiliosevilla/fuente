@@ -645,6 +645,31 @@
             color: var(--gold);
         }
 
+        .reader-theme-label {
+            font-size: 0.72rem;
+            font-weight: 800;
+            letter-spacing: 0.8px;
+            color: var(--gold);
+            padding: 8px 4px 2px 4px;
+        }
+
+        .reader-issue-group {
+            list-style: none;
+            margin: 0 0 8px 0;
+            padding: 0;
+        }
+
+        .reader-issue-label {
+            font-size: 0.74rem;
+            font-weight: 700;
+            color: var(--muted);
+            padding: 6px 8px 2px 8px;
+        }
+
+        .reader-issue-group .reader-note-item {
+            margin-left: 8px;
+        }
+
         .reader-view-pane {
             flex: 1;
             height: 100%;
@@ -985,6 +1010,7 @@
             <div class="modal-header">
                 <div class="modal-title">FUNES EL MEMORIOSO — LECTOR DE NOTAS</div>
                 <div style="display: flex; gap: 6px; align-items: center;">
+                    <button class="btn-small" id="btn-reader-back" data-onclick-command="goBackReaderNote()" disabled title="Volver a la nota anterior">◄ Atrás</button>
                     <button class="btn-small btn-toggle active" id="btn-reader-mode-list" data-onclick-command="switchReaderView('list')">Vista Notas</button>
                     <button class="btn-small btn-toggle" id="btn-reader-mode-graph" data-onclick-command="switchReaderView('graph')">Vista Gráfico</button>
                     <button class="btn-small btn-toggle" id="btn-reader-mode-moc" data-onclick-command="openMOCNote()">Mapa MOC</button>
@@ -1916,7 +1942,7 @@
 
         function getFullNotePath(notePath) {
             const defaultBase = "/Users/emiliosevillaortego/Documents/Programación/funes/Vault_Funes/4_salida/";
-            if (!notePath) return defaultBase + "00_MOC_Funes.md";
+            if (!notePath) return defaultBase + "_Indice_MOC.md";
             if (notePath.startsWith("/")) return notePath;
             return defaultBase + (notePath.endsWith(".md") ? notePath : notePath + ".md");
         }
@@ -2326,7 +2352,7 @@
         }
 
         function openCurrentNoteInObsidian(btnEl) {
-            const noteFile = currentSelectedNotePath ? (currentSelectedNotePath.endsWith('.md') ? currentSelectedNotePath : currentSelectedNotePath + '.md') : '00_MOC_Funes.md';
+            const noteFile = currentSelectedNotePath ? (currentSelectedNotePath.endsWith('.md') ? currentSelectedNotePath : currentSelectedNotePath + '.md') : '_Indice_MOC.md';
             const obsidianUri = 'obsidian://open?vault=Vault_Funes&file=4_salida%2F' + encodeURIComponent(noteFile);
             const title = currentSelectedNoteTitle || noteFile;
 
@@ -2615,9 +2641,9 @@
             };
 
             canvas.onmouseup = function(e) {
-                if (draggedNode && !dragMoved && draggedNode.path) {
+                if (draggedNode && !dragMoved && (draggedNode.document_id || draggedNode.path)) {
                     switchReaderView('list');
-                    loadNoteContent(draggedNode.path);
+                    navigateReaderNote(draggedNode.document_id || draggedNode.path);
                 }
                 draggedNode = null;
                 isPanning = false;
@@ -2732,13 +2758,55 @@
 
         let currentSelectedNoteTitle = '';
         let currentSelectedNotePath = '';
+        let currentSelectedDocumentId = '';
+        let pinnedMocDocumentId = '';
+        let readerNoteHistory = [];
+
+        function updateReaderBackButton() {
+            const btn = document.getElementById('btn-reader-back');
+            if (!btn) return;
+            btn.disabled = readerNoteHistory.length === 0;
+        }
+
+        function pushReaderHistory(nextDocumentId) {
+            if (
+                currentSelectedDocumentId
+                && nextDocumentId
+                && currentSelectedDocumentId !== nextDocumentId
+            ) {
+                readerNoteHistory.push(currentSelectedDocumentId);
+            }
+            updateReaderBackButton();
+        }
+
+        function goBackReaderNote() {
+            if (!readerNoteHistory.length) {
+                updateReaderBackButton();
+                return;
+            }
+            const previousId = readerNoteHistory.pop();
+            updateReaderBackButton();
+            if (previousId) {
+                loadNoteContent(previousId, { skipHistory: true });
+            }
+        }
+
+        function navigateReaderNote(documentId) {
+            if (!documentId) return;
+            pushReaderHistory(documentId);
+            loadNoteContent(documentId, { skipHistory: true });
+        }
 
         function openMOCNote() {
             switchReaderView('list');
             document.querySelectorAll('.btn-toggle').forEach(el => el.classList.remove('active'));
             const mocBtn = document.getElementById('btn-reader-mode-moc');
             if (mocBtn) mocBtn.classList.add('active');
-            loadNoteContent('00_MOC_Funes.md');
+            if (pinnedMocDocumentId) {
+                navigateReaderNote(pinnedMocDocumentId);
+            } else {
+                loadReaderNotes();
+            }
         }
 
         let activeChatContextMode = 'all_notes'; // 'single_note' or 'all_notes'
@@ -2827,9 +2895,13 @@
                         if (token.type === 'wikilink') {
                             const link = document.createElement('span');
                             link.className = 'wikilink';
-                            link.dataset.documentId = token.document_id;
+                            link.dataset.documentId = token.document_id || '';
                             link.textContent = token.text;
-                            link.addEventListener('click', function() { loadNoteContent(token.document_id); });
+                            if (token.document_id && !token.broken) {
+                                link.addEventListener('click', function() {
+                                    navigateReaderNote(token.document_id);
+                                });
+                            }
                             node.appendChild(link);
                         } else {
                             node.appendChild(document.createTextNode(token.text));
@@ -2845,9 +2917,9 @@
 
         const LOCAL_MOCK_NOTES = [
             {
-                title: "00 Mapa de Contenidos (MOC Funes)",
-                path: "00_MOC_Funes.md",
-                html: "<div class='note-content'><div class='note-badge'>YAML Metadata: moc, indice, mapa</div><h1 style='color:var(--gold);'>00 Mapa de Contenidos (MOC Funes)</h1><h3 style='color:var(--accent); margin-top:12px;'>Resumen Ejecutivo</h3><ul style='color:var(--muted); font-size:0.85rem;'><li><b>¿Qué?</b>: Índice central navegable y estructurado del Vault Funes.</li><li><b>¿Cuándo?</b>: Generado automáticamente por el Vault Engine.</li><li><b>¿Quién?</b>: Funes Vault Engine.</li><li><b>¿Cómo?</b>: Hiperenlaces Wiki cruzados y navegación jerárquica.</li></ul><h3 style='color:var(--accent); margin-top:12px;'>Índice General de Conocimiento (15 Notas Atómicas)</h3><ul style='color:var(--paper); font-size:0.85rem;'><li>[[Nota_Arquitectura_Funes]] — Arquitectura General de Funes</li><li>[[Nota_ETL_Pipeline_Ingesta]] — Pipeline ETL de Ingesta y Procesamiento</li><li>[[Nota_Motor_IA_Local]] — Motor de Inferencia IA Local y Ollama</li><li>[[Nota_Base_Datos_Vectorial]] — Base de Datos Vectorial ChromaDB</li><li>[[Nota_Optimizacion_RAM]] — Gobernador de Memoria RAM</li><li>[[Nota_Formato_Papiro]] — Estética Editorial Papiro y Consola UI</li><li>[[Nota_Graph_Engine_Optimizado]] — Grafo Interactivo de Conocimiento</li><li>[[Nota_Notas_Atomicas]] — Estructuración en Notas Atómicas</li><li>[[Nota_Gestor_Cuarentena]] — Aislamiento y Recuperación de Cuarentena</li><li>[[Nota_Integracion_Obsidian]] — Sincronización Bidireccional Obsidian</li><li>[[Nota_AnythingLLM_Conexion]] — Integración Desktop AnythingLLM</li><li>[[Nota_Telemetria_y_Logs]] — Registros y Gazette Logging</li><li>[[Nota_Seguridad_y_Privacidad]] — Privacidad 100% Offline</li><li>[[Nota_Manual_Usuario_Avanzado]] — Manual de Uso Avanzado y Atajos</li></ul></div>"
+                title: "Índice MOC — Mapa de Conocimiento Global",
+                path: "_Indice_MOC.md",
+                html: "<div class='note-content'><div class='note-badge'>YAML Metadata: moc, indice, mapa</div><h1 style='color:var(--gold);'>Índice MOC — Mapa de Conocimiento Global</h1><h3 style='color:var(--accent); margin-top:12px;'>Resumen Ejecutivo</h3><ul style='color:var(--muted); font-size:0.85rem;'><li><b>¿Qué?</b>: Índice central navegable y estructurado del Vault Funes.</li><li><b>¿Cuándo?</b>: Generado automáticamente por el Vault Engine.</li><li><b>¿Quién?</b>: Funes Vault Engine.</li><li><b>¿Cómo?</b>: Hiperenlaces Wiki cruzados y navegación jerárquica.</li></ul><h3 style='color:var(--accent); margin-top:12px;'>Índice General de Conocimiento (15 Notas Atómicas)</h3><ul style='color:var(--paper); font-size:0.85rem;'><li>[[Nota_Arquitectura_Funes]] — Arquitectura General de Funes</li><li>[[Nota_ETL_Pipeline_Ingesta]] — Pipeline ETL de Ingesta y Procesamiento</li><li>[[Nota_Motor_IA_Local]] — Motor de Inferencia IA Local y Ollama</li><li>[[Nota_Base_Datos_Vectorial]] — Base de Datos Vectorial ChromaDB</li><li>[[Nota_Optimizacion_RAM]] — Gobernador de Memoria RAM</li><li>[[Nota_Formato_Papiro]] — Estética Editorial Papiro y Consola UI</li><li>[[Nota_Graph_Engine_Optimizado]] — Grafo Interactivo de Conocimiento</li><li>[[Nota_Notas_Atomicas]] — Estructuración en Notas Atómicas</li><li>[[Nota_Gestor_Cuarentena]] — Aislamiento y Recuperación de Cuarentena</li><li>[[Nota_Integracion_Obsidian]] — Sincronización Bidireccional Obsidian</li><li>[[Nota_AnythingLLM_Conexion]] — Integración Desktop AnythingLLM</li><li>[[Nota_Telemetria_y_Logs]] — Registros y Gazette Logging</li><li>[[Nota_Seguridad_y_Privacidad]] — Privacidad 100% Offline</li><li>[[Nota_Manual_Usuario_Avanzado]] — Manual de Uso Avanzado y Atajos</li></ul></div>"
             },
             {
                 title: "Arquitectura General de Funes",
@@ -2917,7 +2989,7 @@
             {
                 title: "Manual de Uso Avanzado y Atajos",
                 path: "Nota_Manual_Usuario_Avanzado.md",
-                html: "<div class='note-content'><div class='note-badge'>YAML Metadata: manual, atajos, guia, usuario</div><h1 style='color:var(--gold);'>Manual de Uso Avanzado y Atajos de Teclado</h1><h3 style='color:var(--accent); margin-top:12px;'>Resumen Ejecutivo</h3><ul style='color:var(--muted); font-size:0.85rem;'><li><b>¿Qué?</b>: Guía detallada de operación avanzada de la Consola Funes.</li><li><b>¿Cuándo?</b>: Versión 2026.1.</li><li><b>¿Quién?</b>: Funes User Documentation.</li><li><b>¿Cómo?</b>: Explicaciones extensas, tablas de atajos y flujo paso a paso.</li></ul><h3 style='color:var(--accent); margin-top:16px;'>1. Introducción a la Filosofía Papiro</h3><p style='font-size:0.85rem; color:var(--paper); line-height:1.6;'>La Consola Funes combina la calidez visual de una imprenta editorial anticuaria con la velocidad de un pipeline ETL local. Cualquier archivo depositado en 1_entrada es digerido y estructurado en notas atómicas independientes.</p><h3 style='color:var(--accent); margin-top:16px;'>2. Atajos de Teclado y Controles Rápidos</h3><table style='width:100%; border-collapse:collapse; font-size:0.82rem; margin-top:10px; color:var(--paper);'><tr style='border-bottom:1px solid var(--border-accent); text-align:left;'><th>Tecla / Combinación</th><th>Acción</th><th>Alcance</th></tr><tr><td><b>Escape</b></td><td>Cerrar modal o emergente activo</td><td>Global UI</td></tr><tr><td><b>Click Backdrop</b></td><td>Cerrar modal en primer plano</td><td>Modales Papiro</td></tr><tr><td><b>Rueda del Ratón</b></td><td>Zoom dinámico sobre el grafo</td><td>Vista Gráfico</td></tr><tr><td><b>Arrastrar Nodo</b></td><td>Reorganizar posición espacial de notas</td><td>Vista Gráfico</td></tr><tr><td><b>Doble Click Nodo</b></td><td>Abrir nota asociada en el lector</td><td>Vista Gráfico</td></tr></table><h3 style='color:var(--accent); margin-top:16px;'>3. Procedimiento de Ingesta Paso a Paso</h3><p style='font-size:0.85rem; color:var(--paper); line-height:1.6;'>Paso 1: Coloque los documentos en 1_entrada.<br>Paso 2: El sistema ejecuta el [[Nota_ETL_Pipeline_Ingesta]].<br>Paso 3: Si se producen errores de lectura, el archivo se transfiere a la [[Nota_Gestor_Cuarentena]].<br>Paso 4: Consulte los gráficos y resúmenes en el lector interactivo con el [[Nota_Graph_Engine_Optimizado]] y revise el [[00_MOC_Funes]].</p><h3 style='color:var(--accent); margin-top:16px;'>4. Preguntas Frecuentes (FAQ)</h3><p style='font-size:0.85rem; color:var(--paper); line-height:1.6;'><b>¿Los datos salen del equipo?</b> No. Funes cumple con el principio de privacidad local [[Nota_Seguridad_y_Privacidad]].<br><b>¿Se integra con Obsidian?</b> Sí, mediante el protocolo nativo descrito en [[Nota_Integracion_Obsidian]].<br><b>¿Cómo se protege el hardware?</b> Con el monitoreo de recursos del [[Nota_Optimizacion_RAM]].</p></div>"
+                html: "<div class='note-content'><div class='note-badge'>YAML Metadata: manual, atajos, guia, usuario</div><h1 style='color:var(--gold);'>Manual de Uso Avanzado y Atajos de Teclado</h1><h3 style='color:var(--accent); margin-top:12px;'>Resumen Ejecutivo</h3><ul style='color:var(--muted); font-size:0.85rem;'><li><b>¿Qué?</b>: Guía detallada de operación avanzada de la Consola Funes.</li><li><b>¿Cuándo?</b>: Versión 2026.1.</li><li><b>¿Quién?</b>: Funes User Documentation.</li><li><b>¿Cómo?</b>: Explicaciones extensas, tablas de atajos y flujo paso a paso.</li></ul><h3 style='color:var(--accent); margin-top:16px;'>1. Introducción a la Filosofía Papiro</h3><p style='font-size:0.85rem; color:var(--paper); line-height:1.6;'>La Consola Funes combina la calidez visual de una imprenta editorial anticuaria con la velocidad de un pipeline ETL local. Cualquier archivo depositado en 1_entrada es digerido y estructurado en notas atómicas independientes.</p><h3 style='color:var(--accent); margin-top:16px;'>2. Atajos de Teclado y Controles Rápidos</h3><table style='width:100%; border-collapse:collapse; font-size:0.82rem; margin-top:10px; color:var(--paper);'><tr style='border-bottom:1px solid var(--border-accent); text-align:left;'><th>Tecla / Combinación</th><th>Acción</th><th>Alcance</th></tr><tr><td><b>Escape</b></td><td>Cerrar modal o emergente activo</td><td>Global UI</td></tr><tr><td><b>Click Backdrop</b></td><td>Cerrar modal en primer plano</td><td>Modales Papiro</td></tr><tr><td><b>Rueda del Ratón</b></td><td>Zoom dinámico sobre el grafo</td><td>Vista Gráfico</td></tr><tr><td><b>Arrastrar Nodo</b></td><td>Reorganizar posición espacial de notas</td><td>Vista Gráfico</td></tr><tr><td><b>Doble Click Nodo</b></td><td>Abrir nota asociada en el lector</td><td>Vista Gráfico</td></tr></table><h3 style='color:var(--accent); margin-top:16px;'>3. Procedimiento de Ingesta Paso a Paso</h3><p style='font-size:0.85rem; color:var(--paper); line-height:1.6;'>Paso 1: Coloque los documentos en 1_entrada.<br>Paso 2: El sistema ejecuta el [[Nota_ETL_Pipeline_Ingesta]].<br>Paso 3: Si se producen errores de lectura, el archivo se transfiere a la [[Nota_Gestor_Cuarentena]].<br>Paso 4: Consulte los gráficos y resúmenes en el lector interactivo con el [[Nota_Graph_Engine_Optimizado]] y revise el [[_Indice_MOC]].</p><h3 style='color:var(--accent); margin-top:16px;'>4. Preguntas Frecuentes (FAQ)</h3><p style='font-size:0.85rem; color:var(--paper); line-height:1.6;'><b>¿Los datos salen del equipo?</b> No. Funes cumple con el principio de privacidad local [[Nota_Seguridad_y_Privacidad]].<br><b>¿Se integra con Obsidian?</b> Sí, mediante el protocolo nativo descrito en [[Nota_Integracion_Obsidian]].<br><b>¿Cómo se protege el hardware?</b> Con el monitoreo de recursos del [[Nota_Optimizacion_RAM]].</p></div>"
             }
         ];
 
@@ -2929,7 +3001,7 @@
             } else {
                 const demoData = {
                     nodes: [
-                        { id: "00_MOC_Funes", label: "00 Mapa MOC", path: "00_MOC_Funes.md" },
+                        { id: "_Indice_MOC", label: "Índice MOC", path: "_Indice_MOC.md" },
                         { id: "Nota_Arquitectura_Funes", label: "Arquitectura General", path: "Nota_Arquitectura_Funes.md" },
                         { id: "Nota_ETL_Pipeline_Ingesta", label: "Pipeline ETL Ingesta", path: "Nota_ETL_Pipeline_Ingesta.md" },
                         { id: "Nota_Motor_IA_Local", label: "Motor IA Local", path: "Nota_Motor_IA_Local.md" },
@@ -2946,20 +3018,20 @@
                         { id: "Nota_Manual_Usuario_Avanzado", label: "Manual de Usuario", path: "Nota_Manual_Usuario_Avanzado.md" }
                     ],
                     links: [
-                        { source: "00_MOC_Funes", target: "Nota_Arquitectura_Funes" },
-                        { source: "00_MOC_Funes", target: "Nota_ETL_Pipeline_Ingesta" },
-                        { source: "00_MOC_Funes", target: "Nota_Motor_IA_Local" },
-                        { source: "00_MOC_Funes", target: "Nota_Base_Datos_Vectorial" },
-                        { source: "00_MOC_Funes", target: "Nota_Optimizacion_RAM" },
-                        { source: "00_MOC_Funes", target: "Nota_Formato_Papiro" },
-                        { source: "00_MOC_Funes", target: "Nota_Graph_Engine_Optimizado" },
-                        { source: "00_MOC_Funes", target: "Nota_Notas_Atomicas" },
-                        { source: "00_MOC_Funes", target: "Nota_Gestor_Cuarentena" },
-                        { source: "00_MOC_Funes", target: "Nota_Integracion_Obsidian" },
-                        { source: "00_MOC_Funes", target: "Nota_AnythingLLM_Conexion" },
-                        { source: "00_MOC_Funes", target: "Nota_Telemetria_y_Logs" },
-                        { source: "00_MOC_Funes", target: "Nota_Seguridad_y_Privacidad" },
-                        { source: "00_MOC_Funes", target: "Nota_Manual_Usuario_Avanzado" },
+                        { source: "_Indice_MOC", target: "Nota_Arquitectura_Funes" },
+                        { source: "_Indice_MOC", target: "Nota_ETL_Pipeline_Ingesta" },
+                        { source: "_Indice_MOC", target: "Nota_Motor_IA_Local" },
+                        { source: "_Indice_MOC", target: "Nota_Base_Datos_Vectorial" },
+                        { source: "_Indice_MOC", target: "Nota_Optimizacion_RAM" },
+                        { source: "_Indice_MOC", target: "Nota_Formato_Papiro" },
+                        { source: "_Indice_MOC", target: "Nota_Graph_Engine_Optimizado" },
+                        { source: "_Indice_MOC", target: "Nota_Notas_Atomicas" },
+                        { source: "_Indice_MOC", target: "Nota_Gestor_Cuarentena" },
+                        { source: "_Indice_MOC", target: "Nota_Integracion_Obsidian" },
+                        { source: "_Indice_MOC", target: "Nota_AnythingLLM_Conexion" },
+                        { source: "_Indice_MOC", target: "Nota_Telemetria_y_Logs" },
+                        { source: "_Indice_MOC", target: "Nota_Seguridad_y_Privacidad" },
+                        { source: "_Indice_MOC", target: "Nota_Manual_Usuario_Avanzado" },
                         { source: "Nota_Arquitectura_Funes", target: "Nota_ETL_Pipeline_Ingesta" },
                         { source: "Nota_Arquitectura_Funes", target: "Nota_Motor_IA_Local" },
                         { source: "Nota_Arquitectura_Funes", target: "Nota_Base_Datos_Vectorial" },
@@ -2981,14 +3053,23 @@
                     renderNoteList(notes);
                 });
             } else {
-                renderNoteList(LOCAL_MOCK_NOTES.map(n => ({ title: n.title, path: n.path })));
+                renderNoteList(LOCAL_MOCK_NOTES.map(function(n, index) {
+                    return {
+                        title: n.title,
+                        path: n.path,
+                        document_id: 'mock-' + index,
+                        issue: '_Sin_Cuestion',
+                        theme: 'General',
+                        is_moc: n.path.indexOf('_Indice_MOC') !== -1
+                    };
+                }));
             }
         }
 
-        function highlightSidebarNote(notePath) {
+        function highlightSidebarNote(documentId) {
             document.querySelectorAll('.reader-note-item, .reader-pinned-item').forEach(function(el) {
                 el.classList.remove('active');
-                if (el.dataset.path && (el.dataset.path === notePath || el.dataset.path.endsWith(notePath) || notePath.endsWith(el.dataset.path))) {
+                if (el.dataset.documentId && el.dataset.documentId === documentId) {
                     el.classList.add('active');
                 }
             });
@@ -2997,74 +3078,142 @@
         function renderNoteList(notes) {
             const pinnedContainer = document.getElementById('reader-pinned-moc');
             const ul = document.getElementById('reader-note-list');
-            if (ul) ul.innerHTML = '';
-            if (pinnedContainer) pinnedContainer.innerHTML = '';
+            if (ul) ul.replaceChildren();
+            if (pinnedContainer) pinnedContainer.replaceChildren();
+            pinnedMocDocumentId = '';
 
             if (!notes || !notes.length) {
-                if (ul) ul.innerHTML = '<li class="reader-note-item">No se encontraron notas</li>';
+                if (ul) {
+                    const empty = document.createElement('li');
+                    empty.className = 'reader-note-item';
+                    empty.textContent = 'No se encontraron notas';
+                    ul.appendChild(empty);
+                }
                 return;
             }
 
-            // Identificar nota MOC para la cabecera fijada del sidebar
-            const mocNote = notes.find(n => n.path.includes('00_MOC') || n.title.includes('MOC')) || notes[0];
-            
+            const mocNote = notes.find(function(n) {
+                return n.is_moc || (n.path && (n.path.indexOf('_Indice_MOC') !== -1 || n.path.indexOf('Indice_MOC') !== -1));
+            });
             if (mocNote && pinnedContainer) {
+                pinnedMocDocumentId = mocNote.document_id || '';
                 const mocDiv = document.createElement('div');
-                mocDiv.className = 'reader-pinned-item' + (currentSelectedNotePath === mocNote.path ? ' active' : '');
-                mocDiv.dataset.path = mocNote.path;
-                mocDiv.innerText = mocNote.title;
+                mocDiv.className = 'reader-pinned-item' + (currentSelectedDocumentId === mocNote.document_id ? ' active' : '');
+                mocDiv.dataset.documentId = mocNote.document_id || '';
+                mocDiv.dataset.path = mocNote.path || '';
+                mocDiv.textContent = mocNote.title;
                 mocDiv.addEventListener('click', function() {
-                    loadNoteContent(mocNote.path);
+                    navigateReaderNote(mocNote.document_id);
                 });
                 pinnedContainer.appendChild(mocDiv);
             }
 
-            // Filtrar las demás notas para el listado con scroll independiente
-            const otherNotes = notes.filter(n => n !== mocNote);
+            const otherNotes = notes.filter(function(n) { return n !== mocNote; });
+            const themeName = (otherNotes[0] && otherNotes[0].theme) || (mocNote && mocNote.theme) || 'General';
+            const themeLabel = document.createElement('li');
+            themeLabel.className = 'reader-theme-label';
+            themeLabel.textContent = 'Tema: ' + themeName;
+            ul.appendChild(themeLabel);
+
+            const byIssue = {};
             otherNotes.forEach(function(n) {
-                const li = document.createElement('li');
-                li.className = 'reader-note-item' + (currentSelectedNotePath === n.path ? ' active' : '');
-                li.dataset.path = n.path;
-                li.innerText = n.title;
-                li.addEventListener('click', function() {
-                    loadNoteContent(n.path);
-                });
-                ul.appendChild(li);
+                const issue = n.issue || '_Sin_Cuestion';
+                if (!byIssue[issue]) byIssue[issue] = [];
+                byIssue[issue].push(n);
             });
 
-            if (!currentSelectedNotePath && notes.length > 0) {
-                loadNoteContent(notes[0].path);
-            } else if (currentSelectedNotePath) {
-                highlightSidebarNote(currentSelectedNotePath);
+            Object.keys(byIssue).sort().forEach(function(issue) {
+                const group = document.createElement('li');
+                group.className = 'reader-issue-group';
+                const issueLabel = document.createElement('div');
+                issueLabel.className = 'reader-issue-label';
+                issueLabel.textContent = 'Cuestión: ' + issue;
+                group.appendChild(issueLabel);
+                const nested = document.createElement('ul');
+                nested.className = 'reader-note-list';
+                byIssue[issue].forEach(function(n) {
+                    const li = document.createElement('li');
+                    li.className = 'reader-note-item' + (currentSelectedDocumentId === n.document_id ? ' active' : '');
+                    li.dataset.documentId = n.document_id || '';
+                    li.dataset.path = n.path || '';
+                    li.textContent = n.title;
+                    li.addEventListener('click', function() {
+                        navigateReaderNote(n.document_id);
+                    });
+                    nested.appendChild(li);
+                });
+                group.appendChild(nested);
+                ul.appendChild(group);
+            });
+
+            const firstId = (mocNote && mocNote.document_id) || (otherNotes[0] && otherNotes[0].document_id);
+            if (!currentSelectedDocumentId && firstId) {
+                loadNoteContent(firstId);
+            } else if (currentSelectedDocumentId) {
+                highlightSidebarNote(currentSelectedDocumentId);
             }
         }
 
-        function loadNoteContent(notePath) {
-            currentSelectedNotePath = notePath;
-            highlightSidebarNote(notePath);
+        function loadNoteContent(documentId, options) {
+            if (!documentId) return;
+            options = options || {};
+            if (!options.skipHistory) {
+                pushReaderHistory(documentId);
+            }
+            currentSelectedDocumentId = documentId;
+            highlightSidebarNote(documentId);
+            updateReaderBackButton();
 
-            let displayTitle = notePath.replace(/\.md$/, '').replace(/^.*[\\\/]/, '').replace(/_/g, ' ');
+            let displayTitle = 'Nota';
 
             if (window.pywebview && window.pywebview.api) {
-                window.pywebview.api.get_note_content(notePath).then(function(res) {
+                window.pywebview.api.get_note_content(documentId).then(function(res) {
+                    if (res && res.error === 'note_not_found') {
+                        currentSelectedNoteTitle = 'Nota no encontrada';
+                        currentSelectedNotePath = '';
+                        renderNoteDocument(currentSelectedNoteTitle, res.document || [
+                            {"type": "heading", "level": 3, "text": "Nota no encontrada"}
+                        ]);
+                        updateReaderBackButton();
+                        return;
+                    }
+                    if (res && res.error) {
+                        currentSelectedNoteTitle = 'Error';
+                        currentSelectedNotePath = '';
+                        renderNoteDocument('Error', [
+                            {"type": "heading", "level": 3, "text": res.message || 'No se pudo cargar la nota'}
+                        ]);
+                        updateReaderBackButton();
+                        return;
+                    }
                     if (res && res.title) displayTitle = res.title;
+                    if (res && res.path) currentSelectedNotePath = res.path;
+                    if (res && res.document_id) currentSelectedDocumentId = res.document_id;
                     currentSelectedNoteTitle = displayTitle;
                     renderNoteDocument(displayTitle, res ? res.document : []);
+                    updateReaderBackButton();
                 });
             } else {
-                const found = LOCAL_MOCK_NOTES.find(n => n.path === notePath || n.path.endsWith(notePath) || (n.title && notePath.includes(n.title)));
+                const found = LOCAL_MOCK_NOTES.find(function(n, index) {
+                    return ('mock-' + index) === documentId || n.path === documentId;
+                });
                 if (found) {
                     currentSelectedNoteTitle = found.title;
+                    currentSelectedNotePath = found.path;
                     const reader = document.getElementById('reader-content');
-                    reader.innerHTML = found.html;
-                    reader.prepend(createNoteActionBar(found.title));
+                    reader.replaceChildren(createNoteActionBar(found.title));
+                    const wrap = document.createElement('div');
+                    wrap.innerHTML = found.html;
+                    while (wrap.firstChild) reader.appendChild(wrap.firstChild);
                 } else {
                     currentSelectedNoteTitle = displayTitle;
+                    currentSelectedNotePath = '';
                     renderNoteDocument(displayTitle, [
-                        {"type": "heading", "level": 3, "text": displayTitle},
-                        {"type": "paragraph", "text": "Nota cargada en la consola Funes."}
+                        {"type": "heading", "level": 3, "text": "Nota no encontrada"},
+                        {"type": "paragraph", "text": "La nota solicitada no está disponible en la vista previa."}
                     ]);
                 }
+                updateReaderBackButton();
             }
         }
 
@@ -3114,20 +3263,21 @@
                 open.type = 'button';
                 open.textContent = 'Abrir en OS';
                 li.append(description, open);
-                li.ondblclick = function() {
-                    if (window.pywebview && window.pywebview.api) {
-                        window.pywebview.api.open_file_natively(f.path);
-                    } else {
+                function openAuthorizedFile() {
+                    if (!(window.pywebview && window.pywebview.api)) {
                         alert('Abriendo ' + f.name + ' con la aplicación nativa del sistema...');
+                        return;
                     }
-                };
+                    window.pywebview.api.open_file_natively(f.path).then(function(res) {
+                        if (res && res.error) {
+                            alert(res.message || 'No se pudo abrir el archivo autorizado.');
+                        }
+                    });
+                }
+                li.ondblclick = openAuthorizedFile;
                 open.addEventListener('click', function(e) {
                     e.stopPropagation();
-                    if (window.pywebview && window.pywebview.api) {
-                        window.pywebview.api.open_file_natively(f.path);
-                    } else {
-                        alert('Abriendo ' + f.name + ' con la aplicación nativa del sistema...');
-                    }
+                    openAuthorizedFile();
                 });
                 ul.appendChild(li);
             });
@@ -3152,6 +3302,7 @@
                 lastSearchQuery = query;
                 document.querySelectorAll('.reader-note-item, .reader-pinned-item').forEach(el => el.classList.remove('active'));
                 currentSelectedNotePath = '';
+                currentSelectedDocumentId = '';
 
                 const readerContent = document.getElementById('reader-content');
                 if (readerContent) {

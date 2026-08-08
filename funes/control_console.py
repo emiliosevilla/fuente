@@ -35,7 +35,8 @@ from funes.config import get_default_config, AppConfig, save_config, load_config
 from funes.core.vault import VaultManager
 from funes.domain.documents import MarkdownDocument
 from funes.domain.errors import PathAuthorizationError
-from funes.domain.paths import AuthorizedPathResolver
+from funes.domain.frontmatter import FrontmatterError, parse_frontmatter
+from funes.domain.paths import AuthorizedPathResolver, document_id_for_relative_path
 from funes.domain.quarantine import QuarantineService
 from funes.infrastructure.atomic_files import atomic_write_json, atomic_write_text
 from funes.ui.bridge import FunesPyWebViewApi
@@ -268,11 +269,16 @@ class FunesConsoleBackend:
         }
 
     def get_stats_dict(self) -> Dict[str, Any]:
-        inp_files = [f for f in self.config.vault.input_dir.glob("*") if f.is_file() and not f.name.startswith(".")] if self.config.vault.input_dir.exists() else []
+        input_dir = self.vault.input_dir
+        inp_files = [
+            f
+            for f in input_dir.rglob("*")
+            if f.is_file() and not f.name.startswith(".")
+        ] if input_dir.exists() else []
         proc_dir = self.vault_path / ".funes_processed"
         proc_files = list(proc_dir.glob("*")) if proc_dir.exists() else []
         quar_items = self.quarantine_service.list_active_items()
-        notes_files = list(self.config.vault.output_dir.glob("*.md")) if self.config.vault.output_dir.exists() else []
+        notes_count = len(self.vault.enumerate_documents("output"))
 
         ram_pct = 0
         if HAS_PSUTIL and psutil:
@@ -289,7 +295,7 @@ class FunesConsoleBackend:
             "input": len(inp_files),
             "processed": len(proc_files),
             "quarantine": len(quar_items),
-            "notes": len(notes_files),
+            "notes": notes_count,
             "ram": f"{ram_pct}%",
             "line": line_val
         }
@@ -621,18 +627,29 @@ historial:
             import gc
             collected = gc.collect()
             stats = self.get_stats_dict()
+            message = (
+                f"Purga de memoria RAM ejecutada. Objetos liberados: {collected}. "
+                f"RAM actual: {stats['ram']}"
+            )
             return {
-                "log": f"Purga de memoria RAM ejecutada. Objetos liberados: {collected}. RAM actual: {stats['ram']}",
+                "log": message,
+                "alert": message,
                 "refresh": True,
                 "stats": stats
             }
         elif action_name == "stat_input":
-            inp_files = [f for f in self.vault.input_dir.glob("*") if f.is_file() and not f.name.startswith(".")] if self.vault.input_dir.exists() else []
-            return {"log": f"Desglose ingesta consultado: {len(inp_files)} archivos."}
+            input_dir = self.vault.input_dir
+            inp_files = [
+                f
+                for f in input_dir.rglob("*")
+                if f.is_file() and not f.name.startswith(".")
+            ] if input_dir.exists() else []
+            message = f"Desglose ingesta consultado: {len(inp_files)} archivos."
+            return {"log": message, "alert": message}
         elif action_name == "stat_notes":
-            out_dir = self.vault.output_dir
-            notes = list(out_dir.rglob("*.md")) if out_dir.exists() else []
-            return {"log": f"Telemetría del Grafo consultada: {len(notes)} notas preparadas."}
+            notes = self.vault.enumerate_documents("output")
+            message = f"Telemetría del Grafo consultada: {len(notes)} notas preparadas."
+            return {"log": message, "alert": message}
         elif action_name == "step1_flush":
             copied = self.sync_manager.sync_to_input(
                 self.vault.input_dir, self.vault.dirty_dir
@@ -893,43 +910,136 @@ historial:
                 "sources": sources
             }
 
-    def get_notes_list(self) -> List[Dict[str, str]]:
-        out_dir = self.config.vault.output_dir
-        if not out_dir.exists():
-            return []
-        notes = sorted(list(out_dir.glob("*.md")), key=lambda p: p.name.lower())
-        return [{"title": n.stem, "path": self._vault_relative_identity(n)} for n in notes]
+    def _issue_from_relative_path(self, relative_path: str) -> str:
+        """Derive the Cuestión folder from a vault-relative note path."""
+        parts = Path(relative_path).parts
+        if "4_salida" not in parts:
+            return "_Sin_Cuestion"
+        remainder = parts[parts.index("4_salida") + 1 :]
+        if len(remainder) >= 2:
+            return remainder[0]
+        return "_Sin_Cuestion"
 
-    def get_note_content_html(self, note_path: str) -> Dict[str, Any]:
-        """Return safe, structured Markdown display tokens for the WebView."""
+    def _note_list_entry(
+        self, document_id: str, relative_path: str, *, is_moc: bool = False
+    ) -> Dict[str, Any]:
+        title = Path(relative_path).stem.replace("_", " ")
+        issue = "" if is_moc else self._issue_from_relative_path(relative_path)
+        status = "approved" if is_moc else "pending_review"
         try:
-            path = self._path_resolver().resolve_note(note_path)
+            path = self._path_resolver().resolve_note(relative_path)
+            raw = path.read_text(encoding="utf-8", errors="replace")
+            metadata, _body = parse_frontmatter(raw)
+            title = metadata.get("title") or title
+            if not is_moc:
+                issue = metadata.get("issue") or issue or "_Sin_Cuestion"
+            status = metadata.get("status") or status
+        except (PathAuthorizationError, FrontmatterError, OSError):
+            if not is_moc and not issue:
+                issue = "_Sin_Cuestion"
+        return {
+            "document_id": document_id,
+            "path": relative_path,
+            "title": title,
+            "issue": issue,
+            "theme": self.vault.active_theme,
+            "status": status,
+            "is_moc": is_moc,
+        }
+
+    def get_notes_list(self) -> List[Dict[str, Any]]:
+        """Return theme-scoped notes with opaque document ids and metadata."""
+        notes: List[Dict[str, Any]] = []
+        moc_path = self.get_canonical_moc_path()
+        if moc_path.exists():
+            try:
+                relative = self._vault_relative_identity(moc_path)
+                notes.append(
+                    self._note_list_entry(
+                        document_id_for_relative_path(relative),
+                        relative,
+                        is_moc=True,
+                    )
+                )
+            except PathAuthorizationError:
+                pass
+
+        for document_id, relative in self.vault.enumerate_documents("output"):
+            notes.append(self._note_list_entry(document_id, relative))
+        return notes
+
+    def get_note_content_html(self, note_id: str) -> Dict[str, Any]:
+        """Return safe, structured Markdown display tokens for a document id."""
+        try:
+            path = self._path_resolver().resolve_note_id(note_id)
         except PathAuthorizationError as error:
             return self._path_error(error)
         if not path.exists():
             return {
-                "title": Path(note_path).stem,
+                "error": "note_not_found",
+                "message": "Note was not found",
+                "title": "Nota no encontrada",
+                "document_id": note_id,
                 "document": [{"type": "heading", "level": 3, "text": "Nota no encontrada"}],
                 "html": "<h3>Nota no encontrada</h3>",
             }
-        content = path.read_text(encoding="utf-8", errors="replace")
+
+        try:
+            relative = self._vault_relative_identity(path)
+            content = path.read_text(encoding="utf-8", errors="replace")
+        except (PathAuthorizationError, OSError) as error:
+            if isinstance(error, PathAuthorizationError):
+                return self._path_error(error)
+            return {
+                "error": "note_not_found",
+                "message": "Note was not found",
+                "title": "Nota no encontrada",
+                "document_id": note_id,
+                "document": [{"type": "heading", "level": 3, "text": "Nota no encontrada"}],
+                "html": "<h3>Nota no encontrada</h3>",
+            }
+
+        title = path.stem.replace("_", " ")
+        try:
+            metadata, body = parse_frontmatter(content)
+            title = metadata.get("title") or title
+        except FrontmatterError:
+            body = content
+
         import re
 
-        def wikilink_token(match: re.Match[str]) -> Dict[str, str]:
+        resolver = self._path_resolver()
+
+        def wikilink_token(match: re.Match[str]) -> Dict[str, Any]:
             target = match.group(1).strip()
             note_name, separator, label = target.partition("|")
             note_name = note_name.split("#", 1)[0].strip()
-            clean_display = (label.strip() if separator else re.sub(r"^Nota_", "", note_name).replace("_", " "))
+            clean_display = (
+                label.strip()
+                if separator
+                else re.sub(r"^Nota_", "", note_name).replace("_", " ")
+            )
             note_file = note_name if note_name.endswith(".md") else f"{note_name}.md"
-            resolved_note = self._path_resolver().resolve_unique_note_basename(note_file)
-            return {
-                "type": "wikilink",
-                "text": clean_display,
-                "document_id": self._vault_relative_identity(resolved_note),
-            }
+            try:
+                resolved_note = resolver.resolve_unique_note_basename(note_file)
+                document_id = document_id_for_relative_path(
+                    self._vault_relative_identity(resolved_note)
+                )
+                return {
+                    "type": "wikilink",
+                    "text": clean_display,
+                    "document_id": document_id,
+                }
+            except PathAuthorizationError:
+                return {
+                    "type": "wikilink",
+                    "text": clean_display,
+                    "document_id": "",
+                    "broken": True,
+                }
 
-        def text_tokens(line: str) -> List[Dict[str, str]]:
-            tokens: List[Dict[str, str]] = []
+        def text_tokens(line: str) -> List[Dict[str, Any]]:
+            tokens: List[Dict[str, Any]] = []
             offset = 0
             for match in re.finditer(r"\[\[(.*?)\]\]", line):
                 if match.start() > offset:
@@ -940,28 +1050,25 @@ historial:
                 tokens.append({"type": "text", "text": line[offset:]})
             return tokens
 
-        try:
-            document = []
-            for line in content.splitlines():
-                if line.startswith("# "):
-                    document.append({"type": "heading", "level": 1, "text": line[2:]})
-                elif line.startswith("## "):
-                    document.append({"type": "heading", "level": 2, "text": line[3:]})
-                elif line.startswith("### "):
-                    document.append({"type": "heading", "level": 3, "text": line[4:]})
+        document: List[Dict[str, Any]] = []
+        for line in body.splitlines():
+            if line.startswith("# "):
+                document.append({"type": "heading", "level": 1, "text": line[2:]})
+            elif line.startswith("## "):
+                document.append({"type": "heading", "level": 2, "text": line[3:]})
+            elif line.startswith("### "):
+                document.append({"type": "heading", "level": 3, "text": line[4:]})
+            else:
+                children = text_tokens(line)
+                if all(token["type"] == "text" for token in children):
+                    document.append({"type": "paragraph", "text": line})
                 else:
-                    children = text_tokens(line)
-                    if all(token["type"] == "text" for token in children):
-                        document.append({"type": "paragraph", "text": line})
-                    else:
-                        document.append({"type": "paragraph", "children": children})
-        except PathAuthorizationError as error:
-            return self._path_error(error)
+                    document.append({"type": "paragraph", "children": children})
 
-        def fallback_children(tokens: List[Dict[str, str]]) -> str:
+        def fallback_children(tokens: List[Dict[str, Any]]) -> str:
             return "".join(
                 (
-                    f'<span class="wikilink" data-document-id="{html.escape(token["document_id"], quote=True)}">'
+                    f'<span class="wikilink" data-document-id="{html.escape(token.get("document_id", ""), quote=True)}">'
                     f'{html.escape(token["text"])}</span>'
                     if token["type"] == "wikilink"
                     else html.escape(token["text"])
@@ -981,7 +1088,9 @@ historial:
                     children = [{"type": "text", "text": block["text"]}]
                 fallback_html.append(f"<p>{fallback_children(children)}</p>")
         return {
-            "title": path.stem,
+            "title": title,
+            "document_id": note_id,
+            "path": relative,
             "document": document,
             "html": "".join(fallback_html),
         }
@@ -1028,8 +1137,13 @@ historial:
             "4_salida": "output",
         }
         try:
-            top_level = Path(file_identity).parts[0]
-            root_name = root_names[top_level]
+            parts = Path(file_identity).parts
+            root_name = next(
+                (root_names[part] for part in parts if part in root_names),
+                None,
+            )
+            if root_name is None:
+                return {"error": "path_not_authorized", "message": "Path is not authorized"}
             file_path = self._path_resolver().resolve(file_identity, root_name=root_name)
         except (KeyError, IndexError, PathAuthorizationError):
             return {"error": "path_not_authorized", "message": "Path is not authorized"}
@@ -1154,7 +1268,7 @@ class FunesControlConsole(tk.Tk):
 
     def _on_stat_input_click(self):
         res = self.backend.handle_action("stat_input", {})
-        messagebox.showinfo("Archivos por Procesar", res["alert"])
+        messagebox.showinfo("Archivos por Procesar", res.get("alert") or res.get("log", ""))
 
     def _on_stat_processed_click(self):
         proc_dir = self.vault_path / ".funes_processed"
@@ -1164,11 +1278,11 @@ class FunesControlConsole(tk.Tk):
 
     def _on_stat_notes_click(self):
         res = self.backend.handle_action("stat_notes", {})
-        messagebox.showinfo("Notas Preparadas", res["alert"])
+        messagebox.showinfo("Notas Preparadas", res.get("alert") or res.get("log", ""))
 
     def _on_ram_card_click(self):
         res = self.backend.handle_action("stat_ram", {})
-        messagebox.showinfo("Purga RAM", res["alert"])
+        messagebox.showinfo("Purga RAM", res.get("alert") or res.get("log", ""))
         self.refresh_stats()
 
     def _on_quarantine_click(self):

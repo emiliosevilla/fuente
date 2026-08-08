@@ -1,3 +1,4 @@
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -71,25 +72,41 @@ Separador de cuerpo.
             parse_frontmatter("---\ntags: not-a-list\n---\nbody")
 
     def test_linker_preserves_valid_serialized_frontmatter(self):
-        linker = GraphLinker(Path("."))
-        linker.get_existing_note_titles = lambda: ["Nota relacionada"]
-        note = serialize_frontmatter(
-            {
-                "schema_version": 1,
-                "title": "Origen",
-                "date": "2026-08-07",
-                "author": "Funes",
-                "tags": ["Nota relacionada"],
-                "issue": "_Sin_Cuestion",
-                "status": "pending_review",
-                "sources": [],
-                "history": [],
-            }
-        ) + "Hablamos de Nota relacionada.\n"
-        result = linker.auto_link_content(note, "Origen")
-        metadata, body = parse_frontmatter(result)
-        self.assertEqual(metadata["tags"], ["Nota relacionada"])
-        self.assertIn("[[Nota relacionada]]", body)
+        with tempfile.TemporaryDirectory() as tmp:
+            output = Path(tmp)
+            related = serialize_frontmatter(
+                {
+                    "schema_version": 1,
+                    "title": "Nota relacionada",
+                    "date": "2026-08-07",
+                    "author": "Funes",
+                    "tags": [],
+                    "issue": "_Sin_Cuestion",
+                    "status": "approved",
+                    "sources": [],
+                    "history": [],
+                }
+            ) + "# Nota relacionada\n"
+            (output / "Nota relacionada.md").write_text(related, encoding="utf-8")
+
+            linker = GraphLinker(output)
+            note = serialize_frontmatter(
+                {
+                    "schema_version": 1,
+                    "title": "Origen",
+                    "date": "2026-08-07",
+                    "author": "Funes",
+                    "tags": ["Nota relacionada"],
+                    "issue": "_Sin_Cuestion",
+                    "status": "pending_review",
+                    "sources": [],
+                    "history": [],
+                }
+            ) + "Hablamos de Nota relacionada.\n"
+            result = linker.auto_link_content(note, "Origen")
+            metadata, body = parse_frontmatter(result)
+            self.assertEqual(metadata["tags"], ["Nota relacionada"])
+            self.assertIn("[[Nota relacionada]]", body)
 
 
 if __name__ == "__main__":

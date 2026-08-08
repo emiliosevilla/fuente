@@ -52,6 +52,28 @@ Puedes iniciar Funes de forma inmediata usando los scripts oficiales preconfigur
 
 Estos scripts instalarán el entorno virtual, crearán los accesos directos de escritorio (`Funes.lnk` / `Funes.command`) y lanzarán la aplicación.
 
+### Instalación manual por conjuntos de funcionalidades
+
+El núcleo ETL/RAG se instala con:
+
+```bash
+pip install -e .
+```
+
+Las capacidades opcionales se activan con *extras* de `pyproject.toml`:
+
+| Extra | Comando | Habilita |
+|-------|---------|----------|
+| Consola PyWebView | `pip install -e ".[webview]"` | Interfaz web nativa (fallback Tkinter si falta) |
+| Audio | `pip install -e ".[audio]"` | Transcripción local con faster-whisper |
+| OCR | `pip install -e ".[ocr]"` | OCR de imágenes vía pytesseract + Pillow |
+| Office avanzado | `pip install -e ".[office]"` | MarkItDown y Docling como convertidores prioritarios |
+| Escritorio completo | `pip install -e ".[all]"` | webview + audio + ocr + office |
+| Desarrollo / empaquetado | `pip install -e ".[dev]"` | PyInstaller para `funes.spec` |
+| Pruebas | `pip install -e ".[test]"` | pytest |
+
+**Binarios de sistema** (Tesseract, FFmpeg, Ollama, Obsidian) no los instala pip. Consulta la matriz completa de dependencias, versiones registradas y comprobaciones de entorno en [`docs/dependency-matrix.md`](docs/dependency-matrix.md).
+
 ---
 
 ## 📄 Plantilla de Nota Atómica Generada (`4_salida`)

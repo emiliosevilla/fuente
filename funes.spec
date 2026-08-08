@@ -5,6 +5,11 @@ from PyInstaller.utils.hooks import collect_data_files, collect_submodules
 
 block_cipher = None
 
+# Icon asset verified present at assets/funes_icon.ico (Task 7.1).
+_ICON_PATH = Path('assets/funes_icon.ico')
+if not _ICON_PATH.is_file():
+    raise FileNotFoundError(f"PyInstaller icon missing: {_ICON_PATH.resolve()}")
+
 datas = [('funes', 'funes'), ('assets', 'assets')]
 hidden_imports = [
     'funes',
@@ -46,7 +51,11 @@ hidden_imports = [
 
 ]
 
-for pkg in ['psutil', 'watchdog', 'requests', 'pydantic', 'pdfplumber', 'docx', 'pptx', 'openpyxl', 'extract_msg', 'PIL', 'pytesseract', 'markitdown']:
+for pkg in [
+    'psutil', 'watchdog', 'requests', 'pydantic', 'pdfplumber', 'docx', 'pptx',
+    'openpyxl', 'extract_msg', 'PIL', 'pytesseract', 'markitdown', 'docling',
+    'faster_whisper', 'webview',
+]:
     try:
         hidden_imports += collect_submodules(pkg)
     except Exception:
@@ -100,5 +109,5 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon='assets/funes_icon.ico',
+    icon=str(_ICON_PATH),
 )

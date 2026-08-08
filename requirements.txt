@@ -1,20 +1,23 @@
-watchdog>=4.0.0
-psutil>=5.9.0
-chromadb>=0.5.0
-requests>=2.31.0
-pydantic>=2.0.0
-pyyaml>=6.0
-python-docx>=1.1.0
-pdfplumber>=0.10.0
-openpyxl>=3.1.0
-python-pptx>=0.6.21
-extract-msg>=0.48.0
-pillow>=10.0.0
-pytesseract>=0.3.10
-markitdown>=0.0.1a2
-pysqlite3-binary; platform_system == "Linux"
+# Core production dependencies (mirrors pyproject.toml with exact pins).
+# Pinning strategy: see docs/dependency-matrix.md
+watchdog==6.0.0
+psutil==7.2.2
+chromadb==1.5.9
+requests==2.34.2
+pydantic==2.13.4
+pyyaml==6.0.3
+python-docx==1.2.0
+pdfplumber==0.11.10
+openpyxl==3.1.5
+python-pptx==1.0.2
+extract-msg==0.56.0
+pysqlite3-binary>=0.5.4; platform_system == "Linux"
 
-# Test-only dependencies (install: pip install -e ".[test]" or pip install pytest)
-# Run tests with: PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -p 'test_*.py' -v
-#              or PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -q
-pytest>=8.0.0
+# Optional feature sets — install via extras instead of listing here:
+#   pip install -e ".[webview]"   # PyWebView GUI console
+#   pip install -e ".[audio]"     # faster-whisper transcription
+#   pip install -e ".[ocr]"       # Tesseract OCR (Python bindings + Pillow)
+#   pip install -e ".[office]"    # MarkItDown + Docling converters
+#   pip install -e ".[dev]"       # PyInstaller packaging
+#   pip install -e ".[test]"      # pytest
+#   pip install -e ".[all]"       # full desktop stack (webview+audio+ocr+office)

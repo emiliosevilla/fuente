@@ -27,7 +27,10 @@ class FunesPyWebViewApi:
         "stat_input": {},
         "stat_notes": {},
         "copy_reader_note": {"note_title": str, "note_path": str},
-        "export_reader_note": {"format": str, "note_title": str, "note_path": str},
+        "export_reader_note": {
+            "format": str,
+            "note_title": str,
+        },
         "open_obsidian": {"note_path": str, "obsidian_uri": str},
         "open_anything_desktop": {},
         "reset_default_settings": {},
@@ -324,6 +327,38 @@ class FunesPyWebViewApi:
             return self._error("path_not_authorized", "Path is not authorized")
         return self.backend.get_note_content_html(note)
 
+    def export_note(
+        self,
+        note_id: object,
+        export_format: object,
+        destination_path: object = None,
+        confirm_overwrite: object = False,
+    ) -> dict[str, Any]:
+        note = self._text(note_id, "note_id")
+        export_fmt = self._text(export_format, "format")
+        if isinstance(note, dict):
+            return note
+        if isinstance(export_fmt, dict):
+            return export_fmt
+        if "/" in note or "\\" in note or note.endswith(".md"):
+            return self._error("path_not_authorized", "Path is not authorized")
+        if export_fmt not in {"markdown", "pdf", "word", "docx"}:
+            return self._error("invalid_payload", "format is not supported")
+        destination: str | None = None
+        if destination_path is not None:
+            parsed_destination = self._text(destination_path, "destination_path")
+            if isinstance(parsed_destination, dict):
+                return parsed_destination
+            destination = parsed_destination
+        if not isinstance(confirm_overwrite, bool):
+            return self._error("invalid_payload", "confirm_overwrite must be a boolean")
+        return self.backend.export_note(
+            note,
+            export_fmt,
+            destination_path=destination,
+            confirm_overwrite=confirm_overwrite,
+        )
+
     def get_graph_data(self) -> dict[str, Any]:
         return self.backend.get_graph_data()
 
@@ -360,6 +395,9 @@ class FunesPyWebViewApi:
         cls, action: str, payload: dict[str, Any], schema: dict[str, type]
     ) -> ErrorResult | None:
         extra_fields = set(payload) - set(schema)
+        optional_export_fields = {"destination_path", "confirm_overwrite", "note_path", "document_id"}
+        if action == "export_reader_note":
+            extra_fields -= optional_export_fields
         if extra_fields:
             return cls._error("invalid_payload", "Unsupported payload field")
         missing_fields = set(schema) - set(payload)
@@ -381,8 +419,26 @@ class FunesPyWebViewApi:
             "markdown",
             "pdf",
             "word",
+            "docx",
         }:
             return cls._error("invalid_payload", "format is not supported")
+        if action == "export_reader_note":
+            if not payload.get("document_id") and not payload.get("note_path"):
+                return cls._error("invalid_payload", "document_id is required")
+            if "destination_path" in payload and not isinstance(
+                payload["destination_path"], str
+            ):
+                return cls._error("invalid_payload", "destination_path must be a string")
+            if "confirm_overwrite" in payload and not isinstance(
+                payload["confirm_overwrite"], bool
+            ):
+                return cls._error(
+                    "invalid_payload", "confirm_overwrite must be a boolean"
+                )
+            if "note_path" in payload and not isinstance(payload["note_path"], str):
+                return cls._error("invalid_payload", "note_path must be a string")
+            if "document_id" in payload and not isinstance(payload["document_id"], str):
+                return cls._error("invalid_payload", "document_id must be a string")
         return None
 
     def _note_action(self, action: str, note_id: object) -> dict[str, Any]:

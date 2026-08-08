@@ -1201,10 +1201,10 @@
                         Exportar Markdown (.md)
                     </button>
                     <button class="btn-primary" style="padding: 12px 16px; font-weight: 700; background: var(--bg-card); border: 1px solid var(--border-accent); border-radius: 6px; color: var(--paper); cursor: pointer; text-align: center;" data-onclick-command="executeExportFormat('pdf')">
-                        Exportar PDF (.pdf)
+                        Exportar PDF (impresión asistida)
                     </button>
-                    <button class="btn-primary" style="padding: 12px 16px; font-weight: 700; background: var(--bg-card); border: 1px solid var(--border-accent); border-radius: 6px; color: var(--paper); cursor: pointer; text-align: center;" data-onclick-command="executeExportFormat('word')">
-                        Exportar Word (.doc)
+                    <button class="btn-primary" style="padding: 12px 16px; font-weight: 700; background: var(--bg-card); border: 1px solid var(--border-accent); border-radius: 6px; color: var(--paper); cursor: pointer; text-align: center;" data-onclick-command="executeExportFormat('docx')">
+                        Exportar Word (.docx)
                     </button>
                 </div>
             </div>
@@ -2328,27 +2328,59 @@
 
         function executeExportFormat(format) {
             closeModal('modal-export-options');
-            if (format === 'markdown') {
-                downloadMarkdownFile();
-            } else if (format === 'pdf') {
-                downloadPdfFile();
-            } else if (format === 'word') {
-                downloadWordFile();
-            }
-        }
-
-        function downloadMarkdownFile() {
-            const textToExport = getCleanNoteText();
-
-            if (!textToExport) {
+            if (!currentSelectedDocumentId) {
                 alert('No hay ninguna nota seleccionada para exportar.');
                 return;
             }
+            if (window.pywebview && window.pywebview.api && window.pywebview.api.export_note) {
+                window.pywebview.api.export_note(currentSelectedDocumentId, format).then(function(res) {
+                    handleCanonicalExportResponse(res, format);
+                }).catch(function() {
+                    alert('No se pudo exportar la nota desde el documento canónico.');
+                });
+                return;
+            }
+            alert('La exportación determinista requiere la consola Funes (PyWebView).');
+        }
 
+        function handleCanonicalExportResponse(res, format) {
+            if (!res || res.error) {
+                alert((res && res.message) || 'No se pudo exportar la nota.');
+                return;
+            }
             const title = currentSelectedNoteTitle || 'nota_funes';
-            let fileName = (currentSelectedNotePath || title).replace(/\.md$/, '').replace(/^.*[\\\/]/, '') + '.md';
+            if (res.mode === 'user_assisted_print' && res.print_html) {
+                openUserAssistedPdfPrint(res.print_html);
+                if (lastExportButtonRef) showButtonFeedback(lastExportButtonRef, '✓ PDF (impresión)');
+                log('Nota "' + title + '" preparada para PDF mediante impresión asistida del navegador.');
+            } else if (res.content) {
+                downloadTextBlob(res.content, res.filename || (title + '.md'), res.content_type || 'text/markdown;charset=utf-8');
+                if (lastExportButtonRef) showButtonFeedback(lastExportButtonRef, '✓ ¡Exportado!');
+                log('Nota "' + title + '" exportada como ' + (res.filename || format) + ' desde documento canónico.');
+            } else if (res.content_base64) {
+                downloadBase64Blob(res.content_base64, res.filename || (title + '.docx'), res.content_type);
+                if (lastExportButtonRef) showButtonFeedback(lastExportButtonRef, '✓ ¡Exportado!');
+                log('Nota "' + title + '" exportada como ' + (res.filename || format) + ' desde documento canónico.');
+            } else if (res.status === 'exported') {
+                if (lastExportButtonRef) showButtonFeedback(lastExportButtonRef, '✓ ¡Exportado!');
+                log((res.log || ('Nota exportada en ' + (res.path || ''))));
+            }
+        }
 
-            const blob = new Blob([textToExport], { type: 'text/markdown;charset=utf-8' });
+        function downloadTextBlob(text, fileName, mimeType) {
+            const blob = new Blob([text], { type: mimeType || 'text/plain;charset=utf-8' });
+            triggerBlobDownload(blob, fileName);
+        }
+
+        function downloadBase64Blob(base64, fileName, mimeType) {
+            const binary = atob(base64);
+            const bytes = new Uint8Array(binary.length);
+            for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+            const blob = new Blob([bytes], { type: mimeType || 'application/octet-stream' });
+            triggerBlobDownload(blob, fileName);
+        }
+
+        function triggerBlobDownload(blob, fileName) {
             const link = document.createElement('a');
             link.href = URL.createObjectURL(blob);
             link.download = fileName;
@@ -2356,217 +2388,34 @@
             link.click();
             document.body.removeChild(link);
             URL.revokeObjectURL(link.href);
-
-            if (lastExportButtonRef) showButtonFeedback(lastExportButtonRef, '✓ ¡Exportado!');
-            log('Nota "' + title + '" exportada como archivo Markdown (' + fileName + ').');
-
-            if (window.pywebview && window.pywebview.api) {
-                window.pywebview.api.trigger_action('export_reader_note', { format: 'markdown', note_title: title, note_path: currentSelectedNotePath });
-            }
         }
 
-        function downloadPdfFile() {
-            const readerContent = document.getElementById('reader-content');
-            if (!readerContent) return;
-
-            const title = currentSelectedNoteTitle || 'Nota Funes';
-            const fullPath = getFullNotePath(currentSelectedNotePath);
-            const timestamp = getFormattedTimestamp();
-            const notePane = readerContent.querySelector('.note-content') || readerContent;
-            const clone = notePane.cloneNode(true);
-
-            // Eliminar insignias y la barra de acciones superior
-            clone.querySelectorAll('.note-badge').forEach(el => el.remove());
-            const actionBar = clone.querySelector('#note-action-bar');
-            if (actionBar) actionBar.remove();
-
+        function openUserAssistedPdfPrint(printHtml) {
             const printWindow = window.open('', '_blank', 'width=850,height=950');
             if (!printWindow) {
-                alert('Por favor permite ventanas emergentes en tu navegador para generar el PDF.');
+                alert('Por favor permite ventanas emergentes para generar el PDF asistido.');
                 return;
             }
-
-            printWindow.document.write(`
-                <!DOCTYPE html>
-                <html>
-                <head>
-                    <meta charset="utf-8">
-                    <title>${escapeHtml(title)} — Exportación PDF</title>
-                    <style>
-                        @page {
-                            size: A4;
-                            margin: 20mm;
-                        }
-                        body {
-                            font-family: Arial, Helvetica, sans-serif;
-                            font-size: 12pt;
-                            line-height: 1.55;
-                            color: #111111;
-                            text-align: justify;
-                            margin: 0;
-                            padding: 0;
-                        }
-                        .pdf-header {
-                            border-bottom: 1.5px solid #888888;
-                            padding-bottom: 8px;
-                            margin-bottom: 22px;
-                            font-family: Arial, sans-serif;
-                        }
-                        .pdf-header-title {
-                            font-size: 9pt;
-                            font-weight: bold;
-                            color: #222222;
-                            margin-bottom: 4px;
-                            line-height: 1.3;
-                        }
-                        .pdf-header-path {
-                            font-size: 7.8pt;
-                            color: #555555;
-                            word-break: break-all;
-                            line-height: 1.3;
-                        }
-                        .pdf-footer {
-                            margin-top: 35px;
-                            border-top: 1.5px solid #888888;
-                            padding-top: 8px;
-                            display: flex;
-                            justify-content: space-between;
-                            align-items: center;
-                            font-size: 8.5pt;
-                            color: #444444;
-                            font-family: Arial, sans-serif;
-                        }
-                        h1 { font-size: 20pt; font-weight: bold; margin-top: 0; margin-bottom: 14pt; text-align: left; color: #111111; border-bottom: 1px solid #CCCCCC; padding-bottom: 6px; }
-                        h2 { font-size: 16pt; font-weight: bold; margin-top: 18pt; margin-bottom: 8pt; text-align: left; color: #222222; }
-                        h3 { font-size: 14pt; font-weight: bold; margin-top: 14pt; margin-bottom: 6pt; text-align: left; color: #333333; }
-                        p { font-size: 12pt; margin-top: 0; margin-bottom: 10pt; text-align: justify; }
-                        ul, ol { font-size: 12pt; margin-top: 0; margin-bottom: 10pt; padding-left: 20pt; }
-                        li { margin-bottom: 4pt; text-align: justify; }
-                        .wikilink { font-weight: bold; border: 1px solid #999999; padding: 1px 5px; background: #F0F0F0; border-radius: 3px; color: #222222; }
-                    </style>
-                </head>
-                <body>
-                    <div class="pdf-header">
-                        <div class="pdf-header-title">Nota: ${escapeHtml(title)}</div>
-                        <div class="pdf-header-path">Ruta: ${escapeHtml(fullPath)}</div>
-                    </div>
-
-                    ${clone.innerHTML}
-
-                    <div class="pdf-footer">
-                        <span>${escapeHtml(timestamp)}</span>
-                        <span>Página 1 de 1</span>
-                    </div>
-                </body>
-                </html>
-            `);
+            printWindow.document.open();
+            printWindow.document.write(printHtml);
             printWindow.document.close();
             printWindow.focus();
             setTimeout(function() {
                 printWindow.print();
                 printWindow.close();
             }, 350);
+        }
 
-            if (lastExportButtonRef) showButtonFeedback(lastExportButtonRef, '✓ ¡PDF Generado!');
-            log('Nota "' + title + '" exportada como documento PDF (.pdf).');
+        function downloadMarkdownFile() {
+            executeExportFormat('markdown');
+        }
 
-            if (window.pywebview && window.pywebview.api) {
-                window.pywebview.api.trigger_action('export_reader_note', { format: 'pdf', note_title: title, note_path: currentSelectedNotePath });
-            }
+        function downloadPdfFile() {
+            executeExportFormat('pdf');
         }
 
         function downloadWordFile() {
-            const readerContent = document.getElementById('reader-content');
-            if (!readerContent) return;
-
-            const title = currentSelectedNoteTitle || 'Nota Funes';
-            const fullPath = getFullNotePath(currentSelectedNotePath);
-            const timestamp = getFormattedTimestamp();
-            const notePane = readerContent.querySelector('.note-content') || readerContent;
-            const clone = notePane.cloneNode(true);
-
-            clone.querySelectorAll('.note-badge').forEach(el => el.remove());
-            const actionBar = clone.querySelector('#note-action-bar');
-            if (actionBar) actionBar.remove();
-
-            const fileName = (currentSelectedNotePath || title).replace(/\.md$/, '').replace(/^.*[\\\/]/, '') + '.doc';
-
-            const wordHtml = `
-                <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
-                <head>
-                    <meta charset='utf-8'>
-                    <title>${escapeHtml(title)}</title>
-                    <!--[if gte mso 9]>
-                    <xml>
-                        <w:WordDocument>
-                            <w:View>Print</w:View>
-                            <w:Zoom>100</w:Zoom>
-                            <w:DoNotOptimizeForBrowser/>
-                        </w:WordDocument>
-                    </xml>
-                    <![endif]-->
-                    <style>
-                        @page Section1 {
-                            size: 595.3pt 841.9pt;
-                            margin: 70.85pt 70.85pt 70.85pt 70.85pt;
-                        }
-                        div.Section1 { page: Section1; }
-                        body {
-                            font-family: Arial, Helvetica, sans-serif;
-                            font-size: 12pt;
-                            line-height: 1.5;
-                            color: #111111;
-                            text-align: justify;
-                            padding: 20pt;
-                        }
-                        h1 { font-size: 20pt; font-weight: bold; color: #111111; margin-top: 12pt; margin-bottom: 12pt; }
-                        h2 { font-size: 16pt; font-weight: bold; color: #222222; margin-top: 14pt; margin-bottom: 8pt; }
-                        h3 { font-size: 14pt; font-weight: bold; color: #333333; margin-top: 12pt; margin-bottom: 6pt; }
-                        p { font-size: 12pt; text-align: justify; margin-bottom: 10pt; }
-                        ul, ol { font-size: 12pt; }
-                        li { text-align: justify; margin-bottom: 4pt; }
-                        .wikilink { font-weight: bold; background: #F0F0F0; border: 1px solid #CCCCCC; padding: 1px 4px; }
-                    </style>
-                </head>
-                <body>
-                    <div class="Section1">
-                        <table style="width:100%; border-bottom:1.5px solid #888888; margin-bottom:18pt; font-family:Arial;">
-                            <tr>
-                                <td style="font-size:9pt; font-weight:bold; color:#222222; padding-bottom:3pt;">Nota: ${escapeHtml(title)}</td>
-                            </tr>
-                            <tr>
-                                <td style="font-size:7.8pt; color:#555555; word-break:break-all;">Ruta: ${escapeHtml(fullPath)}</td>
-                            </tr>
-                        </table>
-
-                        ${clone.innerHTML}
-
-                        <table style="width:100%; border-top:1.5px solid #888888; margin-top:30pt; font-size:8.5pt; color:#444; font-family:Arial;">
-                            <tr>
-                                <td>${escapeHtml(timestamp)}</td>
-                                <td style="text-align:right;">Página 1 de 1</td>
-                            </tr>
-                        </table>
-                    </div>
-                </body>
-                </html>
-            `;
-
-            const blob = new Blob(['\ufeff' + wordHtml], { type: 'application/msword;charset=utf-8' });
-            const link = document.createElement('a');
-            link.href = URL.createObjectURL(blob);
-            link.download = fileName;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            URL.revokeObjectURL(link.href);
-
-            if (lastExportButtonRef) showButtonFeedback(lastExportButtonRef, '✓ ¡Word Generado!');
-            log('Nota "' + title + '" exportada como documento Word (' + fileName + ').');
-
-            if (window.pywebview && window.pywebview.api) {
-                window.pywebview.api.trigger_action('export_reader_note', { format: 'word', note_title: title, note_path: currentSelectedNotePath });
-            }
+            executeExportFormat('docx');
         }
 
         function showPapiroToast(message, isError) {

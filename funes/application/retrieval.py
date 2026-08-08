@@ -144,6 +144,16 @@ class RetrievalApplicationService:
     ) -> None:
         self.chroma_store = chroma_store
         self._ram_governor = ram_governor
+        # Prefer the store's process-local searcher so add/delete invalidation
+        # (ChromaStore.invalidate_bm25_cache) keeps chat retrieval warm/coherent.
+        if hybrid_searcher is None:
+            store_searcher = getattr(chroma_store, "_hybrid_searcher", None)
+            if callable(store_searcher):
+                try:
+                    hybrid_searcher = store_searcher()
+                except Exception as exc:
+                    logger.debug("Could not reuse chroma HybridSearcher: %s", exc)
+                    hybrid_searcher = None
         self._searcher = hybrid_searcher or HybridSearcher()
         self._should_fallback = should_fallback_to_bm25
         self.max_chars = max(1, int(max_chars))

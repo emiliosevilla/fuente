@@ -42,7 +42,13 @@ from funes.domain.errors import (
     NoteRevisionConflictError,
     PathAuthorizationError,
 )
-from funes.domain.frontmatter import FrontmatterError, parse_frontmatter
+from funes.domain.frontmatter import FrontmatterError, parse_frontmatter, serialize_frontmatter
+from funes.domain.metadata_form import (
+    MetadataValidationError,
+    metadata_form_snapshot,
+    validate_metadata_fields,
+    validate_metadata_save_fields,
+)
 from funes.domain.paths import AuthorizedPathResolver, document_id_for_relative_path
 from funes.domain.quarantine import QuarantineService
 from funes.infrastructure.atomic_files import atomic_write_json, atomic_write_text
@@ -455,7 +461,7 @@ class FunesConsoleBackend:
                                 "issue": issue,
                                 "document_id": document_id,
                                 "revision": note.revision,
-                                "content": content[:1500],
+                                "metadata": metadata_form_snapshot(document.metadata),
                             })
                     except Exception:
                         pass
@@ -475,7 +481,25 @@ class FunesConsoleBackend:
                 expected_revision = payload.get("expected_revision")
                 if expected_revision is None:
                     expected_revision = notes.get_note(document_id).revision
-                approved = notes.approve(document_id, int(expected_revision))
+                metadata_patch = None
+                if "metadata" in payload:
+                    raw_metadata = dict(payload["metadata"])
+                    raw_metadata.pop("status", None)
+                    metadata_patch = validate_metadata_fields(
+                        raw_metadata,
+                        allowed_issues=self.vault.get_issues_in_theme(),
+                    )
+                approved = notes.approve(
+                    document_id,
+                    int(expected_revision),
+                    metadata_patch=metadata_patch,
+                )
+            except MetadataValidationError as error:
+                return {
+                    "error": error.code,
+                    "message": str(error),
+                    "field_errors": error.field_errors,
+                }
             except NoteRevisionConflictError as error:
                 return {"error": error.code, "message": str(error)}
             except InvalidNoteTransitionError as error:
@@ -490,6 +514,76 @@ class FunesConsoleBackend:
                 "document_id": approved.document_id,
                 "revision": approved.revision,
             }
+
+        elif action_name == "update_note_metadata":
+            identifier = payload.get("document_id") or payload.get("path")
+            if not identifier:
+                return {"error": "document_id is required"}
+            try:
+                notes = self.get_notes_service()
+                document_id = notes.resolve_document_id(str(identifier))
+                expected_revision = payload.get("expected_revision")
+                if expected_revision is None:
+                    return {"error": "expected_revision is required"}
+                metadata_patch = validate_metadata_save_fields(
+                    payload.get("metadata") or {},
+                    allowed_issues=self.vault.get_issues_in_theme(),
+                )
+                updated = notes.update_metadata(
+                    document_id,
+                    expected_revision=int(expected_revision),
+                    metadata_patch=metadata_patch,
+                )
+            except MetadataValidationError as error:
+                return {
+                    "error": error.code,
+                    "message": str(error),
+                    "field_errors": error.field_errors,
+                }
+            except NoteRevisionConflictError as error:
+                return {"error": error.code, "message": str(error)}
+            except PathAuthorizationError as error:
+                return self._path_error(error)
+            except (TypeError, ValueError) as error:
+                return {"error": f"Error al actualizar metadatos: {error}"}
+            return {
+                "log": "Metadatos guardados correctamente.",
+                "status": "saved",
+                "document_id": updated.document_id,
+                "revision": updated.revision,
+                "metadata": metadata_form_snapshot(updated.frontmatter),
+            }
+
+        elif action_name == "validate_note_metadata":
+            try:
+                metadata_patch = validate_metadata_save_fields(
+                    payload.get("metadata") or {},
+                    allowed_issues=self.vault.get_issues_in_theme(),
+                )
+            except MetadataValidationError as error:
+                return {
+                    "error": error.code,
+                    "message": str(error),
+                    "field_errors": error.field_errors,
+                }
+            return {"valid": True, "metadata": metadata_patch}
+
+        elif action_name == "get_note_metadata":
+            identifier = payload.get("document_id") or payload.get("path")
+            if not identifier:
+                return {"error": "document_id is required"}
+            try:
+                note = self.get_notes_service().get_note(str(identifier))
+            except PathAuthorizationError as error:
+                return self._path_error(error)
+            response: Dict[str, Any] = {
+                "document_id": note.document_id,
+                "revision": note.revision,
+                "metadata": metadata_form_snapshot(note.frontmatter),
+            }
+            if payload.get("diagnostic"):
+                response["raw_frontmatter"] = serialize_frontmatter(note.frontmatter)
+            return response
 
         # --- CRUD DE NOTAS (GUARDAR, FUSIONAR, MOVER, ELIMINAR) ---
         elif action_name == "save_note":

@@ -142,8 +142,88 @@ class FunesPyWebViewApi:
     def get_pending_notes(self) -> dict[str, Any]:
         return self.backend.handle_action("get_pending_notes", {})
 
-    def approve_note(self, note_id: object) -> dict[str, Any]:
-        return self._note_action("approve_note", note_id)
+    def get_available_issues(self) -> dict[str, Any]:
+        return {"issues": self.backend.vault.get_issues_in_theme()}
+
+    def get_note_metadata(
+        self, note_id: object, diagnostic: object = False
+    ) -> dict[str, Any]:
+        note = self._text(note_id, "note_id")
+        if isinstance(note, dict):
+            return note
+        if "/" in note or "\\" in note or note.endswith(".md"):
+            return self._error("path_not_authorized", "Path is not authorized")
+        include_diagnostic = diagnostic is True
+        return self.backend.handle_action(
+            "get_note_metadata",
+            {"document_id": note, "diagnostic": include_diagnostic},
+        )
+
+    def validate_note_metadata(self, metadata: object) -> dict[str, Any]:
+        parsed = self._payload(metadata)
+        if isinstance(parsed, dict) and "error" in parsed:
+            return parsed
+        assert isinstance(parsed, dict)
+        return self.backend.handle_action(
+            "validate_note_metadata", {"metadata": parsed}
+        )
+
+    def update_note_metadata(
+        self,
+        note_id: object,
+        metadata: object,
+        expected_revision: object,
+    ) -> dict[str, Any]:
+        note = self._text(note_id, "note_id")
+        if isinstance(note, dict):
+            return note
+        if "/" in note or "\\" in note or note.endswith(".md"):
+            return self._error("path_not_authorized", "Path is not authorized")
+        parsed = self._payload(metadata)
+        if isinstance(parsed, dict) and "error" in parsed:
+            return parsed
+        assert isinstance(parsed, dict)
+        if isinstance(expected_revision, bool) or not isinstance(
+            expected_revision, (int, float)
+        ):
+            return self._error("invalid_payload", "expected_revision must be a number")
+        return self.backend.handle_action(
+            "update_note_metadata",
+            {
+                "document_id": note,
+                "metadata": parsed,
+                "expected_revision": int(expected_revision),
+            },
+        )
+
+    def approve_note(
+        self,
+        note_id: object,
+        expected_revision: object = None,
+        metadata: object = None,
+    ) -> dict[str, Any]:
+        note = self._text(note_id, "note_id")
+        if isinstance(note, dict):
+            return note
+        if "/" in note or "\\" in note or note.endswith(".md"):
+            return self._error("path_not_authorized", "Path is not authorized")
+        payload: dict[str, Any] = {"path": note}
+        if expected_revision is not None:
+            if isinstance(expected_revision, bool) or not isinstance(
+                expected_revision, (int, float)
+            ):
+                return self._error("invalid_payload", "expected_revision must be a number")
+            payload["expected_revision"] = int(expected_revision)
+        if metadata is not None:
+            parsed = self._payload(metadata)
+            if isinstance(parsed, dict) and "error" in parsed:
+                return parsed
+            assert isinstance(parsed, dict)
+            payload["metadata"] = parsed
+        try:
+            return self.backend.handle_action("approve_note", payload)
+        except PathAuthorizationError as error:
+            return {"error": error.code, "message": str(error)}
 
     def save_draft(self, note_id: object, content: object) -> dict[str, Any]:
         note = self._text(note_id, "note_id")

@@ -15,6 +15,7 @@ from funes.domain.errors import (
     PathAuthorizationError,
 )
 from funes.domain.frontmatter import serialize_frontmatter
+from funes.domain.metadata_form import validate_metadata_fields, validate_metadata_save_fields
 from funes.domain.paths import AuthorizedPathResolver, document_id_for_relative_path
 from funes.infrastructure.atomic_files import atomic_write_text
 from funes.infrastructure.sqlite_store import JobStore
@@ -87,13 +88,73 @@ class NotesApplicationService:
             content_hash=str(identity.get("content_hash") or note.content_hash),
         )
 
-    def approve(self, document_id: str, expected_revision: int) -> NoteDocument:
+    def approve(
+        self,
+        document_id: str,
+        expected_revision: int,
+        *,
+        metadata_patch: Optional[dict[str, Any]] = None,
+    ) -> NoteDocument:
         document_id = self.resolve_document_id(document_id)
-        return self._transition(
-            document_id,
+        note = self.get_note(document_id)
+        if note.revision != expected_revision:
+            raise NoteRevisionConflictError(document_id)
+        if note.status != "pending_review":
+            raise InvalidNoteTransitionError(
+                document_id,
+                f"Note is not pending review (status={note.status!r})",
+            )
+
+        metadata = dict(note.frontmatter)
+        if metadata_patch:
+            allowed_issues = self.vault.get_issues_in_theme()
+            validated_patch = validate_metadata_save_fields(
+                metadata_patch,
+                allowed_issues=allowed_issues,
+            )
+            metadata.update(validated_patch)
+        metadata["status"] = "approved"
+        event: dict[str, Any] = {
+            "date": time.strftime("%Y-%m-%d %H:%M:%S"),
+            "action": "approved",
+        }
+        metadata["history"] = [*metadata.get("history", []), event]
+        return self._persist_note(
+            note,
             expected_revision=expected_revision,
-            new_status="approved",
-            action="approved",
+            metadata=metadata,
+            reindex=True,
+        )
+
+    def update_metadata(
+        self,
+        document_id: str,
+        *,
+        expected_revision: int,
+        metadata_patch: dict[str, Any],
+    ) -> NoteDocument:
+        document_id = self.resolve_document_id(document_id)
+        note = self.get_note(document_id)
+        if note.revision != expected_revision:
+            raise NoteRevisionConflictError(document_id)
+
+        metadata = dict(note.frontmatter)
+        allowed_issues = self.vault.get_issues_in_theme()
+        validated_patch = validate_metadata_save_fields(
+            metadata_patch,
+            allowed_issues=allowed_issues,
+        )
+        metadata.update(validated_patch)
+        event: dict[str, Any] = {
+            "date": time.strftime("%Y-%m-%d %H:%M:%S"),
+            "action": "metadata_updated",
+        }
+        metadata["history"] = [*metadata.get("history", []), event]
+        return self._persist_note(
+            note,
+            expected_revision=expected_revision,
+            metadata=metadata,
+            reindex=False,
         )
 
     def reject(
@@ -114,6 +175,41 @@ class NotesApplicationService:
             action="rejected",
             reason=cleaned,
         )
+
+    def _persist_note(
+        self,
+        note: NoteDocument,
+        *,
+        expected_revision: int,
+        metadata: dict[str, Any],
+        reindex: bool,
+    ) -> NoteDocument:
+        allowed_issues = self.vault.get_issues_in_theme()
+        validate_metadata_fields(metadata, allowed_issues=allowed_issues)
+
+        markdown = serialize_frontmatter(metadata) + note.body_markdown
+        path, relative = self._resolve_note_path(note.document_id)
+        previous_markdown = path.read_text(encoding="utf-8")
+        atomic_write_text(path, markdown)
+
+        updated_identity = self.job_store.update_document_identity_cas(
+            document_id=note.document_id,
+            expected_revision=expected_revision,
+            relative_path=relative,
+            content_hash=content_hash_for_markdown(markdown),
+        )
+        if updated_identity is None:
+            atomic_write_text(path, previous_markdown)
+            raise NoteRevisionConflictError(note.document_id)
+
+        updated = note.with_metadata(
+            metadata,
+            revision=int(updated_identity["revision"]),
+            content_hash=str(updated_identity["content_hash"]),
+        )
+        if reindex:
+            self._reindex_after_approval(updated)
+        return updated
 
     def _transition(
         self,
@@ -143,29 +239,12 @@ class NotesApplicationService:
             event["reason"] = reason
         metadata["history"] = [*metadata.get("history", []), event]
 
-        markdown = serialize_frontmatter(metadata) + note.body_markdown
-        path, relative = self._resolve_note_path(document_id)
-        previous_markdown = path.read_text(encoding="utf-8")
-        atomic_write_text(path, markdown)
-
-        updated_identity = self.job_store.update_document_identity_cas(
-            document_id=document_id,
+        return self._persist_note(
+            note,
             expected_revision=expected_revision,
-            relative_path=relative,
-            content_hash=content_hash_for_markdown(markdown),
+            metadata=metadata,
+            reindex=new_status == "approved",
         )
-        if updated_identity is None:
-            atomic_write_text(path, previous_markdown)
-            raise NoteRevisionConflictError(document_id)
-
-        updated = note.with_metadata(
-            metadata,
-            revision=int(updated_identity["revision"]),
-            content_hash=str(updated_identity["content_hash"]),
-        )
-        if new_status == "approved":
-            self._reindex_after_approval(updated)
-        return updated
 
     def _reindex_after_approval(self, note: NoteDocument) -> None:
         """Publish chunk vectors only after the approved note is durable on disk."""

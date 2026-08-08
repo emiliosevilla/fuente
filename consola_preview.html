@@ -843,6 +843,111 @@
         input:focus, select:focus, textarea:focus, button:focus {
             outline: none !important;
         }
+
+        /* BANDEJA DE APROBACIÓN — FORMULARIO DE METADATOS TIPADO */
+        #modal-approval .modal-container {
+            width: min(1080px, 96vw);
+            max-height: 88vh;
+        }
+
+        #modal-approval .modal-body {
+            display: grid;
+            grid-template-columns: 280px 1fr;
+            gap: 16px;
+            max-height: 68vh;
+            overflow: hidden;
+        }
+
+        .approval-pending-list {
+            border: 1px solid var(--border);
+            border-radius: var(--card-radius);
+            background: var(--bg-card);
+            overflow-y: auto;
+            padding: 8px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .approval-pending-item {
+            padding: 10px 12px;
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            background: var(--bg-log);
+            cursor: pointer;
+            font-size: 0.8rem;
+            line-height: 1.35;
+        }
+
+        .approval-pending-item.active,
+        .approval-pending-item:hover {
+            border-color: var(--border-accent);
+            background: var(--bg-card-hover);
+            font-weight: 700;
+        }
+
+        .metadata-form-panel {
+            overflow-y: auto;
+            padding-right: 4px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .metadata-field {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .metadata-field label {
+            font-size: 0.78rem;
+            font-weight: 700;
+            color: var(--muted);
+        }
+
+        .metadata-field input,
+        .metadata-field select,
+        .metadata-field textarea {
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            background: var(--bg-log);
+            font-size: 0.82rem;
+        }
+
+        .metadata-field input.invalid,
+        .metadata-field select.invalid,
+        .metadata-field textarea.invalid {
+            border-color: var(--red);
+        }
+
+        .metadata-field-error {
+            font-size: 0.72rem;
+            color: var(--red);
+            min-height: 1em;
+        }
+
+        .metadata-diagnostic {
+            border: 1px dashed var(--border);
+            border-radius: var(--card-radius);
+            padding: 10px 12px;
+            background: var(--bg-card);
+        }
+
+        .metadata-diagnostic pre {
+            margin-top: 8px;
+            padding: 10px;
+            background: var(--bg-log);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            font-size: 0.72rem;
+            white-space: pre-wrap;
+            word-break: break-word;
+            max-height: 180px;
+            overflow-y: auto;
+        }
     </style>
 </head>
 <body>
@@ -894,6 +999,9 @@
                 </button>
                 <button class="btn-secondary" data-onclick-command="triggerAction('flush_sources')">
                     Actualizar Fuentes
+                </button>
+                <button class="btn-secondary" data-onclick-command="openApprovalInbox()">
+                    Bandeja de Aprobación
                 </button>
             </div>
         </div>
@@ -1357,6 +1465,70 @@
         </div>
     </div>
 
+    <!-- MODAL BANDEJA DE APROBACIÓN -->
+    <div class="modal-overlay" id="modal-approval" style="z-index: 1050;">
+        <div class="modal-container">
+            <div class="modal-header">
+                <div class="modal-title">BANDEJA DE APROBACIÓN — METADATOS SEGUROS</div>
+                <button class="close-btn" data-onclick-command="closeModal('modal-approval')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="approval-pending-list" id="approval-pending-list">
+                    <p style="font-size:0.8rem; color:var(--muted); padding:8px;">Cargando notas pendientes...</p>
+                </div>
+                <div class="metadata-form-panel" id="approval-metadata-form">
+                    <p style="font-size:0.82rem; color:var(--muted);">Selecciona una nota pendiente para revisar sus metadatos.</p>
+                    <div class="metadata-field" id="metadata-field-title" style="display:none;">
+                        <label for="metadata-title">Título</label>
+                        <input type="text" id="metadata-title" autocomplete="off">
+                        <span class="metadata-field-error" id="metadata-error-title"></span>
+                    </div>
+                    <div class="metadata-field" id="metadata-field-tags" style="display:none;">
+                        <label for="metadata-tags">Etiquetas (separadas por comas)</label>
+                        <input type="text" id="metadata-tags" autocomplete="off" placeholder="etiqueta1, etiqueta2">
+                        <span class="metadata-field-error" id="metadata-error-tags"></span>
+                    </div>
+                    <div class="metadata-field" id="metadata-field-issue" style="display:none;">
+                        <label for="metadata-issue">Cuestión</label>
+                        <select id="metadata-issue"></select>
+                        <span class="metadata-field-error" id="metadata-error-issue"></span>
+                    </div>
+                    <div class="metadata-field" id="metadata-field-date" style="display:none;">
+                        <label for="metadata-date">Fecha</label>
+                        <input type="date" id="metadata-date">
+                        <span class="metadata-field-error" id="metadata-error-date"></span>
+                    </div>
+                    <div class="metadata-field" id="metadata-field-sources" style="display:none;">
+                        <label for="metadata-sources">Fuentes (una por línea)</label>
+                        <textarea id="metadata-sources" rows="3" placeholder="Fuente 1&#10;Fuente 2"></textarea>
+                        <span class="metadata-field-error" id="metadata-error-sources"></span>
+                    </div>
+                    <div class="metadata-field" id="metadata-field-status" style="display:none;">
+                        <label for="metadata-status">Estado</label>
+                        <select id="metadata-status">
+                            <option value="pending_review">Pendiente de revisión</option>
+                            <option value="draft">Borrador</option>
+                            <option value="archived">Archivada</option>
+                        </select>
+                        <span class="metadata-field-error" id="metadata-error-status"></span>
+                    </div>
+                    <details class="metadata-diagnostic" id="metadata-diagnostic-panel" style="display:none;">
+                        <summary style="cursor:pointer; font-size:0.78rem; font-weight:700; color:var(--muted);">Vista diagnóstica — frontmatter YAML (solo lectura)</summary>
+                        <pre id="metadata-raw-frontmatter"></pre>
+                    </details>
+                </div>
+            </div>
+            <div class="modal-footer" style="justify-content: space-between;">
+                <span id="approval-form-status" style="font-size:0.78rem; color:var(--muted);"></span>
+                <div style="display:flex; gap:10px;">
+                    <button class="btn-secondary" data-onclick-command="closeModal('modal-approval')">Cerrar</button>
+                    <button class="btn-secondary" id="btn-save-metadata" data-onclick-command="saveApprovalMetadata()" disabled>Guardar metadatos</button>
+                    <button class="btn-primary" id="btn-approve-note" data-onclick-command="approveSelectedNote()" disabled>Aprobar nota</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- MODAL GUÍA RÁPIDA -->
     <div class="modal-overlay" id="modal-help">
         <div class="modal-container" style="width: 840px;">
@@ -1450,6 +1622,9 @@
                 'addLinkedOutputFolder()': addLinkedOutputFolder,
                 'resetDefaultSettings()': resetDefaultSettings,
                 'saveSettings()': saveSettings,
+                'openApprovalInbox()': openApprovalInbox,
+                'saveApprovalMetadata()': saveApprovalMetadata,
+                'approveSelectedNote()': approveSelectedNote,
             };
             if (handlers[command]) handlers[command]();
         }
@@ -1547,6 +1722,201 @@
             if (id === 'modal-stat-input') { loadStatInputData(); }
             if (id === 'modal-stat-notes') { loadStatNotesData(); }
             if (id === 'modal-stat-ram') { loadStatRamData(); }
+            if (id === 'modal-approval') { loadApprovalInbox(); }
+        }
+
+        let approvalSelectedNoteId = null;
+        let approvalSelectedRevision = null;
+        const metadataFieldIds = ['title', 'tags', 'issue', 'date', 'sources', 'status'];
+
+        function bindApprovalDiagnosticPanel() {
+            const panel = document.getElementById('metadata-diagnostic-panel');
+            if (!panel || panel.dataset.diagnosticBound === 'true') return;
+            panel.dataset.diagnosticBound = 'true';
+            panel.addEventListener('toggle', function(event) {
+                if (!event.target.open || !approvalSelectedNoteId) return;
+                window.pywebview.api.get_note_metadata(approvalSelectedNoteId, true).then(function(res) {
+                    if (res && res.raw_frontmatter) {
+                        document.getElementById('metadata-raw-frontmatter').textContent = res.raw_frontmatter;
+                    }
+                });
+            });
+        }
+
+        function clearMetadataFieldErrors() {
+            metadataFieldIds.forEach(function(field) {
+                const input = document.getElementById('metadata-' + field);
+                const errorEl = document.getElementById('metadata-error-' + field);
+                if (input) input.classList.remove('invalid');
+                if (errorEl) errorEl.textContent = '';
+            });
+        }
+
+        function showMetadataFieldErrors(fieldErrors) {
+            clearMetadataFieldErrors();
+            if (!fieldErrors) return;
+            Object.keys(fieldErrors).forEach(function(field) {
+                const input = document.getElementById('metadata-' + field);
+                const errorEl = document.getElementById('metadata-error-' + field);
+                if (input) input.classList.add('invalid');
+                if (errorEl) errorEl.textContent = fieldErrors[field];
+            });
+        }
+
+        function setMetadataFormVisible(visible) {
+            metadataFieldIds.forEach(function(field) {
+                const wrapper = document.getElementById('metadata-field-' + field);
+                if (wrapper) wrapper.style.display = visible ? 'flex' : 'none';
+            });
+            document.getElementById('metadata-diagnostic-panel').style.display = visible ? 'block' : 'none';
+            document.getElementById('btn-save-metadata').disabled = !visible;
+            document.getElementById('btn-approve-note').disabled = !visible;
+        }
+
+        function populateIssueOptions(issues, selectedIssue) {
+            const select = document.getElementById('metadata-issue');
+            select.replaceChildren();
+            (issues || ['_Sin_Cuestion']).forEach(function(issue) {
+                const option = document.createElement('option');
+                option.value = issue;
+                option.textContent = issue;
+                if (issue === selectedIssue) option.selected = true;
+                select.appendChild(option);
+            });
+        }
+
+        function fillMetadataForm(metadata) {
+            document.getElementById('metadata-title').value = metadata.title || '';
+            document.getElementById('metadata-tags').value = (metadata.tags || []).join(', ');
+            document.getElementById('metadata-date').value = metadata.date || '';
+            document.getElementById('metadata-sources').value = (metadata.sources || []).join('\n');
+            document.getElementById('metadata-status').value = metadata.status || 'pending_review';
+            populateIssueOptions(window.approvalIssueOptions || ['_Sin_Cuestion'], metadata.issue || '_Sin_Cuestion');
+            clearMetadataFieldErrors();
+        }
+
+        function collectMetadataFormValues() {
+            return {
+                title: document.getElementById('metadata-title').value,
+                tags: document.getElementById('metadata-tags').value,
+                issue: document.getElementById('metadata-issue').value,
+                date: document.getElementById('metadata-date').value,
+                sources: document.getElementById('metadata-sources').value,
+                status: document.getElementById('metadata-status').value,
+            };
+        }
+
+        function openApprovalInbox() {
+            bindApprovalDiagnosticPanel();
+            openModal('modal-approval');
+        }
+
+        function loadApprovalInbox() {
+            const listEl = document.getElementById('approval-pending-list');
+            approvalSelectedNoteId = null;
+            approvalSelectedRevision = null;
+            setMetadataFormVisible(false);
+            document.getElementById('approval-form-status').textContent = '';
+            document.getElementById('metadata-raw-frontmatter').textContent = '';
+            listEl.innerHTML = '<p style="font-size:0.8rem; color:var(--muted); padding:8px;">Cargando notas pendientes...</p>';
+
+            if (!window.pywebview || !window.pywebview.api) {
+                listEl.innerHTML = '<p style="font-size:0.8rem; color:var(--muted); padding:8px;">Vista previa sin backend.</p>';
+                return;
+            }
+
+            window.pywebview.api.get_available_issues().then(function(issueRes) {
+                window.approvalIssueOptions = (issueRes && issueRes.issues) ? issueRes.issues : ['_Sin_Cuestion'];
+                return window.pywebview.api.get_pending_notes();
+            }).then(function(res) {
+                const pending = (res && res.pending_notes) ? res.pending_notes : [];
+                listEl.replaceChildren();
+                if (!pending.length) {
+                    listEl.innerHTML = '<p style="font-size:0.8rem; color:var(--muted); padding:8px;">No hay notas pendientes de revisión.</p>';
+                    return;
+                }
+                pending.forEach(function(note) {
+                    const item = document.createElement('button');
+                    item.type = 'button';
+                    item.className = 'approval-pending-item';
+                    item.textContent = note.title || note.filename || note.document_id;
+                    item.addEventListener('click', function() {
+                        selectApprovalNote(note.document_id, note.revision, item);
+                    });
+                    listEl.appendChild(item);
+                });
+            });
+        }
+
+        function selectApprovalNote(documentId, revision, itemEl) {
+            approvalSelectedNoteId = documentId;
+            approvalSelectedRevision = revision;
+            document.querySelectorAll('.approval-pending-item').forEach(function(el) {
+                el.classList.remove('active');
+            });
+            if (itemEl) itemEl.classList.add('active');
+            setMetadataFormVisible(true);
+            document.getElementById('approval-form-status').textContent = 'Cargando metadatos...';
+            document.getElementById('metadata-raw-frontmatter').textContent = '';
+
+            window.pywebview.api.get_note_metadata(documentId, false).then(function(res) {
+                if (res && res.error) {
+                    document.getElementById('approval-form-status').textContent = res.message || res.error;
+                    return;
+                }
+                approvalSelectedRevision = res.revision;
+                fillMetadataForm(res.metadata || {});
+                document.getElementById('approval-form-status').textContent = 'Revisión ' + res.revision;
+            });
+        }
+
+        function saveApprovalMetadata() {
+            if (!approvalSelectedNoteId || approvalSelectedRevision === null) return;
+            const metadata = collectMetadataFormValues();
+            document.getElementById('approval-form-status').textContent = 'Guardando...';
+            window.pywebview.api.update_note_metadata(
+                approvalSelectedNoteId,
+                metadata,
+                approvalSelectedRevision
+            ).then(function(res) {
+                if (res && res.field_errors) {
+                    showMetadataFieldErrors(res.field_errors);
+                    document.getElementById('approval-form-status').textContent = res.message || 'Metadatos inválidos';
+                    return;
+                }
+                if (res && res.error) {
+                    document.getElementById('approval-form-status').textContent = res.message || res.error;
+                    return;
+                }
+                approvalSelectedRevision = res.revision;
+                fillMetadataForm(res.metadata || metadata);
+                document.getElementById('approval-form-status').textContent = 'Metadatos guardados (rev. ' + res.revision + ')';
+                if (res.log) log(res.log);
+            });
+        }
+
+        function approveSelectedNote() {
+            if (!approvalSelectedNoteId || approvalSelectedRevision === null) return;
+            const metadata = collectMetadataFormValues();
+            document.getElementById('approval-form-status').textContent = 'Aprobando...';
+            window.pywebview.api.approve_note(
+                approvalSelectedNoteId,
+                approvalSelectedRevision,
+                metadata
+            ).then(function(res) {
+                if (res && res.field_errors) {
+                    showMetadataFieldErrors(res.field_errors);
+                    document.getElementById('approval-form-status').textContent = res.message || 'No se puede aprobar con metadatos inválidos';
+                    return;
+                }
+                if (res && res.error) {
+                    document.getElementById('approval-form-status').textContent = res.message || res.error;
+                    return;
+                }
+                if (res && res.log) log(res.log);
+                document.getElementById('approval-form-status').textContent = 'Nota aprobada';
+                loadApprovalInbox();
+            });
         }
 
         function loadStatInputData() {

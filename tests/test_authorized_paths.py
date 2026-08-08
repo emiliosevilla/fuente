@@ -215,6 +215,8 @@ def test_restore_rejects_escaping_destination_symlink_with_stable_error(temp_vau
 
 
 def test_wikilink_callback_uses_unique_vault_relative_note_path(temp_vault_path):
+    from funes.core.vault import document_id_for_relative_path
+
     backend = FunesConsoleBackend(temp_vault_path)
     source = backend.vault.output_dir / "source.md"
     target = backend.vault.output_dir / "Topic" / "nested.md"
@@ -222,7 +224,9 @@ def test_wikilink_callback_uses_unique_vault_relative_note_path(temp_vault_path)
     source.write_text("[[nested]]", encoding="utf-8")
     target.write_text("target", encoding="utf-8")
 
-    result = backend.get_note_content_html("4_salida/source.md")
+    source_id = document_id_for_relative_path("4_salida/source.md")
+    target_id = document_id_for_relative_path("4_salida/Topic/nested.md")
+    result = backend.get_note_content_html(source_id)
 
     assert result["document"] == [
         {
@@ -231,16 +235,18 @@ def test_wikilink_callback_uses_unique_vault_relative_note_path(temp_vault_path)
                 {
                     "type": "wikilink",
                     "text": "nested",
-                    "document_id": "4_salida/Topic/nested.md",
+                    "document_id": target_id,
                 }
             ],
         }
     ]
-    assert 'data-document-id="4_salida/Topic/nested.md"' in result["html"]
+    assert f'data-document-id="{target_id}"' in result["html"]
     assert "onclick=" not in result["html"]
 
 
 def test_wikilink_rejects_ambiguous_basename(temp_vault_path):
+    from funes.core.vault import document_id_for_relative_path
+
     backend = FunesConsoleBackend(temp_vault_path)
     source = backend.vault.output_dir / "source.md"
     source.write_text("[[duplicada]]", encoding="utf-8")
@@ -249,9 +255,13 @@ def test_wikilink_rejects_ambiguous_basename(temp_vault_path):
         note.parent.mkdir()
         note.write_text(issue, encoding="utf-8")
 
-    result = backend.get_note_content_html("4_salida/source.md")
+    result = backend.get_note_content_html(
+        document_id_for_relative_path("4_salida/source.md")
+    )
 
-    assert result == {
-        "error": "path_not_authorized",
-        "message": "Path is not authorized",
-    }
+    # Ambiguous wikilinks stay in-document as broken links (no whole-note failure).
+    assert "error" not in result
+    children = result["document"][0]["children"]
+    assert children[0]["type"] == "wikilink"
+    assert children[0]["document_id"] == ""
+    assert children[0].get("broken") is True

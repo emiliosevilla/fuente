@@ -1,13 +1,11 @@
-import re
-import time
 import logging
 import threading
 from datetime import datetime
 from pathlib import Path
-from typing import List, Dict, Set
+from typing import Dict, List, Optional, Set
 
 from funes.domain.frontmatter import serialize_frontmatter
-from funes.graph_engine.linker import GraphLinker
+from funes.graph_engine.linker import CANONICAL_MOC_FILENAME, GraphLinker, NoteLinkTarget
 
 logger = logging.getLogger(__name__)
 
@@ -57,79 +55,118 @@ class OptimizadoGraphLoop:
 
             self._stop_event.wait(timeout=self.interval_sec)
 
+    def _issue_name_for(self, relative_path: str) -> str:
+        parts = Path(relative_path).parts
+        if len(parts) >= 2:
+            return parts[0]
+        return "General"
+
+    def _notes_by_issue(self, notes: list[NoteLinkTarget]) -> Dict[str, List[NoteLinkTarget]]:
+        grouped: Dict[str, List[NoteLinkTarget]] = {}
+        for note in notes:
+            issue_name = self._issue_name_for(note.relative_path)
+            grouped.setdefault(issue_name, []).append(note)
+        return grouped
+
     def refine_knowledge_graph(self, target_issue: str = None) -> dict:
-        """Escanea 4_salida y sus Cuestiones (subcarpetas), re-enlaza WikiLinks y agrupa el MOC."""
+        """Re-link notes and rebuild the MOC from the full recursive output scope.
+
+        When ``target_issue`` is set, only that issue's note bodies and master
+        note are rewritten. The MOC is always regenerated from the full vault
+        output tree so unrelated issue entries survive a partial refresh.
+        """
         if not self.output_dir.exists():
             return {"status": "empty", "processed_notes": 0}
 
-        # Obtener todas las subcarpetas de Cuestiones
-        issue_dirs = [d for d in self.output_dir.iterdir() if d.is_dir() and not d.name.startswith(".")]
-        if not issue_dirs:
-            issue_dirs = [self.output_dir]
+        all_notes = self.linker.enumerate_notes()
+        notes_by_issue = self._notes_by_issue(all_notes)
 
         processed_notes_count = 0
-        all_valid_notes: List[Path] = []
         orphans: Set[str] = set()
         note_contents: Dict[str, str] = {}
         issue_summaries: Dict[str, List[str]] = {}
+        catalog_notes: List[NoteLinkTarget] = []
 
-        for issue_dir in issue_dirs:
-            issue_name = issue_dir.name if issue_dir != self.output_dir else "General"
-            
-            if target_issue and target_issue != issue_name:
-                continue
-
-            notes = [f for f in issue_dir.glob("*.md") if not f.name.startswith("_")]
-            if not notes:
-                continue
-
+        for issue_name, issue_notes in sorted(notes_by_issue.items()):
+            should_rewrite = target_issue is None or target_issue == issue_name
             issue_summaries[issue_name] = []
-            valid_notes: List[Path] = []
-            for note_file in notes:
+            rewritten_paths: List[Path] = []
+
+            for note in issue_notes:
+                note_path = self.output_dir / note.relative_path
+                catalog_notes.append(note)
+                issue_summaries[issue_name].append(note.link_target)
+
                 try:
-                    with open(note_file, "r", encoding="utf-8") as f:
-                        content = f.read()
+                    content = note_path.read_text(encoding="utf-8")
+                    if should_rewrite:
+                        updated_content = self.linker.auto_link_content(
+                            content,
+                            note.stem,
+                            current_relative_path=note.relative_path,
+                        )
+                        if updated_content != content:
+                            note_path.write_text(updated_content, encoding="utf-8")
+                            content = updated_content
+                            logger.info(
+                                "Bucle Optimizado: Enlaces actualizados en '%s'",
+                                note.relative_path,
+                            )
+                        processed_notes_count += 1
+                        rewritten_paths.append(note_path)
 
-                    updated_content = self.linker.auto_link_content(content, note_file.stem)
-
-                    if updated_content != content:
-                        with open(note_file, "w", encoding="utf-8") as f:
-                            f.write(updated_content)
-                        content = updated_content
-                        logger.info(f"Bucle Optimizado: Enlaces actualizados en '{note_file.name}'")
-
-                    note_contents[note_file.stem] = content
-                    valid_notes.append(note_file)
-                    all_valid_notes.append(note_file)
-                    processed_notes_count += 1
-                    issue_summaries[issue_name].append(note_file.stem)
-
+                    note_contents[note.link_target] = content
                     if "[[" not in content:
-                        orphans.add(note_file.stem)
-
+                        orphans.add(note.link_target)
                 except Exception as e:
-                    logger.error(f"Error procesando {note_file.name} en Bucle Optimizado: {e}")
+                    logger.error(
+                        "Error procesando %s en Bucle Optimizado: %s",
+                        note.relative_path,
+                        e,
+                    )
 
-            # Crear/actualizar nota marco de Cuestión
-            self._update_issue_master_note(issue_dir, issue_name, valid_notes)
+            if should_rewrite:
+                issue_dir = (
+                    self.output_dir / issue_name
+                    if issue_name != "General"
+                    else self.output_dir
+                )
+                self._update_issue_master_note(
+                    issue_dir,
+                    issue_name,
+                    rewritten_paths or [self.output_dir / n.relative_path for n in issue_notes],
+                    link_targets=[n.link_target for n in issue_notes],
+                )
 
-        # Generar / Actualizar MOC global
-        self._update_moc_index(all_valid_notes, note_contents, orphans, issue_summaries)
+        self._update_moc_index(catalog_notes, note_contents, orphans, issue_summaries)
 
         return {
             "status": "success",
             "processed_notes": processed_notes_count,
-            "issues_processed": len(issue_summaries),
-            "orphans_count": len(orphans)
+            "issues_processed": len(
+                [
+                    name
+                    for name in issue_summaries
+                    if target_issue is None or name == target_issue
+                ]
+            ),
+            "orphans_count": len(orphans),
         }
 
-    def _update_issue_master_note(self, issue_dir: Path, issue_name: str, notes: List[Path]) -> None:
+    def _update_issue_master_note(
+        self,
+        issue_dir: Path,
+        issue_name: str,
+        notes: List[Path],
+        link_targets: Optional[List[str]] = None,
+    ) -> None:
         """Crea o actualiza la nota marco _Cuestion_<Nombre>.md dentro de la carpeta de la Cuestión."""
-        if not notes or issue_name == "_Sin_Cuestion":
+        if not notes or issue_name in {"_Sin_Cuestion", "General"}:
             return
 
         master_path = issue_dir / f"_Cuestion_{issue_name}.md"
         now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        targets = link_targets or [n.stem for n in notes if not n.name.startswith("_")]
 
         lines = [
             serialize_frontmatter({
@@ -148,15 +185,14 @@ class OptimizadoGraphLoop:
             "",
             f"Nota marco de síntesis para la cuestión **{issue_name}**, generada el `{now_str}`.",
             "",
-            f"- **Notas Atómicas Integradas:** {len(notes)}",
+            f"- **Notas Atómicas Integradas:** {len(targets)}",
             "",
             "## 🔗 Notas Atómicas de esta Cuestión",
             "",
         ]
 
-        for n in sorted(notes, key=lambda x: x.name.lower()):
-            if not n.name.startswith("_"):
-                lines.append(f"- [[{n.stem}]]")
+        for target in sorted(targets, key=str.lower):
+            lines.append(f"- [[{target}]]")
 
         lines.append("")
         lines.append("---")
@@ -167,13 +203,13 @@ class OptimizadoGraphLoop:
 
     def _update_moc_index(
         self,
-        notes: List[Path],
+        notes: List[NoteLinkTarget],
         note_contents: Dict[str, str],
         orphans: Set[str],
         issue_summaries: Dict[str, List[str]] = None
     ) -> None:
-        """Crea o actualiza el archivo _Indice_MOC.md agrupando por Cuestiones y Tags."""
-        moc_path = self.output_dir / "_Indice_MOC.md"
+        """Crea o actualiza el archivo canónico _Indice_MOC.md agrupando por Cuestiones."""
+        moc_path = self.output_dir / CANONICAL_MOC_FILENAME
         now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
         lines = [
@@ -201,24 +237,25 @@ class OptimizadoGraphLoop:
         if issue_summaries:
             lines.append("## 📂 Agrupación por Cuestiones")
             lines.append("")
-            for issue_name, note_stems in sorted(issue_summaries.items()):
+            for issue_name, note_targets in sorted(issue_summaries.items()):
                 lines.append(f"### Cuestión: {issue_name}")
-                lines.append(f"Nota Marco: [[_Cuestion_{issue_name}]]")
-                for stem in sorted(note_stems):
-                    lines.append(f"- [[{stem}]]")
+                if issue_name not in {"_Sin_Cuestion", "General"}:
+                    lines.append(f"Nota Marco: [[_Cuestion_{issue_name}]]")
+                for target in sorted(note_targets, key=str.lower):
+                    lines.append(f"- [[{target}]]")
                 lines.append("")
 
         if orphans:
             lines.append("## ⚠️ Notas Huérfanas (Pendientes de Interconexión)")
             lines.append("")
-            for orphan_stem in sorted(orphans):
-                lines.append(f"- [[{orphan_stem}]] ⚠️")
+            for orphan_target in sorted(orphans):
+                lines.append(f"- [[{orphan_target}]] ⚠️")
             lines.append("")
 
         lines.append("## 📚 Catálogo Completo de Conocimiento")
         lines.append("")
-        for note in sorted(notes, key=lambda x: x.name.lower()):
-            lines.append(f"- [[{note.stem}]]")
+        for note in sorted(notes, key=lambda n: n.link_target.lower()):
+            lines.append(f"- [[{note.link_target}]]")
 
         lines.append("")
 

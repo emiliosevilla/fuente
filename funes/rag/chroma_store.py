@@ -1,23 +1,32 @@
 from pathlib import Path
-from typing import List, Dict, Any
-from functools import lru_cache
+from typing import List, Dict, Any, Optional
 import logging
+import sys
 
 logger = logging.getLogger(__name__)
+
+
+class ChromaInitError(RuntimeError):
+    """ChromaDB failed to initialize; callers can inspect ``ChromaStore.init_error``."""
 
 
 def _patch_sqlite_for_chroma() -> None:
     """Parche de compatibilidad para entornos con SQLite antiguo (< 3.35.0)."""
     try:
         import sqlite3
+
         version_tuple = tuple(map(int, sqlite3.sqlite_version.split(".")))
         if version_tuple < (3, 35, 0):
             try:
-                import pysqlite3
-                sys.modules['sqlite3'] = pysqlite3
+                import pysqlite3  # type: ignore[import-not-found]
+
+                sys.modules["sqlite3"] = pysqlite3
                 logger.info("Aplicado parche pysqlite3 para compatibilidad con ChromaDB.")
             except ImportError:
-                logger.warning(f"Versión de SQLite {sqlite3.sqlite_version} es inferior a 3.35.0 y pysqlite3 no está disponible.")
+                logger.warning(
+                    f"Versión de SQLite {sqlite3.sqlite_version} es inferior a 3.35.0 "
+                    "y pysqlite3 no está disponible."
+                )
     except Exception as e:
         logger.debug(f"Error verificando versión de SQLite: {e}")
 
@@ -30,25 +39,67 @@ class ChromaStore:
         self.client = None
         self.collection = None
         self._initialized = False
+        self.init_error: Optional[BaseException] = None
+
+    @property
+    def failed(self) -> bool:
+        """True when the last initialization attempt recorded an explicit failure."""
+        return self.init_error is not None
+
+    @property
+    def ready(self) -> bool:
+        return self.collection is not None and self.init_error is None
+
+    def initialize(self) -> None:
+        """Eagerly initialize ChromaDB, raising ``ChromaInitError`` on failure."""
+        self._init_chroma()
+        if self.init_error is not None:
+            raise ChromaInitError(str(self.init_error)) from self.init_error
 
     def _init_chroma(self) -> None:
-        """Inicializa ChromaDB embebido de forma perezosa."""
+        """Inicializa ChromaDB embebido de forma perezosa.
+
+        Failures are recorded on ``init_error`` (and ``failed``) so callers can
+        observe them; they are also re-raised as ``ChromaInitError`` from
+        ``initialize()``. Soft callers (``add_chunks`` / ``query_*``) catch the
+        error and return empty/False without hiding the failed state.
+        """
         if self._initialized:
             return
         self._initialized = True
+        self.init_error = None
         _patch_sqlite_for_chroma()
         try:
             import chromadb
+
             self.persist_directory.mkdir(parents=True, exist_ok=True)
             self.client = chromadb.PersistentClient(path=str(self.persist_directory))
             self.collection = self.client.get_or_create_collection(name="funes_knowledge_base")
             logger.info(f"ChromaDB inicializado con éxito en {self.persist_directory}")
         except Exception as e:
+            self.client = None
+            self.collection = None
+            self.init_error = e
             logger.error(f"Error al inicializar ChromaDB: {e}")
+            raise ChromaInitError(str(e)) from e
+
+    def _ensure_collection(self) -> bool:
+        """Initialize if needed; return True when a collection is usable."""
+        if self.ready:
+            return True
+        if self._initialized and self.failed:
+            return False
+        try:
+            self._init_chroma()
+        except ChromaInitError:
+            return False
+        return self.ready
+
     def get_adaptive_batch_size(self) -> int:
         """Determina dinámicamente el tamaño de lote óptimo (64, 16 o 4) según la RAM libre."""
         try:
             from funes.ram_governor.governor import RAMGovernor
+
             gov = RAMGovernor()
             ram_info = gov.get_system_ram_info()
             avail = ram_info.get("available_gb", 8.0)
@@ -63,11 +114,11 @@ class ChromaStore:
 
     def add_chunks(self, chunks: List[str], metadatas: List[Dict[str, Any]], ids: List[str]) -> bool:
         """Añade o actualiza fragmentos en ChromaDB con desinfección estricta de metadatos."""
-        if not self._initialized:
-            self._init_chroma()
-
-        if not self.collection:
-            logger.warning("ChromaDB no está activo. Se omitió la adición de vectores.")
+        if not self._ensure_collection():
+            logger.warning(
+                "ChromaDB no está activo (%s). Se omitió la adición de vectores.",
+                self.init_error or "not initialized",
+            )
             return False
 
         if not chunks or not ids:
@@ -97,11 +148,11 @@ class ChromaStore:
         if not chunk_ids:
             return True
 
-        if not self._initialized:
-            self._init_chroma()
-
-        if not self.collection:
-            logger.warning("ChromaDB no está activo. Se omitió el borrado de vectores.")
+        if not self._ensure_collection():
+            logger.warning(
+                "ChromaDB no está activo (%s). Se omitió el borrado de vectores.",
+                self.init_error or "not initialized",
+            )
             return False
 
         try:
@@ -114,10 +165,7 @@ class ChromaStore:
 
     def query_similar(self, query_text: str, n_results: int = 5) -> List[Dict[str, Any]]:
         """Busca fragmentos semánticamente similares en la base de datos."""
-        if not self._initialized:
-            self._init_chroma()
-
-        if not self.collection:
+        if not self._ensure_collection():
             return []
 
         try:
@@ -136,10 +184,7 @@ class ChromaStore:
 
     def get_all_notes_titles(self) -> List[str]:
         """Recupera la lista de títulos de notas almacenados en los metadatos."""
-        if not self._initialized:
-            self._init_chroma()
-
-        if not self.collection:
+        if not self._ensure_collection():
             return []
         try:
             get_res = self.collection.get()
@@ -159,18 +204,27 @@ class ChromaStore:
 
         try:
             from funes.rag.hybrid_search import HybridSearcher
+
             searcher = HybridSearcher()
 
             # Obtener todos los documentos guardados para construir el índice BM25 de forma transparente
             if self.collection:
                 all_data = self.collection.get()
                 docs = []
-                for d_id, doc, meta in zip(all_data.get("ids", []), all_data.get("documents", []), all_data.get("metadatas", [])):
+                for d_id, doc, meta in zip(
+                    all_data.get("ids", []),
+                    all_data.get("documents", []),
+                    all_data.get("metadatas", []),
+                ):
                     docs.append({"id": d_id, "content": doc, "metadata": meta})
                 searcher.bm25.index_documents(docs)
                 bm25_results = searcher.bm25.search(query_text, top_k=n_results * 2)
-                return searcher.reciprocal_rank_fusion(vector_results, bm25_results, top_k=n_results)
+                return searcher.reciprocal_rank_fusion(
+                    vector_results, bm25_results, top_k=n_results
+                )
         except Exception as e:
-            logger.warning(f"No se pudo completar la búsqueda híbrida BM25 ({e}). Retornando resultados vectoriales.")
+            logger.warning(
+                f"No se pudo completar la búsqueda híbrida BM25 ({e}). Retornando resultados vectoriales."
+            )
 
         return vector_results[:n_results]

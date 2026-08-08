@@ -314,9 +314,7 @@ class IngestionApplicationService:
 
     def _run_index_chunks(self, job: JobRecord, context: _RunContext) -> JobRecord:
         document_id = self._document_id(job)
-        chunks = self.chunker.chunk_markdown(
-            self._content(job, context), self._source_name(job)
-        )
+        chunks = self._chunk_for_index(job, context, document_id)
         chunk_ids = [chunk["id"] for chunk in chunks]
         published = {
             artifact["artifact_id"]
@@ -547,6 +545,72 @@ class IngestionApplicationService:
             logger.warning("Could not discard artifact %s: %s", identity, error)
 
     # -- helpers ------------------------------------------------------------
+
+    def _chunk_for_index(
+        self, job: JobRecord, context: _RunContext, document_id: str
+    ) -> list[dict[str, Any]]:
+        """Chunk source text with deterministic index identity metadata.
+
+        Passes identity kwargs into ``SemanticChunker``. Test doubles that reject
+        kwargs still work; doubles that keep custom ids are only stamped with
+        the required metadata so JobStore/Chroma reconcile stays intact.
+        """
+        from funes.rag.index_records import ChunkIdentity, materialize_chunks
+
+        content = self._content(job, context)
+        source_name = self._source_name(job)
+        identity = ChunkIdentity(
+            document_id=document_id,
+            relative_path=job.source_relative_path,
+            source_hash=job.source_hash,
+            theme=getattr(self.vault, "active_theme", "") or "",
+            issue="_Sin_Cuestion",
+            pipeline_version=job.pipeline_version,
+        )
+        identity_kwargs = {
+            "document_id": identity.document_id,
+            "content_hash": identity.source_hash,
+            "relative_path": identity.relative_path,
+            "theme": identity.theme,
+            "issue": identity.issue,
+            "pipeline_version": identity.pipeline_version,
+        }
+        try:
+            chunks = self.chunker.chunk_markdown(
+                content, source_name, **identity_kwargs
+            )
+        except TypeError:
+            chunks = self.chunker.chunk_markdown(content, source_name)
+
+        if not chunks:
+            return []
+        # Real SemanticChunker already materializes; scripted doubles keep their
+        # ids and only receive the required metadata fields.
+        first_meta = chunks[0].get("metadata") or {}
+        if first_meta.get("document_id") == identity.document_id and all(
+            "id" in chunk for chunk in chunks
+        ):
+            return list(chunks)
+        if all("id" in chunk for chunk in chunks):
+            stamped: list[dict[str, Any]] = []
+            for index, chunk in enumerate(chunks):
+                metadata = dict(chunk.get("metadata") or {})
+                metadata.setdefault("document_id", identity.document_id)
+                metadata.setdefault("relative_path", identity.relative_path)
+                metadata.setdefault("theme", identity.theme)
+                metadata.setdefault("issue", identity.issue)
+                metadata.setdefault("source_hash", identity.source_hash)
+                metadata.setdefault("chunk_index", index)
+                metadata.setdefault("pipeline_version", identity.pipeline_version)
+                stamped.append(
+                    {
+                        "id": chunk["id"],
+                        "content": chunk.get("content", ""),
+                        "metadata": metadata,
+                    }
+                )
+            return stamped
+        return materialize_chunks(chunks, identity)
 
     def _advance(self, job: JobRecord, to_stage: str, **updates: Any) -> JobRecord:
         result = transition(job, to_stage)

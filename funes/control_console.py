@@ -31,16 +31,22 @@ from tkinter import ttk, messagebox, filedialog
 
 from funes.application.chat import ChatApplicationService, OllamaChatProvider
 from funes.application.lifecycle import ApplicationLifecycle
+from funes.application.notes import NotesApplicationService
 from funes.application.retrieval import RetrievalApplicationService
 from funes.application.settings import SettingsService, SettingsValidationError
 from funes.config import get_default_config, AppConfig, save_config, load_config
 from funes.core.vault import VaultManager
 from funes.domain.documents import MarkdownDocument
-from funes.domain.errors import PathAuthorizationError
+from funes.domain.errors import (
+    InvalidNoteTransitionError,
+    NoteRevisionConflictError,
+    PathAuthorizationError,
+)
 from funes.domain.frontmatter import FrontmatterError, parse_frontmatter
 from funes.domain.paths import AuthorizedPathResolver, document_id_for_relative_path
 from funes.domain.quarantine import QuarantineService
 from funes.infrastructure.atomic_files import atomic_write_json, atomic_write_text
+from funes.infrastructure.sqlite_store import JobStore
 from funes.rag.chroma_store import ChromaStore
 from funes.ui.bridge import FunesPyWebViewApi
 from funes.core.app_checker import check_and_prompt_user_apps_closed, launch_obsidian
@@ -196,6 +202,8 @@ class FunesConsoleBackend:
         self._chroma_store: Optional[ChromaStore] = None
         self._retrieval_service: Optional[RetrievalApplicationService] = None
         self._chat_service: Optional[ChatApplicationService] = None
+        self._notes_service: Optional[NotesApplicationService] = None
+        self._job_store: Optional[JobStore] = None
 
     def attach_lifecycle(self, lifecycle: ApplicationLifecycle) -> None:
         """Share the lifecycle-owned VaultManager for theme-scoped processing."""
@@ -210,6 +218,8 @@ class FunesConsoleBackend:
         self._chroma_store = getattr(lifecycle.pipeline, "chroma", None)
         self._retrieval_service = None
         self._chat_service = None
+        self._notes_service = None
+        self._job_store = None
 
     def _apply_theme(self, theme_name: str) -> str:
         """Activate a theme on the lifecycle pipeline when attached, else locally."""
@@ -236,6 +246,8 @@ class FunesConsoleBackend:
             self.quarantine_service = self.vault.quarantine_service
             self._chroma_store = None
             self._retrieval_service = None
+            self._notes_service = None
+            self._job_store = None
 
     def _get_chroma_store(self) -> ChromaStore:
         if self.lifecycle is not None and self.lifecycle.pipeline is not None:
@@ -269,6 +281,20 @@ class FunesConsoleBackend:
                 ollama_url=self.config.ollama_url,
             )
         return self._chat_service
+
+    def get_notes_service(self) -> NotesApplicationService:
+        """Shared note state-transition service for approval and review flows."""
+        if self._notes_service is None:
+            if self._job_store is None:
+                self._job_store = JobStore(self.vault.config.vault_path)
+            self._notes_service = NotesApplicationService(
+                vault=self.vault,
+                path_resolver=self._path_resolver(),
+                job_store=self._job_store,
+                chroma_store=self._get_chroma_store(),
+                index_notifier=self.notify_index_changed,
+            )
+        return self._notes_service
 
     def notify_index_changed(self) -> None:
         """Invalidate BM25 caches after ingestion writes (parked Task 4.2 wiring)."""
@@ -418,48 +444,52 @@ class FunesConsoleBackend:
                         if document.metadata["status"] == "pending_review":
                             rel_path = str(md_file.relative_to(self.vault.current_theme_dir)) if self.vault.current_theme_dir in md_file.parents else md_file.name
                             issue = md_file.parent.name if md_file.parent != out_dir else "_Sin_Cuestion"
+                            vault_relative = self._vault_relative_identity(md_file)
+                            document_id = document_id_for_relative_path(vault_relative)
+                            note = self.get_notes_service().get_note(document_id)
                             pending.append({
                                 "title": md_file.stem,
                                 "filename": md_file.name,
-                                "path": self._vault_relative_identity(md_file),
+                                "path": vault_relative,
                                 "rel_path": rel_path,
                                 "issue": issue,
-                                "content": content[:1500]
+                                "document_id": document_id,
+                                "revision": note.revision,
+                                "content": content[:1500],
                             })
                     except Exception:
                         pass
             return {"pending_notes": pending, "count": len(pending)}
 
         elif action_name == "approve_note":
-            file_path_str = payload.get("file_path") or payload.get("path")
-            if file_path_str:
-                try:
-                    p = self._path_resolver().resolve_note(file_path_str)
-                except PathAuthorizationError as error:
-                    return self._path_error(error)
-                if p.exists():
-                    try:
-                        content = p.read_text(encoding="utf-8", errors="replace")
-                        document = MarkdownDocument.from_markdown(content)
-                        if document.metadata["status"] != "pending_review":
-                            return {"error": "La nota no está pendiente de aprobación"}
-                        metadata = dict(document.metadata)
-                        metadata["status"] = "approved"
-                        metadata["history"] = [
-                            *metadata["history"],
-                            {
-                                "date": time.strftime("%Y-%m-%d %H:%M:%S"),
-                                "action": "approved",
-                            },
-                        ]
-                        atomic_write_text(
-                            p,
-                            MarkdownDocument(metadata=metadata, body=document.body).to_markdown(),
-                        )
-                        return {"log": f"Nota '{p.name}' APROBADA con éxito.", "status": "approved"}
-                    except Exception as e:
-                        return {"error": f"Error al aprobar nota: {e}"}
-            return {"error": "Ruta de nota no proporcionada"}
+            identifier = (
+                payload.get("document_id")
+                or payload.get("path")
+                or payload.get("file_path")
+            )
+            if not identifier:
+                return {"error": "Ruta de nota no proporcionada"}
+            try:
+                notes = self.get_notes_service()
+                document_id = notes.resolve_document_id(str(identifier))
+                expected_revision = payload.get("expected_revision")
+                if expected_revision is None:
+                    expected_revision = notes.get_note(document_id).revision
+                approved = notes.approve(document_id, int(expected_revision))
+            except NoteRevisionConflictError as error:
+                return {"error": error.code, "message": str(error)}
+            except InvalidNoteTransitionError as error:
+                return {"error": error.code, "message": str(error)}
+            except PathAuthorizationError as error:
+                return self._path_error(error)
+            except (TypeError, ValueError) as error:
+                return {"error": f"Error al aprobar nota: {error}"}
+            return {
+                "log": "Nota APROBADA con éxito.",
+                "status": "approved",
+                "document_id": approved.document_id,
+                "revision": approved.revision,
+            }
 
         # --- CRUD DE NOTAS (GUARDAR, FUSIONAR, MOVER, ELIMINAR) ---
         elif action_name == "save_note":

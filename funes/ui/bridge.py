@@ -232,13 +232,16 @@ class FunesPyWebViewApi:
             return self._error("invalid_payload", "context must be an object")
         return self.backend.process_chat(text, context=dict(context or {}))
 
-    def get_notes_list(self) -> list[dict[str, str]]:
+    def get_notes_list(self) -> list[dict[str, Any]]:
         return self.backend.get_notes_list()
 
     def get_note_content(self, note_id: object) -> dict[str, Any]:
         note = self._text(note_id, "note_id")
         if isinstance(note, dict):
             return note
+        # Opaque document ids only — reject path-shaped client identifiers.
+        if "/" in note or "\\" in note or note.endswith(".md"):
+            return self._error("path_not_authorized", "Path is not authorized")
         return self.backend.get_note_content_html(note)
 
     def get_graph_data(self) -> dict[str, Any]:

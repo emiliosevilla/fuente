@@ -4,13 +4,17 @@ Ofrece navegación por enlaces [[Nota]], historial 'Atrás', botón MOC global,
 búsqueda en tiempo real, exportación triple (PDF/TXT/Portapapeles) y enlace a Obsidian.
 """
 
-import sys
-import subprocess
-import threading
+from __future__ import annotations
+
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
 from pathlib import Path
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, TYPE_CHECKING
+
+from funes.ui.reader_history import pop_reader_history, push_reader_history
+
+if TYPE_CHECKING:
+    from funes.control_console import FunesConsoleBackend
 
 # Importar THEME de la consola si está disponible
 try:
@@ -36,24 +40,59 @@ except ImportError:
 class FunesReaderModal(tk.Toplevel):
     """
     Ventana Modal Nativa Papiro para lectura de Notas Preparadas de Funes (4_salida/).
+    Usa el mismo backend de listado/autorización que la consola PyWebView.
     """
 
-    def __init__(self, parent: tk.Widget, output_dir: Path, initial_note: Optional[Path] = None):
+    def __init__(
+        self,
+        parent: tk.Widget,
+        output_dir: Optional[Path] = None,
+        initial_note: Optional[Path] = None,
+        backend: Optional["FunesConsoleBackend"] = None,
+    ):
         super().__init__(parent)
-        self.output_dir = Path(output_dir).resolve()
+        if backend is None:
+            from funes.control_console import FunesConsoleBackend
+
+            if output_dir is None:
+                raise ValueError("backend or output_dir is required")
+            # Legacy callers pass 4_salida; bind a backend on that theme/vault root.
+            resolved_output = Path(output_dir).resolve()
+            vault_root = (
+                resolved_output.parent
+                if resolved_output.name == "4_salida"
+                else resolved_output
+            )
+            backend = FunesConsoleBackend(vault_root)
+
+        self.backend = backend
+        self.output_dir = Path(self.backend.vault.output_dir).resolve()
         self.title("Funes el Memorioso — Lector de Notas Preparadas")
         self.geometry("960x680")
         self.minsize(800, 500)
         self.configure(bg=THEME["bg_root"])
 
-        self.history: List[Path] = []
-        self.current_note: Optional[Path] = None
+        self.history: List[str] = []
+        self.current_document_id: Optional[str] = None
+        self.current_note_path: Optional[str] = None
+        self.all_notes: List[Dict[str, Any]] = []
+        self._tree_ids: Dict[str, str] = {}
 
         self._setup_ui()
         self._load_note_list()
 
-        if initial_note and initial_note.exists():
-            self.load_note(initial_note)
+        initial_id = None
+        if initial_note is not None:
+            try:
+                relative = self.backend._vault_relative_identity(Path(initial_note))
+                from funes.domain.paths import document_id_for_relative_path
+
+                initial_id = document_id_for_relative_path(relative)
+            except Exception:
+                initial_id = None
+
+        if initial_id:
+            self.load_note(initial_id)
         else:
             self._load_moc_or_first()
 
@@ -62,7 +101,6 @@ class FunesReaderModal(tk.Toplevel):
         tb = tk.Frame(self, bg=THEME["bg_card"], padx=14, pady=8, highlightbackground=THEME["border"], highlightthickness=1)
         tb.pack(side="top", fill="x")
 
-        # Botón Atrás
         self.btn_back = tk.Button(
             tb,
             text="◄ Atrás",
@@ -75,11 +113,10 @@ class FunesReaderModal(tk.Toplevel):
             cursor="hand2",
             padx=8,
             pady=3,
-            command=self._go_back
+            command=self._go_back,
         )
         self.btn_back.pack(side="left", padx=(0, 6))
 
-        # Botón MOC Global
         btn_moc = tk.Button(
             tb,
             text="📜 MOC Global",
@@ -92,11 +129,10 @@ class FunesReaderModal(tk.Toplevel):
             cursor="hand2",
             padx=8,
             pady=3,
-            command=self._load_moc_or_first
+            command=self._load_moc_or_first,
         )
         btn_moc.pack(side="left", padx=(0, 10))
 
-        # Buscador centralizado
         tk.Label(tb, text="Buscar:", font=(FONT_TYPEWRITER, 9, "bold"), fg=THEME["muted"], bg=THEME["bg_card"]).pack(side="left", padx=(0, 4))
         self.search_var = tk.StringVar()
         self.search_var.trace_add("write", lambda *args: self._filter_notes())
@@ -109,11 +145,10 @@ class FunesReaderModal(tk.Toplevel):
             insertbackground=THEME["paper"],
             relief="solid",
             bd=1,
-            width=22
+            width=22,
         )
         search_entry.pack(side="left", padx=(0, 12))
 
-        # Botón Copiar al Portapapeles
         btn_copy = tk.Button(
             tb,
             text="📋 Copiar",
@@ -126,11 +161,10 @@ class FunesReaderModal(tk.Toplevel):
             cursor="hand2",
             padx=8,
             pady=3,
-            command=self._copy_to_clipboard
+            command=self._copy_to_clipboard,
         )
         btn_copy.pack(side="left", padx=(0, 6))
 
-        # Botón Exportar PDF / TXT
         btn_export = tk.Button(
             tb,
             text="📄 Exportar",
@@ -143,11 +177,10 @@ class FunesReaderModal(tk.Toplevel):
             cursor="hand2",
             padx=8,
             pady=3,
-            command=self._export_note
+            command=self._export_note,
         )
         btn_export.pack(side="left", padx=(0, 6))
 
-        # Botón Abrir en Obsidian (Discreto a la derecha)
         btn_obsidian = tk.Button(
             tb,
             text="Abrir en Obsidian",
@@ -157,36 +190,30 @@ class FunesReaderModal(tk.Toplevel):
             activebackground=THEME["bg_card_hover"],
             relief="flat",
             cursor="hand2",
-            command=self._open_in_obsidian
+            command=self._open_in_obsidian,
         )
         btn_obsidian.pack(side="right")
 
-        # ── CUERPO PRINCIPAL: PANEL DUAL (LISTA + VISOR) ──
         body = tk.Frame(self, bg=THEME["bg_root"])
         body.pack(fill="both", expand=True, padx=14, pady=10)
 
-        # Panel Izquierdo: Árbol / Listado de Notas
-        sidebar = tk.Frame(body, bg=THEME["bg_card"], width=240, highlightbackground=THEME["border"], highlightthickness=1)
+        sidebar = tk.Frame(body, bg=THEME["bg_card"], width=260, highlightbackground=THEME["border"], highlightthickness=1)
         sidebar.pack(side="left", fill="y", padx=(0, 8))
         sidebar.pack_propagate(False)
 
-        tk.Label(sidebar, text="── NOTAS EN 4_SALIDA ──", font=(FONT_TYPEWRITER, 9, "bold"), fg=THEME["paper"], bg=THEME["bg_card"], pady=6).pack(fill="x")
-
-        self.listbox_notes = tk.Listbox(
+        tk.Label(
             sidebar,
-            font=(FONT_TYPEWRITER, 9),
-            bg=THEME["bg_log"],
+            text="── NOTAS EN 4_SALIDA ──",
+            font=(FONT_TYPEWRITER, 9, "bold"),
             fg=THEME["paper"],
-            selectbackground=THEME["bg_card_hover"],
-            selectforeground=THEME["paper"],
-            relief="flat",
-            bd=0,
-            activestyle="none"
-        )
-        self.listbox_notes.pack(fill="both", expand=True, padx=4, pady=4)
-        self.listbox_notes.bind("<<ListboxSelect>>", self._on_note_select)
+            bg=THEME["bg_card"],
+            pady=6,
+        ).pack(fill="x")
 
-        # Panel Derecho: Reader Text Widget
+        self.tree = ttk.Treeview(sidebar, show="tree", selectmode="browse")
+        self.tree.pack(fill="both", expand=True, padx=4, pady=4)
+        self.tree.bind("<<TreeviewSelect>>", self._on_note_select)
+
         reader_frame = tk.Frame(body, bg=THEME["bg_card"], highlightbackground=THEME["border"], highlightthickness=1)
         reader_frame.pack(side="right", fill="both", expand=True)
 
@@ -198,7 +225,7 @@ class FunesReaderModal(tk.Toplevel):
             bg=THEME["bg_card"],
             anchor="w",
             padx=12,
-            pady=8
+            pady=8,
         )
         self.lbl_note_title.pack(fill="x")
 
@@ -214,11 +241,10 @@ class FunesReaderModal(tk.Toplevel):
             bd=0,
             padx=16,
             pady=12,
-            wrap="word"
+            wrap="word",
         )
         self.txt_reader.pack(fill="both", expand=True)
 
-        # Configuración de tags de estilo Papiro
         self.txt_reader.tag_configure("h1", font=(FONT_TYPEWRITER, 16, "bold"), foreground="#161411", spacing1=10, spacing3=6)
         self.txt_reader.tag_configure("h2", font=(FONT_TYPEWRITER, 13, "bold"), foreground="#2E2B25", spacing1=8, spacing3=4)
         self.txt_reader.tag_configure("bold", font=(FONT_TYPEWRITER, 11, "bold"))
@@ -229,176 +255,180 @@ class FunesReaderModal(tk.Toplevel):
         self.txt_reader.tag_configure("source_footer", font=(FONT_TYPEWRITER, 9, "italic"), foreground=THEME["muted"], spacing1=14)
 
     def _load_note_list(self):
-        self.all_notes: List[Path] = []
-        if self.output_dir.exists():
-            self.all_notes = sorted(list(self.output_dir.glob("*.md")), key=lambda p: p.name.lower())
+        self.all_notes = list(self.backend.get_notes_list())
         self._filter_notes()
 
     def _filter_notes(self):
         query = self.search_var.get().strip().lower()
-        self.listbox_notes.delete(0, tk.END)
-        self.filtered_notes = []
+        for item in self.tree.get_children():
+            self.tree.delete(item)
+        self._tree_ids.clear()
 
-        for p in self.all_notes:
-            if not query or query in p.stem.lower():
-                self.filtered_notes.append(p)
-                self.listbox_notes.insert(tk.END, f" 📜 {p.stem}")
+        theme = self.backend.vault.active_theme
+        theme_node = self.tree.insert("", "end", text=f"Tema: {theme}", open=True)
+
+        notes = [
+            n
+            for n in self.all_notes
+            if not n.get("is_moc")
+            and (not query or query in (n.get("title") or "").lower() or query in (n.get("issue") or "").lower())
+        ]
+        moc_notes = [n for n in self.all_notes if n.get("is_moc")]
+        if moc_notes and (not query or query in (moc_notes[0].get("title") or "").lower() or "moc" in query):
+            moc = moc_notes[0]
+            iid = self.tree.insert(theme_node, "end", text=f"📜 {moc['title']}")
+            self._tree_ids[iid] = moc["document_id"]
+
+        by_issue: Dict[str, List[Dict[str, Any]]] = {}
+        for note in notes:
+            by_issue.setdefault(note.get("issue") or "_Sin_Cuestion", []).append(note)
+
+        for issue in sorted(by_issue):
+            issue_node = self.tree.insert(theme_node, "end", text=f"Cuestión: {issue}", open=True)
+            for note in sorted(by_issue[issue], key=lambda item: (item.get("title") or "").lower()):
+                iid = self.tree.insert(issue_node, "end", text=f"  {note['title']}")
+                self._tree_ids[iid] = note["document_id"]
 
     def _on_note_select(self, event):
-        sel = self.listbox_notes.curselection()
-        if sel and sel[0] < len(self.filtered_notes):
-            selected_path = self.filtered_notes[sel[0]]
-            if self.current_note != selected_path:
-                if self.current_note:
-                    self.history.append(self.current_note)
-                self.load_note(selected_path)
+        sel = self.tree.selection()
+        if not sel:
+            return
+        document_id = self._tree_ids.get(sel[0])
+        if not document_id or document_id == self.current_document_id:
+            return
+        push_reader_history(self.history, self.current_document_id, document_id)
+        self.load_note(document_id)
 
-    def load_note(self, note_path: Path):
-        # Prevención de Path Traversal
-        try:
-            target = note_path.resolve()
-            if not target.is_relative_to(self.output_dir.resolve()):
-                messagebox.showerror("Seguridad", "Acceso denegado: La nota está fuera del directorio 4_salida.")
-                return
-        except Exception:
-            messagebox.showerror("Error", f"Ruta de nota inválida: {note_path}")
+    def load_note(self, document_id: str):
+        result = self.backend.get_note_content_html(document_id)
+        if result.get("error") == "path_not_authorized":
+            messagebox.showerror("Seguridad", result.get("message", "Path is not authorized"))
+            return
+        if result.get("error") == "note_not_found":
+            messagebox.showwarning("Nota No Encontrada", result.get("message", "Note was not found"))
+            self.current_document_id = document_id
+            self.lbl_note_title.config(text="📜 Nota no encontrada")
+            self._render_document(result.get("document") or [])
+            self.btn_back.config(state="normal" if self.history else "disabled")
+            return
+        if "error" in result:
+            messagebox.showerror("Error", result.get("message", "No se pudo cargar la nota"))
             return
 
-        if not target.exists():
-            messagebox.showwarning("Nota No Encontrada", f"La nota '{note_path.name}' no existe en 4_salida.")
-            return
-
-        self.current_note = target
-        self.lbl_note_title.config(text=f"📜 {target.stem}")
-        self._render_markdown_content(target)
+        self.current_document_id = document_id
+        self.current_note_path = result.get("path")
+        self.lbl_note_title.config(text=f"📜 {result.get('title') or 'Nota'}")
+        self._render_document(result.get("document") or [])
         self.btn_back.config(state="normal" if self.history else "disabled")
 
-    def _render_markdown_content(self, file_path: Path):
+    def _render_document(self, document: List[Dict[str, Any]]):
         self.txt_reader.config(state="normal")
         self.txt_reader.delete("1.0", tk.END)
-
-        try:
-            content = file_path.read_text(encoding="utf-8", errors="replace")
-        except OSError as e:
-            self.txt_reader.insert(tk.END, f"[Nota en actualización por el motor de IA... Haz clic en Recargar]\n\nError: {e}")
-            self.txt_reader.config(state="disabled")
-            return
-
-        lines = content.splitlines()
-        in_code = False
-
-        for line in lines:
-            if line.startswith("```"):
-                in_code = not in_code
+        for index, block in enumerate(document):
+            if block.get("type") == "heading":
+                level = int(block.get("level") or 1)
+                tag = "h1" if level <= 1 else "h2" if level == 2 else "bold"
+                self.txt_reader.insert(tk.END, f"{block.get('text', '')}\n", tag)
                 continue
-
-            if in_code:
-                self.txt_reader.insert(tk.END, f"  {line}\n", "code_block")
+            children = block.get("children")
+            if children is None:
+                self.txt_reader.insert(tk.END, f"{block.get('text', '')}\n")
                 continue
-
-            if line.startswith("# "):
-                self.txt_reader.insert(tk.END, f"{line[2:]}\n", "h1")
-            elif line.startswith("## "):
-                self.txt_reader.insert(tk.END, f"{line[3:]}\n", "h2")
-            elif line.startswith("### "):
-                self.txt_reader.insert(tk.END, f"{line[4:]}\n", "bold")
-            else:
-                self._parse_line_with_wikilinks(line)
-                self.txt_reader.insert(tk.END, "\n")
-
+            for child_index, token in enumerate(children):
+                if token.get("type") == "wikilink":
+                    document_id = token.get("document_id") or ""
+                    label = token.get("text") or ""
+                    tag_name = f"link_{index}_{child_index}"
+                    if document_id and not token.get("broken"):
+                        self.txt_reader.insert(tk.END, label, (tag_name, "wikilink"))
+                        self.txt_reader.tag_bind(
+                            tag_name,
+                            "<Button-1>",
+                            lambda _e, doc_id=document_id: self._on_wikilink_click(doc_id),
+                        )
+                        self.txt_reader.tag_bind(tag_name, "<Enter>", lambda _e: self.txt_reader.config(cursor="hand2"))
+                        self.txt_reader.tag_bind(tag_name, "<Leave>", lambda _e: self.txt_reader.config(cursor="xterm"))
+                    else:
+                        self.txt_reader.insert(tk.END, label, (tag_name, "wikilink_broken"))
+                        self.txt_reader.tag_bind(
+                            tag_name,
+                            "<Button-1>",
+                            lambda _e, name=label: self._on_broken_link_click(name),
+                        )
+                else:
+                    self.txt_reader.insert(tk.END, token.get("text", ""))
+            self.txt_reader.insert(tk.END, "\n")
         self.txt_reader.config(state="disabled")
 
-    def _parse_line_with_wikilinks(self, line: str):
-        start = 0
-        while True:
-            pos_open = line.find("[[", start)
-            if pos_open == -1:
-                self.txt_reader.insert(tk.END, line[start:])
-                break
-
-            self.txt_reader.insert(tk.END, line[start:pos_open])
-            pos_close = line.find("]]", pos_open + 2)
-            if pos_close == -1:
-                self.txt_reader.insert(tk.END, line[pos_open:])
-                break
-
-            target_name = line[pos_open + 2:pos_close].strip()
-            target_path = self.output_dir / f"{target_name}.md"
-            if not target_path.exists():
-                target_path = self.output_dir / target_name
-
-            tag_name = f"link_{pos_open}_{pos_close}"
-            is_valid = target_path.exists() or (self.output_dir / f"{target_name}.md").exists()
-
-            if is_valid:
-                actual_file = target_path if target_path.exists() else (self.output_dir / f"{target_name}.md")
-                self.txt_reader.insert(tk.END, f"[[{target_name}]]", (tag_name, "wikilink"))
-                self.txt_reader.tag_bind(tag_name, "<Button-1>", lambda e, p=actual_file: self._on_wikilink_click(p))
-                self.txt_reader.tag_bind(tag_name, "<Enter>", lambda e: self.txt_reader.config(cursor="hand2"))
-                self.txt_reader.tag_bind(tag_name, "<Leave>", lambda e: self.txt_reader.config(cursor="xterm"))
-            else:
-                self.txt_reader.insert(tk.END, f"[[{target_name}]]", (tag_name, "wikilink_broken"))
-                self.txt_reader.tag_bind(tag_name, "<Button-1>", lambda e, n=target_name: self._on_broken_link_click(n))
-
-            start = pos_close + 2
-
-    def _on_wikilink_click(self, note_path: Path):
-        if self.current_note:
-            self.history.append(self.current_note)
-        self.load_note(note_path)
+    def _on_wikilink_click(self, document_id: str):
+        push_reader_history(self.history, self.current_document_id, document_id)
+        self.load_note(document_id)
 
     def _on_broken_link_click(self, note_name: str):
         messagebox.showinfo("Nota Pendiente", f"La nota '{note_name}' aún no ha sido estructurada en 4_salida.")
 
     def _go_back(self):
-        if self.history:
-            prev = self.history.pop()
+        prev = pop_reader_history(self.history)
+        if prev:
             self.load_note(prev)
 
     def _load_moc_or_first(self):
-        from funes.graph_engine.linker import CANONICAL_MOC_FILENAME
-
-        moc_path = self.output_dir / CANONICAL_MOC_FILENAME
-        if moc_path.exists():
-            self.load_note(moc_path)
+        moc = next((n for n in self.all_notes if n.get("is_moc")), None)
+        if moc:
+            self.load_note(moc["document_id"])
         elif self.all_notes:
-            self.load_note(self.all_notes[0])
+            self.load_note(self.all_notes[0]["document_id"])
         else:
             self.lbl_note_title.config(text="📜 4_salida vacía")
             self.txt_reader.config(state="normal")
             self.txt_reader.delete("1.0", tk.END)
-            self.txt_reader.insert(tk.END, "No se encontraron notas en 4_salida. Ejecuta el Paso 3 (Estructuración) para generar notas inteligentes.")
+            self.txt_reader.insert(
+                tk.END,
+                "No se encontraron notas en 4_salida. Ejecuta el Paso 3 (Estructuración) para generar notas inteligentes.",
+            )
             self.txt_reader.config(state="disabled")
 
+    def _authorized_current_path(self) -> Optional[Path]:
+        if not self.current_document_id:
+            return None
+        try:
+            return self.backend._path_resolver().resolve_note_id(self.current_document_id)
+        except Exception:
+            return None
+
     def _copy_to_clipboard(self):
-        if self.current_note and self.current_note.exists():
-            content = self.current_note.read_text(encoding="utf-8", errors="replace")
-            self.clipboard_clear()
-            self.clipboard_append(content)
-            messagebox.showinfo("Copiado", "¡Nota copiada al portapapeles!")
+        path = self._authorized_current_path()
+        if path is None or not path.exists():
+            messagebox.showwarning("Copiar", "No hay una nota autorizada seleccionada.")
+            return
+        content = path.read_text(encoding="utf-8", errors="replace")
+        self.clipboard_clear()
+        self.clipboard_append(content)
+        messagebox.showinfo("Copiado", "¡Nota copiada al portapapeles!")
 
     def _export_note(self):
-        if not self.current_note or not self.current_note.exists():
+        path = self._authorized_current_path()
+        if path is None or not path.exists():
             return
-
         dest = filedialog.asksaveasfilename(
             title="Exportar Nota",
-            initialfile=f"{self.current_note.stem}.txt",
+            initialfile=f"{path.stem}.txt",
             defaultextension=".txt",
-            filetypes=[("Texto Plano", "*.txt"), ("Markdown", "*.md"), ("Todos los archivos", "*.*")]
+            filetypes=[("Texto Plano", "*.txt"), ("Markdown", "*.md"), ("Todos los archivos", "*.*")],
         )
         if dest:
-            content = self.current_note.read_text(encoding="utf-8", errors="replace")
+            content = path.read_text(encoding="utf-8", errors="replace")
             Path(dest).write_text(content, encoding="utf-8")
             messagebox.showinfo("Exportado", f"Nota guardada correctamente en:\n{dest}")
 
     def _open_in_obsidian(self):
-        if not self.current_note:
+        if not self.current_note_path:
             return
-        vault_name = self.output_dir.parent.name
-        note_name = self.current_note.stem
+        vault_name = self.backend.vault_path.name
+        note_file = self.current_note_path
         try:
             import webbrowser
-            webbrowser.open(f"obsidian://open?vault={vault_name}&file={note_name}")
+
+            webbrowser.open(f"obsidian://open?vault={vault_name}&file={note_file}")
         except Exception:
-            messagebox.showinfo("Obsidian", f"Abriendo nota '{note_name}' en Obsidian...")
+            messagebox.showinfo("Obsidian", f"Abriendo nota '{note_file}' en Obsidian...")

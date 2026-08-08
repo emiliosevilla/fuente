@@ -378,6 +378,52 @@ class JobStore:
         ).fetchone()
         return dict(row) if row is not None else None
 
+    def ensure_document_identity(
+        self,
+        *,
+        document_id: str,
+        relative_path: str,
+        content_hash: Optional[str] = None,
+    ) -> dict[str, Any]:
+        """Return an existing identity or create one at revision 1."""
+        existing = self.get_document_identity(document_id)
+        if existing is not None:
+            return existing
+        now = _timestamp()
+        self._connection.execute(
+            """
+            INSERT INTO document_identities (
+                document_id, relative_path, content_hash, revision, created_at, updated_at
+            ) VALUES (?, ?, ?, 1, ?, ?)
+            """,
+            (document_id, relative_path, content_hash, now, now),
+        )
+        identity = self.get_document_identity(document_id)
+        assert identity is not None
+        return identity
+
+    def update_document_identity_cas(
+        self,
+        *,
+        document_id: str,
+        expected_revision: int,
+        relative_path: str,
+        content_hash: str,
+    ) -> Optional[dict[str, Any]]:
+        """Bump revision only when *expected_revision* still matches."""
+        now = _timestamp()
+        cursor = self._connection.execute(
+            """
+            UPDATE document_identities
+            SET relative_path = ?, content_hash = ?, revision = revision + 1, updated_at = ?
+            WHERE document_id = ? AND revision = ?
+            """,
+            (relative_path, content_hash, now, document_id, expected_revision),
+        )
+        if cursor.rowcount == 0:
+            return None
+        return self.get_document_identity(document_id)
+
     # -- index artifacts -----------------------------------------------------
 
     def add_index_artifact(

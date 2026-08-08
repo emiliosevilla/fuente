@@ -38,6 +38,13 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Optional
 
+from funes.application.scheduler import (
+    BudgetDeferredError,
+    ResourceScheduler,
+    ScheduleAction,
+    TaskClass,
+    task_class_for_job,
+)
 from funes.config import AppConfig
 from funes.core.vault import VaultManager
 from funes.domain.documents import MarkdownDocument
@@ -54,6 +61,7 @@ from funes.domain.paths import AuthorizedPathResolver
 from funes.domain.quarantine import InvalidModelOutputError
 from funes.infrastructure.atomic_files import atomic_write_text
 from funes.infrastructure.sqlite_store import JobStore
+from funes.ram_governor.budget import unavailable_snapshot
 
 logger = logging.getLogger(__name__)
 
@@ -181,6 +189,7 @@ class IngestionApplicationService:
         atomic_generator: Any,
         linker: Any,
         ram_governor: Any = None,
+        scheduler: Optional[ResourceScheduler] = None,
         copy_to_dirty: Optional[Callable[[Path], Path]] = None,
         stabilize: Optional[Callable[[Path], bool]] = None,
     ) -> None:
@@ -195,6 +204,43 @@ class IngestionApplicationService:
         self.ram_governor = ram_governor
         self._copy_to_dirty = copy_to_dirty
         self._stabilize = stabilize or _default_stabilize
+        self.scheduler = scheduler or self._build_scheduler()
+
+    def _build_scheduler(self) -> ResourceScheduler:
+        governor = self.ram_governor
+
+        def memory_probe():
+            if governor is not None and hasattr(governor, "measure_memory"):
+                return governor.measure_memory()
+            return unavailable_snapshot(
+                getattr(self.config, "ram_safety_margin_pct", 0.35),
+                error="no_ram_governor",
+            )
+
+        def purge_model(model_name: str):
+            if governor is None or not hasattr(governor, "purge_model"):
+                return {"ok": False, "error": "no_ram_governor"}
+            return governor.purge_model(model_name)
+
+        def loaded_models():
+            if governor is None or not hasattr(governor, "get_ollama_process_state"):
+                return []
+            state = governor.get_ollama_process_state()
+            names: list[str] = []
+            for entry in state.get("models") or []:
+                name = entry.get("name") or entry.get("model")
+                if name:
+                    names.append(str(name))
+            return names
+
+        return ResourceScheduler(
+            self.job_store,
+            memory_probe=memory_probe,
+            ollama_url=getattr(self.config, "ollama_url", "http://localhost:11434"),
+            model_override=getattr(self.config, "custom_model_override", None) or None,
+            purge_model=purge_model,
+            loaded_models=loaded_models,
+        )
 
     # -- public API ---------------------------------------------------------
 
@@ -222,11 +268,21 @@ class IngestionApplicationService:
         job = self.job_store.create_job(
             source_hash=source_hash, source_relative_path=identity
         )
-        logger.info("Job %s submitted for %s", job.job_id, identity)
+        logger.info(
+            "Job %s submitted for %s (task_class=%s)",
+            job.job_id,
+            identity,
+            task_class_for_job(job).value,
+        )
         return self._advance(job, "stabilized")
 
-    def resume(self, job_id: str) -> JobRecord:
-        """Advance one job from its last durable stage to a terminal stage."""
+    def resume(self, job_id: str, *, respect_scheduler: bool = True) -> JobRecord:
+        """Advance one job from its last durable stage to a terminal stage.
+
+        When *respect_scheduler* is true (default), each stage is admitted by
+        the resource scheduler. A budget wait leaves the job resumable at its
+        last durable stage and never quarantines the source.
+        """
         job = self.job_store.get_job(job_id)
         if job.stage == "completed":
             return job
@@ -242,17 +298,64 @@ class IngestionApplicationService:
                 job.attempt_count,
             )
 
+        # Drop orphaned leases from a prior crash before the admit loop.
+        if respect_scheduler:
+            self.scheduler.release_stale_for_job(job.job_id)
+
         context = _RunContext()
         while job.stage not in TERMINAL_STAGES:
+            leased = False
+            if respect_scheduler:
+                try:
+                    decision = self.scheduler.admit(job, persist=True, acquire=True)
+                except BudgetDeferredError as error:
+                    # Document-lock / concurrency race after a persisted RUN.
+                    self.scheduler.record_wait(
+                        job,
+                        task_class=error.task_class,
+                        reason=error.reason,
+                    )
+                    logger.info(
+                        "Job %s deferred on admit: %s", job.job_id, error.reason
+                    )
+                    return job
+                if decision.action is not ScheduleAction.RUN:
+                    logger.info(
+                        "Job %s deferred at stage %s (%s): %s",
+                        job.job_id,
+                        job.stage,
+                        decision.task_class.value,
+                        decision.reason,
+                    )
+                    return job
+                leased = True
             handler = getattr(self, _STAGE_HANDLERS[job.stage])
             try:
                 job = handler(job, context)
+            except BudgetDeferredError as error:
+                self.scheduler.record_wait(
+                    job,
+                    task_class=error.task_class,
+                    reason=error.reason,
+                )
+                logger.info("Job %s deferred mid-stage: %s", job.job_id, error.reason)
+                return job
             except Exception as error:
                 return self._fail(job, error)
+            finally:
+                if leased:
+                    self.scheduler.release(
+                        job.job_id, document_id=self._document_id(job)
+                    )
         return job
 
     def process_pending(self, limit: int = 1) -> list[JobRecord]:
-        """Resume up to *limit* submitted or interrupted jobs, oldest first."""
+        """Resume up to *limit* jobs ordered by scheduler policy.
+
+        Jobs that cannot run under the current budget are left queued with a
+        durable wait reason. Belonging to a mixed media batch is never itself
+        a quarantine reason — only per-job failures call `_fail`.
+        """
         if limit <= 0:
             return []
         candidates = [
@@ -263,7 +366,11 @@ class IngestionApplicationService:
             )
             if job.stage not in TERMINAL_STAGES
         ]
-        return [self.resume(job.job_id) for job in candidates[:limit]]
+        planned = self.scheduler.plan(candidates, limit=limit, persist=True)
+        results: list[JobRecord] = []
+        for item in planned:
+            results.append(self.resume(item.job.job_id, respect_scheduler=True))
+        return results
 
     def path_resolver(self) -> AuthorizedPathResolver:
         return self.vault.path_resolver()
@@ -418,6 +525,14 @@ class IngestionApplicationService:
     # -- failure handling ---------------------------------------------------
 
     def _fail(self, job: JobRecord, error: Exception) -> JobRecord:
+        # Budget waits are resumable queue states, never failures/quarantine —
+        # including when the job sits in a mixed media batch.
+        if isinstance(error, BudgetDeferredError):
+            self.scheduler.record_wait(
+                job, task_class=error.task_class, reason=error.reason
+            )
+            return job
+
         error_code = getattr(error, "code", None) or "processing_error"
         attempt_count = int(
             getattr(error, "attempt_count", 0) or max(job.attempt_count, 1)
@@ -433,6 +548,8 @@ class IngestionApplicationService:
 
         # The source is preserved before compensation runs, so cleanup can
         # never race with (or delete) the copy the quarantine record needs.
+        # Quarantine is per-job failure policy only — never because a sibling
+        # in a media batch failed or waited.
         quarantined = self._quarantine_source(job, error, attempt_count)
         to_stage = "quarantined" if quarantined else "failed"
         result = transition(
@@ -693,14 +810,29 @@ class IngestionApplicationService:
     def _generate_candidate(self, job: JobRecord, context: _RunContext) -> None:
         context.candidate = self.atomic_generator.generate_atomic_note(
             clean_md_content=self._content(job, context),
-            model_name=self._selected_model(),
+            model_name=self._selected_model(job),
             file_name=self._source_name(job),
         )
 
-    def _selected_model(self) -> str:
-        model_name = self.config.custom_model_override
-        if not model_name and self.ram_governor is not None:
-            model_name = self.ram_governor.recommend_model()
+    def _selected_model(self, job: Optional[JobRecord] = None) -> str:
+        """Pick a model under the scheduler's authoritative ``evaluate_resource`` gate."""
+        from funes.ram_governor.budget import ResourceKind, evaluate_resource
+
+        model_name = self.config.custom_model_override or None
+        snapshot = self.scheduler.memory_probe()
+        if not model_name:
+            model_name, _ = self.scheduler._nominate_llm(snapshot)
+        gate = evaluate_resource(
+            ResourceKind.LLM_INFERENCE, snapshot, model_id=model_name
+        )
+        if not gate.allowed:
+            if job is not None:
+                raise BudgetDeferredError(
+                    job.job_id,
+                    gate.reason,
+                    task_class=TaskClass.LLM_GENERATION,
+                )
+            raise ModelUnavailableError(gate.reason)
         if not model_name:
             raise ModelUnavailableError("No model configured for note generation")
         if self.ram_governor is not None:

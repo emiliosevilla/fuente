@@ -159,11 +159,24 @@ class _FakeGovernor:
     def __init__(self) -> None:
         self.ensured: list[str] = []
 
+    def measure_memory(self):
+        from funes.ram_governor.budget import measured_snapshot
+
+        return measured_snapshot(
+            total_gb=32.0, available_gb=24.0, safety_margin_pct=0.35
+        )
+
     def recommend_model(self) -> str:
         return "fake-model"
 
     def ensure_model_available(self, model_name: str) -> None:
         self.ensured.append(model_name)
+
+    def purge_model(self, model_name: str) -> dict:
+        return {"ok": True, "model": model_name, "force_kill": False}
+
+    def get_ollama_process_state(self) -> dict:
+        return {"ok": True, "models": [], "error": None}
 
 
 @dataclass

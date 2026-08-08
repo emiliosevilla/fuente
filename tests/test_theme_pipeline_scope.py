@@ -59,12 +59,15 @@ def _assert_under_theme(path: Path, theme_dir: Path) -> None:
 
 @pytest.fixture
 def themed_pipeline(temp_vault_path):
+    from tests.conftest import patch_abundant_ram
+
     config = get_default_config(temp_vault_path)
     # Ensure General roots exist so a silent write would be detectable.
     for root in _general_roots(temp_vault_path).values():
         root.mkdir(parents=True, exist_ok=True)
 
     pipeline = ETLPipeline(config)
+    patch_abundant_ram(pipeline.ram_governor)
     pipeline.vault.create_theme(THEME)
     # create_theme already activates the Theme; rebind linker caches.
     pipeline.set_active_theme(THEME)

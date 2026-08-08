@@ -436,6 +436,281 @@ class JobStore:
             (document_id, *doomed),
         )
 
+    # -- scheduler (Task 5.2) -----------------------------------------------
+
+    def record_schedule_decision(
+        self,
+        *,
+        job_id: Optional[str],
+        task_class: str,
+        action: str,
+        reason: str,
+        resource_kind: Optional[str] = None,
+        measurement_status: Optional[str] = None,
+        available_gb: Optional[float] = None,
+        model_id: Optional[str] = None,
+    ) -> dict[str, Any]:
+        """Persist one scheduling admit/wait/degrade decision for audit/resume."""
+        now = _timestamp()
+        cursor = self._connection.execute(
+            """
+            INSERT INTO schedule_decisions (
+                job_id, task_class, action, reason, resource_kind,
+                measurement_status, available_gb, model_id, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                job_id,
+                task_class,
+                action,
+                reason,
+                resource_kind,
+                measurement_status,
+                available_gb,
+                model_id,
+                now,
+            ),
+        )
+        return {
+            "decision_id": int(cursor.lastrowid),
+            "job_id": job_id,
+            "task_class": task_class,
+            "action": action,
+            "reason": reason,
+            "resource_kind": resource_kind,
+            "measurement_status": measurement_status,
+            "available_gb": available_gb,
+            "model_id": model_id,
+            "created_at": now,
+        }
+
+    def list_schedule_decisions(
+        self, job_id: Optional[str] = None, *, limit: int = 100
+    ) -> list[dict[str, Any]]:
+        if job_id is None:
+            rows = self._connection.execute(
+                "SELECT * FROM schedule_decisions ORDER BY decision_id DESC LIMIT ?",
+                (limit,),
+            ).fetchall()
+        else:
+            rows = self._connection.execute(
+                "SELECT * FROM schedule_decisions WHERE job_id = ? "
+                "ORDER BY decision_id ASC LIMIT ?",
+                (job_id, limit),
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    def count_resource_leases(
+        self, resource_key: str, *, exclude_job_id: Optional[str] = None
+    ) -> int:
+        """Count holders of *resource_key*, optionally ignoring one job's leases."""
+        if exclude_job_id is None:
+            row = self._connection.execute(
+                "SELECT COUNT(*) AS n FROM resource_leases WHERE resource_key = ?",
+                (resource_key,),
+            ).fetchone()
+        else:
+            row = self._connection.execute(
+                "SELECT COUNT(*) AS n FROM resource_leases "
+                "WHERE resource_key = ? AND job_id != ?",
+                (resource_key, exclude_job_id),
+            ).fetchone()
+        return int(row["n"]) if row is not None else 0
+
+    def count_task_class_leases(
+        self, task_class: str, *, exclude_job_id: Optional[str] = None
+    ) -> int:
+        if exclude_job_id is None:
+            row = self._connection.execute(
+                "SELECT COUNT(*) AS n FROM resource_leases WHERE task_class = ?",
+                (task_class,),
+            ).fetchone()
+        else:
+            row = self._connection.execute(
+                "SELECT COUNT(*) AS n FROM resource_leases "
+                "WHERE task_class = ? AND job_id != ?",
+                (task_class, exclude_job_id),
+            ).fetchone()
+        return int(row["n"]) if row is not None else 0
+
+    def list_resource_leases(
+        self, *, task_class: Optional[str] = None
+    ) -> list[dict[str, Any]]:
+        if task_class is None:
+            rows = self._connection.execute(
+                "SELECT * FROM resource_leases ORDER BY acquired_at ASC"
+            ).fetchall()
+        else:
+            rows = self._connection.execute(
+                "SELECT * FROM resource_leases WHERE task_class = ? "
+                "ORDER BY acquired_at ASC",
+                (task_class,),
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    def acquire_resource_lease(
+        self,
+        *,
+        job_id: str,
+        task_class: str,
+        resource_key: str,
+        lease_id: Optional[str] = None,
+    ) -> dict[str, Any]:
+        """Acquire a resource lease. Idempotent for the same job+resource_key."""
+        existing = self._connection.execute(
+            "SELECT * FROM resource_leases WHERE job_id = ? AND resource_key = ?",
+            (job_id, resource_key),
+        ).fetchone()
+        if existing is not None:
+            return dict(existing)
+
+        now = _timestamp()
+        lid = lease_id or str(uuid.uuid4())
+        try:
+            self._connection.execute(
+                """
+                INSERT INTO resource_leases (
+                    lease_id, job_id, task_class, resource_key, acquired_at
+                ) VALUES (?, ?, ?, ?, ?)
+                """,
+                (lid, job_id, task_class, resource_key, now),
+            )
+        except sqlite3.IntegrityError as error:
+            raise JobConflictError(job_id) from error
+        row = self._connection.execute(
+            "SELECT * FROM resource_leases WHERE lease_id = ?", (lid,)
+        ).fetchone()
+        assert row is not None
+        return dict(row)
+
+    def claim_resource_lease(
+        self,
+        *,
+        job_id: str,
+        task_class: str,
+        resource_key: str,
+        limit: int,
+        lease_id: Optional[str] = None,
+    ) -> Optional[dict[str, Any]]:
+        """Atomically claim a lease slot under *limit* concurrent holders.
+
+        Uses ``BEGIN IMMEDIATE`` so two workers cannot both observe
+        ``count < limit`` and insert. Returns ``None`` when the pool is full
+        (other jobs already hold ``limit`` leases for *resource_key*). Idempotent
+        when this job already holds the key.
+        """
+        if limit < 1:
+            return None
+        try:
+            self._connection.execute("BEGIN IMMEDIATE")
+        except sqlite3.OperationalError as error:
+            if _is_lock_contention(error):
+                raise JobStoreBusyError(job_id) from error
+            raise
+        try:
+            existing = self._connection.execute(
+                "SELECT * FROM resource_leases WHERE job_id = ? AND resource_key = ?",
+                (job_id, resource_key),
+            ).fetchone()
+            if existing is not None:
+                self._connection.execute("COMMIT")
+                return dict(existing)
+
+            row = self._connection.execute(
+                "SELECT COUNT(*) AS n FROM resource_leases "
+                "WHERE resource_key = ? AND job_id != ?",
+                (resource_key, job_id),
+            ).fetchone()
+            holders = int(row["n"]) if row is not None else 0
+            if holders >= limit:
+                self._connection.execute("COMMIT")
+                return None
+
+            now = _timestamp()
+            lid = lease_id or str(uuid.uuid4())
+            try:
+                self._connection.execute(
+                    """
+                    INSERT INTO resource_leases (
+                        lease_id, job_id, task_class, resource_key, acquired_at
+                    ) VALUES (?, ?, ?, ?, ?)
+                    """,
+                    (lid, job_id, task_class, resource_key, now),
+                )
+            except sqlite3.IntegrityError:
+                # UNIQUE(job_id, resource_key) race: treat as idempotent claim.
+                raced = self._connection.execute(
+                    "SELECT * FROM resource_leases "
+                    "WHERE job_id = ? AND resource_key = ?",
+                    (job_id, resource_key),
+                ).fetchone()
+                self._connection.execute("COMMIT")
+                return dict(raced) if raced is not None else None
+
+            claimed = self._connection.execute(
+                "SELECT * FROM resource_leases WHERE lease_id = ?", (lid,)
+            ).fetchone()
+            self._connection.execute("COMMIT")
+            assert claimed is not None
+            return dict(claimed)
+        except Exception:
+            try:
+                self._connection.execute("ROLLBACK")
+            except sqlite3.Error:
+                pass
+            raise
+
+    def release_resource_leases(self, job_id: str) -> int:
+        cursor = self._connection.execute(
+            "DELETE FROM resource_leases WHERE job_id = ?", (job_id,)
+        )
+        return int(cursor.rowcount)
+
+    def acquire_document_lock(self, document_id: str, job_id: str) -> bool:
+        """Exclusive document lock. Returns False if another job holds it."""
+        existing = self._connection.execute(
+            "SELECT job_id FROM document_locks WHERE document_id = ?",
+            (document_id,),
+        ).fetchone()
+        if existing is not None:
+            return existing["job_id"] == job_id
+
+        now = _timestamp()
+        try:
+            self._connection.execute(
+                """
+                INSERT INTO document_locks (document_id, job_id, acquired_at)
+                VALUES (?, ?, ?)
+                """,
+                (document_id, job_id, now),
+            )
+        except sqlite3.IntegrityError:
+            return False
+        return True
+
+    def release_document_lock(self, document_id: str, *, job_id: Optional[str] = None) -> None:
+        if job_id is None:
+            self._connection.execute(
+                "DELETE FROM document_locks WHERE document_id = ?", (document_id,)
+            )
+            return
+        self._connection.execute(
+            "DELETE FROM document_locks WHERE document_id = ? AND job_id = ?",
+            (document_id, job_id),
+        )
+
+    def release_document_locks_for_job(self, job_id: str) -> int:
+        cursor = self._connection.execute(
+            "DELETE FROM document_locks WHERE job_id = ?", (job_id,)
+        )
+        return int(cursor.rowcount)
+
+    def get_document_lock(self, document_id: str) -> Optional[dict[str, Any]]:
+        row = self._connection.execute(
+            "SELECT * FROM document_locks WHERE document_id = ?", (document_id,)
+        ).fetchone()
+        return dict(row) if row is not None else None
+
     # -- row mapping ---------------------------------------------------------
 
     def _job_row(self, job_id: str) -> Optional[sqlite3.Row]:

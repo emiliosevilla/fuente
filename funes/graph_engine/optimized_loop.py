@@ -16,12 +16,20 @@ class OptimizadoGraphLoop:
     """Bucle autónomo optimizado para refinamiento continuo del grafo de notas en Obsidian."""
 
     def __init__(self, output_dir: Path, interval_sec: int = 600):
-        self.output_dir = output_dir
+        self.output_dir = Path(output_dir)
         self.interval_sec = interval_sec
-        self.linker = GraphLinker(output_dir)
+        self.linker = GraphLinker(self.output_dir)
         self._stop_event = threading.Event()
         self._thread = None
         self._last_max_mtime = 0.0
+
+    def set_output_dir(self, output_dir: Path) -> None:
+        """Retarget continuous refine to a new theme output root without restarting the thread."""
+        self.output_dir = Path(output_dir)
+        self.linker = GraphLinker(self.output_dir)
+        # Force the next pass to treat the new tree as unseen.
+        self._last_max_mtime = 0.0
+        logger.info("OptimizadoGraphLoop retargeted to: %s", self.output_dir)
 
     def start(self) -> None:
         """Inicia el bucle de mantenimiento de grafo en un hilo secundario."""

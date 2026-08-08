@@ -185,6 +185,27 @@ class FunesConsoleBackend:
             self.config, on_applied=self._apply_settings_config
         )
         self._task_in_progress = False
+        # Set by launch_control_console after ApplicationLifecycle.start() so
+        # console theme actions and background services share one VaultManager.
+        self.lifecycle: Optional[ApplicationLifecycle] = None
+
+    def attach_lifecycle(self, lifecycle: ApplicationLifecycle) -> None:
+        """Share the lifecycle-owned VaultManager for theme-scoped processing."""
+        if lifecycle.pipeline is None:
+            raise RuntimeError(
+                "attach_lifecycle requires a started ApplicationLifecycle pipeline"
+            )
+        self.lifecycle = lifecycle
+        self.vault = lifecycle.pipeline.vault
+        self.quarantine_service = self.vault.quarantine_service
+
+    def _apply_theme(self, theme_name: str) -> str:
+        """Activate a theme on the lifecycle pipeline when attached, else locally."""
+        if self.lifecycle is not None and self.lifecycle.pipeline is not None:
+            self.lifecycle.set_active_theme(theme_name)
+        else:
+            self.vault.set_active_theme(theme_name)
+        return self.vault.active_theme
 
     def _apply_settings_config(self, config: AppConfig) -> None:
         """Refresh settings consumers after their durable config has been written."""
@@ -281,18 +302,21 @@ class FunesConsoleBackend:
             }
         elif action_name == "set_theme":
             theme_name = payload.get("theme_name", "General")
-            self.vault.set_active_theme(theme_name)
+            active = self._apply_theme(theme_name)
             return {
-                "log": f"Tema activo cambiado a: '{self.vault.active_theme}'",
+                "log": f"Tema activo cambiado a: '{active}'",
                 "refresh": True,
                 "stats": self.get_stats_dict()
             }
         elif action_name == "create_theme":
             theme_name = payload.get("theme_name", "")
             if theme_name:
+                # Create on the shared vault (lifecycle pipeline when attached),
+                # then rebind linker + graph loop through the lifecycle API.
                 self.vault.create_theme(theme_name)
+                active = self._apply_theme(self.vault.active_theme)
                 return {
-                    "log": f"Nuevo Tema creado y activado: '{self.vault.active_theme}'",
+                    "log": f"Nuevo Tema creado y activado: '{active}'",
                     "refresh": True,
                     "stats": self.get_stats_dict()
                 }
@@ -530,7 +554,9 @@ historial:
 
         # --- ACCIONES ANTERIORES DE CONSOLA ---
         elif action_name == "flush_sources":
-            copied_count = self.sync_manager.sync_to_input(self.vault.input_dir)
+            copied_count = self.sync_manager.sync_to_input(
+                self.vault.input_dir, self.vault.dirty_dir
+            )
             return {
                 "log": f"Recopilación completada hacia 1_entrada. Archivos nuevos o actualizados traídos: {copied_count}",
                 "refresh": True,
@@ -607,7 +633,9 @@ historial:
             notes = list(out_dir.rglob("*.md")) if out_dir.exists() else []
             return {"log": f"Telemetría del Grafo consultada: {len(notes)} notas preparadas."}
         elif action_name == "step1_flush":
-            copied = self.sync_manager.sync_to_input(self.vault.input_dir)
+            copied = self.sync_manager.sync_to_input(
+                self.vault.input_dir, self.vault.dirty_dir
+            )
             return {
                 "log": f"[PASO 1 RECEPCIÓN] Flush Manual ejecutado. Transferidos {copied} archivos a 1_entrada.",
                 "refresh": True,
@@ -1057,9 +1085,9 @@ historial:
 
 class FunesControlConsole(tk.Tk):
     """Consola Fallback Tkinter Papiro."""
-    def __init__(self, vault_path: Path):
+    def __init__(self, vault_path: Path, backend: Optional[FunesConsoleBackend] = None):
         super().__init__()
-        self.backend = FunesConsoleBackend(vault_path)
+        self.backend = backend or FunesConsoleBackend(vault_path)
         self.vault_path = self.backend.vault_path
         self.config = self.backend.config
         self.quarantine_service = self.backend.quarantine_service
@@ -1175,6 +1203,8 @@ def launch_control_console(vault_path: Optional[Path] = None):
 
     try:
         lifecycle.start()
+        # One VaultManager: console theme actions retarget FolderMonitor + graph loop.
+        backend.attach_lifecycle(lifecycle)
         if HAS_WEBVIEW and html_file.exists():
             api = FunesPyWebViewApi(backend)
             window = webview.create_window(
@@ -1189,7 +1219,7 @@ def launch_control_console(vault_path: Optional[Path] = None):
             api.set_window(window)
             webview.start(debug=False)
         else:
-            app = FunesControlConsole(vault_path)
+            app = FunesControlConsole(vault_path, backend=backend)
             app.mainloop()
     finally:
         lifecycle.stop()

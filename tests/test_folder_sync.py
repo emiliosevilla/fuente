@@ -40,7 +40,9 @@ class TestFolderSync(unittest.TestCase):
 
         self.sync_mgr.save_connected_folders([ext_folder])
 
-        copied = self.sync_mgr.sync_to_input(input_dir)
+        dirty_dir = self.vault_path / "2_sucio"
+        dirty_dir.mkdir()
+        copied = self.sync_mgr.sync_to_input(input_dir, dirty_dir)
         self.assertEqual(copied, 1)
 
         dest_file = input_dir / "test_doc.txt"

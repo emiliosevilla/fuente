@@ -2408,16 +2408,44 @@
             }
         }
 
-        function appendChatBubble(container, kind, label, text, sources) {
+        function formatChatSourceLabels(sources, sourceLabels) {
+            if (sourceLabels && sourceLabels.length) {
+                return sourceLabels.map(function(label) { return String(label); });
+            }
+            if (!sources || !sources.length) return [];
+            return sources.map(function(src) {
+                if (typeof src === 'string') return src;
+                if (src && typeof src === 'object') {
+                    return src.relative_path || src.document_id || src.chunk_id || '';
+                }
+                return '';
+            }).filter(Boolean);
+        }
+
+        function appendChatBubble(container, kind, label, text, sources, meta) {
             const bubble = document.createElement('div');
             bubble.className = 'chat-bubble ' + kind;
             const sender = document.createElement('strong');
             sender.textContent = label;
-            bubble.append(sender, document.createTextNode(' ' + text));
-            if (sources && sources.length) {
+            // Never assign model/chat text via innerHTML — textContent only.
+            bubble.append(sender, document.createTextNode(' ' + String(text == null ? '' : text)));
+            if (meta && meta.error) {
+                const err = document.createElement('div');
+                err.style.cssText = 'margin-top:6px; font-size:0.75rem; color: var(--red, #DC2626); font-weight:700;';
+                err.textContent = 'Error: ' + (meta.error.message || meta.error.code || 'fallo de Ollama');
+                bubble.appendChild(err);
+            }
+            if (meta && meta.retrieval_mode) {
+                const mode = document.createElement('div');
+                mode.style.cssText = 'margin-top:4px; font-size:0.72rem; color: var(--muted);';
+                mode.textContent = 'Modo de recuperación: ' + meta.retrieval_mode;
+                bubble.appendChild(mode);
+            }
+            const labels = formatChatSourceLabels(sources, meta && meta.source_labels);
+            if (labels.length) {
                 const sourceText = document.createElement('div');
                 sourceText.style.cssText = 'margin-top:6px; font-size:0.75rem; color: var(--muted);';
-                sourceText.textContent = 'Fuentes: ' + sources.join(', ');
+                sourceText.textContent = 'Fuentes: ' + labels.join(', ');
                 bubble.appendChild(sourceText);
             }
             container.appendChild(bubble);
@@ -2437,17 +2465,51 @@
             const contextPayload = {
                 context_mode: activeChatContextMode,
                 note_title: activeChatNoteTitle,
-                note_path: activeChatNotePath
+                note_path: activeChatNotePath,
+                document_id: activeChatDocumentId
             };
 
             if (window.pywebview && window.pywebview.api) {
                 window.pywebview.api.send_chat_message(msg, contextPayload).then(function(reply) {
-                    appendChatBubble(chatScroll, 'ai', 'Funes IA:', reply.text || reply, reply.sources);
+                    if (!reply || typeof reply !== 'object') {
+                        appendChatBubble(chatScroll, 'ai', 'Funes IA:', String(reply || ''), [], {
+                            error: { code: 'invalid_reply', message: 'Respuesta de chat inválida' },
+                            retrieval_mode: 'none'
+                        });
+                        return;
+                    }
+                    if (reply.error && !reply.text && !reply.answer) {
+                        appendChatBubble(chatScroll, 'ai', 'Funes IA:', reply.message || 'Error de autorización o de chat.', [], {
+                            error: { code: reply.error, message: reply.message || String(reply.error) },
+                            retrieval_mode: 'none'
+                        });
+                        return;
+                    }
+                    const answer = reply.text || reply.answer || '';
+                    appendChatBubble(chatScroll, 'ai', 'Funes IA:', answer, reply.sources, {
+                        error: (reply.error && typeof reply.error === 'object') ? reply.error : null,
+                        retrieval_mode: reply.retrieval_mode || 'none',
+                        source_labels: reply.source_labels || []
+                    });
+                }).catch(function(err) {
+                    appendChatBubble(chatScroll, 'ai', 'Funes IA:', 'No se pudo completar la consulta con Ollama.', [], {
+                        error: { code: 'ollama_unavailable', message: String(err || 'bridge failure') },
+                        retrieval_mode: 'none'
+                    });
                 });
             } else {
                 setTimeout(function() {
-                    const ctxLabel = activeChatContextMode === 'single_note' ? 'la nota "' + activeChatNoteTitle + '"' : 'todas las notas de 4_salida';
-                    appendChatBubble(chatScroll, 'ai', 'Funes IA:', 'Respuesta basada en ' + ctxLabel + '. Información derivada de las notas atómicas locales.');
+                    appendChatBubble(
+                        chatScroll,
+                        'ai',
+                        'Funes IA:',
+                        'Vista previa offline: el chat real requiere el bridge PyWebView y Ollama local.',
+                        [],
+                        {
+                            error: { code: 'offline_preview', message: 'Bridge no disponible' },
+                            retrieval_mode: 'none'
+                        }
+                    );
                 }, 400);
             }
         }
@@ -2812,11 +2874,13 @@
         let activeChatContextMode = 'all_notes'; // 'single_note' or 'all_notes'
         let activeChatNoteTitle = '';
         let activeChatNotePath = '';
+        let activeChatDocumentId = '';
 
         function launchChatWithContext(mode) {
             activeChatContextMode = mode;
             activeChatNoteTitle = currentSelectedNoteTitle || 'esta nota';
             activeChatNotePath = currentSelectedNotePath || '';
+            activeChatDocumentId = currentSelectedDocumentId || '';
 
             closeModal('modal-reader');
             openModal('modal-chat');

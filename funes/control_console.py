@@ -29,7 +29,9 @@ if sys.platform == "win32":
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
 
+from funes.application.chat import ChatApplicationService, OllamaChatProvider
 from funes.application.lifecycle import ApplicationLifecycle
+from funes.application.retrieval import RetrievalApplicationService
 from funes.application.settings import SettingsService, SettingsValidationError
 from funes.config import get_default_config, AppConfig, save_config, load_config
 from funes.core.vault import VaultManager
@@ -39,6 +41,7 @@ from funes.domain.frontmatter import FrontmatterError, parse_frontmatter
 from funes.domain.paths import AuthorizedPathResolver, document_id_for_relative_path
 from funes.domain.quarantine import QuarantineService
 from funes.infrastructure.atomic_files import atomic_write_json, atomic_write_text
+from funes.rag.chroma_store import ChromaStore
 from funes.ui.bridge import FunesPyWebViewApi
 from funes.core.app_checker import check_and_prompt_user_apps_closed, launch_obsidian
 from funes.core.anythingllm_config import (
@@ -190,6 +193,9 @@ class FunesConsoleBackend:
         # Set by launch_control_console after ApplicationLifecycle.start() so
         # console theme actions and background services share one VaultManager.
         self.lifecycle: Optional[ApplicationLifecycle] = None
+        self._chroma_store: Optional[ChromaStore] = None
+        self._retrieval_service: Optional[RetrievalApplicationService] = None
+        self._chat_service: Optional[ChatApplicationService] = None
 
     def attach_lifecycle(self, lifecycle: ApplicationLifecycle) -> None:
         """Share the lifecycle-owned VaultManager for theme-scoped processing."""
@@ -200,6 +206,10 @@ class FunesConsoleBackend:
         self.lifecycle = lifecycle
         self.vault = lifecycle.pipeline.vault
         self.quarantine_service = self.vault.quarantine_service
+        # Prefer the pipeline chroma + reset chat/retrieval so BM25 shares one cache.
+        self._chroma_store = getattr(lifecycle.pipeline, "chroma", None)
+        self._retrieval_service = None
+        self._chat_service = None
 
     def _apply_theme(self, theme_name: str) -> str:
         """Activate a theme on the lifecycle pipeline when attached, else locally."""
@@ -218,10 +228,57 @@ class FunesConsoleBackend:
             ollama_url=config.ollama_url,
             safety_margin_pct=config.ram_safety_margin_pct,
         )
+        # Model/URL changes must rebuild the chat provider on next ask.
+        self._chat_service = None
         if vault_changed:
             self.vault = VaultManager(config.vault)
             self.sync_manager = FolderSyncManager(self.vault_path)
             self.quarantine_service = self.vault.quarantine_service
+            self._chroma_store = None
+            self._retrieval_service = None
+
+    def _get_chroma_store(self) -> ChromaStore:
+        if self.lifecycle is not None and self.lifecycle.pipeline is not None:
+            pipeline_chroma = getattr(self.lifecycle.pipeline, "chroma", None)
+            if pipeline_chroma is not None:
+                self._chroma_store = pipeline_chroma
+                return pipeline_chroma
+        if self._chroma_store is None:
+            self._chroma_store = ChromaStore(self.config.vault.chroma_dir)
+        return self._chroma_store
+
+    def get_retrieval_service(self) -> RetrievalApplicationService:
+        """Shared retrieval service (hybrid searcher reused from Chroma when possible)."""
+        if self._retrieval_service is None:
+            self._retrieval_service = RetrievalApplicationService(
+                self._get_chroma_store(),
+                ram_governor=self.ram_governor,
+            )
+        return self._retrieval_service
+
+    def get_chat_service(self) -> ChatApplicationService:
+        """Shared chat contract used by WebView bridge and native modal."""
+        if self._chat_service is None:
+            self._chat_service = ChatApplicationService(
+                self.get_retrieval_service(),
+                provider=OllamaChatProvider(self.config.ollama_url, timeout=12.0),
+                model_resolver=lambda: (
+                    self.config.custom_model_override
+                    or self.ram_governor.recommend_model()
+                ),
+                ollama_url=self.config.ollama_url,
+            )
+        return self._chat_service
+
+    def notify_index_changed(self) -> None:
+        """Invalidate BM25 caches after ingestion writes (parked Task 4.2 wiring)."""
+        if self._retrieval_service is not None:
+            self._retrieval_service.notify_index_changed()
+        else:
+            chroma = self._get_chroma_store()
+            invalidate = getattr(chroma, "invalidate_bm25_cache", None)
+            if callable(invalidate):
+                invalidate()
 
     def save_settings(self, settings: Dict[str, Any]) -> Dict[str, Any]:
         """Apply validated canonical settings from the typed UI bridge."""
@@ -820,95 +877,49 @@ historial:
             "allow_non_loopback_ollama": self.config.allow_non_loopback_ollama,
         }
 
-    def process_chat(self, message: str, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-        import json
-        import urllib.request
-        ctx_mode = "all_notes"
-        note_title = ""
-        note_path = ""
+    def _resolve_chat_context(
+        self, context: Optional[Dict[str, Any]]
+    ) -> Dict[str, Any] | Dict[str, str]:
+        """Normalize UI chat context; resolve single-note paths to document_id."""
+        ctx: Dict[str, Any] = dict(context or {})
+        mode = str(ctx.get("context_mode") or ctx.get("scope") or "all_notes").strip()
+        ctx["context_mode"] = mode
+        if mode != "single_note":
+            return ctx
 
-        if isinstance(context, dict):
-            ctx_mode = context.get("context_mode", "all_notes")
-            note_title = context.get("note_title", "")
-            note_path = context.get("note_path", "")
+        document_id = str(ctx.get("document_id") or "").strip()
+        if document_id:
+            ctx["document_id"] = document_id
+            return ctx
 
-        sources = []
-        note_content = ""
-
-        if ctx_mode == "single_note" and (note_path or note_title):
-            try:
-                if note_path:
-                    note_file = self._path_resolver().resolve_note(note_path)
-                else:
-                    note_file = self.vault.output_dir / f"{note_title}.md"
-                    note_file = self._path_resolver().resolve_note(
-                        self._vault_relative_identity(note_file)
-                    )
-            except PathAuthorizationError as error:
-                return self._path_error(error)
-
-            sources = [note_title or note_file.stem]
-            if note_file.exists():
-                try:
-                    note_content = note_file.read_text(encoding="utf-8", errors="replace")
-                except Exception:
-                    pass
-
-            prompt = (
-                f"Eres Funes, un asistente de conocimiento local. "
-                f"Basándote EXCLUSIVAMENTE en el contenido de la siguiente nota titulada '{note_title}':\n\n"
-                f"--- INICIO NOTA ---\n{note_content[:4000]}\n--- FIN NOTA ---\n\n"
-                f"Responde en español a la siguiente pregunta: {message}"
-            )
-        else:
-            out_dir = self.vault_path / "4_salida"
-            all_files = sorted(list(out_dir.glob("*.md"))) if out_dir.exists() else []
-            combined_texts = []
-            sources_found = []
-
-            for f in all_files:
-                try:
-                    txt = f.read_text(encoding="utf-8", errors="replace").strip()
-                    if txt:
-                        combined_texts.append(f"=== NOTA: {f.name} ===\n{txt}\n")
-                        sources_found.append(f.name)
-                except Exception:
-                    pass
-
-            vault_context_text = "\n".join(combined_texts)[:16000] if combined_texts else "No hay notas procesadas aún."
-            sources = sources_found[:5] if sources_found else ["Bóveda Completa (4_salida)"]
-            if len(sources_found) > 5:
-                sources.append(f"+{len(sources_found) - 5} notas más")
-
-            prompt = (
-                f"Eres Funes, un asistente de conocimiento local. "
-                f"Basándote en el contenido completo de todas las notas almacenadas en la carpeta '4_salida' de tu Vault Funes:\n\n"
-                f"--- INICIO CONTEXTO BÓVEDA COMPLETA (4_SALIDA) ---\n{vault_context_text}\n--- FIN CONTEXTO BÓVEDA ---\n\n"
-                f"Responde en español a la siguiente consulta del usuario relacionando la información disponible: {message}"
-            )
-
+        note_path = str(ctx.get("note_path") or "").strip()
+        note_title = str(ctx.get("note_title") or "").strip()
         try:
-            model_name = self.config.custom_model_override or self.ram_governor.recommend_model()
-            payload = json.dumps({
-                "model": model_name,
-                "prompt": prompt,
-                "stream": False
-            }).encode("utf-8")
-            req = urllib.request.Request(
-                f"{self.config.ollama_url.rstrip('/')}/api/generate",
-                data=payload,
-                headers={"Content-Type": "application/json"},
-            )
-            with urllib.request.urlopen(req, timeout=12) as resp:
-                data = json.loads(resp.read().decode("utf-8"))
-                reply = data.get("response", "").strip()
-                return {"text": reply, "sources": sources}
-        except Exception:
-            ctx_desc = f"nota '{note_title}'" if ctx_mode == "single_note" else "todas las notas de 4_salida"
-            return {
-                "text": f"No se pudo completar la consulta local sobre {ctx_desc}. Comprueba que Ollama esté disponible en {self.config.ollama_url}.",
-                "sources": sources
-            }
+            if note_path:
+                note_file = self._path_resolver().resolve_note(note_path)
+            elif note_title:
+                note_file = self._path_resolver().resolve_note(
+                    self._vault_relative_identity(
+                        self.vault.output_dir / f"{note_title}.md"
+                    )
+                )
+            else:
+                return ctx
+            relative = self._vault_relative_identity(note_file)
+            ctx["document_id"] = document_id_for_relative_path(relative)
+            ctx["note_path"] = relative
+        except PathAuthorizationError as error:
+            return self._path_error(error)
+        return ctx
+
+    def process_chat(
+        self, message: str, context: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
+        """Shared chat contract: retrieval-grounded answer + sources + error state."""
+        resolved = self._resolve_chat_context(context)
+        if isinstance(resolved, dict) and resolved.get("error"):
+            return resolved
+        return self.get_chat_service().ask(message, resolved)
 
     def _issue_from_relative_path(self, relative_path: str) -> str:
         """Derive the Cuestión folder from a vault-relative note path."""

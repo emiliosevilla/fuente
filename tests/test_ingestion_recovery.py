@@ -142,7 +142,7 @@ class _ScriptedChunker:
         self.id_sets = id_sets
         self.calls = 0
 
-    def chunk_markdown(self, md_content: str, source_file: str) -> list[dict]:
+    def chunk_markdown(self, md_content: str, source_file: str, **_kwargs) -> list[dict]:
         chunk_ids = self.id_sets[min(self.calls, len(self.id_sets) - 1)]
         self.calls += 1
         return [

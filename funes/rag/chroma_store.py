@@ -136,6 +136,7 @@ class ChromaStore:
 
         try:
             self.collection.upsert(documents=chunks, metadatas=safe_metadatas, ids=ids)
+            self.invalidate_bm25_cache()
             logger.info(f"Insertados/Actualizados {len(chunks)} vectores en ChromaDB.")
             return True
         except Exception as e:
@@ -157,6 +158,7 @@ class ChromaStore:
 
         try:
             self.collection.delete(ids=chunk_ids)
+            self.invalidate_bm25_cache()
             logger.info(f"Eliminados {len(chunk_ids)} vectores obsoletos de ChromaDB.")
             return True
         except Exception as e:
@@ -182,6 +184,24 @@ class ChromaStore:
             logger.error(f"Error consultando ChromaDB: {e}")
             return []
 
+    def get_all_chunks(self) -> List[Dict[str, Any]]:
+        """Return every stored chunk as ``{id, content, metadata}`` dicts."""
+        if not self._ensure_collection():
+            return []
+        try:
+            all_data = self.collection.get()
+            docs: List[Dict[str, Any]] = []
+            for d_id, doc, meta in zip(
+                all_data.get("ids", []),
+                all_data.get("documents", []),
+                all_data.get("metadatas", []),
+            ):
+                docs.append({"id": d_id, "content": doc, "metadata": meta or {}})
+            return docs
+        except Exception as e:
+            logger.error(f"Error obteniendo chunks de ChromaDB: {e}")
+            return []
+
     def get_all_notes_titles(self) -> List[str]:
         """Recupera la lista de títulos de notas almacenados en los metadatos."""
         if not self._ensure_collection():
@@ -199,32 +219,36 @@ class ChromaStore:
             return []
 
     def query_hybrid(self, query_text: str, n_results: int = 5) -> List[Dict[str, Any]]:
-        """Realiza una búsqueda híbrida combinando la similitud semántica (ChromaDB) y léxica (BM25)."""
+        """Realiza una búsqueda híbrida combinando la similitud semántica (ChromaDB) y léxica (BM25).
+
+        Uses a process-local HybridSearcher so BM25 is rebuilt only after
+        ``invalidate_bm25_cache()`` (called from add/delete) rather than on
+        every query.
+        """
         vector_results = self.query_similar(query_text, n_results=n_results * 2)
 
         try:
-            from funes.rag.hybrid_search import HybridSearcher
-
-            searcher = HybridSearcher()
-
-            # Obtener todos los documentos guardados para construir el índice BM25 de forma transparente
-            if self.collection:
-                all_data = self.collection.get()
-                docs = []
-                for d_id, doc, meta in zip(
-                    all_data.get("ids", []),
-                    all_data.get("documents", []),
-                    all_data.get("metadatas", []),
-                ):
-                    docs.append({"id": d_id, "content": doc, "metadata": meta})
-                searcher.bm25.index_documents(docs)
-                bm25_results = searcher.bm25.search(query_text, top_k=n_results * 2)
-                return searcher.reciprocal_rank_fusion(
-                    vector_results, bm25_results, top_k=n_results
-                )
+            searcher = self._hybrid_searcher()
+            searcher.ensure_index(self.get_all_chunks)
+            return searcher.search_hybrid(vector_results, query_text, top_k=n_results)
         except Exception as e:
             logger.warning(
                 f"No se pudo completar la búsqueda híbrida BM25 ({e}). Retornando resultados vectoriales."
             )
 
         return vector_results[:n_results]
+
+    def invalidate_bm25_cache(self) -> None:
+        """Drop the cached BM25 index after the vector store changes."""
+        searcher = getattr(self, "_cached_hybrid_searcher", None)
+        if searcher is not None:
+            searcher.invalidate_cache()
+
+    def _hybrid_searcher(self):
+        from funes.rag.hybrid_search import HybridSearcher
+
+        searcher = getattr(self, "_cached_hybrid_searcher", None)
+        if searcher is None:
+            searcher = HybridSearcher()
+            self._cached_hybrid_searcher = searcher
+        return searcher

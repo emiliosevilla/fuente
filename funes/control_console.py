@@ -1396,15 +1396,17 @@ historial:
 
         discovered = GraphLinker(out_dir).enumerate_notes()
         node_ids = {note.link_target for note in discovered}
-        nodes = [
-            {
-                "id": note.link_target,
-                "label": note.stem,
-                "path": self._vault_relative_identity(out_dir / note.relative_path),
-                "document_id": note.document_id,
-            }
-            for note in discovered
-        ]
+        nodes = []
+        for note in discovered:
+            vault_relative = self._vault_relative_identity(out_dir / note.relative_path)
+            nodes.append(
+                {
+                    "id": note.link_target,
+                    "label": note.stem,
+                    "path": vault_relative,
+                    "document_id": document_id_for_relative_path(vault_relative),
+                }
+            )
 
         links = []
         import re

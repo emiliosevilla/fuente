@@ -12,10 +12,13 @@ services:
       - ./ObsidianVault:/vault
     environment:
       - OLLAMA_URL=http://ollama:11434
+      - ALLOW_NON_LOOPBACK_OLLAMA=true
     depends_on:
       - ollama
 
   ollama:
+    # Ollama starts empty — pull at least one model before first useful ingest:
+    #   docker exec -it funes_ollama_service ollama pull qwen2.5:7b
     image: ollama/ollama:latest
     container_name: funes_ollama_service
     restart: unless-stopped

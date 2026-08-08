@@ -1,5 +1,8 @@
+import os
 import sys
 import time
+import signal
+import threading
 import argparse
 import logging
 from pathlib import Path
@@ -22,6 +25,29 @@ logging.basicConfig(
 )
 
 logger = logging.getLogger("funes")
+
+_NO_DISPLAY_MESSAGE = (
+    "No graphical display is available. The Funes Control Console requires a "
+    "desktop environment with a display server.\n"
+    "  • Server / Docker / CI: run with --headless for continuous background services.\n"
+    "  • One-shot ingestion: run with --flush.\n"
+    "  • Remote Linux: export DISPLAY or use X11 forwarding before launching the GUI."
+)
+
+
+def has_graphical_display() -> bool:
+    """Return whether this process can open a native GUI window."""
+    if sys.platform in {"darwin", "win32"}:
+        return True
+    return bool(os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"))
+
+
+def require_graphical_display() -> None:
+    """Exit with a clear message when GUI mode cannot run headlessly."""
+    if has_graphical_display():
+        return
+    print(_NO_DISPLAY_MESSAGE, file=sys.stderr)
+    sys.exit(1)
 
 
 def select_vault_folder_gui() -> Path:
@@ -61,13 +87,29 @@ def run_flush(vault_path: Path) -> dict:
         lifecycle.stop()
 
 
-def _wait_for_keyboard_interrupt() -> None:
-    """Bloquea el proceso hasta recibir Ctrl+C / SIGINT (usado por el modo headless)."""
+def _wait_for_shutdown_signal() -> None:
+    """Block until SIGINT (Ctrl+C) or SIGTERM (``docker stop``) requests shutdown."""
+    shutdown = threading.Event()
+
+    def _request_shutdown(signum, _frame):
+        try:
+            name = signal.Signals(signum).name
+        except ValueError:
+            name = str(signum)
+        logger.info("Señal %s recibida. Deteniendo servicios de Funes...", name)
+        shutdown.set()
+
+    previous_int = signal.getsignal(signal.SIGINT)
+    previous_term = signal.getsignal(signal.SIGTERM)
+    signal.signal(signal.SIGINT, _request_shutdown)
+    signal.signal(signal.SIGTERM, _request_shutdown)
+
     try:
-        while True:
-            time.sleep(1.0)
-    except KeyboardInterrupt:
-        logger.info("Señal de interrupción recibida. Deteniendo servicios de Funes...")
+        while not shutdown.is_set():
+            shutdown.wait(timeout=1.0)
+    finally:
+        signal.signal(signal.SIGINT, previous_int)
+        signal.signal(signal.SIGTERM, previous_term)
 
 
 def run_headless(vault_path: Path, wait_for_shutdown=None) -> None:
@@ -76,7 +118,7 @@ def run_headless(vault_path: Path, wait_for_shutdown=None) -> None:
     logger.info(f"=== Funes en modo headless (sin interfaz) — Vault: {vault_path} ===")
     config = get_default_config(vault_path)
     lifecycle = ApplicationLifecycle(config, mode="headless")
-    wait = wait_for_shutdown or _wait_for_keyboard_interrupt
+    wait = wait_for_shutdown or _wait_for_shutdown_signal
     try:
         lifecycle.start()
         wait()
@@ -86,6 +128,7 @@ def run_headless(vault_path: Path, wait_for_shutdown=None) -> None:
 
 def run_continuous_console(vault_path: Path) -> None:
     """Modo predeterminado: lanza la Consola Central de Control (posee su propio ciclo de vida)."""
+    require_graphical_display()
     from funes.control_console import launch_control_console
 
     launch_control_console(vault_path)

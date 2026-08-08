@@ -31,6 +31,56 @@ def is_loopback_ollama_url(url: str) -> bool:
         return False
 
 
+LOCAL_ONLY_MODE = "local_only"
+EXTERNAL_ENABLED_MODE = "external_enabled"
+
+
+def describe_offline_mode(config: AppConfig) -> dict:
+    """Return a verifiable offline / external-enabled snapshot for UI and tests."""
+    loopback = is_loopback_ollama_url(config.ollama_url)
+    is_local_only = loopback
+    if is_local_only:
+        return {
+            "mode": LOCAL_ONLY_MODE,
+            "is_local_only": True,
+            "ollama_is_loopback": True,
+            "allow_non_loopback_ollama": config.allow_non_loopback_ollama,
+            "ollama_url": config.ollama_url,
+            "label": "Solo local",
+            "detail": (
+                "Inferencia en Ollama loopback; la consola no carga recursos de red "
+                "en tiempo de ejecución."
+            ),
+            "chat_welcome": (
+                "Hola. Puedo responder preguntas sobre los documentos procesados en tu "
+                "Vault usando Ollama en este equipo."
+            ),
+            "chat_footer": (
+                "Modo solo local: inferencia en Ollama loopback "
+                f"({config.ollama_url})."
+            ),
+        }
+    return {
+        "mode": EXTERNAL_ENABLED_MODE,
+        "is_local_only": False,
+        "ollama_is_loopback": False,
+        "allow_non_loopback_ollama": config.allow_non_loopback_ollama,
+        "ollama_url": config.ollama_url,
+        "label": "IA remota habilitada",
+        "detail": (
+            f"Inferencia en {config.ollama_url}; las solicitudes pueden salir de "
+            "este equipo."
+        ),
+        "chat_welcome": (
+            "Hola. Las consultas de chat se envían al endpoint Ollama configurado "
+            "fuera de este equipo."
+        ),
+        "chat_footer": (
+            "Modo externo activo: la inferencia puede salir de este dispositivo."
+        ),
+    }
+
+
 def validate_ollama_url(url: str, allow_non_loopback: bool) -> str | None:
     """Validate an Ollama endpoint and return the remote-access warning if needed."""
     parsed = urlparse(url)

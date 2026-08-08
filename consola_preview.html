@@ -177,6 +177,31 @@
             color: var(--paper);
         }
 
+        .offline-badge {
+            font-weight: 700;
+            padding: 2px 8px;
+            border-radius: 999px;
+            border: 1px solid var(--border);
+            background: var(--bg-log);
+        }
+
+        .offline-badge.local-only {
+            color: var(--green);
+            border-color: var(--green);
+        }
+
+        .offline-badge.external-enabled {
+            color: var(--amber);
+            border-color: var(--amber);
+        }
+
+        #offline-mode-detail {
+            font-size: 0.72rem;
+            color: var(--muted);
+            margin-top: 4px;
+            display: block;
+        }
+
         /* STATS GRID */
         .stats-grid {
             display: grid;
@@ -969,6 +994,12 @@
         <!-- STATUS STRIP (ESTADO DE FUNES EN CABECERA) -->
         <div class="status-strip">
             <div class="status-item">
+                <span class="status-label">● MODO DE RED:</span>
+                <span class="status-val">
+                    <span id="status-offline-mode" class="offline-badge local-only" title="Inferencia en Ollama loopback">Solo local</span>
+                </span>
+            </div>
+            <div class="status-item">
                 <span class="status-label">● MOTOR DE IA LOCAL:</span>
                 <span class="status-val" id="status-ollama">Disponible (Qwen 2.5 7B)</span>
             </div>
@@ -1232,8 +1263,8 @@
             <div class="modal-body">
                 <div class="chat-container-box">
                     <div class="chat-messages-scroll" id="chat-messages">
-                        <div class="chat-bubble ai">
-                            <strong>Funes IA:</strong> Hola. Puedo responder preguntas sobre los documentos procesados en tu Vault 100% en local.
+                        <div class="chat-bubble ai" id="chat-welcome-bubble">
+                            <strong>Funes IA:</strong> <span id="chat-welcome-text">Hola. Puedo responder preguntas sobre los documentos procesados en tu Vault usando Ollama en este equipo.</span>
                         </div>
                     </div>
                     <div class="chat-input-bar">
@@ -1243,7 +1274,7 @@
                 </div>
             </div>
             <div class="modal-footer">
-                <span style="font-size: 0.78rem; color: var(--muted);">Funes funciona con una IA 100% local, garantizando la privacidad</span>
+                <span id="chat-privacy-footer" style="font-size: 0.78rem; color: var(--muted);">Modo solo local: inferencia en Ollama loopback (http://localhost:11434).</span>
                 <button class="btn-secondary" data-onclick-command="closeModal('modal-chat')">Cerrar</button>
             </div>
         </div>
@@ -1417,6 +1448,7 @@
                         <input id="setting-allow-non-loopback-ollama" type="checkbox">
                         <span>Permitir Ollama fuera de este equipo. Las solicitudes pueden salir del dispositivo.</span>
                     </label>
+                    <span id="offline-mode-detail">Modo solo local: inferencia en Ollama loopback; la consola no carga recursos de red en tiempo de ejecución.</span>
                 </div>
 
                 <!-- PESTAÑA 3: PLANTILLA NOTA -->
@@ -1665,6 +1697,30 @@
 
         function clearLogView() {
             document.getElementById('log-console').replaceChildren();
+        }
+
+        function applyOfflineModeState(offlineMode) {
+            if (!offlineMode) return;
+            const badge = document.getElementById('status-offline-mode');
+            const detail = document.getElementById('offline-mode-detail');
+            const welcome = document.getElementById('chat-welcome-text');
+            const footer = document.getElementById('chat-privacy-footer');
+            const isLocalOnly = offlineMode.is_local_only !== false;
+            if (badge) {
+                badge.textContent = offlineMode.label || (isLocalOnly ? 'Solo local' : 'IA remota habilitada');
+                badge.title = offlineMode.detail || '';
+                badge.classList.toggle('local-only', isLocalOnly);
+                badge.classList.toggle('external-enabled', !isLocalOnly);
+            }
+            if (detail && offlineMode.detail) {
+                detail.textContent = offlineMode.detail;
+            }
+            if (welcome && offlineMode.chat_welcome) {
+                welcome.textContent = offlineMode.chat_welcome;
+            }
+            if (footer && offlineMode.chat_footer) {
+                footer.textContent = offlineMode.chat_footer;
+            }
         }
 
         function getFormattedTimestamp() {
@@ -2183,6 +2239,7 @@
                     if (info.ollama_url) { document.getElementById('setting-ollama-url').value = info.ollama_url; }
                     if (info.ram_margin) { document.getElementById('setting-ram-margin').value = info.ram_margin; }
                     document.getElementById('setting-allow-non-loopback-ollama').checked = !!info.allow_non_loopback_ollama;
+                    if (info.offline_mode) { applyOfflineModeState(info.offline_mode); }
                     renderLinkedFolders();
                     populateOllamaModels(info.models, info.current_model);
                 });
@@ -2738,8 +2795,12 @@
 
         function clearChatHistory() {
             const chat = document.getElementById('chat-messages');
-            chat.replaceChildren();
-            appendChatBubble(chat, 'ai', 'Funes IA:', 'Historial de chat limpiado.');
+            const welcome = document.getElementById('chat-welcome-bubble');
+            Array.from(chat.children).forEach(function(child) {
+                if (child !== welcome) {
+                    child.remove();
+                }
+            });
         }
 
         function switchReaderView(view) {
@@ -3641,6 +3702,7 @@
                     } else if (res && res.log) {
                         log(res.log);
                         if (res.warning) log('Advertencia: ' + res.warning);
+                        if (res.offline_mode) applyOfflineModeState(res.offline_mode);
                         if (res.stats) updateDashboardStats(res.stats);
                     }
                 });
@@ -3664,6 +3726,9 @@
                     updateDashboardStats(state.stats);
                     if (state.vault_path) {
                         document.getElementById('setting-vault-path').value = state.vault_path;
+                    }
+                    if (state.offline_mode) {
+                        applyOfflineModeState(state.offline_mode);
                     }
                 });
                 loadThemes();

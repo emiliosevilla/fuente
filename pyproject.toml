@@ -36,6 +36,9 @@ test = [
 where = ["."]
 include = ["funes*"]
 
+[tool.setuptools.package-data]
+"funes.infrastructure.migrations" = ["*.sql"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py"]

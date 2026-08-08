@@ -3,7 +3,6 @@ import re
 import shutil
 import hashlib
 import json
-import uuid
 from pathlib import Path
 from typing import Literal
 import logging
@@ -12,7 +11,7 @@ from funes.config import VaultConfig
 from funes.domain.documents import MarkdownDocument
 from funes.domain.frontmatter import FrontmatterError, serialize_frontmatter
 from funes.domain.errors import PathAuthorizationError
-from funes.domain.paths import AuthorizedPathResolver
+from funes.domain.paths import AuthorizedPathResolver, document_id_for_relative_path
 from funes.domain.quarantine import QuarantineService
 from funes.infrastructure.atomic_files import atomic_write_json, atomic_write_text
 
@@ -27,10 +26,7 @@ WINDOWS_RESERVED_NAMES = {
 ThemeRootName = Literal["input", "dirty", "clean", "output"]
 SYSTEM_DIR_NAME = ".funes"
 
-
-def document_id_for_relative_path(relative_path: str) -> str:
-    """Opaque, stable document id derived from a Vault-relative path."""
-    return str(uuid.uuid5(uuid.NAMESPACE_URL, f"funes:vault:{relative_path}"))
+__all__ = ["VaultManager", "document_id_for_relative_path", "SYSTEM_DIR_NAME"]
 
 
 class VaultManager:

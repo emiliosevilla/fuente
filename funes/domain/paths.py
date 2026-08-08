@@ -1,5 +1,8 @@
 """Authorization of filesystem paths supplied by UI callers."""
 
+from __future__ import annotations
+
+import uuid
 from pathlib import Path, PureWindowsPath
 from typing import Literal
 
@@ -7,6 +10,11 @@ from funes.domain.errors import PathAuthorizationError
 
 
 RootName = Literal["vault", "output", "input", "dirty", "clean", "quarantine"]
+
+
+def document_id_for_relative_path(relative_path: str) -> str:
+    """Opaque, stable document id derived from a Vault-relative path."""
+    return str(uuid.uuid5(uuid.NAMESPACE_URL, f"funes:vault:{relative_path}"))
 
 
 class AuthorizedPathResolver:
@@ -40,6 +48,30 @@ class AuthorizedPathResolver:
     def resolve_note(self, relative_path: str) -> Path:
         """Resolve a Markdown note below the output directory."""
         return self.resolve(relative_path, root_name="output", allowed_extensions={".md"})
+
+    def resolve_note_id(self, document_id: str) -> Path:
+        """Resolve an opaque document id to an authorized Markdown note path."""
+        if not isinstance(document_id, str) or not document_id.strip():
+            raise PathAuthorizationError()
+        if "/" in document_id or "\\" in document_id or document_id.endswith(".md"):
+            # Clients must load by opaque id, never by path-shaped strings.
+            raise PathAuthorizationError()
+
+        output = self.roots["output"]
+        if not output.exists():
+            raise PathAuthorizationError()
+
+        for candidate in output.rglob("*.md"):
+            if not candidate.is_file():
+                continue
+            try:
+                relative = self._vault_relative_identity(candidate)
+            except PathAuthorizationError:
+                continue
+            if document_id_for_relative_path(relative) != document_id:
+                continue
+            return self.resolve_note(relative)
+        raise PathAuthorizationError()
 
     def resolve_unique_note_basename(self, filename: str) -> Path:
         """Resolve one unique Markdown note basename below the output root."""

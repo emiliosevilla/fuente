@@ -1,5 +1,7 @@
-from funes.control_console import FunesConsoleBackend
 from pathlib import Path
+
+from funes.control_console import FunesConsoleBackend
+from funes.core.vault import document_id_for_relative_path
 
 
 def test_note_document_uses_text_tokens_for_hostile_markdown(temp_vault_path):
@@ -14,7 +16,9 @@ def test_note_document_uses_text_tokens_for_hostile_markdown(temp_vault_path):
         encoding="utf-8",
     )
 
-    result = backend.get_note_content_html(f"4_salida/{note.name}")
+    result = backend.get_note_content_html(
+        document_id_for_relative_path(f"4_salida/{note.name}")
+    )
 
     assert result["title"] == "hostile"
     assert result["document"] == [
@@ -40,12 +44,16 @@ def test_wikilink_ids_escape_quote_breaking_paths(temp_vault_path):
     target.write_text("target", encoding="utf-8")
     source.write_text('[[target"]]', encoding="utf-8")
 
-    result = backend.get_note_content_html(f"4_salida/{source.name}")
+    source_id = document_id_for_relative_path(f"4_salida/{source.name}")
+    target_id = document_id_for_relative_path(f"4_salida/{target.name}")
+    result = backend.get_note_content_html(source_id)
 
     assert result["title"] == 'source"'
-    assert result["document"][0]["children"][0]["document_id"] == '4_salida/target".md'
-    assert 'data-document-id="4_salida/target&quot;.md"' in result["html"]
+    assert result["document"][0]["children"][0]["document_id"] == target_id
+    assert f'data-document-id="{target_id}"' in result["html"]
     assert "onclick=" not in result["html"]
+    # Opaque ids must not reintroduce quote-bearing path fragments into HTML attrs.
+    assert 'target"' not in result["html"]
 
 
 def test_webview_csp_blocks_inline_scripts_and_search_uses_dom_nodes():

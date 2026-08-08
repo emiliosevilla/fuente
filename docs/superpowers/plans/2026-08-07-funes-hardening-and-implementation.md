@@ -11,7 +11,7 @@
 ## Progress Status (2026-08-08)
 
 **Branch:** `feature/funes-hardening-2026-08-07` (worktree `.worktrees/funes-hardening-2026-08-07`)  
-**Tip:** `b47d234` — pushed to `origin/feature/funes-hardening-2026-08-07`  
+**Tip:** `cf0160c` — pushed to `origin/feature/funes-hardening-2026-08-07`  
 **Not merged** into `dev` / `main` yet. Main checkout still has a dirty partial `consola_preview.html`; discard before any `/supagit` promote.
 
 ### Completed
@@ -23,7 +23,7 @@
 | Phase 2 — Recoverable ETL | **Done** | 2.1–2.4 | `d8d38ba` |
 | Phase 3 — Themes / Graph / Reader | **Done** | 3.1–3.3 | `b6aec0d` |
 | Phase 4 — RAG / Local Chat | **Done** | 4.1–4.3 | `2b64861` |
-| Phase 5 — Resource scheduling | **In progress** | 5.1 done (commit pending); 5.2–5.3 open | `b47d234` |
+| Phase 5 — Resource scheduling | **In progress** | 5.1–5.2 done (5.2 commit pending); 5.3 open | `cf0160c` |
 
 Commits on this branch since `1bb66b8`:
 
@@ -50,12 +50,14 @@ Commits on this branch since `1bb66b8`:
 21. `c594bb6` — docs: record Task 4.2  
 22. `2b64861` — Task 4.3 chat + retrieval contract  
 23. `b47d234` — docs: record Task 4.3  
+24. `2a39ef8` — Task 5.1 resource budgets  
+25. `cf0160c` — docs: record Task 5.1  
 
 ### Not started / next
 
-- Task `5.1` commit pending; then `5.2`–`5.3` and Phases 6–8  
+- Task `5.2` commit pending; then `5.3` and Phases 6–8  
 
-**Resume at:** Task `5.2` — Build the resource scheduler (once 5.1 is committed).  
+**Resume at:** Task `5.3` — Retry policy (once 5.2 is committed).  
 **SDD ledger:** `.worktrees/funes-hardening-2026-08-07/.superpowers/sdd/2026-08-07-funes-hardening-and-implementation/progress.md`  
 **Process note:** After each completed task, update this Progress Status section, mark that task's step checkboxes `[x]`, and refresh §12 Recommended Execution Order — do not leave the plan stale between checkpoints.
 
@@ -913,7 +915,7 @@ Acceptance:
 - No fallback claims a precise available-memory value when it was not measured.
 - Every selected model has a budget decision and reason.
 
-**Checkpoint 5.1 (2026-08-08):** Resource budgets + honest measurement_unavailable; model decision/reason; purge via keep_alive=0. Review approved. **Commit pending**.
+**Checkpoint 5.1 (2026-08-08):** Resource budgets + honest measurement_unavailable; model decision/reason; purge via keep_alive=0. Review approved. Committed as `2a39ef8`.
 
 ### Task 5.2 — Add persistent task classes
 
@@ -936,18 +938,20 @@ graph_refresh
 
 Steps:
 
-- [ ] Add a durable queue backed by the job store.
-- [ ] Limit OCR/audio concurrency separately from text extraction.
-- [ ] Enforce one LLM generation per Ollama endpoint/model unless measured capacity permits more.
-- [ ] Purge/release the model between heavy media tasks when policy requires it.
-- [ ] Store scheduling decisions and wait reasons.
-- [ ] Do not classify a failed file as quarantined merely because it belongs to a media batch.
+- [x] Add a durable queue backed by the job store.
+- [x] Limit OCR/audio concurrency separately from text extraction.
+- [x] Enforce one LLM generation per Ollama endpoint/model unless measured capacity permits more.
+- [x] Purge/release the model between heavy media tasks when policy requires it.
+- [x] Store scheduling decisions and wait reasons.
+- [x] Do not classify a failed file as quarantined merely because it belongs to a media batch.
 
 Acceptance:
 
 - A mixed queue is ordered by policy and remains resumable.
 - A memory-constrained environment queues or degrades instead of exceeding the budget.
 - Two simultaneous tasks cannot corrupt the same document or Chroma records.
+
+**Checkpoint 5.2 (2026-08-08):** Durable scheduler + task classes; evaluate_resource gate; orphaned-lease resume fix; atomic lease claim. Review approved after fix round 1. **Commit pending**.
 
 ### Task 5.3 — Validate the two-attempt rule as a policy
 
@@ -1321,9 +1325,9 @@ Execute tasks in this order. Do not start a later phase merely because its UI is
 17. [x] `4.1` Index reconciliation. (`543b6e1`)
 18. [x] `4.2` Retrieval service. (`1a16a92`)
 19. [x] `4.3` Chat + Ollama. (`2b64861`)
-20. [x] `5.1` Resource budgets. (commit pending)
-21. [ ] `5.2` Scheduler. ← **resume here** (after 5.1 commit)
-22. `5.3` Retry policy.
+20. [x] `5.1` Resource budgets. (`2a39ef8`)
+21. [x] `5.2` Scheduler. (commit pending)
+22. [ ] `5.3` Retry policy. ← **resume here** (after 5.2 commit)
 23. `6.1` Approval.
 24. `6.2` Metadata forms.
 25. `6.3` TipTap evaluation.

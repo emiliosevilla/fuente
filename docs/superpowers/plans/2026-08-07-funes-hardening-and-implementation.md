@@ -11,7 +11,7 @@
 ## Progress Status (2026-08-08)
 
 **Branch:** `feature/funes-hardening-2026-08-07` (worktree `.worktrees/funes-hardening-2026-08-07`)  
-**Tip:** `2a0f472` — pushed to `origin/feature/funes-hardening-2026-08-07`  
+**Tip:** `b6aec0d` — pushed to `origin/feature/funes-hardening-2026-08-07`  
 **Not merged** into `dev` / `main` yet. Main checkout still has a dirty partial `consola_preview.html`; discard before any `/supagit` promote.
 
 ### Completed
@@ -21,7 +21,7 @@
 | Phase 0 — Safety Baseline | **Done** | 0.1–0.5 | `cdbb81e` |
 | Phase 1 — Domain Contracts | **Done** | 1.1–1.4 | `1c07a95` |
 | Phase 2 — Recoverable ETL | **Done** | 2.1–2.4 | `d8d38ba` |
-| Phase 3 — Themes / Graph / Reader | **Done** | 3.1–3.3 | `2a0f472` |
+| Phase 3 — Themes / Graph / Reader | **Done** | 3.1–3.3 | `b6aec0d` |
 
 Commits on this branch since `1bb66b8`:
 

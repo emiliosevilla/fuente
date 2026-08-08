@@ -22,7 +22,7 @@ import sqlite3
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Iterable, Optional
 
 from funes.domain.jobs import (
     CLAIMED_STATUS,
@@ -37,6 +37,17 @@ from funes.domain.jobs import (
 )
 
 MIGRATIONS_DIR = Path(__file__).resolve().parent / "migrations"
+
+#: Job columns `update_job` can reset to `NULL` via its `clear_fields` argument.
+CLEARABLE_JOB_FIELDS: frozenset[str] = frozenset(
+    {
+        "error_code",
+        "error_message",
+        "dirty_artifact",
+        "clean_artifact",
+        "note_document_id",
+    }
+)
 
 
 def _timestamp() -> str:
@@ -254,44 +265,51 @@ class JobStore:
         dirty_artifact: Optional[str] = None,
         clean_artifact: Optional[str] = None,
         note_document_id: Optional[str] = None,
+        clear_fields: Iterable[str] = (),
     ) -> JobRecord:
         """Atomically update fields and bump `revision`, recording a stage event.
 
-        Any argument left as `None` keeps its current stored value — this
-        call cannot clear an already-set field back to `NULL`. Fails with
+        Any argument left as `None` keeps its current stored value. To reset a
+        field back to `NULL` — e.g. dropping the error of a previous attempt
+        when a job advances again, or discarding a partial artifact during
+        compensation — name it in *clear_fields* (see `CLEARABLE_JOB_FIELDS`);
+        a field cannot be set and cleared in the same call. Fails with
         `JobConflictError` if `expected_revision` no longer matches the
         stored revision (another writer updated the job first), or with
         `JobStoreBusyError` if SQLite could not grant the write lock within
         `PRAGMA busy_timeout` (retryable write contention, not a stale
         revision).
         """
+        cleared = set(clear_fields)
+        unknown = cleared - CLEARABLE_JOB_FIELDS
+        if unknown:
+            raise ValueError(f"Unclearable job fields: {sorted(unknown)}")
+
         now = _timestamp()
+        assignments: list[str] = []
+        params: list[Any] = []
+        for column, value in (
+            ("stage", stage),
+            ("status", status),
+            ("error_code", error_code),
+            ("error_message", error_message),
+            ("dirty_artifact", dirty_artifact),
+            ("clean_artifact", clean_artifact),
+            ("note_document_id", note_document_id),
+        ):
+            if column in cleared:
+                if value is not None:
+                    raise ValueError(f"Job field cannot be set and cleared: {column}")
+                assignments.append(f"{column} = NULL")
+                continue
+            assignments.append(f"{column} = COALESCE(?, {column})")
+            params.append(value)
+
         cursor = self._execute_cas_update(
-            """
-            UPDATE jobs
-            SET stage = COALESCE(?, stage),
-                status = COALESCE(?, status),
-                error_code = COALESCE(?, error_code),
-                error_message = COALESCE(?, error_message),
-                dirty_artifact = COALESCE(?, dirty_artifact),
-                clean_artifact = COALESCE(?, clean_artifact),
-                note_document_id = COALESCE(?, note_document_id),
-                revision = revision + 1,
-                updated_at = ?
-            WHERE job_id = ? AND revision = ?
-            """,
-            (
-                stage,
-                status,
-                error_code,
-                error_message,
-                dirty_artifact,
-                clean_artifact,
-                note_document_id,
-                now,
-                job_id,
-                expected_revision,
-            ),
+            "UPDATE jobs SET "
+            + ", ".join([*assignments, "revision = revision + 1", "updated_at = ?"])
+            + " WHERE job_id = ? AND revision = ?",
+            (*params, now, job_id, expected_revision),
             job_id=job_id,
         )
         if cursor.rowcount != 1:
@@ -393,9 +411,29 @@ class JobStore:
         ).fetchall()
         return [dict(row) for row in rows]
 
-    def delete_index_artifacts(self, document_id: str) -> None:
+    def delete_index_artifacts(
+        self, document_id: str, artifact_ids: Optional[Iterable[str]] = None
+    ) -> None:
+        """Delete a document's index artifacts, or only *artifact_ids* of them.
+
+        Reconciling a document's index needs to drop exactly the entries that
+        became obsolete without touching the ones just published, so callers
+        can narrow the delete to a known id set instead of clearing the whole
+        document.
+        """
+        if artifact_ids is None:
+            self._connection.execute(
+                "DELETE FROM index_artifacts WHERE document_id = ?", (document_id,)
+            )
+            return
+        doomed = list(artifact_ids)
+        if not doomed:
+            return
+        placeholders = ", ".join("?" for _ in doomed)
         self._connection.execute(
-            "DELETE FROM index_artifacts WHERE document_id = ?", (document_id,)
+            "DELETE FROM index_artifacts WHERE document_id = ? "
+            f"AND artifact_id IN ({placeholders})",
+            (document_id, *doomed),
         )
 
     # -- row mapping ---------------------------------------------------------

@@ -42,8 +42,9 @@ def test_watcher_retries_corrupt_content_before_quarantining(tmp_path):
 
     item = pipeline.vault.quarantine_service.list_items()[0]
     assert item["error_code"] == "corrupt_content"
-    assert item["attempt_count"] == 3
-    assert pipeline.extractors.extract.call_count == 3
+    assert item["attempt_count"] == 2
+    assert pipeline.extractors.extract.call_count == 2
+    assert "Corrupt or unsupported media after 2 attempts" in item["error_message"]
 
 
 def test_invalid_model_output_is_not_converted_to_successful_fallback():

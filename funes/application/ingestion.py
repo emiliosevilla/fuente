@@ -54,7 +54,12 @@ from funes.domain.jobs import (
     CLAIMED_STATUS,
     DEFAULT_STATUS,
     CompensationPlan,
+    ErrorClass,
+    FailureAction,
     JobRecord,
+    classify_exception,
+    evaluate_failure,
+    max_attempts_for_error_class,
     transition,
 )
 from funes.domain.paths import AuthorizedPathResolver
@@ -341,6 +346,9 @@ class IngestionApplicationService:
                 logger.info("Job %s deferred mid-stage: %s", job.job_id, error.reason)
                 return job
             except Exception as error:
+                # Stages may persist attempt rows mid-flight (content retries),
+                # so reload before failure handling to avoid a stale CAS revision.
+                job = self.job_store.get_job(job.job_id)
                 return self._fail(job, error)
             finally:
                 if leased:
@@ -405,7 +413,9 @@ class IngestionApplicationService:
         dirty_path = self._recorded_artifact(job.dirty_artifact)
         if dirty_path is None:
             raise MissingArtifactError(job.job_id, "dirty copy")
-        context.content, context.metadata = self._extract_with_content_retries(dirty_path)
+        job, context.content, context.metadata = self._extract_with_content_retries(
+            job, dirty_path
+        )
         return self._advance(job, "extracted")
 
     def _run_save_clean(self, job: JobRecord, context: _RunContext) -> JobRecord:
@@ -533,27 +543,49 @@ class IngestionApplicationService:
             )
             return job
 
-        error_code = getattr(error, "code", None) or "processing_error"
+        error_code, _error_class = classify_exception(error)
+        # Prefer an explicit code on typed exhaustion errors (content retries).
+        typed_code = getattr(error, "code", None)
+        if isinstance(typed_code, str) and typed_code:
+            error_code = typed_code
         attempt_count = int(
             getattr(error, "attempt_count", 0) or max(job.attempt_count, 1)
+        )
+        decision = evaluate_failure(
+            error_code=error_code,
+            attempt_count=attempt_count,
+            error_message=str(error),
         )
         logger.error(
             "Job %s failed at stage %s (%s): %s",
             job.job_id,
             job.stage,
             error_code,
-            error,
+            decision.user_reason,
             exc_info=True,
         )
 
         # The source is preserved before compensation runs, so cleanup can
         # never race with (or delete) the copy the quarantine record needs.
         # Quarantine is per-job failure policy only — never because a sibling
-        # in a media batch failed or waited.
+        # in a media batch failed or waited. Below the policy threshold the
+        # source stays put (`retry_pending` / review); only threshold hits move it.
         quarantined = self._quarantine_source(job, error, attempt_count)
+        if decision.action is FailureAction.RETRY:
+            # Attempt recorded; leave the job resumable at its last stage.
+            return self.job_store.update_job(
+                job.job_id,
+                expected_revision=job.revision,
+                status=DEFAULT_STATUS,
+                error_code=decision.error_code,
+                error_message=decision.user_reason,
+            )
         to_stage = "quarantined" if quarantined else "failed"
         result = transition(
-            job, to_stage, error_code=error_code, error_message=str(error)
+            job,
+            to_stage,
+            error_code=decision.error_code,
+            error_message=decision.user_reason,
         )
         cleared = self._apply_compensation(job, result.compensation)
         return self.job_store.update_job(
@@ -561,8 +593,8 @@ class IngestionApplicationService:
             expected_revision=job.revision,
             stage=result.job.stage,
             status=result.job.status,
-            error_code=error_code,
-            error_message=str(error) or error_code,
+            error_code=decision.error_code,
+            error_message=decision.user_reason,
             clear_fields=cleared,
         )
 
@@ -730,6 +762,9 @@ class IngestionApplicationService:
         return materialize_chunks(chunks, identity)
 
     def _advance(self, job: JobRecord, to_stage: str, **updates: Any) -> JobRecord:
+        # Reload so mid-stage attempt persistence (content retries) cannot leave
+        # callers holding a stale revision for the CAS update.
+        job = self.job_store.get_job(job.job_id)
         result = transition(job, to_stage)
         if result.is_replay:
             return job
@@ -797,7 +832,9 @@ class IngestionApplicationService:
         dirty_path = self._recorded_artifact(job.dirty_artifact)
         if dirty_path is None:
             raise MissingArtifactError(job.job_id, "dirty copy")
-        context.content, context.metadata = self._extract_with_content_retries(dirty_path)
+        _updated_job, context.content, context.metadata = (
+            self._extract_with_content_retries(job, dirty_path)
+        )
         return context.content
 
     def _candidate(self, job: JobRecord, context: _RunContext) -> str:
@@ -927,19 +964,43 @@ class IngestionApplicationService:
     def _source_suffix(job: JobRecord) -> str:
         return Path(job.source_relative_path).suffix
 
-    def _extract_with_content_retries(self, dirty_path: Path) -> tuple[str, dict]:
-        """Retry known corrupt/unsupported extraction failures before failing."""
+    def _extract_with_content_retries(
+        self, job: JobRecord, dirty_path: Path
+    ) -> tuple[JobRecord, str, dict]:
+        """Retry corrupt/unsupported extraction failures under the domain policy.
+
+        Each attempt is persisted on the job (stage event + error fields) so the
+        attempt count is durable and inspectable. Permanent parse failures are
+        not given this budget — they re-raise immediately. The original source
+        stays in place until `handle_failure` sees the policy threshold.
+        """
         last_error: Optional[Exception] = None
         error_code = ""
-        max_attempts = self.vault.quarantine_service.UNSUPPORTED_CONTENT_MAX_ATTEMPTS
-        for _attempt in range(max_attempts):
+        max_attempts = max_attempts_for_error_class(ErrorClass.CORRUPT_OR_UNSUPPORTED)
+        for attempt in range(1, max_attempts + 1):
             try:
-                return self.extractors.extract(dirty_path)
+                content, metadata = self.extractors.extract(dirty_path)
+                return job, content, metadata
             except Exception as error:
                 error_code = self._content_error_code(error)
                 if not error_code:
+                    # Permanent / unclassified parse failure: do not loop.
                     raise
                 last_error = error
+                decision = evaluate_failure(
+                    error_code=error_code,
+                    attempt_count=attempt,
+                    error_message=str(error),
+                )
+                job = self.job_store.update_job(
+                    job.job_id,
+                    expected_revision=job.revision,
+                    error_code=error_code,
+                    error_message=decision.user_reason,
+                )
+                if decision.action is FailureAction.RETRY:
+                    continue
+                break
         assert last_error is not None
         raise ContentRetryExhaustedError(
             last_error, error_code, max_attempts

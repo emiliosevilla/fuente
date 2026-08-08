@@ -11,6 +11,15 @@ from typing import Any, Iterable
 from uuid import UUID, uuid4
 
 from funes.domain.errors import PathAuthorizationError
+from funes.domain.jobs import (
+    CORRUPT_OR_UNSUPPORTED_MAX_ATTEMPTS,
+    TRANSIENT_IO_BACKOFF_MULTIPLIER as DOMAIN_TRANSIENT_IO_BACKOFF_MULTIPLIER,
+    TRANSIENT_IO_INITIAL_BACKOFF_SECONDS as DOMAIN_TRANSIENT_IO_INITIAL_BACKOFF_SECONDS,
+    TRANSIENT_IO_MAX_ATTEMPTS as DOMAIN_TRANSIENT_IO_MAX_ATTEMPTS,
+    FailureAction,
+    classify_exception,
+    evaluate_failure,
+)
 from funes.domain.paths import AuthorizedPathResolver
 from funes.infrastructure.atomic_files import atomic_write_json
 
@@ -22,12 +31,18 @@ class InvalidModelOutputError(ValueError):
 
 
 class QuarantineService:
-    """Moves failed Vault files into one canonical, durable quarantine."""
+    """Moves failed Vault files into one canonical, durable quarantine.
 
-    TRANSIENT_IO_MAX_ATTEMPTS = 3
-    TRANSIENT_IO_INITIAL_BACKOFF_SECONDS = 0.5
-    TRANSIENT_IO_BACKOFF_MULTIPLIER = 2
-    UNSUPPORTED_CONTENT_MAX_ATTEMPTS = 3
+    Retry budgets and preserve-vs-quarantine decisions come from the domain
+    retry policy in `funes.domain.jobs` (Task 5.3). Class attributes below are
+    aliases so existing callers keep a stable import surface.
+    """
+
+    TRANSIENT_IO_MAX_ATTEMPTS = DOMAIN_TRANSIENT_IO_MAX_ATTEMPTS
+    TRANSIENT_IO_INITIAL_BACKOFF_SECONDS = DOMAIN_TRANSIENT_IO_INITIAL_BACKOFF_SECONDS
+    TRANSIENT_IO_BACKOFF_MULTIPLIER = DOMAIN_TRANSIENT_IO_BACKOFF_MULTIPLIER
+    #: Product policy: corrupt/unsupported media quarantines after two attempts.
+    UNSUPPORTED_CONTENT_MAX_ATTEMPTS = CORRUPT_OR_UNSUPPORTED_MAX_ATTEMPTS
 
     def __init__(
         self,
@@ -99,11 +114,32 @@ class QuarantineService:
         *,
         attempt_count: int,
     ) -> dict[str, Any]:
-        """Apply the documented failure policy without losing invalid model input."""
+        """Apply the domain retry policy without losing the original source early.
+
+        Below the configured attempt threshold the source stays in place and a
+        durable `retry_pending` manifest row records the attempt. Quarantine
+        (file move) happens only once the policy threshold is reached, with a
+        user-readable reason. Invalid model output is never quarantined.
+        """
+        if attempt_count < 1:
+            raise ValueError("attempt_count must be at least 1")
+
+        source = self._contained_file(source_path)
+        if not source.exists():
+            raise FileNotFoundError(source)
+
         if isinstance(error, InvalidModelOutputError):
-            source = self._contained_file(source_path)
-            if not source.exists():
-                raise FileNotFoundError(source)
+            error_code = error.code
+        else:
+            error_code, _error_class = classify_exception(error)
+
+        decision = evaluate_failure(
+            error_code=error_code,
+            attempt_count=attempt_count,
+            error_message=str(error),
+        )
+
+        if decision.action is FailureAction.FAILED_FOR_REVIEW:
             review_item = {
                 "quarantine_id": str(uuid4()),
                 "stored_filename": None,
@@ -111,19 +147,35 @@ class QuarantineService:
                 "original_relative_path": source.relative_to(self.vault_root).as_posix(),
                 "source_sha256": self._sha256(source),
                 "status": "failed_for_review",
-                "error_code": error.code,
+                "error_code": decision.error_code,
                 "attempt_count": attempt_count,
-                "error_message": str(error),
+                "error_message": decision.user_reason,
                 "timestamp": self._timestamp(),
             }
             self._write_items([*self._read_items(), review_item])
             return review_item
-        error_code = getattr(error, "code", "processing_error")
+
+        if decision.action is FailureAction.RETRY or decision.preserve_source:
+            retry_item = {
+                "quarantine_id": str(uuid4()),
+                "stored_filename": None,
+                "original_filename": source.name,
+                "original_relative_path": source.relative_to(self.vault_root).as_posix(),
+                "source_sha256": self._sha256(source),
+                "status": "retry_pending",
+                "error_code": decision.error_code,
+                "error_message": decision.user_reason,
+                "attempt_count": attempt_count,
+                "timestamp": self._timestamp(),
+            }
+            self._write_items([*self._read_items(), retry_item])
+            return retry_item
+
         return self.quarantine(
             source_path,
-            error_code=error_code,
+            error_code=decision.error_code,
             attempt_count=attempt_count,
-            error_message=str(error),
+            error_message=decision.user_reason,
         )
 
     def restore(

@@ -74,6 +74,21 @@ Las capacidades opcionales se activan con *extras* de `pyproject.toml`:
 
 **Binarios de sistema** (Tesseract, FFmpeg, Ollama, Obsidian) no los instala pip. Consulta la matriz completa de dependencias, versiones registradas y comprobaciones de entorno en [`docs/dependency-matrix.md`](docs/dependency-matrix.md).
 
+### Modo offline, instalación e inferencia
+
+Funes distingue dos fases con requisitos de red distintos:
+
+| Fase | Qué implica red | Comportamiento por defecto |
+|------|-----------------|----------------------------|
+| **Instalación** | `pip install`, descarga de modelos Ollama, binarios del sistema | Puede requerir Internet una vez; no forma parte del runtime diario |
+| **Inferencia en ejecución** | Peticiones HTTP a Ollama durante ETL, chat y refinamiento | Solo loopback (`http://localhost:11434`); URLs no loopback se rechazan salvo opt-in explícito |
+
+En la consola, el indicador **Modo de red** muestra `Solo local` o `IA remota habilitada` según la URL de Ollama configurada. El texto del chat y los ajustes nunca afirman procesamiento 100% local cuando hay un endpoint externo activo.
+
+Para habilitar un Ollama remoto (p. ej. en Docker), marca **Permitir Ollama fuera de este equipo** en Ajustes o define `ALLOW_NON_LOOPBACK_OLLAMA=true` junto con `OLLAMA_URL`.
+
+La interfaz (`consola_preview.html`) usa tipografías del sistema y una política CSP estricta: no carga fuentes ni scripts desde CDNs en tiempo de ejecución.
+
 ---
 
 ## 📄 Plantilla de Nota Atómica Generada (`4_salida`)

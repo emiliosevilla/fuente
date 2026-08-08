@@ -39,7 +39,13 @@ from funes.application.export import (
 from funes.application.notes import NotesApplicationService
 from funes.application.retrieval import RetrievalApplicationService
 from funes.application.settings import SettingsService, SettingsValidationError
-from funes.config import get_default_config, AppConfig, save_config, load_config
+from funes.config import (
+    get_default_config,
+    AppConfig,
+    save_config,
+    load_config,
+    describe_offline_mode,
+)
 from funes.core.vault import VaultManager
 from funes.domain.documents import MarkdownDocument
 from funes.domain.errors import (
@@ -371,6 +377,7 @@ class FunesConsoleBackend:
             ),
             "refresh": True,
             "stats": self.get_stats_dict(),
+            "offline_mode": describe_offline_mode(self.config),
         }
         if result.non_loopback_warning:
             response["warning"] = result.non_loopback_warning
@@ -400,7 +407,8 @@ class FunesConsoleBackend:
         stats = self.get_stats_dict()
         return {
             "vault_path": str(self.vault_path),
-            "stats": stats
+            "stats": stats,
+            "offline_mode": describe_offline_mode(self.config),
         }
 
     def get_stats_dict(self) -> Dict[str, Any]:
@@ -1079,6 +1087,7 @@ historial:
             "ollama_url": str(self.config.ollama_url),
             "ram_margin": f"{self.config.ram_safety_margin_pct * 100:g}%",
             "allow_non_loopback_ollama": self.config.allow_non_loopback_ollama,
+            "offline_mode": describe_offline_mode(self.config),
         }
 
     def _resolve_chat_context(

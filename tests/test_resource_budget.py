@@ -1,0 +1,194 @@
+"""Task 5.1 — resource budgets and honest memory measurement."""
+
+from __future__ import annotations
+
+import unittest
+from unittest import mock
+
+from funes.ram_governor.budget import (
+    MODEL_CATALOG,
+    OLLAMA_PURGE_KEEP_ALIVE,
+    MeasurementStatus,
+    ResourceKind,
+    evaluate_resource,
+    list_resource_budgets,
+    measured_snapshot,
+    select_llm_model,
+    unavailable_snapshot,
+)
+from funes.ram_governor.governor import RAMGovernor
+
+
+class TestResourceBudgets(unittest.TestCase):
+    def test_all_workload_budgets_defined(self):
+        kinds = {b["kind"] for b in list_resource_budgets()}
+        self.assertEqual(
+            kinds,
+            {
+                "text_extraction",
+                "ocr",
+                "audio_transcription",
+                "embeddings",
+                "llm_inference",
+            },
+        )
+
+    def test_model_metadata_includes_ram_context_concurrency(self):
+        for entry in MODEL_CATALOG:
+            self.assertGreater(entry.estimated_ram_gb, 0)
+            self.assertGreater(entry.context_size, 0)
+            self.assertGreaterEqual(entry.concurrency_limit, 1)
+
+    def test_unavailable_snapshot_never_invents_available_gb(self):
+        snap = unavailable_snapshot(0.35, error="test", total_gb=16.0)
+        self.assertIs(snap.status, MeasurementStatus.MEASUREMENT_UNAVAILABLE)
+        self.assertIsNone(snap.available_gb)
+        self.assertIsNone(snap.used_pct)
+        self.assertEqual(snap.total_gb, 16.0)
+
+    def test_select_llm_when_unmeasured_is_conservative_with_reason(self):
+        decision = select_llm_model(unavailable_snapshot(0.35, error="no_psutil"))
+        self.assertTrue(decision.allowed)
+        self.assertEqual(decision.model_id, "qwen2.5:1.5b")
+        self.assertIn("measurement_unavailable", decision.reason)
+        self.assertIsNone(decision.available_gb)
+
+    def test_select_llm_when_measured_has_budget_decision_and_reason(self):
+        snap = measured_snapshot(total_gb=32.0, available_gb=20.0, safety_margin_pct=0.35)
+        decision = select_llm_model(snap)
+        self.assertTrue(decision.allowed)
+        self.assertEqual(decision.model_id, "qwen2.5:7b")
+        self.assertIn("qwen2.5:7b", decision.reason)
+        self.assertIsNotNone(decision.estimated_ram_gb)
+        self.assertEqual(decision.measurement_status, MeasurementStatus.MEASURED)
+
+    def test_heavy_resource_refused_when_unmeasured(self):
+        snap = unavailable_snapshot(0.35)
+        for kind in (
+            ResourceKind.OCR,
+            ResourceKind.AUDIO_TRANSCRIPTION,
+            ResourceKind.EMBEDDINGS,
+            ResourceKind.LLM_INFERENCE,
+        ):
+            decision = evaluate_resource(kind, snap)
+            self.assertFalse(decision.allowed, kind)
+            self.assertIn("measurement_unavailable", decision.reason)
+
+    def test_text_extraction_allowed_conservatively_when_unmeasured(self):
+        decision = evaluate_resource(
+            ResourceKind.TEXT_EXTRACTION, unavailable_snapshot(0.35)
+        )
+        self.assertTrue(decision.allowed)
+        self.assertEqual(decision.concurrency_limit, 1)
+
+
+class TestRAMGovernorBudgets(unittest.TestCase):
+    def test_macos_fallback_does_not_fabricate_available_gb(self):
+        gov = RAMGovernor(safety_margin_pct=0.35)
+        with mock.patch("funes.ram_governor.governor.HAS_PSUTIL", False):
+            with mock.patch("sys.platform", "darwin"):
+                with mock.patch("subprocess.check_output", return_value=b"17179869184"):
+                    info = gov.get_system_ram_info()
+        self.assertEqual(info["measurement_status"], "measurement_unavailable")
+        self.assertIsNone(info["available_gb"])
+        self.assertEqual(info["total_gb"], 16.0)
+        self.assertNotIsInstance(info["available_gb"], float)
+
+    def test_psutil_path_reports_measured_values(self):
+        gov = RAMGovernor(safety_margin_pct=0.35)
+        mock_mem = mock.MagicMock()
+        mock_mem.total = 32 * (1024**3)
+        mock_mem.available = 20 * (1024**3)
+        mock_psutil = mock.MagicMock()
+        mock_psutil.virtual_memory.return_value = mock_mem
+
+        with mock.patch("funes.ram_governor.governor.HAS_PSUTIL", True):
+            with mock.patch("funes.ram_governor.governor.psutil", mock_psutil):
+                info = gov.get_system_ram_info()
+                decision = gov.recommend_model_decision()
+
+        self.assertEqual(info["measurement_status"], "measured")
+        self.assertAlmostEqual(info["available_gb"], 20.0, places=1)
+        self.assertEqual(decision.model_id, "qwen2.5:7b")
+        self.assertTrue(decision.reason)
+        self.assertEqual(gov.last_budget_decision()["model_id"], "qwen2.5:7b")
+
+    def test_recommend_model_always_stores_decision_reason(self):
+        gov = RAMGovernor()
+        with mock.patch.object(
+            gov,
+            "measure_memory",
+            return_value=unavailable_snapshot(0.35, error="forced"),
+        ):
+            model = gov.recommend_model()
+            decision = gov.last_budget_decision()
+        self.assertEqual(model, "qwen2.5:1.5b")
+        self.assertIsNotNone(decision)
+        self.assertIn("measurement_unavailable", decision["reason"])
+
+    def test_get_ollama_process_state_records_failure_without_crash(self):
+        gov = RAMGovernor(ollama_url="http://127.0.0.1:9")
+        with mock.patch.object(
+            gov, "_http_json", side_effect=RuntimeError("connection refused")
+        ):
+            state = gov.get_ollama_process_state()
+        self.assertFalse(state["ok"])
+        self.assertEqual(state["models"], [])
+        self.assertIn("ollama_ps_failed", state["error"])
+        self.assertIsNotNone(gov._last_ollama_state_error)
+
+    def test_get_ollama_process_state_success(self):
+        gov = RAMGovernor()
+        payload = {"models": [{"name": "qwen2.5:7b", "size": 1}]}
+        with mock.patch.object(gov, "_http_json", return_value=payload):
+            state = gov.get_ollama_process_state()
+        self.assertTrue(state["ok"])
+        self.assertEqual(len(state["models"]), 1)
+        self.assertIsNone(state["error"])
+
+    def test_purge_model_uses_keep_alive_zero_not_force_kill(self):
+        gov = RAMGovernor()
+        captured = {}
+
+        def fake_http(method, path, payload=None, timeout=5.0):
+            captured["method"] = method
+            captured["path"] = path
+            captured["payload"] = payload
+            return {"done": True, "done_reason": "unload"}
+
+        with mock.patch.object(gov, "_http_json", side_effect=fake_http):
+            result = gov.purge_model("qwen2.5:7b")
+
+        self.assertTrue(result["ok"])
+        self.assertFalse(result["force_kill"])
+        self.assertEqual(result["policy"], "keep_alive=0")
+        self.assertEqual(captured["path"], "/api/generate")
+        self.assertEqual(captured["payload"]["keep_alive"], OLLAMA_PURGE_KEEP_ALIVE)
+        self.assertEqual(captured["payload"]["keep_alive"], 0)
+        self.assertEqual(captured["payload"]["prompt"], "")
+
+    def test_purge_model_failure_is_recorded(self):
+        gov = RAMGovernor()
+        with mock.patch.object(gov, "_http_json", side_effect=TimeoutError("slow")):
+            result = gov.purge_model("qwen2.5:1.5b")
+        self.assertFalse(result["ok"])
+        self.assertFalse(result["force_kill"])
+        self.assertIn("purge_failed", result["error"])
+
+    def test_evaluate_resource_budget_via_governor(self):
+        gov = RAMGovernor()
+        with mock.patch.object(
+            gov,
+            "measure_memory",
+            return_value=measured_snapshot(
+                total_gb=16.0, available_gb=8.0, safety_margin_pct=0.35
+            ),
+        ):
+            decision = gov.evaluate_resource_budget("text_extraction")
+        self.assertTrue(decision["allowed"])
+        self.assertEqual(decision["resource_kind"], "text_extraction")
+        self.assertIn("estimated_ram_gb", decision["reason"])
+
+
+if __name__ == "__main__":
+    unittest.main()

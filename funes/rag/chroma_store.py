@@ -102,13 +102,15 @@ class ChromaStore:
 
             gov = RAMGovernor()
             ram_info = gov.get_system_ram_info()
-            avail = ram_info.get("available_gb", 8.0)
+            avail = ram_info.get("available_gb")
+            # Never invent a precise available-memory figure when unmeasured.
+            if avail is None:
+                return 4
             if avail > 8.0:
                 return 64
-            elif avail >= 4.0:
+            if avail >= 4.0:
                 return 16
-            else:
-                return 4
+            return 4
         except Exception:
             return 16
 

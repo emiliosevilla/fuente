@@ -11,7 +11,7 @@
 ## Progress Status (2026-08-08)
 
 **Branch:** `feature/funes-hardening-2026-08-07` (worktree `.worktrees/funes-hardening-2026-08-07`)  
-**Tip:** `9dbcc58` — pushed to `origin/feature/funes-hardening-2026-08-07`  
+**Tip:** `c76dd08` — pushed to `origin/feature/funes-hardening-2026-08-07`  
 **Not merged** into `dev` / `main` yet. Main checkout still has a dirty partial `consola_preview.html`; discard before any `/supagit` promote.
 
 ### Completed
@@ -23,7 +23,7 @@
 | Phase 2 — Recoverable ETL | **Done** | 2.1–2.4 | `d8d38ba` |
 | Phase 3 — Themes / Graph / Reader | **Done** | 3.1–3.3 | `b6aec0d` |
 | Phase 4 — RAG / Local Chat | **Done** | 4.1–4.3 | `2b64861` |
-| Phase 5 — Resource scheduling | **In progress** | 5.1–5.3 done (5.3 commit pending) | `9dbcc58` |
+| Phase 5 — Resource scheduling | **Done** | 5.1–5.3 | `7d47d2a` |
 
 Commits on this branch since `1bb66b8`:
 
@@ -54,12 +54,15 @@ Commits on this branch since `1bb66b8`:
 25. `cf0160c` — docs: record Task 5.1  
 26. `5ab37d1` — Task 5.2 durable scheduler  
 27. `9dbcc58` — docs: record Task 5.2  
+28. `7d47d2a` — Task 5.3 retry policy  
+29. `c76dd08` — docs: record Task 5.3 / Phase 5  
 
 ### Not started / next
 
-- Task `5.3` commit pending; then Phases 6–8  
+- Phases 6–8 (`6.1` next)  
 
-**Resume at:** Task `6.1` — Approval (once 5.3 is committed).  
+**Resume at:** Task `6.1` — Approval workflow.
+**Paused (2026-08-08):** Session cut after Phase 5. Next session: continue SDD from Task `6.1` in this worktree.  
 **SDD ledger:** `.worktrees/funes-hardening-2026-08-07/.superpowers/sdd/2026-08-07-funes-hardening-and-implementation/progress.md`  
 **Process note:** After each completed task, update this Progress Status section, mark that task's step checkboxes `[x]`, and refresh §12 Recommended Execution Order — do not leave the plan stale between checkpoints.
 
@@ -986,7 +989,7 @@ Acceptance:
 
 **Exit gate:** a user can review, edit, approve, reject, restore and export a note without corrupting frontmatter or losing content.
 
-**Checkpoint 5.3 (2026-08-08):** Domain retry policy (corrupt/unsupported = 2); attempt persistence; quarantine at threshold. Review approved. **Commit pending**.
+**Checkpoint 5.3 (2026-08-08):** Domain retry policy (corrupt/unsupported = 2); attempt persistence; quarantine at threshold. Review approved. Committed as `7d47d2a`.
 
 ### Task 6.1 — Implement approval as a state transition
 
@@ -1331,8 +1334,8 @@ Execute tasks in this order. Do not start a later phase merely because its UI is
 19. [x] `4.3` Chat + Ollama. (`2b64861`)
 20. [x] `5.1` Resource budgets. (`2a39ef8`)
 21. [x] `5.2` Scheduler. (`5ab37d1`)
-22. [x] `5.3` Retry policy. (commit pending)
-23. [ ] `6.1` Approval. ← **resume here** (after 5.3 commit)
+22. [x] `5.3` Retry policy. (`7d47d2a`)
+23. [ ] `6.1` Approval. ← **resume here**
 24. `6.2` Metadata forms.
 25. `6.3` TipTap evaluation.
 26. `6.4` Export.

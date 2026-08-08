@@ -11,7 +11,7 @@
 ## Progress Status (2026-08-08)
 
 **Branch:** `feature/funes-hardening-2026-08-07` (worktree `.worktrees/funes-hardening-2026-08-07`)  
-**Tip:** `06d7623` — pushed to `origin/feature/funes-hardening-2026-08-07`  
+**Tip:** `ef24a82` — pushed to `origin/feature/funes-hardening-2026-08-07`  
 **Not merged** into `dev` / `main` yet. Main checkout still has a dirty partial `consola_preview.html`; discard before any `/supagit` promote.
 
 ### Completed
@@ -25,7 +25,7 @@
 | Phase 4 — RAG / Local Chat | **Done** | 4.1–4.3 | `2b64861` |
 | Phase 5 — Resource scheduling | **Done** | 5.1–5.3 | `7d47d2a` |
 | Phase 6 — Human Review / YAML / Editorial | **Done** | 6.1–6.4 | `3d46902` |
-| Phase 7 — Installers / Packaging / Offline | **In progress** | 7.1–7.3 done (7.3 commit pending); 7.4 open | `06d7623` |
+| Phase 7 — Installers / Packaging / Offline | **In progress** | 7.1–7.4 done (7.4 commit pending) | `ef24a82` |
 
 Commits on this branch since `1bb66b8`:
 
@@ -71,12 +71,14 @@ Commits on this branch since `1bb66b8`:
 40. `a970fb0` — docs: record Task 7.1  
 41. `a6ff700` — Task 7.2 idempotent installers  
 42. `06d7623` — docs: record Task 7.2  
+43. `05555f2` — Task 7.3 headless Docker worker  
+44. `ef24a82` — docs: record Task 7.3  
 
 ### Not started / next
 
-- Task `7.3` commit pending; then `7.4` and Phase 8  
+- Task `7.4` commit pending; then Phase 8  
 
-**Resume at:** Task `7.4` — Offline mode (once 7.3 is committed).  
+**Resume at:** Task `8.1` — Security matrix (once 7.4 is committed / Phase 7 closed).  
 **SDD ledger:** `.worktrees/funes-hardening-2026-08-07/.superpowers/sdd/2026-08-07-funes-hardening-and-implementation/progress.md`  
 **Process note:** After each completed task, update this Progress Status section, mark that task's step checkboxes `[x]`, and refresh §12 Recommended Execution Order — do not leave the plan stale between checkpoints.
 
@@ -1193,7 +1195,7 @@ Acceptance:
 - Docker starts a useful headless worker or is removed from supported deployment claims.
 - GUI startup remains correct on desktop platforms.
 
-**Checkpoint 7.3 (2026-08-09):** Docker `--headless`; GUI fails without display; validated OLLAMA_URL; SIGTERM graceful stop. Review approved after fix round 1. **Commit pending**.
+**Checkpoint 7.3 (2026-08-09):** Docker `--headless`; GUI fails without display; validated OLLAMA_URL; SIGTERM graceful stop. Review approved after fix round 1. Committed as `05555f2`.
 
 ### Task 7.4 — Define offline mode accurately
 
@@ -1207,11 +1209,11 @@ Acceptance:
 
 Steps:
 
-- [ ] Remove runtime Google Fonts requests in strict offline mode.
-- [ ] Add a visible state showing whether the application is local-only or external-enabled.
-- [ ] Block non-loopback LLM URLs by default.
-- [ ] Separate install-time downloads from runtime inference.
-- [ ] Add an offline test that fails if external URLs are present in the runtime HTML.
+- [x] Remove runtime Google Fonts requests in strict offline mode.
+- [x] Add a visible state showing whether the application is local-only or external-enabled.
+- [x] Block non-loopback LLM URLs by default.
+- [x] Separate install-time downloads from runtime inference.
+- [x] Add an offline test that fails if external URLs are present in the runtime HTML.
 
 Acceptance:
 
@@ -1219,6 +1221,8 @@ Acceptance:
 - The UI never claims 100% local processing when an external endpoint is active.
 
 ---
+
+**Checkpoint 7.4 (2026-08-09):** Verifiable offline mode badge; no CDN fonts; install vs runtime docs; tests. Review approved. **Commit pending**.
 
 ## 11. Phase 8 — Verification, Migration and Release
 
@@ -1369,9 +1373,9 @@ Execute tasks in this order. Do not start a later phase merely because its UI is
 26. [x] `6.4` Export. (`3d46902`)
 27. [x] `7.1` Dependencies. (`167e4b0`)
 28. [x] `7.2` Installers. (`a6ff700`)
-29. [x] `7.3` Headless mode. (commit pending)
-30. [ ] `7.4` Offline mode. ← **resume here** (after 7.3 commit)
-31. `8.1` Security matrix.
+29. [x] `7.3` Headless mode. (`05555f2`)
+30. [x] `7.4` Offline mode. (commit pending)
+31. [ ] `8.1` Security matrix. ← **resume here** (after 7.4 commit)
 32. `8.2` Recovery matrix.
 33. `8.3` Contract matrix.
 34. `8.4` Migration.

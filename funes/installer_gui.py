@@ -1,6 +1,5 @@
 import os
 import sys
-import time
 import subprocess
 import threading
 from pathlib import Path
@@ -11,19 +10,17 @@ base_dir = Path(__file__).resolve().parent.parent
 if str(base_dir) not in sys.path:
     sys.path.insert(0, str(base_dir))
 
-# Intentar importar dependencias del proyecto
-try:
-    from funes.core.icon_generator import ensure_app_icon
-    from funes.ram_governor.governor import RAMGovernor
-    from funes.core.anythingllm_config import (
-        is_anythingllm_installed,
-        install_anythingllm_autonomously,
-        configure_anythingllm_integration
-    )
-    from funes.core.folder_sync import FolderSyncManager
-    from create_shortcuts import create_shortcuts
-except ImportError:
-    pass
+from funes.core.folder_sync import FolderSyncManager
+from funes.installer_contract import (
+    InstallationContext,
+    detect_prerequisites,
+    failed_steps,
+    installation_succeeded,
+    load_receipt,
+    merge_folder_lists,
+    resolve_vault_path,
+    run_installation,
+)
 
 
 
@@ -62,6 +59,9 @@ class FunesInstallerWizard(tk.Tk):
 
         self.current_step = 1
         self.total_steps = 6
+        self.install_steps = []
+        self.install_had_failures = False
+        self._existing_receipt = load_receipt(self.base_dir)
 
         # Construir la interfaz base
         self._setup_ui()
@@ -86,7 +86,7 @@ class FunesInstallerWizard(tk.Tk):
 
         self.step_indicator = tk.Label(
             self.header_frame,
-            text="Paso 1 de 5",
+            text=f"Paso 1 de {self.total_steps}",
             font=("Helvetica", 10, "italic"),
             fg="#BDC3C7",
             bg="#2C3E50",
@@ -378,44 +378,32 @@ class FunesInstallerWizard(tk.Tk):
         self._check_requirements()
 
     def _check_requirements(self):
-        # Comprobar Obsidian
-        is_mac = sys.platform == "darwin"
-        has_obsidian = False
-        if is_mac:
-            has_obsidian = Path("/Applications/Obsidian.app").exists()
-        else:
-            local_app = Path(os.environ.get("LOCALAPPDATA", "")) / "Programs" / "obsidian" / "Obsidian.exe"
-            prog_files = Path(os.environ.get("ProgramFiles", "")) / "Obsidian" / "Obsidian.exe"
-            has_obsidian = local_app.exists() or prog_files.exists()
+        prereqs = detect_prerequisites()
 
-        if has_obsidian:
+        if prereqs.obsidian_installed:
             self.obsidian_status_var.set("✓ Detectado correctamente")
         else:
-            self.obsidian_status_var.set("⚠️ No detectado (Se sugerirá descarga)")
+            self.obsidian_status_var.set("⚠️ No detectado (instalación manual o con confirmación)")
 
-        # Comprobar Ollama
-        has_ollama = False
-        try:
-            import urllib.request
-            req = urllib.request.urlopen("http://localhost:11434/api/tags", timeout=2)
-            has_ollama = (req.getcode() == 200)
-        except Exception:
-            try:
-                res = subprocess.run(["ollama", "--version"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-                has_ollama = (res.returncode == 0)
-            except Exception:
-                has_ollama = False
-
-        if has_ollama:
+        if prereqs.ollama_api_ready:
             self.ollama_status_var.set("✓ Detectado y activo")
+        elif prereqs.ollama_binary_installed:
+            self.ollama_status_var.set("⚠️ Instalado pero no activo (se intentará iniciar)")
         else:
-            self.ollama_status_var.set("⚠️ No activo (Se iniciará/descargará)")
+            self.ollama_status_var.set("⚠️ No detectado (instalación solo con confirmación)")
 
-        # Comprobar AnythingLLM
-        if is_anythingllm_installed():
+        if prereqs.anythingllm_installed:
             self.anythingllm_status_var.set("✓ Detectado correctamente")
         else:
-            self.anythingllm_status_var.set("⚠️ No detectado (Se instalará automáticamente)")
+            self.anythingllm_status_var.set("⚠️ No detectado (se pedirá confirmación)")
+
+        if self._existing_receipt:
+            vault = self._existing_receipt.get("vault_path")
+            if vault:
+                self.obsidian_status_var.set(
+                    self.obsidian_status_var.get()
+                    + f" | Reinstalación segura (vault: {Path(vault).name})"
+                )
 
     # --- PASO 4: Sincronización SharePoint & OneDrive ---
     def _render_step4_cloud_sync(self):
@@ -522,12 +510,9 @@ class FunesInstallerWizard(tk.Tk):
     def _on_detect_cloud_installer(self, silent=False):
         try:
             detected = FolderSyncManager.detect_cloud_folders()
-            added = 0
-            existing = [f.resolve() for f in self.cloud_folders]
-            for folder in detected:
-                if folder.resolve() not in existing:
-                    self.cloud_folders.append(folder)
-                    added += 1
+            before = len(self.cloud_folders)
+            self.cloud_folders = merge_folder_lists(self.cloud_folders, detected)
+            added = len(self.cloud_folders) - before
             self._refresh_cloud_listbox()
             if not silent:
                 if added > 0:
@@ -594,118 +579,157 @@ class FunesInstallerWizard(tk.Tk):
         # Iniciar instalación en un hilo secundario
         threading.Thread(target=self._run_installation_tasks, daemon=True).start()
 
+    def _run_on_main_thread(self, callback, *args, **kwargs):
+        """Schedule Tkinter-safe UI updates on the main event loop."""
+        self.after(0, lambda: callback(*args, **kwargs))
+
+    def _confirm_on_main_thread(self, title: str, message: str) -> bool:
+        result = {"value": False}
+        done = threading.Event()
+
+        def _ask():
+            result["value"] = messagebox.askyesno(title, message, parent=self)
+            done.set()
+
+        self.after(0, _ask)
+        done.wait()
+        return result["value"]
+
+    def _set_install_status(self, text: str):
+        self._run_on_main_thread(self.lbl_install_status.config, text=text)
+
+    def _set_progress(self, value: int):
+        self._run_on_main_thread(lambda: self.progress_bar.configure(value=value))
+
     def _log(self, msg: str):
-        self.log_text.insert("end", f"{msg}\n")
-        self.log_text.see("end")
+        def _append():
+            self.log_text.insert("end", f"{msg}\n")
+            self.log_text.see("end")
+
+        self._run_on_main_thread(_append)
+
+    def _format_step_log(self, step) -> str:
+        prefix = "[✓]" if step.success else "[✗]"
+        if step.skipped:
+            prefix = "[~]"
+        line = f"{prefix} {step.name}: {step.message}"
+        if not step.success and step.actionable:
+            line += f"\n    → {step.actionable}"
+        return line
 
     def _run_installation_tasks(self):
         try:
-            # 1. Crear carpeta Vault de Obsidian si no existe
-            raw_vault = Path(self.vault_path_var.get()).resolve()
-            if raw_vault.name.lower() in ("funes", "funes_vault", "funes vault"):
-                vault = raw_vault
+            vault = resolve_vault_path(self.vault_path_var.get())
+            self._run_on_main_thread(self.vault_path_var.set, str(vault))
+
+            self._set_install_status("1. Preparando estructura de carpetas Vault...")
+            self._set_progress(10)
+            self._log(f"[+] Vault objetivo: {vault}")
+
+            ctx = InstallationContext(
+                base_dir=self.base_dir,
+                vault_path=vault,
+                cloud_folders=list(self.cloud_folders),
+                confirm=self._confirm_on_main_thread,
+                log=self._log,
+                existing_receipt=self._existing_receipt,
+            )
+
+            step_labels = {
+                "vault_structure": ("2. Verificando estructura del Vault...", 25),
+                "cloud_folders": ("3. Vinculando carpetas de la nube...", 40),
+                "ollama_model": ("4. Evaluando modelo LLM recomendado...", 55),
+                "anythingllm_install": ("5. Verificando AnythingLLM Desktop...", 70),
+                "anythingllm_config": ("6. Configurando integración AnythingLLM...", 80),
+                "shortcuts": ("7. Generando acceso directo en el Escritorio...", 90),
+            }
+
+            def _on_step_start(step_name: str):
+                label, pct = step_labels.get(
+                    step_name,
+                    (f"Ejecutando paso {step_name}...", 50),
+                )
+                self._set_install_status(label)
+                self._set_progress(pct)
+
+            ctx.on_step_start = _on_step_start
+            self.install_steps = run_installation(ctx)
+            for step in self.install_steps:
+                self._log(self._format_step_log(step))
+
+            self.install_had_failures = not installation_succeeded(self.install_steps)
+            self._set_progress(100)
+
+            if self.install_had_failures:
+                failures = failed_steps(self.install_steps)
+                self._set_install_status(
+                    f"Instalación finalizada con {len(failures)} error(es) — revisa el registro"
+                )
+                self._log("\n[!] Algunos pasos fallaron. Corrige los elementos indicados y vuelve a ejecutar el instalador.")
             else:
-                vault = raw_vault / "Funes"
-            self.vault_path_var.set(str(vault))
+                self._set_install_status("¡Instalación completada con éxito!")
+                self._log("\n🎉 Todas las tareas de instalación finalizaron correctamente.")
 
-            self.lbl_install_status.config(text="1. Preparando estructura de carpetas Vault...")
-            self.progress_bar["value"] = 15
-            self._log(f"[+] Creando estructura de Vault en: {vault}")
-            for sub in ["1_entrada", "2_sucio", "3_limpio", "4_salida"]:
-                (vault / sub).mkdir(parents=True, exist_ok=True)
-            self._log("[✓] Estructura de carpetas 1_entrada, 2_sucio, 3_limpio, 4_salida verificada.")
-            time.sleep(0.5)
-
-            # Guardar carpetas de la nube vinculadas si existen
-            if self.cloud_folders:
-                try:
-                    sync_mgr = FolderSyncManager(vault)
-                    sync_mgr.save_connected_folders(self.cloud_folders)
-                    self._log(f"[✓] Guardadas {len(self.cloud_folders)} carpeta(s) vinculadas en .funes_connected_folders.json")
-                except Exception as e:
-                    self._log(f"[!] Aviso al guardar carpetas de la nube: {e}")
-
-            # 2. Configurar modelo LLM según la RAM
-            self.lbl_install_status.config(text="2. Evaluando memoria RAM y modelo LLM recomendado...")
-            self.progress_bar["value"] = 35
-            try:
-                governor = RAMGovernor()
-                rec_model = governor.recommend_model()
-                self._log(f"[+] Modelo de IA recomendado para tu hardware: {rec_model}")
-                governor.ensure_model_available(rec_model)
-                self._log(f"[✓] Modelo {rec_model} verificado en Ollama.")
-            except Exception as e:
-                self._log(f"[!] Aviso sobre Ollama/RAM: {e}")
-
-            time.sleep(0.5)
-
-            # 3. Comprobar e instalar AnythingLLM si no está presente
-            self.lbl_install_status.config(text="3. Verificando e instalando AnythingLLM Desktop...")
-            self.progress_bar["value"] = 60
-            if not is_anythingllm_installed():
-                self._log("[+] AnythingLLM no detectado. Intentando instalación autónoma desatendida...")
-                if install_anythingllm_autonomously():
-                    self._log("[✓] AnythingLLM Desktop instalado con éxito.")
-                else:
-                    self._log("[!] No se pudo instalar AnythingLLM de forma automática. Se abrirá la web oficial.")
-            else:
-                self._log("[✓] AnythingLLM Desktop ya está instalado en el equipo.")
-
-            # Auto-configurar AnythingLLM con Ollama y Workspace 4_salida
-            self._log("[+] Configurando integración de AnythingLLM con Ollama y carpeta 4_salida...")
-            configure_anythingllm_integration(vault / "4_salida")
-            self._log("[✓] AnythingLLM configurado correctamente.")
-            time.sleep(0.5)
-
-            # 4. Crear accesos directos en el escritorio
-            self.lbl_install_status.config(text="4. Generando botón de acceso directo en el Escritorio...")
-            self.progress_bar["value"] = 85
-            try:
-                create_shortcuts(self.base_dir, vault_dir=vault)
-                self._log("[✓] Acceso directo 'Funes' creado con éxito en tu Escritorio.")
-            except Exception as e:
-                self._log(f"[!] Error creando acceso directo: {e}")
-
-            self.progress_bar["value"] = 100
-            self.lbl_install_status.config(text="¡Instalación completada con éxito!")
-            self._log("\n🎉 ¡TODAS LAS TAREAS DE INSTALACIÓN HAN FINALIZADO DE FORMA EXITOSA!")
-            time.sleep(1)
-
-            # Avanzar automáticamente al paso 6
             self.after(100, lambda: self.show_step(6))
 
         except Exception as err:
             self._log(f"\n[ERROR CRÍTICO]: {err}")
-            self.lbl_install_status.config(text="Error durante la instalación.")
-            messagebox.showerror("Error de Instalación", f"Ocurrió un error inesperado:\n{err}")
+            self._set_install_status("Error durante la instalación.")
+            self._run_on_main_thread(
+                messagebox.showerror,
+                "Error de Instalación",
+                f"Ocurrió un error inesperado:\n{err}",
+            )
 
     # --- PASO 6: Instalación Completada ---
     def _render_step6_complete(self):
+        had_failures = self.install_had_failures
         title = tk.Label(
             self.content_frame,
-            text="🎉 ¡Funes está listo para usarse!",
+            text=(
+                "⚠️ Instalación completada con avisos"
+                if had_failures
+                else "🎉 ¡Funes está listo para usarse!"
+            ),
             font=("Helvetica", 16, "bold"),
-            fg="#059669",
+            fg="#B45309" if had_failures else "#059669",
             bg="#F5F5F7",
             anchor="w"
         )
         title.pack(fill="x", pady=(0, 15))
 
-        use_instructions = (
-            "📌 Tu entorno ha sido configurado por completo:\n\n"
-            "• Vault de Obsidian: 'La Memoria de Funes' preparado.\n"
-            "• Ollama AI + Qwen: Configurado según tu memoria RAM.\n"
-            "• AnythingLLM Desktop: Auto-configurado y vinculado a la carpeta '4_salida'.\n"
-            "• Acceso Directo: Se ha creado el botón 'Funes' en tu Escritorio.\n\n"
-            "Al hacer clic en 'Finalizar', se abrirá tu Consola Central de Control."
-        )
+        if had_failures:
+            failure_lines = []
+            for step in failed_steps(self.install_steps):
+                line = f"• {step.name}: {step.message}"
+                if step.actionable:
+                    line += f"\n  Acción: {step.actionable}"
+                failure_lines.append(line)
+            use_instructions = (
+                "Algunos pasos no se completaron correctamente:\n\n"
+                + "\n".join(failure_lines)
+                + "\n\nPuedes corregirlos manualmente y volver a ejecutar el instalador de forma segura."
+            )
+            box_fg = "#92400E"
+            box_bg = "#FEF3C7"
+        else:
+            use_instructions = (
+                "📌 Tu entorno ha sido configurado por completo:\n\n"
+                "• Vault de Obsidian: 'La Memoria de Funes' preparado.\n"
+                "• Ollama AI: Modelo configurado según tu memoria RAM.\n"
+                "• AnythingLLM Desktop: Auto-configurado y vinculado a la carpeta '4_salida'.\n"
+                "• Acceso Directo: Se ha creado el botón 'Funes' en tu Escritorio.\n\n"
+                "Al hacer clic en 'Finalizar', se abrirá tu Consola Central de Control."
+            )
+            box_fg = "#065F46"
+            box_bg = "#ECFDF5"
 
         inst_box = tk.Label(
             self.content_frame,
             text=use_instructions,
             font=("Helvetica", 11),
-            fg="#065F46",
-            bg="#ECFDF5",
+            fg=box_fg,
+            bg=box_bg,
             justify="left",
             anchor="w",
             relief="solid",

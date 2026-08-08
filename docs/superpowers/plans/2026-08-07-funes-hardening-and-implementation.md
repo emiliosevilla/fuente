@@ -11,7 +11,7 @@
 ## Progress Status (2026-08-08)
 
 **Branch:** `feature/funes-hardening-2026-08-07` (worktree `.worktrees/funes-hardening-2026-08-07`)  
-**Tip:** `b6aec0d` — pushed to `origin/feature/funes-hardening-2026-08-07`  
+**Tip:** `5e1799f` — pushed to `origin/feature/funes-hardening-2026-08-07`  
 **Not merged** into `dev` / `main` yet. Main checkout still has a dirty partial `consola_preview.html`; discard before any `/supagit` promote.
 
 ### Completed
@@ -22,6 +22,7 @@
 | Phase 1 — Domain Contracts | **Done** | 1.1–1.4 | `1c07a95` |
 | Phase 2 — Recoverable ETL | **Done** | 2.1–2.4 | `d8d38ba` |
 | Phase 3 — Themes / Graph / Reader | **Done** | 3.1–3.3 | `b6aec0d` |
+| Phase 4 — RAG / Local Chat | **In progress** | 4.1 done (commit pending); 4.2–4.3 open | `5e1799f` |
 
 Commits on this branch since `1bb66b8`:
 
@@ -45,10 +46,10 @@ Commits on this branch since `1bb66b8`:
 
 ### Not started / next
 
-- Phase 4 — Real RAG and Local Chat (`4.1` onward)  
+- Tasks `4.2`–`4.3` (retrieval + chat)  
 - Phases 5–8  
 
-**Resume at:** Task `4.1` — Define index identity and reconciliation.  
+**Resume at:** Task `4.2` — Build the retrieval service (once 4.1 is committed).  
 **SDD ledger:** `.worktrees/funes-hardening-2026-08-07/.superpowers/sdd/2026-08-07-funes-hardening-and-implementation/progress.md`  
 **Process note:** After each completed task, update this Progress Status section, mark that task's step checkboxes `[x]`, and refresh §12 Recommended Execution Order — do not leave the plan stale between checkpoints.
 
@@ -59,6 +60,7 @@ Commits on this branch since `1bb66b8`:
 - Direct `handle_action` generic success; AnythingLLM helper website fallback  
 - `failed_for_review` not listed in active quarantine UI  
 - Direct `pytest` launcher Unicode-path quirk (use `python3 -m pytest`)  
+- Task 4.1 minors: issue hardcoded `_Sin_Cuestion` at chunk-index; broad TypeError around chunk_markdown kwargs
 - Task 3.2 minors: ingestion auto_link without current_relative_path; O(n²) enumerate per note  
 - Task 2.x minors: COALESCE/orphan-clean edge cases; flush banner honesty; dual ETLPipeline in console vs lifecycle; `assert` graph invariants under `python -O`
 
@@ -809,17 +811,19 @@ Acceptance:
 
 Steps:
 
-- [ ] Include `document_id`, relative path, theme, issue, source hash, chunk index and pipeline version in metadata.
-- [ ] Generate deterministic chunk IDs from document ID, content hash and chunk index.
-- [ ] Store the set of chunk IDs per document.
-- [ ] Delete old chunk IDs when a document is reindexed with fewer chunks.
-- [ ] Make Chroma initialization report failures explicitly.
-- [ ] Fix the SQLite compatibility module import and add a test for the fallback branch.
+- [x] Include `document_id`, relative path, theme, issue, source hash, chunk index and pipeline version in metadata.
+- [x] Generate deterministic chunk IDs from document ID, content hash and chunk index.
+- [x] Store the set of chunk IDs per document.
+- [x] Delete old chunk IDs when a document is reindexed with fewer chunks.
+- [x] Make Chroma initialization report failures explicitly.
+- [x] Fix the SQLite compatibility module import and add a test for the fallback branch.
 
 Acceptance:
 
 - Reindexing from N chunks to N-2 leaves no stale chunks.
 - Query results expose source document ID and relative path.
+
+**Checkpoint 4.1 (2026-08-08):** Deterministic chunk IDs + required metadata; N→N-2 reconcile; explicit ChromaInitError; SQLite sys import fixed. Review approved. **Commit pending**.
 
 ### Task 4.2 — Build the retrieval service
 
@@ -1302,8 +1306,8 @@ Execute tasks in this order. Do not start a later phase merely because its UI is
 14. [x] `3.1` Vault scope. (`62c5663`)
 15. [x] `3.2` Graph scope. (`4561585`)
 16. [x] `3.3` Reader contract. (`2a0f472`)
-17. [ ] `4.1` Index reconciliation. ← **resume here**
-18. `4.2` Retrieval service.
+17. [x] `4.1` Index reconciliation. (commit pending)
+18. [ ] `4.2` Retrieval service. ← **resume here** (after 4.1 commit)
 19. `4.3` Chat integration.
 20. `5.1` Resource budgets.
 21. `5.2` Scheduler.

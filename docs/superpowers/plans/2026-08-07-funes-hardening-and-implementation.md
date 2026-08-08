@@ -11,7 +11,7 @@
 ## Progress Status (2026-08-08)
 
 **Branch:** `feature/funes-hardening-2026-08-07` (worktree `.worktrees/funes-hardening-2026-08-07`)  
-**Tip:** `5e1799f` — pushed to `origin/feature/funes-hardening-2026-08-07`  
+**Tip:** `5b3108c` — pushed to `origin/feature/funes-hardening-2026-08-07`  
 **Not merged** into `dev` / `main` yet. Main checkout still has a dirty partial `consola_preview.html`; discard before any `/supagit` promote.
 
 ### Completed
@@ -22,7 +22,7 @@
 | Phase 1 — Domain Contracts | **Done** | 1.1–1.4 | `1c07a95` |
 | Phase 2 — Recoverable ETL | **Done** | 2.1–2.4 | `d8d38ba` |
 | Phase 3 — Themes / Graph / Reader | **Done** | 3.1–3.3 | `b6aec0d` |
-| Phase 4 — RAG / Local Chat | **In progress** | 4.1 done (commit pending); 4.2–4.3 open | `5e1799f` |
+| Phase 4 — RAG / Local Chat | **In progress** | 4.1–4.2 done (4.2 commit pending); 4.3 open | `5b3108c` |
 
 Commits on this branch since `1bb66b8`:
 
@@ -49,7 +49,7 @@ Commits on this branch since `1bb66b8`:
 - Tasks `4.2`–`4.3` (retrieval + chat)  
 - Phases 5–8  
 
-**Resume at:** Task `4.2` — Build the retrieval service (once 4.1 is committed).  
+**Resume at:** Task `4.3` — Integrate chat with retrieval and Ollama (once 4.2 is committed).  
 **SDD ledger:** `.worktrees/funes-hardening-2026-08-07/.superpowers/sdd/2026-08-07-funes-hardening-and-implementation/progress.md`  
 **Process note:** After each completed task, update this Progress Status section, mark that task's step checkboxes `[x]`, and refresh §12 Recommended Execution Order — do not leave the plan stale between checkpoints.
 
@@ -823,7 +823,9 @@ Acceptance:
 - Reindexing from N chunks to N-2 leaves no stale chunks.
 - Query results expose source document ID and relative path.
 
-**Checkpoint 4.1 (2026-08-08):** Deterministic chunk IDs + required metadata; N→N-2 reconcile; explicit ChromaInitError; SQLite sys import fixed. Review approved. **Commit pending**.
+**Checkpoint 4.1 (2026-08-08):** Deterministic chunk IDs + required metadata; N→N-2 reconcile; explicit ChromaInitError; SQLite sys import fixed. Review approved. Committed as `543b6e1`.
+
+**Checkpoint 4.2 (2026-08-08):** Scoped hybrid retrieval + BM25 cache/invalidate; RAM degradation recorded; bounds + source snippets. Review approved. **Commit pending**.
 
 ### Task 4.2 — Build the retrieval service
 
@@ -835,12 +837,12 @@ Acceptance:
 
 Steps:
 
-- [ ] Add scope filters for `single_note`, `issue`, `theme` and `all_notes`.
-- [ ] Use vector retrieval plus BM25/RRF when resources permit.
-- [ ] Use BM25 fallback only when RAM policy says so, and record the degradation.
-- [ ] Bound the number of chunks, total characters and maximum source count.
-- [ ] Return source snippets and IDs with every result.
-- [ ] Avoid rebuilding a complete BM25 index on every query by caching and invalidating on index changes.
+- [x] Add scope filters for `single_note`, `issue`, `theme` and `all_notes`.
+- [x] Use vector retrieval plus BM25/RRF when resources permit.
+- [x] Use BM25 fallback only when RAM policy says so, and record the degradation.
+- [x] Bound the number of chunks, total characters and maximum source count.
+- [x] Return source snippets and IDs with every result.
+- [x] Avoid rebuilding a complete BM25 index on every query by caching and invalidating on index changes.
 
 Acceptance:
 
@@ -1306,8 +1308,9 @@ Execute tasks in this order. Do not start a later phase merely because its UI is
 14. [x] `3.1` Vault scope. (`62c5663`)
 15. [x] `3.2` Graph scope. (`4561585`)
 16. [x] `3.3` Reader contract. (`2a0f472`)
-17. [x] `4.1` Index reconciliation. (commit pending)
-18. [ ] `4.2` Retrieval service. ← **resume here** (after 4.1 commit)
+17. [x] `4.1` Index reconciliation. (`543b6e1`)
+18. [x] `4.2` Retrieval service. (commit pending)
+19. [ ] `4.3` Chat + Ollama. ← **resume here** (after 4.2 commit)
 19. `4.3` Chat integration.
 20. `5.1` Resource budgets.
 21. `5.2` Scheduler.

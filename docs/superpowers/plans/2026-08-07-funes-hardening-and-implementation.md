@@ -11,7 +11,7 @@
 ## Progress Status (2026-08-08)
 
 **Branch:** `feature/funes-hardening-2026-08-07` (worktree `.worktrees/funes-hardening-2026-08-07`)  
-**Tip:** `b4774ba` — pushed to `origin/feature/funes-hardening-2026-08-07`  
+**Tip:** `5e7ac57` — pushed to `origin/feature/funes-hardening-2026-08-07`  
 **Not merged** into `dev` / `main` yet. Main checkout still has a dirty partial `consola_preview.html`; discard before any `/supagit` promote.
 
 ### Completed
@@ -26,7 +26,7 @@
 | Phase 5 — Resource scheduling | **Done** | 5.1–5.3 | `7d47d2a` |
 | Phase 6 — Human Review / YAML / Editorial | **Done** | 6.1–6.4 | `3d46902` |
 | Phase 7 — Installers / Packaging / Offline | **Done** | 7.1–7.4 | `2748962` |
-| Phase 8 — Matrices / Migration / Release | **In progress** | 8.1–8.2 done (8.2 commit pending); 8.3–8.5 open | `b4774ba` |
+| Phase 8 — Matrices / Migration / Release | **In progress** | 8.1–8.3 done (8.3 commit pending); 8.4–8.5 open | `5e7ac57` |
 
 Commits on this branch since `1bb66b8`:
 
@@ -78,12 +78,14 @@ Commits on this branch since `1bb66b8`:
 46. `52990b3` — docs: record Task 7.4 / Phase 7  
 47. `10139a7` — Task 8.1 security matrix  
 48. `b4774ba` — docs: record Task 8.1  
+49. `7948bcb` — Task 8.2 recovery matrix  
+50. `5e7ac57` — docs: record Task 8.2  
 
 ### Not started / next
 
-- Task `8.2` commit pending; then `8.3`–`8.5`  
+- Tasks `8.4`–`8.5` (after 8.3 commit)  
 
-**Resume at:** Task `8.3` — Contract matrix (once 8.2 is committed).  
+**Resume at:** Task `8.4` — Migration tooling (once 8.3 is committed).  
 **SDD ledger:** `.worktrees/funes-hardening-2026-08-07/.superpowers/sdd/2026-08-07-funes-hardening-and-implementation/progress.md`  
 **Process note:** After each completed task, update this Progress Status section, mark that task's step checkboxes `[x]`, and refresh §12 Recommended Execution Order — do not leave the plan stale between checkpoints.
 
@@ -97,6 +99,7 @@ Commits on this branch since `1bb66b8`:
 - Task 4.1 minors: issue hardcoded `_Sin_Cuestion` at chunk-index; broad TypeError around chunk_markdown kwargs
 - Task 3.2 minors: ingestion auto_link without current_relative_path; O(n²) enumerate per note  
 - Task 2.x minors: COALESCE/orphan-clean edge cases; flush banner honesty; dual ETLPipeline in console vs lifecycle; `assert` graph invariants under `python -O`
+- Task 8.3 minors: GraphLinker still emits output-relative `document_id` (only `get_graph_data` remaps); DOCX contract checks ZIP magic only; unused `export_stack` fixture; settings contract asserts input folder more than output
 
 ---
 
@@ -1290,7 +1293,7 @@ Acceptance:
 - No stale chunks remain.
 - Job history explains every recovery.
 
-**Checkpoint 8.2 (2026-08-09):** Recovery/idempotency integration matrix (18 tests). Review approved. **Commit pending**.
+**Checkpoint 8.2 (2026-08-09):** Recovery/idempotency integration matrix (18 tests). Review approved. Committed as `7948bcb`.
 
 ### Task 8.3 — Contract and UI test matrix
 
@@ -1303,12 +1306,14 @@ Acceptance:
 
 Required cases:
 
-- [ ] Every frontend bridge call exists.
-- [ ] Every action has a typed payload.
-- [ ] Settings persist and apply.
-- [ ] Nested Themes/Cuestiones appear in every relevant subsystem.
-- [ ] Approval changes state and history.
-- [ ] Export matches the approved canonical document.
+- [x] Every frontend bridge call exists.
+- [x] Every action has a typed payload.
+- [x] Settings persist and apply.
+- [x] Nested Themes/Cuestiones appear in every relevant subsystem.
+- [x] Approval changes state and history.
+- [x] Export matches the approved canonical document.
+
+**Checkpoint 8.3 (2026-08-09):** Contract matrix under `tests/contract/` (36 tests). `get_graph_data` vault-relative `document_id` fix. Review approved. **Commit pending**.
 
 ### Task 8.4 — Migration tooling
 
@@ -1385,9 +1390,9 @@ Execute tasks in this order. Do not start a later phase merely because its UI is
 29. [x] `7.3` Headless mode. (`05555f2`)
 30. [x] `7.4` Offline mode. (`2748962`)
 31. [x] `8.1` Security matrix. (`10139a7`)
-32. [x] `8.2` Recovery matrix. (commit pending)
-33. [ ] `8.3` Contract matrix. ← **resume here** (after 8.2 commit)
-34. `8.4` Migration.
+32. [x] `8.2` Recovery matrix. (`7948bcb`)
+33. [x] `8.3` Contract matrix. (commit pending)
+34. [ ] `8.4` Migration. ← **resume here** (after 8.3 commit)
 35. `8.5` Release gate.
 
 Each task should produce a small, reviewable change with its tests. Do not mix security changes with visual redesign in the same task.

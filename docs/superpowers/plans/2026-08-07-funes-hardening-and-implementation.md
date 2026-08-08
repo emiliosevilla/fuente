@@ -11,7 +11,7 @@
 ## Progress Status (2026-08-08)
 
 **Branch:** `feature/funes-hardening-2026-08-07` (worktree `.worktrees/funes-hardening-2026-08-07`)  
-**Tip:** `52990b3` — pushed to `origin/feature/funes-hardening-2026-08-07`  
+**Tip:** `b4774ba` — pushed to `origin/feature/funes-hardening-2026-08-07`  
 **Not merged** into `dev` / `main` yet. Main checkout still has a dirty partial `consola_preview.html`; discard before any `/supagit` promote.
 
 ### Completed
@@ -26,7 +26,7 @@
 | Phase 5 — Resource scheduling | **Done** | 5.1–5.3 | `7d47d2a` |
 | Phase 6 — Human Review / YAML / Editorial | **Done** | 6.1–6.4 | `3d46902` |
 | Phase 7 — Installers / Packaging / Offline | **Done** | 7.1–7.4 | `2748962` |
-| Phase 8 — Matrices / Migration / Release | **In progress** | 8.1 done (commit pending); 8.2–8.5 open | `52990b3` |
+| Phase 8 — Matrices / Migration / Release | **In progress** | 8.1–8.2 done (8.2 commit pending); 8.3–8.5 open | `b4774ba` |
 
 Commits on this branch since `1bb66b8`:
 
@@ -76,12 +76,14 @@ Commits on this branch since `1bb66b8`:
 44. `ef24a82` — docs: record Task 7.3  
 45. `2748962` — Task 7.4 verifiable offline mode  
 46. `52990b3` — docs: record Task 7.4 / Phase 7  
+47. `10139a7` — Task 8.1 security matrix  
+48. `b4774ba` — docs: record Task 8.1  
 
 ### Not started / next
 
-- Task `8.1` commit pending; then `8.2`–`8.5`  
+- Task `8.2` commit pending; then `8.3`–`8.5`  
 
-**Resume at:** Task `8.2` — Recovery matrix (once 8.1 is committed).  
+**Resume at:** Task `8.3` — Contract matrix (once 8.2 is committed).  
 **SDD ledger:** `.worktrees/funes-hardening-2026-08-07/.superpowers/sdd/2026-08-07-funes-hardening-and-implementation/progress.md`  
 **Process note:** After each completed task, update this Progress Status section, mark that task's step checkboxes `[x]`, and refresh §12 Recommended Execution Order — do not leave the plan stale between checkpoints.
 
@@ -1259,7 +1261,7 @@ Acceptance:
 - No generated HTML contains executable user-controlled attributes.
 - No external filesystem mutation is possible through the bridge.
 
-**Checkpoint 8.1 (2026-08-09):** Security matrix under `tests/security/` (29 tests); EPUB budgets fail-closed. Review approved. **Commit pending**.
+**Checkpoint 8.1 (2026-08-09):** Security matrix under `tests/security/` (29 tests); EPUB budgets fail-closed. Review approved. Committed as `10139a7`.
 
 ### Task 8.2 — Recovery and idempotency test matrix
 
@@ -1271,22 +1273,24 @@ Acceptance:
 
 Required cases:
 
-- [ ] Failure after dirty copy.
-- [ ] Failure after clean artifact.
-- [ ] Failure after Chroma indexing.
-- [ ] Failure after LLM generation.
-- [ ] Failure during note write.
-- [ ] Process restart between every stage.
-- [ ] Duplicate source hash.
-- [ ] Source modified after previous completion.
-- [ ] Reindex with fewer chunks.
-- [ ] Concurrent claim of one job.
+- [x] Failure after dirty copy.
+- [x] Failure after clean artifact.
+- [x] Failure after Chroma indexing.
+- [x] Failure after LLM generation.
+- [x] Failure during note write.
+- [x] Process restart between every stage.
+- [x] Duplicate source hash.
+- [x] Source modified after previous completion.
+- [x] Reindex with fewer chunks.
+- [x] Concurrent claim of one job.
 
 Acceptance:
 
 - Resume completes without duplicate notes.
 - No stale chunks remain.
 - Job history explains every recovery.
+
+**Checkpoint 8.2 (2026-08-09):** Recovery/idempotency integration matrix (18 tests). Review approved. **Commit pending**.
 
 ### Task 8.3 — Contract and UI test matrix
 
@@ -1380,9 +1384,9 @@ Execute tasks in this order. Do not start a later phase merely because its UI is
 28. [x] `7.2` Installers. (`a6ff700`)
 29. [x] `7.3` Headless mode. (`05555f2`)
 30. [x] `7.4` Offline mode. (`2748962`)
-31. [x] `8.1` Security matrix. (commit pending)
-32. [ ] `8.2` Recovery matrix. ← **resume here** (after 8.1 commit)
-33. `8.3` Contract matrix.
+31. [x] `8.1` Security matrix. (`10139a7`)
+32. [x] `8.2` Recovery matrix. (commit pending)
+33. [ ] `8.3` Contract matrix. ← **resume here** (after 8.2 commit)
 34. `8.4` Migration.
 35. `8.5` Release gate.
 

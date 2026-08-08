@@ -47,6 +47,7 @@ from funes.core.anythingllm_config import (
 )
 from funes.core.folder_sync import FolderSyncManager, FolderSyncModal
 from funes.watcher.watcher import ETLPipeline
+from funes.graph_engine.linker import CANONICAL_MOC_FILENAME, GraphLinker
 from funes.graph_engine.optimized_loop import OptimizadoGraphLoop
 from funes.ram_governor.governor import RAMGovernor
 
@@ -1046,38 +1047,41 @@ historial:
             return {"error": "open_failed", "message": str(error)}
         return {"status": "opened", "file_id": file_identity}
 
+    def get_canonical_moc_path(self) -> Path:
+        """Return the canonical Map-of-Content path under the active theme output."""
+        return self.vault.output_dir / CANONICAL_MOC_FILENAME
+
     def get_graph_data(self) -> Dict[str, Any]:
-        out_dir = self.config.vault.output_dir
+        out_dir = self.vault.output_dir
         if not out_dir.exists():
             return {"nodes": [], "links": []}
-        notes = []
-        for note in sorted(out_dir.glob("*.md"), key=lambda p: p.name.lower()):
-            try:
-                MarkdownDocument.from_markdown(note.read_text(encoding="utf-8"))
-            except (OSError, UnicodeError, ValueError):
-                logger.warning("Skipping invalid note during graph indexing: %s", note.name)
-                continue
-            notes.append(note)
-        node_names = set(n.stem for n in notes)
+
+        discovered = GraphLinker(out_dir).enumerate_notes()
+        node_ids = {note.link_target for note in discovered}
         nodes = [
-            {"id": n.stem, "label": n.stem, "path": self._vault_relative_identity(n)}
-            for n in notes
+            {
+                "id": note.link_target,
+                "label": note.stem,
+                "path": self._vault_relative_identity(out_dir / note.relative_path),
+                "document_id": note.document_id,
+            }
+            for note in discovered
         ]
-        
+
         links = []
         import re
-        link_pattern = re.compile(r'\[\[(.*?)\]\]')
+        link_pattern = re.compile(r"\[\[(.*?)\]\]")
 
-        for note_file in notes:
-            source = note_file.stem
+        for note in discovered:
+            note_file = out_dir / note.relative_path
+            source = note.link_target
             try:
                 content = note_file.read_text(encoding="utf-8", errors="ignore")
-                targets = link_pattern.findall(content)
-                for target in targets:
+                for target in link_pattern.findall(content):
                     clean_target = target.split("|")[0].split("#")[0].strip()
-                    if clean_target and clean_target in node_names and clean_target != source:
+                    if clean_target and clean_target in node_ids and clean_target != source:
                         links.append({"source": source, "target": clean_target})
-            except Exception:
+            except OSError:
                 pass
 
         return {"nodes": nodes, "links": links}

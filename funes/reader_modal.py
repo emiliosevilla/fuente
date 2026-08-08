@@ -356,9 +356,11 @@ class FunesReaderModal(tk.Toplevel):
             self.load_note(prev)
 
     def _load_moc_or_first(self):
-        moc_candidates = list(self.output_dir.glob("*MOC*.md")) + list(self.output_dir.glob("*Indice*.md"))
-        if moc_candidates:
-            self.load_note(moc_candidates[0])
+        from funes.graph_engine.linker import CANONICAL_MOC_FILENAME
+
+        moc_path = self.output_dir / CANONICAL_MOC_FILENAME
+        if moc_path.exists():
+            self.load_note(moc_path)
         elif self.all_notes:
             self.load_note(self.all_notes[0])
         else:

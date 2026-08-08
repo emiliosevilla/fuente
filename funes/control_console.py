@@ -616,11 +616,14 @@ historial:
             try:
                 pipeline = ETLPipeline(self.config)
                 input_files = [f for f in self.vault.input_dir.glob("*") if f.is_file() and not f.name.startswith(".")]
-                for f in input_files:
-                    try:
-                        pipeline.process_file(f)
-                    except Exception as err:
-                        self.quarantine_service.handle_failure(f, err, attempt_count=1)
+                try:
+                    for f in input_files:
+                        try:
+                            pipeline.process_file(f)
+                        except Exception as err:
+                            self.quarantine_service.handle_failure(f, err, attempt_count=1)
+                finally:
+                    pipeline.close()
                 return {
                     "log": "Estructuración de datos completada hacia 3_limpio.",
                     "refresh": True,

@@ -91,6 +91,27 @@ class ChromaStore:
             logger.error(f"Error al insertar en ChromaDB: {e}")
             return False
 
+    def delete_chunks(self, ids: List[str]) -> bool:
+        """Elimina fragmentos concretos por ID para reconciliar un documento."""
+        chunk_ids = list(ids)
+        if not chunk_ids:
+            return True
+
+        if not self._initialized:
+            self._init_chroma()
+
+        if not self.collection:
+            logger.warning("ChromaDB no está activo. Se omitió el borrado de vectores.")
+            return False
+
+        try:
+            self.collection.delete(ids=chunk_ids)
+            logger.info(f"Eliminados {len(chunk_ids)} vectores obsoletos de ChromaDB.")
+            return True
+        except Exception as e:
+            logger.error(f"Error al eliminar vectores de ChromaDB: {e}")
+            return False
+
     def query_similar(self, query_text: str, n_results: int = 5) -> List[Dict[str, Any]]:
         """Busca fragmentos semánticamente similares en la base de datos."""
         if not self._initialized:

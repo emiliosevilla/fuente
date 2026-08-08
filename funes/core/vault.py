@@ -109,7 +109,7 @@ class VaultManager:
         except Exception as e:
             logger.warning(f"No se pudo escribir la configuración de Obsidian: {e}")
 
-    def _path_resolver(self) -> AuthorizedPathResolver:
+    def path_resolver(self) -> AuthorizedPathResolver:
         return AuthorizedPathResolver(
             vault_root=self.config.vault_path,
             output=self.output_dir,
@@ -255,7 +255,7 @@ class VaultManager:
         if output_path.exists() and source_ext:
             output_path = target_issue_dir / f"{safe_title}_{source_ext.lstrip('.')}.md"
 
-        output_path = self._path_resolver().resolve_note(
+        output_path = self.path_resolver().resolve_note(
             self._vault_relative_identity(output_path)
         )
         target_issue_dir = output_path.parent
@@ -286,7 +286,7 @@ class VaultManager:
     # --- PAPELERA DE CUARENTENA Y RESTAURACIÓN ---
     def move_to_quarantine(self, source_path: Path, reason: str = "Eliminación o error") -> Path:
         """Move one authorized Vault file through the canonical quarantine service."""
-        resolver = self._path_resolver()
+        resolver = self.path_resolver()
         source_path = resolver.resolve(
             self._vault_relative_identity(source_path),
             root_name="vault",
@@ -316,7 +316,7 @@ class VaultManager:
 
     def restore_from_quarantine(self, quarantine_id: str, target_issue: str = "_Sin_Cuestion") -> Path:
         """Restore an opaque quarantine ID to an authorized output issue."""
-        resolver = self._path_resolver()
+        resolver = self.path_resolver()
         safe_target_issue = self.sanitize_filename(target_issue)
         dest_path = self.quarantine_service.restore(
             quarantine_id,

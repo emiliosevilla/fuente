@@ -4,9 +4,17 @@ import threading
 from pathlib import Path
 from typing import Callable, Any
 
+from funes.application.ingestion import (
+    ContentRetryExhaustedError,
+    IngestionApplicationService,
+    RetryExhaustedError,
+    SourceNotStableError,
+)
 from funes.config import AppConfig
 from funes.core.vault import VaultManager
+from funes.domain.errors import PathAuthorizationError
 from funes.extractors.registry import ExtractorRegistry
+from funes.infrastructure.sqlite_store import JobStore
 from funes.ram_governor.governor import RAMGovernor
 from funes.rag.chroma_store import ChromaStore
 from funes.rag.semantic_chunker import SemanticChunker
@@ -15,25 +23,9 @@ from funes.graph_engine.linker import GraphLinker
 
 logger = logging.getLogger(__name__)
 
-
-class RetryExhaustedError(OSError):
-    """An I/O operation exhausted its bounded retry budget."""
-
-    code = "transient_io"
-
-    def __init__(self, error: OSError, attempt_count: int) -> None:
-        super().__init__(str(error))
-        self.attempt_count = attempt_count
-
-
-class ContentRetryExhaustedError(ValueError):
-    """Unsupported or corrupt content persisted through its retry budget."""
-
-    def __init__(self, error: Exception, error_code: str, attempt_count: int) -> None:
-        super().__init__(str(error))
-        self.code = error_code
-        self.attempt_count = attempt_count
-
+# `RetryExhaustedError` / `ContentRetryExhaustedError` now live with the
+# ingestion stages that raise them; they stay importable from here because the
+# retry decorator below and existing callers still reference them.
 
 try:
     from watchdog.observers import Observer
@@ -106,7 +98,15 @@ def wait_until_file_stable(file_path: Path, max_wait_sec: float = 10.0, check_in
 
 
 class ETLPipeline:
-    """Orquestador completo del pipeline ETL de Funes."""
+    """Orquestador del pipeline ETL de Funes sobre trabajos (jobs) durables.
+
+    Owns the collaborators the pipeline needs (Vault, extractors, index,
+    generator, linker) and wires them into `IngestionApplicationService`, which
+    holds the actual stage logic. `process_file` stays as the entry point the
+    folder monitor and the console call, but it no longer processes a path
+    in-memory: it submits the source as a job and advances that job, so an
+    interrupted ingestion resumes instead of restarting.
+    """
 
     def __init__(self, config: AppConfig):
         self.config = config
@@ -120,9 +120,26 @@ class ETLPipeline:
         self.chunker = SemanticChunker()
         self.atomic_gen = AtomicNoteGenerator(ollama_url=config.ollama_url)
         self.linker = GraphLinker(config.vault.output_dir)
+        self.job_store = JobStore(config.vault.vault_path)
+        self.ingestion = IngestionApplicationService(
+            config=config,
+            vault=self.vault,
+            job_store=self.job_store,
+            extractors=self.extractors,
+            chunker=self.chunker,
+            chroma=self.chroma,
+            atomic_generator=self.atomic_gen,
+            linker=self.linker,
+            ram_governor=self.ram_governor,
+            copy_to_dirty=self._safe_copy_to_dirty,
+            stabilize=self._wait_until_stable,
+        )
+
+    def close(self) -> None:
+        self.job_store.close()
 
     def process_file(self, raw_file_path: Path) -> bool:
-        """Ejecuta el flujo ETL completo para un archivo entrante."""
+        """Ingesta un archivo de 1_entrada como un job y lo lleva a término."""
         if is_temporary_or_system_file(raw_file_path):
             return False
 
@@ -134,91 +151,65 @@ class ETLPipeline:
 
         logger.info(f"=== Iniciando Pipeline ETL para: {raw_file_path.name} ===")
 
-        if not wait_until_file_stable(raw_file_path):
-            logger.warning(f"El archivo {raw_file_path.name} es temporal, no se estabilizó o está vacío. Omitiendo.")
+        try:
+            source_identity = self.ingestion.vault_relative_identity(raw_file_path)
+            job = self.ingestion.submit(source_identity)
+        except SourceNotStableError:
+            logger.warning(
+                f"El archivo {raw_file_path.name} es temporal, no se estabilizó o está vacío. Omitiendo."
+            )
             return False
+        except PathAuthorizationError:
+            logger.warning(f"Ruta no autorizada para ingesta: {raw_file_path.name}")
+            return False
+        except Exception as error:
+            logger.error(
+                f"No se pudo registrar el job de {raw_file_path.name}: {error}",
+                exc_info=True,
+            )
+            return False
+
+        if job.stage == "completed":
+            logger.info(
+                f"=== Contenido ya ingerido (job {job.job_id}): {raw_file_path.name} ==="
+            )
+            return True
 
         try:
-            # Paso 1: Copiar a 2_sucio con reintento ante micro-cortes de red
-            dirty_path = self._safe_copy_to_dirty(raw_file_path)
-
-            # Paso 2: Extraer a verbatim .md y guardar en 3_limpio
-            content_verbatim, metadata = self._extract_with_content_retries(dirty_path)
-            clean_path = self.vault.save_clean_md(raw_file_path.name, content_verbatim, metadata)
-
-            # Paso 3: Chunking semántico e indexación en ChromaDB
-            chunks = self.chunker.chunk_markdown(content_verbatim, raw_file_path.name)
-            chunk_texts = [c["content"] for c in chunks]
-            chunk_metas = [c["metadata"] for c in chunks]
-            chunk_ids = [c["id"] for c in chunks]
-            self.chroma.add_chunks(chunk_texts, chunk_metas, chunk_ids)
-
-            # Paso 4: Evaluar RAM y seleccionar modelo LLM (respetando custom_model_override)
-            selected_model = self.config.custom_model_override or self.ram_governor.recommend_model()
-            self.ram_governor.ensure_model_available(selected_model)
-
-            # Paso 5: Generar nota atómica estructurada
-            atomic_raw = self.atomic_gen.generate_atomic_note(
-                clean_md_content=content_verbatim,
-                model_name=selected_model,
-                file_name=raw_file_path.name
-            )
-
-            # Paso 6: Interconectar mediante WikiLinks y guardar en 4_salida
-            atomic_linked = self.linker.auto_link_content(atomic_raw, raw_file_path.stem)
-            self.vault.save_atomic_note(raw_file_path.stem, atomic_linked, source_ext=raw_file_path.suffix)
-
-            # Eliminar el archivo procesado de 1_entrada de forma segura
-            try:
-                if raw_file_path.exists():
-                    raw_file_path.unlink()
-                    logger.info(f"Archivo limpiado de 1_entrada: {raw_file_path.name}")
-            except Exception as unl_err:
-                logger.warning(f"No se pudo eliminar {raw_file_path.name} de 1_entrada: {unl_err}")
-
-            logger.info(f"=== Pipeline ETL finalizado con éxito para: {raw_file_path.name} ===")
-            return True
-        except Exception as e:
-            logger.error(f"Error procesando {raw_file_path.name}: {e}", exc_info=True)
-            self.vault.quarantine_service.handle_failure(
-                raw_file_path,
-                e,
-                attempt_count=getattr(e, "attempt_count", 1),
+            job = self.ingestion.resume(job.job_id)
+        except Exception as error:
+            logger.error(
+                f"Error procesando {raw_file_path.name}: {error}", exc_info=True
             )
             return False
+
+        if job.stage == "completed":
+            logger.info(f"=== Pipeline ETL finalizado con éxito para: {raw_file_path.name} ===")
+            return True
+
+        logger.warning(
+            f"Pipeline ETL no completado para {raw_file_path.name}: "
+            f"stage={job.stage} error={job.error_code}"
+        )
+        return False
+
+    def resume_pending_jobs(self, limit: int = 25) -> int:
+        """Reanuda jobs interrumpidos (p. ej. tras un cierre inesperado)."""
+        try:
+            resumed = self.ingestion.process_pending(limit=limit)
+        except Exception as error:
+            logger.error(f"Error reanudando jobs pendientes: {error}", exc_info=True)
+            return 0
+        if resumed:
+            logger.info(f"Reanudados {len(resumed)} job(s) de ingesta pendientes.")
+        return len(resumed)
+
+    def _wait_until_stable(self, raw_file_path: Path) -> bool:
+        return wait_until_file_stable(raw_file_path)
 
     @retry_on_io_error(max_retries=3, delay_sec=0.5)
     def _safe_copy_to_dirty(self, raw_file_path: Path) -> Path:
         return self.vault.copy_to_dirty(raw_file_path)
-
-    def _extract_with_content_retries(self, dirty_path: Path) -> tuple[str, dict]:
-        """Retry known corrupt/unsupported extraction failures before quarantine."""
-        last_error: Exception | None = None
-        error_code = ""
-        max_attempts = self.vault.quarantine_service.UNSUPPORTED_CONTENT_MAX_ATTEMPTS
-        for attempt in range(1, max_attempts + 1):
-            try:
-                return self.extractors.extract(dirty_path)
-            except Exception as error:
-                error_code = self._content_error_code(error)
-                if not error_code:
-                    raise
-                last_error = error
-        assert last_error is not None
-        raise ContentRetryExhaustedError(
-            last_error, error_code, max_attempts
-        ) from last_error
-
-    @staticmethod
-    def _content_error_code(error: Exception) -> str:
-        if isinstance(error, UnicodeDecodeError):
-            return "corrupt_content"
-        message = str(error).lower()
-        if "corrupt" in message or "malformed" in message:
-            return "corrupt_content"
-        if "unsupported" in message or "not supported" in message:
-            return "unsupported_content"
-        return ""
 
 
 if HAS_WATCHDOG:
@@ -274,6 +265,9 @@ class FolderMonitor:
     def process_existing_files(self) -> None:
         """Procesa de inmediato los archivos que ya se encontraban en 1_entrada al iniciar Funes."""
         input_dir = self.pipeline.config.vault.input_dir
+        # Los jobs interrumpidos por un cierre anterior continúan desde su
+        # última etapa durable antes de admitir archivos nuevos.
+        self.pipeline.resume_pending_jobs()
         try:
             files = [f for f in input_dir.glob("*") if f.is_file() and not is_temporary_or_system_file(f)]
             if files:

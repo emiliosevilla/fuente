@@ -5,6 +5,7 @@ from pathlib import Path
 
 from funes.config import get_default_config
 from funes.core.vault import VaultManager
+from funes.domain.frontmatter import parse_frontmatter, serialize_frontmatter
 from funes.extractors.registry import ExtractorRegistry
 from funes.extractors.office_pdf import TextAndOfficeExtractor
 from funes.ram_governor.governor import RAMGovernor
@@ -82,7 +83,11 @@ class TestFunes(unittest.TestCase):
     def test_linker_protection_yaml_and_code(self):
         existing_note = self.config.vault.output_dir / "Proyecto Alpha.md"
         with open(existing_note, "w", encoding="utf-8") as f:
-            f.write("Contenido de Proyecto Alpha")
+            f.write(serialize_frontmatter({
+                "schema_version": 1, "title": "Proyecto Alpha", "date": "",
+                "author": "Funes", "tags": [], "issue": "_Sin_Cuestion",
+                "status": "approved", "sources": [], "history": [],
+            }) + "Contenido de Proyecto Alpha")
 
         linker = GraphLinker(self.config.vault.output_dir)
 
@@ -104,8 +109,8 @@ Ver también: `Proyecto Alpha en codigo inline`
 """
         linked = linker.auto_link_content(content, "Otra Nota")
 
-        self.assertIn('tags: [proyecto alpha, test]', linked)
-        self.assertNotIn('tags: [[Proyecto Alpha]]', linked)
+        metadata, _ = parse_frontmatter(linked)
+        self.assertEqual(metadata["tags"], ["proyecto alpha", "test"])
         self.assertIn("del [[Proyecto Alpha]].", linked)
         self.assertIn('var_name = "Proyecto Alpha"', linked)
         self.assertIn('`Proyecto Alpha en codigo inline`', linked)

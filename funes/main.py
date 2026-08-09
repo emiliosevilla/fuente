@@ -1,12 +1,14 @@
+import os
 import sys
 import time
+import signal
+import threading
 import argparse
 import logging
 from pathlib import Path
 
 from funes.config import get_default_config
-from funes.watcher.watcher import ETLPipeline
-from funes.graph_engine.optimized_loop import OptimizadoGraphLoop
+from funes.application.lifecycle import ApplicationLifecycle
 from funes.core.app_checker import check_and_prompt_user_apps_closed
 
 # Configuración básica de logging y codificación UTF-8 para consola en Windows
@@ -23,6 +25,29 @@ logging.basicConfig(
 )
 
 logger = logging.getLogger("funes")
+
+_NO_DISPLAY_MESSAGE = (
+    "No graphical display is available. The Funes Control Console requires a "
+    "desktop environment with a display server.\n"
+    "  • Server / Docker / CI: run with --headless for continuous background services.\n"
+    "  • One-shot ingestion: run with --flush.\n"
+    "  • Remote Linux: export DISPLAY or use X11 forwarding before launching the GUI."
+)
+
+
+def has_graphical_display() -> bool:
+    """Return whether this process can open a native GUI window."""
+    if sys.platform in {"darwin", "win32"}:
+        return True
+    return bool(os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"))
+
+
+def require_graphical_display() -> None:
+    """Exit with a clear message when GUI mode cannot run headlessly."""
+    if has_graphical_display():
+        return
+    print(_NO_DISPLAY_MESSAGE, file=sys.stderr)
+    sys.exit(1)
 
 
 def select_vault_folder_gui() -> Path:
@@ -49,7 +74,64 @@ def select_vault_folder_gui() -> Path:
     return default_dir
 
 
-from funes.control_console import launch_control_console
+def run_flush(vault_path: Path) -> dict:
+    """Ejecuta un pase de Flush determinista (sin hilos de fondo) y devuelve su resumen."""
+    config = get_default_config(vault_path)
+    lifecycle = ApplicationLifecycle(config, mode="flush")
+    try:
+        lifecycle.start()
+        return lifecycle.last_flush_result or {}
+    finally:
+        # No background thread runs in flush mode; stop() just releases the
+        # pipeline's own resources (e.g. the durable job store's connection).
+        lifecycle.stop()
+
+
+def _wait_for_shutdown_signal() -> None:
+    """Block until SIGINT (Ctrl+C) or SIGTERM (``docker stop``) requests shutdown."""
+    shutdown = threading.Event()
+
+    def _request_shutdown(signum, _frame):
+        try:
+            name = signal.Signals(signum).name
+        except ValueError:
+            name = str(signum)
+        logger.info("Señal %s recibida. Deteniendo servicios de Funes...", name)
+        shutdown.set()
+
+    previous_int = signal.getsignal(signal.SIGINT)
+    previous_term = signal.getsignal(signal.SIGTERM)
+    signal.signal(signal.SIGINT, _request_shutdown)
+    signal.signal(signal.SIGTERM, _request_shutdown)
+
+    try:
+        while not shutdown.is_set():
+            shutdown.wait(timeout=1.0)
+    finally:
+        signal.signal(signal.SIGINT, previous_int)
+        signal.signal(signal.SIGTERM, previous_term)
+
+
+def run_headless(vault_path: Path, wait_for_shutdown=None) -> None:
+    """Arranca los servicios continuos (FolderMonitor + OptimizadoGraphLoop) sin abrir
+    ninguna interfaz gráfica (Tkinter/PyWebView), pensado para Docker/CI."""
+    logger.info(f"=== Funes en modo headless (sin interfaz) — Vault: {vault_path} ===")
+    config = get_default_config(vault_path)
+    lifecycle = ApplicationLifecycle(config, mode="headless")
+    wait = wait_for_shutdown or _wait_for_shutdown_signal
+    try:
+        lifecycle.start()
+        wait()
+    finally:
+        lifecycle.stop()
+
+
+def run_continuous_console(vault_path: Path) -> None:
+    """Modo predeterminado: lanza la Consola Central de Control (posee su propio ciclo de vida)."""
+    require_graphical_display()
+    from funes.control_console import launch_control_console
+
+    launch_control_console(vault_path)
 
 
 def main():
@@ -71,6 +153,14 @@ def main():
         action="store_true",
         help="Ejecuta directamente el Flush por línea de comandos sin abrir la Consola.",
     )
+    parser.add_argument(
+        "--headless",
+        action="store_true",
+        help=(
+            "Ejecuta Funes en modo continuo sin interfaz gráfica (Docker/CI): "
+            "nunca abre Tkinter ni PyWebView."
+        ),
+    )
     args = parser.parse_args()
 
     vault_arg = args.vault or args.vault_pos
@@ -91,29 +181,27 @@ def main():
             sys.exit(0)
 
         logger.info(f"=== Ejecutando Flush de Funes en Vault: {vault_path} ===")
-        config = get_default_config(vault_path)
-        pipeline = ETLPipeline(config)
+        result = run_flush(vault_path)
 
-        input_files = [f for f in config.vault.input_dir.glob("*") if f.is_file() and not f.name.startswith(".")]
-        if input_files:
-            logger.info(f"Iniciando ingesta de {len(input_files)} archivo(s) en 1_entrada...")
-            for file_path in input_files:
-                pipeline.process_file(file_path)
+        files_found = result.get("files_found", 0)
+        files_processed = result.get("files_processed", 0)
+        if files_found:
+            logger.info(f"Ingesta completada: {files_processed}/{files_found} archivo(s) de 1_entrada procesados.")
         else:
             logger.info("No se encontraron archivos nuevos en 1_entrada para procesar.")
-
-        logger.info("Refinando interconexiones del grafo de conocimiento...")
-        optimized_loop = OptimizadoGraphLoop(output_dir=config.vault.output_dir)
-        optimized_loop.refine_knowledge_graph()
+        logger.info("Interconexiones del grafo de conocimiento refinadas.")
 
         print("\n" + "=" * 65)
         print(" ✅ INGESTA Y FLUSH FINALIZADOS CON ÉXITO")
         print("=" * 65)
         print(" Todos los archivos han sido procesados y el mapa de conocimiento")
         print(" en Obsidian ha sido actualizado correctamente.\n")
+    elif args.headless:
+        # Modo headless: servicios continuos sin ninguna interfaz gráfica (Docker/CI).
+        run_headless(vault_path)
     else:
-        # Modo predeterminado: Lanzar la Consola Central de Control
-        launch_control_console(vault_path)
+        # Modo predeterminado: Lanzar la Consola Central de Control (posee el ciclo de vida de sus servicios).
+        run_continuous_console(vault_path)
 
 
 if __name__ == "__main__":

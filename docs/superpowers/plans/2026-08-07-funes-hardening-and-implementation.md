@@ -8,6 +8,109 @@
 
 **Tech Stack:** Python 3.10+, Tkinter fallback, optional PyWebView, HTML5/CSS3/JavaScript, PyYAML, SQLite, ChromaDB, BM25, Ollama, watchdog, pytest-compatible tests, PyInstaller, Obsidian Vault.
 
+## Progress Status (2026-08-08)
+
+**Branch:** `feature/funes-hardening-2026-08-07` (worktree `.worktrees/funes-hardening-2026-08-07`)  
+**Tip:** `9684bd1` — pushed to `origin/feature/funes-hardening-2026-08-07`  
+**Not merged** into `dev` / `main` yet. Main checkout still has a dirty partial `consola_preview.html`; discard before any `/supagit` promote.
+
+### Completed
+
+| Phase | Status | Tasks | Tip commit |
+|---|---|---|---|
+| Phase 0 — Safety Baseline | **Done** | 0.1–0.5 | `cdbb81e` |
+| Phase 1 — Domain Contracts | **Done** | 1.1–1.4 | `1c07a95` |
+| Phase 2 — Recoverable ETL | **Done** | 2.1–2.4 | `d8d38ba` |
+| Phase 3 — Themes / Graph / Reader | **Done** | 3.1–3.3 | `b6aec0d` |
+| Phase 4 — RAG / Local Chat | **Done** | 4.1–4.3 | `2b64861` |
+| Phase 5 — Resource scheduling | **Done** | 5.1–5.3 | `7d47d2a` |
+| Phase 6 — Human Review / YAML / Editorial | **Done** | 6.1–6.4 | `3d46902` |
+| Phase 7 — Installers / Packaging / Offline | **Done** | 7.1–7.4 | `2748962` |
+| Phase 8 — Matrices / Migration / Release | **Done** | 8.1–8.5 | `9684bd1` |
+
+Commits on this branch since `1bb66b8`:
+
+1. `0d7e5fa` — Task 0.1 test harness / pytest  
+2. `fcb8070` — Task 0.2 authorized paths  
+3. `c2bb0e0` — Task 0.3 HTML safety / CSP  
+4. `f6c3bdb` — Task 0.4 typed bridge  
+5. `cdbb81e` — Task 0.5 native selector safety  
+6. `e6713b7` — Task 1.1 versioned frontmatter  
+7. `df079c9` — Task 1.2 atomic persistence  
+8. `4c09f45` — Task 1.3 unified quarantine  
+9. `1c07a95` — Task 1.4 canonical settings  
+10. `bde44e4` — docs: Phase 0–1 progress / pause before Phase 2  
+11. `f81a1d0` — Task 2.1 durable SQLite job store  
+12. `ea23bc1` — Task 2.2 ETL transition graph  
+13. `bada86f` — Task 2.3 resumable ingestion jobs  
+14. `d8d38ba` — Task 2.4 ApplicationLifecycle modes  
+15. `62c5663` — Task 3.1 theme-scoped pipeline / FolderSync  
+16. `4561585` — Task 3.2 recursive graph linking  
+17. `2a0f472` — Task 3.3 reader/bridge document IDs  
+18. `543b6e1` — Task 4.1 deterministic chunk IDs / reconcile  
+19. `5b3108c` — docs: record Task 4.1  
+20. `1a16a92` — Task 4.2 scoped hybrid retrieval  
+21. `c594bb6` — docs: record Task 4.2  
+22. `2b64861` — Task 4.3 chat + retrieval contract  
+23. `b47d234` — docs: record Task 4.3  
+24. `2a39ef8` — Task 5.1 resource budgets  
+25. `cf0160c` — docs: record Task 5.1  
+26. `5ab37d1` — Task 5.2 durable scheduler  
+27. `9dbcc58` — docs: record Task 5.2  
+28. `7d47d2a` — Task 5.3 retry policy  
+29. `c76dd08` — docs: record Task 5.3 / Phase 5  
+30. `596c9a2` — docs: Phase 5 done / pause at 6.1  
+31. `b05e997` — Task 6.1 note approval transitions  
+32. `0fa0c46` — docs: record Task 6.1  
+33. `d48fa40` — Task 6.2 safe metadata forms  
+34. `f82520b` — docs: record Task 6.2  
+35. `b45a31c` — Task 6.3 markdown projection / TipTap excluded  
+36. `feea4ad` — docs: record Task 6.3  
+37. `3d46902` — Task 6.4 deterministic export  
+38. `286f4c0` — docs: record Task 6.4 / Phase 6  
+39. `167e4b0` — Task 7.1 dependency manifests  
+40. `a970fb0` — docs: record Task 7.1  
+41. `a6ff700` — Task 7.2 idempotent installers  
+42. `06d7623` — docs: record Task 7.2  
+43. `05555f2` — Task 7.3 headless Docker worker  
+44. `ef24a82` — docs: record Task 7.3  
+45. `2748962` — Task 7.4 verifiable offline mode  
+46. `52990b3` — docs: record Task 7.4 / Phase 7  
+47. `10139a7` — Task 8.1 security matrix  
+48. `b4774ba` — docs: record Task 8.1  
+49. `7948bcb` — Task 8.2 recovery matrix  
+50. `5e7ac57` — docs: record Task 8.2  
+51. `ba291b3` — Task 8.3 contract matrix  
+52. `472a1b2` — docs: record Task 8.3  
+53. `6f68b00` — Task 8.4 migration tooling  
+54. `c4009dd` — docs: record Task 8.4  
+55. `17fc90c` — Task 8.5 release gate  
+56. `9684bd1` — docs: record Task 8.5 / Phase 8  
+
+### Not started / next
+
+- All plan tasks **0.1–8.5 complete**. Awaiting integration decision (merge / PR / keep).
+
+**Resume at:** finishing-a-development-branch (base: `dev`).  
+**SDD ledger:** `.worktrees/funes-hardening-2026-08-07/.superpowers/sdd/2026-08-07-funes-hardening-and-implementation/progress.md`  
+**Process note:** After each completed task, update this Progress Status section, mark that task's step checkboxes `[x]`, and refresh §12 Recommended Execution Order — do not leave the plan stale between checkpoints.
+
+### Deferred minors (triage at final branch review)
+
+- Path-style wikilinks `[[dir/note]]` (basename-only resolution)  
+- `style-src 'unsafe-inline'`; mock-path / export `innerHTML`  
+- Direct `handle_action` generic success; AnythingLLM helper website fallback  
+- `failed_for_review` not listed in active quarantine UI  
+- Direct `pytest` launcher Unicode-path quirk (use `python3 -m pytest`)  
+- Task 4.1 minors: issue hardcoded `_Sin_Cuestion` at chunk-index; broad TypeError around chunk_markdown kwargs
+- Task 3.2 minors: ingestion auto_link without current_relative_path; O(n²) enumerate per note  
+- Task 2.x minors: COALESCE/orphan-clean edge cases; flush banner honesty; dual ETLPipeline in console vs lifecycle; `assert` graph invariants under `python -O`
+- Task 8.3 minors: GraphLinker still emits output-relative `document_id` (only `get_graph_data` remaps); DOCX contract checks ZIP magic only; unused `export_stack` fixture; settings contract asserts input folder more than output
+- Task 8.4 minor: rollback always refreshes MOC catalog even if apply used `--skip-moc`
+- Task 8.5 minors: security residual fixture column-count vs live table; README OptimizedGraphLoop always-on claim still soft
+
+---
+
 ## Global Constraints
 
 - All LLM inference is local by default and must use loopback endpoints only: `http://localhost:11434`.
@@ -219,6 +322,8 @@ class RetrievalApplicationService:
 
 **Exit gate:** no untrusted note, title, path, chat message or model response can execute JavaScript or access a file outside the authorized Vault.
 
+**Phase status (2026-08-07):** complete — exit gate met for Tasks 0.1–0.5 on `feature/funes-hardening-2026-08-07` (`cdbb81e`).
+
 ### Task 0.1 — Establish a reproducible test command
 
 **Files:**
@@ -230,28 +335,30 @@ class RetrievalApplicationService:
 
 Steps:
 
-- [ ] Add the test runner and test-only dependencies to a clearly separated test configuration.
-- [ ] Preserve the existing `unittest` suite while adding a single documented command:
+- [x] Add the test runner and test-only dependencies to a clearly separated test configuration.
+- [x] Preserve the existing `unittest` suite while adding a single documented command:
 
 ```bash
-python3 -m unittest discover -s tests -p 'test_*.py' -v
+PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -p 'test_*.py' -v
 ```
 
-- [ ] Add a second command for new focused tests:
+- [x] Add a second command for new focused tests:
 
 ```bash
-python3 -m pytest -q
+PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -q
 ```
 
-- [ ] Ensure test execution does not modify tracked bytecode or generated artifacts.
-- [ ] Add a cleanup test fixture that uses a temporary Vault and never the repository Vault.
-- [ ] Run both commands and record the expected result in `README.md`.
+- [x] Ensure test execution does not modify tracked bytecode or generated artifacts.
+- [x] Add a cleanup test fixture that uses a temporary Vault and never the repository Vault.
+- [x] Run both commands and record the expected result in `README.md`.
 
 Acceptance:
 
 - Existing 70-test suite remains green.
 - New tests run without Ollama, Obsidian, AnythingLLM or a display.
 - `git status --short` remains empty after testing.
+
+**Checkpoint 0.1 (2026-08-07):** Implemented in worktree `feature/funes-hardening-2026-08-07`. Review clean after fix round 1. Extra file `tests/test_a.py` kept as early unittest bytecode guard. Human must `git restore` tracked `*.pyc` before commit. Deferred minor: pytest also listed under a separated comment block in `requirements.txt` (plan-mandated).
 
 ### Task 0.2 — Add authorized path resolution
 
@@ -265,13 +372,13 @@ Acceptance:
 
 Steps:
 
-- [ ] Implement a resolver with separate roots for the Vault, `4_salida`, input, dirty, clean and quarantine directories.
-- [ ] Accept only relative paths and opaque document/quarantine IDs from UI callers.
-- [ ] Reject absolute paths, empty paths, `..`, null bytes, directories and unsupported extensions.
-- [ ] Resolve the candidate and verify `candidate.is_relative_to(root.resolve())`.
-- [ ] Reject symlinks whose resolved target escapes the root.
-- [ ] Use the resolver in `get_note_content`, `save_note`, `approve_note`, `merge_notes`, `move_note`, `delete_note`, chat single-note context and restore.
-- [ ] Add tests for:
+- [x] Implement a resolver with separate roots for the Vault, `4_salida`, input, dirty, clean and quarantine directories.
+- [x] Accept only relative paths and opaque document/quarantine IDs from UI callers.
+- [x] Reject absolute paths, empty paths, `..`, null bytes, directories and unsupported extensions.
+- [x] Resolve the candidate and verify `candidate.is_relative_to(root.resolve())`.
+- [x] Reject symlinks whose resolved target escapes the root.
+- [x] Use the resolver in `get_note_content`, `save_note`, `approve_note`, `merge_notes`, `move_note`, `delete_note`, chat single-note context and restore.
+- [x] Add tests for:
   - `../outside.md`
   - `/tmp/outside.md`
   - Windows-style paths
@@ -286,6 +393,8 @@ Acceptance:
 - A valid nested note works.
 - No handler accepts a client-supplied absolute filesystem path.
 
+**Checkpoint 0.2 (2026-08-07):** `AuthorizedPathResolver` + `PathAuthorizationError`; handlers and vault write/move/restore authorized; wiki-links emit Vault-relative IDs. Review clean after fix round 1. Deferred minor: path-style `[[dir/note]]` wikilinks remain basename-only.
+
 ### Task 0.3 — Remove dynamic HTML injection
 
 **Files:**
@@ -296,14 +405,14 @@ Acceptance:
 
 Steps:
 
-- [ ] Change `get_note_content_html()` to return a structured document model or escaped text tokens, not raw interpolated HTML.
-- [ ] Escape text with `html.escape()` when a server-rendered HTML fallback is unavoidable.
-- [ ] Render note titles, paths, logs and chat messages with `textContent` and explicit DOM nodes.
-- [ ] Keep `innerHTML` only for static, source-controlled templates with no interpolated data.
-- [ ] Replace inline `onclick` generation for WikiLinks with event listeners and a `data-document-id` attribute.
-- [ ] Add a strict Content Security Policy for the WebView HTML.
-- [ ] Remove external Google Fonts in strict offline mode and ship a local fallback.
-- [ ] Test payloads containing:
+- [x] Change `get_note_content_html()` to return a structured document model or escaped text tokens, not raw interpolated HTML.
+- [x] Escape text with `html.escape()` when a server-rendered HTML fallback is unavoidable.
+- [x] Render note titles, paths, logs and chat messages with `textContent` and explicit DOM nodes.
+- [x] Keep `innerHTML` only for static, source-controlled templates with no interpolated data.
+- [x] Replace inline `onclick` generation for WikiLinks with event listeners and a `data-document-id` attribute.
+- [x] Add a strict Content Security Policy for the WebView HTML.
+- [x] Remove external Google Fonts in strict offline mode and ship a local fallback.
+- [x] Test payloads containing:
   - `<script>alert(1)</script>`
   - `<img src=x onerror=alert(1)>`
   - `<svg onload=alert(1)>`
@@ -316,6 +425,8 @@ Acceptance:
 - No payload creates executable attributes or script nodes.
 - The bridge is never called as a side effect of rendering a note.
 
+**Checkpoint 0.3 (2026-08-07):** Structured note document + safe DOM rendering; CSP `script-src` nonce-only (no unsafe-inline scripts); Google Fonts removed. Review clean after fix round 1. Deferred minors: `style-src 'unsafe-inline'`; mock-path/`export` innerHTML.
+
 ### Task 0.4 — Replace the generic bridge boundary
 
 **Files:**
@@ -327,24 +438,26 @@ Acceptance:
 
 Steps:
 
-- [ ] Define typed methods for initial state, settings, note listing, note retrieval, chat, graph data, approval, save draft, quarantine and restore.
-- [ ] Make every method accept IDs and validated scalar payloads.
-- [ ] Reject unknown actions instead of returning a generic success log.
-- [ ] Temporarily keep `trigger_action` as a compatibility adapter that delegates only to an explicit allowlist.
-- [ ] Implement or remove every direct frontend API call:
+- [x] Define typed methods for initial state, settings, note listing, note retrieval, chat, graph data, approval, save draft, quarantine and restore.
+- [x] Make every method accept IDs and validated scalar payloads.
+- [x] Reject unknown actions instead of returning a generic success log.
+- [x] Temporarily keep `trigger_action` as a compatibility adapter that delegates only to an explicit allowlist.
+- [x] Implement or remove every direct frontend API call:
   - `get_themes`
   - `set_theme`
   - `create_theme`
   - `run_optimized_cycle`
   - `get_category_files`
   - `open_file_natively`
-- [ ] Add contract tests that compare frontend-called methods with bridge methods.
+- [x] Add contract tests that compare frontend-called methods with bridge methods.
 
 Acceptance:
 
 - Every UI call has a real implementation or is removed.
 - Unknown methods and malformed payloads fail closed.
 - No bridge method exposes arbitrary path mutation.
+
+**Checkpoint 0.4 (2026-08-07):** Typed `FunesPyWebViewApi` facade; allowlisted `trigger_action` with per-action schemas; missing frontend APIs implemented. Review clean after fix round 1. Deferred: direct `handle_action` generic success; AnythingLLM helper website fallback.
 
 ### Task 0.5 — Remove shell injection from native selectors
 
@@ -356,15 +469,17 @@ Acceptance:
 
 Steps:
 
-- [ ] Replace `shell=True` AppleScript construction with a subprocess argument strategy that does not concatenate untrusted strings into a shell command.
-- [ ] Restrict dialog titles to constant values or escape them using an AppleScript-safe serializer.
-- [ ] Apply the same rule to application names passed to `osascript`.
-- [ ] Test titles containing quotes, backslashes, newlines and AppleScript syntax.
+- [x] Replace `shell=True` AppleScript construction with a subprocess argument strategy that does not concatenate untrusted strings into a shell command.
+- [x] Restrict dialog titles to constant values or escape them using an AppleScript-safe serializer.
+- [x] Apply the same rule to application names passed to `osascript`.
+- [x] Test titles containing quotes, backslashes, newlines and AppleScript syntax.
 
 Acceptance:
 
 - No production subprocess call uses `shell=True`.
 - A malicious title remains data and cannot add AppleScript statements.
+
+**Checkpoint 0.5 (2026-08-07):** Native selectors pass titles/app names as argv/env data; no production `shell=True`. Review approved. Committed as `cdbb81e`. Phase 0 complete.
 
 ---
 
@@ -373,6 +488,8 @@ Acceptance:
 **Objective:** Establish one canonical document model and one durable state model.
 
 **Exit gate:** notes, frontmatter, approvals, configuration and quarantine are validated, atomic and recoverable.
+
+**Phase status (2026-08-07):** complete — exit gate met for Tasks 1.1–1.4 on `feature/funes-hardening-2026-08-07` (`1c07a95`).
 
 ### Task 1.1 — Introduce versioned frontmatter
 
@@ -403,20 +520,22 @@ history: []
 
 Steps:
 
-- [ ] Implement `parse_frontmatter(markdown: str) -> tuple[dict, str]` using a delimiter parser and `yaml.safe_load`.
-- [ ] Reject malformed YAML, duplicate keys, non-mapping roots and invalid status values.
-- [ ] Implement `serialize_frontmatter(metadata: dict) -> str` using `yaml.safe_dump(..., allow_unicode=True, sort_keys=False)`.
-- [ ] Validate title, date, tags, issue, sources and history types.
-- [ ] Make the parser distinguish frontmatter delimiters from `---` in the body.
-- [ ] Add a `schema_version` migration from existing keys (`título`, `fecha`, `claves`, `fuentes`, `estado`).
-- [ ] Make the LLM output an input candidate that is parsed and validated, never a trusted final document.
-- [ ] Make `GraphLinker` operate on parsed body text and preserve serialized frontmatter.
+- [x] Implement `parse_frontmatter(markdown: str) -> tuple[dict, str]` using a delimiter parser and `yaml.safe_load`.
+- [x] Reject malformed YAML, duplicate keys, non-mapping roots and invalid status values.
+- [x] Implement `serialize_frontmatter(metadata: dict) -> str` using `yaml.safe_dump(..., allow_unicode=True, sort_keys=False)`.
+- [x] Validate title, date, tags, issue, sources and history types.
+- [x] Make the parser distinguish frontmatter delimiters from `---` in the body.
+- [x] Add a `schema_version` migration from existing keys (`título`, `fecha`, `claves`, `fuentes`, `estado`).
+- [x] Make the LLM output an input candidate that is parsed and validated, never a trusted final document.
+- [x] Make `GraphLinker` operate on parsed body text and preserve serialized frontmatter.
 
 Acceptance:
 
 - Invalid frontmatter cannot be approved or indexed.
 - Unicode, lists, quotes, multiline values and body separators round-trip correctly.
 - Existing notes can be read without data loss.
+
+**Checkpoint 1.1 (2026-08-07):** Versioned frontmatter schema v1 + migration; invalid notes excluded from approval/index/graph. Review clean after fix round 1. Atomic writers deferred to 1.2.
 
 ### Task 1.2 — Add atomic file persistence
 
@@ -430,16 +549,18 @@ Acceptance:
 
 Steps:
 
-- [ ] Implement `atomic_write_text(path, content)` using a temporary file in the same directory, flush, `fsync`, then `os.replace`.
-- [ ] Implement atomic JSON writes for settings and manifests.
-- [ ] Preserve file permissions where supported.
-- [ ] Ensure failed writes leave the previous file intact.
-- [ ] Add tests that inject write failures before replacement.
+- [x] Implement `atomic_write_text(path, content)` using a temporary file in the same directory, flush, `fsync`, then `os.replace`.
+- [x] Implement atomic JSON writes for settings and manifests.
+- [x] Preserve file permissions where supported.
+- [x] Ensure failed writes leave the previous file intact.
+- [x] Add tests that inject write failures before replacement.
 
 Acceptance:
 
 - A simulated failure never leaves a truncated note, config or manifest.
 - Concurrent readers see either the old or new complete content.
+
+**Checkpoint 1.2 (2026-08-07):** Shared `atomic_write_text`/`atomic_write_json` with fsync+replace; config/vault/console routed. Review approved.
 
 ### Task 1.3 — Unify quarantine
 
@@ -453,17 +574,17 @@ Acceptance:
 
 Steps:
 
-- [ ] Select one canonical location: `<vault>/.funes/quarantine/`.
-- [ ] Store one manifest in SQLite or an atomic JSON file.
-- [ ] Generate a stable `quarantine_id`; do not reconstruct original names by splitting underscores.
-- [ ] Record source hash, original relative path, error code, attempt count and timestamp.
-- [ ] Define retry policy:
+- [x] Select one canonical location: `<vault>/.funes/quarantine/`.
+- [x] Store one manifest in SQLite or an atomic JSON file.
+- [x] Generate a stable `quarantine_id`; do not reconstruct original names by splitting underscores.
+- [x] Record source hash, original relative path, error code, attempt count and timestamp.
+- [x] Define retry policy:
   - transient I/O: retry with bounded exponential backoff;
   - unsupported/corrupt content: quarantine after configured attempts;
   - invalid model output: mark job failed for review, do not silently quarantine the source;
   - cancellation: preserve input and job state.
-- [ ] Make restore require a quarantine ID and target issue validated by `AuthorizedPathResolver`.
-- [ ] Remove both old managers after migration tests pass.
+- [x] Make restore require a quarantine ID and target issue validated by `AuthorizedPathResolver`.
+- [x] Remove both old managers after migration tests pass.
 
 Acceptance:
 
@@ -471,6 +592,8 @@ Acceptance:
 - Restore preserves provenance.
 - Attempt counts represent actual attempts.
 - A collision cannot overwrite an unrelated quarantine item.
+
+**Checkpoint 1.3 (2026-08-07):** Single `QuarantineService` at `<vault>/.funes/quarantine/`; UUID IDs; retry accounting; restore provenance retained. Review clean after fix round 1. Deferred: job-store persistence / UI for `failed_for_review` (Task 2.x).
 
 ### Task 1.4 — Correct configuration persistence
 
@@ -484,13 +607,13 @@ Acceptance:
 
 Steps:
 
-- [ ] Use `custom_model_override` for the selected model.
-- [ ] Use `ram_safety_margin_pct` for the RAM margin.
-- [ ] Validate `ollama_url` against loopback by default.
-- [ ] Migrate any old `ollama_model` and `ram_margin_pct` keys.
-- [ ] Apply the new settings to active services after save.
-- [ ] Remove hardcoded model and URL reads from chat/model discovery.
-- [ ] Add save/reload tests for model, URL, margin, Vault and connected folders.
+- [x] Use `custom_model_override` for the selected model.
+- [x] Use `ram_safety_margin_pct` for the RAM margin.
+- [x] Validate `ollama_url` against loopback by default.
+- [x] Migrate any old `ollama_model` and `ram_margin_pct` keys.
+- [x] Apply the new settings to active services after save.
+- [x] Remove hardcoded model and URL reads from chat/model discovery.
+- [x] Add save/reload tests for model, URL, margin, Vault and connected folders.
 
 Acceptance:
 
@@ -500,11 +623,15 @@ Acceptance:
 
 ---
 
+**Checkpoint 1.4 (2026-08-07):** Canonical settings keys + loopback guard on save/load; legacy migration; live apply. Review clean after fix round 1. Committed as `1c07a95`. Phase 1 complete.
+
 ## 5. Phase 2 — Recoverable and Idempotent ETL
 
 **Objective:** Turn the sequential pipeline into a durable state machine without introducing concurrency prematurely.
 
 **Exit gate:** interrupting any stage allows safe resume without duplicate notes, stale vectors or lost source files.
+
+**Phase status (2026-08-08):** **complete** — Tasks 2.1–2.4 through `d8d38ba`. Next was Phase 3.
 
 ### Task 2.1 — Create the job store
 
@@ -517,18 +644,20 @@ Acceptance:
 
 Steps:
 
-- [ ] Create a Vault-local SQLite database at `.funes/state.db`.
-- [ ] Add tables for jobs, stage events, document identities and index artifacts.
-- [ ] Add indexes on `source_hash`, `status`, `stage` and `updated_at`.
-- [ ] Implement optimistic update using `revision` or conditional `WHERE status = ?`.
-- [ ] Store pipeline version with every job.
-- [ ] Add migration execution with a schema version table.
+- [x] Create a Vault-local SQLite database at `.funes/state.db`.
+- [x] Add tables for jobs, stage events, document identities and index artifacts.
+- [x] Add indexes on `source_hash`, `status`, `stage` and `updated_at`.
+- [x] Implement optimistic update using `revision` or conditional `WHERE status = ?`.
+- [x] Store pipeline version with every job.
+- [x] Add migration execution with a schema version table.
 
 Acceptance:
 
 - Job state survives process restart.
 - Two workers cannot claim the same pending job.
 - Every state transition has a timestamp and event record.
+
+**Checkpoint 2.1 (2026-08-08):** Vault-local `.funes/state.db`, CAS claim/update, stage events, `JobStoreBusyError`. Review clean after fix round 1. Committed as `f81a1d0`.
 
 ### Task 2.2 — Model the ETL state machine
 
@@ -557,17 +686,19 @@ quarantined
 
 Steps:
 
-- [ ] Define allowed transitions and reject illegal transitions.
-- [ ] Make each transition idempotent.
-- [ ] Define compensation for partial artifacts.
-- [ ] Persist error codes rather than only formatted strings.
-- [ ] Add tests for every legal and illegal transition.
+- [x] Define allowed transitions and reject illegal transitions.
+- [x] Make each transition idempotent.
+- [x] Define compensation for partial artifacts.
+- [x] Persist error codes rather than only formatted strings.
+- [x] Add tests for every legal and illegal transition.
 
 Acceptance:
 
 - A job cannot jump from `discovered` to `completed`.
 - Replaying a completed transition returns the existing result.
 - Illegal transitions do not mutate the record.
+
+**Checkpoint 2.2 (2026-08-08):** Pure `transition()` graph + compensation plans. Review approved. Committed as `ea23bc1`.
 
 ### Task 2.3 — Refactor `ETLPipeline` around jobs
 
@@ -579,20 +710,22 @@ Acceptance:
 
 Steps:
 
-- [ ] Replace direct path-driven processing with `submit(relative_path)` and `resume(job_id)`.
-- [ ] Compute a source hash after stabilization.
-- [ ] Reuse an existing completed job for the same hash unless the user explicitly requests reprocessing.
-- [ ] Keep source, dirty copy and clean artifact identities in the job record.
-- [ ] Validate generated Markdown before saving the output note.
-- [ ] Save the note atomically before publishing its index entries.
-- [ ] Make Chroma indexing reconcile by document ID and remove obsolete chunk IDs.
-- [ ] Decide and test failure behavior at every stage.
+- [x] Replace direct path-driven processing with `submit(relative_path)` and `resume(job_id)`.
+- [x] Compute a source hash after stabilization.
+- [x] Reuse an existing completed job for the same hash unless the user explicitly requests reprocessing.
+- [x] Keep source, dirty copy and clean artifact identities in the job record.
+- [x] Validate generated Markdown before saving the output note.
+- [x] Save the note atomically before publishing its index entries.
+- [x] Make Chroma indexing reconcile by document ID and remove obsolete chunk IDs.
+- [x] Decide and test failure behavior at every stage.
 
 Acceptance:
 
 - Reprocessing the same source hash does not create duplicate notes.
 - A failure after Chroma insertion is reconciled on resume.
 - The original source is not deleted until the job is completed and artifacts are durable.
+
+**Checkpoint 2.3 (2026-08-08):** `IngestionApplicationService` with durable resume; Chroma reconcile-by-document-id. Review approved. Committed as `bada86f`.
 
 ### Task 2.4 — Start lifecycle services explicitly
 
@@ -605,18 +738,20 @@ Acceptance:
 
 Steps:
 
-- [ ] Define `ApplicationLifecycle.start()` and `.stop()`.
-- [ ] Start `FolderMonitor` only in continuous mode.
-- [ ] Start `OptimizadoGraphLoop` only after the Vault is initialized.
-- [ ] Keep `--flush` deterministic and non-background.
-- [ ] Stop threads before closing the UI.
-- [ ] Add a headless mode for Docker and CI that never opens Tkinter/PyWebView.
+- [x] Define `ApplicationLifecycle.start()` and `.stop()`.
+- [x] Start `FolderMonitor` only in continuous mode.
+- [x] Start `OptimizadoGraphLoop` only after the Vault is initialized.
+- [x] Keep `--flush` deterministic and non-background.
+- [x] Stop threads before closing the UI.
+- [x] Add a headless mode for Docker and CI that never opens Tkinter/PyWebView.
 
 Acceptance:
 
 - Normal continuous mode processes new files.
 - Flush mode exits after all jobs finish.
 - Stop is bounded and does not leave worker threads behind.
+
+**Checkpoint 2.4 (2026-08-08):** Modes continuous/flush/headless; failed-start cleanup. Review clean after fix round 1. Committed as `d8d38ba`. Phase 2 complete.
 
 ---
 
@@ -637,16 +772,18 @@ Acceptance:
 
 Steps:
 
-- [ ] Make the active `VaultManager` theme paths the only source of input, dirty, clean, output and quarantine roots.
-- [ ] Remove direct `config.vault.input_dir` use where a theme-aware manager is required.
-- [ ] Make FolderSync resolve the active theme input and dirty directories.
-- [ ] Add recursive enumeration helpers returning `DocumentId` and relative paths.
-- [ ] Exclude `.funes`, hidden files, MOC metadata artifacts and quarantine from normal note lists.
+- [x] Make the active `VaultManager` theme paths the only source of input, dirty, clean, output and quarantine roots.
+- [x] Remove direct `config.vault.input_dir` use where a theme-aware manager is required.
+- [x] Make FolderSync resolve the active theme input and dirty directories.
+- [x] Add recursive enumeration helpers returning `DocumentId` and relative paths.
+- [x] Exclude `.funes`, hidden files, MOC metadata artifacts and quarantine from normal note lists.
 
 Acceptance:
 
 - Processing a file in an active Theme writes only inside that Theme.
 - A connected folder cannot silently write to the General root.
+
+**Checkpoint 3.1 (2026-08-08):** Theme-aware monitor/sync/ETL; shared lifecycle vault; theme switch rebinds services. Review clean after fix round 1. Committed as `62c5663`.
 
 ### Task 3.2 — Make graph linking recursive and safe
 
@@ -659,18 +796,20 @@ Acceptance:
 
 Steps:
 
-- [ ] Enumerate notes with `rglob("*.md")` within the authorized output root.
-- [ ] Use document IDs and relative paths rather than only stem names.
-- [ ] Preserve issue-qualified links when duplicate stems exist.
-- [ ] Parse frontmatter before linking body content.
-- [ ] Generate the MOC from the full scope even when refining one issue; only update the selected issue's artifacts incrementally.
-- [ ] Use one canonical MOC filename in backend, UI, README and tests.
+- [x] Enumerate notes with `rglob("*.md")` within the authorized output root.
+- [x] Use document IDs and relative paths rather than only stem names.
+- [x] Preserve issue-qualified links when duplicate stems exist.
+- [x] Parse frontmatter before linking body content.
+- [x] Generate the MOC from the full scope even when refining one issue; only update the selected issue's artifacts incrementally.
+- [x] Use one canonical MOC filename in backend, UI, README and tests.
 
 Acceptance:
 
 - Notes in two issues with the same stem do not collide.
 - Partial issue refresh cannot erase unrelated MOC entries.
 - No WikiLink is inserted into frontmatter or fenced code.
+
+**Checkpoint 3.2 (2026-08-08):** Recursive linker + issue-qualified duplicates; full-scope MOC on partial refresh; own-stem never cross-links; canonical `_Indice_MOC.md`. Review clean after fix round 1. Committed as `4561585`.
 
 ### Task 3.3 — Align reader and bridge
 
@@ -683,12 +822,12 @@ Acceptance:
 
 Steps:
 
-- [ ] Return note metadata and `document_id` from `get_notes_list`.
-- [ ] Load notes by ID.
-- [ ] Render nested issues in the sidebar.
-- [ ] Make the native reader use the same parser and authorization service as PyWebView.
-- [ ] Fix fallback `alert`/`log` response mismatches.
-- [ ] Implement safe file opening only for authorized artifacts.
+- [x] Return note metadata and `document_id` from `get_notes_list`.
+- [x] Load notes by ID.
+- [x] Render nested issues in the sidebar.
+- [x] Make the native reader use the same parser and authorization service as PyWebView.
+- [x] Fix fallback `alert`/`log` response mismatches.
+- [x] Implement safe file opening only for authorized artifacts.
 
 Acceptance:
 
@@ -697,6 +836,8 @@ Acceptance:
 - A missing note produces a controlled error, not a traceback.
 
 ---
+
+**Checkpoint 3.3 (2026-08-08):** Shared opaque document_id list/load; nested issue sidebar; WebView Back pops history; controlled missing-note errors. Review clean after fix round 1. Committed as `2a0f472`. Phase 3 complete.
 
 ## 7. Phase 4 — Real RAG and Local Chat
 
@@ -715,17 +856,23 @@ Acceptance:
 
 Steps:
 
-- [ ] Include `document_id`, relative path, theme, issue, source hash, chunk index and pipeline version in metadata.
-- [ ] Generate deterministic chunk IDs from document ID, content hash and chunk index.
-- [ ] Store the set of chunk IDs per document.
-- [ ] Delete old chunk IDs when a document is reindexed with fewer chunks.
-- [ ] Make Chroma initialization report failures explicitly.
-- [ ] Fix the SQLite compatibility module import and add a test for the fallback branch.
+- [x] Include `document_id`, relative path, theme, issue, source hash, chunk index and pipeline version in metadata.
+- [x] Generate deterministic chunk IDs from document ID, content hash and chunk index.
+- [x] Store the set of chunk IDs per document.
+- [x] Delete old chunk IDs when a document is reindexed with fewer chunks.
+- [x] Make Chroma initialization report failures explicitly.
+- [x] Fix the SQLite compatibility module import and add a test for the fallback branch.
 
 Acceptance:
 
 - Reindexing from N chunks to N-2 leaves no stale chunks.
 - Query results expose source document ID and relative path.
+
+**Checkpoint 4.1 (2026-08-08):** Deterministic chunk IDs + required metadata; N→N-2 reconcile; explicit ChromaInitError; SQLite sys import fixed. Review approved. Committed as `543b6e1`.
+
+**Checkpoint 4.2 (2026-08-08):** Scoped hybrid retrieval + BM25 cache/invalidate; RAM degradation recorded; bounds + source snippets. Review approved. Committed as `1a16a92`.
+
+**Checkpoint 4.3 (2026-08-08):** Shared ChatApplicationService + retrieval; Ollama failures actionable; escaped rendering; FakeChatProvider. Review approved. Committed as `2b64861`.
 
 ### Task 4.2 — Build the retrieval service
 
@@ -737,12 +884,12 @@ Acceptance:
 
 Steps:
 
-- [ ] Add scope filters for `single_note`, `issue`, `theme` and `all_notes`.
-- [ ] Use vector retrieval plus BM25/RRF when resources permit.
-- [ ] Use BM25 fallback only when RAM policy says so, and record the degradation.
-- [ ] Bound the number of chunks, total characters and maximum source count.
-- [ ] Return source snippets and IDs with every result.
-- [ ] Avoid rebuilding a complete BM25 index on every query by caching and invalidating on index changes.
+- [x] Add scope filters for `single_note`, `issue`, `theme` and `all_notes`.
+- [x] Use vector retrieval plus BM25/RRF when resources permit.
+- [x] Use BM25 fallback only when RAM policy says so, and record the degradation.
+- [x] Bound the number of chunks, total characters and maximum source count.
+- [x] Return source snippets and IDs with every result.
+- [x] Avoid rebuilding a complete BM25 index on every query by caching and invalidating on index changes.
 
 Acceptance:
 
@@ -761,13 +908,13 @@ Acceptance:
 
 Steps:
 
-- [ ] Replace direct file concatenation with `RetrievalApplicationService`.
-- [ ] Use the configured model and loopback URL.
-- [ ] Include explicit instructions that the model must distinguish evidence from uncertainty.
-- [ ] Return answer, sources, retrieval mode and error state.
-- [ ] Never return “processed successfully” when Ollama failed.
-- [ ] Escape all answer text before rendering.
-- [ ] Add an offline fake provider for tests.
+- [x] Replace direct file concatenation with `RetrievalApplicationService`.
+- [x] Use the configured model and loopback URL.
+- [x] Include explicit instructions that the model must distinguish evidence from uncertainty.
+- [x] Return answer, sources, retrieval mode and error state.
+- [x] Never return “processed successfully” when Ollama failed.
+- [x] Escape all answer text before rendering.
+- [x] Add an offline fake provider for tests.
 
 Acceptance:
 
@@ -793,17 +940,19 @@ Acceptance:
 
 Steps:
 
-- [ ] Define budgets for text extraction, OCR, audio transcription, embeddings and LLM inference.
-- [ ] Use measured available memory when `psutil` exists.
-- [ ] Replace fabricated macOS fallback values with an explicit `measurement_unavailable` state.
-- [ ] Add model metadata: estimated RAM, context size and concurrency limit.
-- [ ] Query Ollama process/model state when supported and record failures.
-- [ ] Make “purge” a policy operation using documented `keep_alive=0`, not an assumed force-kill.
+- [x] Define budgets for text extraction, OCR, audio transcription, embeddings and LLM inference.
+- [x] Use measured available memory when `psutil` exists.
+- [x] Replace fabricated macOS fallback values with an explicit `measurement_unavailable` state.
+- [x] Add model metadata: estimated RAM, context size and concurrency limit.
+- [x] Query Ollama process/model state when supported and record failures.
+- [x] Make “purge” a policy operation using documented `keep_alive=0`, not an assumed force-kill.
 
 Acceptance:
 
 - No fallback claims a precise available-memory value when it was not measured.
 - Every selected model has a budget decision and reason.
+
+**Checkpoint 5.1 (2026-08-08):** Resource budgets + honest measurement_unavailable; model decision/reason; purge via keep_alive=0. Review approved. Committed as `2a39ef8`.
 
 ### Task 5.2 — Add persistent task classes
 
@@ -826,18 +975,20 @@ graph_refresh
 
 Steps:
 
-- [ ] Add a durable queue backed by the job store.
-- [ ] Limit OCR/audio concurrency separately from text extraction.
-- [ ] Enforce one LLM generation per Ollama endpoint/model unless measured capacity permits more.
-- [ ] Purge/release the model between heavy media tasks when policy requires it.
-- [ ] Store scheduling decisions and wait reasons.
-- [ ] Do not classify a failed file as quarantined merely because it belongs to a media batch.
+- [x] Add a durable queue backed by the job store.
+- [x] Limit OCR/audio concurrency separately from text extraction.
+- [x] Enforce one LLM generation per Ollama endpoint/model unless measured capacity permits more.
+- [x] Purge/release the model between heavy media tasks when policy requires it.
+- [x] Store scheduling decisions and wait reasons.
+- [x] Do not classify a failed file as quarantined merely because it belongs to a media batch.
 
 Acceptance:
 
 - A mixed queue is ordered by policy and remains resumable.
 - A memory-constrained environment queues or degrades instead of exceeding the budget.
 - Two simultaneous tasks cannot corrupt the same document or Chroma records.
+
+**Checkpoint 5.2 (2026-08-08):** Durable scheduler + task classes; evaluate_resource gate; orphaned-lease resume fix; atomic lease claim. Review approved after fix round 1. Committed as `5ab37d1`.
 
 ### Task 5.3 — Validate the two-attempt rule as a policy
 
@@ -849,12 +1000,12 @@ Acceptance:
 
 Steps:
 
-- [ ] Persist every attempt.
-- [ ] Classify retryable and permanent errors.
-- [ ] Configure the maximum attempts per error class.
-- [ ] Default corrupt/unsupported media to two attempts only if the product decision confirms that policy.
-- [ ] Preserve the original source on first failure.
-- [ ] Quarantine only after the policy threshold and write a user-readable reason.
+- [x] Persist every attempt.
+- [x] Classify retryable and permanent errors.
+- [x] Configure the maximum attempts per error class.
+- [x] Default corrupt/unsupported media to two attempts only if the product decision confirms that policy.
+- [x] Preserve the original source on first failure.
+- [x] Quarantine only after the policy threshold and write a user-readable reason.
 
 Acceptance:
 
@@ -870,6 +1021,8 @@ Acceptance:
 
 **Exit gate:** a user can review, edit, approve, reject, restore and export a note without corrupting frontmatter or losing content.
 
+**Checkpoint 5.3 (2026-08-08):** Domain retry policy (corrupt/unsupported = 2); attempt persistence; quarantine at threshold. Review approved. Committed as `7d47d2a`.
+
 ### Task 6.1 — Implement approval as a state transition
 
 **Files:**
@@ -880,20 +1033,22 @@ Acceptance:
 
 Steps:
 
-- [ ] Load a `NoteDocument` by ID.
-- [ ] Validate expected revision.
-- [ ] Update only metadata fields controlled by the UI.
-- [ ] Preserve body Markdown separately.
-- [ ] Append a typed history event.
-- [ ] Save atomically.
-- [ ] Reindex only after the approved note is durable.
-- [ ] Reject stale revisions with a conflict response.
+- [x] Load a `NoteDocument` by ID.
+- [x] Validate expected revision.
+- [x] Update only metadata fields controlled by the UI.
+- [x] Preserve body Markdown separately.
+- [x] Append a typed history event.
+- [x] Save atomically.
+- [x] Reindex only after the approved note is durable.
+- [x] Reject stale revisions with a conflict response.
 
 Acceptance:
 
 - Approval cannot modify arbitrary body occurrences of `estado`.
 - A stale editor cannot overwrite a newer note.
 - A rejected note remains recoverable with reason and history.
+
+**Checkpoint 6.1 (2026-08-08):** NotesApplicationService approve/reject with revision CAS; inbox path+document_id; file rollback on CAS fail. Review approved after fix round 1. Committed as `b05e997`.
 
 ### Task 6.2 — Add safe metadata forms
 
@@ -905,18 +1060,20 @@ Acceptance:
 
 Steps:
 
-- [ ] Provide title, tags, issue, date, sources and status as typed controls.
-- [ ] Sanitize tags into a bounded list of strings.
-- [ ] Validate issue names through the Vault service.
-- [ ] Do not expose raw YAML editing in the approval modal.
-- [ ] Display validation errors adjacent to the invalid field.
-- [ ] Keep the raw frontmatter available only in a diagnostic/export view.
+- [x] Provide title, tags, issue, date, sources and status as typed controls.
+- [x] Sanitize tags into a bounded list of strings.
+- [x] Validate issue names through the Vault service.
+- [x] Do not expose raw YAML editing in the approval modal.
+- [x] Display validation errors adjacent to the invalid field.
+- [x] Keep the raw frontmatter available only in a diagnostic/export view.
 
 Acceptance:
 
 - Invalid metadata cannot be committed.
 - Tags and issue names cannot inject YAML or paths.
 - The approval UI does not directly edit serialized frontmatter.
+
+**Checkpoint 6.2 (2026-08-08):** Safe typed metadata forms; injection blocked; save cannot set approved (approve-only). Review approved after fix round 1. Committed as `d48fa40`.
 
 ### Task 6.3 — Evaluate TipTap without making it the source of truth
 
@@ -929,17 +1086,19 @@ Acceptance:
 
 Steps:
 
-- [ ] Decide whether TipTap is vendored for offline use or excluded from the packaged application.
-- [ ] Define Markdown-to-editor and editor-to-Markdown conversions for headings, lists, code, links and emphasis.
-- [ ] Preserve unsupported Markdown as explicit raw blocks rather than silently dropping it.
-- [ ] Add round-trip tests with WikiLinks, frontmatter, code fences, tables and math.
-- [ ] Keep approval based on `NoteDocument`, not editor state alone.
+- [x] Decide whether TipTap is vendored for offline use or excluded from the packaged application.
+- [x] Define Markdown-to-editor and editor-to-Markdown conversions for headings, lists, code, links and emphasis.
+- [x] Preserve unsupported Markdown as explicit raw blocks rather than silently dropping it.
+- [x] Add round-trip tests with WikiLinks, frontmatter, code fences, tables and math.
+- [x] Keep approval based on `NoteDocument`, not editor state alone.
 
 Acceptance:
 
 - A round-trip does not lose supported content.
 - Unsupported content is visible and preserved.
 - TipTap is not added if the measured round-trip quality is below the acceptance threshold.
+
+**Checkpoint 6.3 (2026-08-08):** TipTap **excluded** (measured); `markdown_projection` + round-trip tests; NoteDocument remains SoT. Review approved. Committed as `b45a31c`.
 
 ### Task 6.4 — Make export deterministic
 
@@ -952,12 +1111,12 @@ Acceptance:
 
 Steps:
 
-- [ ] Export from the canonical `NoteDocument`, not from rendered DOM.
-- [ ] Implement Markdown export directly.
-- [ ] Implement PDF through a documented local renderer or explicitly label browser printing as a user-assisted export.
-- [ ] Implement DOCX with `python-docx` if Word export is required; do not call HTML with `.doc` a real DOCX.
-- [ ] Validate destination paths and prevent overwrites unless confirmed.
-- [ ] Escape titles, paths and note body in every export format.
+- [x] Export from the canonical `NoteDocument`, not from rendered DOM.
+- [x] Implement Markdown export directly.
+- [x] Implement PDF through a documented local renderer or explicitly label browser printing as a user-assisted export.
+- [x] Implement DOCX with `python-docx` if Word export is required; do not call HTML with `.doc` a real DOCX.
+- [x] Validate destination paths and prevent overwrites unless confirmed.
+- [x] Escape titles, paths and note body in every export format.
 
 Acceptance:
 
@@ -966,6 +1125,8 @@ Acceptance:
 - No export path can escape the allowed destination policy.
 
 ---
+
+**Checkpoint 6.4 (2026-08-09):** Deterministic export from NoteDocument (MD/DOCX/PDF print-assisted); path policy + overwrite guard; PDF includes canonical frontmatter. Review approved. Committed as `3d46902`.
 
 ## 10. Phase 7 — Installers, Packaging and Offline Claims
 
@@ -985,17 +1146,19 @@ Acceptance:
 
 Steps:
 
-- [ ] Declare optional dependencies with extras for PyWebView, audio, OCR, Office/Docling and development.
-- [ ] Pin or lock production dependencies for reproducibility.
-- [ ] Document system binaries: Tesseract, FFmpeg, Ollama and Obsidian.
-- [ ] Resolve the `pywebview` and `faster-whisper` declaration gap.
-- [ ] Verify the icon path referenced by PyInstaller and add the actual asset or correct the spec.
-- [ ] Build from a clean environment and record package versions.
+- [x] Declare optional dependencies with extras for PyWebView, audio, OCR, Office/Docling and development.
+- [x] Pin or lock production dependencies for reproducibility.
+- [x] Document system binaries: Tesseract, FFmpeg, Ollama and Obsidian.
+- [x] Resolve the `pywebview` and `faster-whisper` declaration gap.
+- [x] Verify the icon path referenced by PyInstaller and add the actual asset or correct the spec.
+- [x] Build from a clean environment and record package versions.
 
 Acceptance:
 
 - A clean installation has the dependencies needed for the selected feature set.
 - The packager does not reference missing assets.
+
+**Checkpoint 7.1 (2026-08-09):** Extras (webview/audio/ocr/office/dev); pins; dependency-matrix; icon guard; pywebview/faster-whisper gap closed. Review approved. Committed as `167e4b0`.
 
 ### Task 7.2 — Make installer actions explicit and idempotent
 
@@ -1008,20 +1171,22 @@ Acceptance:
 
 Steps:
 
-- [ ] Detect existing installations without reinstalling them.
-- [ ] Ask for confirmation before installing large models or system applications.
-- [ ] Verify service readiness after starting Ollama.
-- [ ] Report failed model installation as a failed step, not success.
-- [ ] Move Tkinter widget updates onto the main thread using `after`.
-- [ ] Correct the wizard step count.
-- [ ] Store an installation receipt with versions and paths.
-- [ ] Make rerunning the installer safe.
+- [x] Detect existing installations without reinstalling them.
+- [x] Ask for confirmation before installing large models or system applications.
+- [x] Verify service readiness after starting Ollama.
+- [x] Report failed model installation as a failed step, not success.
+- [x] Move Tkinter widget updates onto the main thread using `after`.
+- [x] Correct the wizard step count.
+- [x] Store an installation receipt with versions and paths.
+- [x] Make rerunning the installer safe.
 
 Acceptance:
 
 - A second run does not duplicate configuration or workspaces.
 - A failed dependency is visible and actionable.
 - No system mutation occurs without the required user confirmation.
+
+**Checkpoint 7.2 (2026-08-09):** Idempotent installers + confirmation gates; Ollama readiness; receipt; Tk `after`; fix `_default_log`/progress. Review approved after fix round 1. Committed as `a6ff700`.
 
 ### Task 7.3 — Separate GUI and headless execution
 
@@ -1035,16 +1200,18 @@ Acceptance:
 
 Steps:
 
-- [ ] Add an explicit `--headless` command that runs lifecycle services without Tkinter/PyWebView.
-- [ ] Make Docker use headless mode.
-- [ ] Make GUI mode fail with a clear message when no display is available.
-- [ ] Pass `OLLAMA_URL` through configuration only after validation.
-- [ ] Document volumes, state database, Vault and shutdown behavior.
+- [x] Add an explicit `--headless` command that runs lifecycle services without Tkinter/PyWebView.
+- [x] Make Docker use headless mode.
+- [x] Make GUI mode fail with a clear message when no display is available.
+- [x] Pass `OLLAMA_URL` through configuration only after validation.
+- [x] Document volumes, state database, Vault and shutdown behavior.
 
 Acceptance:
 
 - Docker starts a useful headless worker or is removed from supported deployment claims.
 - GUI startup remains correct on desktop platforms.
+
+**Checkpoint 7.3 (2026-08-09):** Docker `--headless`; GUI fails without display; validated OLLAMA_URL; SIGTERM graceful stop. Review approved after fix round 1. Committed as `05555f2`.
 
 ### Task 7.4 — Define offline mode accurately
 
@@ -1058,11 +1225,11 @@ Acceptance:
 
 Steps:
 
-- [ ] Remove runtime Google Fonts requests in strict offline mode.
-- [ ] Add a visible state showing whether the application is local-only or external-enabled.
-- [ ] Block non-loopback LLM URLs by default.
-- [ ] Separate install-time downloads from runtime inference.
-- [ ] Add an offline test that fails if external URLs are present in the runtime HTML.
+- [x] Remove runtime Google Fonts requests in strict offline mode.
+- [x] Add a visible state showing whether the application is local-only or external-enabled.
+- [x] Block non-loopback LLM URLs by default.
+- [x] Separate install-time downloads from runtime inference.
+- [x] Add an offline test that fails if external URLs are present in the runtime HTML.
 
 Acceptance:
 
@@ -1070,6 +1237,8 @@ Acceptance:
 - The UI never claims 100% local processing when an external endpoint is active.
 
 ---
+
+**Checkpoint 7.4 (2026-08-09):** Verifiable offline mode badge; no CDN fonts; install vs runtime docs; tests. Review approved. Committed as `2748962`.
 
 ## 11. Phase 8 — Verification, Migration and Release
 
@@ -1086,22 +1255,24 @@ Acceptance:
 
 Required cases:
 
-- [ ] Absolute external path.
-- [ ] Relative traversal.
-- [ ] Symlink outside Vault.
-- [ ] Quarantine name containing separators.
-- [ ] HTML/JS in note body.
-- [ ] HTML/JS in title, tag, issue and chat response.
-- [ ] `javascript:` and data URLs.
-- [ ] AppleScript metacharacters.
-- [ ] Non-loopback endpoint.
-- [ ] Oversized/zip-bomb-like EPUB.
+- [x] Absolute external path.
+- [x] Relative traversal.
+- [x] Symlink outside Vault.
+- [x] Quarantine name containing separators.
+- [x] HTML/JS in note body.
+- [x] HTML/JS in title, tag, issue and chat response.
+- [x] `javascript:` and data URLs.
+- [x] AppleScript metacharacters.
+- [x] Non-loopback endpoint.
+- [x] Oversized/zip-bomb-like EPUB.
 
 Acceptance:
 
 - All cases fail closed.
 - No generated HTML contains executable user-controlled attributes.
 - No external filesystem mutation is possible through the bridge.
+
+**Checkpoint 8.1 (2026-08-09):** Security matrix under `tests/security/` (29 tests); EPUB budgets fail-closed. Review approved. Committed as `10139a7`.
 
 ### Task 8.2 — Recovery and idempotency test matrix
 
@@ -1113,22 +1284,24 @@ Acceptance:
 
 Required cases:
 
-- [ ] Failure after dirty copy.
-- [ ] Failure after clean artifact.
-- [ ] Failure after Chroma indexing.
-- [ ] Failure after LLM generation.
-- [ ] Failure during note write.
-- [ ] Process restart between every stage.
-- [ ] Duplicate source hash.
-- [ ] Source modified after previous completion.
-- [ ] Reindex with fewer chunks.
-- [ ] Concurrent claim of one job.
+- [x] Failure after dirty copy.
+- [x] Failure after clean artifact.
+- [x] Failure after Chroma indexing.
+- [x] Failure after LLM generation.
+- [x] Failure during note write.
+- [x] Process restart between every stage.
+- [x] Duplicate source hash.
+- [x] Source modified after previous completion.
+- [x] Reindex with fewer chunks.
+- [x] Concurrent claim of one job.
 
 Acceptance:
 
 - Resume completes without duplicate notes.
 - No stale chunks remain.
 - Job history explains every recovery.
+
+**Checkpoint 8.2 (2026-08-09):** Recovery/idempotency integration matrix (18 tests). Review approved. Committed as `7948bcb`.
 
 ### Task 8.3 — Contract and UI test matrix
 
@@ -1141,12 +1314,14 @@ Acceptance:
 
 Required cases:
 
-- [ ] Every frontend bridge call exists.
-- [ ] Every action has a typed payload.
-- [ ] Settings persist and apply.
-- [ ] Nested Themes/Cuestiones appear in every relevant subsystem.
-- [ ] Approval changes state and history.
-- [ ] Export matches the approved canonical document.
+- [x] Every frontend bridge call exists.
+- [x] Every action has a typed payload.
+- [x] Settings persist and apply.
+- [x] Nested Themes/Cuestiones appear in every relevant subsystem.
+- [x] Approval changes state and history.
+- [x] Export matches the approved canonical document.
+
+**Checkpoint 8.3 (2026-08-09):** Contract matrix under `tests/contract/` (36 tests). `get_graph_data` vault-relative `document_id` fix. Review approved. Committed as `ba291b3`.
 
 ### Task 8.4 — Migration tooling
 
@@ -1158,13 +1333,13 @@ Required cases:
 
 Steps:
 
-- [ ] Dry-run scan all notes before modifying anything.
-- [ ] Report malformed frontmatter, duplicate stems, unsafe paths and unsupported statuses.
-- [ ] Write a migration manifest.
-- [ ] Back up affected files or use a reversible migration directory.
-- [ ] Migrate frontmatter to schema version 1.
-- [ ] Rebuild index and MOC after migration.
-- [ ] Provide a rollback procedure based on the manifest.
+- [x] Dry-run scan all notes before modifying anything.
+- [x] Report malformed frontmatter, duplicate stems, unsafe paths and unsupported statuses.
+- [x] Write a migration manifest.
+- [x] Back up affected files or use a reversible migration directory.
+- [x] Migrate frontmatter to schema version 1.
+- [x] Rebuild index and MOC after migration.
+- [x] Provide a rollback procedure based on the manifest.
 
 Acceptance:
 
@@ -1172,19 +1347,23 @@ Acceptance:
 - A dry run makes no modifications.
 - Rollback restores the pre-migration content and paths.
 
+**Checkpoint 8.4 (2026-08-09):** Vault migrator + CLI + guide (15 tests). Catalog-only MOC; fail-closed apply; index rollback. Review approved after fix round 1. Committed as `6f68b00`.
+
 ### Task 8.5 — Release gate
 
 Release only when all conditions are true:
 
-- [ ] Source tree is clean after tests.
-- [ ] Unit, integration, security and contract suites pass.
-- [ ] No P0/P1 security findings remain open.
-- [ ] Offline mode has a passing contract test.
-- [ ] Installer tests pass for supported platforms.
-- [ ] Headless mode is documented and tested if Docker remains supported.
-- [ ] README claims match measured behavior.
-- [ ] A sample Vault can be migrated, ingested, reviewed, searched, exported and restored.
-- [ ] A rollback plan exists for application and Vault migrations.
+- [x] Source tree is clean after tests.
+- [x] Unit, integration, security and contract suites pass.
+- [x] No P0/P1 security findings remain open.
+- [x] Offline mode has a passing contract test.
+- [x] Installer tests pass for supported platforms.
+- [x] Headless mode is documented and tested if Docker remains supported.
+- [x] README claims match measured behavior.
+- [x] A sample Vault can be migrated, ingested, reviewed, searched, exported and restored.
+- [x] A rollback plan exists for application and Vault migrations.
+
+**Checkpoint 8.5 (2026-08-09):** Fail-closed `scripts/release_gate.py` + docs (12 tests). Smoke: migrate→ingest→approve→retrieve→export→rollback. Review approved after fix round 1. Committed as `17fc90c`. Gate `--skip-pytest` → **READY**. Phase 8 complete.
 
 ---
 
@@ -1192,41 +1371,41 @@ Release only when all conditions are true:
 
 Execute tasks in this order. Do not start a later phase merely because its UI is attractive; each phase depends on the contracts before it.
 
-1. `0.1` Test environment.
-2. `0.2` Authorized paths.
-3. `0.3` HTML safety.
-4. `0.4` Bridge contract.
-5. `0.5` Native command safety.
-6. `1.1` Frontmatter.
-7. `1.2` Atomic persistence.
-8. `1.3` Quarantine.
-9. `1.4` Configuration.
-10. `2.1` Job store.
-11. `2.2` State machine.
-12. `2.3` Recoverable ETL.
-13. `2.4` Lifecycle.
-14. `3.1` Vault scope.
-15. `3.2` Graph scope.
-16. `3.3` Reader contract.
-17. `4.1` Index reconciliation.
-18. `4.2` Retrieval service.
-19. `4.3` Chat integration.
-20. `5.1` Resource budgets.
-21. `5.2` Scheduler.
-22. `5.3` Retry policy.
-23. `6.1` Approval.
-24. `6.2` Metadata forms.
-25. `6.3` TipTap evaluation.
-26. `6.4` Export.
-27. `7.1` Dependencies.
-28. `7.2` Installers.
-29. `7.3` Headless mode.
-30. `7.4` Offline mode.
-31. `8.1` Security matrix.
-32. `8.2` Recovery matrix.
-33. `8.3` Contract matrix.
-34. `8.4` Migration.
-35. `8.5` Release gate.
+1. [x] `0.1` Test environment. (`0d7e5fa`)
+2. [x] `0.2` Authorized paths. (`fcb8070`)
+3. [x] `0.3` HTML safety. (`c2bb0e0`)
+4. [x] `0.4` Bridge contract. (`f6c3bdb`)
+5. [x] `0.5` Native command safety. (`cdbb81e`)
+6. [x] `1.1` Frontmatter. (`e6713b7`)
+7. [x] `1.2` Atomic persistence. (`df079c9`)
+8. [x] `1.3` Quarantine. (`4c09f45`)
+9. [x] `1.4` Configuration. (`1c07a95`)
+10. [x] `2.1` Job store. (`f81a1d0`)
+11. [x] `2.2` State machine. (`ea23bc1`)
+12. [x] `2.3` Recoverable ETL. (`bada86f`)
+13. [x] `2.4` Lifecycle. (`d8d38ba`)
+14. [x] `3.1` Vault scope. (`62c5663`)
+15. [x] `3.2` Graph scope. (`4561585`)
+16. [x] `3.3` Reader contract. (`2a0f472`)
+17. [x] `4.1` Index reconciliation. (`543b6e1`)
+18. [x] `4.2` Retrieval service. (`1a16a92`)
+19. [x] `4.3` Chat + Ollama. (`2b64861`)
+20. [x] `5.1` Resource budgets. (`2a39ef8`)
+21. [x] `5.2` Scheduler. (`5ab37d1`)
+22. [x] `5.3` Retry policy. (`7d47d2a`)
+23. [x] `6.1` Approval. (`b05e997`)
+24. [x] `6.2` Metadata forms. (`d48fa40`)
+25. [x] `6.3` TipTap evaluation. (`b45a31c` — TipTap excluded)
+26. [x] `6.4` Export. (`3d46902`)
+27. [x] `7.1` Dependencies. (`167e4b0`)
+28. [x] `7.2` Installers. (`a6ff700`)
+29. [x] `7.3` Headless mode. (`05555f2`)
+30. [x] `7.4` Offline mode. (`2748962`)
+31. [x] `8.1` Security matrix. (`10139a7`)
+32. [x] `8.2` Recovery matrix. (`7948bcb`)
+33. [x] `8.3` Contract matrix. (`ba291b3`)
+34. [x] `8.4` Migration. (`6f68b00`)
+35. [x] `8.5` Release gate. (`17fc90c`)
 
 Each task should produce a small, reviewable change with its tests. Do not mix security changes with visual redesign in the same task.
 

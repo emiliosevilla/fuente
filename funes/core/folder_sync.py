@@ -55,17 +55,26 @@ class FolderSyncManager:
             logger.error(f"Error guardando carpetas vinculadas: {e}")
             return False
 
-    def sync_to_input(self, input_dir: Path) -> int:
+    def sync_to_input(self, input_dir: Path, dirty_dir: Path) -> int:
         """
-        Recopila hacia 1_entrada todo archivo de las carpetas vinculadas que:
-        1. No haya pasado anteriormente por el flujo de Funes (no existe en 2_sucio ni en 1_entrada).
-        2. O que sí haya pasado por 2_sucio (o esté en 1_entrada), pero la fecha de modificación (mtime)
-           en la carpeta fuente de origen sea más reciente que la del archivo llevado en su día a 2_sucio/1_entrada.
+        Recopila hacia el 1_entrada del Tema activo todo archivo de las carpetas
+        vinculadas que:
+        1. No haya pasado anteriormente por el flujo de Funes (no existe en el
+           2_sucio del Tema ni en 1_entrada).
+        2. O que sí haya pasado por 2_sucio (o esté en 1_entrada), pero la fecha
+           de modificación (mtime) en la carpeta fuente de origen sea más reciente
+           que la del archivo llevado en su día a 2_sucio/1_entrada.
+
+        Both ``input_dir`` and ``dirty_dir`` must be the active Theme roots
+        (typically ``VaultManager.input_dir`` / ``VaultManager.dirty_dir``).
+        Never hardcode the General vault-root ``2_sucio``.
         """
         connected = self.load_connected_folders()
         copied_count = 0
+        input_dir = Path(input_dir)
+        dirty_dir = Path(dirty_dir)
         input_dir.mkdir(parents=True, exist_ok=True)
-        dirty_dir = self.vault_root / "2_sucio"
+        dirty_dir.mkdir(parents=True, exist_ok=True)
 
         for folder in connected:
             if not folder.exists():
@@ -75,9 +84,9 @@ class FolderSyncManager:
                     if file_path.is_file() and not file_path.name.startswith("."):
                         dest = input_dir / file_path.name
                         dirty_file = dirty_dir / file_path.name
-                        
+
                         should_copy = False
-                        
+
                         # Caso 1: No ha pasado anteriormente por 2_sucio
                         if not dirty_file.exists():
                             if not dest.exists():

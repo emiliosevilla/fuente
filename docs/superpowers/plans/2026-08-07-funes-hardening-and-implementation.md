@@ -11,7 +11,7 @@
 ## Progress Status (2026-08-08)
 
 **Branch:** `feature/funes-hardening-2026-08-07` (worktree `.worktrees/funes-hardening-2026-08-07`)  
-**Tip:** `c4009dd` — pushed to `origin/feature/funes-hardening-2026-08-07`  
+**Tip:** `9684bd1` — pushed to `origin/feature/funes-hardening-2026-08-07`  
 **Not merged** into `dev` / `main` yet. Main checkout still has a dirty partial `consola_preview.html`; discard before any `/supagit` promote.
 
 ### Completed
@@ -26,7 +26,7 @@
 | Phase 5 — Resource scheduling | **Done** | 5.1–5.3 | `7d47d2a` |
 | Phase 6 — Human Review / YAML / Editorial | **Done** | 6.1–6.4 | `3d46902` |
 | Phase 7 — Installers / Packaging / Offline | **Done** | 7.1–7.4 | `2748962` |
-| Phase 8 — Matrices / Migration / Release | **Done** (8.5 commit pending) | 8.1–8.5 | `c4009dd` |
+| Phase 8 — Matrices / Migration / Release | **Done** | 8.1–8.5 | `9684bd1` |
 
 Commits on this branch since `1bb66b8`:
 
@@ -84,12 +84,14 @@ Commits on this branch since `1bb66b8`:
 52. `472a1b2` — docs: record Task 8.3  
 53. `6f68b00` — Task 8.4 migration tooling  
 54. `c4009dd` — docs: record Task 8.4  
+55. `17fc90c` — Task 8.5 release gate  
+56. `9684bd1` — docs: record Task 8.5 / Phase 8  
 
 ### Not started / next
 
-- Plan tasks complete after 8.5 commit; then whole-branch review + finishing-a-development-branch.
+- All plan tasks **0.1–8.5 complete**. Awaiting integration decision (merge / PR / keep).
 
-**Resume at:** human commit of Task `8.5`, then final branch review.  
+**Resume at:** finishing-a-development-branch (base: `dev`).  
 **SDD ledger:** `.worktrees/funes-hardening-2026-08-07/.superpowers/sdd/2026-08-07-funes-hardening-and-implementation/progress.md`  
 **Process note:** After each completed task, update this Progress Status section, mark that task's step checkboxes `[x]`, and refresh §12 Recommended Execution Order — do not leave the plan stale between checkpoints.
 
@@ -1361,7 +1363,7 @@ Release only when all conditions are true:
 - [x] A sample Vault can be migrated, ingested, reviewed, searched, exported and restored.
 - [x] A rollback plan exists for application and Vault migrations.
 
-**Checkpoint 8.5 (2026-08-09):** Fail-closed `scripts/release_gate.py` + docs (12 tests). Smoke: migrate→ingest→approve→retrieve→export→rollback. Review approved after fix round 1. **Commit pending**. Phase 8 complete after commit.
+**Checkpoint 8.5 (2026-08-09):** Fail-closed `scripts/release_gate.py` + docs (12 tests). Smoke: migrate→ingest→approve→retrieve→export→rollback. Review approved after fix round 1. Committed as `17fc90c`. Gate `--skip-pytest` → **READY**. Phase 8 complete.
 
 ---
 
@@ -1403,7 +1405,7 @@ Execute tasks in this order. Do not start a later phase merely because its UI is
 32. [x] `8.2` Recovery matrix. (`7948bcb`)
 33. [x] `8.3` Contract matrix. (`ba291b3`)
 34. [x] `8.4` Migration. (`6f68b00`)
-35. [x] `8.5` Release gate. (commit pending)
+35. [x] `8.5` Release gate. (`17fc90c`)
 
 Each task should produce a small, reviewable change with its tests. Do not mix security changes with visual redesign in the same task.
 

@@ -1,9 +1,27 @@
+import json
+import logging
 import os
 import sys
 import time
 import ctypes
-import logging
-from typing import Dict, Any, List, Set
+import urllib.request
+from typing import Any, Dict, List, Optional, Set, Union
+
+from funes.ram_governor.budget import (
+    MODEL_CATALOG,
+    OLLAMA_PURGE_KEEP_ALIVE,
+    BudgetDecision,
+    MemorySnapshot,
+    ResourceKind,
+    evaluate_resource,
+    get_model_metadata,
+    list_resource_budgets,
+    measured_snapshot,
+    select_llm_model,
+    should_fallback_to_bm25 as budget_should_fallback_to_bm25,
+    unavailable_snapshot,
+    viable_models,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -33,8 +51,6 @@ try:
     import requests
     HAS_REQUESTS = True
 except ImportError:
-    import urllib.request
-    import json
     HAS_REQUESTS = False
 
 
@@ -58,6 +74,8 @@ class RAMGovernor:
     def __init__(self, ollama_url: str = "http://localhost:11434", safety_margin_pct: float = 0.35):
         self.ollama_url = ollama_url.rstrip("/")
         self.safety_margin_pct = safety_margin_pct
+        self._last_budget_decision: Optional[BudgetDecision] = None
+        self._last_ollama_state_error: Optional[str] = None
 
     def get_top_resource_hogs(self, limit: int = 5) -> List[Dict[str, Any]]:
         """Obtiene la lista de los N procesos de usuario que más RAM consumen, excluyendo la whitelist del SO."""
@@ -156,111 +174,245 @@ class RAMGovernor:
 
         return results
 
+    def measure_memory(self) -> MemorySnapshot:
+        """Measure host RAM. Never invent a precise available_gb when unmeasured."""
+        if HAS_PSUTIL:
+            try:
+                mem = psutil.virtual_memory()
+                return measured_snapshot(
+                    total_gb=mem.total / (1024 ** 3),
+                    available_gb=mem.available / (1024 ** 3),
+                    safety_margin_pct=self.safety_margin_pct,
+                )
+            except Exception as exc:
+                logger.debug("psutil virtual_memory failed: %s", exc)
+                return unavailable_snapshot(
+                    self.safety_margin_pct,
+                    error=f"psutil_error: {exc}",
+                )
+
+        try:
+            if sys.platform == "win32":
+                stat = MEMORYSTATUSEX()
+                stat.dwLength = ctypes.sizeof(MEMORYSTATUSEX)
+                if ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(stat)):
+                    return measured_snapshot(
+                        total_gb=stat.ullTotalPhys / (1024 ** 3),
+                        available_gb=stat.ullAvailPhys / (1024 ** 3),
+                        safety_margin_pct=self.safety_margin_pct,
+                    )
+                return unavailable_snapshot(
+                    self.safety_margin_pct,
+                    error="GlobalMemoryStatusEx_failed",
+                )
+
+            if sys.platform == "darwin":
+                # hw.memsize yields total RAM only. Do not fabricate available_gb
+                # as a fraction of total (previous bug).
+                import subprocess
+
+                out = subprocess.check_output(["sysctl", "-n", "hw.memsize"]).decode().strip()
+                total_gb = round(int(out) / (1024 ** 3), 2)
+                return unavailable_snapshot(
+                    self.safety_margin_pct,
+                    error="macos_available_memory_requires_psutil",
+                    total_gb=total_gb,
+                )
+
+            if sys.platform.startswith("linux"):
+                total_kb = None
+                available_kb = None
+                with open("/proc/meminfo", "r", encoding="utf-8") as handle:
+                    for line in handle:
+                        if line.startswith("MemTotal:"):
+                            total_kb = int(line.split()[1])
+                        elif line.startswith("MemAvailable:"):
+                            available_kb = int(line.split()[1])
+                if total_kb is not None and available_kb is not None:
+                    return measured_snapshot(
+                        total_gb=total_kb / (1024 ** 2),
+                        available_gb=available_kb / (1024 ** 2),
+                        safety_margin_pct=self.safety_margin_pct,
+                    )
+                return unavailable_snapshot(
+                    self.safety_margin_pct,
+                    error="linux_meminfo_incomplete",
+                    total_gb=round(total_kb / (1024 ** 2), 2) if total_kb else None,
+                )
+        except Exception as exc:
+            logger.debug("Fallback RAM measurement error: %s", exc)
+            return unavailable_snapshot(
+                self.safety_margin_pct,
+                error=f"measurement_error: {exc}",
+            )
+
+        return unavailable_snapshot(
+            self.safety_margin_pct,
+            error=f"unsupported_platform:{sys.platform}",
+        )
+
     def should_fallback_to_bm25(self) -> bool:
         """Determina si se debe aplicar la degradación transparente a búsqueda léxica BM25."""
-        info = self.get_system_ram_info()
-        return info["available_gb"] < 3.5 or info["used_pct"] > 85.0
+        return budget_should_fallback_to_bm25(self.measure_memory())
 
     def get_system_ram_info(self) -> Dict[str, Any]:
-        """Obtiene información precisa de RAM del sistema (compatible con macOS, Windows y Linux)."""
-        total_gb = 16.0
-        available_gb = 8.0
+        """Obtiene información de RAM. ``available_gb`` is None when not measured."""
+        snapshot = self.measure_memory()
+        return snapshot.to_dict()
 
-        if HAS_PSUTIL:
-            mem = psutil.virtual_memory()
-            total_gb = mem.total / (1024 ** 3)
-            available_gb = mem.available / (1024 ** 3)
-        else:
-            try:
-                if sys.platform == "win32":
-                    stat = MEMORYSTATUSEX()
-                    stat.dwLength = ctypes.sizeof(MEMORYSTATUSEX)
-                    if ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(stat)):
-                        total_gb = stat.ullTotalPhys / (1024 ** 3)
-                        available_gb = stat.ullAvailPhys / (1024 ** 3)
-                elif sys.platform == "darwin":
-                    import subprocess
-                    out = subprocess.check_output(["sysctl", "-n", "hw.memsize"]).decode().strip()
-                    total_gb = int(out) / (1024 ** 3)
-                    available_gb = total_gb * 0.5
-                elif sys.platform.startswith("linux"):
-                    with open("/proc/meminfo", "r") as f:
-                        lines = f.readlines()
-                    for l in lines:
-                        if "MemTotal" in l:
-                            total_gb = int(l.split()[1]) / (1024 ** 2)
-                        elif "MemAvailable" in l:
-                            available_gb = int(l.split()[1]) / (1024 ** 2)
-            except Exception as e:
-                logger.debug(f"Fallback RAM measurement error: {e}")
-
-        return {
-            "total_gb": round(total_gb, 2),
-            "available_gb": round(available_gb, 2),
-            "used_pct": round((1.0 - (available_gb / max(total_gb, 1.0))) * 100, 1),
-            "safety_margin_gb": round(total_gb * self.safety_margin_pct, 2),
-        }
+    def recommend_model_decision(self) -> BudgetDecision:
+        """Select an LLM and return the full budget decision + reason."""
+        decision = select_llm_model(self.measure_memory())
+        self._last_budget_decision = decision
+        logger.info(
+            "Modelo seleccionado por RAMGovernor: '%s' (%s)",
+            decision.model_id,
+            decision.reason,
+        )
+        return decision
 
     def recommend_model(self) -> str:
         """Selecciona el modelo óptimo garantizando la holgura de RAM para el sistema host."""
-        ram_info = self.get_system_ram_info()
-        available_gb = ram_info["available_gb"]
-        total_gb = ram_info["total_gb"]
+        decision = self.recommend_model_decision()
+        return decision.model_id or MODEL_CATALOG[0].id
 
-        logger.info(f"RAM Total: {total_gb} GB, RAM Disponible: {available_gb} GB")
+    def last_budget_decision(self) -> Optional[Dict[str, Any]]:
+        if self._last_budget_decision is None:
+            return None
+        return self._last_budget_decision.to_dict()
 
-        if total_gb <= 8.0 or available_gb <= 3.5:
-            model = "qwen2.5:1.5b"
-            logger.info("[MODO ECO 8GB] Equipo con 8 GB RAM o baja memoria libre. Usando modelo ultraligero con descarga inmediata.")
-        elif available_gb <= 10.0 or total_gb <= 16.0:
-            model = "qwen2.5:3b"
-        elif available_gb <= 20.0 or total_gb <= 32.0:
-            model = "qwen2.5:7b"
-        elif available_gb <= 32.0:
-            model = "qwen2.5:14b"
-        else:
-            model = "command-r:35b"
+    def evaluate_resource_budget(
+        self,
+        kind: Union[str, ResourceKind],
+        *,
+        model_id: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Evaluate whether a named resource class fits the current snapshot."""
+        resource_kind = kind if isinstance(kind, ResourceKind) else ResourceKind(kind)
+        decision = evaluate_resource(
+            resource_kind,
+            self.measure_memory(),
+            model_id=model_id,
+        )
+        return decision.to_dict()
 
-        logger.info(f"Modelo seleccionado por RAMGovernor: '{model}'")
-        return model
+    def get_resource_budgets(self) -> List[Dict[str, Any]]:
+        return list_resource_budgets()
+
+    def get_model_catalog(self) -> List[Dict[str, Any]]:
+        return [m.to_dict() for m in MODEL_CATALOG]
 
     def get_viable_models(self) -> list[Dict[str, Any]]:
-        """Devuelve la lista de modelos de IA matemáticamente viables según la memoria RAM física.
+        """Devuelve la lista de modelos de IA viables según la memoria RAM física.
         Filtra y oculta automáticamente cualquier modelo que exceda la capacidad o margen de seguridad.
         """
-        ram_info = self.get_system_ram_info()
-        total_gb = ram_info["total_gb"]
+        return viable_models(self.measure_memory())
 
-        catalog = [
-            {"id": "qwen2.5:1.5b", "name": "Qwen 2.5 1.5B (Ultraligero - Eco 8GB)", "min_ram_gb": 3.0},
-            {"id": "qwen2.5:3b",   "name": "Qwen 2.5 3B (Ligero - Rápido)",       "min_ram_gb": 4.5},
-            {"id": "qwen2.5:7b",   "name": "Qwen 2.5 7B (Equilibrado - Estándar)",  "min_ram_gb": 7.0},
-            {"id": "qwen2.5:14b",  "name": "Qwen 2.5 14B (Avanzado - Razonamiento)","min_ram_gb": 14.0},
-            {"id": "command-r:35b","name": "Command-R 35B (Máximo Rendimiento)",   "min_ram_gb": 26.0},
-        ]
+    def _http_json(
+        self,
+        method: str,
+        path: str,
+        *,
+        payload: Optional[Dict[str, Any]] = None,
+        timeout: float = 5.0,
+    ) -> Dict[str, Any]:
+        url = f"{self.ollama_url}{path}"
+        if HAS_REQUESTS:
+            if method.upper() == "GET":
+                resp = requests.get(url, timeout=timeout)
+            else:
+                resp = requests.post(url, json=payload or {}, timeout=timeout)
+            if resp.status_code >= 400:
+                raise RuntimeError(f"HTTP {resp.status_code} from {path}")
+            if not resp.content:
+                return {}
+            return resp.json()
 
-        # Solo incluir modelos cuya exigencia mínima de RAM esté dentro de la RAM física utilizable
-        max_safe_ram = total_gb * (1.0 - (self.safety_margin_pct * 0.5))  # Tolerancia máxima segura
-        viable = [m for m in catalog if m["min_ram_gb"] <= max_safe_ram]
-        if not viable:
-            viable = [catalog[0]]  # Al menos el modelo ultraligero
-        return viable
+        data = None
+        headers = {}
+        if payload is not None:
+            data = json.dumps(payload).encode("utf-8")
+            headers["Content-Type"] = "application/json"
+        req = urllib.request.Request(url, data=data, headers=headers, method=method.upper())
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            body = resp.read()
+            if not body:
+                return {}
+            return json.loads(body.decode("utf-8"))
 
     def check_ollama_status(self) -> bool:
         """Verifica si Ollama está en ejecución."""
-        if HAS_REQUESTS:
-            try:
-                resp = requests.get(f"{self.ollama_url}/api/tags", timeout=3)
-                return resp.status_code == 200
-            except Exception:
-                return False
-        else:
-            try:
-                req = urllib.request.Request(f"{self.ollama_url}/api/tags")
-                with urllib.request.urlopen(req, timeout=3) as resp:
-                    return resp.status == 200
-            except Exception:
-                return False
+        try:
+            self._http_json("GET", "/api/tags", timeout=3)
+            return True
+        except Exception:
+            return False
+
+    def get_ollama_process_state(self) -> Dict[str, Any]:
+        """Query Ollama loaded-model state via ``/api/ps``. Failures are recorded, not raised."""
+        try:
+            data = self._http_json("GET", "/api/ps", timeout=3)
+            models = data.get("models") or []
+            self._last_ollama_state_error = None
+            return {
+                "ok": True,
+                "supported": True,
+                "models": models,
+                "error": None,
+            }
+        except Exception as exc:
+            message = f"ollama_ps_failed: {exc}"
+            self._last_ollama_state_error = message
+            logger.debug("Ollama process/model state query failed: %s", exc)
+            return {
+                "ok": False,
+                "supported": True,
+                "models": [],
+                "error": message,
+            }
+
+    def purge_model(self, model_name: str) -> Dict[str, Any]:
+        """Unload a model using documented ``keep_alive=0`` (policy purge, not force-kill)."""
+        meta = get_model_metadata(model_name)
+        try:
+            # Official unload: empty prompt + keep_alive=0 → done_reason unload.
+            result = self._http_json(
+                "POST",
+                "/api/generate",
+                payload={
+                    "model": model_name,
+                    "prompt": "",
+                    "keep_alive": OLLAMA_PURGE_KEEP_ALIVE,
+                    "stream": False,
+                },
+                timeout=30,
+            )
+            return {
+                "ok": True,
+                "model": model_name,
+                "policy": "keep_alive=0",
+                "force_kill": False,
+                "done_reason": result.get("done_reason"),
+                "estimated_ram_gb": meta.estimated_ram_gb if meta else None,
+                "error": None,
+            }
+        except Exception as exc:
+            message = f"purge_failed: {exc}"
+            logger.warning(
+                "Ollama purge via keep_alive=%s failed for %s: %s",
+                OLLAMA_PURGE_KEEP_ALIVE,
+                model_name,
+                exc,
+            )
+            return {
+                "ok": False,
+                "model": model_name,
+                "policy": "keep_alive=0",
+                "force_kill": False,
+                "done_reason": None,
+                "estimated_ram_gb": meta.estimated_ram_gb if meta else None,
+                "error": message,
+            }
 
     def ensure_model_available(self, model_name: str) -> bool:
         """Comprueba si el modelo está descargado en Ollama. Si no, solicita el pull."""
@@ -283,14 +435,14 @@ class RAMGovernor:
                     timeout=600,
                 )
                 return pull_resp.status_code == 200
-            else:
-                req = urllib.request.Request(f"{self.ollama_url}/api/tags")
-                with urllib.request.urlopen(req, timeout=5) as resp:
-                    data = json.loads(resp.read().decode("utf-8"))
-                    models = [m.get("name") for m in data.get("models", [])]
-                    if any(model_name in m for m in models):
-                        return True
-                return True
+
+            req = urllib.request.Request(f"{self.ollama_url}/api/tags")
+            with urllib.request.urlopen(req, timeout=5) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+                models = [m.get("name") for m in data.get("models", [])]
+                if any(model_name in m for m in models):
+                    return True
+            return True
         except Exception as e:
             logger.error(f"Error comprobando disponibilidad del modelo '{model_name}': {e}")
             return False
@@ -301,12 +453,19 @@ class RAMGovernor:
         print("\n=======================================================")
         print("    CONFIGURACION DE MODELO IA SEGÚN RAM DISPONIBLE")
         print("=======================================================")
+        status = ram_info.get("measurement_status")
+        print(f"[+] Measurement status: {status}")
         print(f"[+] RAM Total detectada: {ram_info['total_gb']} GB")
-        print(f"[+] RAM Libre/Disponible: {ram_info['available_gb']} GB")
-        print(f"[+] Margen de seguridad: 35% reservado para evitar lag en el sistema host.")
+        if ram_info.get("available_gb") is None:
+            print("[+] RAM Libre/Disponible: measurement_unavailable (no precise figure)")
+        else:
+            print(f"[+] RAM Libre/Disponible: {ram_info['available_gb']} GB")
+        print(f"[+] Margen de seguridad: {int(self.safety_margin_pct * 100)}% reservado para evitar lag en el sistema host.")
 
-        model = self.recommend_model()
+        decision = self.recommend_model_decision()
+        model = decision.model_id or MODEL_CATALOG[0].id
         print(f"[+] Modelo Qwen óptimo seleccionado: '{model}'")
+        print(f"[+] Motivo: {decision.reason}")
 
         if not self.check_ollama_status():
             print("[!] Ollama no está respondiendo en http://localhost:11434. Asegúrate de iniciarlo.")
@@ -314,12 +473,10 @@ class RAMGovernor:
 
         already_installed = False
         try:
-            if HAS_REQUESTS:
-                resp = requests.get(f"{self.ollama_url}/api/tags", timeout=5)
-                if resp.status_code == 200:
-                    models = [m.get("name") for m in resp.json().get("models", [])]
-                    if any(model in m for m in models):
-                        already_installed = True
+            tags = self._http_json("GET", "/api/tags", timeout=5)
+            models = [m.get("name") for m in tags.get("models", [])]
+            if any(model in (m or "") for m in models):
+                already_installed = True
         except Exception:
             pass
 
@@ -352,4 +509,3 @@ if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
     gov = RAMGovernor()
     gov.setup_optimal_model()
-

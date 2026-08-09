@@ -6,6 +6,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from funes.config import get_default_config
+from funes.domain.frontmatter import serialize_frontmatter
 from funes.core.vault import VaultManager
 from funes.extractors.registry import ExtractorRegistry
 from funes.extractors.office_pdf import TextAndOfficeExtractor
@@ -20,11 +21,14 @@ from funes.watcher.watcher import ETLPipeline, wait_until_file_stable
 class TestAdversarial(unittest.TestCase):
 
     def setUp(self):
+        from tests.conftest import patch_abundant_ram
+
         self.temp_dir = tempfile.TemporaryDirectory()
         self.vault_path = Path(self.temp_dir.name)
         self.config = get_default_config(self.vault_path)
         self.vault = VaultManager(self.config.vault)
         self.pipeline = ETLPipeline(self.config)
+        patch_abundant_ram(self.pipeline.ram_governor)
 
     def tearDown(self):
         self.temp_dir.cleanup()
@@ -177,7 +181,13 @@ Esta es una Nota normal.
     @patch("funes.watcher.watcher.AtomicNoteGenerator.generate_atomic_note")
     def test_adversarial_concurrent_batch_ingestion(self, mock_gen):
         """Prueba volcado simultáneo de 20 archivos en 1_entrada."""
-        mock_gen.side_effect = lambda clean_md_content, model_name, file_name: f"# {file_name}\n\n{clean_md_content}"
+        mock_gen.side_effect = lambda clean_md_content, model_name, file_name: (
+            serialize_frontmatter({
+                "schema_version": 1, "title": file_name, "date": "", "author": "Funes",
+                "tags": [], "issue": "_Sin_Cuestion", "status": "pending_review",
+                "sources": [file_name], "history": [],
+            }) + f"# {file_name}\n\n{clean_md_content}"
+        )
         for i in range(20):
             p = self.config.vault.input_dir / f"archivo_masivo_{i:02d}.txt"
             with open(p, "w", encoding="utf-8") as f:

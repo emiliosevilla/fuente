@@ -1,74 +1,235 @@
-import re
+"""WikiLink insertion that respects frontmatter, code fences, and nested notes."""
+from __future__ import annotations
+
 import logging
+import re
+from dataclasses import dataclass
 from pathlib import Path
-from typing import List
+from typing import List, Optional
+
+from funes.core.vault import document_id_for_relative_path
+from funes.domain.documents import MarkdownDocument
 
 logger = logging.getLogger(__name__)
 
+CANONICAL_MOC_FILENAME = "_Indice_MOC.md"
+_SYSTEM_DIR_NAME = ".funes"
+_CODE_PLACEHOLDER = "__FUNES_CODE_BLOCK_{idx}__"
+_WIKILINK_PLACEHOLDER = "__FUNES_WIKILINK_{idx}__"
+
+
+@dataclass(frozen=True)
+class NoteLinkTarget:
+    """A discoverable note under the authorized output root."""
+
+    document_id: str
+    relative_path: str
+    stem: str
+    link_target: str
+
 
 class GraphLinker:
-    """Interconecta notas atómicas insertando hipervínculos [[WikiLinks]] de Obsidian sin corromper frontmatter ni código."""
+    """Interconecta notas atómicas insertando hipervínculos [[WikiLinks]] de Obsidian."""
 
     def __init__(self, output_dir: Path):
-        self.output_dir = output_dir
+        self.output_dir = Path(output_dir)
 
-    def get_existing_note_titles(self) -> List[str]:
-        """Escanea 4_salida y devuelve todos los títulos de las notas atómicas creadas."""
+    def _is_excluded(self, path: Path) -> bool:
+        """Exclude MOC/metadata, hidden paths and .funes from note discovery."""
+        try:
+            relative = path.resolve().relative_to(self.output_dir.resolve())
+        except ValueError:
+            return True
+        if any(part.startswith(".") for part in relative.parts):
+            return True
+        if _SYSTEM_DIR_NAME in relative.parts:
+            return True
+        if path.name.startswith("_") and path.suffix.lower() == ".md":
+            return True
+        return False
+
+    def enumerate_notes(self) -> list[NoteLinkTarget]:
+        """Recursively list valid notes with document IDs and link targets."""
         if not self.output_dir.exists():
             return []
 
-        titles = []
-        for file_path in self.output_dir.glob("*.md"):
-            titles.append(file_path.stem)
-        return titles
+        discovered: list[tuple[str, Path]] = []
+        for file_path in sorted(self.output_dir.rglob("*.md")):
+            if not file_path.is_file() or self._is_excluded(file_path):
+                continue
+            try:
+                MarkdownDocument.from_markdown(file_path.read_text(encoding="utf-8"))
+            except (OSError, UnicodeError, ValueError):
+                logger.warning(
+                    "Skipping invalid note during title discovery: %s",
+                    file_path.name,
+                )
+                continue
+            relative = file_path.resolve().relative_to(self.output_dir.resolve()).as_posix()
+            discovered.append((relative, file_path))
 
-    def auto_link_content(self, note_content: str, current_title: str) -> str:
-        """Inserta enlaces [[WikiLinks]] respetando bloques de código, frontmatter y flexibilidad de espacios/guiones."""
-        titles = self.get_existing_note_titles()
-        # Ordenar por longitud descendente para dar prioridad a títulos más largos y específicos
-        titles.sort(key=len, reverse=True)
+        stem_counts: dict[str, int] = {}
+        for _, path in discovered:
+            stem_counts[path.stem] = stem_counts.get(path.stem, 0) + 1
 
-        # Separar frontmatter YAML si existe
-        frontmatter = ""
-        body = note_content
+        notes: list[NoteLinkTarget] = []
+        for relative, path in discovered:
+            stem = path.stem
+            if stem_counts[stem] > 1:
+                link_target = relative[: -len(".md")] if relative.endswith(".md") else relative
+            else:
+                link_target = stem
+            notes.append(
+                NoteLinkTarget(
+                    document_id=document_id_for_relative_path(relative),
+                    relative_path=relative,
+                    stem=stem,
+                    link_target=link_target,
+                )
+            )
+        return notes
 
-        if note_content.startswith("---"):
-            parts = note_content.split("---", 2)
-            if len(parts) >= 3:
-                frontmatter = f"---{parts[1]}---"
-                body = parts[2]
+    def get_existing_note_titles(self) -> List[str]:
+        """Return WikiLink targets (issue-qualified when stems collide)."""
+        return [note.link_target for note in self.enumerate_notes()]
 
-        # Extraer bloques de código para evitar reemplazos en código
-        code_blocks = []
-        def mask_code_blocks(match):
+    def _normalize_relative_path(self, relative_path: str | None) -> str | None:
+        if not relative_path:
+            return None
+        normalized = relative_path.replace("\\", "/").lstrip("./")
+        return normalized
+
+    def _current_stem(
+        self,
+        current_title: str,
+        current_relative_path: str | None,
+    ) -> str:
+        if current_relative_path:
+            return Path(current_relative_path).stem
+        return Path(current_title).stem
+
+    def _should_skip_note(
+        self,
+        note: NoteLinkTarget,
+        current_title: str,
+        current_relative_path: str | None,
+    ) -> bool:
+        # Always skip the current note's own stem — never substitute another
+        # issue's namesake for self-title text under collisions.
+        current_stem = self._current_stem(current_title, current_relative_path)
+        if note.stem.lower() == current_stem.lower():
+            return True
+        if current_relative_path and note.relative_path == current_relative_path:
+            return True
+        return len(note.stem) < 3
+
+    def _pick_target_for_stem(
+        self,
+        stem: str,
+        notes: list[NoteLinkTarget],
+        current_title: str,
+        current_relative_path: str | None,
+    ) -> Optional[NoteLinkTarget]:
+        """Choose a link target for a stem; skip when still ambiguous or self."""
+        current_stem = self._current_stem(current_title, current_relative_path)
+        if stem.lower() == current_stem.lower():
+            # Own title text must stay unlinked; do not cross-link to a namesake.
+            return None
+
+        candidates = [
+            note
+            for note in notes
+            if note.stem.lower() == stem.lower()
+            and not (
+                current_relative_path and note.relative_path == current_relative_path
+            )
+        ]
+        if not candidates:
+            return None
+        if len(candidates) == 1:
+            return candidates[0]
+
+        if current_relative_path and "/" in current_relative_path:
+            current_issue = current_relative_path.split("/", 1)[0]
+            same_issue = [
+                note
+                for note in candidates
+                if note.relative_path.startswith(f"{current_issue}/")
+            ]
+            if len(same_issue) == 1:
+                return same_issue[0]
+        return None
+
+    def auto_link_content(
+        self,
+        note_content: str,
+        current_title: str,
+        *,
+        current_relative_path: str | None = None,
+    ) -> str:
+        """Insert [[WikiLinks]] into the body only; never frontmatter or code."""
+        notes = self.enumerate_notes()
+        # Longer stems first so specific titles win over shorter substrings.
+        unique_stems = sorted({note.stem for note in notes}, key=len, reverse=True)
+        current_rel = self._normalize_relative_path(current_relative_path)
+
+        document = MarkdownDocument.from_markdown(note_content)
+        body = document.body
+
+        code_blocks: list[str] = []
+
+        def mask_code(match: re.Match[str]) -> str:
             code_blocks.append(match.group(0))
-            return f"__CODE_BLOCK_{len(code_blocks)-1}__"
+            return _CODE_PLACEHOLDER.format(idx=len(code_blocks) - 1)
 
-        # Ocultar bloques ``` ... ``` y `...`
-        body = re.sub(r"```[\s\S]*?```", mask_code_blocks, body)
-        body = re.sub(r"`[^`\n]+`", mask_code_blocks, body)
+        # Closed fences, then unclosed fence-to-EOF, then inline code.
+        body = re.sub(r"```[\s\S]*?```", mask_code, body)
+        body = re.sub(r"```[\s\S]*\Z", mask_code, body)
+        body = re.sub(r"`[^`\n]+`", mask_code, body)
 
-        # Aplicar hipervínculos WikiLinks
-        for title in titles:
-            if title.lower() == current_title.lower() or len(title) < 3:
+        wikilinks: list[str] = []
+
+        def mask_wikilink(match: re.Match[str]) -> str:
+            wikilinks.append(match.group(0))
+            return _WIKILINK_PLACEHOLDER.format(idx=len(wikilinks) - 1)
+
+        body = re.sub(r"\[\[[^\]]+\]\]", mask_wikilink, body)
+
+        for stem in unique_stems:
+            target_note = self._pick_target_for_stem(
+                stem, notes, current_title, current_rel
+            )
+            if target_note is None:
+                continue
+            if self._should_skip_note(target_note, current_title, current_rel):
                 continue
 
-            # Crear patrón flexible que acepte espacios o guiones bajos indistintamente
-            pattern_str = r"[ _]".join(re.escape(part) for part in re.split(r"[ _]", title))
-            pattern = re.compile(rf"(?<!\[\[)(?<!\[)\b({pattern_str})\b(?!\]\])(?!\])", re.IGNORECASE)
-            
-            # Si el texto coincide con una variación de espacios/underscores, sustituir por [[Title|MatchedText]] o [[Title]]
-            def replace_with_wikilink(match):
+            pattern_str = r"[ _]".join(
+                re.escape(part) for part in re.split(r"[ _]", stem) if part
+            )
+            if not pattern_str:
+                continue
+            pattern = re.compile(
+                rf"(?<!\[\[)(?<!\[)\b({pattern_str})\b(?!\]\])(?!\])",
+                re.IGNORECASE,
+            )
+            link_target = target_note.link_target
+
+            def replace_with_wikilink(
+                match: re.Match[str],
+                *,
+                target: str = link_target,
+            ) -> str:
                 matched_text = match.group(1)
-                if matched_text == title:
-                    return f"[[{title}]]"
-                else:
-                    return f"[[{title}|{matched_text}]]"
+                if matched_text == target:
+                    return f"[[{target}]]"
+                return f"[[{target}|{matched_text}]]"
 
             body = pattern.sub(replace_with_wikilink, body)
 
-        # Restaurar bloques de código
+        for idx, wikilink in enumerate(wikilinks):
+            body = body.replace(_WIKILINK_PLACEHOLDER.format(idx=idx), wikilink)
         for idx, code_str in enumerate(code_blocks):
-            body = body.replace(f"__CODE_BLOCK_{idx}__", code_str)
+            body = body.replace(_CODE_PLACEHOLDER.format(idx=idx), code_str)
 
-        return frontmatter + body
+        return MarkdownDocument(metadata=document.metadata, body=body).to_markdown()

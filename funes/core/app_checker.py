@@ -202,8 +202,15 @@ def close_user_apps(apps_list: List[str]) -> bool:
         try:
             if is_mac:
                 cmd = [
-                    "osascript", "-e",
-                    f'tell application "{app_name}" to quit'
+                    "osascript",
+                    "-e",
+                    "on run argv",
+                    "-e",
+                    "tell application (item 1 of argv) to quit",
+                    "-e",
+                    "end run",
+                    "--",
+                    app_name,
                 ]
                 subprocess.run(cmd, capture_output=True, text=True, timeout=3)
             elif is_win:

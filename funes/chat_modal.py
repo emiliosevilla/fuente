@@ -1,18 +1,25 @@
 """
 Funes Chat Modal — Interfaz de chat nativa estilo Papiro.
-Conecta vía HTTP con la API de AnythingLLM local (localhost:3001) con fallback automático
-al motor local de Ollama (localhost:11434). Muestra tarjetas de citas, botón de borrado de historial,
-distintivo de privacidad local y asistente de reconexión.
+
+Uses the same ``process_chat`` / ``ChatApplicationService`` contract as the
+WebView bridge: retrieval-grounded answers, source citations, retrieval mode
+and an explicit error state when Ollama fails.
 """
 
-import json
-import urllib.request
-import urllib.error
+from __future__ import annotations
+
+import html
 import threading
 import tkinter as tk
-from tkinter import ttk, messagebox
+import urllib.request
 from pathlib import Path
-from typing import Optional, List, Dict, Any
+from typing import Any, Callable, Dict, List, Optional
+
+from funes.application.chat import ChatApplicationService, OllamaChatProvider
+from funes.application.retrieval import RetrievalApplicationService
+from funes.config import AppConfig, get_default_config
+from funes.rag.chroma_store import ChromaStore
+from funes.ram_governor.governor import RAMGovernor
 
 try:
     from funes.control_console import THEME, FONT_TYPEWRITER
@@ -33,15 +40,35 @@ except ImportError:
     }
     FONT_TYPEWRITER = "Courier"
 
+ChatHandler = Callable[[str, Optional[Dict[str, Any]]], Dict[str, Any]]
+
+
+def _display_text(value: str) -> str:
+    """Tk-safe display: unescape HTML entities if a backend html field was passed."""
+    text = value or ""
+    # Prefer raw text; if callers pass html.escape output, undo for Tk widgets.
+    if "&lt;" in text or "&amp;" in text or "&gt;" in text:
+        return html.unescape(text)
+    return text
+
 
 class FunesChatModal(tk.Toplevel):
-    """
-    Ventana Modal Nativa Papiro para 'Funes el conversador'.
-    """
+    """Ventana Modal Nativa Papiro para 'Funes el conversador'."""
 
-    def __init__(self, parent: tk.Widget, output_dir: Path):
+    def __init__(
+        self,
+        parent: tk.Widget,
+        output_dir: Path,
+        config: Optional[AppConfig] = None,
+        *,
+        process_chat: Optional[ChatHandler] = None,
+        chat_context: Optional[Dict[str, Any]] = None,
+    ):
         super().__init__(parent)
         self.output_dir = Path(output_dir).resolve()
+        self.config = config or get_default_config(self.output_dir.parent)
+        self._process_chat = process_chat or self._default_process_chat
+        self.chat_context: Dict[str, Any] = dict(chat_context or {"context_mode": "all_notes"})
         self.title("Funes el Conversador — Chat Inteligente Local")
         self.geometry("880x640")
         self.minsize(750, 480)
@@ -53,26 +80,51 @@ class FunesChatModal(tk.Toplevel):
         self._setup_ui()
         self._check_services_async()
 
+    def _default_process_chat(
+        self, message: str, context: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
+        """Standalone fallback when no console backend handler is injected."""
+        chroma = ChromaStore(self.config.vault.chroma_dir)
+        ram = RAMGovernor(
+            ollama_url=self.config.ollama_url,
+            safety_margin_pct=self.config.ram_safety_margin_pct,
+        )
+        retrieval = RetrievalApplicationService(chroma, ram_governor=ram)
+        service = ChatApplicationService(
+            retrieval,
+            provider=OllamaChatProvider(self.config.ollama_url, timeout=12.0),
+            model_resolver=lambda: (
+                self.config.custom_model_override or ram.recommend_model()
+            ),
+            ollama_url=self.config.ollama_url,
+        )
+        return service.ask(message, context)
+
     def _setup_ui(self):
-        # ── BARRA SUPERIOR DE CABECERA ──
-        tb = tk.Frame(self, bg=THEME["bg_card"], padx=14, pady=8, highlightbackground=THEME["border"], highlightthickness=1)
+        tb = tk.Frame(
+            self,
+            bg=THEME["bg_card"],
+            padx=14,
+            pady=8,
+            highlightbackground=THEME["border"],
+            highlightthickness=1,
+        )
         tb.pack(side="top", fill="x")
 
-        lbl_title = tk.Label(
+        tk.Label(
             tb,
-            text="💬 FUNES EL CONVERSADOR",
+            text="FUNES EL CONVERSADOR",
             font=(FONT_TYPEWRITER, 11, "bold"),
             fg=THEME["paper"],
-            bg=THEME["bg_card"]
-        )
-        lbl_title.pack(side="left")
+            bg=THEME["bg_card"],
+        ).pack(side="left")
 
         self.lbl_status_engine = tk.Label(
             tb,
             text="● Verificando motores de IA...",
             font=(FONT_TYPEWRITER, 9, "bold"),
             fg=THEME["amber"],
-            bg=THEME["bg_card"]
+            bg=THEME["bg_card"],
         )
         self.lbl_status_engine.pack(side="left", padx=(14, 0))
 
@@ -88,28 +140,13 @@ class FunesChatModal(tk.Toplevel):
             cursor="hand2",
             padx=8,
             pady=3,
-            command=self._clear_chat
+            command=self._clear_chat,
         )
         btn_clear.pack(side="right", padx=(6, 0))
 
-        btn_app = tk.Button(
-            tb,
-            text="Abrir AnythingLLM",
-            font=(FONT_TYPEWRITER, 9, "italic"),
-            fg=THEME["muted"],
-            bg=THEME["bg_card"],
-            activebackground=THEME["bg_card_hover"],
-            relief="flat",
-            cursor="hand2",
-            command=self._launch_external_app
-        )
-        btn_app.pack(side="right")
-
-        # ── PANELES VISTA (CHAT NORMAL vs PANTALLA DIAGNÓSTICO) ──
         self.container = tk.Frame(self, bg=THEME["bg_root"])
         self.container.pack(fill="both", expand=True, padx=14, pady=10)
 
-        # Frame de Chat Normal
         self.chat_frame = tk.Frame(self.container, bg=THEME["bg_root"])
         self.chat_frame.pack(fill="both", expand=True)
 
@@ -125,19 +162,62 @@ class FunesChatModal(tk.Toplevel):
             highlightthickness=1,
             padx=14,
             pady=10,
-            wrap="word"
+            wrap="word",
         )
         self.txt_chat.pack(fill="both", expand=True, pady=(0, 10))
 
-        self.txt_chat.tag_configure("user_hdr", font=(FONT_TYPEWRITER, 10, "bold"), foreground="#2E2B25", spacing1=8)
-        self.txt_chat.tag_configure("user_msg", font=(FONT_TYPEWRITER, 10), foreground="#161411", lmargin1=10, lmargin2=10)
-        self.txt_chat.tag_configure("ai_hdr", font=(FONT_TYPEWRITER, 10, "bold"), foreground="#161411", spacing1=8)
-        self.txt_chat.tag_configure("ai_msg", font=(FONT_TYPEWRITER, 10), foreground="#161411", lmargin1=10, lmargin2=10)
-        self.txt_chat.tag_configure("sources", font=(FONT_TYPEWRITER, 9, "italic"), foreground=THEME["muted"], lmargin1=20, lmargin2=20, spacing1=4)
+        self.txt_chat.tag_configure(
+            "user_hdr", font=(FONT_TYPEWRITER, 10, "bold"), foreground="#2E2B25", spacing1=8
+        )
+        self.txt_chat.tag_configure(
+            "user_msg",
+            font=(FONT_TYPEWRITER, 10),
+            foreground="#161411",
+            lmargin1=10,
+            lmargin2=10,
+        )
+        self.txt_chat.tag_configure(
+            "ai_hdr", font=(FONT_TYPEWRITER, 10, "bold"), foreground="#161411", spacing1=8
+        )
+        self.txt_chat.tag_configure(
+            "ai_msg",
+            font=(FONT_TYPEWRITER, 10),
+            foreground="#161411",
+            lmargin1=10,
+            lmargin2=10,
+        )
+        self.txt_chat.tag_configure(
+            "error_msg",
+            font=(FONT_TYPEWRITER, 10, "bold"),
+            foreground=THEME["red"],
+            lmargin1=10,
+            lmargin2=10,
+        )
+        self.txt_chat.tag_configure(
+            "sources",
+            font=(FONT_TYPEWRITER, 9, "italic"),
+            foreground=THEME["muted"],
+            lmargin1=20,
+            lmargin2=20,
+            spacing1=4,
+        )
+        self.txt_chat.tag_configure(
+            "meta",
+            font=(FONT_TYPEWRITER, 8),
+            foreground=THEME["muted"],
+            lmargin1=20,
+            lmargin2=20,
+        )
         self.txt_chat.config(state="disabled")
 
-        # Input Frame
-        input_frame = tk.Frame(self.chat_frame, bg=THEME["bg_card"], padx=10, pady=8, highlightbackground=THEME["border"], highlightthickness=1)
+        input_frame = tk.Frame(
+            self.chat_frame,
+            bg=THEME["bg_card"],
+            padx=10,
+            pady=8,
+            highlightbackground=THEME["border"],
+            highlightthickness=1,
+        )
         input_frame.pack(side="bottom", fill="x")
 
         self.entry_prompt = tk.Entry(
@@ -147,7 +227,7 @@ class FunesChatModal(tk.Toplevel):
             fg=THEME["paper"],
             insertbackground=THEME["paper"],
             relief="solid",
-            bd=1
+            bd=1,
         )
         self.entry_prompt.pack(side="left", fill="x", expand=True, padx=(0, 8))
         self.entry_prompt.bind("<Return>", lambda e: self._send_prompt())
@@ -164,29 +244,42 @@ class FunesChatModal(tk.Toplevel):
             cursor="hand2",
             padx=14,
             pady=4,
-            command=self._send_prompt
+            command=self._send_prompt,
         )
         self.btn_send.pack(side="right")
 
-        # Frame de Diagnóstico (Oculto por defecto)
-        self.diag_frame = tk.Frame(self.container, bg=THEME["bg_card"], padx=30, pady=30, highlightbackground=THEME["border"], highlightthickness=1)
+        self.diag_frame = tk.Frame(
+            self.container,
+            bg=THEME["bg_card"],
+            padx=30,
+            pady=30,
+            highlightbackground=THEME["border"],
+            highlightthickness=1,
+        )
 
-        tk.Label(self.diag_frame, text="⚠️ Servicio de Chat No Detectado", font=(FONT_TYPEWRITER, 14, "bold"), fg=THEME["red"], bg=THEME["bg_card"]).pack(anchor="w", pady=(0, 10))
         tk.Label(
             self.diag_frame,
-            text="No se pudo establecer conexión con AnythingLLM (puerto 3001) ni con Ollama Local (puerto 11434).\n\n"
-                 "Pasos rápidos para activar el chat:\n"
-                 "1. Asegúrate de que Ollama o AnythingLLM estén instalados y abiertos en tu sistema.\n"
-                 "2. Haz clic en 'Reintentar Conexión' a continuación.",
+            text="Servicio de Chat No Detectado",
+            font=(FONT_TYPEWRITER, 14, "bold"),
+            fg=THEME["red"],
+            bg=THEME["bg_card"],
+        ).pack(anchor="w", pady=(0, 10))
+        tk.Label(
+            self.diag_frame,
+            text=(
+                f"No se pudo establecer conexión con Ollama en {self.config.ollama_url}.\n\n"
+                "1. Asegúrate de que Ollama esté instalado y en ejecución.\n"
+                "2. Haz clic en 'Reintentar Conexión'."
+            ),
             font=(FONT_TYPEWRITER, 10),
             fg=THEME["paper"],
             bg=THEME["bg_card"],
-            justify="left"
+            justify="left",
         ).pack(anchor="w", pady=(0, 15))
 
         btn_retry = tk.Button(
             self.diag_frame,
-            text="🔄 Reintentar Conexión",
+            text="Reintentar Conexión",
             font=(FONT_TYPEWRITER, 10, "bold"),
             fg=THEME["paper"],
             bg=THEME["bg_root"],
@@ -196,31 +289,37 @@ class FunesChatModal(tk.Toplevel):
             cursor="hand2",
             padx=14,
             pady=6,
-            command=self._check_services_async
+            command=self._check_services_async,
         )
         btn_retry.pack(anchor="w")
 
-        # ── PIE DE PRIVACIDAD ──
-        status_bar = tk.Frame(self, bg=THEME["bg_card"], padx=14, pady=4, highlightbackground=THEME["border"], highlightthickness=1)
+        status_bar = tk.Frame(
+            self,
+            bg=THEME["bg_card"],
+            padx=14,
+            pady=4,
+            highlightbackground=THEME["border"],
+            highlightthickness=1,
+        )
         status_bar.pack(side="bottom", fill="x")
 
-        lbl_priv = tk.Label(
+        tk.Label(
             status_bar,
             text="Funes funciona con una IA 100% local, garantizando la privacidad",
             font=(FONT_TYPEWRITER, 8),
             fg=THEME["muted"],
-            bg=THEME["bg_card"]
-        )
-        lbl_priv.pack(side="left")
+            bg=THEME["bg_card"],
+        ).pack(side="left")
 
     def _check_services_async(self):
         self.lbl_status_engine.config(text="● Verificando conexiones...", fg=THEME["amber"])
 
         def _worker():
-            anything_ok = self._ping_url("http://localhost:3001/api/ping") or self._ping_url("http://localhost:3001")
-            ollama_ok = self._ping_url("http://localhost:11434/api/version") or self._ping_url("http://localhost:11434")
-
-            self.after(0, lambda: self._update_service_status(anything_ok, ollama_ok))
+            ollama_base_url = self.config.ollama_url.rstrip("/")
+            ollama_ok = self._ping_url(f"{ollama_base_url}/api/version") or self._ping_url(
+                ollama_base_url
+            )
+            self.after(0, lambda: self._update_service_status(ollama_ok))
 
         threading.Thread(target=_worker, daemon=True).start()
 
@@ -232,12 +331,11 @@ class FunesChatModal(tk.Toplevel):
         except Exception:
             return False
 
-    def _update_service_status(self, anything_ok: bool, ollama_ok: bool):
-        if anything_ok:
-            self.lbl_status_engine.config(text="● Conectado: AnythingLLM (Local)", fg=THEME["green"])
-            self._show_chat_view()
-        elif ollama_ok:
-            self.lbl_status_engine.config(text="● Conectado: Ollama Directo (Local)", fg=THEME["green"])
+    def _update_service_status(self, ollama_ok: bool):
+        if ollama_ok:
+            self.lbl_status_engine.config(
+                text="● Conectado: Ollama Local", fg=THEME["green"]
+            )
             self._show_chat_view()
         else:
             self.lbl_status_engine.config(text="● Sin Servicio de IA", fg=THEME["red"])
@@ -262,48 +360,74 @@ class FunesChatModal(tk.Toplevel):
         self.btn_send.config(state="disabled")
 
         def _bg_query():
-            reply_text = ""
-            sources = []
-
-            # 1. Intentar Ollama primero/fallback
             try:
-                payload = json.dumps({
-                    "model": "llama3.2",
-                    "prompt": f"Basándote en las notas de la biblioteca, responde en español: {prompt}",
-                    "stream": False
-                }).encode("utf-8")
-                req = urllib.request.Request("http://localhost:11434/api/generate", data=payload, headers={"Content-Type": "application/json"})
-                with urllib.request.urlopen(req, timeout=15) as resp:
-                    data = json.loads(resp.read().decode("utf-8"))
-                    reply_text = data.get("response", "").strip()
-            except Exception as e:
-                reply_text = f"Respuesta de Funes Local: He procesado tu consulta ('{prompt}'). Las notas en 4_salida contienen la información relacionada."
-
-            # Extraer posibles notas citadas
-            if self.output_dir.exists():
-                notes = list(self.output_dir.glob("*.md"))[:3]
-                sources = [n.name for n in notes]
-
-            self.after(0, lambda: self._on_query_complete(reply_text, sources))
+                result = self._process_chat(prompt, self.chat_context)
+            except Exception as exc:
+                result = {
+                    "ok": False,
+                    "text": f"Error al procesar la consulta: {exc}",
+                    "sources": [],
+                    "source_labels": [],
+                    "retrieval_mode": "none",
+                    "error": {"code": "provider_error", "message": str(exc)},
+                }
+            self.after(0, lambda: self._on_query_complete(result))
 
         threading.Thread(target=_bg_query, daemon=True).start()
 
-    def _on_query_complete(self, reply: str, sources: List[str]):
-        self._append_message("Funes IA", reply, is_user=False, sources=sources)
+    def _on_query_complete(self, result: Dict[str, Any]):
+        text = _display_text(str(result.get("text") or result.get("answer") or ""))
+        error = result.get("error")
+        labels = list(result.get("source_labels") or [])
+        if not labels:
+            for src in result.get("sources") or []:
+                if isinstance(src, str):
+                    labels.append(src)
+                elif isinstance(src, dict):
+                    labels.append(
+                        str(
+                            src.get("relative_path")
+                            or src.get("document_id")
+                            or src.get("chunk_id")
+                            or ""
+                        )
+                    )
+        mode = str(result.get("retrieval_mode") or "none")
+        self._append_message(
+            "Funes IA",
+            text,
+            is_user=False,
+            sources=labels,
+            retrieval_mode=mode,
+            is_error=bool(error) or result.get("ok") is False,
+        )
         self._is_querying = False
         self.btn_send.config(state="normal")
 
-    def _append_message(self, sender: str, text: str, is_user: bool, sources: Optional[List[str]] = None):
+    def _append_message(
+        self,
+        sender: str,
+        text: str,
+        is_user: bool,
+        sources: Optional[List[str]] = None,
+        retrieval_mode: Optional[str] = None,
+        is_error: bool = False,
+    ):
+        # Tk Text.insert is XSS-safe; still keep display free of raw HTML tags intent.
+        safe = _display_text(text)
         self.txt_chat.config(state="normal")
         if is_user:
-            self.txt_chat.insert(tk.END, f"\n👤 {sender}:\n", "user_hdr")
-            self.txt_chat.insert(tk.END, f"{text}\n", "user_msg")
+            self.txt_chat.insert(tk.END, f"\n{sender}:\n", "user_hdr")
+            self.txt_chat.insert(tk.END, f"{safe}\n", "user_msg")
         else:
-            self.txt_chat.insert(tk.END, f"\n📜 {sender}:\n", "ai_hdr")
-            self.txt_chat.insert(tk.END, f"{text}\n", "ai_msg")
-
+            self.txt_chat.insert(tk.END, f"\n{sender}:\n", "ai_hdr")
+            self.txt_chat.insert(tk.END, f"{safe}\n", "error_msg" if is_error else "ai_msg")
+            if retrieval_mode:
+                self.txt_chat.insert(
+                    tk.END, f"Modo de recuperación: {retrieval_mode}\n", "meta"
+                )
             if sources:
-                src_str = "Fuentes Consultadas: " + ", ".join([f"[[{s}]]" for s in sources])
+                src_str = "Fuentes: " + ", ".join(sources)
                 self.txt_chat.insert(tk.END, f"{src_str}\n", "sources")
 
         self.txt_chat.see(tk.END)
@@ -313,10 +437,3 @@ class FunesChatModal(tk.Toplevel):
         self.txt_chat.config(state="normal")
         self.txt_chat.delete("1.0", tk.END)
         self.txt_chat.config(state="disabled")
-
-    def _launch_external_app(self):
-        try:
-            import webbrowser
-            webbrowser.open("http://localhost:3001")
-        except Exception:
-            pass

@@ -9,6 +9,7 @@ import os
 import sys
 import time
 import json
+import html
 import shutil
 import queue
 import logging
@@ -28,8 +29,43 @@ if sys.platform == "win32":
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
 
-from funes.config import get_default_config, AppConfig, save_config, load_config
+from funes.application.chat import ChatApplicationService, OllamaChatProvider
+from funes.application.lifecycle import ApplicationLifecycle
+from funes.application.export import (
+    ExportApplicationService,
+    ExportFileExistsError,
+    UnsupportedExportFormatError,
+)
+from funes.application.notes import NotesApplicationService
+from funes.application.retrieval import RetrievalApplicationService
+from funes.application.settings import SettingsService, SettingsValidationError
+from funes.config import (
+    get_default_config,
+    AppConfig,
+    save_config,
+    load_config,
+    describe_offline_mode,
+)
 from funes.core.vault import VaultManager
+from funes.domain.documents import MarkdownDocument
+from funes.domain.errors import (
+    InvalidNoteTransitionError,
+    NoteRevisionConflictError,
+    PathAuthorizationError,
+)
+from funes.domain.frontmatter import FrontmatterError, parse_frontmatter, serialize_frontmatter
+from funes.domain.metadata_form import (
+    MetadataValidationError,
+    metadata_form_snapshot,
+    validate_metadata_fields,
+    validate_metadata_save_fields,
+)
+from funes.domain.paths import AuthorizedPathResolver, document_id_for_relative_path
+from funes.domain.quarantine import QuarantineService
+from funes.infrastructure.atomic_files import atomic_write_json, atomic_write_text
+from funes.infrastructure.sqlite_store import JobStore
+from funes.rag.chroma_store import ChromaStore
+from funes.ui.bridge import FunesPyWebViewApi
 from funes.core.app_checker import check_and_prompt_user_apps_closed, launch_obsidian
 from funes.core.anythingllm_config import (
     is_anythingllm_installed,
@@ -38,8 +74,11 @@ from funes.core.anythingllm_config import (
 )
 from funes.core.folder_sync import FolderSyncManager, FolderSyncModal
 from funes.watcher.watcher import ETLPipeline
+from funes.graph_engine.linker import CANONICAL_MOC_FILENAME, GraphLinker
 from funes.graph_engine.optimized_loop import OptimizadoGraphLoop
 from funes.ram_governor.governor import RAMGovernor
+
+logger = logging.getLogger(__name__)
 
 try:
     from funes.reader_modal import FunesReaderModal
@@ -92,102 +131,12 @@ THEME = {
 FONT_TYPEWRITER = "Courier"
 
 
-class QuarantineManager:
-    """Gestor persistente de archivos aislados en .funes_quarantine/manifest.json."""
-
-    def __init__(self, vault_path: Path):
-        self.vault_path = vault_path.resolve()
-        self.quarantine_dir = self.vault_path / ".funes_quarantine"
-        self.manifest_file = self.quarantine_dir / "manifest.json"
-        self.ensure_structure()
-
-    def ensure_structure(self):
-        self.quarantine_dir.mkdir(parents=True, exist_ok=True)
-        if not self.manifest_file.exists():
-            self._save_manifest([])
-
-    def _read_manifest(self) -> List[Dict[str, Any]]:
-        try:
-            if self.manifest_file.exists():
-                with open(self.manifest_file, "r", encoding="utf-8") as f:
-                    return json.load(f)
-        except Exception:
-            pass
-        return []
-
-    def _save_manifest(self, items: List[Dict[str, Any]]):
-        try:
-            with open(self.manifest_file, "w", encoding="utf-8") as f:
-                json.dump(items, f, indent=2, ensure_ascii=False)
-        except Exception as e:
-            logging.error(f"Error guardando manifiesto de cuarentena: {e}")
-
-    def quarantine_file(self, filepath: Path, reason: str, stack_trace: str = "") -> bool:
-        try:
-            if not filepath.exists():
-                return False
-            self.ensure_structure()
-            dest_path = self.quarantine_dir / filepath.name
-            shutil.move(str(filepath), str(dest_path))
-
-            items = self._read_manifest()
-            items = [i for i in items if i["filename"] != filepath.name]
-            items.append({
-                "filename": filepath.name,
-                "orig_path": str(filepath),
-                "quarantine_path": str(dest_path),
-                "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
-                "error_reason": self._map_plain_spanish_reason(reason),
-                "stack_trace": stack_trace or reason,
-                "attempts": 3
-            })
-            self._save_manifest(items)
-            return True
-        except Exception as e:
-            logging.error(f"Error al mover a cuarentena {filepath}: {e}")
-            return False
-
-    def restore_file(self, filename: str, target_dir: Path) -> bool:
-        try:
-            q_file = self.quarantine_dir / filename
-            if not q_file.exists():
-                return False
-
-            target_dir.mkdir(parents=True, exist_ok=True)
-            dest_file = target_dir / filename
-            shutil.move(str(q_file), str(dest_file))
-
-            items = self._read_manifest()
-            items = [i for i in items if i["filename"] != filename]
-            self._save_manifest(items)
-            return True
-        except Exception as e:
-            logging.error(f"Error al restaurar archivo {filename}: {e}")
-            return False
-
-    def get_quarantined_items(self) -> List[Dict[str, Any]]:
-        return self._read_manifest()
-
-    def _map_plain_spanish_reason(self, error_str: str) -> str:
-        err_lower = error_str.lower()
-        if "permission" in err_lower or "permiso" in err_lower:
-            return "El archivo está abierto por otra aplicación o no tiene permisos de lectura."
-        elif "password" in err_lower or "encrypted" in err_lower or "contraseña" in err_lower:
-            return "El documento está protegido con contraseña o cifrado."
-        elif "utf-8" in err_lower or "decode" in err_lower or "codificación" in err_lower:
-            return "Formato o codificación de texto ilegible en este archivo."
-        elif "corrupt" in err_lower or "invalid" in err_lower:
-            return "El archivo parece estar incompleto o dañado."
-        else:
-            return f"Error en extracción: {error_str[:120]}"
-
-
 class QuarantineModal(tk.Toplevel):
     """Modal flotante Papiro para Cuarentena."""
 
-    def __init__(self, parent, quarantine_mgr: QuarantineManager, on_restore_callback):
+    def __init__(self, parent, quarantine_service: QuarantineService, on_restore_callback):
         super().__init__(parent)
-        self.quarantine_mgr = quarantine_mgr
+        self.quarantine_service = quarantine_service
         self.on_restore_callback = on_restore_callback
 
         self.title("Archivos en Cuarentena — Funes")
@@ -202,7 +151,7 @@ class QuarantineModal(tk.Toplevel):
 
         tk.Label(hdr, text="ARCHIVOS EN CUARENTENA Y AVISOS DE INGESTA", font=(FONT_TYPEWRITER, 13, "bold"), fg=THEME["red"], bg=THEME["bg_card"]).pack(side="left")
 
-        items = self.quarantine_mgr.get_quarantined_items()
+        items = self.quarantine_service.list_active_items()
 
         if not items:
             empty_frame = tk.Frame(self, bg=THEME["bg_root"], pady=60)
@@ -220,10 +169,10 @@ class QuarantineModal(tk.Toplevel):
             top_line = tk.Frame(card, bg=THEME["bg_card"])
             top_line.pack(fill="x")
 
-            tk.Label(top_line, text=f"Archivo: {item['filename']}", font=(FONT_TYPEWRITER, 10, "bold"), fg=THEME["paper"], bg=THEME["bg_card"]).pack(side="left")
+            tk.Label(top_line, text=f"Archivo: {item['original_filename']}", font=(FONT_TYPEWRITER, 10, "bold"), fg=THEME["paper"], bg=THEME["bg_card"]).pack(side="left")
             tk.Label(top_line, text=f"Fecha: {item['timestamp']}", font=(FONT_TYPEWRITER, 9), fg=THEME["muted"], bg=THEME["bg_card"]).pack(side="right")
 
-            tk.Label(card, text=f"Causa: {item['error_reason']}", font=(FONT_TYPEWRITER, 10), fg=THEME["paper"], bg=THEME["bg_card"], anchor="w", justify="left").pack(fill="x", pady=(4, 6))
+            tk.Label(card, text=f"Causa: {item['error_message']}", font=(FONT_TYPEWRITER, 10), fg=THEME["paper"], bg=THEME["bg_card"], anchor="w", justify="left").pack(fill="x", pady=(4, 6))
 
             btn_rest = tk.Button(
                 card,
@@ -234,13 +183,13 @@ class QuarantineModal(tk.Toplevel):
                 relief="solid",
                 bd=1,
                 cursor="hand2",
-                command=lambda fname=item['filename']: self._restore_action(fname)
+                command=lambda qid=item['quarantine_id']: self._restore_action(qid)
             )
             btn_rest.pack(side="left")
 
-    def _restore_action(self, filename: str):
-        if self.on_restore_callback(filename):
-            messagebox.showinfo("Restauración", f"El archivo '{filename}' ha sido devuelto a 1_entrada.")
+    def _restore_action(self, quarantine_id: str):
+        if self.on_restore_callback(quarantine_id):
+            messagebox.showinfo("Restauración", "El archivo ha sido restaurado.")
             self.destroy()
 
 
@@ -255,26 +204,224 @@ class FunesConsoleBackend:
         self.config = get_default_config(self.vault_path)
         self.vault = VaultManager(self.config.vault)
         self.sync_manager = FolderSyncManager(self.vault_path)
-        self.quarantine_mgr = QuarantineManager(self.vault_path)
+        self.quarantine_service = self.vault.quarantine_service
         self.ram_governor = RAMGovernor(
             ollama_url=self.config.ollama_url,
             safety_margin_pct=self.config.ram_safety_margin_pct
         )
+        self.settings_service = SettingsService(
+            self.config, on_applied=self._apply_settings_config
+        )
         self._task_in_progress = False
+        # Set by launch_control_console after ApplicationLifecycle.start() so
+        # console theme actions and background services share one VaultManager.
+        self.lifecycle: Optional[ApplicationLifecycle] = None
+        self._chroma_store: Optional[ChromaStore] = None
+        self._retrieval_service: Optional[RetrievalApplicationService] = None
+        self._chat_service: Optional[ChatApplicationService] = None
+        self._notes_service: Optional[NotesApplicationService] = None
+        self._export_service: Optional[ExportApplicationService] = None
+        self._job_store: Optional[JobStore] = None
+
+    def attach_lifecycle(self, lifecycle: ApplicationLifecycle) -> None:
+        """Share the lifecycle-owned VaultManager for theme-scoped processing."""
+        if lifecycle.pipeline is None:
+            raise RuntimeError(
+                "attach_lifecycle requires a started ApplicationLifecycle pipeline"
+            )
+        self.lifecycle = lifecycle
+        self.vault = lifecycle.pipeline.vault
+        self.quarantine_service = self.vault.quarantine_service
+        # Prefer the pipeline chroma + reset chat/retrieval so BM25 shares one cache.
+        self._chroma_store = getattr(lifecycle.pipeline, "chroma", None)
+        self._retrieval_service = None
+        self._chat_service = None
+        self._notes_service = None
+        self._export_service = None
+        self._job_store = None
+
+    def _apply_theme(self, theme_name: str) -> str:
+        """Activate a theme on the lifecycle pipeline when attached, else locally."""
+        if self.lifecycle is not None and self.lifecycle.pipeline is not None:
+            self.lifecycle.set_active_theme(theme_name)
+        else:
+            self.vault.set_active_theme(theme_name)
+        return self.vault.active_theme
+
+    def _apply_settings_config(self, config: AppConfig) -> None:
+        """Refresh settings consumers after their durable config has been written."""
+        vault_changed = self.vault_path != config.vault.vault_path
+        self.config = config
+        self.vault_path = config.vault.vault_path
+        self.ram_governor = RAMGovernor(
+            ollama_url=config.ollama_url,
+            safety_margin_pct=config.ram_safety_margin_pct,
+        )
+        # Model/URL changes must rebuild the chat provider on next ask.
+        self._chat_service = None
+        if vault_changed:
+            self.vault = VaultManager(config.vault)
+            self.sync_manager = FolderSyncManager(self.vault_path)
+            self.quarantine_service = self.vault.quarantine_service
+            self._chroma_store = None
+            self._retrieval_service = None
+            self._notes_service = None
+            self._job_store = None
+
+    def _get_chroma_store(self) -> ChromaStore:
+        if self.lifecycle is not None and self.lifecycle.pipeline is not None:
+            pipeline_chroma = getattr(self.lifecycle.pipeline, "chroma", None)
+            if pipeline_chroma is not None:
+                self._chroma_store = pipeline_chroma
+                return pipeline_chroma
+        if self._chroma_store is None:
+            self._chroma_store = ChromaStore(self.config.vault.chroma_dir)
+        return self._chroma_store
+
+    def get_retrieval_service(self) -> RetrievalApplicationService:
+        """Shared retrieval service (hybrid searcher reused from Chroma when possible)."""
+        if self._retrieval_service is None:
+            self._retrieval_service = RetrievalApplicationService(
+                self._get_chroma_store(),
+                ram_governor=self.ram_governor,
+            )
+        return self._retrieval_service
+
+    def get_chat_service(self) -> ChatApplicationService:
+        """Shared chat contract used by WebView bridge and native modal."""
+        if self._chat_service is None:
+            self._chat_service = ChatApplicationService(
+                self.get_retrieval_service(),
+                provider=OllamaChatProvider(self.config.ollama_url, timeout=12.0),
+                model_resolver=lambda: (
+                    self.config.custom_model_override
+                    or self.ram_governor.recommend_model()
+                ),
+                ollama_url=self.config.ollama_url,
+            )
+        return self._chat_service
+
+    def get_notes_service(self) -> NotesApplicationService:
+        """Shared note state-transition service for approval and review flows."""
+        if self._notes_service is None:
+            if self._job_store is None:
+                self._job_store = JobStore(self.vault.config.vault_path)
+            self._notes_service = NotesApplicationService(
+                vault=self.vault,
+                path_resolver=self._path_resolver(),
+                job_store=self._job_store,
+                chroma_store=self._get_chroma_store(),
+                index_notifier=self.notify_index_changed,
+            )
+        return self._notes_service
+
+    def get_export_service(self) -> ExportApplicationService:
+        """Canonical note export service (Task 6.4)."""
+        if self._export_service is None:
+            self._export_service = ExportApplicationService(
+                notes_service=self.get_notes_service(),
+                path_resolver=self._path_resolver(),
+            )
+        return self._export_service
+
+    def export_note(
+        self,
+        document_id: str,
+        export_format: str,
+        *,
+        destination_path: Optional[str] = None,
+        confirm_overwrite: bool = False,
+    ) -> Dict[str, Any]:
+        """Export a note from canonical NoteDocument, not rendered DOM."""
+        try:
+            service = self.get_export_service()
+            if destination_path:
+                return service.write_export(
+                    document_id,
+                    export_format,
+                    destination_path,
+                    confirm_overwrite=confirm_overwrite,
+                )
+            return service.prepare_download(document_id, export_format).as_dict()
+        except ExportFileExistsError as error:
+            return {
+                "error": error.code,
+                "message": str(error),
+                "destination": error.destination,
+            }
+        except UnsupportedExportFormatError as error:
+            return {"error": error.code, "message": str(error)}
+        except PathAuthorizationError as error:
+            return {"error": error.code, "message": str(error)}
+
+    def notify_index_changed(self) -> None:
+        """Invalidate BM25 caches after ingestion writes (parked Task 4.2 wiring)."""
+        if self._retrieval_service is not None:
+            self._retrieval_service.notify_index_changed()
+        else:
+            chroma = self._get_chroma_store()
+            invalidate = getattr(chroma, "invalidate_bm25_cache", None)
+            if callable(invalidate):
+                invalidate()
+
+    def save_settings(self, settings: Dict[str, Any]) -> Dict[str, Any]:
+        """Apply validated canonical settings from the typed UI bridge."""
+        try:
+            result = self.settings_service.apply(**settings)
+        except (SettingsValidationError, TypeError, ValueError) as error:
+            return {"error": "invalid_settings", "message": str(error)}
+        response = {
+            "log": (
+                "[AJUSTES] Memoria y conexiones guardadas. "
+                f"Vault: '{self.vault_path.name}'."
+            ),
+            "refresh": True,
+            "stats": self.get_stats_dict(),
+            "offline_mode": describe_offline_mode(self.config),
+        }
+        if result.non_loopback_warning:
+            response["warning"] = result.non_loopback_warning
+        return response
+
+    def _path_resolver(self) -> AuthorizedPathResolver:
+        return AuthorizedPathResolver(
+            vault_root=self.vault.config.vault_path,
+            output=self.vault.output_dir,
+            input=self.vault.input_dir,
+            dirty=self.vault.dirty_dir,
+            clean=self.vault.clean_dir,
+            quarantine=self.vault.quarantine_dir,
+        )
+
+    @staticmethod
+    def _path_error(error: PathAuthorizationError) -> Dict[str, str]:
+        return {"error": error.code, "message": str(error)}
+
+    def _vault_relative_identity(self, path: Path) -> str:
+        try:
+            return path.resolve().relative_to(self.vault.config.vault_path.resolve()).as_posix()
+        except ValueError as error:
+            raise PathAuthorizationError() from error
 
     def get_initial_state_dict(self) -> Dict[str, Any]:
         stats = self.get_stats_dict()
         return {
             "vault_path": str(self.vault_path),
-            "stats": stats
+            "stats": stats,
+            "offline_mode": describe_offline_mode(self.config),
         }
 
     def get_stats_dict(self) -> Dict[str, Any]:
-        inp_files = [f for f in self.config.vault.input_dir.glob("*") if f.is_file() and not f.name.startswith(".")] if self.config.vault.input_dir.exists() else []
+        input_dir = self.vault.input_dir
+        inp_files = [
+            f
+            for f in input_dir.rglob("*")
+            if f.is_file() and not f.name.startswith(".")
+        ] if input_dir.exists() else []
         proc_dir = self.vault_path / ".funes_processed"
         proc_files = list(proc_dir.glob("*")) if proc_dir.exists() else []
-        quar_items = self.quarantine_mgr.get_quarantined_items()
-        notes_files = list(self.config.vault.output_dir.glob("*.md")) if self.config.vault.output_dir.exists() else []
+        quar_items = self.quarantine_service.list_active_items()
+        notes_count = len(self.vault.enumerate_documents("output"))
 
         ram_pct = 0
         if HAS_PSUTIL and psutil:
@@ -291,7 +438,7 @@ class FunesConsoleBackend:
             "input": len(inp_files),
             "processed": len(proc_files),
             "quarantine": len(quar_items),
-            "notes": len(notes_files),
+            "notes": notes_count,
             "ram": f"{ram_pct}%",
             "line": line_val
         }
@@ -305,18 +452,21 @@ class FunesConsoleBackend:
             }
         elif action_name == "set_theme":
             theme_name = payload.get("theme_name", "General")
-            self.vault.set_active_theme(theme_name)
+            active = self._apply_theme(theme_name)
             return {
-                "log": f"Tema activo cambiado a: '{self.vault.active_theme}'",
+                "log": f"Tema activo cambiado a: '{active}'",
                 "refresh": True,
                 "stats": self.get_stats_dict()
             }
         elif action_name == "create_theme":
             theme_name = payload.get("theme_name", "")
             if theme_name:
+                # Create on the shared vault (lifecycle pipeline when attached),
+                # then rebind linker + graph loop through the lifecycle API.
                 self.vault.create_theme(theme_name)
+                active = self._apply_theme(self.vault.active_theme)
                 return {
-                    "log": f"Nuevo Tema creado y activado: '{self.vault.active_theme}'",
+                    "log": f"Nuevo Tema creado y activado: '{active}'",
                     "refresh": True,
                     "stats": self.get_stats_dict()
                 }
@@ -350,38 +500,144 @@ class FunesConsoleBackend:
                         continue
                     try:
                         content = md_file.read_text(encoding="utf-8", errors="replace")
-                        if "estado: pendiente_aprobacion" in content or "estado: \"pendiente_aprobacion\"" in content:
+                        document = MarkdownDocument.from_markdown(content)
+                        if document.metadata["status"] == "pending_review":
                             rel_path = str(md_file.relative_to(self.vault.current_theme_dir)) if self.vault.current_theme_dir in md_file.parents else md_file.name
                             issue = md_file.parent.name if md_file.parent != out_dir else "_Sin_Cuestion"
+                            vault_relative = self._vault_relative_identity(md_file)
+                            document_id = document_id_for_relative_path(vault_relative)
+                            note = self.get_notes_service().get_note(document_id)
                             pending.append({
                                 "title": md_file.stem,
                                 "filename": md_file.name,
-                                "path": str(md_file.resolve()),
+                                "path": vault_relative,
                                 "rel_path": rel_path,
                                 "issue": issue,
-                                "content": content[:1500]
+                                "document_id": document_id,
+                                "revision": note.revision,
+                                "metadata": metadata_form_snapshot(document.metadata),
                             })
                     except Exception:
                         pass
             return {"pending_notes": pending, "count": len(pending)}
 
         elif action_name == "approve_note":
-            file_path_str = payload.get("file_path") or payload.get("path")
-            if file_path_str:
-                p = Path(file_path_str).resolve()
-                if p.exists():
-                    try:
-                        content = p.read_text(encoding="utf-8", errors="replace")
-                        content = content.replace("estado: pendiente_aprobacion", "estado: aprobada")
-                        content = content.replace("estado: \"pendiente_aprobacion\"", "estado: \"aprobada\"")
-                        if "historial:" not in content:
-                            hist_entry = f"\nhistorial:\n  - fecha: \"{time.strftime('%Y-%m-%d %H:%M:%S')}\"\n    accion: \"aprobada\"\n"
-                            content = content.replace("---\n\n", hist_entry + "---\n\n", 1)
-                        p.write_text(content, encoding="utf-8")
-                        return {"log": f"Nota '{p.name}' APROBADA con éxito.", "status": "approved"}
-                    except Exception as e:
-                        return {"error": f"Error al aprobar nota: {e}"}
-            return {"error": "Ruta de nota no proporcionada"}
+            identifier = (
+                payload.get("document_id")
+                or payload.get("path")
+                or payload.get("file_path")
+            )
+            if not identifier:
+                return {"error": "Ruta de nota no proporcionada"}
+            try:
+                notes = self.get_notes_service()
+                document_id = notes.resolve_document_id(str(identifier))
+                expected_revision = payload.get("expected_revision")
+                if expected_revision is None:
+                    expected_revision = notes.get_note(document_id).revision
+                metadata_patch = None
+                if "metadata" in payload:
+                    raw_metadata = dict(payload["metadata"])
+                    raw_metadata.pop("status", None)
+                    metadata_patch = validate_metadata_fields(
+                        raw_metadata,
+                        allowed_issues=self.vault.get_issues_in_theme(),
+                    )
+                approved = notes.approve(
+                    document_id,
+                    int(expected_revision),
+                    metadata_patch=metadata_patch,
+                )
+            except MetadataValidationError as error:
+                return {
+                    "error": error.code,
+                    "message": str(error),
+                    "field_errors": error.field_errors,
+                }
+            except NoteRevisionConflictError as error:
+                return {"error": error.code, "message": str(error)}
+            except InvalidNoteTransitionError as error:
+                return {"error": error.code, "message": str(error)}
+            except PathAuthorizationError as error:
+                return self._path_error(error)
+            except (TypeError, ValueError) as error:
+                return {"error": f"Error al aprobar nota: {error}"}
+            return {
+                "log": "Nota APROBADA con éxito.",
+                "status": "approved",
+                "document_id": approved.document_id,
+                "revision": approved.revision,
+            }
+
+        elif action_name == "update_note_metadata":
+            identifier = payload.get("document_id") or payload.get("path")
+            if not identifier:
+                return {"error": "document_id is required"}
+            try:
+                notes = self.get_notes_service()
+                document_id = notes.resolve_document_id(str(identifier))
+                expected_revision = payload.get("expected_revision")
+                if expected_revision is None:
+                    return {"error": "expected_revision is required"}
+                metadata_patch = validate_metadata_save_fields(
+                    payload.get("metadata") or {},
+                    allowed_issues=self.vault.get_issues_in_theme(),
+                )
+                updated = notes.update_metadata(
+                    document_id,
+                    expected_revision=int(expected_revision),
+                    metadata_patch=metadata_patch,
+                )
+            except MetadataValidationError as error:
+                return {
+                    "error": error.code,
+                    "message": str(error),
+                    "field_errors": error.field_errors,
+                }
+            except NoteRevisionConflictError as error:
+                return {"error": error.code, "message": str(error)}
+            except PathAuthorizationError as error:
+                return self._path_error(error)
+            except (TypeError, ValueError) as error:
+                return {"error": f"Error al actualizar metadatos: {error}"}
+            return {
+                "log": "Metadatos guardados correctamente.",
+                "status": "saved",
+                "document_id": updated.document_id,
+                "revision": updated.revision,
+                "metadata": metadata_form_snapshot(updated.frontmatter),
+            }
+
+        elif action_name == "validate_note_metadata":
+            try:
+                metadata_patch = validate_metadata_save_fields(
+                    payload.get("metadata") or {},
+                    allowed_issues=self.vault.get_issues_in_theme(),
+                )
+            except MetadataValidationError as error:
+                return {
+                    "error": error.code,
+                    "message": str(error),
+                    "field_errors": error.field_errors,
+                }
+            return {"valid": True, "metadata": metadata_patch}
+
+        elif action_name == "get_note_metadata":
+            identifier = payload.get("document_id") or payload.get("path")
+            if not identifier:
+                return {"error": "document_id is required"}
+            try:
+                note = self.get_notes_service().get_note(str(identifier))
+            except PathAuthorizationError as error:
+                return self._path_error(error)
+            response: Dict[str, Any] = {
+                "document_id": note.document_id,
+                "revision": note.revision,
+                "metadata": metadata_form_snapshot(note.frontmatter),
+            }
+            if payload.get("diagnostic"):
+                response["raw_frontmatter"] = serialize_frontmatter(note.frontmatter)
+            return response
 
         # --- CRUD DE NOTAS (GUARDAR, FUSIONAR, MOVER, ELIMINAR) ---
         elif action_name == "save_note":
@@ -391,13 +647,27 @@ class FunesConsoleBackend:
             issue_name = payload.get("issue", "_Sin_Cuestion")
 
             if file_path_str:
-                p = Path(file_path_str).resolve()
+                try:
+                    p = self._path_resolver().resolve_note(file_path_str)
+                except PathAuthorizationError as error:
+                    return self._path_error(error)
                 if p.exists() and new_content is not None:
-                    p.write_text(new_content, encoding="utf-8")
+                    atomic_write_text(p, new_content)
                     return {"log": f"Nota '{p.name}' guardada correctamente.", "status": "saved"}
             elif title and new_content:
-                saved_path = self.vault.save_atomic_note(title=title, content=new_content, issue_name=issue_name)
-                return {"log": f"Nota nueva '{saved_path.name}' creada en {issue_name}.", "status": "created", "path": str(saved_path)}
+                try:
+                    saved_path = self.vault.save_atomic_note(
+                        title=title,
+                        content=new_content,
+                        issue_name=issue_name,
+                    )
+                except PathAuthorizationError as error:
+                    return self._path_error(error)
+                return {
+                    "log": f"Nota nueva '{saved_path.name}' creada en {issue_name}.",
+                    "status": "created",
+                    "path": self._vault_relative_identity(saved_path),
+                }
 
             return {"error": "Datos insuficientes para guardar nota"}
 
@@ -412,7 +682,10 @@ class FunesConsoleBackend:
             contents = []
             sources_set = set()
             for np_str in note_paths:
-                p = Path(np_str).resolve()
+                try:
+                    p = self._path_resolver().resolve_note(np_str)
+                except PathAuthorizationError as error:
+                    return self._path_error(error)
                 if p.exists():
                     txt = p.read_text(encoding="utf-8", errors="replace")
                     contents.append(f"### Origen: {p.stem}\n{txt}\n")
@@ -437,30 +710,57 @@ historial:
 
 {combined_body}
 """
-            out_path = self.vault.save_atomic_note(title=merged_title, content=merged_md, issue_name=target_issue)
-            return {"log": f"Fusión completada. Nota resultante: '{out_path.name}' en Cuestión '{target_issue}'.", "path": str(out_path)}
+            try:
+                out_path = self.vault.save_atomic_note(
+                    title=merged_title,
+                    content=merged_md,
+                    issue_name=target_issue,
+                )
+            except PathAuthorizationError as error:
+                return self._path_error(error)
+            return {
+                "log": f"Fusión completada. Nota resultante: '{out_path.name}' en Cuestión '{target_issue}'.",
+                "path": self._vault_relative_identity(out_path),
+            }
 
         elif action_name == "move_note":
             file_path_str = payload.get("file_path") or payload.get("path")
             target_issue = payload.get("target_issue", "_Sin_Cuestion")
             if file_path_str:
-                p = Path(file_path_str).resolve()
+                try:
+                    resolver = self._path_resolver()
+                    p = resolver.resolve_note(file_path_str)
+                except PathAuthorizationError as error:
+                    return self._path_error(error)
                 if p.exists():
                     target_dir = self.vault.output_dir / self.vault.sanitize_filename(target_issue)
-                    target_dir.mkdir(parents=True, exist_ok=True)
                     dest_path = target_dir / p.name
+                    try:
+                        resolver.resolve_note(self._vault_relative_identity(dest_path))
+                    except PathAuthorizationError as error:
+                        return self._path_error(error)
+                    target_dir.mkdir(parents=True, exist_ok=True)
                     if p != dest_path:
                         shutil.move(str(p), str(dest_path))
-                    return {"log": f"Nota '{p.name}' movida a Cuestión '{target_issue}'.", "new_path": str(dest_path)}
+                    return {
+                        "log": f"Nota '{p.name}' movida a Cuestión '{target_issue}'.",
+                        "new_path": self._vault_relative_identity(dest_path),
+                    }
             return {"error": "No se pudo mover la nota"}
 
         elif action_name == "delete_note":
             file_path_str = payload.get("file_path") or payload.get("path")
             if file_path_str:
-                p = Path(file_path_str).resolve()
+                try:
+                    p = self._path_resolver().resolve_note(file_path_str)
+                except PathAuthorizationError as error:
+                    return self._path_error(error)
                 if p.exists():
                     quar_path = self.vault.move_to_quarantine(p, reason="Eliminada por el usuario")
-                    return {"log": f"Nota '{p.name}' trasladada a Papelera de Cuarentena.", "quarantine_path": str(quar_path)}
+                    return {
+                        "log": f"Nota '{p.name}' trasladada a Papelera de Cuarentena.",
+                        "quarantine_path": quar_path.name,
+                    }
             return {"error": "Ruta de archivo no válida para eliminar"}
 
         # --- PAPELERA CUARENTENA Y RESTAURACIÓN ---
@@ -473,7 +773,12 @@ historial:
             if q_filename:
                 try:
                     restored_path = self.vault.restore_from_quarantine(q_filename, target_issue=target_issue)
-                    return {"log": f"Nota restaurada con éxito en Cuestión '{target_issue}': {restored_path.name}", "path": str(restored_path)}
+                    return {
+                        "log": f"Nota restaurada con éxito en Cuestión '{target_issue}': {restored_path.name}",
+                        "path": self._vault_relative_identity(restored_path),
+                    }
+                except PathAuthorizationError as error:
+                    return self._path_error(error)
                 except Exception as e:
                     return {"error": f"Error al restaurar: {e}"}
             return {"error": "Nombre de archivo de cuarentena no especificado"}
@@ -491,7 +796,9 @@ historial:
 
         # --- ACCIONES ANTERIORES DE CONSOLA ---
         elif action_name == "flush_sources":
-            copied_count = self.sync_manager.sync_to_input(self.vault.input_dir)
+            copied_count = self.sync_manager.sync_to_input(
+                self.vault.input_dir, self.vault.dirty_dir
+            )
             return {
                 "log": f"Recopilación completada hacia 1_entrada. Archivos nuevos o actualizados traídos: {copied_count}",
                 "refresh": True,
@@ -527,8 +834,42 @@ historial:
             note_title = payload.get("note_title", "seleccionada")
             return {"log": f"Nota '{note_title}' copiada al portapapeles."}
         elif action_name == "export_reader_note":
+            export_format = str(payload.get("format") or "markdown")
+            document_id = str(payload.get("document_id") or payload.get("note_path") or "")
             note_title = payload.get("note_title", "seleccionada")
-            return {"log": f"Nota '{note_title}' exportada como archivo Markdown."}
+            destination_path = payload.get("destination_path")
+            confirm_overwrite = bool(payload.get("confirm_overwrite"))
+            if not document_id.strip():
+                return {
+                    "error": "invalid_payload",
+                    "message": "document_id is required",
+                }
+            result = self.export_note(
+                document_id,
+                export_format,
+                destination_path=destination_path,
+                confirm_overwrite=confirm_overwrite,
+            )
+            if "error" in result:
+                return result
+            if result.get("status") == "exported":
+                return {
+                    "log": (
+                        f"Nota '{note_title}' exportada como {export_format} "
+                        f"en {result.get('path', '')}."
+                    ),
+                    **result,
+                }
+            format_labels = {
+                "markdown": "Markdown (.md)",
+                "docx": "Word (.docx)",
+                "pdf": "PDF (impresión asistida)",
+            }
+            label = format_labels.get(export_format, export_format)
+            return {
+                "log": f"Nota '{note_title}' preparada para exportación como {label}.",
+                **result,
+            }
         elif action_name == "open_obsidian":
             obsidian_uri = payload.get("obsidian_uri", "")
             note_path = payload.get("note_path", "")
@@ -539,24 +880,49 @@ historial:
                 except Exception:
                     pass
             return {"log": f"Abriendo nota '{note_path}' en Obsidian Vault."}
+        elif action_name == "open_anything_desktop":
+            if not is_anythingllm_installed():
+                return {
+                    "error": "anythingllm_unavailable",
+                    "message": "AnythingLLM Desktop is not installed",
+                }
+            if not launch_anythingllm():
+                return {
+                    "error": "anythingllm_launch_failed",
+                    "message": "AnythingLLM Desktop could not be opened",
+                }
+            return {"log": "AnythingLLM Desktop abierto."}
         elif action_name == "stat_ram":
             import gc
             collected = gc.collect()
             stats = self.get_stats_dict()
+            message = (
+                f"Purga de memoria RAM ejecutada. Objetos liberados: {collected}. "
+                f"RAM actual: {stats['ram']}"
+            )
             return {
-                "log": f"Purga de memoria RAM ejecutada. Objetos liberados: {collected}. RAM actual: {stats['ram']}",
+                "log": message,
+                "alert": message,
                 "refresh": True,
                 "stats": stats
             }
         elif action_name == "stat_input":
-            inp_files = [f for f in self.vault.input_dir.glob("*") if f.is_file() and not f.name.startswith(".")] if self.vault.input_dir.exists() else []
-            return {"log": f"Desglose ingesta consultado: {len(inp_files)} archivos."}
+            input_dir = self.vault.input_dir
+            inp_files = [
+                f
+                for f in input_dir.rglob("*")
+                if f.is_file() and not f.name.startswith(".")
+            ] if input_dir.exists() else []
+            message = f"Desglose ingesta consultado: {len(inp_files)} archivos."
+            return {"log": message, "alert": message}
         elif action_name == "stat_notes":
-            out_dir = self.vault.output_dir
-            notes = list(out_dir.rglob("*.md")) if out_dir.exists() else []
-            return {"log": f"Telemetría del Grafo consultada: {len(notes)} notas preparadas."}
+            notes = self.vault.enumerate_documents("output")
+            message = f"Telemetría del Grafo consultada: {len(notes)} notas preparadas."
+            return {"log": message, "alert": message}
         elif action_name == "step1_flush":
-            copied = self.sync_manager.sync_to_input(self.vault.input_dir)
+            copied = self.sync_manager.sync_to_input(
+                self.vault.input_dir, self.vault.dirty_dir
+            )
             return {
                 "log": f"[PASO 1 RECEPCIÓN] Flush Manual ejecutado. Transferidos {copied} archivos a 1_entrada.",
                 "refresh": True,
@@ -566,11 +932,14 @@ historial:
             try:
                 pipeline = ETLPipeline(self.config)
                 input_files = [f for f in self.vault.input_dir.glob("*") if f.is_file() and not f.name.startswith(".")]
-                for f in input_files:
-                    try:
-                        pipeline.process_file(f)
-                    except Exception as err:
-                        self.quarantine_mgr.quarantine_file(f, str(err))
+                try:
+                    for f in input_files:
+                        try:
+                            pipeline.process_file(f)
+                        except Exception as err:
+                            self.quarantine_service.handle_failure(f, err, attempt_count=1)
+                finally:
+                    pipeline.close()
                 return {
                     "log": "Estructuración de datos completada hacia 3_limpio.",
                     "refresh": True,
@@ -592,47 +961,15 @@ historial:
             except Exception as e:
                 return {"log": f"Error en Estructuración: {e}"}
         elif action_name == "save_settings":
-            new_vault_str = payload.get("vault_path")
-            if new_vault_str:
-                new_v = Path(new_vault_str).resolve()
-                if new_v.exists():
-                    self.vault_path = new_v
-                    self.config = get_default_config(self.vault_path)
-
-            input_folders = payload.get("input_connected_folders", [])
-            self.sync_manager.save_connected_folders([Path(p) for p in input_folders if p])
-
-            output_folders = payload.get("output_connected_folders", [])
-            out_config_file = self.vault_path / ".funes_output_connected_folders.json"
-            try:
-                with open(out_config_file, "w", encoding="utf-8") as f:
-                    json.dump({"folders": [str(Path(p).resolve()) for p in output_folders if p]}, f, indent=2, ensure_ascii=False)
-            except Exception as e:
-                logging.error(f"Error guardando carpetas de salida vinculadas: {e}")
-
-            new_model = payload.get("model")
-            if new_model:
-                self.config.ollama_model = new_model
-
-            new_url = payload.get("ollama_url")
-            if new_url:
-                self.config.ollama_url = new_url
-
-            new_ram = payload.get("ram_margin")
-            if new_ram:
-                try:
-                    pct = int(str(new_ram).replace("%", "").strip())
-                    self.config.ram_margin_pct = pct
-                except Exception:
-                    pass
-
-            save_config(self.config)
-
-            return {
-                "log": f"[AJUSTES] Memoria & Conexiones guardadas. Vault: '{self.vault_path.name}'. Fuentes Ingesta: {len(input_folders)}, Destinos Difusión: {len(output_folders)}.",
-                "refresh": True,
-                "stats": self.get_stats_dict()
-            }
+            canonical_settings = dict(payload)
+            if "model" in canonical_settings:
+                canonical_settings["custom_model_override"] = canonical_settings.pop(
+                    "model"
+                )
+            if "ram_margin" in canonical_settings:
+                margin = str(canonical_settings.pop("ram_margin")).replace("%", "").strip()
+                canonical_settings["ram_safety_margin_pct"] = float(margin) / 100
+            return self.save_settings(canonical_settings)
         elif action_name == "reset_default_settings":
             default_cfg = get_default_config(self.vault_path)
             self.config = default_cfg
@@ -653,8 +990,20 @@ historial:
         """
         if sys.platform == "darwin":
             try:
-                cmd = f'osascript -e \'tell application "System Events" to activate\' -e \'posix path of (choose folder with prompt "{title}")\''
-                res = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=120)
+                cmd = [
+                    "osascript",
+                    "-e",
+                    "on run argv",
+                    "-e",
+                    'tell application "System Events" to activate',
+                    "-e",
+                    "return POSIX path of (choose folder with prompt (item 1 of argv))",
+                    "-e",
+                    "end run",
+                    "--",
+                    title,
+                ]
+                res = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
                 if res.returncode == 0:
                     folder = res.stdout.strip()
                     if folder:
@@ -664,8 +1013,23 @@ historial:
 
         if sys.platform == "win32":
             try:
-                ps_cmd = '[System.Reflection.Assembly]::LoadWithPartialName("System.windows.forms") | Out-Null; $dialog = New-Object System.Windows.Forms.FolderBrowserDialog; $dialog.Description = "' + title + '"; if($dialog.ShowDialog() -eq "OK"){ $dialog.SelectedPath }'
-                res = subprocess.run(["powershell", "-Command", ps_cmd], capture_output=True, text=True, timeout=120)
+                ps_cmd = (
+                    "Add-Type -AssemblyName System.Windows.Forms; "
+                    "$dialog = New-Object System.Windows.Forms.FolderBrowserDialog; "
+                    "$dialog.Description = "
+                    "[Environment]::GetEnvironmentVariable('FUNES_FOLDER_DIALOG_TITLE'); "
+                    "if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) "
+                    "{ $dialog.SelectedPath }"
+                )
+                env = os.environ.copy()
+                env["FUNES_FOLDER_DIALOG_TITLE"] = title
+                res = subprocess.run(
+                    ["powershell", "-NoProfile", "-Command", ps_cmd],
+                    capture_output=True,
+                    text=True,
+                    timeout=120,
+                    env=env,
+                )
                 if res.returncode == 0 and res.stdout.strip():
                     return res.stdout.strip()
             except Exception as e:
@@ -689,7 +1053,7 @@ historial:
         models = []
         try:
             import urllib.request
-            req = urllib.request.Request("http://localhost:11434/api/tags")
+            req = urllib.request.Request(f"{self.config.ollama_url.rstrip('/')}/api/tags")
             with urllib.request.urlopen(req, timeout=2.0) as resp:
                 data = json.loads(resp.read().decode("utf-8"))
                 fetched = [m["name"] for m in data.get("models", [])]
@@ -719,196 +1083,358 @@ historial:
             "input_connected_folders": connected_input,
             "output_connected_folders": connected_output,
             "models": self.get_ollama_models(),
-            "current_model": getattr(self.config, "ollama_model", "qwen2.5:7b") or "qwen2.5:7b",
+            "current_model": self.config.custom_model_override,
             "ollama_url": str(self.config.ollama_url),
-            "ram_margin": f"{getattr(self.config, 'ram_margin_pct', 20)}%"
+            "ram_margin": f"{self.config.ram_safety_margin_pct * 100:g}%",
+            "allow_non_loopback_ollama": self.config.allow_non_loopback_ollama,
+            "offline_mode": describe_offline_mode(self.config),
         }
 
-    def process_chat(self, message: str, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-        import json
-        import urllib.request
-        ctx_mode = "all_notes"
-        note_title = ""
-        note_path = ""
+    def _resolve_chat_context(
+        self, context: Optional[Dict[str, Any]]
+    ) -> Dict[str, Any] | Dict[str, str]:
+        """Normalize UI chat context; resolve single-note paths to document_id."""
+        ctx: Dict[str, Any] = dict(context or {})
+        mode = str(ctx.get("context_mode") or ctx.get("scope") or "all_notes").strip()
+        ctx["context_mode"] = mode
+        if mode != "single_note":
+            return ctx
 
-        if isinstance(context, dict):
-            ctx_mode = context.get("context_mode", "all_notes")
-            note_title = context.get("note_title", "")
-            note_path = context.get("note_path", "")
+        document_id = str(ctx.get("document_id") or "").strip()
+        if document_id:
+            ctx["document_id"] = document_id
+            return ctx
 
-        sources = []
-        note_content = ""
-
-        if ctx_mode == "single_note" and (note_path or note_title):
-            sources = [note_title or Path(note_path).stem]
-            if note_path and Path(note_path).exists():
-                try:
-                    note_content = Path(note_path).read_text(encoding="utf-8", errors="replace")
-                except Exception:
-                    pass
-            elif note_title:
-                out_dir = self.vault_path / "4_salida"
-                possible_file = out_dir / f"{note_title}.md"
-                if possible_file.exists():
-                    try:
-                        note_content = possible_file.read_text(encoding="utf-8", errors="replace")
-                    except Exception:
-                        pass
-
-            prompt = (
-                f"Eres Funes, un asistente de conocimiento local. "
-                f"Basándote EXCLUSIVAMENTE en el contenido de la siguiente nota titulada '{note_title}':\n\n"
-                f"--- INICIO NOTA ---\n{note_content[:4000]}\n--- FIN NOTA ---\n\n"
-                f"Responde en español a la siguiente pregunta: {message}"
-            )
-        else:
-            out_dir = self.vault_path / "4_salida"
-            all_files = sorted(list(out_dir.glob("*.md"))) if out_dir.exists() else []
-            combined_texts = []
-            sources_found = []
-
-            for f in all_files:
-                try:
-                    txt = f.read_text(encoding="utf-8", errors="replace").strip()
-                    if txt:
-                        combined_texts.append(f"=== NOTA: {f.name} ===\n{txt}\n")
-                        sources_found.append(f.name)
-                except Exception:
-                    pass
-
-            vault_context_text = "\n".join(combined_texts)[:16000] if combined_texts else "No hay notas procesadas aún."
-            sources = sources_found[:5] if sources_found else ["Bóveda Completa (4_salida)"]
-            if len(sources_found) > 5:
-                sources.append(f"+{len(sources_found) - 5} notas más")
-
-            prompt = (
-                f"Eres Funes, un asistente de conocimiento local. "
-                f"Basándote en el contenido completo de todas las notas almacenadas en la carpeta '4_salida' de tu Vault Funes:\n\n"
-                f"--- INICIO CONTEXTO BÓVEDA COMPLETA (4_SALIDA) ---\n{vault_context_text}\n--- FIN CONTEXTO BÓVEDA ---\n\n"
-                f"Responde en español a la siguiente consulta del usuario relacionando la información disponible: {message}"
-            )
-
+        note_path = str(ctx.get("note_path") or "").strip()
+        note_title = str(ctx.get("note_title") or "").strip()
         try:
-            model_name = getattr(self.config, "ollama_model", "qwen2.5:7b") or "qwen2.5:7b"
-            payload = json.dumps({
-                "model": model_name,
-                "prompt": prompt,
-                "stream": False
-            }).encode("utf-8")
-            req = urllib.request.Request("http://localhost:11434/api/generate", data=payload, headers={"Content-Type": "application/json"})
-            with urllib.request.urlopen(req, timeout=12) as resp:
-                data = json.loads(resp.read().decode("utf-8"))
-                reply = data.get("response", "").strip()
-                return {"text": reply, "sources": sources}
-        except Exception:
-            ctx_desc = f"nota '{note_title}'" if ctx_mode == "single_note" else "todas las notas de 4_salida"
+            if note_path:
+                note_file = self._path_resolver().resolve_note(note_path)
+            elif note_title:
+                note_file = self._path_resolver().resolve_note(
+                    self._vault_relative_identity(
+                        self.vault.output_dir / f"{note_title}.md"
+                    )
+                )
+            else:
+                return ctx
+            relative = self._vault_relative_identity(note_file)
+            ctx["document_id"] = document_id_for_relative_path(relative)
+            ctx["note_path"] = relative
+        except PathAuthorizationError as error:
+            return self._path_error(error)
+        return ctx
+
+    def process_chat(
+        self, message: str, context: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
+        """Shared chat contract: retrieval-grounded answer + sources + error state."""
+        resolved = self._resolve_chat_context(context)
+        if isinstance(resolved, dict) and resolved.get("error"):
+            return resolved
+        return self.get_chat_service().ask(message, resolved)
+
+    def _issue_from_relative_path(self, relative_path: str) -> str:
+        """Derive the Cuestión folder from a vault-relative note path."""
+        parts = Path(relative_path).parts
+        if "4_salida" not in parts:
+            return "_Sin_Cuestion"
+        remainder = parts[parts.index("4_salida") + 1 :]
+        if len(remainder) >= 2:
+            return remainder[0]
+        return "_Sin_Cuestion"
+
+    def _note_list_entry(
+        self, document_id: str, relative_path: str, *, is_moc: bool = False
+    ) -> Dict[str, Any]:
+        title = Path(relative_path).stem.replace("_", " ")
+        issue = "" if is_moc else self._issue_from_relative_path(relative_path)
+        status = "approved" if is_moc else "pending_review"
+        try:
+            path = self._path_resolver().resolve_note(relative_path)
+            raw = path.read_text(encoding="utf-8", errors="replace")
+            metadata, _body = parse_frontmatter(raw)
+            title = metadata.get("title") or title
+            if not is_moc:
+                issue = metadata.get("issue") or issue or "_Sin_Cuestion"
+            status = metadata.get("status") or status
+        except (PathAuthorizationError, FrontmatterError, OSError):
+            if not is_moc and not issue:
+                issue = "_Sin_Cuestion"
+        return {
+            "document_id": document_id,
+            "path": relative_path,
+            "title": title,
+            "issue": issue,
+            "theme": self.vault.active_theme,
+            "status": status,
+            "is_moc": is_moc,
+        }
+
+    def get_notes_list(self) -> List[Dict[str, Any]]:
+        """Return theme-scoped notes with opaque document ids and metadata."""
+        notes: List[Dict[str, Any]] = []
+        moc_path = self.get_canonical_moc_path()
+        if moc_path.exists():
+            try:
+                relative = self._vault_relative_identity(moc_path)
+                notes.append(
+                    self._note_list_entry(
+                        document_id_for_relative_path(relative),
+                        relative,
+                        is_moc=True,
+                    )
+                )
+            except PathAuthorizationError:
+                pass
+
+        for document_id, relative in self.vault.enumerate_documents("output"):
+            notes.append(self._note_list_entry(document_id, relative))
+        return notes
+
+    def get_note_content_html(self, note_id: str) -> Dict[str, Any]:
+        """Return safe, structured Markdown display tokens for a document id."""
+        try:
+            path = self._path_resolver().resolve_note_id(note_id)
+        except PathAuthorizationError as error:
+            return self._path_error(error)
+        if not path.exists():
             return {
-                "text": f"Funes IA Local: Consulta procesada con éxito sobre {ctx_desc}. Para obtener la inferencia de lenguaje natural completa de Qwen, asegúrate de tener Ollama activo en http://localhost:11434.",
-                "sources": sources
+                "error": "note_not_found",
+                "message": "Note was not found",
+                "title": "Nota no encontrada",
+                "document_id": note_id,
+                "document": [{"type": "heading", "level": 3, "text": "Nota no encontrada"}],
+                "html": "<h3>Nota no encontrada</h3>",
             }
 
-    def get_notes_list(self) -> List[Dict[str, str]]:
-        out_dir = self.config.vault.output_dir
-        if not out_dir.exists():
-            return []
-        notes = sorted(list(out_dir.glob("*.md")), key=lambda p: p.name.lower())
-        return [{"title": n.stem, "path": str(n)} for n in notes]
+        try:
+            relative = self._vault_relative_identity(path)
+            content = path.read_text(encoding="utf-8", errors="replace")
+        except (PathAuthorizationError, OSError) as error:
+            if isinstance(error, PathAuthorizationError):
+                return self._path_error(error)
+            return {
+                "error": "note_not_found",
+                "message": "Note was not found",
+                "title": "Nota no encontrada",
+                "document_id": note_id,
+                "document": [{"type": "heading", "level": 3, "text": "Nota no encontrada"}],
+                "html": "<h3>Nota no encontrada</h3>",
+            }
 
-    def get_note_content_html(self, note_path: str) -> Dict[str, str]:
-        path = Path(note_path)
-        if not path.exists():
-            return {"html": "<h3>Nota no encontrada</h3>"}
-        content = path.read_text(encoding="utf-8", errors="replace")
+        title = path.stem.replace("_", " ")
+        try:
+            metadata, body = parse_frontmatter(content)
+            title = metadata.get("title") or title
+        except FrontmatterError:
+            body = content
+
         import re
-        def replace_wikilink(match):
+
+        resolver = self._path_resolver()
+
+        def wikilink_token(match: re.Match[str]) -> Dict[str, Any]:
             target = match.group(1).strip()
-            clean_display = re.sub(r'^Nota_', '', target).replace('_', ' ')
-            note_file = target if target.endswith('.md') else f"{target}.md"
-            return f"<span class='wikilink' onclick=\"loadNoteContent('{note_file}')\">{clean_display}</span>"
+            note_name, separator, label = target.partition("|")
+            note_name = note_name.split("#", 1)[0].strip()
+            clean_display = (
+                label.strip()
+                if separator
+                else re.sub(r"^Nota_", "", note_name).replace("_", " ")
+            )
+            note_file = note_name if note_name.endswith(".md") else f"{note_name}.md"
+            try:
+                resolved_note = resolver.resolve_unique_note_basename(note_file)
+                document_id = document_id_for_relative_path(
+                    self._vault_relative_identity(resolved_note)
+                )
+                return {
+                    "type": "wikilink",
+                    "text": clean_display,
+                    "document_id": document_id,
+                }
+            except PathAuthorizationError:
+                return {
+                    "type": "wikilink",
+                    "text": clean_display,
+                    "document_id": "",
+                    "broken": True,
+                }
 
-        content = re.sub(r'\[\[(.*?)\]\]', replace_wikilink, content)
+        def text_tokens(line: str) -> List[Dict[str, Any]]:
+            tokens: List[Dict[str, Any]] = []
+            offset = 0
+            for match in re.finditer(r"\[\[(.*?)\]\]", line):
+                if match.start() > offset:
+                    tokens.append({"type": "text", "text": line[offset:match.start()]})
+                tokens.append(wikilink_token(match))
+                offset = match.end()
+            if offset < len(line) or not tokens:
+                tokens.append({"type": "text", "text": line[offset:]})
+            return tokens
 
-        html_lines = []
-        for line in content.splitlines():
+        document: List[Dict[str, Any]] = []
+        for line in body.splitlines():
             if line.startswith("# "):
-                html_lines.append(f"<h1 style='color:var(--paper);'>{line[2:]}</h1>")
+                document.append({"type": "heading", "level": 1, "text": line[2:]})
             elif line.startswith("## "):
-                html_lines.append(f"<h2 style='color:var(--gold);'>{line[3:]}</h2>")
+                document.append({"type": "heading", "level": 2, "text": line[3:]})
             elif line.startswith("### "):
-                html_lines.append(f"<h3 style='color:var(--accent); margin-top:12px;'>{line[4:]}</h3>")
+                document.append({"type": "heading", "level": 3, "text": line[4:]})
             else:
-                html_lines.append(f"<p>{line}</p>")
-        return {"html": "".join(html_lines)}
+                children = text_tokens(line)
+                if all(token["type"] == "text" for token in children):
+                    document.append({"type": "paragraph", "text": line})
+                else:
+                    document.append({"type": "paragraph", "children": children})
+
+        def fallback_children(tokens: List[Dict[str, Any]]) -> str:
+            return "".join(
+                (
+                    f'<span class="wikilink" data-document-id="{html.escape(token.get("document_id", ""), quote=True)}">'
+                    f'{html.escape(token["text"])}</span>'
+                    if token["type"] == "wikilink"
+                    else html.escape(token["text"])
+                )
+                for token in tokens
+            )
+
+        fallback_html = []
+        for block in document:
+            if block["type"] == "heading":
+                fallback_html.append(
+                    f'<h{block["level"]}>{html.escape(block["text"])}</h{block["level"]}>'
+                )
+            else:
+                children = block.get("children")
+                if children is None:
+                    children = [{"type": "text", "text": block["text"]}]
+                fallback_html.append(f"<p>{fallback_children(children)}</p>")
+        return {
+            "title": title,
+            "document_id": note_id,
+            "path": relative,
+            "document": document,
+            "html": "".join(fallback_html),
+        }
+
+    def get_category_files(self, category: str) -> List[Dict[str, Any]]:
+        """Return authorized, vault-relative identities for a pipeline category."""
+        categories = {
+            "1_entrada": ("input", self.vault.input_dir),
+            "2_sucio": ("dirty", self.vault.dirty_dir),
+            "3_limpio": ("clean", self.vault.clean_dir),
+            "4_salida": ("output", self.vault.output_dir),
+        }
+        if category not in categories:
+            return []
+
+        root_name, directory = categories[category]
+        resolver = self._path_resolver()
+        files = []
+        for candidate in sorted(directory.rglob("*")) if directory.exists() else []:
+            if not candidate.is_file() or candidate.name.startswith("."):
+                continue
+            try:
+                identity = self._vault_relative_identity(candidate)
+                authorized = resolver.resolve(identity, root_name=root_name)
+            except PathAuthorizationError:
+                continue
+            files.append(
+                {
+                    "name": authorized.name,
+                    "path": identity,
+                    "folder": category,
+                }
+            )
+        return files
+
+    def open_file_natively(self, file_identity: str) -> Dict[str, Any]:
+        """Open an existing file only after resolving its Vault-relative identity."""
+        if not isinstance(file_identity, str):
+            return {"error": "path_not_authorized", "message": "Path is not authorized"}
+        root_names = {
+            "1_entrada": "input",
+            "2_sucio": "dirty",
+            "3_limpio": "clean",
+            "4_salida": "output",
+        }
+        try:
+            parts = Path(file_identity).parts
+            root_name = next(
+                (root_names[part] for part in parts if part in root_names),
+                None,
+            )
+            if root_name is None:
+                return {"error": "path_not_authorized", "message": "Path is not authorized"}
+            file_path = self._path_resolver().resolve(file_identity, root_name=root_name)
+        except (KeyError, IndexError, PathAuthorizationError):
+            return {"error": "path_not_authorized", "message": "Path is not authorized"}
+
+        if not file_path.is_file():
+            return {"error": "file_not_found", "message": "File was not found"}
+        try:
+            if sys.platform == "darwin":
+                subprocess.Popen(["open", str(file_path)])
+            elif sys.platform == "win32":
+                os.startfile(str(file_path))
+            else:
+                subprocess.Popen(["xdg-open", str(file_path)])
+        except OSError as error:
+            return {"error": "open_failed", "message": str(error)}
+        return {"status": "opened", "file_id": file_identity}
+
+    def get_canonical_moc_path(self) -> Path:
+        """Return the canonical Map-of-Content path under the active theme output."""
+        return self.vault.output_dir / CANONICAL_MOC_FILENAME
 
     def get_graph_data(self) -> Dict[str, Any]:
-        out_dir = self.config.vault.output_dir
+        out_dir = self.vault.output_dir
         if not out_dir.exists():
             return {"nodes": [], "links": []}
-        notes = sorted(list(out_dir.glob("*.md")), key=lambda p: p.name.lower())
-        node_names = set(n.stem for n in notes)
-        nodes = [{"id": n.stem, "label": n.stem, "path": str(n)} for n in notes]
-        
+
+        discovered = GraphLinker(out_dir).enumerate_notes()
+        node_ids = {note.link_target for note in discovered}
+        nodes = []
+        for note in discovered:
+            vault_relative = self._vault_relative_identity(out_dir / note.relative_path)
+            nodes.append(
+                {
+                    "id": note.link_target,
+                    "label": note.stem,
+                    "path": vault_relative,
+                    "document_id": document_id_for_relative_path(vault_relative),
+                }
+            )
+
         links = []
         import re
-        link_pattern = re.compile(r'\[\[(.*?)\]\]')
+        link_pattern = re.compile(r"\[\[(.*?)\]\]")
 
-        for note_file in notes:
-            source = note_file.stem
+        for note in discovered:
+            note_file = out_dir / note.relative_path
+            source = note.link_target
             try:
                 content = note_file.read_text(encoding="utf-8", errors="ignore")
-                targets = link_pattern.findall(content)
-                for target in targets:
+                for target in link_pattern.findall(content):
                     clean_target = target.split("|")[0].split("#")[0].strip()
-                    if clean_target and clean_target in node_names and clean_target != source:
+                    if clean_target and clean_target in node_ids and clean_target != source:
                         links.append({"source": source, "target": clean_target})
-            except Exception:
+            except OSError:
                 pass
 
         return {"nodes": nodes, "links": links}
 
 
-class FunesPyWebViewApi:
-    """Bridge JavaScript <-> Python para PyWebView."""
-    def __init__(self, backend: FunesConsoleBackend):
-        self.backend = backend
-        self._window = None
-
-    def set_window(self, window):
-        self._window = window
-
-    def get_initial_state(self):
-        return self.backend.get_initial_state_dict()
-
-    def get_settings_info(self):
-        return self.backend.get_settings_info()
-
-    def select_folder(self, title: str = "Seleccionar Carpeta") -> str:
-        return self.backend.select_folder(title)
-
-    def trigger_action(self, action_name: str, payload: dict):
-        return self.backend.handle_action(action_name, payload or {})
-
-    def send_chat_message(self, message: str, context: Optional[dict] = None):
-        return self.backend.process_chat(message, context=context)
-
-    def get_notes_list(self):
-        return self.backend.get_notes_list()
-
-    def get_note_content(self, note_path: str):
-        return self.backend.get_note_content_html(note_path)
-
-    def get_graph_data(self):
-        return self.backend.get_graph_data()
-
-
 class FunesControlConsole(tk.Tk):
     """Consola Fallback Tkinter Papiro."""
-    def __init__(self, vault_path: Path):
+    def __init__(self, vault_path: Path, backend: Optional[FunesConsoleBackend] = None):
         super().__init__()
-        self.backend = FunesConsoleBackend(vault_path)
+        self.backend = backend or FunesConsoleBackend(vault_path)
         self.vault_path = self.backend.vault_path
         self.config = self.backend.config
-        self.quarantine_mgr = self.backend.quarantine_mgr
+        self.quarantine_service = self.backend.quarantine_service
         self.sync_manager = self.backend.sync_manager
 
         self.title("Funes — Registro de Prensa de Conocimiento")
@@ -968,7 +1494,7 @@ class FunesControlConsole(tk.Tk):
 
     def _on_stat_input_click(self):
         res = self.backend.handle_action("stat_input", {})
-        messagebox.showinfo("Archivos por Procesar", res["alert"])
+        messagebox.showinfo("Archivos por Procesar", res.get("alert") or res.get("log", ""))
 
     def _on_stat_processed_click(self):
         proc_dir = self.vault_path / ".funes_processed"
@@ -978,21 +1504,37 @@ class FunesControlConsole(tk.Tk):
 
     def _on_stat_notes_click(self):
         res = self.backend.handle_action("stat_notes", {})
-        messagebox.showinfo("Notas Preparadas", res["alert"])
+        messagebox.showinfo("Notas Preparadas", res.get("alert") or res.get("log", ""))
 
     def _on_ram_card_click(self):
         res = self.backend.handle_action("stat_ram", {})
-        messagebox.showinfo("Purga RAM", res["alert"])
+        messagebox.showinfo("Purga RAM", res.get("alert") or res.get("log", ""))
         self.refresh_stats()
 
     def _on_quarantine_click(self):
-        QuarantineModal(self, self.quarantine_mgr, on_restore_callback=lambda f: self.refresh_stats())
+        def restore(quarantine_id: str) -> bool:
+            result = self.backend.handle_action(
+                "restore_note",
+                {"filename": quarantine_id, "target_issue": "_Sin_Cuestion"},
+            )
+            if "error" in result:
+                messagebox.showerror("Restauración", result["error"])
+                return False
+            self.refresh_stats()
+            return True
+
+        QuarantineModal(self, self.quarantine_service, on_restore_callback=restore)
 
 
 def launch_control_console(vault_path: Optional[Path] = None):
     """
     Lanza la Consola Funes oficial 100% IDÉNTICA a consola_preview.html
     vía PyWebView / Native WebKit engine con fallback Tkinter.
+
+    Owns the lifecycle of the console's background services: the
+    `ApplicationLifecycle` (FolderMonitor + OptimizadoGraphLoop) is started
+    before the window opens and stopped — bounded, no leftover threads —
+    once the window is closed, regardless of which UI backend was used.
     """
     if not vault_path:
         vault_path = Path.home() / "Documents" / "Funes_Vault"
@@ -1000,24 +1542,31 @@ def launch_control_console(vault_path: Optional[Path] = None):
     vault_path = Path(vault_path).resolve()
     backend = FunesConsoleBackend(vault_path)
 
+    lifecycle = ApplicationLifecycle(backend.config, mode="continuous")
     html_file = Path(__file__).resolve().parent.parent / "consola_preview.html"
 
-    if HAS_WEBVIEW and html_file.exists():
-        api = FunesPyWebViewApi(backend)
-        window = webview.create_window(
-            "Funes Control Console — Estética Papiro",
-            url=html_file.as_uri(),
-            js_api=api,
-            width=1280,
-            height=850,
-            min_size=(980, 680),
-            background_color="#DCD4C7"
-        )
-        api.set_window(window)
-        webview.start(debug=False)
-    else:
-        app = FunesControlConsole(vault_path)
-        app.mainloop()
+    try:
+        lifecycle.start()
+        # One VaultManager: console theme actions retarget FolderMonitor + graph loop.
+        backend.attach_lifecycle(lifecycle)
+        if HAS_WEBVIEW and html_file.exists():
+            api = FunesPyWebViewApi(backend)
+            window = webview.create_window(
+                "Funes Control Console — Estética Papiro",
+                url=html_file.as_uri(),
+                js_api=api,
+                width=1280,
+                height=850,
+                min_size=(980, 680),
+                background_color="#DCD4C7"
+            )
+            api.set_window(window)
+            webview.start(debug=False)
+        else:
+            app = FunesControlConsole(vault_path, backend=backend)
+            app.mainloop()
+    finally:
+        lifecycle.stop()
 
 
 if __name__ == "__main__":

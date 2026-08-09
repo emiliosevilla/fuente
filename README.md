@@ -52,6 +52,43 @@ Puedes iniciar Funes de forma inmediata usando los scripts oficiales preconfigur
 
 Estos scripts instalarán el entorno virtual, crearán los accesos directos de escritorio (`Funes.lnk` / `Funes.command`) y lanzarán la aplicación.
 
+### Instalación manual por conjuntos de funcionalidades
+
+El núcleo ETL/RAG se instala con:
+
+```bash
+pip install -e .
+```
+
+Las capacidades opcionales se activan con *extras* de `pyproject.toml`:
+
+| Extra | Comando | Habilita |
+|-------|---------|----------|
+| Consola PyWebView | `pip install -e ".[webview]"` | Interfaz web nativa (fallback Tkinter si falta) |
+| Audio | `pip install -e ".[audio]"` | Transcripción local con faster-whisper |
+| OCR | `pip install -e ".[ocr]"` | OCR de imágenes vía pytesseract + Pillow |
+| Office avanzado | `pip install -e ".[office]"` | MarkItDown y Docling como convertidores prioritarios |
+| Escritorio completo | `pip install -e ".[all]"` | webview + audio + ocr + office |
+| Desarrollo / empaquetado | `pip install -e ".[dev]"` | PyInstaller para `funes.spec` |
+| Pruebas | `pip install -e ".[test]"` | pytest |
+
+**Binarios de sistema** (Tesseract, FFmpeg, Ollama, Obsidian) no los instala pip. Consulta la matriz completa de dependencias, versiones registradas y comprobaciones de entorno en [`docs/dependency-matrix.md`](docs/dependency-matrix.md).
+
+### Modo offline, instalación e inferencia
+
+Funes distingue dos fases con requisitos de red distintos:
+
+| Fase | Qué implica red | Comportamiento por defecto |
+|------|-----------------|----------------------------|
+| **Instalación** | `pip install`, descarga de modelos Ollama, binarios del sistema | Puede requerir Internet una vez; no forma parte del runtime diario |
+| **Inferencia en ejecución** | Peticiones HTTP a Ollama durante ETL, chat y refinamiento | Solo loopback (`http://localhost:11434`); URLs no loopback se rechazan salvo opt-in explícito |
+
+En la consola, el indicador **Modo de red** muestra `Solo local` o `IA remota habilitada` según la URL de Ollama configurada. El texto del chat y los ajustes nunca afirman procesamiento 100% local cuando hay un endpoint externo activo.
+
+Para habilitar un Ollama remoto (p. ej. en Docker), marca **Permitir Ollama fuera de este equipo** en Ajustes o define `ALLOW_NON_LOOPBACK_OLLAMA=true` junto con `OLLAMA_URL`.
+
+La interfaz (`consola_preview.html`) usa tipografías del sistema y una política CSP estricta: no carga fuentes ni scripts desde CDNs en tiempo de ejecución.
+
 ---
 
 ## 📄 Plantilla de Nota Atómica Generada (`4_salida`)
@@ -107,6 +144,38 @@ fuentes: [md_sucio_1, md_sucio_2]
 ### Otras Notas Atómicas
 - [[Nota_...]]
 ```
+
+---
+
+## 🧪 Pruebas
+
+Instala las dependencias de test (pytest) si aún no están disponibles:
+
+```bash
+pip install -e ".[test]"
+```
+
+Usa `PYTHONDONTWRITEBYTECODE=1` para no generar bytecode rastreado (`*.pyc`, `__pycache__`).
+
+### Suite pytest
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -q
+```
+
+La suite actual supera las 500 pruebas (unitarias, integración, seguridad, contratos). Consulta el resumen al final de la ejecución.
+
+### Release gate (pre-publicación)
+
+Antes de etiquetar o publicar una build, ejecuta el gate fail-closed:
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 python3 scripts/release_gate.py
+```
+
+Documentación del checklist y mapeo de condiciones: [`docs/release-gate.md`](docs/release-gate.md). El gate ejecuta pytest, comprueba que el árbol git permanece limpio (ignorando `__pycache__`, `funes.egg-info` y `.pytest_cache`), valida hallazgos de seguridad residuales y ejecuta un smoke offline de Vault (migración → ingesta ETL → revisión → búsqueda → exportación → rollback).
+
+Tras ejecutar pruebas desde un checkpoint limpio, `git status --short` debe permanecer vacío salvo ruido de caché ignorado por el gate.
 
 ---
 

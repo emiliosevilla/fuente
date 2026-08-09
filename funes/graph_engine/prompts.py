@@ -5,11 +5,15 @@ Debes responder ÚNICAMENTE con el código Markdown final de la nota, sin explic
 Sigue estrictamente la siguiente plantilla:
 
 ---
-título: "<Título descriptivo y conciso>"
-fecha: "<Fecha identificada o AAAA-MM-DD>"
-autor: "<Autor/es o Desconocido>"
-claves: [<clave1>, <clave2>, <clave3>]
-fuentes: [<md_sucio_1>, <md_sucio_2>]
+schema_version: 1
+title: "<Título descriptivo y conciso>"
+date: "<Fecha identificada o AAAA-MM-DD>"
+author: "<Autor/es o Desconocido>"
+tags: [<clave1>, <clave2>, <clave3>]
+issue: "_Sin_Cuestion"
+status: "pending_review"
+sources: [<md_sucio_1>, <md_sucio_2>]
+history: []
 ---
 
 # <Título de la Nota>

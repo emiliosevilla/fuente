@@ -1,9 +1,11 @@
 import re
 import math
 import logging
-from typing import List, Dict, Any, Tuple
+from typing import Any, Callable, Dict, List, Sequence, Union
 
 logger = logging.getLogger(__name__)
+
+DocsSource = Union[Sequence[Dict[str, Any]], Callable[[], Sequence[Dict[str, Any]]]]
 
 
 def tokenize(text: str) -> List[str]:
@@ -90,12 +92,67 @@ class BM25Okapi:
         return results
 
 
+def docs_from_chroma_store(chroma_store: Any) -> List[Dict[str, Any]]:
+    """Load all indexed chunks from a ChromaStore-like object."""
+    if chroma_store is None:
+        return []
+
+    getter = getattr(chroma_store, "get_all_chunks", None)
+    if callable(getter):
+        return list(getter() or [])
+
+    collection = getattr(chroma_store, "collection", None)
+    if collection is None:
+        return []
+    try:
+        all_data = collection.get()
+    except Exception as exc:
+        logger.debug("Unable to load Chroma documents for BM25: %s", exc)
+        return []
+
+    docs: List[Dict[str, Any]] = []
+    for d_id, doc, meta in zip(
+        all_data.get("ids", []),
+        all_data.get("documents", []),
+        all_data.get("metadatas", []),
+    ):
+        docs.append({"id": d_id, "content": doc, "metadata": meta or {}})
+    return docs
+
+
 class HybridSearcher:
-    """Combina la búsqueda semántica vectorial (ChromaDB) y la búsqueda léxica (BM25) mediante RRF."""
+    """Combina la búsqueda semántica vectorial (ChromaDB) y la búsqueda léxica (BM25) mediante RRF.
+
+    BM25 is cached across queries. Call ``invalidate_cache()`` (or bump the
+    generation counter) whenever the underlying index changes so the next
+    search rebuilds from the store.
+    """
 
     def __init__(self, rrf_k: int = 60):
         self.rrf_k = rrf_k
         self.bm25 = BM25Okapi()
+        self._cache_generation: int = 0
+        self._built_generation: int = -1
+
+    @property
+    def cache_generation(self) -> int:
+        return self._cache_generation
+
+    @property
+    def cache_is_warm(self) -> bool:
+        return self._built_generation >= 0 and self._built_generation == self._cache_generation
+
+    def invalidate_cache(self) -> None:
+        """Mark the BM25 index stale; the next ensure_index rebuilds it."""
+        self._cache_generation += 1
+
+    def ensure_index(self, docs: DocsSource) -> None:
+        """Build BM25 only when the cache generation has advanced (or never built)."""
+        if self._built_generation == self._cache_generation:
+            return
+        resolved = list(docs() if callable(docs) else docs)
+        self.bm25.index_documents(resolved)
+        self._built_generation = self._cache_generation
 
     def reciprocal_rank_fusion(
         self, vector_results: List[Dict[str, Any]], bm25_results: List[Dict[str, Any]], top_k: int = 5
@@ -127,23 +184,47 @@ class HybridSearcher:
 
         return final_results
 
+    def search_bm25(self, query_text: str, top_k: int = 5) -> List[Dict[str, Any]]:
+        """Lexical search against the cached BM25 index (must ensure_index first)."""
+        return self.bm25.search(query_text, top_k=top_k)
+
+    def search_hybrid(
+        self,
+        vector_results: List[Dict[str, Any]],
+        query_text: str,
+        top_k: int = 5,
+    ) -> List[Dict[str, Any]]:
+        """Fuse vector hits with cached BM25 via RRF."""
+        bm25_results = self.bm25.search(query_text, top_k=top_k * 2)
+        if not bm25_results:
+            return vector_results[:top_k]
+        return self.reciprocal_rank_fusion(vector_results, bm25_results, top_k=top_k)
+
     def search(self, chroma_store, query_text: str, n_results: int = 5) -> List[Dict[str, Any]]:
-        """Búsqueda con fallback transparente a BM25 (< 50ms) si RAMGovernor detecta estrés de memoria."""
+        """Búsqueda con fallback transparente a BM25 si RAMGovernor detecta estrés de memoria."""
         try:
             from funes.ram_governor.governor import RAMGovernor
             gov = RAMGovernor()
             if gov.should_fallback_to_bm25():
-                logger.warning("[RAM GOVERNOR] Memoria RAM justa/crítica. Activando fallback degradado transparente BM25.")
-                if chroma_store and chroma_store.collection:
-                    all_data = chroma_store.collection.get()
-                    docs = []
-                    for d_id, doc, meta in zip(all_data.get("ids", []), all_data.get("documents", []), all_data.get("metadatas", [])):
-                        docs.append({"id": d_id, "content": doc, "metadata": meta})
-                    self.bm25.index_documents(docs)
+                logger.warning(
+                    "[RAM GOVERNOR] Memoria RAM justa/crítica. Activando fallback degradado transparente BM25."
+                )
+                self.ensure_index(lambda: docs_from_chroma_store(chroma_store))
                 return self.bm25.search(query_text, top_k=n_results)
         except Exception as e:
             logger.debug(f"Error consultando RAMGovernor para fallback BM25: {e}")
 
         if chroma_store:
-            return chroma_store.query_hybrid(query_text, n_results=n_results)
+            # Prefer the store's hybrid path when present; otherwise fuse locally with cache.
+            query_hybrid = getattr(chroma_store, "query_hybrid", None)
+            if callable(query_hybrid):
+                # Still warm the cache so subsequent BM25-only calls are cheap.
+                self.ensure_index(lambda: docs_from_chroma_store(chroma_store))
+                return query_hybrid(query_text, n_results=n_results)
+
+            vector_fn = getattr(chroma_store, "query_similar", None)
+            if callable(vector_fn):
+                self.ensure_index(lambda: docs_from_chroma_store(chroma_store))
+                vector_results = vector_fn(query_text, n_results=n_results * 2)
+                return self.search_hybrid(vector_results, query_text, top_k=n_results)
         return []

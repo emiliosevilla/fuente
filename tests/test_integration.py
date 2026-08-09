@@ -4,6 +4,7 @@ import tempfile
 from pathlib import Path
 
 from funes.config import get_default_config
+from funes.domain.frontmatter import serialize_frontmatter
 from funes.watcher.watcher import ETLPipeline
 
 
@@ -12,10 +13,13 @@ from unittest.mock import patch
 class TestIntegration(unittest.TestCase):
 
     def setUp(self):
+        from tests.conftest import patch_abundant_ram
+
         self.temp_dir = tempfile.TemporaryDirectory()
         self.vault_path = Path(self.temp_dir.name)
         self.config = get_default_config(self.vault_path)
         self.pipeline = ETLPipeline(self.config)
+        patch_abundant_ram(self.pipeline.ram_governor)
 
     def tearDown(self):
         self.temp_dir.cleanup()
@@ -25,7 +29,11 @@ class TestIntegration(unittest.TestCase):
         # Configurar mock para devolver notas con referencias a títulos existentes
         def mock_generate(clean_md_content, model_name, file_name):
             stem = file_name.rsplit(".", 1)[0]
-            return f"# {stem}\n\n{clean_md_content}"
+            return serialize_frontmatter({
+                "schema_version": 1, "title": stem, "date": "", "author": "Funes",
+                "tags": [], "issue": "_Sin_Cuestion", "status": "pending_review",
+                "sources": [file_name], "history": [],
+            }) + f"# {stem}\n\n{clean_md_content}"
 
         mock_gen.side_effect = mock_generate
 

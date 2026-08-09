@@ -1,6 +1,10 @@
-import re
+import hashlib
 import logging
-from typing import List, Dict, Any
+import re
+from typing import Any, Dict, List, Optional
+
+from funes.domain.jobs import CURRENT_PIPELINE_VERSION
+from funes.rag.index_records import ChunkIdentity, materialize_chunks
 
 logger = logging.getLogger(__name__)
 
@@ -12,13 +16,41 @@ class SemanticChunker:
         self.max_chunk_size = max_chunk_size
         self.overlap = overlap
 
-    def chunk_markdown(self, md_content: str, source_file: str) -> List[Dict[str, Any]]:
-        """Aplica chunking estructurado y semántico sobre Markdown verbatim."""
+    def chunk_markdown(
+        self,
+        md_content: str,
+        source_file: str,
+        *,
+        document_id: Optional[str] = None,
+        content_hash: Optional[str] = None,
+        relative_path: Optional[str] = None,
+        theme: str = "",
+        issue: str = "",
+        pipeline_version: str = CURRENT_PIPELINE_VERSION,
+        source_hash: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        """Aplica chunking estructurado y semántico sobre Markdown verbatim.
+
+        When identity kwargs are omitted, a deterministic fallback is derived
+        from ``source_file`` + content bytes so ids remain stable for the same
+        input. Prefer passing ``document_id`` / ``content_hash`` from ingestion.
+        """
         safe_source_id = re.sub(r"[^a-zA-Z0-9_-]", "_", source_file)
-        
+        resolved_hash = content_hash or source_hash or hashlib.sha256(
+            md_content.encode("utf-8")
+        ).hexdigest()
+        identity = ChunkIdentity(
+            document_id=document_id or f"source:{safe_source_id}",
+            relative_path=relative_path or source_file,
+            source_hash=resolved_hash,
+            theme=theme,
+            issue=issue,
+            pipeline_version=pipeline_version,
+        )
+
         # Dividir por encabezados (#, ##, ###)
         sections = re.split(r"\n(?=#+\s)", md_content)
-        chunks = []
+        raw_chunks: List[Dict[str, Any]] = []
 
         for sec in sections:
             sec_text = sec.strip()
@@ -44,19 +76,35 @@ class SemanticChunker:
                             s_len = len(sentence)
                             if current_len + s_len > self.max_chunk_size and current_chunk:
                                 chunk_text = " ".join(current_chunk)
-                                chunks.append(self._create_chunk_dict(chunk_text, source_file, safe_source_id, current_header, len(chunks)))
+                                raw_chunks.append(
+                                    self._raw_chunk(chunk_text, source_file, current_header)
+                                )
                                 # Aplicar solapamiento (overlap) del fragmento anterior
-                                overlap_text = chunk_text[-self.overlap:] if len(chunk_text) > self.overlap else chunk_text
-                                current_chunk = [overlap_text, sentence] if self.overlap > 0 else [sentence]
-                                current_len = sum(len(x) for x in current_chunk) + len(current_chunk) - 1
+                                overlap_text = (
+                                    chunk_text[-self.overlap:]
+                                    if len(chunk_text) > self.overlap
+                                    else chunk_text
+                                )
+                                current_chunk = (
+                                    [overlap_text, sentence] if self.overlap > 0 else [sentence]
+                                )
+                                current_len = sum(len(x) for x in current_chunk) + len(
+                                    current_chunk
+                                ) - 1
                             else:
                                 current_chunk.append(sentence)
                                 current_len += s_len + 1
                     elif current_len + p_len > self.max_chunk_size and current_chunk:
                         chunk_text = "\n\n".join(current_chunk)
-                        chunks.append(self._create_chunk_dict(chunk_text, source_file, safe_source_id, current_header, len(chunks)))
+                        raw_chunks.append(
+                            self._raw_chunk(chunk_text, source_file, current_header)
+                        )
                         # Aplicar solapamiento (overlap) del fragmento anterior
-                        overlap_text = chunk_text[-self.overlap:] if len(chunk_text) > self.overlap else chunk_text
+                        overlap_text = (
+                            chunk_text[-self.overlap:]
+                            if len(chunk_text) > self.overlap
+                            else chunk_text
+                        )
                         current_chunk = [overlap_text, p] if self.overlap > 0 else [p]
                         current_len = sum(len(x) for x in current_chunk) + len(current_chunk) - 1
                     else:
@@ -65,14 +113,18 @@ class SemanticChunker:
 
                 if current_chunk:
                     chunk_text = "\n\n".join(current_chunk)
-                    chunks.append(self._create_chunk_dict(chunk_text, source_file, safe_source_id, current_header, len(chunks)))
+                    raw_chunks.append(
+                        self._raw_chunk(chunk_text, source_file, current_header)
+                    )
             else:
-                chunks.append(self._create_chunk_dict(sec_text, source_file, safe_source_id, current_header, len(chunks)))
+                raw_chunks.append(self._raw_chunk(sec_text, source_file, current_header))
+
+        chunks = materialize_chunks(raw_chunks, identity)
 
         logger.info(f"Creados {len(chunks)} fragmentos semánticos para '{source_file}'")
-        
+
         # Enlazar metadatos jerárquicos padre-hijo entre chunks secuenciales
-        parent_id = f"{safe_source_id}_parent_root"
+        parent_id = f"{identity.document_id}_parent_root"
         for idx, chk in enumerate(chunks):
             chk["metadata"]["parent_node_id"] = parent_id
             children = []
@@ -84,16 +136,12 @@ class SemanticChunker:
 
         return chunks
 
-    def _create_chunk_dict(self, content: str, source_file: str, safe_source_id: str, header: str, idx: int) -> Dict[str, Any]:
+    def _raw_chunk(self, content: str, source_file: str, header: str) -> Dict[str, Any]:
         return {
-            "id": f"{safe_source_id}_chunk_{idx}",
             "content": content,
             "metadata": {
                 "source_file": source_file,
                 "header": header,
-                "chunk_idx": idx,
                 "char_length": len(content),
-                "parent_node_id": f"{safe_source_id}_parent_root",
-                "child_node_ids": "",
             },
         }

@@ -11,6 +11,12 @@ from funes.extractors.base import BaseExtractor
 
 logger = logging.getLogger(__name__)
 
+MAX_EPUB_COMPRESSED_BYTES = 32 * 1024 * 1024
+MAX_EPUB_UNCOMPRESSED_ENTRY_BYTES = 8 * 1024 * 1024
+MAX_EPUB_UNCOMPRESSED_TOTAL_BYTES = 16 * 1024 * 1024
+MAX_EPUB_HTML_ENTRIES = 128
+EPUB_HTML_SUFFIXES = (".xhtml", ".html", ".htm")
+
 
 class ExtendedFormatsExtractor(BaseExtractor):
     """Extractor para cuadernos Jupyter (.ipynb), libros (.epub) y correos (.eml / .msg)."""
@@ -79,17 +85,52 @@ class ExtendedFormatsExtractor(BaseExtractor):
     # 2. Libros Electrónicos (.epub)
     # ------------------------------------------------------------------
     def _extract_epub(self, path: Path) -> str:
+        compressed_size = path.stat().st_size
+        if compressed_size > MAX_EPUB_COMPRESSED_BYTES:
+            raise ValueError(
+                f"EPUB exceeds maximum compressed size ({MAX_EPUB_COMPRESSED_BYTES} bytes)"
+            )
+
         chapters = []
+        total_uncompressed = 0
         with zipfile.ZipFile(path, "r") as z:
-            for item in z.infolist():
-                if item.filename.endswith((".xhtml", ".html", ".htm")):
-                    try:
-                        raw_html = z.read(item.filename).decode("utf-8", errors="ignore")
-                        cleaned_text = self._html_to_markdown(raw_html)
-                        if cleaned_text:
-                            chapters.append(cleaned_text)
-                    except Exception as e:
-                        logger.debug(f"No se pudo leer capítulo {item.filename} en {path.name}: {e}")
+            html_entries = [
+                item
+                for item in z.infolist()
+                if item.filename.lower().endswith(EPUB_HTML_SUFFIXES)
+            ]
+            if len(html_entries) > MAX_EPUB_HTML_ENTRIES:
+                raise ValueError(
+                    f"EPUB exceeds maximum chapter count ({MAX_EPUB_HTML_ENTRIES})"
+                )
+
+            for item in html_entries:
+                if item.file_size > MAX_EPUB_UNCOMPRESSED_ENTRY_BYTES:
+                    raise ValueError(
+                        "EPUB chapter exceeds maximum uncompressed size "
+                        f"({MAX_EPUB_UNCOMPRESSED_ENTRY_BYTES} bytes)"
+                    )
+                total_uncompressed += item.file_size
+                if total_uncompressed > MAX_EPUB_UNCOMPRESSED_TOTAL_BYTES:
+                    raise ValueError(
+                        "EPUB exceeds total uncompressed size budget "
+                        f"({MAX_EPUB_UNCOMPRESSED_TOTAL_BYTES} bytes)"
+                    )
+                try:
+                    raw_html = z.read(item.filename).decode("utf-8", errors="ignore")
+                    if len(raw_html.encode("utf-8")) > MAX_EPUB_UNCOMPRESSED_ENTRY_BYTES:
+                        raise ValueError(
+                            "EPUB chapter exceeds maximum uncompressed size after decode"
+                        )
+                    cleaned_text = self._html_to_markdown(raw_html)
+                    if cleaned_text:
+                        chapters.append(cleaned_text)
+                except Exception as e:
+                    logger.debug(
+                        f"No se pudo leer capítulo {item.filename} en {path.name}: {e}"
+                    )
+                    if isinstance(e, ValueError):
+                        raise
 
         if not chapters:
             return f"[EPUB {path.name}: No se detectaron capítulos de texto legible]"

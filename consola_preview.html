@@ -3,10 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; base-uri 'none'; connect-src 'self'; font-src 'self'; img-src 'self' data:; object-src 'none'; script-src 'self' 'nonce-funes-console'; style-src 'self' 'unsafe-inline'">
     <title>Funes Control Console — Estética Papiro (Vista Previa Definitiva)</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,400;0,500;0,700;1,400&display=swap" rel="stylesheet">
     <style>
         /* DESIGN SYSTEM ESTÉTICA PAPIRO - TIPOGRAFÍA MÁQUINA DE ESCRIBIR EN TODO EL TEXTO */
         :root {
@@ -24,7 +22,7 @@
             --green: #16A34A;
             --amber: #D97706;
             --red: #DC2626;
-            --font-mono: 'JetBrains Mono', 'Courier New', Courier, monospace;
+            --font-mono: 'Courier New', Courier, monospace;
             --card-radius: 6px;
             --border-width: 1px;
             --shadow: 0 4px 18px rgba(0,0,0,0.06);
@@ -177,6 +175,31 @@
         .status-val {
             font-size: 0.8rem;
             color: var(--paper);
+        }
+
+        .offline-badge {
+            font-weight: 700;
+            padding: 2px 8px;
+            border-radius: 999px;
+            border: 1px solid var(--border);
+            background: var(--bg-log);
+        }
+
+        .offline-badge.local-only {
+            color: var(--green);
+            border-color: var(--green);
+        }
+
+        .offline-badge.external-enabled {
+            color: var(--amber);
+            border-color: var(--amber);
+        }
+
+        #offline-mode-detail {
+            font-size: 0.72rem;
+            color: var(--muted);
+            margin-top: 4px;
+            display: block;
         }
 
         /* STATS GRID */
@@ -647,6 +670,31 @@
             color: var(--gold);
         }
 
+        .reader-theme-label {
+            font-size: 0.72rem;
+            font-weight: 800;
+            letter-spacing: 0.8px;
+            color: var(--gold);
+            padding: 8px 4px 2px 4px;
+        }
+
+        .reader-issue-group {
+            list-style: none;
+            margin: 0 0 8px 0;
+            padding: 0;
+        }
+
+        .reader-issue-label {
+            font-size: 0.74rem;
+            font-weight: 700;
+            color: var(--muted);
+            padding: 6px 8px 2px 8px;
+        }
+
+        .reader-issue-group .reader-note-item {
+            margin-left: 8px;
+        }
+
         .reader-view-pane {
             flex: 1;
             height: 100%;
@@ -820,6 +868,111 @@
         input:focus, select:focus, textarea:focus, button:focus {
             outline: none !important;
         }
+
+        /* BANDEJA DE APROBACIÓN — FORMULARIO DE METADATOS TIPADO */
+        #modal-approval .modal-container {
+            width: min(1080px, 96vw);
+            max-height: 88vh;
+        }
+
+        #modal-approval .modal-body {
+            display: grid;
+            grid-template-columns: 280px 1fr;
+            gap: 16px;
+            max-height: 68vh;
+            overflow: hidden;
+        }
+
+        .approval-pending-list {
+            border: 1px solid var(--border);
+            border-radius: var(--card-radius);
+            background: var(--bg-card);
+            overflow-y: auto;
+            padding: 8px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .approval-pending-item {
+            padding: 10px 12px;
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            background: var(--bg-log);
+            cursor: pointer;
+            font-size: 0.8rem;
+            line-height: 1.35;
+        }
+
+        .approval-pending-item.active,
+        .approval-pending-item:hover {
+            border-color: var(--border-accent);
+            background: var(--bg-card-hover);
+            font-weight: 700;
+        }
+
+        .metadata-form-panel {
+            overflow-y: auto;
+            padding-right: 4px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .metadata-field {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .metadata-field label {
+            font-size: 0.78rem;
+            font-weight: 700;
+            color: var(--muted);
+        }
+
+        .metadata-field input,
+        .metadata-field select,
+        .metadata-field textarea {
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            background: var(--bg-log);
+            font-size: 0.82rem;
+        }
+
+        .metadata-field input.invalid,
+        .metadata-field select.invalid,
+        .metadata-field textarea.invalid {
+            border-color: var(--red);
+        }
+
+        .metadata-field-error {
+            font-size: 0.72rem;
+            color: var(--red);
+            min-height: 1em;
+        }
+
+        .metadata-diagnostic {
+            border: 1px dashed var(--border);
+            border-radius: var(--card-radius);
+            padding: 10px 12px;
+            background: var(--bg-card);
+        }
+
+        .metadata-diagnostic pre {
+            margin-top: 8px;
+            padding: 10px;
+            background: var(--bg-log);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            font-size: 0.72rem;
+            white-space: pre-wrap;
+            word-break: break-word;
+            max-height: 180px;
+            overflow-y: auto;
+        }
     </style>
 </head>
 <body>
@@ -832,14 +985,20 @@
                 <div class="masthead-tagline">Formateo Universal de Notas, Estructuración y Síntesis</div>
             </div>
             <div style="display:flex; gap:14px; align-items:center; margin-top:4px;">
-                <span class="masthead-link" onclick="triggerAction('quick_help')">Guía Rápida</span>
+                <span class="masthead-link" data-onclick-command="triggerAction('quick_help')">Guía Rápida</span>
                 <span style="color:var(--border-accent); font-size:0.8rem;">|</span>
-                <span class="masthead-link" onclick="openModal('modal-settings')">Ajustes</span>
+                <span class="masthead-link" data-onclick-command="openModal('modal-settings')">Ajustes</span>
             </div>
         </div>
 
         <!-- STATUS STRIP (ESTADO DE FUNES EN CABECERA) -->
         <div class="status-strip">
+            <div class="status-item">
+                <span class="status-label">● MODO DE RED:</span>
+                <span class="status-val">
+                    <span id="status-offline-mode" class="offline-badge local-only" title="Inferencia en Ollama loopback">Solo local</span>
+                </span>
+            </div>
             <div class="status-item">
                 <span class="status-label">● MOTOR DE IA LOCAL:</span>
                 <span class="status-val" id="status-ollama">Disponible (Qwen 2.5 7B)</span>
@@ -861,39 +1020,42 @@
         <div class="toolbar-bar">
             <div class="toolbar-group">
                 <span style="font-size:0.95rem; font-weight:800; color:var(--paper); letter-spacing:0.5px; margin-right:4px;">TEMA:</span>
-                <select id="theme-select" style="background:var(--bg-card); color:var(--paper); border:1px solid var(--border-accent); border-radius:var(--card-radius); padding:8px 16px; font-size:0.8rem; font-weight:700; height:36px; box-sizing:border-box; cursor:pointer; font-family:var(--font-mono);" onchange="changeActiveTheme(this.value)">
+                <select id="theme-select" style="background:var(--bg-card); color:var(--paper); border:1px solid var(--border-accent); border-radius:var(--card-radius); padding:8px 16px; font-size:0.8rem; font-weight:700; height:36px; box-sizing:border-box; cursor:pointer; font-family:var(--font-mono);" data-onchange-command="changeActiveTheme(this.value)">
                     <option value="General">General</option>
                 </select>
-                <button class="btn-secondary" onclick="promptCreateTheme()">+ Nuevo Tema</button>
+                <button class="btn-secondary" data-onclick-command="promptCreateTheme()">+ Nuevo Tema</button>
                 <span style="border-left:1px solid var(--border); height:18px; margin:0 4px;"></span>
-                <button class="btn-primary" id="btn-run-optimized" onclick="triggerOptimizedCycle()">
+                <button class="btn-primary" id="btn-run-optimized" data-onclick-command="triggerOptimizedCycle()">
                     <span id="optimized-spinner" style="display:none;">⚙️</span> Nuevo Flujo de Trabajo
                 </button>
-                <button class="btn-secondary" onclick="triggerAction('flush_sources')">
+                <button class="btn-secondary" data-onclick-command="triggerAction('flush_sources')">
                     Actualizar Fuentes
+                </button>
+                <button class="btn-secondary" data-onclick-command="openApprovalInbox()">
+                    Bandeja de Aprobación
                 </button>
             </div>
         </div>
 
         <!-- STATS GRID -->
         <div class="stats-grid">
-            <div class="stat-card" onclick="openModal('modal-stat-input')">
+            <div class="stat-card" data-onclick-command="openModal('modal-stat-input')">
                 <div class="stat-title">Archivos por Procesar</div>
                 <div class="stat-num gold" id="stat-input">0</div>
             </div>
-            <div class="stat-card" onclick="openModal('modal-category')">
+            <div class="stat-card" data-onclick-command="openModal('modal-category')">
                 <div class="stat-title">Archivos Procesados</div>
                 <div class="stat-num green" id="stat-processed">0</div>
             </div>
-            <div class="stat-card" onclick="openModal('modal-quarantine')">
+            <div class="stat-card" data-onclick-command="openModal('modal-quarantine')">
                 <div class="stat-title">En Cuarentena</div>
                 <div class="stat-num red" id="stat-quarantine">0</div>
             </div>
-            <div class="stat-card" onclick="openModal('modal-stat-notes')">
+            <div class="stat-card" data-onclick-command="openModal('modal-stat-notes')">
                 <div class="stat-title">Notas Preparadas</div>
                 <div class="stat-num" id="stat-notes">0</div>
             </div>
-            <div class="stat-card" onclick="openModal('modal-stat-ram')">
+            <div class="stat-card" data-onclick-command="openModal('modal-stat-ram')">
                 <div class="stat-title">Consumo RAM</div>
                 <div class="stat-num" id="stat-ram">0%</div>
             </div>
@@ -909,7 +1071,7 @@
                         <span class="subgraph-title">1. Recepción</span>
                         <span class="node-badge" id="badge-step1">Última acción:  --/--/----  --:--:--</span>
                     </div>
-                    <div class="node-card" onclick="triggerAction('step1_flush')">
+                    <div class="node-card" data-onclick-command="triggerAction('step1_flush')">
                         <div class="node-tag">── PASO 1 ──</div>
                         <div class="node-name">Recopilación de archivos en formato variado</div>
                         <div class="node-desc">Flush Manual desde carpetas vinculadas hacia 1_entrada</div>
@@ -923,7 +1085,7 @@
                         <span class="subgraph-title">2. Transcripción</span>
                         <span class="node-badge" id="badge-step2">Última acción:  --/--/----  --:--:--</span>
                     </div>
-                    <div class="node-card" onclick="triggerAction('step2_transcribe')">
+                    <div class="node-card" data-onclick-command="triggerAction('step2_transcribe')">
                         <div class="node-tag">── PASO 2 ──</div>
                         <div class="node-name">Traslado de la información a formato uniforme</div>
                         <div class="node-desc">Procesado ETL: 1_entrada ➔ 2_sucio ➔ 3_limpio</div>
@@ -937,7 +1099,7 @@
                         <span class="subgraph-title">3. Estructuración</span>
                         <span class="node-badge" id="badge-step3">Última acción:  --/--/----  --:--:--</span>
                     </div>
-                    <div class="node-card" onclick="triggerAction('step3_structure')">
+                    <div class="node-card" data-onclick-command="triggerAction('step3_structure')">
                         <div class="node-tag">── PASO 3 ──</div>
                         <div class="node-name">Preparación de notas inteligentes</div>
                         <div class="node-desc">Bucle Optimizado + Vectorización ChromaDB ➔ 4_salida</div>
@@ -951,7 +1113,7 @@
                         <span class="subgraph-title">4. Consulta</span>
                         <span class="node-badge" id="badge-step4">Última acción:  --/--/----  --:--:--</span>
                     </div>
-                    <div class="node-card" onclick="openModal('modal-reader')">
+                    <div class="node-card" data-onclick-command="openModal('modal-reader')">
                         <div class="node-tag">── PASO 4 ──</div>
                         <div class="node-name">Consulta de Notas Finales</div>
                         <div class="node-desc">Funes el memorioso (Lector) y Funes el conversador (Chat)</div>
@@ -965,8 +1127,8 @@
             <div class="log-header">
                 <span>── REGISTRO DE ACTIVIDAD ──</span>
                 <div class="log-actions">
-                    <button class="btn-small" id="btn-toggle-path" onclick="togglePathMode(this)">Rutas: Relativas</button>
-                    <button class="btn-small" onclick="clearLogView()">Limpiar Registro</button>
+                    <button class="btn-small" id="btn-toggle-path" data-onclick-command="togglePathMode(this)">Rutas: Relativas</button>
+                    <button class="btn-small" data-onclick-command="clearLogView()">Limpiar Registro</button>
                 </div>
             </div>
             <div class="log-console" id="log-console">
@@ -987,14 +1149,15 @@
             <div class="modal-header">
                 <div class="modal-title">FUNES EL MEMORIOSO — LECTOR DE NOTAS</div>
                 <div style="display: flex; gap: 6px; align-items: center;">
-                    <button class="btn-small btn-toggle active" id="btn-reader-mode-list" onclick="switchReaderView('list')">Vista Notas</button>
-                    <button class="btn-small btn-toggle" id="btn-reader-mode-graph" onclick="switchReaderView('graph')">Vista Gráfico</button>
-                    <button class="btn-small btn-toggle" id="btn-reader-mode-moc" onclick="openMOCNote()">Mapa MOC</button>
+                    <button class="btn-small" id="btn-reader-back" data-onclick-command="goBackReaderNote()" disabled title="Volver a la nota anterior">◄ Atrás</button>
+                    <button class="btn-small btn-toggle active" id="btn-reader-mode-list" data-onclick-command="switchReaderView('list')">Vista Notas</button>
+                    <button class="btn-small btn-toggle" id="btn-reader-mode-graph" data-onclick-command="switchReaderView('graph')">Vista Gráfico</button>
+                    <button class="btn-small btn-toggle" id="btn-reader-mode-moc" data-onclick-command="openMOCNote()">Mapa MOC</button>
                     <span style="border-left: 1px solid var(--border); height: 16px; margin: 0 4px;"></span>
-                    <button class="btn-small" onclick="triggerAction('copy_reader_note', {}, this)">Copiar</button>
-                    <button class="btn-small" onclick="triggerAction('export_reader_note', {}, this)">Exportar</button>
-                    <button class="btn-small" onclick="triggerAction('open_obsidian', {}, this)">Abrir en Obsidian</button>
-                    <button class="close-btn" onclick="closeModal('modal-reader')">&times;</button>
+                    <button class="btn-small" data-onclick-command="triggerAction('copy_reader_note', {}, this)">Copiar</button>
+                    <button class="btn-small" data-onclick-command="triggerAction('export_reader_note', {}, this)">Exportar</button>
+                    <button class="btn-small" data-onclick-command="triggerAction('open_obsidian', {}, this)">Abrir en Obsidian</button>
+                    <button class="close-btn" data-onclick-command="closeModal('modal-reader')">&times;</button>
                 </div>
             </div>
             <div class="modal-body">
@@ -1002,7 +1165,7 @@
                     <div class="reader-sidebar">
                         <div class="reader-search-wrapper">
                             <span class="reader-search-icon">🔍</span>
-                            <input type="text" class="reader-search-input" id="reader-search" placeholder="Buscar notas..." oninput="filterReaderNotes()">
+                            <input type="text" class="reader-search-input" id="reader-search" placeholder="Buscar notas..." data-oninput-command="filterReaderNotes()">
                         </div>
                         <div class="reader-pinned-container" id="reader-pinned-moc"></div>
                         <div class="reader-sidebar-divider">ÍNDICE DE NOTAS</div>
@@ -1025,7 +1188,7 @@
                 </div>
             </div>
             <div class="modal-footer" style="justify-content: flex-end;">
-                <button class="btn-secondary" onclick="closeModal('modal-reader')">Cerrar</button>
+                <button class="btn-secondary" data-onclick-command="closeModal('modal-reader')">Cerrar</button>
             </div>
         </div>
     </div>
@@ -1035,7 +1198,7 @@
         <div class="modal-container" style="max-width: 480px; padding: 22px;">
             <div class="modal-header" style="border-bottom: 1px solid var(--border-accent); padding-bottom: 10px; margin-bottom: 14px;">
                 <div class="modal-title" style="font-size: 0.95rem; font-weight: 700; color: var(--paper);">CREAR NUEVO TEMA INDEPENDIENTE</div>
-                <button class="close-btn" onclick="closeModal('modal-create-theme')">&times;</button>
+                <button class="close-btn" data-onclick-command="closeModal('modal-create-theme')">&times;</button>
             </div>
             <div class="modal-body" style="display: flex; flex-direction: column; gap: 14px;">
                 <p style="font-size: 0.85rem; color: var(--muted); line-height: 1.45; margin: 0;">
@@ -1043,12 +1206,12 @@
                 </p>
                 <div style="display: flex; flex-direction: column; gap: 6px; margin-top: 4px;">
                     <label style="font-size: 0.8rem; font-weight: 700; color: var(--paper);">Título del Tema:</label>
-                    <input type="text" id="input-new-theme-name" placeholder="Ej: Derecho Civil, Historia Romana, Física Cuántica..." style="background: var(--bg-card); color: var(--paper); border: 1px solid var(--border-accent); border-radius: var(--card-radius); padding: 8px 12px; font-family: var(--font-mono); font-size: 0.85rem;" onkeydown="if(event.key==='Enter') submitCreateThemeModal()" />
+                    <input type="text" id="input-new-theme-name" placeholder="Ej: Derecho Civil, Historia Romana, Física Cuántica..." style="background: var(--bg-card); color: var(--paper); border: 1px solid var(--border-accent); border-radius: var(--card-radius); padding: 8px 12px; font-family: var(--font-mono); font-size: 0.85rem;" data-onkeydown-command="if(event.key==='Enter') submitCreateThemeModal()" />
                 </div>
             </div>
             <div class="modal-footer" style="margin-top: 18px; padding-top: 10px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: 10px;">
-                <button class="btn-secondary" onclick="closeModal('modal-create-theme')">Cancelar</button>
-                <button class="btn-primary" onclick="submitCreateThemeModal()">✓ Crear Tema</button>
+                <button class="btn-secondary" data-onclick-command="closeModal('modal-create-theme')">Cancelar</button>
+                <button class="btn-primary" data-onclick-command="submitCreateThemeModal()">✓ Crear Tema</button>
             </div>
         </div>
     </div>
@@ -1058,26 +1221,26 @@
         <div class="modal-container" style="max-width: 400px; padding: 22px;">
             <div class="modal-header" style="border-bottom: 1px solid var(--border-accent); padding-bottom: 10px; margin-bottom: 14px;">
                 <div class="modal-title" style="font-size: 0.95rem; font-weight: 700; color: var(--gold);">EXPORTAR NOTA</div>
-                <button class="close-btn" onclick="closeModal('modal-export-options')">&times;</button>
+                <button class="close-btn" data-onclick-command="closeModal('modal-export-options')">&times;</button>
             </div>
             <div class="modal-body" style="display: flex; flex-direction: column; gap: 14px;">
                 <p style="font-size: 0.85rem; color: var(--paper); line-height: 1.45; margin: 0;">
                     Selecciona el formato de exportación para la nota <b id="export-modal-note-title" style="color: var(--gold);">"Nota"</b>:
                 </p>
                 <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 4px;">
-                    <button class="btn-primary" style="padding: 12px 16px; font-weight: 700; background: var(--bg-card); border: 1px solid var(--border-accent); border-radius: 6px; color: var(--paper); cursor: pointer; text-align: center;" onclick="executeExportFormat('markdown')">
+                    <button class="btn-primary" style="padding: 12px 16px; font-weight: 700; background: var(--bg-card); border: 1px solid var(--border-accent); border-radius: 6px; color: var(--paper); cursor: pointer; text-align: center;" data-onclick-command="executeExportFormat('markdown')">
                         Exportar Markdown (.md)
                     </button>
-                    <button class="btn-primary" style="padding: 12px 16px; font-weight: 700; background: var(--bg-card); border: 1px solid var(--border-accent); border-radius: 6px; color: var(--paper); cursor: pointer; text-align: center;" onclick="executeExportFormat('pdf')">
-                        Exportar PDF (.pdf)
+                    <button class="btn-primary" style="padding: 12px 16px; font-weight: 700; background: var(--bg-card); border: 1px solid var(--border-accent); border-radius: 6px; color: var(--paper); cursor: pointer; text-align: center;" data-onclick-command="executeExportFormat('pdf')">
+                        Exportar PDF (impresión asistida)
                     </button>
-                    <button class="btn-primary" style="padding: 12px 16px; font-weight: 700; background: var(--bg-card); border: 1px solid var(--border-accent); border-radius: 6px; color: var(--paper); cursor: pointer; text-align: center;" onclick="executeExportFormat('word')">
-                        Exportar Word (.doc)
+                    <button class="btn-primary" style="padding: 12px 16px; font-weight: 700; background: var(--bg-card); border: 1px solid var(--border-accent); border-radius: 6px; color: var(--paper); cursor: pointer; text-align: center;" data-onclick-command="executeExportFormat('docx')">
+                        Exportar Word (.docx)
                     </button>
                 </div>
             </div>
             <div class="modal-footer" style="margin-top: 16px; padding-top: 10px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end;">
-                <button class="btn-secondary" onclick="closeModal('modal-export-options')">Cancelar</button>
+                <button class="btn-secondary" data-onclick-command="closeModal('modal-export-options')">Cancelar</button>
             </div>
         </div>
     </div>
@@ -1088,9 +1251,9 @@
             <div class="modal-header">
                 <div class="modal-title">FUNES EL CONVERSADOR — CHAT INTEGRADO</div>
                 <div>
-                    <button class="btn-small" onclick="clearChatHistory()">Limpiar Historial</button>
-                    <button class="btn-small" onclick="triggerAction('open_anything_desktop')">Abrir AnythingLLM Desktop</button>
-                    <button class="close-btn" onclick="closeModal('modal-chat')">&times;</button>
+                    <button class="btn-small" data-onclick-command="clearChatHistory()">Limpiar Historial</button>
+                    <button class="btn-small" data-onclick-command="triggerAction('open_anything_desktop')">Abrir AnythingLLM Desktop</button>
+                    <button class="close-btn" data-onclick-command="closeModal('modal-chat')">&times;</button>
                 </div>
             </div>
             <div id="chat-context-badge" style="background: var(--bg-card); border-bottom: 1px solid var(--border-accent); padding: 8px 16px; font-size: 0.8rem; color: var(--paper); display: flex; align-items: center; justify-content: space-between;">
@@ -1100,19 +1263,19 @@
             <div class="modal-body">
                 <div class="chat-container-box">
                     <div class="chat-messages-scroll" id="chat-messages">
-                        <div class="chat-bubble ai">
-                            <strong>Funes IA:</strong> Hola. Puedo responder preguntas sobre los documentos procesados en tu Vault 100% en local.
+                        <div class="chat-bubble ai" id="chat-welcome-bubble">
+                            <strong>Funes IA:</strong> <span id="chat-welcome-text">Hola. Puedo responder preguntas sobre los documentos procesados en tu Vault usando Ollama en este equipo.</span>
                         </div>
                     </div>
                     <div class="chat-input-bar">
-                        <input type="text" class="chat-input-field" id="chat-input" placeholder="Escribe tu consulta sobre los documentos..." onkeypress="if(event.key==='Enter') sendChatMessage()">
-                        <button class="btn-primary" onclick="sendChatMessage()">Enviar</button>
+                        <input type="text" class="chat-input-field" id="chat-input" placeholder="Escribe tu consulta sobre los documentos..." data-onkeypress-command="if(event.key==='Enter') sendChatMessage()">
+                        <button class="btn-primary" data-onclick-command="sendChatMessage()">Enviar</button>
                     </div>
                 </div>
             </div>
             <div class="modal-footer">
-                <span style="font-size: 0.78rem; color: var(--muted);">Funes funciona con una IA 100% local, garantizando la privacidad</span>
-                <button class="btn-secondary" onclick="closeModal('modal-chat')">Cerrar</button>
+                <span id="chat-privacy-footer" style="font-size: 0.78rem; color: var(--muted);">Modo solo local: inferencia en Ollama loopback (http://localhost:11434).</span>
+                <button class="btn-secondary" data-onclick-command="closeModal('modal-chat')">Cerrar</button>
             </div>
         </div>
     </div>
@@ -1122,7 +1285,7 @@
         <div class="modal-container">
             <div class="modal-header">
                 <div class="modal-title" style="color: var(--red);">ARCHIVOS EN CUARENTENA</div>
-                <button class="close-btn" onclick="closeModal('modal-quarantine')">&times;</button>
+                <button class="close-btn" data-onclick-command="closeModal('modal-quarantine')">&times;</button>
             </div>
             <div class="modal-body" id="quarantine-list">
                 <div style="background-color: var(--bg-card); border: 1px solid var(--border); padding: 14px; border-radius: 6px;">
@@ -1131,7 +1294,7 @@
             </div>
             <div class="modal-footer">
                 <span style="font-size: 0.8rem; color: var(--muted);">Aislamiento seguro de archivos ilegibles sin detener el motor.</span>
-                <button class="btn-secondary" onclick="closeModal('modal-quarantine')">Cerrar</button>
+                <button class="btn-secondary" data-onclick-command="closeModal('modal-quarantine')">Cerrar</button>
             </div>
         </div>
     </div>
@@ -1141,7 +1304,7 @@
         <div class="modal-container" style="width: 680px;">
             <div class="modal-header">
                 <div class="modal-title" style="color: var(--gold);">ARCHIVOS POR PROCESAR (1_ENTRADA)</div>
-                <button class="close-btn" onclick="closeModal('modal-stat-input')">&times;</button>
+                <button class="close-btn" data-onclick-command="closeModal('modal-stat-input')">&times;</button>
             </div>
             <div class="modal-body">
                 <div style="background-color: var(--bg-card); border: 1px solid var(--border); padding: 14px; border-radius: 6px; display: flex; flex-direction: column; gap: 8px;">
@@ -1154,7 +1317,7 @@
             </div>
             <div class="modal-footer">
                 <span style="font-size: 0.8rem; color: var(--muted);">Archivos pendientes de transcripción y estructuración.</span>
-                <button class="btn-secondary" onclick="closeModal('modal-stat-input')">Cerrar</button>
+                <button class="btn-secondary" data-onclick-command="closeModal('modal-stat-input')">Cerrar</button>
             </div>
         </div>
     </div>
@@ -1164,7 +1327,7 @@
         <div class="modal-container" style="width: 680px;">
             <div class="modal-header">
                 <div class="modal-title">TELEMETRÍA DEL GRAFO DE CONOCIMIENTO</div>
-                <button class="close-btn" onclick="closeModal('modal-stat-notes')">&times;</button>
+                <button class="close-btn" data-onclick-command="closeModal('modal-stat-notes')">&times;</button>
             </div>
             <div class="modal-body">
                 <div style="background-color: var(--bg-card); border: 1px solid var(--border); padding: 14px; border-radius: 6px; display: flex; flex-direction: column; gap: 8px;">
@@ -1178,7 +1341,7 @@
             </div>
             <div class="modal-footer">
                 <span style="font-size: 0.8rem; color: var(--muted);">Notas atómicas vectorizadas e hiperinterenlazadas en 4_salida.</span>
-                <button class="btn-secondary" onclick="closeModal('modal-stat-notes')">Cerrar</button>
+                <button class="btn-secondary" data-onclick-command="closeModal('modal-stat-notes')">Cerrar</button>
             </div>
         </div>
     </div>
@@ -1188,7 +1351,7 @@
         <div class="modal-container" style="width: 680px;">
             <div class="modal-header">
                 <div class="modal-title">RECURSOS Y MEMORIA RAM DEL SISTEMA</div>
-                <button class="close-btn" onclick="closeModal('modal-stat-ram')">&times;</button>
+                <button class="close-btn" data-onclick-command="closeModal('modal-stat-ram')">&times;</button>
             </div>
             <div class="modal-body">
                 <div style="background-color: var(--bg-card); border: 1px solid var(--border); padding: 14px; border-radius: 6px; display: flex; flex-direction: column; gap: 10px;">
@@ -1198,12 +1361,12 @@
                         <li>Margen de seguridad configurado: <b id="stat-ram-margin-pct" style="color: var(--paper);">20%</b></li>
                         <li>Estado del recolector de basura (GC): <b style="color: var(--green);">Optimizado</b></li>
                     </ul>
-                    <button class="btn-secondary" style="align-self: flex-start; margin-top: 4px;" onclick="triggerAction('stat_ram')">Purgar Memoria RAM Ahora</button>
+                    <button class="btn-secondary" style="align-self: flex-start; margin-top: 4px;" data-onclick-command="triggerAction('stat_ram')">Purgar Memoria RAM Ahora</button>
                 </div>
             </div>
             <div class="modal-footer">
                 <span style="font-size: 0.8rem; color: var(--muted);">Gestión inteligente de memoria para modelos de IA local.</span>
-                <button class="btn-secondary" onclick="closeModal('modal-stat-ram')">Cerrar</button>
+                <button class="btn-secondary" data-onclick-command="closeModal('modal-stat-ram')">Cerrar</button>
             </div>
         </div>
     </div>
@@ -1213,13 +1376,13 @@
         <div class="modal-container">
             <div class="modal-header">
                 <div class="modal-title">AJUSTES AVANZADOS Y CONFIGURACIÓN FUNES</div>
-                <button class="close-btn" onclick="closeModal('modal-settings')">&times;</button>
+                <button class="close-btn" data-onclick-command="closeModal('modal-settings')">&times;</button>
             </div>
             <div class="modal-body">
                 <div style="display: flex; gap: 10px; border-bottom: 1px solid var(--border); padding-bottom: 8px;">
-                    <button class="btn-small tab-btn" id="tab-btn-routes" style="font-weight: 700; background-color: var(--bg-card-hover);" onclick="switchSettingsTab('routes')">Memoria & Conexiones</button>
-                    <button class="btn-small tab-btn" id="tab-btn-server" onclick="switchSettingsTab('server')">Servidor & IA</button>
-                    <button class="btn-small tab-btn" id="tab-btn-template" onclick="switchSettingsTab('template')">Plantilla Nota</button>
+                    <button class="btn-small tab-btn" id="tab-btn-routes" style="font-weight: 700; background-color: var(--bg-card-hover);" data-onclick-command="switchSettingsTab('routes')">Memoria & Conexiones</button>
+                    <button class="btn-small tab-btn" id="tab-btn-server" data-onclick-command="switchSettingsTab('server')">Servidor & IA</button>
+                    <button class="btn-small tab-btn" id="tab-btn-template" data-onclick-command="switchSettingsTab('template')">Plantilla Nota</button>
                 </div>
 
                 <!-- PESTAÑA 1: MEMORIA & CONEXIONES -->
@@ -1229,7 +1392,7 @@
                         <label style="font-size: 0.85rem; font-weight: 700; display: block; margin-bottom: 4px;">Ruta Principal de la Memoria de Funes:</label>
                         <div style="display: flex; gap: 8px;">
                             <input type="text" id="setting-vault-path" value="" readonly style="flex-grow: 1; padding: 8px 12px; border: 1px solid var(--border); background-color: var(--bg-log); color: var(--paper); font-family: var(--font-mono) !important; font-size: 0.85rem; border-radius: 4px; outline: none; cursor: default;">
-                            <button class="btn-secondary" style="white-space: nowrap;" onclick="browseVaultFolder()">Explorar...</button>
+                            <button class="btn-secondary" style="white-space: nowrap;" data-onclick-command="browseVaultFolder()">Explorar...</button>
                         </div>
                         <span style="font-size: 0.72rem; color: var(--muted); margin-top: 3px; display: block;">Las carpetas 1_entrada, 2_sucio, 3_limpio y 4_salida están estructuradas automáticamente por Funes en esta bóveda.</span>
                     </div>
@@ -1238,7 +1401,7 @@
                     <div style="border-top: 1px solid var(--border); padding-top: 10px;">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
                             <label style="font-size: 0.85rem; font-weight: 700; color: var(--paper);">Fuentes Vinculadas a 1_entrada (Ingesta):</label>
-                            <button class="btn-small" onclick="addLinkedInputFolder()">+ Vincular Carpeta de Ingesta</button>
+                            <button class="btn-small" data-onclick-command="addLinkedInputFolder()">+ Vincular Carpeta de Ingesta</button>
                         </div>
                         <span style="font-size: 0.72rem; color: var(--muted); display: block; margin-bottom: 6px;">Archivos volcados en estas carpetas locales/compartidas serán recopilados hacia 1_entrada:</span>
                         <div id="linked-input-folders-list" style="background-color: var(--bg-log); border: 1px solid var(--border); border-radius: 4px; padding: 8px; min-height: 54px; max-height: 90px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px;">
@@ -1250,7 +1413,7 @@
                     <div style="border-top: 1px solid var(--border); padding-top: 10px;">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
                             <label style="font-size: 0.85rem; font-weight: 700; color: var(--paper);">Destinos Vinculados a 4_salida (Difusión):</label>
-                            <button class="btn-small" onclick="addLinkedOutputFolder()">+ Vincular Carpeta de Destino</button>
+                            <button class="btn-small" data-onclick-command="addLinkedOutputFolder()">+ Vincular Carpeta de Destino</button>
                         </div>
                         <span style="font-size: 0.72rem; color: var(--muted); display: block; margin-bottom: 6px;">Notas preparadas en 4_salida se replicarán en estos destinos locales/compartidos:</span>
                         <div id="linked-output-folders-list" style="background-color: var(--bg-log); border: 1px solid var(--border); border-radius: 4px; padding: 8px; min-height: 54px; max-height: 90px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px;">
@@ -1269,12 +1432,7 @@
                     </div>
                     <div>
                         <label style="font-size: 0.85rem; font-weight: 700; display: block; margin-bottom: 4px;">URL Servidor:</label>
-                        <select id="setting-ollama-url" style="width: 100%; padding: 8px 12px; border: 1px solid var(--border); background-color: var(--bg-log); color: var(--paper); font-family: var(--font-mono) !important; font-size: 0.85rem; border-radius: 4px; cursor: pointer; outline: none;">
-                            <option value="http://localhost:11434">Ollama (http://localhost:11434)</option>
-                            <option value="http://localhost:1234">LM Studio (http://localhost:1234)</option>
-                            <option value="http://localhost:8000">vLLM / LocalAI (http://localhost:8000)</option>
-                            <option value="http://localhost:11435">Ollama Puerto Alternativo (http://localhost:11435)</option>
-                        </select>
+                        <input id="setting-ollama-url" type="url" value="http://localhost:11434" style="width: 100%; box-sizing: border-box; padding: 8px 12px; border: 1px solid var(--border); background-color: var(--bg-log); color: var(--paper); font-family: var(--font-mono) !important; font-size: 0.85rem; border-radius: 4px; outline: none;">
                     </div>
                     <div>
                         <label style="font-size: 0.85rem; font-weight: 700; display: block; margin-bottom: 4px;">Margen de Seguridad RAM:</label>
@@ -1286,6 +1444,11 @@
                             <option value="50%">50%</option>
                         </select>
                     </div>
+                    <label style="font-size: 0.78rem; color: var(--muted); display: flex; gap: 8px; align-items: flex-start;">
+                        <input id="setting-allow-non-loopback-ollama" type="checkbox">
+                        <span>Permitir Ollama fuera de este equipo. Las solicitudes pueden salir del dispositivo.</span>
+                    </label>
+                    <span id="offline-mode-detail">Modo solo local: inferencia en Ollama loopback; la consola no carga recursos de red en tiempo de ejecución.</span>
                 </div>
 
                 <!-- PESTAÑA 3: PLANTILLA NOTA -->
@@ -1308,10 +1471,10 @@
                 </div>
             </div>
             <div class="modal-footer">
-                <button class="btn-secondary" style="background-color: var(--bg-card); border: 1px solid var(--border-accent);" onclick="resetDefaultSettings()">Restaurar por Defecto</button>
+                <button class="btn-secondary" style="background-color: var(--bg-card); border: 1px solid var(--border-accent);" data-onclick-command="resetDefaultSettings()">Restaurar por Defecto</button>
                 <div style="display: flex; align-items: center; gap: 10px;">
-                    <span style="font-size: 0.78rem; color: var(--muted); font-weight: 700;">100% Local</span>
-                    <button class="btn-secondary" style="background-color: var(--accent); color: white;" onclick="saveSettings()">Guardar Ajustes</button>
+                    <span style="font-size: 0.78rem; color: var(--muted); font-weight: 700;">Local por defecto</span>
+                    <button class="btn-secondary" style="background-color: var(--accent); color: white;" data-onclick-command="saveSettings()">Guardar Ajustes</button>
                 </div>
             </div>
         </div>
@@ -1322,14 +1485,81 @@
         <div class="modal-container">
             <div class="modal-header">
                 <div class="modal-title" id="category-modal-title">DESGLOSE DE ARCHIVOS</div>
-                <button class="close-btn" onclick="closeModal('modal-category')">&times;</button>
+                <button class="close-btn" data-onclick-command="closeModal('modal-category')">&times;</button>
             </div>
             <div class="modal-body" id="category-modal-body">
                 <p style="font-size: 0.85rem; color: var(--muted);">Cargando listado de archivos...</p>
             </div>
             <div class="modal-footer">
                 <span style="font-size: 0.78rem; color: var(--muted);">Doble clic abre el archivo con la app nativa del sistema.</span>
-                <button class="btn-secondary" onclick="closeModal('modal-category')">Cerrar</button>
+                <button class="btn-secondary" data-onclick-command="closeModal('modal-category')">Cerrar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL BANDEJA DE APROBACIÓN
+         Editor strategy (Task 6.3): TipTap excluded from packaged app — no vendored
+         JS bundle. Body round-trip uses funes/ui/markdown_projection.py; approval
+         persists NoteDocument (frontmatter + body_markdown), not editor DOM state. -->
+    <div class="modal-overlay" id="modal-approval" style="z-index: 1050;">
+        <div class="modal-container">
+            <div class="modal-header">
+                <div class="modal-title">BANDEJA DE APROBACIÓN — METADATOS SEGUROS</div>
+                <button class="close-btn" data-onclick-command="closeModal('modal-approval')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="approval-pending-list" id="approval-pending-list">
+                    <p style="font-size:0.8rem; color:var(--muted); padding:8px;">Cargando notas pendientes...</p>
+                </div>
+                <div class="metadata-form-panel" id="approval-metadata-form">
+                    <p style="font-size:0.82rem; color:var(--muted);">Selecciona una nota pendiente para revisar sus metadatos.</p>
+                    <div class="metadata-field" id="metadata-field-title" style="display:none;">
+                        <label for="metadata-title">Título</label>
+                        <input type="text" id="metadata-title" autocomplete="off">
+                        <span class="metadata-field-error" id="metadata-error-title"></span>
+                    </div>
+                    <div class="metadata-field" id="metadata-field-tags" style="display:none;">
+                        <label for="metadata-tags">Etiquetas (separadas por comas)</label>
+                        <input type="text" id="metadata-tags" autocomplete="off" placeholder="etiqueta1, etiqueta2">
+                        <span class="metadata-field-error" id="metadata-error-tags"></span>
+                    </div>
+                    <div class="metadata-field" id="metadata-field-issue" style="display:none;">
+                        <label for="metadata-issue">Cuestión</label>
+                        <select id="metadata-issue"></select>
+                        <span class="metadata-field-error" id="metadata-error-issue"></span>
+                    </div>
+                    <div class="metadata-field" id="metadata-field-date" style="display:none;">
+                        <label for="metadata-date">Fecha</label>
+                        <input type="date" id="metadata-date">
+                        <span class="metadata-field-error" id="metadata-error-date"></span>
+                    </div>
+                    <div class="metadata-field" id="metadata-field-sources" style="display:none;">
+                        <label for="metadata-sources">Fuentes (una por línea)</label>
+                        <textarea id="metadata-sources" rows="3" placeholder="Fuente 1&#10;Fuente 2"></textarea>
+                        <span class="metadata-field-error" id="metadata-error-sources"></span>
+                    </div>
+                    <div class="metadata-field" id="metadata-field-status" style="display:none;">
+                        <label for="metadata-status">Estado</label>
+                        <select id="metadata-status">
+                            <option value="pending_review">Pendiente de revisión</option>
+                            <option value="draft">Borrador</option>
+                            <option value="archived">Archivada</option>
+                        </select>
+                        <span class="metadata-field-error" id="metadata-error-status"></span>
+                    </div>
+                    <details class="metadata-diagnostic" id="metadata-diagnostic-panel" style="display:none;">
+                        <summary style="cursor:pointer; font-size:0.78rem; font-weight:700; color:var(--muted);">Vista diagnóstica — frontmatter YAML (solo lectura)</summary>
+                        <pre id="metadata-raw-frontmatter"></pre>
+                    </details>
+                </div>
+            </div>
+            <div class="modal-footer" style="justify-content: space-between;">
+                <span id="approval-form-status" style="font-size:0.78rem; color:var(--muted);"></span>
+                <div style="display:flex; gap:10px;">
+                    <button class="btn-secondary" data-onclick-command="closeModal('modal-approval')">Cerrar</button>
+                    <button class="btn-secondary" id="btn-save-metadata" data-onclick-command="saveApprovalMetadata()" disabled>Guardar metadatos</button>
+                    <button class="btn-primary" id="btn-approve-note" data-onclick-command="approveSelectedNote()" disabled>Aprobar nota</button>
+                </div>
             </div>
         </div>
     </div>
@@ -1339,7 +1569,7 @@
         <div class="modal-container" style="width: 840px;">
             <div class="modal-header">
                 <div class="modal-title">GUÍA RÁPIDA DE USO — SISTEMA FUNES</div>
-                <button class="close-btn" onclick="closeModal('modal-help')">&times;</button>
+                <button class="close-btn" data-onclick-command="closeModal('modal-help')">&times;</button>
             </div>
             <div class="modal-body" style="gap: 14px; max-height: 75vh; overflow-y: auto; padding-right: 6px;">
                 <!-- 1. ORGANIZACIÓN EN TEMAS Y CUESTIONES -->
@@ -1392,18 +1622,65 @@
             </div>
             <div class="modal-footer">
                 <span style="font-size: 0.78rem; color: var(--muted);">Funes v2026.1 • Formateo Universal de Notas, Estructuración y Síntesis</span>
-                <button class="btn-secondary" onclick="closeModal('modal-help')">Cerrar</button>
+                <button class="btn-secondary" data-onclick-command="closeModal('modal-help')">Cerrar</button>
             </div>
         </div>
     </div>
 
-    <script>
+    <script nonce="funes-console">
+        function runStaticCommand(command, element, event) {
+            if (command.startsWith("if(event.key==='Enter')")) {
+                if (event.key !== 'Enter') return;
+                command = command.replace("if(event.key==='Enter') ", '');
+            }
+            const args = Array.from(command.matchAll(/'([^']*)'/g), match => match[1]);
+            if (command.startsWith('triggerAction(')) return triggerAction(args[0], {}, element);
+            if (command.startsWith('openModal(')) return openModal(args[0]);
+            if (command.startsWith('closeModal(')) return closeModal(args[0]);
+            if (command.startsWith('switchReaderView(')) return switchReaderView(args[0]);
+            if (command.startsWith('switchSettingsTab(')) return switchSettingsTab(args[0]);
+            if (command.startsWith('executeExportFormat(')) return executeExportFormat(args[0]);
+            if (command.startsWith('changeActiveTheme(')) return changeActiveTheme(element.value);
+            if (command === 'togglePathMode(this)') return togglePathMode(element);
+
+            const handlers = {
+                'promptCreateTheme()': promptCreateTheme,
+                'triggerOptimizedCycle()': triggerOptimizedCycle,
+                'clearLogView()': clearLogView,
+                'openMOCNote()': openMOCNote,
+                'filterReaderNotes()': filterReaderNotes,
+                'submitCreateThemeModal()': submitCreateThemeModal,
+                'clearChatHistory()': clearChatHistory,
+                'sendChatMessage()': sendChatMessage,
+                'browseVaultFolder()': browseVaultFolder,
+                'addLinkedInputFolder()': addLinkedInputFolder,
+                'addLinkedOutputFolder()': addLinkedOutputFolder,
+                'resetDefaultSettings()': resetDefaultSettings,
+                'saveSettings()': saveSettings,
+                'openApprovalInbox()': openApprovalInbox,
+                'saveApprovalMetadata()': saveApprovalMetadata,
+                'approveSelectedNote()': approveSelectedNote,
+            };
+            if (handlers[command]) handlers[command]();
+        }
+
+        ['click', 'change', 'input', 'keydown', 'keypress'].forEach(function(eventName) {
+            document.querySelectorAll(`[data-on${eventName}-command]`).forEach(function(element) {
+                element.addEventListener(eventName, function(event) {
+                    runStaticCommand(element.dataset[`on${eventName}Command`], element, event);
+                });
+            });
+        });
+
         function log(msg) {
             const consoleEl = document.getElementById('log-console');
             const now = new Date();
             const timeStr = now.toTimeString().split(' ')[0];
             const entry = document.createElement('div');
-            entry.innerHTML = `<span class="log-time">[${timeStr}]</span> ${msg}`;
+            const timestamp = document.createElement('span');
+            timestamp.className = 'log-time';
+            timestamp.textContent = `[${timeStr}]`;
+            entry.append(timestamp, document.createTextNode(` ${msg}`));
             consoleEl.appendChild(entry);
             consoleEl.scrollTop = consoleEl.scrollHeight;
         }
@@ -1419,7 +1696,31 @@
         }
 
         function clearLogView() {
-            document.getElementById('log-console').innerHTML = '';
+            document.getElementById('log-console').replaceChildren();
+        }
+
+        function applyOfflineModeState(offlineMode) {
+            if (!offlineMode) return;
+            const badge = document.getElementById('status-offline-mode');
+            const detail = document.getElementById('offline-mode-detail');
+            const welcome = document.getElementById('chat-welcome-text');
+            const footer = document.getElementById('chat-privacy-footer');
+            const isLocalOnly = offlineMode.is_local_only !== false;
+            if (badge) {
+                badge.textContent = offlineMode.label || (isLocalOnly ? 'Solo local' : 'IA remota habilitada');
+                badge.title = offlineMode.detail || '';
+                badge.classList.toggle('local-only', isLocalOnly);
+                badge.classList.toggle('external-enabled', !isLocalOnly);
+            }
+            if (detail && offlineMode.detail) {
+                detail.textContent = offlineMode.detail;
+            }
+            if (welcome && offlineMode.chat_welcome) {
+                welcome.textContent = offlineMode.chat_welcome;
+            }
+            if (footer && offlineMode.chat_footer) {
+                footer.textContent = offlineMode.chat_footer;
+            }
         }
 
         function getFormattedTimestamp() {
@@ -1480,6 +1781,201 @@
             if (id === 'modal-stat-input') { loadStatInputData(); }
             if (id === 'modal-stat-notes') { loadStatNotesData(); }
             if (id === 'modal-stat-ram') { loadStatRamData(); }
+            if (id === 'modal-approval') { loadApprovalInbox(); }
+        }
+
+        let approvalSelectedNoteId = null;
+        let approvalSelectedRevision = null;
+        const metadataFieldIds = ['title', 'tags', 'issue', 'date', 'sources', 'status'];
+
+        function bindApprovalDiagnosticPanel() {
+            const panel = document.getElementById('metadata-diagnostic-panel');
+            if (!panel || panel.dataset.diagnosticBound === 'true') return;
+            panel.dataset.diagnosticBound = 'true';
+            panel.addEventListener('toggle', function(event) {
+                if (!event.target.open || !approvalSelectedNoteId) return;
+                window.pywebview.api.get_note_metadata(approvalSelectedNoteId, true).then(function(res) {
+                    if (res && res.raw_frontmatter) {
+                        document.getElementById('metadata-raw-frontmatter').textContent = res.raw_frontmatter;
+                    }
+                });
+            });
+        }
+
+        function clearMetadataFieldErrors() {
+            metadataFieldIds.forEach(function(field) {
+                const input = document.getElementById('metadata-' + field);
+                const errorEl = document.getElementById('metadata-error-' + field);
+                if (input) input.classList.remove('invalid');
+                if (errorEl) errorEl.textContent = '';
+            });
+        }
+
+        function showMetadataFieldErrors(fieldErrors) {
+            clearMetadataFieldErrors();
+            if (!fieldErrors) return;
+            Object.keys(fieldErrors).forEach(function(field) {
+                const input = document.getElementById('metadata-' + field);
+                const errorEl = document.getElementById('metadata-error-' + field);
+                if (input) input.classList.add('invalid');
+                if (errorEl) errorEl.textContent = fieldErrors[field];
+            });
+        }
+
+        function setMetadataFormVisible(visible) {
+            metadataFieldIds.forEach(function(field) {
+                const wrapper = document.getElementById('metadata-field-' + field);
+                if (wrapper) wrapper.style.display = visible ? 'flex' : 'none';
+            });
+            document.getElementById('metadata-diagnostic-panel').style.display = visible ? 'block' : 'none';
+            document.getElementById('btn-save-metadata').disabled = !visible;
+            document.getElementById('btn-approve-note').disabled = !visible;
+        }
+
+        function populateIssueOptions(issues, selectedIssue) {
+            const select = document.getElementById('metadata-issue');
+            select.replaceChildren();
+            (issues || ['_Sin_Cuestion']).forEach(function(issue) {
+                const option = document.createElement('option');
+                option.value = issue;
+                option.textContent = issue;
+                if (issue === selectedIssue) option.selected = true;
+                select.appendChild(option);
+            });
+        }
+
+        function fillMetadataForm(metadata) {
+            document.getElementById('metadata-title').value = metadata.title || '';
+            document.getElementById('metadata-tags').value = (metadata.tags || []).join(', ');
+            document.getElementById('metadata-date').value = metadata.date || '';
+            document.getElementById('metadata-sources').value = (metadata.sources || []).join('\n');
+            document.getElementById('metadata-status').value = metadata.status || 'pending_review';
+            populateIssueOptions(window.approvalIssueOptions || ['_Sin_Cuestion'], metadata.issue || '_Sin_Cuestion');
+            clearMetadataFieldErrors();
+        }
+
+        function collectMetadataFormValues() {
+            return {
+                title: document.getElementById('metadata-title').value,
+                tags: document.getElementById('metadata-tags').value,
+                issue: document.getElementById('metadata-issue').value,
+                date: document.getElementById('metadata-date').value,
+                sources: document.getElementById('metadata-sources').value,
+                status: document.getElementById('metadata-status').value,
+            };
+        }
+
+        function openApprovalInbox() {
+            bindApprovalDiagnosticPanel();
+            openModal('modal-approval');
+        }
+
+        function loadApprovalInbox() {
+            const listEl = document.getElementById('approval-pending-list');
+            approvalSelectedNoteId = null;
+            approvalSelectedRevision = null;
+            setMetadataFormVisible(false);
+            document.getElementById('approval-form-status').textContent = '';
+            document.getElementById('metadata-raw-frontmatter').textContent = '';
+            listEl.innerHTML = '<p style="font-size:0.8rem; color:var(--muted); padding:8px;">Cargando notas pendientes...</p>';
+
+            if (!window.pywebview || !window.pywebview.api) {
+                listEl.innerHTML = '<p style="font-size:0.8rem; color:var(--muted); padding:8px;">Vista previa sin backend.</p>';
+                return;
+            }
+
+            window.pywebview.api.get_available_issues().then(function(issueRes) {
+                window.approvalIssueOptions = (issueRes && issueRes.issues) ? issueRes.issues : ['_Sin_Cuestion'];
+                return window.pywebview.api.get_pending_notes();
+            }).then(function(res) {
+                const pending = (res && res.pending_notes) ? res.pending_notes : [];
+                listEl.replaceChildren();
+                if (!pending.length) {
+                    listEl.innerHTML = '<p style="font-size:0.8rem; color:var(--muted); padding:8px;">No hay notas pendientes de revisión.</p>';
+                    return;
+                }
+                pending.forEach(function(note) {
+                    const item = document.createElement('button');
+                    item.type = 'button';
+                    item.className = 'approval-pending-item';
+                    item.textContent = note.title || note.filename || note.document_id;
+                    item.addEventListener('click', function() {
+                        selectApprovalNote(note.document_id, note.revision, item);
+                    });
+                    listEl.appendChild(item);
+                });
+            });
+        }
+
+        function selectApprovalNote(documentId, revision, itemEl) {
+            approvalSelectedNoteId = documentId;
+            approvalSelectedRevision = revision;
+            document.querySelectorAll('.approval-pending-item').forEach(function(el) {
+                el.classList.remove('active');
+            });
+            if (itemEl) itemEl.classList.add('active');
+            setMetadataFormVisible(true);
+            document.getElementById('approval-form-status').textContent = 'Cargando metadatos...';
+            document.getElementById('metadata-raw-frontmatter').textContent = '';
+
+            window.pywebview.api.get_note_metadata(documentId, false).then(function(res) {
+                if (res && res.error) {
+                    document.getElementById('approval-form-status').textContent = res.message || res.error;
+                    return;
+                }
+                approvalSelectedRevision = res.revision;
+                fillMetadataForm(res.metadata || {});
+                document.getElementById('approval-form-status').textContent = 'Revisión ' + res.revision;
+            });
+        }
+
+        function saveApprovalMetadata() {
+            if (!approvalSelectedNoteId || approvalSelectedRevision === null) return;
+            const metadata = collectMetadataFormValues();
+            document.getElementById('approval-form-status').textContent = 'Guardando...';
+            window.pywebview.api.update_note_metadata(
+                approvalSelectedNoteId,
+                metadata,
+                approvalSelectedRevision
+            ).then(function(res) {
+                if (res && res.field_errors) {
+                    showMetadataFieldErrors(res.field_errors);
+                    document.getElementById('approval-form-status').textContent = res.message || 'Metadatos inválidos';
+                    return;
+                }
+                if (res && res.error) {
+                    document.getElementById('approval-form-status').textContent = res.message || res.error;
+                    return;
+                }
+                approvalSelectedRevision = res.revision;
+                fillMetadataForm(res.metadata || metadata);
+                document.getElementById('approval-form-status').textContent = 'Metadatos guardados (rev. ' + res.revision + ')';
+                if (res.log) log(res.log);
+            });
+        }
+
+        function approveSelectedNote() {
+            if (!approvalSelectedNoteId || approvalSelectedRevision === null) return;
+            const metadata = collectMetadataFormValues();
+            document.getElementById('approval-form-status').textContent = 'Aprobando...';
+            window.pywebview.api.approve_note(
+                approvalSelectedNoteId,
+                approvalSelectedRevision,
+                metadata
+            ).then(function(res) {
+                if (res && res.field_errors) {
+                    showMetadataFieldErrors(res.field_errors);
+                    document.getElementById('approval-form-status').textContent = res.message || 'No se puede aprobar con metadatos inválidos';
+                    return;
+                }
+                if (res && res.error) {
+                    document.getElementById('approval-form-status').textContent = res.message || res.error;
+                    return;
+                }
+                if (res && res.log) log(res.log);
+                document.getElementById('approval-form-status').textContent = 'Nota aprobada';
+                loadApprovalInbox();
+            });
         }
 
         function loadStatInputData() {
@@ -1596,7 +2092,7 @@
                 input.style.display = 'none';
                 document.body.appendChild(input);
             }
-            input.onchange = function(e) {
+            input.addEventListener('change', function(e) {
                 if (e.target.files && e.target.files.length > 0) {
                     const file = e.target.files[0];
                     let folderPath = file.path;
@@ -1612,7 +2108,7 @@
                     callback(folderPath);
                 }
                 input.value = '';
-            };
+            }, { once: true });
             input.click();
         }
 
@@ -1705,33 +2201,33 @@
             const inputEl = document.getElementById('linked-input-folders-list');
             const outputEl = document.getElementById('linked-output-folders-list');
 
-            if (inputEl) {
-                inputEl.innerHTML = '';
-                if (linkedInputFolders.length === 0) {
-                    inputEl.innerHTML = '<div style="font-size: 0.78rem; color: var(--muted); font-style: italic;">No hay carpetas de ingesta vinculadas.</div>';
-                } else {
-                    linkedInputFolders.forEach(function(f, idx) {
-                        const item = document.createElement('div');
-                        item.style.cssText = 'display: flex; justify-content: space-between; align-items: center; background-color: var(--bg-card); padding: 4px 8px; border-radius: 4px; font-size: 0.78rem; border: 1px solid var(--border);';
-                        item.innerHTML = '<span>' + f + '</span><span style="color: var(--red); cursor: pointer; font-weight: 700;" onclick="removeLinkedInputFolder(' + idx + ')">&times;</span>';
-                        inputEl.appendChild(item);
-                    });
+            function renderFolderList(container, folders, emptyMessage, removeFolder) {
+                if (!container) return;
+                container.replaceChildren();
+                if (folders.length === 0) {
+                    const empty = document.createElement('div');
+                    empty.style.cssText = 'font-size: 0.78rem; color: var(--muted); font-style: italic;';
+                    empty.textContent = emptyMessage;
+                    container.appendChild(empty);
+                    return;
                 }
+                folders.forEach(function(folder, index) {
+                    const item = document.createElement('div');
+                    item.style.cssText = 'display: flex; justify-content: space-between; align-items: center; background-color: var(--bg-card); padding: 4px 8px; border-radius: 4px; font-size: 0.78rem; border: 1px solid var(--border);';
+                    const label = document.createElement('span');
+                    label.textContent = folder;
+                    const remove = document.createElement('button');
+                    remove.type = 'button';
+                    remove.style.cssText = 'color: var(--red); cursor: pointer; font-weight: 700; border: 0; background: transparent;';
+                    remove.textContent = '×';
+                    remove.addEventListener('click', function() { removeFolder(index); });
+                    item.append(label, remove);
+                    container.appendChild(item);
+                });
             }
 
-            if (outputEl) {
-                outputEl.innerHTML = '';
-                if (linkedOutputFolders.length === 0) {
-                    outputEl.innerHTML = '<div style="font-size: 0.78rem; color: var(--muted); font-style: italic;">No hay carpetas de destino vinculadas.</div>';
-                } else {
-                    linkedOutputFolders.forEach(function(f, idx) {
-                        const item = document.createElement('div');
-                        item.style.cssText = 'display: flex; justify-content: space-between; align-items: center; background-color: var(--bg-card); padding: 4px 8px; border-radius: 4px; font-size: 0.78rem; border: 1px solid var(--border);';
-                        item.innerHTML = '<span>' + f + '</span><span style="color: var(--red); cursor: pointer; font-weight: 700;" onclick="removeLinkedOutputFolder(' + idx + ')">&times;</span>';
-                        outputEl.appendChild(item);
-                    });
-                }
-            }
+            renderFolderList(inputEl, linkedInputFolders, 'No hay carpetas de ingesta vinculadas.', removeLinkedInputFolder);
+            renderFolderList(outputEl, linkedOutputFolders, 'No hay carpetas de destino vinculadas.', removeLinkedOutputFolder);
         }
 
         function loadSettingsData() {
@@ -1742,6 +2238,8 @@
                     if (info.output_connected_folders) { linkedOutputFolders = info.output_connected_folders; }
                     if (info.ollama_url) { document.getElementById('setting-ollama-url').value = info.ollama_url; }
                     if (info.ram_margin) { document.getElementById('setting-ram-margin').value = info.ram_margin; }
+                    document.getElementById('setting-allow-non-loopback-ollama').checked = !!info.allow_non_loopback_ollama;
+                    if (info.offline_mode) { applyOfflineModeState(info.offline_mode); }
                     renderLinkedFolders();
                     populateOllamaModels(info.models, info.current_model);
                 });
@@ -1874,34 +2372,72 @@
 
         function getFullNotePath(notePath) {
             const defaultBase = "/Users/emiliosevillaortego/Documents/Programación/funes/Vault_Funes/4_salida/";
-            if (!notePath) return defaultBase + "00_MOC_Funes.md";
+            if (!notePath) return defaultBase + "_Indice_MOC.md";
             if (notePath.startsWith("/")) return notePath;
             return defaultBase + (notePath.endsWith(".md") ? notePath : notePath + ".md");
         }
 
-        function executeExportFormat(format) {
-            closeModal('modal-export-options');
-            if (format === 'markdown') {
-                downloadMarkdownFile();
-            } else if (format === 'pdf') {
-                downloadPdfFile();
-            } else if (format === 'word') {
-                downloadWordFile();
-            }
+        function escapeHtml(value) {
+            const node = document.createElement('span');
+            node.textContent = String(value);
+            return node.innerHTML;
         }
 
-        function downloadMarkdownFile() {
-            const textToExport = getCleanNoteText();
-
-            if (!textToExport) {
+        function executeExportFormat(format) {
+            closeModal('modal-export-options');
+            if (!currentSelectedDocumentId) {
                 alert('No hay ninguna nota seleccionada para exportar.');
                 return;
             }
+            if (window.pywebview && window.pywebview.api && window.pywebview.api.export_note) {
+                window.pywebview.api.export_note(currentSelectedDocumentId, format).then(function(res) {
+                    handleCanonicalExportResponse(res, format);
+                }).catch(function() {
+                    alert('No se pudo exportar la nota desde el documento canónico.');
+                });
+                return;
+            }
+            alert('La exportación determinista requiere la consola Funes (PyWebView).');
+        }
 
+        function handleCanonicalExportResponse(res, format) {
+            if (!res || res.error) {
+                alert((res && res.message) || 'No se pudo exportar la nota.');
+                return;
+            }
             const title = currentSelectedNoteTitle || 'nota_funes';
-            let fileName = (currentSelectedNotePath || title).replace(/\.md$/, '').replace(/^.*[\\\/]/, '') + '.md';
+            if (res.mode === 'user_assisted_print' && res.print_html) {
+                openUserAssistedPdfPrint(res.print_html);
+                if (lastExportButtonRef) showButtonFeedback(lastExportButtonRef, '✓ PDF (impresión)');
+                log('Nota "' + title + '" preparada para PDF mediante impresión asistida del navegador.');
+            } else if (res.content) {
+                downloadTextBlob(res.content, res.filename || (title + '.md'), res.content_type || 'text/markdown;charset=utf-8');
+                if (lastExportButtonRef) showButtonFeedback(lastExportButtonRef, '✓ ¡Exportado!');
+                log('Nota "' + title + '" exportada como ' + (res.filename || format) + ' desde documento canónico.');
+            } else if (res.content_base64) {
+                downloadBase64Blob(res.content_base64, res.filename || (title + '.docx'), res.content_type);
+                if (lastExportButtonRef) showButtonFeedback(lastExportButtonRef, '✓ ¡Exportado!');
+                log('Nota "' + title + '" exportada como ' + (res.filename || format) + ' desde documento canónico.');
+            } else if (res.status === 'exported') {
+                if (lastExportButtonRef) showButtonFeedback(lastExportButtonRef, '✓ ¡Exportado!');
+                log((res.log || ('Nota exportada en ' + (res.path || ''))));
+            }
+        }
 
-            const blob = new Blob([textToExport], { type: 'text/markdown;charset=utf-8' });
+        function downloadTextBlob(text, fileName, mimeType) {
+            const blob = new Blob([text], { type: mimeType || 'text/plain;charset=utf-8' });
+            triggerBlobDownload(blob, fileName);
+        }
+
+        function downloadBase64Blob(base64, fileName, mimeType) {
+            const binary = atob(base64);
+            const bytes = new Uint8Array(binary.length);
+            for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+            const blob = new Blob([bytes], { type: mimeType || 'application/octet-stream' });
+            triggerBlobDownload(blob, fileName);
+        }
+
+        function triggerBlobDownload(blob, fileName) {
             const link = document.createElement('a');
             link.href = URL.createObjectURL(blob);
             link.download = fileName;
@@ -1909,217 +2445,34 @@
             link.click();
             document.body.removeChild(link);
             URL.revokeObjectURL(link.href);
-
-            if (lastExportButtonRef) showButtonFeedback(lastExportButtonRef, '✓ ¡Exportado!');
-            log('Nota "' + title + '" exportada como archivo Markdown (' + fileName + ').');
-
-            if (window.pywebview && window.pywebview.api) {
-                window.pywebview.api.trigger_action('export_reader_note', { format: 'markdown', note_title: title, note_path: currentSelectedNotePath });
-            }
         }
 
-        function downloadPdfFile() {
-            const readerContent = document.getElementById('reader-content');
-            if (!readerContent) return;
-
-            const title = currentSelectedNoteTitle || 'Nota Funes';
-            const fullPath = getFullNotePath(currentSelectedNotePath);
-            const timestamp = getFormattedTimestamp();
-            const notePane = readerContent.querySelector('.note-content') || readerContent;
-            const clone = notePane.cloneNode(true);
-
-            // Eliminar insignias y la barra de acciones superior
-            clone.querySelectorAll('.note-badge').forEach(el => el.remove());
-            const actionBar = clone.querySelector('#note-action-bar');
-            if (actionBar) actionBar.remove();
-
+        function openUserAssistedPdfPrint(printHtml) {
             const printWindow = window.open('', '_blank', 'width=850,height=950');
             if (!printWindow) {
-                alert('Por favor permite ventanas emergentes en tu navegador para generar el PDF.');
+                alert('Por favor permite ventanas emergentes para generar el PDF asistido.');
                 return;
             }
-
-            printWindow.document.write(`
-                <!DOCTYPE html>
-                <html>
-                <head>
-                    <meta charset="utf-8">
-                    <title>${title} — Exportación PDF</title>
-                    <style>
-                        @page {
-                            size: A4;
-                            margin: 20mm;
-                        }
-                        body {
-                            font-family: Arial, Helvetica, sans-serif;
-                            font-size: 12pt;
-                            line-height: 1.55;
-                            color: #111111;
-                            text-align: justify;
-                            margin: 0;
-                            padding: 0;
-                        }
-                        .pdf-header {
-                            border-bottom: 1.5px solid #888888;
-                            padding-bottom: 8px;
-                            margin-bottom: 22px;
-                            font-family: Arial, sans-serif;
-                        }
-                        .pdf-header-title {
-                            font-size: 9pt;
-                            font-weight: bold;
-                            color: #222222;
-                            margin-bottom: 4px;
-                            line-height: 1.3;
-                        }
-                        .pdf-header-path {
-                            font-size: 7.8pt;
-                            color: #555555;
-                            word-break: break-all;
-                            line-height: 1.3;
-                        }
-                        .pdf-footer {
-                            margin-top: 35px;
-                            border-top: 1.5px solid #888888;
-                            padding-top: 8px;
-                            display: flex;
-                            justify-content: space-between;
-                            align-items: center;
-                            font-size: 8.5pt;
-                            color: #444444;
-                            font-family: Arial, sans-serif;
-                        }
-                        h1 { font-size: 20pt; font-weight: bold; margin-top: 0; margin-bottom: 14pt; text-align: left; color: #111111; border-bottom: 1px solid #CCCCCC; padding-bottom: 6px; }
-                        h2 { font-size: 16pt; font-weight: bold; margin-top: 18pt; margin-bottom: 8pt; text-align: left; color: #222222; }
-                        h3 { font-size: 14pt; font-weight: bold; margin-top: 14pt; margin-bottom: 6pt; text-align: left; color: #333333; }
-                        p { font-size: 12pt; margin-top: 0; margin-bottom: 10pt; text-align: justify; }
-                        ul, ol { font-size: 12pt; margin-top: 0; margin-bottom: 10pt; padding-left: 20pt; }
-                        li { margin-bottom: 4pt; text-align: justify; }
-                        .wikilink { font-weight: bold; border: 1px solid #999999; padding: 1px 5px; background: #F0F0F0; border-radius: 3px; color: #222222; }
-                    </style>
-                </head>
-                <body>
-                    <div class="pdf-header">
-                        <div class="pdf-header-title">Nota: ${title}</div>
-                        <div class="pdf-header-path">Ruta: ${fullPath}</div>
-                    </div>
-
-                    ${clone.innerHTML}
-
-                    <div class="pdf-footer">
-                        <span>${timestamp}</span>
-                        <span>Página 1 de 1</span>
-                    </div>
-                </body>
-                </html>
-            `);
+            printWindow.document.open();
+            printWindow.document.write(printHtml);
             printWindow.document.close();
             printWindow.focus();
             setTimeout(function() {
                 printWindow.print();
                 printWindow.close();
             }, 350);
+        }
 
-            if (lastExportButtonRef) showButtonFeedback(lastExportButtonRef, '✓ ¡PDF Generado!');
-            log('Nota "' + title + '" exportada como documento PDF (.pdf).');
+        function downloadMarkdownFile() {
+            executeExportFormat('markdown');
+        }
 
-            if (window.pywebview && window.pywebview.api) {
-                window.pywebview.api.trigger_action('export_reader_note', { format: 'pdf', note_title: title, note_path: currentSelectedNotePath });
-            }
+        function downloadPdfFile() {
+            executeExportFormat('pdf');
         }
 
         function downloadWordFile() {
-            const readerContent = document.getElementById('reader-content');
-            if (!readerContent) return;
-
-            const title = currentSelectedNoteTitle || 'Nota Funes';
-            const fullPath = getFullNotePath(currentSelectedNotePath);
-            const timestamp = getFormattedTimestamp();
-            const notePane = readerContent.querySelector('.note-content') || readerContent;
-            const clone = notePane.cloneNode(true);
-
-            clone.querySelectorAll('.note-badge').forEach(el => el.remove());
-            const actionBar = clone.querySelector('#note-action-bar');
-            if (actionBar) actionBar.remove();
-
-            const fileName = (currentSelectedNotePath || title).replace(/\.md$/, '').replace(/^.*[\\\/]/, '') + '.doc';
-
-            const wordHtml = `
-                <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
-                <head>
-                    <meta charset='utf-8'>
-                    <title>${title}</title>
-                    <!--[if gte mso 9]>
-                    <xml>
-                        <w:WordDocument>
-                            <w:View>Print</w:View>
-                            <w:Zoom>100</w:Zoom>
-                            <w:DoNotOptimizeForBrowser/>
-                        </w:WordDocument>
-                    </xml>
-                    <![endif]-->
-                    <style>
-                        @page Section1 {
-                            size: 595.3pt 841.9pt;
-                            margin: 70.85pt 70.85pt 70.85pt 70.85pt;
-                        }
-                        div.Section1 { page: Section1; }
-                        body {
-                            font-family: Arial, Helvetica, sans-serif;
-                            font-size: 12pt;
-                            line-height: 1.5;
-                            color: #111111;
-                            text-align: justify;
-                            padding: 20pt;
-                        }
-                        h1 { font-size: 20pt; font-weight: bold; color: #111111; margin-top: 12pt; margin-bottom: 12pt; }
-                        h2 { font-size: 16pt; font-weight: bold; color: #222222; margin-top: 14pt; margin-bottom: 8pt; }
-                        h3 { font-size: 14pt; font-weight: bold; color: #333333; margin-top: 12pt; margin-bottom: 6pt; }
-                        p { font-size: 12pt; text-align: justify; margin-bottom: 10pt; }
-                        ul, ol { font-size: 12pt; }
-                        li { text-align: justify; margin-bottom: 4pt; }
-                        .wikilink { font-weight: bold; background: #F0F0F0; border: 1px solid #CCCCCC; padding: 1px 4px; }
-                    </style>
-                </head>
-                <body>
-                    <div class="Section1">
-                        <table style="width:100%; border-bottom:1.5px solid #888888; margin-bottom:18pt; font-family:Arial;">
-                            <tr>
-                                <td style="font-size:9pt; font-weight:bold; color:#222222; padding-bottom:3pt;">Nota: ${title}</td>
-                            </tr>
-                            <tr>
-                                <td style="font-size:7.8pt; color:#555555; word-break:break-all;">Ruta: ${fullPath}</td>
-                            </tr>
-                        </table>
-
-                        ${clone.innerHTML}
-
-                        <table style="width:100%; border-top:1.5px solid #888888; margin-top:30pt; font-size:8.5pt; color:#444; font-family:Arial;">
-                            <tr>
-                                <td>${timestamp}</td>
-                                <td style="text-align:right;">Página 1 de 1</td>
-                            </tr>
-                        </table>
-                    </div>
-                </body>
-                </html>
-            `;
-
-            const blob = new Blob(['\ufeff' + wordHtml], { type: 'application/msword;charset=utf-8' });
-            const link = document.createElement('a');
-            link.href = URL.createObjectURL(blob);
-            link.download = fileName;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            URL.revokeObjectURL(link.href);
-
-            if (lastExportButtonRef) showButtonFeedback(lastExportButtonRef, '✓ ¡Word Generado!');
-            log('Nota "' + title + '" exportada como documento Word (' + fileName + ').');
-
-            if (window.pywebview && window.pywebview.api) {
-                window.pywebview.api.trigger_action('export_reader_note', { format: 'word', note_title: title, note_path: currentSelectedNotePath });
-            }
+            executeExportFormat('docx');
         }
 
         function showPapiroToast(message, isError) {
@@ -2151,7 +2504,7 @@
                 document.body.appendChild(toast);
             }
             toast.style.borderColor = isError ? 'var(--red)' : 'var(--gold)';
-            toast.innerHTML = message;
+            toast.textContent = message;
             toast.style.opacity = '1';
             toast.style.transform = 'translateY(0)';
 
@@ -2278,7 +2631,7 @@
         }
 
         function openCurrentNoteInObsidian(btnEl) {
-            const noteFile = currentSelectedNotePath ? (currentSelectedNotePath.endsWith('.md') ? currentSelectedNotePath : currentSelectedNotePath + '.md') : '00_MOC_Funes.md';
+            const noteFile = currentSelectedNotePath ? (currentSelectedNotePath.endsWith('.md') ? currentSelectedNotePath : currentSelectedNotePath + '.md') : '_Indice_MOC.md';
             const obsidianUri = 'obsidian://open?vault=Vault_Funes&file=4_salida%2F' + encodeURIComponent(noteFile);
             const title = currentSelectedNoteTitle || noteFile;
 
@@ -2334,6 +2687,50 @@
             }
         }
 
+        function formatChatSourceLabels(sources, sourceLabels) {
+            if (sourceLabels && sourceLabels.length) {
+                return sourceLabels.map(function(label) { return String(label); });
+            }
+            if (!sources || !sources.length) return [];
+            return sources.map(function(src) {
+                if (typeof src === 'string') return src;
+                if (src && typeof src === 'object') {
+                    return src.relative_path || src.document_id || src.chunk_id || '';
+                }
+                return '';
+            }).filter(Boolean);
+        }
+
+        function appendChatBubble(container, kind, label, text, sources, meta) {
+            const bubble = document.createElement('div');
+            bubble.className = 'chat-bubble ' + kind;
+            const sender = document.createElement('strong');
+            sender.textContent = label;
+            // Never assign model/chat text via innerHTML — textContent only.
+            bubble.append(sender, document.createTextNode(' ' + String(text == null ? '' : text)));
+            if (meta && meta.error) {
+                const err = document.createElement('div');
+                err.style.cssText = 'margin-top:6px; font-size:0.75rem; color: var(--red, #DC2626); font-weight:700;';
+                err.textContent = 'Error: ' + (meta.error.message || meta.error.code || 'fallo de Ollama');
+                bubble.appendChild(err);
+            }
+            if (meta && meta.retrieval_mode) {
+                const mode = document.createElement('div');
+                mode.style.cssText = 'margin-top:4px; font-size:0.72rem; color: var(--muted);';
+                mode.textContent = 'Modo de recuperación: ' + meta.retrieval_mode;
+                bubble.appendChild(mode);
+            }
+            const labels = formatChatSourceLabels(sources, meta && meta.source_labels);
+            if (labels.length) {
+                const sourceText = document.createElement('div');
+                sourceText.style.cssText = 'margin-top:6px; font-size:0.75rem; color: var(--muted);';
+                sourceText.textContent = 'Fuentes: ' + labels.join(', ');
+                bubble.appendChild(sourceText);
+            }
+            container.appendChild(bubble);
+            container.scrollTop = container.scrollHeight;
+        }
+
         function sendChatMessage() {
             const inputEl = document.getElementById('chat-input');
             const msg = inputEl.value.trim();
@@ -2341,44 +2738,69 @@
 
             const chatScroll = document.getElementById('chat-messages');
 
-            const userBubble = document.createElement('div');
-            userBubble.className = 'chat-bubble user';
-            userBubble.innerHTML = '<strong>Tú:</strong> ' + msg;
-            chatScroll.appendChild(userBubble);
+            appendChatBubble(chatScroll, 'user', 'Tú:', msg);
             inputEl.value = '';
-            chatScroll.scrollTop = chatScroll.scrollHeight;
 
             const contextPayload = {
                 context_mode: activeChatContextMode,
                 note_title: activeChatNoteTitle,
-                note_path: activeChatNotePath
+                note_path: activeChatNotePath,
+                document_id: activeChatDocumentId
             };
 
             if (window.pywebview && window.pywebview.api) {
                 window.pywebview.api.send_chat_message(msg, contextPayload).then(function(reply) {
-                    const aiBubble = document.createElement('div');
-                    aiBubble.className = 'chat-bubble ai';
-                    aiBubble.innerHTML = '<strong>Funes IA:</strong> ' + (reply.text || reply);
-                    if (reply.sources && reply.sources.length) {
-                        aiBubble.innerHTML += '<div style="margin-top:6px; font-size:0.75rem; color: var(--muted);">Fuentes: ' + reply.sources.join(', ') + '</div>';
+                    if (!reply || typeof reply !== 'object') {
+                        appendChatBubble(chatScroll, 'ai', 'Funes IA:', String(reply || ''), [], {
+                            error: { code: 'invalid_reply', message: 'Respuesta de chat inválida' },
+                            retrieval_mode: 'none'
+                        });
+                        return;
                     }
-                    chatScroll.appendChild(aiBubble);
-                    chatScroll.scrollTop = chatScroll.scrollHeight;
+                    if (reply.error && !reply.text && !reply.answer) {
+                        appendChatBubble(chatScroll, 'ai', 'Funes IA:', reply.message || 'Error de autorización o de chat.', [], {
+                            error: { code: reply.error, message: reply.message || String(reply.error) },
+                            retrieval_mode: 'none'
+                        });
+                        return;
+                    }
+                    const answer = reply.text || reply.answer || '';
+                    appendChatBubble(chatScroll, 'ai', 'Funes IA:', answer, reply.sources, {
+                        error: (reply.error && typeof reply.error === 'object') ? reply.error : null,
+                        retrieval_mode: reply.retrieval_mode || 'none',
+                        source_labels: reply.source_labels || []
+                    });
+                }).catch(function(err) {
+                    appendChatBubble(chatScroll, 'ai', 'Funes IA:', 'No se pudo completar la consulta con Ollama.', [], {
+                        error: { code: 'ollama_unavailable', message: String(err || 'bridge failure') },
+                        retrieval_mode: 'none'
+                    });
                 });
             } else {
                 setTimeout(function() {
-                    const aiBubble = document.createElement('div');
-                    aiBubble.className = 'chat-bubble ai';
-                    const ctxLabel = activeChatContextMode === 'single_note' ? 'la nota "' + activeChatNoteTitle + '"' : 'todas las notas de 4_salida';
-                    aiBubble.innerHTML = '<strong>Funes IA:</strong> Respuesta basada en ' + ctxLabel + '. Información derivada de las notas atómicas locales.';
-                    chatScroll.appendChild(aiBubble);
-                    chatScroll.scrollTop = chatScroll.scrollHeight;
+                    appendChatBubble(
+                        chatScroll,
+                        'ai',
+                        'Funes IA:',
+                        'Vista previa offline: el chat real requiere el bridge PyWebView y Ollama local.',
+                        [],
+                        {
+                            error: { code: 'offline_preview', message: 'Bridge no disponible' },
+                            retrieval_mode: 'none'
+                        }
+                    );
                 }, 400);
             }
         }
 
         function clearChatHistory() {
-            document.getElementById('chat-messages').innerHTML = '<div class="chat-bubble ai"><strong>Funes IA:</strong> Historial de chat limpiado.</div>';
+            const chat = document.getElementById('chat-messages');
+            const welcome = document.getElementById('chat-welcome-bubble');
+            Array.from(chat.children).forEach(function(child) {
+                if (child !== welcome) {
+                    child.remove();
+                }
+            });
         }
 
         function switchReaderView(view) {
@@ -2564,9 +2986,9 @@
             };
 
             canvas.onmouseup = function(e) {
-                if (draggedNode && !dragMoved && draggedNode.path) {
+                if (draggedNode && !dragMoved && (draggedNode.document_id || draggedNode.path)) {
                     switchReaderView('list');
-                    loadNoteContent(draggedNode.path);
+                    navigateReaderNote(draggedNode.document_id || draggedNode.path);
                 }
                 draggedNode = null;
                 isPanning = false;
@@ -2681,23 +3103,67 @@
 
         let currentSelectedNoteTitle = '';
         let currentSelectedNotePath = '';
+        let currentSelectedDocumentId = '';
+        let pinnedMocDocumentId = '';
+        let readerNoteHistory = [];
+
+        function updateReaderBackButton() {
+            const btn = document.getElementById('btn-reader-back');
+            if (!btn) return;
+            btn.disabled = readerNoteHistory.length === 0;
+        }
+
+        function pushReaderHistory(nextDocumentId) {
+            if (
+                currentSelectedDocumentId
+                && nextDocumentId
+                && currentSelectedDocumentId !== nextDocumentId
+            ) {
+                readerNoteHistory.push(currentSelectedDocumentId);
+            }
+            updateReaderBackButton();
+        }
+
+        function goBackReaderNote() {
+            if (!readerNoteHistory.length) {
+                updateReaderBackButton();
+                return;
+            }
+            const previousId = readerNoteHistory.pop();
+            updateReaderBackButton();
+            if (previousId) {
+                loadNoteContent(previousId, { skipHistory: true });
+            }
+        }
+
+        function navigateReaderNote(documentId) {
+            if (!documentId) return;
+            pushReaderHistory(documentId);
+            loadNoteContent(documentId, { skipHistory: true });
+        }
 
         function openMOCNote() {
             switchReaderView('list');
             document.querySelectorAll('.btn-toggle').forEach(el => el.classList.remove('active'));
             const mocBtn = document.getElementById('btn-reader-mode-moc');
             if (mocBtn) mocBtn.classList.add('active');
-            loadNoteContent('00_MOC_Funes.md');
+            if (pinnedMocDocumentId) {
+                navigateReaderNote(pinnedMocDocumentId);
+            } else {
+                loadReaderNotes();
+            }
         }
 
         let activeChatContextMode = 'all_notes'; // 'single_note' or 'all_notes'
         let activeChatNoteTitle = '';
         let activeChatNotePath = '';
+        let activeChatDocumentId = '';
 
         function launchChatWithContext(mode) {
             activeChatContextMode = mode;
             activeChatNoteTitle = currentSelectedNoteTitle || 'esta nota';
             activeChatNotePath = currentSelectedNotePath || '';
+            activeChatDocumentId = currentSelectedDocumentId || '';
 
             closeModal('modal-reader');
             openModal('modal-chat');
@@ -2716,59 +3182,91 @@
                 if (subtextEl) subtextEl.innerText = 'Contexto delimitado exclusivamente al archivo .md de esta nota';
 
                 if (scrollBox) {
-                    scrollBox.innerHTML = `
-                        <div class="chat-bubble ai" style="border-color: var(--gold); background: var(--bg-card); font-size: 0.85rem; padding: 12px 14px; border-radius: 6px;">
-                            <strong>Funes IA:</strong> Hilo de conversación iniciado. Contexto fijado exclusivamente en la nota <b>"${noteName}"</b>. ¿Qué deseas consultar sobre este documento?
-                        </div>
-                    `;
+                    scrollBox.replaceChildren();
+                    appendChatBubble(
+                        scrollBox,
+                        'ai',
+                        'Funes IA:',
+                        'Hilo de conversación iniciado. Contexto fijado exclusivamente en la nota "' + noteName + '". ¿Qué deseas consultar sobre este documento?'
+                    );
                 }
             } else {
                 if (labelEl) labelEl.innerText = 'Toda la Bóveda de Notas (4_salida)';
                 if (subtextEl) subtextEl.innerText = 'Acceso a la totalidad del conocimiento en 4_salida';
 
                 if (scrollBox) {
-                    scrollBox.innerHTML = `
-                        <div class="chat-bubble ai" style="border-color: var(--gold); background: var(--bg-card); font-size: 0.85rem; padding: 12px 14px; border-radius: 6px;">
-                            <strong>Funes IA:</strong> Hilo de conversación iniciado. Contexto fijado en <b>todas las notas de la Bóveda (4_salida)</b>. Puedo responder preguntas relacionando cualquier documento procesado.
-                        </div>
-                    `;
+                    scrollBox.replaceChildren();
+                    appendChatBubble(
+                        scrollBox,
+                        'ai',
+                        'Funes IA:',
+                        'Hilo de conversación iniciado. Contexto fijado en todas las notas de la Bóveda (4_salida). Puedo responder preguntas relacionando cualquier documento procesado.'
+                    );
                 }
             }
         }
 
-        function injectNoteActionBar(noteTitle, innerHtml) {
+        function createNoteActionBar(noteTitle) {
             currentSelectedNoteTitle = noteTitle;
-            const barHtml = `
-                <div id="note-action-bar" style="position: sticky; top: -24px; z-index: 20; display: flex; justify-content: space-between; align-items: center; background: var(--bg-card); border: 1px solid var(--border-accent); padding: 10px 16px; border-radius: 6px; margin: -24px -30px 16px -30px; box-shadow: 0 4px 12px rgba(0,0,0,0.12);">
-                    <span style="font-size: 0.85rem; font-weight: 700; color: var(--gold);">Nota: ${noteTitle}</span>
-                    <div style="display: flex; flex-direction: column; gap: 4px; align-items: flex-end;">
-                        <button class="btn-small" style="font-weight: 700; background: var(--bg-card-hover); border: 1px solid var(--border-accent); width: 220px; text-align: center;" onclick="launchChatWithContext('single_note')">Hablar con esta Nota</button>
-                        <button class="btn-small" style="font-weight: 700; background: var(--bg-card-hover); border: 1px solid var(--border-accent); width: 220px; text-align: center;" onclick="launchChatWithContext('all_notes')">Hablar con todas las Notas</button>
-                    </div>
-                </div>
-            `;
-            return barHtml + innerHtml;
+            const bar = document.createElement('div');
+            bar.id = 'note-action-bar';
+            bar.style.cssText = 'position: sticky; top: -24px; z-index: 20; display: flex; justify-content: space-between; align-items: center; background: var(--bg-card); border: 1px solid var(--border-accent); padding: 10px 16px; border-radius: 6px; margin: -24px -30px 16px -30px; box-shadow: 0 4px 12px rgba(0,0,0,0.12);';
+            const title = document.createElement('span');
+            title.style.cssText = 'font-size: 0.85rem; font-weight: 700; color: var(--gold);';
+            title.textContent = 'Nota: ' + noteTitle;
+            const actions = document.createElement('div');
+            actions.style.cssText = 'display: flex; flex-direction: column; gap: 4px; align-items: flex-end;';
+            [['single_note', 'Hablar con esta Nota'], ['all_notes', 'Hablar con todas las Notas']].forEach(function(action) {
+                const button = document.createElement('button');
+                button.type = 'button';
+                button.className = 'btn-small';
+                button.style.cssText = 'font-weight: 700; background: var(--bg-card-hover); border: 1px solid var(--border-accent); width: 220px; text-align: center;';
+                button.textContent = action[1];
+                button.addEventListener('click', function() { launchChatWithContext(action[0]); });
+                actions.appendChild(button);
+            });
+            bar.append(title, actions);
+            return bar;
         }
 
-        function formatWikilinksInHtml(rawHtml) {
-            if (!rawHtml) return '';
-            let html = rawHtml.replace(/<span class=['"]wikilink['"]([^>]*)>\[\[(.*?)\]\]<\/span>/g, function(match, attrs, target) {
-                let cleanDisplay = target.replace(/^Nota_/, '').replace(/_/g, ' ');
-                return `<span class='wikilink'${attrs}>${cleanDisplay}</span>`;
+        function renderNoteDocument(title, documentModel) {
+            const reader = document.getElementById('reader-content');
+            reader.replaceChildren(createNoteActionBar(title));
+            const noteContent = document.createElement('div');
+            noteContent.className = 'note-content';
+            (documentModel || []).forEach(function(block) {
+                const tag = block.type === 'heading' ? 'h' + Math.min(Math.max(block.level || 3, 1), 3) : 'p';
+                const node = document.createElement(tag);
+                if (block.children) {
+                    block.children.forEach(function(token) {
+                        if (token.type === 'wikilink') {
+                            const link = document.createElement('span');
+                            link.className = 'wikilink';
+                            link.dataset.documentId = token.document_id || '';
+                            link.textContent = token.text;
+                            if (token.document_id && !token.broken) {
+                                link.addEventListener('click', function() {
+                                    navigateReaderNote(token.document_id);
+                                });
+                            }
+                            node.appendChild(link);
+                        } else {
+                            node.appendChild(document.createTextNode(token.text));
+                        }
+                    });
+                } else {
+                    node.textContent = block.text || '';
+                }
+                noteContent.appendChild(node);
             });
-            html = html.replace(/\[\[(.*?)\]\]/g, function(match, target) {
-                let cleanDisplay = target.replace(/^Nota_/, '').replace(/_/g, ' ');
-                let noteFile = target.endsWith('.md') ? target : target + '.md';
-                return `<span class='wikilink' onclick="loadNoteContent('${noteFile}')">${cleanDisplay}</span>`;
-            });
-            return html;
+            reader.appendChild(noteContent);
         }
 
         const LOCAL_MOCK_NOTES = [
             {
-                title: "00 Mapa de Contenidos (MOC Funes)",
-                path: "00_MOC_Funes.md",
-                html: "<div class='note-content'><div class='note-badge'>YAML Metadata: moc, indice, mapa</div><h1 style='color:var(--gold);'>00 Mapa de Contenidos (MOC Funes)</h1><h3 style='color:var(--accent); margin-top:12px;'>Resumen Ejecutivo</h3><ul style='color:var(--muted); font-size:0.85rem;'><li><b>¿Qué?</b>: Índice central navegable y estructurado del Vault Funes.</li><li><b>¿Cuándo?</b>: Generado automáticamente por el Vault Engine.</li><li><b>¿Quién?</b>: Funes Vault Engine.</li><li><b>¿Cómo?</b>: Hiperenlaces Wiki cruzados y navegación jerárquica.</li></ul><h3 style='color:var(--accent); margin-top:12px;'>Índice General de Conocimiento (15 Notas Atómicas)</h3><ul style='color:var(--paper); font-size:0.85rem;'><li>[[Nota_Arquitectura_Funes]] — Arquitectura General de Funes</li><li>[[Nota_ETL_Pipeline_Ingesta]] — Pipeline ETL de Ingesta y Procesamiento</li><li>[[Nota_Motor_IA_Local]] — Motor de Inferencia IA Local y Ollama</li><li>[[Nota_Base_Datos_Vectorial]] — Base de Datos Vectorial ChromaDB</li><li>[[Nota_Optimizacion_RAM]] — Gobernador de Memoria RAM</li><li>[[Nota_Formato_Papiro]] — Estética Editorial Papiro y Consola UI</li><li>[[Nota_Graph_Engine_Optimizado]] — Grafo Interactivo de Conocimiento</li><li>[[Nota_Notas_Atomicas]] — Estructuración en Notas Atómicas</li><li>[[Nota_Gestor_Cuarentena]] — Aislamiento y Recuperación de Cuarentena</li><li>[[Nota_Integracion_Obsidian]] — Sincronización Bidireccional Obsidian</li><li>[[Nota_AnythingLLM_Conexion]] — Integración Desktop AnythingLLM</li><li>[[Nota_Telemetria_y_Logs]] — Registros y Gazette Logging</li><li>[[Nota_Seguridad_y_Privacidad]] — Privacidad 100% Offline</li><li>[[Nota_Manual_Usuario_Avanzado]] — Manual de Uso Avanzado y Atajos</li></ul></div>"
+                title: "Índice MOC — Mapa de Conocimiento Global",
+                path: "_Indice_MOC.md",
+                html: "<div class='note-content'><div class='note-badge'>YAML Metadata: moc, indice, mapa</div><h1 style='color:var(--gold);'>Índice MOC — Mapa de Conocimiento Global</h1><h3 style='color:var(--accent); margin-top:12px;'>Resumen Ejecutivo</h3><ul style='color:var(--muted); font-size:0.85rem;'><li><b>¿Qué?</b>: Índice central navegable y estructurado del Vault Funes.</li><li><b>¿Cuándo?</b>: Generado automáticamente por el Vault Engine.</li><li><b>¿Quién?</b>: Funes Vault Engine.</li><li><b>¿Cómo?</b>: Hiperenlaces Wiki cruzados y navegación jerárquica.</li></ul><h3 style='color:var(--accent); margin-top:12px;'>Índice General de Conocimiento (15 Notas Atómicas)</h3><ul style='color:var(--paper); font-size:0.85rem;'><li>[[Nota_Arquitectura_Funes]] — Arquitectura General de Funes</li><li>[[Nota_ETL_Pipeline_Ingesta]] — Pipeline ETL de Ingesta y Procesamiento</li><li>[[Nota_Motor_IA_Local]] — Motor de Inferencia IA Local y Ollama</li><li>[[Nota_Base_Datos_Vectorial]] — Base de Datos Vectorial ChromaDB</li><li>[[Nota_Optimizacion_RAM]] — Gobernador de Memoria RAM</li><li>[[Nota_Formato_Papiro]] — Estética Editorial Papiro y Consola UI</li><li>[[Nota_Graph_Engine_Optimizado]] — Grafo Interactivo de Conocimiento</li><li>[[Nota_Notas_Atomicas]] — Estructuración en Notas Atómicas</li><li>[[Nota_Gestor_Cuarentena]] — Aislamiento y Recuperación de Cuarentena</li><li>[[Nota_Integracion_Obsidian]] — Sincronización Bidireccional Obsidian</li><li>[[Nota_AnythingLLM_Conexion]] — Integración Desktop AnythingLLM</li><li>[[Nota_Telemetria_y_Logs]] — Registros y Gazette Logging</li><li>[[Nota_Seguridad_y_Privacidad]] — Privacidad 100% Offline</li><li>[[Nota_Manual_Usuario_Avanzado]] — Manual de Uso Avanzado y Atajos</li></ul></div>"
             },
             {
                 title: "Arquitectura General de Funes",
@@ -2838,7 +3336,7 @@
             {
                 title: "Manual de Uso Avanzado y Atajos",
                 path: "Nota_Manual_Usuario_Avanzado.md",
-                html: "<div class='note-content'><div class='note-badge'>YAML Metadata: manual, atajos, guia, usuario</div><h1 style='color:var(--gold);'>Manual de Uso Avanzado y Atajos de Teclado</h1><h3 style='color:var(--accent); margin-top:12px;'>Resumen Ejecutivo</h3><ul style='color:var(--muted); font-size:0.85rem;'><li><b>¿Qué?</b>: Guía detallada de operación avanzada de la Consola Funes.</li><li><b>¿Cuándo?</b>: Versión 2026.1.</li><li><b>¿Quién?</b>: Funes User Documentation.</li><li><b>¿Cómo?</b>: Explicaciones extensas, tablas de atajos y flujo paso a paso.</li></ul><h3 style='color:var(--accent); margin-top:16px;'>1. Introducción a la Filosofía Papiro</h3><p style='font-size:0.85rem; color:var(--paper); line-height:1.6;'>La Consola Funes combina la calidez visual de una imprenta editorial anticuaria con la velocidad de un pipeline ETL local. Cualquier archivo depositado en 1_entrada es digerido y estructurado en notas atómicas independientes.</p><h3 style='color:var(--accent); margin-top:16px;'>2. Atajos de Teclado y Controles Rápidos</h3><table style='width:100%; border-collapse:collapse; font-size:0.82rem; margin-top:10px; color:var(--paper);'><tr style='border-bottom:1px solid var(--border-accent); text-align:left;'><th>Tecla / Combinación</th><th>Acción</th><th>Alcance</th></tr><tr><td><b>Escape</b></td><td>Cerrar modal o emergente activo</td><td>Global UI</td></tr><tr><td><b>Click Backdrop</b></td><td>Cerrar modal en primer plano</td><td>Modales Papiro</td></tr><tr><td><b>Rueda del Ratón</b></td><td>Zoom dinámico sobre el grafo</td><td>Vista Gráfico</td></tr><tr><td><b>Arrastrar Nodo</b></td><td>Reorganizar posición espacial de notas</td><td>Vista Gráfico</td></tr><tr><td><b>Doble Click Nodo</b></td><td>Abrir nota asociada en el lector</td><td>Vista Gráfico</td></tr></table><h3 style='color:var(--accent); margin-top:16px;'>3. Procedimiento de Ingesta Paso a Paso</h3><p style='font-size:0.85rem; color:var(--paper); line-height:1.6;'>Paso 1: Coloque los documentos en 1_entrada.<br>Paso 2: El sistema ejecuta el [[Nota_ETL_Pipeline_Ingesta]].<br>Paso 3: Si se producen errores de lectura, el archivo se transfiere a la [[Nota_Gestor_Cuarentena]].<br>Paso 4: Consulte los gráficos y resúmenes en el lector interactivo con el [[Nota_Graph_Engine_Optimizado]] y revise el [[00_MOC_Funes]].</p><h3 style='color:var(--accent); margin-top:16px;'>4. Preguntas Frecuentes (FAQ)</h3><p style='font-size:0.85rem; color:var(--paper); line-height:1.6;'><b>¿Los datos salen del equipo?</b> No. Funes cumple con el principio de privacidad local [[Nota_Seguridad_y_Privacidad]].<br><b>¿Se integra con Obsidian?</b> Sí, mediante el protocolo nativo descrito en [[Nota_Integracion_Obsidian]].<br><b>¿Cómo se protege el hardware?</b> Con el monitoreo de recursos del [[Nota_Optimizacion_RAM]].</p></div>"
+                html: "<div class='note-content'><div class='note-badge'>YAML Metadata: manual, atajos, guia, usuario</div><h1 style='color:var(--gold);'>Manual de Uso Avanzado y Atajos de Teclado</h1><h3 style='color:var(--accent); margin-top:12px;'>Resumen Ejecutivo</h3><ul style='color:var(--muted); font-size:0.85rem;'><li><b>¿Qué?</b>: Guía detallada de operación avanzada de la Consola Funes.</li><li><b>¿Cuándo?</b>: Versión 2026.1.</li><li><b>¿Quién?</b>: Funes User Documentation.</li><li><b>¿Cómo?</b>: Explicaciones extensas, tablas de atajos y flujo paso a paso.</li></ul><h3 style='color:var(--accent); margin-top:16px;'>1. Introducción a la Filosofía Papiro</h3><p style='font-size:0.85rem; color:var(--paper); line-height:1.6;'>La Consola Funes combina la calidez visual de una imprenta editorial anticuaria con la velocidad de un pipeline ETL local. Cualquier archivo depositado en 1_entrada es digerido y estructurado en notas atómicas independientes.</p><h3 style='color:var(--accent); margin-top:16px;'>2. Atajos de Teclado y Controles Rápidos</h3><table style='width:100%; border-collapse:collapse; font-size:0.82rem; margin-top:10px; color:var(--paper);'><tr style='border-bottom:1px solid var(--border-accent); text-align:left;'><th>Tecla / Combinación</th><th>Acción</th><th>Alcance</th></tr><tr><td><b>Escape</b></td><td>Cerrar modal o emergente activo</td><td>Global UI</td></tr><tr><td><b>Click Backdrop</b></td><td>Cerrar modal en primer plano</td><td>Modales Papiro</td></tr><tr><td><b>Rueda del Ratón</b></td><td>Zoom dinámico sobre el grafo</td><td>Vista Gráfico</td></tr><tr><td><b>Arrastrar Nodo</b></td><td>Reorganizar posición espacial de notas</td><td>Vista Gráfico</td></tr><tr><td><b>Doble Click Nodo</b></td><td>Abrir nota asociada en el lector</td><td>Vista Gráfico</td></tr></table><h3 style='color:var(--accent); margin-top:16px;'>3. Procedimiento de Ingesta Paso a Paso</h3><p style='font-size:0.85rem; color:var(--paper); line-height:1.6;'>Paso 1: Coloque los documentos en 1_entrada.<br>Paso 2: El sistema ejecuta el [[Nota_ETL_Pipeline_Ingesta]].<br>Paso 3: Si se producen errores de lectura, el archivo se transfiere a la [[Nota_Gestor_Cuarentena]].<br>Paso 4: Consulte los gráficos y resúmenes en el lector interactivo con el [[Nota_Graph_Engine_Optimizado]] y revise el [[_Indice_MOC]].</p><h3 style='color:var(--accent); margin-top:16px;'>4. Preguntas Frecuentes (FAQ)</h3><p style='font-size:0.85rem; color:var(--paper); line-height:1.6;'><b>¿Los datos salen del equipo?</b> No. Funes cumple con el principio de privacidad local [[Nota_Seguridad_y_Privacidad]].<br><b>¿Se integra con Obsidian?</b> Sí, mediante el protocolo nativo descrito en [[Nota_Integracion_Obsidian]].<br><b>¿Cómo se protege el hardware?</b> Con el monitoreo de recursos del [[Nota_Optimizacion_RAM]].</p></div>"
             }
         ];
 
@@ -2850,7 +3348,7 @@
             } else {
                 const demoData = {
                     nodes: [
-                        { id: "00_MOC_Funes", label: "00 Mapa MOC", path: "00_MOC_Funes.md" },
+                        { id: "_Indice_MOC", label: "Índice MOC", path: "_Indice_MOC.md" },
                         { id: "Nota_Arquitectura_Funes", label: "Arquitectura General", path: "Nota_Arquitectura_Funes.md" },
                         { id: "Nota_ETL_Pipeline_Ingesta", label: "Pipeline ETL Ingesta", path: "Nota_ETL_Pipeline_Ingesta.md" },
                         { id: "Nota_Motor_IA_Local", label: "Motor IA Local", path: "Nota_Motor_IA_Local.md" },
@@ -2867,20 +3365,20 @@
                         { id: "Nota_Manual_Usuario_Avanzado", label: "Manual de Usuario", path: "Nota_Manual_Usuario_Avanzado.md" }
                     ],
                     links: [
-                        { source: "00_MOC_Funes", target: "Nota_Arquitectura_Funes" },
-                        { source: "00_MOC_Funes", target: "Nota_ETL_Pipeline_Ingesta" },
-                        { source: "00_MOC_Funes", target: "Nota_Motor_IA_Local" },
-                        { source: "00_MOC_Funes", target: "Nota_Base_Datos_Vectorial" },
-                        { source: "00_MOC_Funes", target: "Nota_Optimizacion_RAM" },
-                        { source: "00_MOC_Funes", target: "Nota_Formato_Papiro" },
-                        { source: "00_MOC_Funes", target: "Nota_Graph_Engine_Optimizado" },
-                        { source: "00_MOC_Funes", target: "Nota_Notas_Atomicas" },
-                        { source: "00_MOC_Funes", target: "Nota_Gestor_Cuarentena" },
-                        { source: "00_MOC_Funes", target: "Nota_Integracion_Obsidian" },
-                        { source: "00_MOC_Funes", target: "Nota_AnythingLLM_Conexion" },
-                        { source: "00_MOC_Funes", target: "Nota_Telemetria_y_Logs" },
-                        { source: "00_MOC_Funes", target: "Nota_Seguridad_y_Privacidad" },
-                        { source: "00_MOC_Funes", target: "Nota_Manual_Usuario_Avanzado" },
+                        { source: "_Indice_MOC", target: "Nota_Arquitectura_Funes" },
+                        { source: "_Indice_MOC", target: "Nota_ETL_Pipeline_Ingesta" },
+                        { source: "_Indice_MOC", target: "Nota_Motor_IA_Local" },
+                        { source: "_Indice_MOC", target: "Nota_Base_Datos_Vectorial" },
+                        { source: "_Indice_MOC", target: "Nota_Optimizacion_RAM" },
+                        { source: "_Indice_MOC", target: "Nota_Formato_Papiro" },
+                        { source: "_Indice_MOC", target: "Nota_Graph_Engine_Optimizado" },
+                        { source: "_Indice_MOC", target: "Nota_Notas_Atomicas" },
+                        { source: "_Indice_MOC", target: "Nota_Gestor_Cuarentena" },
+                        { source: "_Indice_MOC", target: "Nota_Integracion_Obsidian" },
+                        { source: "_Indice_MOC", target: "Nota_AnythingLLM_Conexion" },
+                        { source: "_Indice_MOC", target: "Nota_Telemetria_y_Logs" },
+                        { source: "_Indice_MOC", target: "Nota_Seguridad_y_Privacidad" },
+                        { source: "_Indice_MOC", target: "Nota_Manual_Usuario_Avanzado" },
                         { source: "Nota_Arquitectura_Funes", target: "Nota_ETL_Pipeline_Ingesta" },
                         { source: "Nota_Arquitectura_Funes", target: "Nota_Motor_IA_Local" },
                         { source: "Nota_Arquitectura_Funes", target: "Nota_Base_Datos_Vectorial" },
@@ -2902,14 +3400,23 @@
                     renderNoteList(notes);
                 });
             } else {
-                renderNoteList(LOCAL_MOCK_NOTES.map(n => ({ title: n.title, path: n.path })));
+                renderNoteList(LOCAL_MOCK_NOTES.map(function(n, index) {
+                    return {
+                        title: n.title,
+                        path: n.path,
+                        document_id: 'mock-' + index,
+                        issue: '_Sin_Cuestion',
+                        theme: 'General',
+                        is_moc: n.path.indexOf('_Indice_MOC') !== -1
+                    };
+                }));
             }
         }
 
-        function highlightSidebarNote(notePath) {
+        function highlightSidebarNote(documentId) {
             document.querySelectorAll('.reader-note-item, .reader-pinned-item').forEach(function(el) {
                 el.classList.remove('active');
-                if (el.dataset.path && (el.dataset.path === notePath || el.dataset.path.endsWith(notePath) || notePath.endsWith(el.dataset.path))) {
+                if (el.dataset.documentId && el.dataset.documentId === documentId) {
                     el.classList.add('active');
                 }
             });
@@ -2918,71 +3425,142 @@
         function renderNoteList(notes) {
             const pinnedContainer = document.getElementById('reader-pinned-moc');
             const ul = document.getElementById('reader-note-list');
-            if (ul) ul.innerHTML = '';
-            if (pinnedContainer) pinnedContainer.innerHTML = '';
+            if (ul) ul.replaceChildren();
+            if (pinnedContainer) pinnedContainer.replaceChildren();
+            pinnedMocDocumentId = '';
 
             if (!notes || !notes.length) {
-                if (ul) ul.innerHTML = '<li class="reader-note-item">No se encontraron notas</li>';
+                if (ul) {
+                    const empty = document.createElement('li');
+                    empty.className = 'reader-note-item';
+                    empty.textContent = 'No se encontraron notas';
+                    ul.appendChild(empty);
+                }
                 return;
             }
 
-            // Identificar nota MOC para la cabecera fijada del sidebar
-            const mocNote = notes.find(n => n.path.includes('00_MOC') || n.title.includes('MOC')) || notes[0];
-            
+            const mocNote = notes.find(function(n) {
+                return n.is_moc || (n.path && (n.path.indexOf('_Indice_MOC') !== -1 || n.path.indexOf('Indice_MOC') !== -1));
+            });
             if (mocNote && pinnedContainer) {
+                pinnedMocDocumentId = mocNote.document_id || '';
                 const mocDiv = document.createElement('div');
-                mocDiv.className = 'reader-pinned-item' + (currentSelectedNotePath === mocNote.path ? ' active' : '');
-                mocDiv.dataset.path = mocNote.path;
-                mocDiv.innerText = mocNote.title;
-                mocDiv.onclick = function() {
-                    loadNoteContent(mocNote.path);
-                };
+                mocDiv.className = 'reader-pinned-item' + (currentSelectedDocumentId === mocNote.document_id ? ' active' : '');
+                mocDiv.dataset.documentId = mocNote.document_id || '';
+                mocDiv.dataset.path = mocNote.path || '';
+                mocDiv.textContent = mocNote.title;
+                mocDiv.addEventListener('click', function() {
+                    navigateReaderNote(mocNote.document_id);
+                });
                 pinnedContainer.appendChild(mocDiv);
             }
 
-            // Filtrar las demás notas para el listado con scroll independiente
-            const otherNotes = notes.filter(n => n !== mocNote);
+            const otherNotes = notes.filter(function(n) { return n !== mocNote; });
+            const themeName = (otherNotes[0] && otherNotes[0].theme) || (mocNote && mocNote.theme) || 'General';
+            const themeLabel = document.createElement('li');
+            themeLabel.className = 'reader-theme-label';
+            themeLabel.textContent = 'Tema: ' + themeName;
+            ul.appendChild(themeLabel);
+
+            const byIssue = {};
             otherNotes.forEach(function(n) {
-                const li = document.createElement('li');
-                li.className = 'reader-note-item' + (currentSelectedNotePath === n.path ? ' active' : '');
-                li.dataset.path = n.path;
-                li.innerText = n.title;
-                li.onclick = function() {
-                    loadNoteContent(n.path);
-                };
-                ul.appendChild(li);
+                const issue = n.issue || '_Sin_Cuestion';
+                if (!byIssue[issue]) byIssue[issue] = [];
+                byIssue[issue].push(n);
             });
 
-            if (!currentSelectedNotePath && notes.length > 0) {
-                loadNoteContent(notes[0].path);
-            } else if (currentSelectedNotePath) {
-                highlightSidebarNote(currentSelectedNotePath);
+            Object.keys(byIssue).sort().forEach(function(issue) {
+                const group = document.createElement('li');
+                group.className = 'reader-issue-group';
+                const issueLabel = document.createElement('div');
+                issueLabel.className = 'reader-issue-label';
+                issueLabel.textContent = 'Cuestión: ' + issue;
+                group.appendChild(issueLabel);
+                const nested = document.createElement('ul');
+                nested.className = 'reader-note-list';
+                byIssue[issue].forEach(function(n) {
+                    const li = document.createElement('li');
+                    li.className = 'reader-note-item' + (currentSelectedDocumentId === n.document_id ? ' active' : '');
+                    li.dataset.documentId = n.document_id || '';
+                    li.dataset.path = n.path || '';
+                    li.textContent = n.title;
+                    li.addEventListener('click', function() {
+                        navigateReaderNote(n.document_id);
+                    });
+                    nested.appendChild(li);
+                });
+                group.appendChild(nested);
+                ul.appendChild(group);
+            });
+
+            const firstId = (mocNote && mocNote.document_id) || (otherNotes[0] && otherNotes[0].document_id);
+            if (!currentSelectedDocumentId && firstId) {
+                loadNoteContent(firstId);
+            } else if (currentSelectedDocumentId) {
+                highlightSidebarNote(currentSelectedDocumentId);
             }
         }
 
-        function loadNoteContent(notePath) {
-            currentSelectedNotePath = notePath;
-            highlightSidebarNote(notePath);
+        function loadNoteContent(documentId, options) {
+            if (!documentId) return;
+            options = options || {};
+            if (!options.skipHistory) {
+                pushReaderHistory(documentId);
+            }
+            currentSelectedDocumentId = documentId;
+            highlightSidebarNote(documentId);
+            updateReaderBackButton();
 
-            let displayTitle = notePath.replace(/\.md$/, '').replace(/^.*[\\\/]/, '').replace(/_/g, ' ');
+            let displayTitle = 'Nota';
 
             if (window.pywebview && window.pywebview.api) {
-                window.pywebview.api.get_note_content(notePath).then(function(res) {
+                window.pywebview.api.get_note_content(documentId).then(function(res) {
+                    if (res && res.error === 'note_not_found') {
+                        currentSelectedNoteTitle = 'Nota no encontrada';
+                        currentSelectedNotePath = '';
+                        renderNoteDocument(currentSelectedNoteTitle, res.document || [
+                            {"type": "heading", "level": 3, "text": "Nota no encontrada"}
+                        ]);
+                        updateReaderBackButton();
+                        return;
+                    }
+                    if (res && res.error) {
+                        currentSelectedNoteTitle = 'Error';
+                        currentSelectedNotePath = '';
+                        renderNoteDocument('Error', [
+                            {"type": "heading", "level": 3, "text": res.message || 'No se pudo cargar la nota'}
+                        ]);
+                        updateReaderBackButton();
+                        return;
+                    }
                     if (res && res.title) displayTitle = res.title;
+                    if (res && res.path) currentSelectedNotePath = res.path;
+                    if (res && res.document_id) currentSelectedDocumentId = res.document_id;
                     currentSelectedNoteTitle = displayTitle;
-                    const formattedHtml = formatWikilinksInHtml(res ? res.html : '');
-                    document.getElementById('reader-content').innerHTML = injectNoteActionBar(displayTitle, formattedHtml);
+                    renderNoteDocument(displayTitle, res ? res.document : []);
+                    updateReaderBackButton();
                 });
             } else {
-                const found = LOCAL_MOCK_NOTES.find(n => n.path === notePath || n.path.endsWith(notePath) || (n.title && notePath.includes(n.title)));
+                const found = LOCAL_MOCK_NOTES.find(function(n, index) {
+                    return ('mock-' + index) === documentId || n.path === documentId;
+                });
                 if (found) {
                     currentSelectedNoteTitle = found.title;
-                    const formattedHtml = formatWikilinksInHtml(found.html);
-                    document.getElementById('reader-content').innerHTML = injectNoteActionBar(found.title, formattedHtml);
+                    currentSelectedNotePath = found.path;
+                    const reader = document.getElementById('reader-content');
+                    reader.replaceChildren(createNoteActionBar(found.title));
+                    const wrap = document.createElement('div');
+                    wrap.innerHTML = found.html;
+                    while (wrap.firstChild) reader.appendChild(wrap.firstChild);
                 } else {
                     currentSelectedNoteTitle = displayTitle;
-                    document.getElementById('reader-content').innerHTML = injectNoteActionBar(displayTitle, '<h3 style="color:var(--gold);">' + displayTitle + '</h3><p style="color:var(--muted); margin-top:10px;">Nota cargada en la consola Funes.</p>');
+                    currentSelectedNotePath = '';
+                    renderNoteDocument(displayTitle, [
+                        {"type": "heading", "level": 3, "text": "Nota no encontrada"},
+                        {"type": "paragraph", "text": "La nota solicitada no está disponible en la vista previa."}
+                    ]);
                 }
+                updateReaderBackButton();
             }
         }
 
@@ -3008,9 +3586,12 @@
         function renderCategoryFiles(files) {
             const bodyEl = document.getElementById('category-modal-body');
             if (!bodyEl) return;
-            bodyEl.innerHTML = '';
+            bodyEl.replaceChildren();
             if (!files || !files.length) {
-                bodyEl.innerHTML = '<p style="font-size:0.85rem; color:var(--muted);">No hay archivos archivados en esta sección.</p>';
+                const empty = document.createElement('p');
+                empty.style.cssText = 'font-size:0.85rem; color:var(--muted);';
+                empty.textContent = 'No hay archivos archivados en esta sección.';
+                bodyEl.appendChild(empty);
                 return;
             }
             const ul = document.createElement('ul');
@@ -3018,22 +3599,33 @@
             files.forEach(function(f) {
                 const li = document.createElement('li');
                 li.style.cssText = 'background: var(--bg-card); padding: 10px 14px; border: 1px solid var(--border); border-radius: 4px; display: flex; justify-content: space-between; align-items: center; cursor: pointer; font-size: 0.85rem;';
-                li.innerHTML = '<span>📄 ' + f.name + ' <small style="color:var(--muted); margin-left:8px;">(' + (f.folder || 'vault') + ')</small></span><button class="btn-small">Abrir en OS</button>';
-                li.ondblclick = function() {
-                    if (window.pywebview && window.pywebview.api) {
-                        window.pywebview.api.open_file_natively(f.path);
-                    } else {
+                const description = document.createElement('span');
+                description.textContent = '📄 ' + f.name + ' ';
+                const folder = document.createElement('small');
+                folder.style.cssText = 'color:var(--muted); margin-left:8px;';
+                folder.textContent = '(' + (f.folder || 'vault') + ')';
+                description.appendChild(folder);
+                const open = document.createElement('button');
+                open.className = 'btn-small';
+                open.type = 'button';
+                open.textContent = 'Abrir en OS';
+                li.append(description, open);
+                function openAuthorizedFile() {
+                    if (!(window.pywebview && window.pywebview.api)) {
                         alert('Abriendo ' + f.name + ' con la aplicación nativa del sistema...');
+                        return;
                     }
-                };
-                li.querySelector('button').onclick = function(e) {
+                    window.pywebview.api.open_file_natively(f.path).then(function(res) {
+                        if (res && res.error) {
+                            alert(res.message || 'No se pudo abrir el archivo autorizado.');
+                        }
+                    });
+                }
+                li.ondblclick = openAuthorizedFile;
+                open.addEventListener('click', function(e) {
                     e.stopPropagation();
-                    if (window.pywebview && window.pywebview.api) {
-                        window.pywebview.api.open_file_natively(f.path);
-                    } else {
-                        alert('Abriendo ' + f.name + ' con la aplicación nativa del sistema...');
-                    }
-                };
+                    openAuthorizedFile();
+                });
                 ul.appendChild(li);
             });
             bodyEl.appendChild(ul);
@@ -3057,47 +3649,23 @@
                 lastSearchQuery = query;
                 document.querySelectorAll('.reader-note-item, .reader-pinned-item').forEach(el => el.classList.remove('active'));
                 currentSelectedNotePath = '';
+                currentSelectedDocumentId = '';
 
                 const readerContent = document.getElementById('reader-content');
                 if (readerContent) {
-                    readerContent.innerHTML = `
-                        <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; min-height: 380px; text-align: center; color: var(--muted); gap: 18px; padding: 20px;">
-                            <svg width="110" height="130" viewBox="0 0 100 120" style="animation: flipHourglass 4s infinite cubic-bezier(0.65, 0, 0.35, 1); flex-shrink: 0;">
-                                <defs>
-                                    <pattern id="sandDotsPattern" width="7" height="7" patternUnits="userSpaceOnUse">
-                                        <circle cx="2" cy="2" r="1.1" fill="#787268"/>
-                                        <circle cx="5" cy="4" r="1.0" fill="#5C574F"/>
-                                        <circle cx="1.5" cy="5.5" r="0.9" fill="#8C867C"/>
-                                        <circle cx="5.5" cy="1.5" r="1.2" fill="#6E685E"/>
-                                    </pattern>
-                                    <clipPath id="topBulbClip">
-                                        <polygon points="22,18 78,18 50,60"/>
-                                    </clipPath>
-                                    <clipPath id="bottomBulbClip">
-                                        <polygon points="22,102 78,102 50,60"/>
-                                    </clipPath>
-                                </defs>
-                                <rect x="15" y="10" width="70" height="8" rx="2" fill="#59544D" stroke="#3D3934" stroke-width="1.5"/>
-                                <rect x="15" y="102" width="70" height="8" rx="2" fill="#59544D" stroke="#3D3934" stroke-width="1.5"/>
-                                <path d="M 22 18 L 78 18 Q 58 55 52 60 Q 58 65 78 102 L 22 102 Q 42 65 48 60 Q 42 55 22 18 Z" fill="none" stroke="#9C958B" stroke-width="2.5" stroke-linejoin="round"/>
-                                <g clip-path="url(#topBulbClip)">
-                                    <polygon points="22,18 78,18 50,60" fill="url(#sandDotsPattern)" style="animation: drainTopSand 4s infinite ease-in-out; transform-origin: 50px 60px;"/>
-                                </g>
-                                <g class="sand-falling-grains">
-                                    <circle cx="49" cy="58" r="1.3" fill="#787268" style="animation: dropParticleDot 0.65s infinite linear 0s;"/>
-                                    <circle cx="51" cy="58" r="1.1" fill="#5C574F" style="animation: dropParticleDot 0.65s infinite linear 0.13s;"/>
-                                    <circle cx="50" cy="58" r="1.4" fill="#8C867C" style="animation: dropParticleDot 0.65s infinite linear 0.26s;"/>
-                                    <circle cx="48.5" cy="58" r="1.0" fill="#6E685E" style="animation: dropParticleDot 0.65s infinite linear 0.39s;"/>
-                                    <circle cx="51.5" cy="58" r="1.2" fill="#787268" style="animation: dropParticleDot 0.65s infinite linear 0.52s;"/>
-                                </g>
-                                <g clip-path="url(#bottomBulbClip)">
-                                    <polygon points="22,102 78,102 50,60" fill="url(#sandDotsPattern)" style="animation: fillBottomSand 4s infinite ease-in-out; transform-origin: 50px 102px;"/>
-                                </g>
-                            </svg>
-                            <div style="font-size: 0.92rem; font-weight: 700; color: var(--paper); letter-spacing: 0.5px;">Búsqueda activa: "<span style="color: var(--gold);">${rawInput}</span>"</div>
-                            <div style="font-size: 0.8rem; color: var(--muted); max-width: 340px; line-height: 1.45;">Selecciona una de las notas filtradas en la columna izquierda para desplegar su lectura.</div>
-                        </div>
-                    `;
+                    const emptyState = document.createElement('div');
+                    emptyState.style.cssText = 'display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; min-height: 380px; text-align: center; color: var(--muted); gap: 18px; padding: 20px;';
+                    const hourglass = document.createElement('div');
+                    hourglass.style.cssText = 'font-size: 4rem; animation: flipHourglass 4s infinite cubic-bezier(0.65, 0, 0.35, 1);';
+                    hourglass.textContent = '⌛';
+                    const title = document.createElement('div');
+                    title.style.cssText = 'font-size: 0.92rem; font-weight: 700; color: var(--paper); letter-spacing: 0.5px;';
+                    title.append('Búsqueda activa: "', document.createTextNode(rawInput), '"');
+                    const help = document.createElement('div');
+                    help.style.cssText = 'font-size: 0.8rem; color: var(--muted); max-width: 340px; line-height: 1.45;';
+                    help.textContent = 'Selecciona una de las notas filtradas en la columna izquierda para desplegar su lectura.';
+                    emptyState.append(hourglass, title, help);
+                    readerContent.replaceChildren(emptyState);
                 }
             } else if (query.length === 0 && lastSearchQuery.length > 0) {
                 lastSearchQuery = '';
@@ -3115,19 +3683,32 @@
         }
 
         function saveSettings() {
-            const path = document.getElementById('setting-vault-path').value;
             const model = document.getElementById('setting-ollama-model').value;
             const ollamaUrl = document.getElementById('setting-ollama-url') ? document.getElementById('setting-ollama-url').value : 'http://localhost:11434';
             const ramMargin = document.getElementById('setting-ram-margin') ? document.getElementById('setting-ram-margin').value : '20%';
-
-            triggerAction('save_settings', {
-                vault_path: path,
-                model: model,
-                input_connected_folders: linkedInputFolders,
-                output_connected_folders: linkedOutputFolders,
+            const settings = {
+                vault_path: document.getElementById('setting-vault-path').value,
+                custom_model_override: model,
                 ollama_url: ollamaUrl,
-                ram_margin: ramMargin
-            });
+                ram_safety_margin_pct: Number.parseFloat(ramMargin) / 100,
+                allow_non_loopback_ollama: document.getElementById('setting-allow-non-loopback-ollama').checked,
+                input_connected_folders: linkedInputFolders,
+                output_connected_folders: linkedOutputFolders
+            };
+            if (window.pywebview && window.pywebview.api) {
+                window.pywebview.api.save_settings(settings).then(function(res) {
+                    if (res && res.error) {
+                        log('Error guardando ajustes: ' + res.message);
+                    } else if (res && res.log) {
+                        log(res.log);
+                        if (res.warning) log('Advertencia: ' + res.warning);
+                        if (res.offline_mode) applyOfflineModeState(res.offline_mode);
+                        if (res.stats) updateDashboardStats(res.stats);
+                    }
+                });
+            } else {
+                log('Ajustes actualizados (vista previa).');
+            }
             closeModal('modal-settings');
         }
 
@@ -3145,6 +3726,9 @@
                     updateDashboardStats(state.stats);
                     if (state.vault_path) {
                         document.getElementById('setting-vault-path').value = state.vault_path;
+                    }
+                    if (state.offline_mode) {
+                        applyOfflineModeState(state.offline_mode);
                     }
                 });
                 loadThemes();

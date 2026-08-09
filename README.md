@@ -155,23 +155,27 @@ Instala las dependencias de test (pytest) si aún no están disponibles:
 pip install -e ".[test]"
 ```
 
-Usa `PYTHONDONTWRITEBYTECODE=1` en ambos comandos para no modificar bytecode rastreado (`*.pyc`, `__pycache__`).
+Usa `PYTHONDONTWRITEBYTECODE=1` para no generar bytecode rastreado (`*.pyc`, `__pycache__`).
 
-Ejecuta la suite histórica basada en `unittest` (debe terminar con `OK`):
-
-```bash
-PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -p 'test_*.py' -v
-```
-
-Ejecuta la suite orientada a pytest (salida silenciosa con resumen al final):
+### Suite pytest
 
 ```bash
 PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -q
 ```
 
-**Resultado esperado (checkpoint 0.1):** ambos comandos pasan en verde; la suite `unittest` reporta 74 pruebas en `OK`; `pytest` reporta 75 pruebas pasadas. Tras ejecutar ambos comandos desde un checkpoint limpio, `git status --short` debe permanecer vacío (sin cambios en bytecode rastreado ni en `Vault_Funes`).
+La suite actual supera las 500 pruebas (unitarias, integración, seguridad, contratos). Consulta el resumen al final de la ejecución.
 
-Si el árbol ya tenía `.pyc` modificados antes de las pruebas, restáuralos desde el índice antes de commitear (ver informe de la tarea 0.1).
+### Release gate (pre-publicación)
+
+Antes de etiquetar o publicar una build, ejecuta el gate fail-closed:
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 python3 scripts/release_gate.py
+```
+
+Documentación del checklist y mapeo de condiciones: [`docs/release-gate.md`](docs/release-gate.md). El gate ejecuta pytest, comprueba que el árbol git permanece limpio (ignorando `__pycache__`, `funes.egg-info` y `.pytest_cache`), valida hallazgos de seguridad residuales y ejecuta un smoke offline de Vault (migración → ingesta ETL → revisión → búsqueda → exportación → rollback).
+
+Tras ejecutar pruebas desde un checkpoint limpio, `git status --short` debe permanecer vacío salvo ruido de caché ignorado por el gate.
 
 ---
 

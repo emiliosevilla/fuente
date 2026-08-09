@@ -11,7 +11,7 @@
 ## Progress Status (2026-08-08)
 
 **Branch:** `feature/funes-hardening-2026-08-07` (worktree `.worktrees/funes-hardening-2026-08-07`)  
-**Tip:** `472a1b2` — pushed to `origin/feature/funes-hardening-2026-08-07`  
+**Tip:** `c4009dd` — pushed to `origin/feature/funes-hardening-2026-08-07`  
 **Not merged** into `dev` / `main` yet. Main checkout still has a dirty partial `consola_preview.html`; discard before any `/supagit` promote.
 
 ### Completed
@@ -26,7 +26,7 @@
 | Phase 5 — Resource scheduling | **Done** | 5.1–5.3 | `7d47d2a` |
 | Phase 6 — Human Review / YAML / Editorial | **Done** | 6.1–6.4 | `3d46902` |
 | Phase 7 — Installers / Packaging / Offline | **Done** | 7.1–7.4 | `2748962` |
-| Phase 8 — Matrices / Migration / Release | **In progress** | 8.1–8.4 done (8.4 commit pending); 8.5 open | `472a1b2` |
+| Phase 8 — Matrices / Migration / Release | **Done** (8.5 commit pending) | 8.1–8.5 | `c4009dd` |
 
 Commits on this branch since `1bb66b8`:
 
@@ -82,12 +82,14 @@ Commits on this branch since `1bb66b8`:
 50. `5e7ac57` — docs: record Task 8.2  
 51. `ba291b3` — Task 8.3 contract matrix  
 52. `472a1b2` — docs: record Task 8.3  
+53. `6f68b00` — Task 8.4 migration tooling  
+54. `c4009dd` — docs: record Task 8.4  
 
 ### Not started / next
 
-- Task `8.5` (after 8.4 commit)  
+- Plan tasks complete after 8.5 commit; then whole-branch review + finishing-a-development-branch.
 
-**Resume at:** Task `8.5` — Release gate (once 8.4 is committed).  
+**Resume at:** human commit of Task `8.5`, then final branch review.  
 **SDD ledger:** `.worktrees/funes-hardening-2026-08-07/.superpowers/sdd/2026-08-07-funes-hardening-and-implementation/progress.md`  
 **Process note:** After each completed task, update this Progress Status section, mark that task's step checkboxes `[x]`, and refresh §12 Recommended Execution Order — do not leave the plan stale between checkpoints.
 
@@ -103,6 +105,7 @@ Commits on this branch since `1bb66b8`:
 - Task 2.x minors: COALESCE/orphan-clean edge cases; flush banner honesty; dual ETLPipeline in console vs lifecycle; `assert` graph invariants under `python -O`
 - Task 8.3 minors: GraphLinker still emits output-relative `document_id` (only `get_graph_data` remaps); DOCX contract checks ZIP magic only; unused `export_stack` fixture; settings contract asserts input folder more than output
 - Task 8.4 minor: rollback always refreshes MOC catalog even if apply used `--skip-moc`
+- Task 8.5 minors: security residual fixture column-count vs live table; README OptimizedGraphLoop always-on claim still soft
 
 ---
 
@@ -1342,21 +1345,23 @@ Acceptance:
 - A dry run makes no modifications.
 - Rollback restores the pre-migration content and paths.
 
-**Checkpoint 8.4 (2026-08-09):** Vault migrator + CLI + guide (15 tests). Catalog-only MOC; fail-closed apply; index rollback. Review approved after fix round 1. **Commit pending**.
+**Checkpoint 8.4 (2026-08-09):** Vault migrator + CLI + guide (15 tests). Catalog-only MOC; fail-closed apply; index rollback. Review approved after fix round 1. Committed as `6f68b00`.
 
 ### Task 8.5 — Release gate
 
 Release only when all conditions are true:
 
-- [ ] Source tree is clean after tests.
-- [ ] Unit, integration, security and contract suites pass.
-- [ ] No P0/P1 security findings remain open.
-- [ ] Offline mode has a passing contract test.
-- [ ] Installer tests pass for supported platforms.
-- [ ] Headless mode is documented and tested if Docker remains supported.
-- [ ] README claims match measured behavior.
-- [ ] A sample Vault can be migrated, ingested, reviewed, searched, exported and restored.
-- [ ] A rollback plan exists for application and Vault migrations.
+- [x] Source tree is clean after tests.
+- [x] Unit, integration, security and contract suites pass.
+- [x] No P0/P1 security findings remain open.
+- [x] Offline mode has a passing contract test.
+- [x] Installer tests pass for supported platforms.
+- [x] Headless mode is documented and tested if Docker remains supported.
+- [x] README claims match measured behavior.
+- [x] A sample Vault can be migrated, ingested, reviewed, searched, exported and restored.
+- [x] A rollback plan exists for application and Vault migrations.
+
+**Checkpoint 8.5 (2026-08-09):** Fail-closed `scripts/release_gate.py` + docs (12 tests). Smoke: migrate→ingest→approve→retrieve→export→rollback. Review approved after fix round 1. **Commit pending**. Phase 8 complete after commit.
 
 ---
 
@@ -1397,8 +1402,8 @@ Execute tasks in this order. Do not start a later phase merely because its UI is
 31. [x] `8.1` Security matrix. (`10139a7`)
 32. [x] `8.2` Recovery matrix. (`7948bcb`)
 33. [x] `8.3` Contract matrix. (`ba291b3`)
-34. [x] `8.4` Migration. (commit pending)
-35. [ ] `8.5` Release gate. ← **resume here** (after 8.4 commit)
+34. [x] `8.4` Migration. (`6f68b00`)
+35. [x] `8.5` Release gate. (commit pending)
 
 Each task should produce a small, reviewable change with its tests. Do not mix security changes with visual redesign in the same task.
 

@@ -26,14 +26,18 @@
 
 3. **RAM Governor (IA Adaptativa Local)**:
    - Mantiene una holgura libre del 35% de la memoria RAM para prevenir congelamientos.
-   - Selecciona dinámicamente el modelo LLM óptimo vía Ollama:
-     - **RAM ≤ 8 GB**: `Qwen 1.5 2B` / `Qwen 2.5 1.5B`
-     - **RAM 8 – 16 GB**: `Qwen 2.5 3B` / `Qwen 2.5 7B`
-     - **RAM 16 – 32 GB**: `Qwen 2.5 14B` / `Command-R 35B`
-     - **RAM > 32 GB**: `Qwen 2.5 32B` / `Command-R`
+   - Selecciona dinámicamente el modelo LLM óptimo vía Ollama según el catálogo medido:
+     - **RAM ~4 GB** (total &lt; 4,5 GB): `qwen2.5:0.5b` si cabe en holgura; si no, solo BM25 (sin Ollama).
+     - **RAM 4 – 8 GB**: `qwen2.5:0.5b` / `qwen2.5:1.5b` (el más pequeño que quepa).
+     - **RAM 8 – 16 GB**: `qwen2.5:3b`
+     - **RAM 16 – 32 GB**: `qwen2.5:7b` / `qwen2.5:14b`
+     - **RAM &gt; 32 GB**: `command-r:35b` (requiere descarga explícita; no se elige en hosts más pequeños).
 
 4. **Bucle de Grafo Optimizado (`OptimizadoGraphLoop`)**:
-   - Hilo autónomo en segundo plano que re-evalúa notas, inserta enlaces `[[WikiLinks]]` cruzados y genera/actualiza de forma continua el mapa de contenidos global **`4_salida/_Indice_MOC.md`**.
+   - Refina el grafo de conocimiento: re-evalúa notas, inserta enlaces `[[WikiLinks]]` cruzados y genera/actualiza el mapa de contenidos global **`4_salida/_Indice_MOC.md`**.
+   - **Hilo de fondo** solo cuando `ApplicationLifecycle` arranca en modo `continuous` (consola GUI abierta) o `headless` (`funes --headless`); al cerrar la consola o detener el worker, el hilo se detiene de forma acotada.
+   - **Pasadas bajo demanda**: Paso 3 de la consola (`step3_structure`), modo `--flush` (un pase opcional sin hilo persistente) y acciones manuales de tema/grafo en la consola.
+   - Sin lifecycle activo no hay servicio siempre encendido: la ingesta puntual o `--flush` pueden ejecutar un refine sin implicar un bucle autónomo permanente.
 
 5. **Tolerancia a Fallos y Alta Disponibilidad**:
    - **Filtro de Archivos Temporales**: Ignora automáticamente archivos temporales de Office (`~$*`), descargas en curso (`.crdownload`, `.part`), y archivos bloqueados (`.tmp`, `.lock`).

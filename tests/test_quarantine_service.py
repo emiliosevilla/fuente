@@ -12,6 +12,35 @@ from funes.domain.quarantine import (
 )
 
 
+@pytest.fixture
+def quarantine_service(tmp_path):
+    vault_root = tmp_path / "vault"
+    vault_root.mkdir()
+    return QuarantineService(vault_root)
+
+
+def test_list_active_items_includes_failed_for_review(quarantine_service, tmp_path):
+    vault_root = quarantine_service.vault_root
+    quarantined_source = vault_root / "1_entrada" / "broken.pdf"
+    quarantined_source.parent.mkdir(parents=True)
+    quarantined_source.write_bytes(b"%PDF-broken")
+    review_source = vault_root / "1_entrada" / "model-input.pdf"
+    review_source.write_text("input", encoding="utf-8")
+
+    quarantine_service.quarantine(
+        quarantined_source, error_code="extract_failed", attempt_count=1
+    )
+    quarantine_service.handle_failure(
+        review_source,
+        InvalidModelOutputError("model schema mismatch"),
+        attempt_count=1,
+    )
+
+    active = quarantine_service.list_active_items()
+    statuses = {item["status"] for item in active}
+    assert statuses == {"quarantined", "failed_for_review"}
+
+
 def test_quarantine_uses_canonical_location_and_preserves_provenance(tmp_path):
     vault_root = tmp_path / "vault"
     source = vault_root / "1_entrada" / "report_final.txt"

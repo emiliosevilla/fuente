@@ -30,6 +30,7 @@ import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
 
 from funes.application.chat import ChatApplicationService, OllamaChatProvider
+from funes.application.ingestion import IngestionApplicationService, SourceNotStableError
 from funes.application.lifecycle import ApplicationLifecycle
 from funes.application.export import (
     ExportApplicationService,
@@ -222,6 +223,29 @@ class FunesConsoleBackend:
         self._notes_service: Optional[NotesApplicationService] = None
         self._export_service: Optional[ExportApplicationService] = None
         self._job_store: Optional[JobStore] = None
+        self._ingestion_service: Optional[IngestionApplicationService] = None
+        self._ingestion_job_store: Optional[JobStore] = None
+
+    def attach_ingestion_service(
+        self,
+        ingestion: IngestionApplicationService,
+        job_store: JobStore,
+    ) -> None:
+        """Attach a pre-built ingestion service (tests / offline harness)."""
+        self._ingestion_service = ingestion
+        self._ingestion_job_store = job_store
+
+    def _resolve_step2_ingestion(
+        self,
+    ) -> tuple[IngestionApplicationService, JobStore, Optional[ETLPipeline]]:
+        """Return ingestion collaborators for step2 without duplicating lifecycle pipeline."""
+        if self._ingestion_service is not None and self._ingestion_job_store is not None:
+            return self._ingestion_service, self._ingestion_job_store, None
+        if self.lifecycle is not None and self.lifecycle.pipeline is not None:
+            pipeline = self.lifecycle.pipeline
+            return pipeline.ingestion, pipeline.job_store, None
+        pipeline = ETLPipeline(self.config)
+        return pipeline.ingestion, pipeline.job_store, pipeline
 
     def attach_lifecycle(self, lifecycle: ApplicationLifecycle) -> None:
         """Share the lifecycle-owned VaultManager for theme-scoped processing."""
@@ -296,6 +320,11 @@ class FunesConsoleBackend:
                 model_resolver=lambda: (
                     self.config.custom_model_override
                     or self.ram_governor.recommend_model()
+                ),
+                budget_decision_resolver=(
+                    None
+                    if self.config.custom_model_override
+                    else self.ram_governor.recommend_model_decision
                 ),
                 ollama_url=self.config.ollama_url,
             )
@@ -396,6 +425,10 @@ class FunesConsoleBackend:
     @staticmethod
     def _path_error(error: PathAuthorizationError) -> Dict[str, str]:
         return {"error": error.code, "message": str(error)}
+
+    def _resolve_note_from_identifier(self, identifier: str) -> Path:
+        document_id = self.get_notes_service().resolve_document_id(identifier)
+        return self._path_resolver().resolve_note_id(document_id)
 
     def _vault_relative_identity(self, path: Path) -> str:
         try:
@@ -641,14 +674,18 @@ class FunesConsoleBackend:
 
         # --- CRUD DE NOTAS (GUARDAR, FUSIONAR, MOVER, ELIMINAR) ---
         elif action_name == "save_note":
-            file_path_str = payload.get("file_path") or payload.get("path")
+            identifier = (
+                payload.get("document_id")
+                or payload.get("file_path")
+                or payload.get("path")
+            )
             new_content = payload.get("content")
             title = payload.get("title")
             issue_name = payload.get("issue", "_Sin_Cuestion")
 
-            if file_path_str:
+            if identifier:
                 try:
-                    p = self._path_resolver().resolve_note(file_path_str)
+                    p = self._resolve_note_from_identifier(str(identifier))
                 except PathAuthorizationError as error:
                     return self._path_error(error)
                 if p.exists() and new_content is not None:
@@ -724,12 +761,16 @@ historial:
             }
 
         elif action_name == "move_note":
-            file_path_str = payload.get("file_path") or payload.get("path")
+            identifier = (
+                payload.get("document_id")
+                or payload.get("file_path")
+                or payload.get("path")
+            )
             target_issue = payload.get("target_issue", "_Sin_Cuestion")
-            if file_path_str:
+            if identifier:
                 try:
                     resolver = self._path_resolver()
-                    p = resolver.resolve_note(file_path_str)
+                    p = self._resolve_note_from_identifier(str(identifier))
                 except PathAuthorizationError as error:
                     return self._path_error(error)
                 if p.exists():
@@ -749,10 +790,14 @@ historial:
             return {"error": "No se pudo mover la nota"}
 
         elif action_name == "delete_note":
-            file_path_str = payload.get("file_path") or payload.get("path")
-            if file_path_str:
+            identifier = (
+                payload.get("document_id")
+                or payload.get("file_path")
+                or payload.get("path")
+            )
+            if identifier:
                 try:
-                    p = self._path_resolver().resolve_note(file_path_str)
+                    p = self._resolve_note_from_identifier(str(identifier))
                 except PathAuthorizationError as error:
                     return self._path_error(error)
                 if p.exists():
@@ -787,7 +832,10 @@ historial:
         elif action_name == "run_optimized_cycle":
             target_issue = payload.get("target_issue")
             try:
-                loop = OptimizadoGraphLoop(self.vault.output_dir)
+                loop = OptimizadoGraphLoop(
+                    self.vault.output_dir,
+                    vault_root=self.vault.config.vault_path,
+                )
                 res = loop.refine_knowledge_graph(target_issue=target_issue)
                 msg = f"Ciclo Optimizado completado para Cuestión '{target_issue or 'Todas'}'. Notas procesadas: {res.get('processed_notes', 0)}."
                 return {"log": msg, "result": res, "refresh": True, "stats": self.get_stats_dict()}
@@ -806,7 +854,10 @@ historial:
             }
         elif action_name == "reindex_notes":
             try:
-                loop = OptimizadoGraphLoop(self.vault.output_dir)
+                loop = OptimizadoGraphLoop(
+                    self.vault.output_dir,
+                    vault_root=self.vault.config.vault_path,
+                )
                 loop.refine_knowledge_graph()
                 notes_count = len(list(self.vault.output_dir.rglob("*.md"))) if self.vault.output_dir.exists() else 0
                 return {
@@ -930,26 +981,64 @@ historial:
             }
         elif action_name == "step2_transcribe":
             try:
-                pipeline = ETLPipeline(self.config)
-                input_files = [f for f in self.vault.input_dir.glob("*") if f.is_file() and not f.name.startswith(".")]
+                ingestion, _job_store, ephemeral_pipeline = self._resolve_step2_ingestion()
+                input_dir = self.vault.input_dir
+                input_files = (
+                    [
+                        f
+                        for f in input_dir.glob("*")
+                        if f.is_file() and not f.name.startswith(".")
+                    ]
+                    if input_dir.exists()
+                    else []
+                )
+                log_lines: list[str] = []
                 try:
-                    for f in input_files:
+                    for file_path in input_files:
                         try:
-                            pipeline.process_file(f)
+                            identity = ingestion.vault_relative_identity(file_path)
+                            job = ingestion.submit(identity)
+                            if job.stage != "completed":
+                                job = ingestion.resume(job.job_id)
+                            if job.stage == "completed":
+                                log_lines.append(f"[OK] {file_path.name}")
+                            else:
+                                log_lines.append(
+                                    f"[PENDIENTE] {file_path.name}: "
+                                    f"stage={job.stage} code={job.error_code}"
+                                )
+                        except SourceNotStableError:
+                            log_lines.append(
+                                f"[OMITIDO] {file_path.name}: archivo no estabilizado"
+                            )
+                        except PathAuthorizationError:
+                            log_lines.append(
+                                f"[OMITIDO] {file_path.name}: ruta no autorizada"
+                            )
                         except Exception as err:
-                            self.quarantine_service.handle_failure(f, err, attempt_count=1)
+                            self.quarantine_service.handle_failure(
+                                file_path, err, attempt_count=1
+                            )
+                            log_lines.append(f"[ERROR] {file_path.name}: {err}")
                 finally:
-                    pipeline.close()
+                    if ephemeral_pipeline is not None:
+                        ephemeral_pipeline.close()
+                message = "Estructuración de datos completada hacia 3_limpio."
+                if log_lines:
+                    message = message + "\n" + "\n".join(log_lines)
                 return {
-                    "log": "Estructuración de datos completada hacia 3_limpio.",
+                    "log": message,
                     "refresh": True,
-                    "stats": self.get_stats_dict()
+                    "stats": self.get_stats_dict(),
                 }
             except Exception as e:
                 return {"log": f"Error en Transcripción: {e}"}
         elif action_name == "step3_structure":
             try:
-                loop = OptimizadoGraphLoop(self.vault.output_dir)
+                loop = OptimizadoGraphLoop(
+                    self.vault.output_dir,
+                    vault_root=self.vault.config.vault_path,
+                )
                 loop.refine_knowledge_graph()
                 configure_anythingllm_integration(self.vault.output_dir)
                 notes_count = len(list(self.vault.output_dir.rglob("*.md"))) if self.vault.output_dir.exists() else 0
@@ -1394,7 +1483,9 @@ historial:
         if not out_dir.exists():
             return {"nodes": [], "links": []}
 
-        discovered = GraphLinker(out_dir).enumerate_notes()
+        discovered = GraphLinker(
+            out_dir, vault_root=self.vault.config.vault_path
+        ).enumerate_notes()
         node_ids = {note.link_target for note in discovered}
         nodes = []
         for note in discovered:
@@ -1404,7 +1495,7 @@ historial:
                     "id": note.link_target,
                     "label": note.stem,
                     "path": vault_relative,
-                    "document_id": document_id_for_relative_path(vault_relative),
+                    "document_id": note.document_id,
                 }
             )
 

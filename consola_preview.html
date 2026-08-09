@@ -1287,11 +1287,7 @@
                 <div class="modal-title" style="color: var(--red);">ARCHIVOS EN CUARENTENA</div>
                 <button class="close-btn" data-onclick-command="closeModal('modal-quarantine')">&times;</button>
             </div>
-            <div class="modal-body" id="quarantine-list">
-                <div style="background-color: var(--bg-card); border: 1px solid var(--border); padding: 14px; border-radius: 6px;">
-                    <div style="font-size: 0.85rem; color: var(--muted);">No hay archivos en cuarentena actualmente.</div>
-                </div>
-            </div>
+            <div class="modal-body" id="quarantine-list"></div>
             <div class="modal-footer">
                 <span style="font-size: 0.8rem; color: var(--muted);">Aislamiento seguro de archivos ilegibles sin detener el motor.</span>
                 <button class="btn-secondary" data-onclick-command="closeModal('modal-quarantine')">Cerrar</button>
@@ -1782,6 +1778,7 @@
             if (id === 'modal-stat-notes') { loadStatNotesData(); }
             if (id === 'modal-stat-ram') { loadStatRamData(); }
             if (id === 'modal-approval') { loadApprovalInbox(); }
+            if (id === 'modal-quarantine') { loadQuarantineData(); }
         }
 
         let approvalSelectedNoteId = null;
@@ -1975,6 +1972,117 @@
                 if (res && res.log) log(res.log);
                 document.getElementById('approval-form-status').textContent = 'Nota aprobada';
                 loadApprovalInbox();
+            });
+        }
+
+        function loadQuarantineData() {
+            const listEl = document.getElementById('quarantine-list');
+            if (!listEl) return;
+            listEl.replaceChildren();
+            const loading = document.createElement('p');
+            loading.style.cssText = 'font-size:0.85rem; color:var(--muted);';
+            loading.textContent = 'Cargando cuarentena...';
+            listEl.appendChild(loading);
+
+            if (!window.pywebview || !window.pywebview.api) {
+                listEl.replaceChildren();
+                const preview = document.createElement('p');
+                preview.style.cssText = 'font-size:0.85rem; color:var(--muted);';
+                preview.textContent = 'Vista previa mock: sin bridge de cuarentena (lista vacía).';
+                listEl.appendChild(preview);
+                return;
+            }
+
+            window.pywebview.api.get_quarantine().then(function(res) {
+                const notes = (res && res.quarantine_notes)
+                    ? res.quarantine_notes
+                    : ((res && res.items) ? res.items : []);
+                renderQuarantineList(notes);
+            }).catch(function() {
+                listEl.replaceChildren();
+                const err = document.createElement('p');
+                err.style.cssText = 'font-size:0.85rem; color:var(--red);';
+                err.textContent = 'No se pudo cargar la cuarentena.';
+                listEl.appendChild(err);
+            });
+        }
+
+        function renderQuarantineList(notes) {
+            const listEl = document.getElementById('quarantine-list');
+            if (!listEl) return;
+            listEl.replaceChildren();
+            if (!notes || !notes.length) {
+                const empty = document.createElement('div');
+                empty.style.cssText = 'background-color: var(--bg-card); border: 1px solid var(--border); padding: 14px; border-radius: 6px;';
+                const msg = document.createElement('div');
+                msg.style.cssText = 'font-size: 0.85rem; color: var(--muted);';
+                msg.textContent = 'No hay archivos en cuarentena actualmente.';
+                empty.appendChild(msg);
+                listEl.appendChild(empty);
+                return;
+            }
+            notes.forEach(function(note) {
+                const card = document.createElement('div');
+                card.style.cssText = 'background-color: var(--bg-card); border: 1px solid var(--border); padding: 14px; border-radius: 6px; margin-bottom: 10px;';
+
+                const filename = document.createElement('div');
+                filename.style.cssText = 'font-size: 0.9rem; font-weight: 600; color: var(--paper);';
+                filename.textContent = note.original_filename || note.filename || note.stored_filename || 'Archivo';
+
+                const errorCode = document.createElement('div');
+                errorCode.style.cssText = 'font-size: 0.8rem; color: var(--muted); margin-top: 4px;';
+                errorCode.textContent = 'Código: ' + (note.error_code || 'desconocido');
+
+                const status = note.status || 'quarantined';
+                const statusLabel = document.createElement('div');
+                statusLabel.style.cssText = 'font-size: 0.8rem; margin-top: 4px;';
+                if (status === 'failed_for_review') {
+                    statusLabel.style.color = 'var(--amber, #d4a017)';
+                    statusLabel.textContent = 'Estado: Revisión manual';
+                } else if (status === 'quarantined') {
+                    statusLabel.style.color = 'var(--muted)';
+                    statusLabel.textContent = 'Estado: En cuarentena';
+                } else {
+                    statusLabel.style.color = 'var(--muted)';
+                    statusLabel.textContent = 'Estado: ' + status;
+                }
+
+                card.appendChild(filename);
+                card.appendChild(errorCode);
+                card.appendChild(statusLabel);
+
+                if (status === 'quarantined') {
+                    const restoreBtn = document.createElement('button');
+                    restoreBtn.className = 'btn-small';
+                    restoreBtn.type = 'button';
+                    restoreBtn.textContent = 'Restaurar';
+                    restoreBtn.style.marginTop = '10px';
+                    const quarantineId = note.quarantine_id || note.path;
+                    restoreBtn.addEventListener('click', function() {
+                        restoreQuarantineItem(quarantineId);
+                    });
+                    card.appendChild(restoreBtn);
+                }
+                listEl.appendChild(card);
+            });
+        }
+
+        function restoreQuarantineItem(quarantineId) {
+            if (!quarantineId || !window.pywebview || !window.pywebview.api) return;
+            window.pywebview.api.restore_note(quarantineId, '_Sin_Cuestion').then(function(res) {
+                if (res && res.error) {
+                    if (typeof log === 'function') log(res.error);
+                    return;
+                }
+                if (res && res.log && typeof log === 'function') log(res.log);
+                if (res && res.stats && typeof updateDashboardStats === 'function') {
+                    updateDashboardStats(res.stats);
+                } else if (window.pywebview.api.get_initial_state) {
+                    window.pywebview.api.get_initial_state().then(function(state) {
+                        if (state && state.stats) updateDashboardStats(state.stats);
+                    });
+                }
+                loadQuarantineData();
             });
         }
 

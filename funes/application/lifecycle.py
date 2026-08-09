@@ -66,7 +66,9 @@ class ApplicationLifecycle:
         self._monitor_factory: MonitorFactory = monitor_factory or FolderMonitor
         self._graph_loop_factory: GraphLoopFactory = graph_loop_factory or (
             lambda output_dir: OptimizadoGraphLoop(
-                output_dir, interval_sec=config.optimized_loop_interval_sec
+                output_dir,
+                interval_sec=config.optimized_loop_interval_sec,
+                vault_root=config.vault.vault_path,
             )
         )
 

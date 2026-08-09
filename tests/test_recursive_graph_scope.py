@@ -4,6 +4,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from funes.domain.frontmatter import parse_frontmatter, serialize_frontmatter
+from funes.domain.paths import document_id_for_relative_path
 from funes.graph_engine.linker import CANONICAL_MOC_FILENAME, GraphLinker
 from funes.graph_engine.optimized_loop import OptimizadoGraphLoop
 
@@ -22,6 +23,45 @@ def _note(title: str, body: str, issue: str = "_Sin_Cuestion") -> str:
             "history": [],
         }
     ) + body
+
+
+def test_graph_linker_document_id_is_vault_relative(tmp_path: Path):
+    vault = tmp_path / "Vault"
+    out = vault / "4_salida" / "TemaA" / "_Sin_Cuestion"
+    out.mkdir(parents=True)
+    note = out / "Alpha.md"
+    note.write_text(
+        "---\nschema_version: 1\ntitle: Alpha\nstatus: approved\n---\nbody\n",
+        encoding="utf-8",
+    )
+    discovered = GraphLinker(vault / "4_salida", vault_root=vault).enumerate_notes()
+    assert discovered
+    vault_rel = (Path("4_salida") / discovered[0].relative_path).as_posix()
+    assert discovered[0].document_id == document_id_for_relative_path(vault_rel)
+
+
+def test_graph_linker_themed_output_uses_vault_root(tmp_path: Path):
+    """Themed vault output must not infer vault_root from output_dir.parent."""
+    vault = tmp_path / "Vault"
+    theme_output = vault / "TemaA" / "4_salida" / "_Sin_Cuestion"
+    theme_output.mkdir(parents=True)
+    (theme_output / "Alpha.md").write_text(
+        "---\nschema_version: 1\ntitle: Alpha\nstatus: approved\n---\nbody\n",
+        encoding="utf-8",
+    )
+    wrong = GraphLinker(theme_output.parent).enumerate_notes()
+    right = GraphLinker(theme_output.parent, vault_root=vault).enumerate_notes()
+    assert wrong[0].document_id != right[0].document_id
+    vault_rel = Path("TemaA") / "4_salida" / "_Sin_Cuestion" / "Alpha.md"
+    assert right[0].document_id == document_id_for_relative_path(vault_rel.as_posix())
+
+
+def test_optimized_loop_passes_vault_root(tmp_path: Path):
+    vault = tmp_path / "Vault"
+    theme_output = vault / "TemaA" / "4_salida"
+    theme_output.mkdir(parents=True)
+    loop = OptimizadoGraphLoop(theme_output, vault_root=vault)
+    assert loop.linker.vault_root.resolve() == vault.resolve()
 
 
 def test_duplicate_stems_across_issues_do_not_collide(tmp_path: Path):

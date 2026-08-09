@@ -43,6 +43,7 @@ class QuarantineService:
     TRANSIENT_IO_BACKOFF_MULTIPLIER = DOMAIN_TRANSIENT_IO_BACKOFF_MULTIPLIER
     #: Product policy: corrupt/unsupported media quarantines after two attempts.
     UNSUPPORTED_CONTENT_MAX_ATTEMPTS = CORRUPT_OR_UNSUPPORTED_MAX_ATTEMPTS
+    _ACTIVE_STATUSES = frozenset({"quarantined", "failed_for_review"})
 
     def __init__(
         self,
@@ -63,7 +64,9 @@ class QuarantineService:
     def list_active_items(self) -> list[dict[str, Any]]:
         """Return entries whose quarantined file is still awaiting action."""
         return [
-            item for item in self._read_items() if item.get("status") == "quarantined"
+            item
+            for item in self._read_items()
+            if item.get("status") in self._ACTIVE_STATUSES
         ]
 
     def quarantine(

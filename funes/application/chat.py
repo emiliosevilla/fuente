@@ -13,6 +13,8 @@ import urllib.error
 import urllib.request
 from typing import Any, Callable, Mapping, Optional, Protocol
 
+from funes.ram_governor.budget import BM25_ONLY_POLICY, BudgetDecision, llm_inference_mode
+
 from funes.application.retrieval import (
     MODE_NONE,
     SCOPE_ALL_NOTES,
@@ -37,6 +39,7 @@ ERROR_EMPTY_MESSAGE = "empty_message"
 ERROR_PROVIDER = "provider_error"
 
 ModelResolver = Callable[[], str]
+BudgetDecisionResolver = Callable[[], BudgetDecision]
 
 
 class ChatProviderError(RuntimeError):
@@ -174,10 +177,12 @@ class ChatApplicationService:
         model_resolver: ModelResolver,
         ollama_url: str = "",
         system_prompt: str = CHAT_SYSTEM_PROMPT,
+        budget_decision_resolver: Optional[BudgetDecisionResolver] = None,
     ) -> None:
         self.retrieval = retrieval
         self.provider = provider
         self._model_resolver = model_resolver
+        self._budget_decision_resolver = budget_decision_resolver
         self.ollama_url = ollama_url
         self.system_prompt = system_prompt
 
@@ -223,6 +228,23 @@ class ChatApplicationService:
                 f"{query}\n\n"
                 "Indica que no hay evidencia suficiente en la bóveda y evita "
                 "inventar hechos."
+            )
+
+        budget_decision = (
+            self._budget_decision_resolver()
+            if self._budget_decision_resolver is not None
+            else None
+        )
+        if budget_decision is not None and llm_inference_mode(budget_decision) == BM25_ONLY_POLICY:
+            return self._bm25_only_result(
+                query=query,
+                evidence=evidence,
+                sources=sources,
+                retrieval_mode=retrieval_mode,
+                has_context=has_context,
+                budget_reason=budget_decision.reason,
+                degraded=bool(retrieval_ctx.get("degraded")),
+                degradation_reason=retrieval_ctx.get("degradation_reason"),
             )
 
         try:
@@ -283,6 +305,45 @@ class ChatApplicationService:
             ok=True,
             degraded=bool(retrieval_ctx.get("degraded")),
             degradation_reason=retrieval_ctx.get("degradation_reason"),
+        )
+
+    @staticmethod
+    def _bm25_only_result(
+        *,
+        query: str,
+        evidence: str,
+        sources: list[dict[str, Any]],
+        retrieval_mode: str,
+        has_context: bool,
+        budget_reason: str,
+        degraded: bool = False,
+        degradation_reason: Optional[str] = None,
+    ) -> dict[str, Any]:
+        preamble = (
+            "El modelo local (Ollama) se omitió por falta de RAM disponible. "
+            "Respuesta basada solo en búsqueda BM25 sobre las notas indexadas."
+        )
+        if has_context and evidence:
+            body = (
+                f"{preamble}\n\n"
+                f"Evidencia recuperada para «{query}»:\n"
+                f"{evidence}"
+            )
+        else:
+            body = (
+                f"{preamble}\n\n"
+                "No se recuperó contexto relevante en la bóveda para esta consulta."
+            )
+        return ChatApplicationService._result(
+            text=body,
+            sources=sources,
+            retrieval_mode=retrieval_mode,
+            has_context=has_context,
+            error=None,
+            model="",
+            ok=True,
+            degraded=degraded or True,
+            degradation_reason=degradation_reason or budget_reason,
         )
 
     @staticmethod

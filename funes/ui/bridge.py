@@ -235,7 +235,11 @@ class FunesPyWebViewApi:
             return note
         if isinstance(body, dict):
             return body
-        return self.backend.handle_action("save_note", {"path": note, "content": body})
+        if "/" in note or "\\" in note or note.endswith(".md"):
+            return self._error("path_not_authorized", "Path is not authorized")
+        return self.backend.handle_action(
+            "save_note", {"document_id": note, "content": body}
+        )
 
     def create_note(
         self, title: object, content: object, issue_id: object = "_Sin_Cuestion"
@@ -263,8 +267,10 @@ class FunesPyWebViewApi:
             return note
         if isinstance(issue, dict):
             return issue
+        if "/" in note or "\\" in note or note.endswith(".md"):
+            return self._error("path_not_authorized", "Path is not authorized")
         return self.backend.handle_action(
-            "move_note", {"path": note, "target_issue": issue}
+            "move_note", {"document_id": note, "target_issue": issue}
         )
 
     def merge_notes(
@@ -445,7 +451,9 @@ class FunesPyWebViewApi:
         note = self._text(note_id, "note_id")
         if isinstance(note, dict):
             return note
+        if "/" in note or "\\" in note or note.endswith(".md"):
+            return self._error("path_not_authorized", "Path is not authorized")
         try:
-            return self.backend.handle_action(action, {"path": note})
+            return self.backend.handle_action(action, {"document_id": note})
         except PathAuthorizationError as error:
             return {"error": error.code, "message": str(error)}

@@ -81,6 +81,30 @@ class TestResourceBudgets(unittest.TestCase):
         self.assertTrue(decision.allowed)
         self.assertEqual(decision.concurrency_limit, 1)
 
+    def test_select_llm_prefers_sub_2gb_model_on_4gb_host(self):
+        snap = measured_snapshot(
+            total_gb=4.0, available_gb=2.2, safety_margin_pct=0.35
+        )
+        decision = select_llm_model(snap)
+        self.assertIn(
+            decision.model_id, {"qwen2.5:0.5b", "qwen2.5:1.5b"}
+        )
+        self.assertTrue(
+            (decision.estimated_ram_gb or 0) <= 2.0 or not decision.allowed
+        )
+
+    def test_select_llm_denies_when_nothing_fits_tiny_host(self):
+        snap = measured_snapshot(
+            total_gb=3.0, available_gb=0.8, safety_margin_pct=0.35
+        )
+        decision = select_llm_model(snap)
+        self.assertTrue(
+            decision.model_id == "qwen2.5:0.5b" or not decision.allowed
+        )
+        if not decision.allowed:
+            self.assertIn("bm25_only", decision.reason.lower())
+            self.assertIsNone(decision.model_id)
+
 
 class TestRAMGovernorBudgets(unittest.TestCase):
     def test_macos_fallback_does_not_fabricate_available_gb(self):

@@ -27,6 +27,7 @@ class MeasurementStatus(str, Enum):
 
 # Documented Ollama unload policy (empty prompt + keep_alive=0). Not a force-kill.
 OLLAMA_PURGE_KEEP_ALIVE = 0
+BM25_ONLY_POLICY = "bm25_only"
 
 
 @dataclass(frozen=True)
@@ -119,6 +120,14 @@ class BudgetDecision:
 
 MODEL_CATALOG: Sequence[ModelMetadata] = (
     ModelMetadata(
+        id="qwen2.5:0.5b",
+        name="Qwen 2.5 0.5B (Mínimo - ~4 GB)",
+        estimated_ram_gb=1.0,
+        context_size=8192,
+        concurrency_limit=1,
+        min_ram_gb=2.0,
+    ),
+    ModelMetadata(
         id="qwen2.5:1.5b",
         name="Qwen 2.5 1.5B (Ultraligero - Eco 8GB)",
         estimated_ram_gb=2.0,
@@ -193,7 +202,15 @@ RESOURCE_BUDGETS: Mapping[ResourceKind, ResourceBudget] = {
     ),
 }
 
-_ECO_MODEL = MODEL_CATALOG[0]
+_ECO_MODEL = next(m for m in MODEL_CATALOG if m.id == "qwen2.5:1.5b")
+_ULTRA_ECO_MODEL = next(m for m in MODEL_CATALOG if m.id == "qwen2.5:0.5b")
+
+
+def llm_inference_mode(decision: BudgetDecision) -> str:
+    """Return ``bm25_only`` when chat must skip Ollama, else ``ollama``."""
+    if not decision.allowed or BM25_ONLY_POLICY in decision.reason.lower():
+        return BM25_ONLY_POLICY
+    return "ollama"
 
 
 def get_model_metadata(model_id: str) -> Optional[ModelMetadata]:
@@ -357,21 +374,24 @@ def select_llm_model(snapshot: MemorySnapshot) -> BudgetDecision:
     total = snapshot.total_gb
     assert available is not None and total is not None
 
-    # Tier ladder preserves prior governor behaviour while attaching metadata.
-    if total <= 8.0 or available <= 3.5:
-        chosen = MODEL_CATALOG[0]
+    # Tier ladder: smallest viable model on tight hosts, scale up with headroom.
+    if total < 4.5 or available < 2.0:
+        chosen = _ULTRA_ECO_MODEL
+        tier_reason = f"ultra-eco tier (total_gb={total}, available_gb={available})"
+    elif total <= 8.0 or available <= 3.5:
+        chosen = _ECO_MODEL
         tier_reason = f"eco tier (total_gb={total}, available_gb={available})"
     elif available <= 10.0 or total <= 16.0:
-        chosen = MODEL_CATALOG[1]
+        chosen = MODEL_CATALOG[2]
         tier_reason = f"light tier (total_gb={total}, available_gb={available})"
     elif available <= 20.0 or total <= 32.0:
-        chosen = MODEL_CATALOG[2]
+        chosen = MODEL_CATALOG[3]
         tier_reason = f"standard tier (total_gb={total}, available_gb={available})"
     elif available <= 32.0:
-        chosen = MODEL_CATALOG[3]
+        chosen = MODEL_CATALOG[4]
         tier_reason = f"advanced tier (total_gb={total}, available_gb={available})"
     else:
-        chosen = MODEL_CATALOG[4]
+        chosen = MODEL_CATALOG[5]
         tier_reason = f"max tier (total_gb={total}, available_gb={available})"
 
     headroom = usable_headroom_gb(snapshot)
@@ -402,13 +422,13 @@ def select_llm_model(snapshot: MemorySnapshot) -> BudgetDecision:
                 )
         eco = _ECO_MODEL
         return BudgetDecision(
-            allowed=True,
+            allowed=False,
             resource_kind=ResourceKind.LLM_INFERENCE,
             reason=(
-                f"{tier_reason}; no catalog model fits usable_headroom_gb={headroom}; "
-                f"falling back to {eco.id}"
+                f"{tier_reason}; {BM25_ONLY_POLICY}; no catalog model fits "
+                f"usable_headroom_gb={headroom} (available_gb={available})"
             ),
-            model_id=eco.id,
+            model_id=None,
             estimated_ram_gb=eco.estimated_ram_gb,
             concurrency_limit=eco.concurrency_limit,
             available_gb=available,

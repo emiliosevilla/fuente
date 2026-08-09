@@ -10,12 +10,12 @@ All items below are **P2 or lower**, triaged as deferred minors at final branch 
 | SEC-002 | P2 | CSP / UI | parked | `style-src 'unsafe-inline'` and mock export `innerHTML` scoped to static templates; XSS matrix green for untrusted note content |
 | SEC-003 | P2 | Bridge | parked | Generic `handle_action` success path; contract tests enforce typed APIs for production callers |
 | SEC-004 | P2 | AnythingLLM | parked | Helper website fallback; offline mode blocks non-loopback URLs by default |
-| SEC-005 | P2 | Quarantine UI | parked | `failed_for_review` not listed in active quarantine UI; data remains in canonical quarantine service |
+| SEC-005 | P2 | Quarantine UI | resolved | `list_active_items()` now includes `failed_for_review`; regression in `test_list_active_items_includes_failed_for_review` |
 | SEC-006 | P2 | Tooling | parked | Direct `pytest` launcher Unicode-path quirk; gate and CI use `python3 -m pytest` |
 | SEC-007 | P2 | Indexing | parked | Hardcoded `_Sin_Cuestion` at chunk-index edge; broad TypeError around chunk_markdown kwargs — covered by contract tests |
 | SEC-008 | P2 | Graph | parked | Ingestion auto_link without `current_relative_path`; O(n²) enumerate — performance/minor correctness |
-| SEC-009 | P2 | ETL | parked | COALESCE/orphan-clean edge cases; dual ETLPipeline in console vs lifecycle — recovery matrix green |
-| SEC-010 | P2 | Contracts | parked | GraphLinker output-relative `document_id`; DOCX contract checks ZIP magic only |
+| SEC-009 | P2 | ETL | parked | COALESCE/orphan-clean edge cases; `step2_transcribe` now uses `IngestionApplicationService` (W1-3) but other console paths may still bypass lifecycle |
+| SEC-010 | P2 | Contracts | resolved | `GraphLinker` emits vault-relative `document_id` via `document_id_for_relative_path` (W1-5); DOCX contract ZIP-magic check unchanged |
 | SEC-011 | P2 | Migration | parked | Rollback always refreshes MOC catalog even if apply used `--skip-moc` — documented in migration-guide |
 
 ## Verification

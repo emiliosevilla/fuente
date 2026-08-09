@@ -455,7 +455,10 @@ class VaultMigrator:
             output_dir = self.vault.output_dir
             if not output_dir.exists():
                 continue
-            loop = OptimizadoGraphLoop(output_dir)
+            loop = OptimizadoGraphLoop(
+                output_dir,
+                vault_root=self.vault.config.vault_path,
+            )
             all_notes = loop.linker.enumerate_notes()
             notes_by_issue = loop._notes_by_issue(all_notes)
             note_contents: dict[str, str] = {}

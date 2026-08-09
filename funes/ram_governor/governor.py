@@ -8,6 +8,7 @@ import urllib.request
 from typing import Any, Dict, List, Optional, Set, Union
 
 from funes.ram_governor.budget import (
+    BM25_ONLY_POLICY,
     MODEL_CATALOG,
     OLLAMA_PURGE_KEEP_ALIVE,
     BudgetDecision,
@@ -16,6 +17,7 @@ from funes.ram_governor.budget import (
     evaluate_resource,
     get_model_metadata,
     list_resource_budgets,
+    llm_inference_mode,
     measured_snapshot,
     select_llm_model,
     should_fallback_to_bm25 as budget_should_fallback_to_bm25,
@@ -274,7 +276,9 @@ class RAMGovernor:
     def recommend_model(self) -> str:
         """Selecciona el modelo óptimo garantizando la holgura de RAM para el sistema host."""
         decision = self.recommend_model_decision()
-        return decision.model_id or MODEL_CATALOG[0].id
+        if not decision.allowed or llm_inference_mode(decision) == BM25_ONLY_POLICY:
+            return ""
+        return decision.model_id or ""
 
     def last_budget_decision(self) -> Optional[Dict[str, Any]]:
         if self._last_budget_decision is None:

@@ -64,6 +64,35 @@ def test_optimized_loop_passes_vault_root(tmp_path: Path):
     assert loop.linker.vault_root.resolve() == vault.resolve()
 
 
+def test_optimized_loop_enumerates_notes_once_per_refinement_pass(tmp_path, monkeypatch):
+    output = tmp_path / "4_salida"
+    output.mkdir()
+    (output / "Alpha.md").write_text(
+        _note("Alpha", "# Alpha\n\nContenido de Alpha.\n"),
+        encoding="utf-8",
+    )
+    (output / "Beta.md").write_text(
+        _note("Beta", "# Beta\n\nContenido de Beta.\n"),
+        encoding="utf-8",
+    )
+
+    loop = OptimizadoGraphLoop(output)
+    original_enumerate_notes = loop.linker.enumerate_notes
+    enumeration_calls = 0
+
+    def counted_enumerate_notes():
+        nonlocal enumeration_calls
+        enumeration_calls += 1
+        return original_enumerate_notes()
+
+    monkeypatch.setattr(loop.linker, "enumerate_notes", counted_enumerate_notes)
+
+    result = loop.refine_knowledge_graph()
+
+    assert result["status"] == "success"
+    assert enumeration_calls == 1
+
+
 def test_duplicate_stems_across_issues_do_not_collide(tmp_path: Path):
     output = tmp_path / "4_salida"
     issue_a = output / "Contratos"
@@ -110,6 +139,32 @@ def test_duplicate_stems_across_issues_do_not_collide(tmp_path: Path):
     assert "Contratos/Obligaciones" in body
     assert "[[Contratos/Obligaciones" in body
     assert "Historia/Obligaciones" not in body
+
+
+def test_auto_link_uses_supplied_catalog_without_reenumerating(tmp_path, monkeypatch):
+    output = tmp_path / "4_salida"
+    output.mkdir()
+    (output / "Actual.md").write_text(
+        _note("Actual", "# Actual\n\nTexto relacionado.\n"),
+        encoding="utf-8",
+    )
+    (output / "Relacionado.md").write_text(
+        _note("Relacionado", "# Relacionado\n\nContenido.\n"),
+        encoding="utf-8",
+    )
+    linker = GraphLinker(output)
+    catalog = linker.enumerate_notes()
+    monkeypatch.setattr(
+        linker,
+        "enumerate_notes",
+        lambda: (_ for _ in ()).throw(AssertionError("unexpected rescan")),
+    )
+
+    linker.auto_link_content(
+        _note("Actual", "# Actual\n\nTexto relacionado.\n"),
+        "Actual",
+        note_catalog=catalog,
+    )
 
 
 def test_duplicate_stem_refine_does_not_cross_link_own_title(tmp_path: Path):

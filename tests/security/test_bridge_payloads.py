@@ -13,6 +13,15 @@ from funes.extractors.extended_formats import ExtendedFormatsExtractor
 from funes.ui.bridge import FunesPyWebViewApi
 
 
+def test_backend_unknown_action_fails_closed(temp_vault_path):
+    backend = FunesConsoleBackend(temp_vault_path)
+
+    assert backend.handle_action("not_registered", {}) == {
+        "error": "action_not_allowed",
+        "message": "Acción no permitida",
+    }
+
+
 def test_bridge_rejects_unknown_actions_and_malformed_payloads(temp_vault_path):
     bridge = FunesPyWebViewApi(FunesConsoleBackend(temp_vault_path))
 

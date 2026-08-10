@@ -5,7 +5,7 @@ import logging
 import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Sequence
 
 from funes.core.vault import document_id_for_relative_path
 from funes.domain.documents import MarkdownDocument
@@ -180,9 +180,10 @@ class GraphLinker:
         current_title: str,
         *,
         current_relative_path: str | None = None,
+        note_catalog: Sequence[NoteLinkTarget] | None = None,
     ) -> str:
         """Insert [[WikiLinks]] into the body only; never frontmatter or code."""
-        notes = self.enumerate_notes()
+        notes = list(note_catalog) if note_catalog is not None else self.enumerate_notes()
         # Longer stems first so specific titles win over shorter substrings.
         unique_stems = sorted({note.stem for note in notes}, key=len, reverse=True)
         current_rel = self._normalize_relative_path(current_relative_path)

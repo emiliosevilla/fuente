@@ -25,16 +25,18 @@ class OptimizadoGraphLoop:
         self.interval_sec = interval_sec
         self.linker = GraphLinker(self.output_dir, vault_root=self.vault_root)
         self._stop_event = threading.Event()
+        self._operation_lock = threading.Lock()
         self._thread = None
         self._last_max_mtime = 0.0
 
     def set_output_dir(self, output_dir: Path) -> None:
         """Retarget continuous refine to a new theme output root without restarting the thread."""
-        self.output_dir = Path(output_dir)
-        self.linker = GraphLinker(self.output_dir, vault_root=self.vault_root)
-        # Force the next pass to treat the new tree as unseen.
-        self._last_max_mtime = 0.0
-        logger.info("OptimizadoGraphLoop retargeted to: %s", self.output_dir)
+        with self._operation_lock:
+            self.output_dir = Path(output_dir)
+            self.linker = GraphLinker(self.output_dir, vault_root=self.vault_root)
+            # Force the next pass to treat the new tree as unseen.
+            self._last_max_mtime = 0.0
+            logger.info("OptimizadoGraphLoop retargeted to: %s", self.output_dir)
 
     def start(self) -> None:
         """Inicia el bucle de mantenimiento de grafo en un hilo secundario."""
@@ -76,6 +78,11 @@ class OptimizadoGraphLoop:
         return grouped
 
     def refine_knowledge_graph(self, target_issue: str = None) -> dict:
+        """Serialize every refinement against theme retargeting and other calls."""
+        with self._operation_lock:
+            return self._refine_knowledge_graph(target_issue=target_issue)
+
+    def _refine_knowledge_graph(self, target_issue: str = None) -> dict:
         """Re-link notes and rebuild the MOC from the full recursive output scope.
 
         When ``target_issue`` is set, only that issue's note bodies and master
@@ -85,7 +92,8 @@ class OptimizadoGraphLoop:
         if not self.output_dir.exists():
             return {"status": "empty", "processed_notes": 0}
 
-        all_notes = self.linker.enumerate_notes()
+        catalog = tuple(self.linker.enumerate_notes())
+        all_notes = list(catalog)
         notes_by_issue = self._notes_by_issue(all_notes)
 
         processed_notes_count = 0
@@ -111,6 +119,7 @@ class OptimizadoGraphLoop:
                             content,
                             note.stem,
                             current_relative_path=note.relative_path,
+                            note_catalog=catalog,
                         )
                         if updated_content != content:
                             note_path.write_text(updated_content, encoding="utf-8")

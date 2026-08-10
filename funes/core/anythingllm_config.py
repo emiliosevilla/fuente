@@ -4,6 +4,7 @@ import json
 import sqlite3
 import logging
 import subprocess
+import webbrowser
 from pathlib import Path
 from typing import Optional, Dict, Any
 
@@ -125,10 +126,9 @@ def launch_anythingllm() -> bool:
                 subprocess.Popen([str(app_path)])
                 return True
 
-        # Fallback si no está instalado: abre la web oficial sin lanzar error de CMD
+        # No browser or installer fallback belongs in a launch action. The
+        # explicit installer flow is the only path allowed to install it.
         logger.warning("AnythingLLM Desktop no se encuentra instalado.")
-        import webbrowser
-        webbrowser.open("https://anythingllm.com/desktop")
         return False
     except Exception as e:
         logger.error(f"Error abriendo AnythingLLM: {e}")

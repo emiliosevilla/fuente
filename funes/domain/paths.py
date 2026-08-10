@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import uuid
-from pathlib import Path, PureWindowsPath
+from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Literal
 
 from funes.domain.errors import PathAuthorizationError
@@ -92,6 +92,33 @@ class AuthorizedPathResolver:
         if len(matches) != 1:
             raise PathAuthorizationError()
         return matches[0]
+
+    def resolve_wikilink_target(self, target: str) -> Path:
+        """Resolve a basename or output-relative path used by a wikilink."""
+        raw = target.strip()
+        if not raw or "\x00" in raw or "\\" in raw:
+            raise PathAuthorizationError()
+
+        raw_parts = raw.split("/")
+        if any(part in {".", ".."} for part in raw_parts):
+            raise PathAuthorizationError()
+
+        posix = PurePosixPath(raw)
+        if (
+            posix.is_absolute()
+            or raw in {".", ".."}
+            or ".." in posix.parts
+            or "." in posix.parts
+        ):
+            raise PathAuthorizationError()
+
+        if len(posix.parts) == 1:
+            filename = posix.name + ("" if posix.suffix else ".md")
+            return self.resolve_unique_note_basename(filename)
+
+        relative = posix if posix.suffix else posix.with_suffix(".md")
+        output_prefix = self.roots["output"].relative_to(self.roots["vault"])
+        return self.resolve_note((output_prefix / relative).as_posix())
 
     def resolve_quarantine(self, filename: str) -> Path:
         """Resolve a Markdown quarantine identifier, which must be a basename."""

@@ -187,7 +187,7 @@ Usa `PYTHONDONTWRITEBYTECODE=1` para no generar bytecode rastreado (`*.pyc`, `__
 PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -q
 ```
 
-La suite actual supera las 500 pruebas (unitarias, integración, seguridad, contratos). Consulta el resumen al final de la ejecución.
+La suite actual contiene **733 tests collected**: **732 passed** y **1 skipped**, con un warning externo de deprecación de ChromaDB. La medición se obtuvo con `PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -p no:cacheprovider tests -q`.
 
 ### Release gate (pre-publicación)
 

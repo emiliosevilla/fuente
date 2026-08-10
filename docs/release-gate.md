@@ -1,6 +1,6 @@
 # Release gate
 
-Funes ships a **fail-closed release gate** that must pass before tagging or publishing a build. The gate encodes every checklist item from the hardening plan Task 8.5.
+Funes ships a **fail-closed release gate** that must pass before tagging or publishing a build. The gate encodes the completed hardening, residual-security, and productization checks.
 
 ## Run the gate
 

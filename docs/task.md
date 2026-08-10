@@ -1,8 +1,8 @@
 # Funes — Tablero de estado (task.md)
 
-> **Checkout medido:** `dev` / `main` / `origin` = `fc2c069` (2026-08-09)  
-> **Plan de hardening cerrado:** [`docs/superpowers/plans/2026-08-07-funes-hardening-and-implementation.md`](superpowers/plans/2026-08-07-funes-hardening-and-implementation.md) (tareas 0.1–8.5)  
-> **Siguiente plan ejecutable (Wave 1):** [`docs/superpowers/plans/2026-08-09-funes-productization-wave.md`](superpowers/plans/2026-08-09-funes-productization-wave.md)  
+> **Checkout medido:** `dev` / `main` / `origin` = `5ec6c17` (2026-08-11)
+> **Estado:** hardening, Wave 1, residual hardening y Wave 2 completados; los ledgers SDD conservan el detalle histórico y la evidencia por tarea.
+> **Ledgers:** [Wave 1](../.superpowers/sdd/2026-08-09-funes-productization-wave/progress.md), [residual hardening](../.superpowers/sdd/2026-08-10-funes-residual-hardening/progress.md), [Wave 2](../.superpowers/sdd/2026-08-10-funes-productization-wave-2/progress.md)
 > **Gate:** `PYTHONDONTWRITEBYTECODE=1 python3 scripts/release_gate.py`
 
 ---
@@ -51,7 +51,7 @@
 - Matrices security / recovery / contract; `scripts/migrate_vault.py` + guía; **release gate** fail-closed + smoke migrate→ingest→approve→retrieve→export→rollback.
 
 ### Resultado neto
-Núcleo **seguro, recuperable y medible**. No es todavía un producto UX cerrado: varios contratos de backend no están cableados a la consola.
+Núcleo **seguro, recuperable y medible**, con sus contratos de backend cableados a la consola y las superficies de operación de Wave 2 verificadas.
 
 ---
 
@@ -67,14 +67,13 @@ Núcleo **seguro, recuperable y medible**. No es todavía un producto UX cerrado
 | W1-6 | Honestidad README: graph loop acotado a lifecycle / pasadas bajo demanda |
 | W1-7 | Tier ultra-bajo RAM (&lt;8 GB / ~4 GB): catálogo `qwen2.5:0.5b` + BM25-only |
 
-**Verificación Wave 1 (Task 8, 2026-08-09):** ✅ cerrada con reservas.
+**Verificación Wave 1 (Task 8, 2026-08-09):** ✅ completada.
 - Suites focalizadas Wave 1: **96 passed** (cuarentena, ingesta step2, bridge CRUD, RAM tier, contract/, security/).
-- `release_gate.py`: **verde salvo `source_tree_clean`** (árbol sucio intencional pre-commit).
-- **Nota:** `test_adversarial_binary_junk_file` falló 2× en matriz unit completa (`InvalidModelOutputError` / `os.urandom`); pasó en aislamiento — flake preexistente, no regresión Wave 1.
+- Las reservas históricas de `source_tree_clean`, `RAMGovernor` y `test_adversarial_binary_junk_file` quedaron resueltas por los cierres posteriores y el gate final.
 
 ---
 
-## Queda por hacer (priorizado)
+## Estado de cierre
 
 ### P0 — Completar contratos ya existentes en la UI (Wave 1 del plan)
 
@@ -90,7 +89,7 @@ _Wave 1 P0 + Task 8 verification gate cerrados — ver tabla y nota de verificac
 | ~~W1-6~~ | ~~Honestidad README graph loop~~ | _done_ | — |
 | ~~W1-7~~ | ~~Tier ultra-bajo RAM~~ | _done_ | — |
 
-### P1 — Residuales de seguridad / calidad (parked P2 → cerrar o documentar)
+### P1 — Residuales de seguridad / calidad
 
 Ver [`docs/security-residual-findings.md`](security-residual-findings.md) (SEC-001…011). Priorizar al cerrar Wave 1:
 - [x] Wikilinks `[[dir/note]]` — SEC-001/SEC-008 resueltos con regresiones de paths y grafo.
@@ -98,17 +97,17 @@ Ver [`docs/security-residual-findings.md`](security-residual-findings.md) (SEC-0
 - [x] AnythingLLM website fallback — SEC-004 resuelto; fallback sin navegador y política offline cubiertos.
 - [x] DOCX contract body-deep; dual ETLPipeline console vs lifecycle — exportación y ciclo ETL cubiertos por sus contratos focalizados.
 
-### Verificación residual (Task 9A/9B, 2026-08-10)
+### Verificación residual y gate final (2026-08-10 → 2026-08-11)
 
 - Matriz residual enfocada: **167 passed**, con un warning externo de deprecación de Chroma.
 - `PYTHONDONTWRITEBYTECODE=1 python3 -m pytest --collect-only -q`: **585 collected**.
-- La medición histórica de Wave 1 registró `PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -q`: **584 passed, 1 skipped**, con un warning externo de deprecación de ChromaDB; no se reutiliza para declarar la suite completa de Wave 2 en este checkout.
+- La suite actual mide **733 collected**, **732 passed** y **1 skipped**, con un warning externo de deprecación de ChromaDB.
 - Los fallos globales de `RAMGovernor` quedaron resueltos alineando los tests legacy con la decisión explícita `bm25_only` y bloqueando el bypass del instalador.
-- El texto preexistente registraba un checkpoint histórico posterior al merge con resultado `READY`; no describe este checkout. Actualmente hay cambios sin publicar, por lo que no se afirma árbol limpio ni release gate vigente. El gate de release requiere un checkpoint limpio autorizado.
+- El checkpoint actual está limpio y `scripts/release_gate.py` devuelve `RESULT: READY`; el warning de ChromaDB procede de telemetría de una dependencia externa.
 
 ### Wave 2 — productización (Task 11, 2026-08-10)
 
-La evidencia focalizada de este checkout cubre el comportamiento de Wave 2 y se complementa con la medición exacta de la suite completa; ambas siguen separadas del release gate. Se marca como entregado únicamente lo que tiene evidencia medida:
+La evidencia focalizada de este checkout se complementa con la suite completa y el release gate final; no quedan tareas funcionales pendientes en Wave 2:
 
 | Área | Estado documentado | Evidencia medida |
 |------|--------------------|------------------|
@@ -121,9 +120,9 @@ La evidencia focalizada de este checkout cubre el comportamiento de Wave 2 y se 
 | Demo offline collision-safe | ✅ Entregado | Smoke demo/Vault/review-export: **14 passed**; instalación explícita, idempotente, atómica y bloqueada ante colisiones, sin proceso/red externos. |
 | AnythingLLM | ✅ Entregado | Es una integración externa opt-in; no es prerrequisito ni participa en el camino por defecto. |
 
-Verificaciones adicionales de Tarea 10 (demo/package/path/UI): **86 passed**. La orden exacta de suite completa `PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -p no:cacheprovider tests -q`, ejecutada después de añadir el smoke integrado de Task 11, quedó medida en **732 passed, 1 skipped**, con **1 warning externo de deprecación de ChromaDB**. Esta medición no declara verde `scripts/release_gate.py`: el release gate y el árbol limpio siguen pendientes de un checkpoint limpio autorizado.
+Verificaciones adicionales de Tarea 10 (demo/package/path/UI): **86 passed**. El smoke integrado de Task 11 pasa en un Vault temporal y cubre demo → BM25 Eco → approve → Markdown/DOCX → reinstalación idempotente. El release gate final devuelve `READY`.
 
-### P2 — Estado histórico de propuestas de Wave 2
+### P2 — Estado histórico y límites deliberados
 
 Estas propuestas constaban como trabajo futuro antes de Wave 2. Las superficies incluidas en Task 11 quedan cubiertas por la evidencia focalizada anterior; no deben interpretarse como pendientes del checkout actual:
 
@@ -146,12 +145,12 @@ Estas propuestas constaban como trabajo futuro antes de Wave 2. Las superficies 
 
 ## Cómo trabajar esto
 
-1. Wave 1 y sus verificaciones quedan como histórico del desarrollo (`subagent-driven-development` o `executing-plans`).
-2. Wave 2 se documenta con evidencia focalizada por tarea; la suite completa y el release gate quedan separados del cierre documental.
-3. Cualquier cambio posterior debe conservar el gate de release fail-closed y ejecutarlo solo desde un checkpoint limpio autorizado.
+1. Wave 1, residual hardening y Wave 2 quedan como histórico detallado en sus ledgers SDD.
+2. TipTap, LLM cloud por defecto, SaaS sync, telemetría comercial y rediseño visual sin contrato siguen fuera de alcance.
+3. Cualquier cambio posterior debe conservar el gate fail-closed y actualizar esta fuente de verdad junto con su evidencia.
 
 ---
 
 ## Definition of Done del producto (sigue vigente)
 
-La DoD del hardening (§13 del plan 2026-08-07) sigue siendo la barra. Wave 1 cerró el **hueco UI/contrato** de cuarentena e ingesta manual y endureció el **camino &lt;8 GB**. Wave 2 añade política Eco, operación visible, aprobación/exportación y demo offline sin romper el core local-first; su release final sigue pendiente del checkpoint autorizado indicado arriba.
+La DoD histórica del hardening quedó satisfecha. Wave 1 cerró el **hueco UI/contrato** de cuarentena e ingesta manual y endureció el **camino &lt;8 GB**. Wave 2 añadió política Eco, operación visible, aprobación/exportación y demo offline sin romper el core local-first; el gate final está en `READY`.

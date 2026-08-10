@@ -12,6 +12,7 @@ from funes.infrastructure.atomic_files import atomic_write_json
 
 logger = logging.getLogger(__name__)
 DEFAULT_OLLAMA_URL = "http://localhost:11434"
+DEFAULT_ISSUE = "_Sin_Cuestion"
 
 
 def is_loopback_ollama_url(url: str) -> bool:
@@ -103,7 +104,7 @@ DEFAULT_ATOMIC_NOTE_TEMPLATE = serialize_frontmatter({
     "date": "{date}",
     "author": "{author}",
     "tags": [],
-    "issue": "_Sin_Cuestion",
+    "issue": DEFAULT_ISSUE,
     "status": "pending_review",
     "sources": [],
     "history": [],

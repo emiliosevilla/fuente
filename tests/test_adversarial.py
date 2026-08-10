@@ -1,34 +1,41 @@
-import os
 import sys
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+from funes.application.ingestion import IngestionApplicationService
 from funes.config import get_default_config
-from funes.domain.frontmatter import serialize_frontmatter
+from funes.domain.frontmatter import parse_frontmatter, serialize_frontmatter
 from funes.core.vault import VaultManager
 from funes.extractors.registry import ExtractorRegistry
 from funes.extractors.office_pdf import TextAndOfficeExtractor
 from funes.extractors.tex_tm import TeXAndTeXmacsExtractor
+from funes.graph_engine.linker import GraphLinker
+from funes.infrastructure.sqlite_store import JobStore
 from funes.ram_governor.governor import RAMGovernor
 from funes.rag.chroma_store import ChromaStore
 from funes.rag.semantic_chunker import SemanticChunker
-from funes.graph_engine.linker import GraphLinker
 from funes.watcher.watcher import ETLPipeline, wait_until_file_stable
+from tests.integration.conftest import FakeChroma, FakeGenerator, FakeGovernor
 
 
 class TestAdversarial(unittest.TestCase):
 
     def setUp(self):
-        from tests.conftest import patch_abundant_ram
-
         self.temp_dir = tempfile.TemporaryDirectory()
         self.vault_path = Path(self.temp_dir.name)
         self.config = get_default_config(self.vault_path)
         self.vault = VaultManager(self.config.vault)
-        self.pipeline = ETLPipeline(self.config)
-        patch_abundant_ram(self.pipeline.ram_governor)
+        self.pipeline = None
+
+    def _legacy_pipeline(self):
+        if self.pipeline is None:
+            from tests.conftest import patch_abundant_ram
+
+            self.pipeline = ETLPipeline(self.config)
+            patch_abundant_ram(self.pipeline.ram_governor)
+        return self.pipeline
 
     def tearDown(self):
         self.temp_dir.cleanup()
@@ -78,18 +85,60 @@ E = mc^2
         self.assertIn("E = mc^2", content)
 
     def test_adversarial_binary_junk_file(self):
-        """Prueba ingesta de archivo de 1MB de bytes aleatorios (basura binaria)."""
+        """Completa durablemente una ingesta binaria determinista y offline."""
+        payload = bytes(range(256)) * 4096
         junk_file = self.config.vault.input_dir / "basura_random.bin"
-        with open(junk_file, "wb") as f:
-            f.write(os.urandom(1024 * 1024))
+        junk_file.write_bytes(payload)
 
         registry = ExtractorRegistry()
         content, meta = registry.extract(junk_file)
-        self.assertIsInstance(content, str)
-        self.assertIsInstance(meta, dict)
+        expected_content = payload.decode("utf-8", errors="ignore").replace(
+            "\r", "\n"
+        )
+        self.assertEqual(content, expected_content)
+        self.assertEqual(
+            meta,
+            {"original_file": "basura_random.bin", "format": ".bin"},
+        )
 
-        res = self.pipeline.process_file(junk_file)
-        self.assertTrue(res)
+        job_store = JobStore(self.vault_path)
+        service = IngestionApplicationService(
+            config=self.config,
+            vault=self.vault,
+            job_store=job_store,
+            extractors=registry,
+            chunker=SemanticChunker(),
+            chroma=FakeChroma(),
+            atomic_generator=FakeGenerator(),
+            linker=GraphLinker(self.vault.output_dir),
+            ram_governor=FakeGovernor(),
+            stabilize=lambda path: path.is_file() and path.stat().st_size > 0,
+        )
+        source_identity = service.vault_relative_identity(junk_file)
+
+        try:
+            submitted = service.submit(source_identity)
+            self.assertEqual(submitted.stage, "stabilized")
+            self.assertEqual(submitted.status, "pending")
+            self.assertTrue(junk_file.exists())
+
+            completed = service.resume(submitted.job_id)
+            self.assertEqual(completed.stage, "completed")
+            self.assertEqual(completed.status, "completed")
+            self.assertFalse(junk_file.exists())
+
+            output_notes = sorted(self.vault.output_dir.rglob("*.md"))
+            self.assertEqual(len(output_notes), 1)
+            note_metadata, note_body = parse_frontmatter(
+                output_notes[0].read_text(encoding="utf-8")
+            )
+            self.assertEqual(note_metadata["schema_version"], 1)
+            self.assertEqual(note_metadata["title"], "basura_random")
+            self.assertEqual(note_metadata["status"], "pending_review")
+            self.assertEqual(note_metadata["sources"], ["basura_random.bin"])
+            self.assertTrue(note_body.startswith("# basura_random\n\n"))
+        finally:
+            job_store.close()
 
     def test_adversarial_corrupted_utf8_file(self):
         """Prueba lectura de archivo con secuencia de bytes UTF-8 inválida."""
@@ -195,7 +244,7 @@ Esta es una Nota normal.
 
         for i in range(20):
             p = self.config.vault.input_dir / f"archivo_masivo_{i:02d}.txt"
-            res = self.pipeline.process_file(p)
+            res = self._legacy_pipeline().process_file(p)
             self.assertTrue(res)
 
         out_count = len(list(self.config.vault.output_dir.glob("archivo_masivo_*.md")))

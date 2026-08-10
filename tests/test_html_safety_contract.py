@@ -1,4 +1,5 @@
 from pathlib import Path
+import re
 
 from funes.control_console import FunesConsoleBackend
 from funes.core.vault import document_id_for_relative_path
@@ -64,3 +65,49 @@ def test_webview_csp_blocks_inline_scripts_and_search_uses_dom_nodes():
     assert "script-src 'self'" in csp
     assert "'unsafe-inline'" not in csp.split("script-src", 1)[1].split(";", 1)[0]
     assert "readerContent.innerHTML =" not in source
+
+
+def test_console_has_no_inner_html_assignment():
+    source = (Path(__file__).resolve().parent.parent / "consola_preview.html").read_text(
+        encoding="utf-8"
+    )
+    assert re.search(r"\.innerHTML\s*=", source) is None
+
+
+def test_console_has_no_inline_style_execution():
+    source_path = Path(__file__).resolve().parent.parent / "consola_preview.html"
+    source = source_path.read_text(encoding="utf-8")
+    assert "style-src 'self' 'unsafe-inline'" not in source
+    assert "<style" not in source.lower()
+    assert re.search(r"\sstyle\s*=", source, re.I) is None
+    assert ".style.cssText" not in source
+    assert ".style." not in source
+    assert (source_path.parent / "funes/ui/static/console.css").is_file()
+
+
+def test_console_stylesheet_link_resolves_to_local_packaged_css():
+    source_path = Path(__file__).resolve().parent.parent / "consola_preview.html"
+    source = source_path.read_text(encoding="utf-8")
+    link = re.search(
+        r"<link\s+rel=[\"']stylesheet[\"']\s+href=[\"']([^\"']+)[\"']",
+        source,
+        re.I,
+    )
+
+    assert link is not None
+    href = link.group(1)
+    assert href == "funes/ui/static/console.css"
+
+    resolved_css = (source_path.parent / href).resolve()
+    packaged_css = (source_path.parent / "funes/ui/static/console.css").resolve()
+    assert resolved_css.is_file()
+    assert resolved_css == packaged_css
+    assert resolved_css.read_bytes() == packaged_css.read_bytes()
+
+
+def test_hostile_filename_is_inserted_as_text():
+    source = (Path(__file__).resolve().parent.parent / "consola_preview.html").read_text(
+        encoding="utf-8"
+    )
+    assert re.search(r"filename\.textContent\s*=\s*note\.", source)
+    assert "filename.innerHTML" not in source

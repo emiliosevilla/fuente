@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Literal
 import logging
 
-from funes.config import VaultConfig
+from funes.config import DEFAULT_ISSUE, VaultConfig
 from funes.domain.documents import MarkdownDocument
 from funes.domain.frontmatter import FrontmatterError, serialize_frontmatter
 from funes.domain.errors import PathAuthorizationError
@@ -300,12 +300,13 @@ class VaultManager:
             "date": "",
             "author": "",
             "tags": [],
-            "issue": "_Sin_Cuestion",
+            "issue": DEFAULT_ISSUE,
             "status": "pending_review",
             "sources": [],
             "history": [],
             **metadata,
         }
+        document_metadata["issue"] = document_metadata.get("issue") or DEFAULT_ISSUE
         full_content = serialize_frontmatter(document_metadata) + content
 
         atomic_write_text(clean_path, full_content)
@@ -313,8 +314,8 @@ class VaultManager:
         logger.info(f"Guardado en 3_limpio: {clean_path.name}")
         return clean_path
 
-    def save_atomic_note(self, title: str, content: str, issue_name: str = "", source_ext: str = "") -> Path:
-        """Guarda una nota atómica estructurada en 4_salida (o 4_salida/<issue_name> si se especifica)."""
+    def atomic_note_path(self, title: str, issue_name: str = "", source_ext: str = "") -> Path:
+        """Resolve the authorized path for an atomic note without writing it."""
         safe_title = self.sanitize_filename(title)
         if not safe_title:
             safe_title = "Nota_Sin_Titulo"
@@ -331,6 +332,11 @@ class VaultManager:
         output_path = self.path_resolver().resolve_note(
             self._vault_relative_identity(output_path)
         )
+        return output_path
+
+    def save_atomic_note(self, title: str, content: str, issue_name: str = "", source_ext: str = "") -> Path:
+        """Guarda una nota atómica estructurada en 4_salida (o 4_salida/<issue_name> si se especifica)."""
+        output_path = self.atomic_note_path(title, issue_name, source_ext)
         target_issue_dir = output_path.parent
         target_issue_dir.mkdir(parents=True, exist_ok=True)
 

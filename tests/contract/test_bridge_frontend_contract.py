@@ -11,8 +11,12 @@ from funes.ui.bridge import FunesPyWebViewApi
 
 from tests.contract.conftest import CONSOLA_HTML
 
-WEBVIEW_CALL_PATTERN = re.compile(r"window\.pywebview\.api\.([A-Za-z_]\w*)\(")
-TRIGGER_ACTION_PATTERN = re.compile(r"triggerAction\('([A-Za-z_]\w*)'")
+WEBVIEW_CALL_PATTERN = re.compile(
+    r"(?:window\.)?pywebview\.api\.([A-Za-z_]\w*)\s*\("
+)
+TRIGGER_ACTION_PATTERN = re.compile(
+    r"triggerAction\(\s*['\"]([A-Za-z_]\w*)['\"]"
+)
 
 
 def _bridge_public_methods() -> set[str]:
@@ -62,6 +66,13 @@ def test_every_frontend_direct_bridge_call_is_exposed():
     called = _frontend_direct_calls()
     exposed = _bridge_public_methods()
     assert called, "consola_preview.html must call at least one bridge method"
+    assert called <= exposed, called - exposed
+
+
+def test_frontend_bridge_calls_use_the_typed_api_inventory():
+    source = CONSOLA_HTML.read_text(encoding="utf-8")
+    called = set(WEBVIEW_CALL_PATTERN.findall(source))
+    exposed = _bridge_public_methods()
     assert called <= exposed, called - exposed
 
 

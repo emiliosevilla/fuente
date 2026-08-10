@@ -17,8 +17,9 @@ import logging.handlers
 import subprocess
 import threading
 import webbrowser
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional, Dict, Any, List
+from typing import Mapping, Optional, Dict, Any, List
 
 if sys.platform == "win32":
     if hasattr(sys.stdout, "reconfigure"):
@@ -30,6 +31,7 @@ import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
 
 from funes.application.chat import ChatApplicationService, OllamaChatProvider
+from funes.application.ingestion import IngestionApplicationService, SourceNotStableError
 from funes.application.lifecycle import ApplicationLifecycle
 from funes.application.export import (
     ExportApplicationService,
@@ -131,6 +133,57 @@ THEME = {
 FONT_TYPEWRITER = "Courier"
 
 
+@dataclass(frozen=True)
+class QuarantineItemView:
+    """Presentation data and allowed actions for one active quarantine item."""
+
+    status_label: str
+    can_restore: bool
+    quarantine_id: str = ""
+    original_filename: str = ""
+    timestamp: str = ""
+    error_message: str = ""
+
+
+def quarantine_item_view(item: Mapping[str, Any]) -> QuarantineItemView:
+    """Map a quarantine record to fail-closed, renderable UI semantics."""
+
+    status = item.get("status")
+    if status == "quarantined":
+        status_label = "Cuarentena"
+        can_restore = True
+    elif status == "failed_for_review":
+        status_label = "Revisión manual"
+        can_restore = False
+    else:
+        status_label = "Revisión manual"
+        can_restore = False
+
+    return QuarantineItemView(
+        status_label=status_label,
+        can_restore=can_restore,
+        quarantine_id=str(item.get("quarantine_id") or ""),
+        original_filename=str(item.get("original_filename") or ""),
+        timestamp=str(item.get("timestamp") or ""),
+        error_message=str(item.get("error_message") or ""),
+    )
+
+
+class _TkWidgetFactory:
+    """Small production adapter so the renderer can use recording fakes."""
+
+    def frame(self, parent, **kwargs):
+        return tk.Frame(parent, **kwargs)
+
+    def label(self, parent, **kwargs):
+        return tk.Label(parent, **kwargs)
+
+    def button(self, parent, *, command=None, command_callback=None, **kwargs):
+        if command == "restore":
+            command = command_callback
+        return tk.Button(parent, command=command, **kwargs)
+
+
 class QuarantineModal(tk.Toplevel):
     """Modal flotante Papiro para Cuarentena."""
 
@@ -145,36 +198,78 @@ class QuarantineModal(tk.Toplevel):
 
         self._setup_ui()
 
-    def _setup_ui(self):
-        hdr = tk.Frame(self, bg=THEME["bg_card"], padx=20, pady=12, highlightbackground=THEME["border"], highlightthickness=1)
+    def _setup_ui(self, widget_factory=None):
+        widget_factory = widget_factory or _TkWidgetFactory(self)
+
+        hdr = widget_factory.frame(self, bg=THEME["bg_card"], padx=20, pady=12, highlightbackground=THEME["border"], highlightthickness=1)
         hdr.pack(fill="x")
 
-        tk.Label(hdr, text="ARCHIVOS EN CUARENTENA Y AVISOS DE INGESTA", font=(FONT_TYPEWRITER, 13, "bold"), fg=THEME["red"], bg=THEME["bg_card"]).pack(side="left")
+        widget_factory.label(hdr, text="ARCHIVOS EN CUARENTENA Y AVISOS DE INGESTA", font=(FONT_TYPEWRITER, 13, "bold"), fg=THEME["red"], bg=THEME["bg_card"]).pack(side="left")
 
         items = self.quarantine_service.list_active_items()
 
         if not items:
-            empty_frame = tk.Frame(self, bg=THEME["bg_root"], pady=60)
+            empty_frame = widget_factory.frame(self, bg=THEME["bg_root"], pady=60)
             empty_frame.pack(fill="both", expand=True)
-            tk.Label(empty_frame, text="[OK] No hay ningún archivo en cuarentena. La bóveda está limpia.", font=(FONT_TYPEWRITER, 11, "bold"), fg=THEME["green"], bg=THEME["bg_root"]).pack()
+            widget_factory.label(empty_frame, text="[OK] No hay ningún archivo en cuarentena. La bóveda está limpia.", font=(FONT_TYPEWRITER, 11, "bold"), fg=THEME["green"], bg=THEME["bg_root"]).pack()
             return
 
-        container = tk.Frame(self, bg=THEME["bg_root"], padx=20, pady=15)
+        container = widget_factory.frame(self, bg=THEME["bg_root"], padx=20, pady=15)
         container.pack(fill="both", expand=True)
 
         for item in items:
-            card = tk.Frame(container, bg=THEME["bg_card"], highlightbackground=THEME["border"], highlightthickness=1, padx=14, pady=10)
-            card.pack(fill="x", pady=6)
+            self._render_item_card(container, quarantine_item_view(item), widget_factory)
 
-            top_line = tk.Frame(card, bg=THEME["bg_card"])
-            top_line.pack(fill="x")
+    def _render_item_card(self, parent, view: QuarantineItemView, widget_factory):
+        card = widget_factory.frame(
+            parent,
+            bg=THEME["bg_card"],
+            highlightbackground=THEME["border"],
+            highlightthickness=1,
+            padx=14,
+            pady=10,
+        )
+        card.pack(fill="x", pady=6)
 
-            tk.Label(top_line, text=f"Archivo: {item['original_filename']}", font=(FONT_TYPEWRITER, 10, "bold"), fg=THEME["paper"], bg=THEME["bg_card"]).pack(side="left")
-            tk.Label(top_line, text=f"Fecha: {item['timestamp']}", font=(FONT_TYPEWRITER, 9), fg=THEME["muted"], bg=THEME["bg_card"]).pack(side="right")
+        top_line = widget_factory.frame(card, bg=THEME["bg_card"])
+        top_line.pack(fill="x")
 
-            tk.Label(card, text=f"Causa: {item['error_message']}", font=(FONT_TYPEWRITER, 10), fg=THEME["paper"], bg=THEME["bg_card"], anchor="w", justify="left").pack(fill="x", pady=(4, 6))
+        widget_factory.label(
+            top_line,
+            text=f"Archivo: {view.original_filename}",
+            font=(FONT_TYPEWRITER, 10, "bold"),
+            fg=THEME["paper"],
+            bg=THEME["bg_card"],
+        ).pack(side="left")
+        widget_factory.label(
+            top_line,
+            text=f"Fecha: {view.timestamp}",
+            font=(FONT_TYPEWRITER, 9),
+            fg=THEME["muted"],
+            bg=THEME["bg_card"],
+        ).pack(side="right")
 
-            btn_rest = tk.Button(
+        widget_factory.label(
+            card,
+            text=f"Estado: {view.status_label}",
+            font=(FONT_TYPEWRITER, 9, "bold"),
+            fg=THEME["red"] if not view.can_restore else THEME["green"],
+            bg=THEME["bg_card"],
+            anchor="w",
+            justify="left",
+        ).pack(fill="x", pady=(4, 0))
+        widget_factory.label(
+            card,
+            text=f"Causa: {view.error_message}",
+            font=(FONT_TYPEWRITER, 10),
+            fg=THEME["paper"],
+            bg=THEME["bg_card"],
+            anchor="w",
+            justify="left",
+        ).pack(fill="x", pady=(4, 6))
+
+        if view.can_restore:
+            widget_factory.button(
                 card,
                 text="Restaurar y Reintentar",
                 font=(FONT_TYPEWRITER, 9, "bold"),
@@ -183,9 +278,9 @@ class QuarantineModal(tk.Toplevel):
                 relief="solid",
                 bd=1,
                 cursor="hand2",
-                command=lambda qid=item['quarantine_id']: self._restore_action(qid)
-            )
-            btn_rest.pack(side="left")
+                command="restore",
+                command_callback=lambda qid=view.quarantine_id: self._restore_action(qid),
+            ).pack(side="left")
 
     def _restore_action(self, quarantine_id: str):
         if self.on_restore_callback(quarantine_id):
@@ -222,6 +317,32 @@ class FunesConsoleBackend:
         self._notes_service: Optional[NotesApplicationService] = None
         self._export_service: Optional[ExportApplicationService] = None
         self._job_store: Optional[JobStore] = None
+        self._ingestion_service: Optional[IngestionApplicationService] = None
+        self._ingestion_job_store: Optional[JobStore] = None
+
+    def attach_ingestion_service(
+        self,
+        ingestion: IngestionApplicationService,
+        job_store: JobStore,
+    ) -> None:
+        """Attach a pre-built ingestion service (tests / offline harness)."""
+        self._ingestion_service = ingestion
+        self._ingestion_job_store = job_store
+
+    def _resolve_step2_ingestion(
+        self,
+    ) -> Optional[tuple[IngestionApplicationService, JobStore]]:
+        """Return only ingestion collaborators owned by an active runtime."""
+        if self._ingestion_service is not None and self._ingestion_job_store is not None:
+            return self._ingestion_service, self._ingestion_job_store
+        if (
+            self.lifecycle is not None
+            and self.lifecycle.is_running
+            and self.lifecycle.pipeline is not None
+        ):
+            pipeline = self.lifecycle.pipeline
+            return pipeline.ingestion, pipeline.job_store
+        return None
 
     def attach_lifecycle(self, lifecycle: ApplicationLifecycle) -> None:
         """Share the lifecycle-owned VaultManager for theme-scoped processing."""
@@ -247,6 +368,15 @@ class FunesConsoleBackend:
         else:
             self.vault.set_active_theme(theme_name)
         return self.vault.active_theme
+
+    def _refine_graph(self, target_issue: Optional[str] = None) -> dict:
+        """Delegate graph work to the lifecycle-owned, serialized loop."""
+        if self.lifecycle is None or not self.lifecycle.is_running:
+            return {
+                "error": "graph_service_unavailable",
+                "message": "The lifecycle-owned graph service is not started",
+            }
+        return self.lifecycle.refine_graph(target_issue=target_issue)
 
     def _apply_settings_config(self, config: AppConfig) -> None:
         """Refresh settings consumers after their durable config has been written."""
@@ -296,6 +426,11 @@ class FunesConsoleBackend:
                 model_resolver=lambda: (
                     self.config.custom_model_override
                     or self.ram_governor.recommend_model()
+                ),
+                budget_decision_resolver=(
+                    None
+                    if self.config.custom_model_override
+                    else self.ram_governor.recommend_model_decision
                 ),
                 ollama_url=self.config.ollama_url,
             )
@@ -396,6 +531,10 @@ class FunesConsoleBackend:
     @staticmethod
     def _path_error(error: PathAuthorizationError) -> Dict[str, str]:
         return {"error": error.code, "message": str(error)}
+
+    def _resolve_note_from_identifier(self, identifier: str) -> Path:
+        document_id = self.get_notes_service().resolve_document_id(identifier)
+        return self._path_resolver().resolve_note_id(document_id)
 
     def _vault_relative_identity(self, path: Path) -> str:
         try:
@@ -641,14 +780,18 @@ class FunesConsoleBackend:
 
         # --- CRUD DE NOTAS (GUARDAR, FUSIONAR, MOVER, ELIMINAR) ---
         elif action_name == "save_note":
-            file_path_str = payload.get("file_path") or payload.get("path")
+            identifier = (
+                payload.get("document_id")
+                or payload.get("file_path")
+                or payload.get("path")
+            )
             new_content = payload.get("content")
             title = payload.get("title")
             issue_name = payload.get("issue", "_Sin_Cuestion")
 
-            if file_path_str:
+            if identifier:
                 try:
-                    p = self._path_resolver().resolve_note(file_path_str)
+                    p = self._resolve_note_from_identifier(str(identifier))
                 except PathAuthorizationError as error:
                     return self._path_error(error)
                 if p.exists() and new_content is not None:
@@ -724,12 +867,16 @@ historial:
             }
 
         elif action_name == "move_note":
-            file_path_str = payload.get("file_path") or payload.get("path")
+            identifier = (
+                payload.get("document_id")
+                or payload.get("file_path")
+                or payload.get("path")
+            )
             target_issue = payload.get("target_issue", "_Sin_Cuestion")
-            if file_path_str:
+            if identifier:
                 try:
                     resolver = self._path_resolver()
-                    p = resolver.resolve_note(file_path_str)
+                    p = self._resolve_note_from_identifier(str(identifier))
                 except PathAuthorizationError as error:
                     return self._path_error(error)
                 if p.exists():
@@ -749,10 +896,14 @@ historial:
             return {"error": "No se pudo mover la nota"}
 
         elif action_name == "delete_note":
-            file_path_str = payload.get("file_path") or payload.get("path")
-            if file_path_str:
+            identifier = (
+                payload.get("document_id")
+                or payload.get("file_path")
+                or payload.get("path")
+            )
+            if identifier:
                 try:
-                    p = self._path_resolver().resolve_note(file_path_str)
+                    p = self._resolve_note_from_identifier(str(identifier))
                 except PathAuthorizationError as error:
                     return self._path_error(error)
                 if p.exists():
@@ -787,8 +938,9 @@ historial:
         elif action_name == "run_optimized_cycle":
             target_issue = payload.get("target_issue")
             try:
-                loop = OptimizadoGraphLoop(self.vault.output_dir)
-                res = loop.refine_knowledge_graph(target_issue=target_issue)
+                res = self._refine_graph(target_issue=target_issue)
+                if "error" in res:
+                    return res
                 msg = f"Ciclo Optimizado completado para Cuestión '{target_issue or 'Todas'}'. Notas procesadas: {res.get('processed_notes', 0)}."
                 return {"log": msg, "result": res, "refresh": True, "stats": self.get_stats_dict()}
             except Exception as e:
@@ -806,8 +958,9 @@ historial:
             }
         elif action_name == "reindex_notes":
             try:
-                loop = OptimizadoGraphLoop(self.vault.output_dir)
-                loop.refine_knowledge_graph()
+                res = self._refine_graph()
+                if "error" in res:
+                    return res
                 notes_count = len(list(self.vault.output_dir.rglob("*.md"))) if self.vault.output_dir.exists() else 0
                 return {
                     "log": f"Se regeneró el mapa de notas e interconexiones. Total notas preparadas: {notes_count}",
@@ -930,27 +1083,65 @@ historial:
             }
         elif action_name == "step2_transcribe":
             try:
-                pipeline = ETLPipeline(self.config)
-                input_files = [f for f in self.vault.input_dir.glob("*") if f.is_file() and not f.name.startswith(".")]
-                try:
-                    for f in input_files:
-                        try:
-                            pipeline.process_file(f)
-                        except Exception as err:
-                            self.quarantine_service.handle_failure(f, err, attempt_count=1)
-                finally:
-                    pipeline.close()
+                resolved = self._resolve_step2_ingestion()
+                if resolved is None:
+                    return {
+                        "error": "ingestion_service_unavailable",
+                        "message": "The lifecycle-owned ingestion service is not started",
+                    }
+                ingestion, _job_store = resolved
+                input_dir = self.vault.input_dir
+                input_files = (
+                    [
+                        f
+                        for f in input_dir.glob("*")
+                        if f.is_file() and not f.name.startswith(".")
+                    ]
+                    if input_dir.exists()
+                    else []
+                )
+                log_lines: list[str] = []
+                for file_path in input_files:
+                    try:
+                        identity = ingestion.vault_relative_identity(file_path)
+                        job = ingestion.submit(identity)
+                        if job.stage != "completed":
+                            job = ingestion.resume(job.job_id)
+                        if job.stage == "completed":
+                            log_lines.append(f"[OK] {file_path.name}")
+                        else:
+                            log_lines.append(
+                                f"[PENDIENTE] {file_path.name}: "
+                                f"stage={job.stage} code={job.error_code}"
+                            )
+                    except SourceNotStableError:
+                        log_lines.append(
+                            f"[OMITIDO] {file_path.name}: archivo no estabilizado"
+                        )
+                    except PathAuthorizationError:
+                        log_lines.append(
+                            f"[OMITIDO] {file_path.name}: ruta no autorizada"
+                        )
+                    except Exception as err:
+                        self.quarantine_service.handle_failure(
+                            file_path, err, attempt_count=1
+                        )
+                        log_lines.append(f"[ERROR] {file_path.name}: {err}")
+                message = "Estructuración de datos completada hacia 3_limpio."
+                if log_lines:
+                    message = message + "\n" + "\n".join(log_lines)
                 return {
-                    "log": "Estructuración de datos completada hacia 3_limpio.",
+                    "log": message,
                     "refresh": True,
-                    "stats": self.get_stats_dict()
+                    "stats": self.get_stats_dict(),
                 }
             except Exception as e:
                 return {"log": f"Error en Transcripción: {e}"}
         elif action_name == "step3_structure":
             try:
-                loop = OptimizadoGraphLoop(self.vault.output_dir)
-                loop.refine_knowledge_graph()
+                res = self._refine_graph()
+                if "error" in res:
+                    return res
                 configure_anythingllm_integration(self.vault.output_dir)
                 notes_count = len(list(self.vault.output_dir.rglob("*.md"))) if self.vault.output_dir.exists() else 0
                 return {
@@ -981,7 +1172,10 @@ historial:
                 "alert": "Ajustes restaurados a los valores por defecto del sistema Papiro."
             }
 
-        return {"log": f"Acción '{action_name}' procesada."}
+        return {
+            "error": "action_not_allowed",
+            "message": "Acción no permitida",
+        }
 
     def select_folder(self, title: str = "Seleccionar Carpeta") -> str:
         """
@@ -1243,9 +1437,8 @@ historial:
                 if separator
                 else re.sub(r"^Nota_", "", note_name).replace("_", " ")
             )
-            note_file = note_name if note_name.endswith(".md") else f"{note_name}.md"
             try:
-                resolved_note = resolver.resolve_unique_note_basename(note_file)
+                resolved_note = resolver.resolve_wikilink_target(note_name)
                 document_id = document_id_for_relative_path(
                     self._vault_relative_identity(resolved_note)
                 )
@@ -1394,7 +1587,9 @@ historial:
         if not out_dir.exists():
             return {"nodes": [], "links": []}
 
-        discovered = GraphLinker(out_dir).enumerate_notes()
+        discovered = GraphLinker(
+            out_dir, vault_root=self.vault.config.vault_path
+        ).enumerate_notes()
         node_ids = {note.link_target for note in discovered}
         nodes = []
         for note in discovered:
@@ -1404,7 +1599,7 @@ historial:
                     "id": note.link_target,
                     "label": note.stem,
                     "path": vault_relative,
-                    "document_id": document_id_for_relative_path(vault_relative),
+                    "document_id": note.document_id,
                 }
             )
 
@@ -1551,6 +1746,9 @@ def launch_control_console(vault_path: Optional[Path] = None):
         backend.attach_lifecycle(lifecycle)
         if HAS_WEBVIEW and html_file.exists():
             api = FunesPyWebViewApi(backend)
+            # PyWebView blocks browser downloads unless this setting is enabled
+            # before the native window is created.
+            webview.settings["ALLOW_DOWNLOADS"] = True
             window = webview.create_window(
                 "Funes Control Console — Estética Papiro",
                 url=html_file.as_uri(),

@@ -5,7 +5,7 @@ import logging
 import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Sequence
 
 from funes.core.vault import document_id_for_relative_path
 from funes.domain.documents import MarkdownDocument
@@ -31,8 +31,20 @@ class NoteLinkTarget:
 class GraphLinker:
     """Interconecta notas atómicas insertando hipervínculos [[WikiLinks]] de Obsidian."""
 
-    def __init__(self, output_dir: Path):
-        self.output_dir = Path(output_dir)
+    def __init__(self, output_dir: Path, *, vault_root: Path | None = None):
+        self.output_dir = Path(output_dir).resolve()
+        self.vault_root = (
+            Path(vault_root).resolve() if vault_root is not None else self.output_dir.parent
+        )
+
+    def _vault_relative_path(self, output_relative: str) -> str:
+        """Vault-relative POSIX path for a note under the authorized output root."""
+        return (
+            (self.output_dir / output_relative)
+            .resolve()
+            .relative_to(self.vault_root)
+            .as_posix()
+        )
 
     def _is_excluded(self, path: Path) -> bool:
         """Exclude MOC/metadata, hidden paths and .funes from note discovery."""
@@ -81,7 +93,9 @@ class GraphLinker:
                 link_target = stem
             notes.append(
                 NoteLinkTarget(
-                    document_id=document_id_for_relative_path(relative),
+                    document_id=document_id_for_relative_path(
+                        self._vault_relative_path(relative)
+                    ),
                     relative_path=relative,
                     stem=stem,
                     link_target=link_target,
@@ -166,9 +180,10 @@ class GraphLinker:
         current_title: str,
         *,
         current_relative_path: str | None = None,
+        note_catalog: Sequence[NoteLinkTarget] | None = None,
     ) -> str:
         """Insert [[WikiLinks]] into the body only; never frontmatter or code."""
-        notes = self.enumerate_notes()
+        notes = list(note_catalog) if note_catalog is not None else self.enumerate_notes()
         # Longer stems first so specific titles win over shorter substrings.
         unique_stems = sorted({note.stem for note in notes}, key=len, reverse=True)
         current_rel = self._normalize_relative_path(current_relative_path)

@@ -3,10 +3,12 @@ from pathlib import Path
 import pytest
 
 from funes.domain.errors import PathAuthorizationError
-from funes.domain.paths import AuthorizedPathResolver
+from funes.domain.frontmatter import serialize_frontmatter
+from funes.domain.paths import AuthorizedPathResolver, document_id_for_relative_path
 from funes.control_console import FunesConsoleBackend
 from funes.core.vault import VaultManager
 from funes.config import VaultConfig
+from funes.graph_engine.linker import GraphLinker
 
 
 @pytest.fixture
@@ -31,6 +33,33 @@ def test_resolves_valid_nested_output_note(resolver, temp_vault_path):
     resolved = resolver.resolve_note("4_salida/Cuestion/nota.md")
 
     assert resolved == note.resolve()
+
+
+def test_path_qualified_wikilink_disambiguates_duplicate_basenames(resolver, temp_vault_path):
+    first = temp_vault_path / "4_salida" / "tema-a" / "nota.md"
+    second = temp_vault_path / "4_salida" / "tema-b" / "nota.md"
+    first.parent.mkdir(parents=True)
+    second.parent.mkdir(parents=True)
+    first.write_text("a", encoding="utf-8")
+    second.write_text("b", encoding="utf-8")
+
+    assert resolver.resolve_wikilink_target("tema-b/nota") == second.resolve()
+
+
+@pytest.mark.parametrize(
+    "target",
+    [
+        "../secreto",
+        "/tmp/secreto",
+        r"tema\nota",
+        "tema/./note",
+        "tema/../../x",
+        "x\x00y",
+    ],
+)
+def test_path_qualified_wikilink_rejects_escape(target, resolver):
+    with pytest.raises(PathAuthorizationError):
+        resolver.resolve_wikilink_target(target)
 
 
 @pytest.mark.parametrize(
@@ -265,3 +294,41 @@ def test_wikilink_rejects_ambiguous_basename(temp_vault_path):
     assert children[0]["type"] == "wikilink"
     assert children[0]["document_id"] == ""
     assert children[0].get("broken") is True
+
+
+def test_wikilink_callback_resolves_graph_qualified_target_end_to_end(temp_vault_path):
+    backend = FunesConsoleBackend(temp_vault_path)
+    output = backend.vault.output_dir
+    contratos = output / "Contratos" / "Obligaciones.md"
+    historia = output / "Historia" / "Obligaciones.md"
+    source = output / "Contratos" / "Referencia.md"
+    contratos.parent.mkdir(parents=True)
+    historia.parent.mkdir(parents=True)
+    contratos.write_text(
+        serialize_frontmatter({"title": "Obligaciones", "issue": "Contratos", "status": "approved"})
+        + "# Obligaciones\n\nContrato A.\n",
+        encoding="utf-8",
+    )
+    historia.write_text(
+        serialize_frontmatter({"title": "Obligaciones", "issue": "Historia", "status": "approved"})
+        + "# Obligaciones\n\nHecho B.\n",
+        encoding="utf-8",
+    )
+
+    linked = GraphLinker(output).auto_link_content(
+        serialize_frontmatter({"title": "Referencia", "issue": "Contratos", "status": "approved"})
+        + "Referencia a Obligaciones.",
+        "Referencia",
+        current_relative_path="Contratos/Referencia.md",
+    )
+    assert "[[Contratos/Obligaciones" in linked
+    source.write_text(linked, encoding="utf-8")
+
+    source_id = document_id_for_relative_path("4_salida/Contratos/Referencia.md")
+    target_id = document_id_for_relative_path("4_salida/Contratos/Obligaciones.md")
+    result = backend.get_note_content_html(source_id)
+
+    assert result["document"][0]["children"][1]["document_id"] == target_id
+    assert result["document"][0]["children"][1].get("broken") is not True
+    assert f'data-document-id="{target_id}"' in result["html"]
+    assert "broken-link" not in result["html"]

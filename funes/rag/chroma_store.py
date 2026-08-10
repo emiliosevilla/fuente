@@ -173,7 +173,11 @@ class ChromaStore:
             return []
 
         try:
-            results = self.collection.query(query_texts=[query_text], n_results=n_results)
+            results = self.collection.query(
+                query_texts=[query_text],
+                n_results=n_results,
+                include=["documents", "metadatas", "distances"],
+            )
             documents = results.get("documents", [[]])[0]
             metadatas = results.get("metadatas", [[]])[0]
             ids = results.get("ids", [[]])[0]
@@ -191,7 +195,7 @@ class ChromaStore:
         if not self._ensure_collection():
             return []
         try:
-            all_data = self.collection.get()
+            all_data = self.collection.get(include=["documents", "metadatas"])
             docs: List[Dict[str, Any]] = []
             for d_id, doc, meta in zip(
                 all_data.get("ids", []),
@@ -209,7 +213,7 @@ class ChromaStore:
         if not self._ensure_collection():
             return []
         try:
-            get_res = self.collection.get()
+            get_res = self.collection.get(include=["documents", "metadatas"])
             metas = get_res.get("metadatas", [])
             titles = set()
             for m in metas:

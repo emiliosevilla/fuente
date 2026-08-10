@@ -55,27 +55,56 @@ Núcleo **seguro, recuperable y medible**. No es todavía un producto UX cerrado
 
 ---
 
+### Wave 1 — productización (2026-08-09, Tasks 1–7)
+
+| ID | Entrega |
+|----|---------|
+| W1-1 | Modal de cuarentena cableado a `get_quarantine` / `restore_note` |
+| W1-2 | `failed_for_review` incluido en listados activos de cuarentena |
+| W1-3 | `step2_transcribe` → `IngestionApplicationService` (JobStore durable) |
+| W1-4 | Bridge CRUD (`save_draft` / `delete_note` / `move_note`) por `document_id` |
+| W1-5 | `GraphLinker.document_id` vault-relative centralizado en linker |
+| W1-6 | Honestidad README: graph loop acotado a lifecycle / pasadas bajo demanda |
+| W1-7 | Tier ultra-bajo RAM (&lt;8 GB / ~4 GB): catálogo `qwen2.5:0.5b` + BM25-only |
+
+**Verificación Wave 1 (Task 8, 2026-08-09):** ✅ cerrada con reservas.
+- Suites focalizadas Wave 1: **96 passed** (cuarentena, ingesta step2, bridge CRUD, RAM tier, contract/, security/).
+- `release_gate.py`: **verde salvo `source_tree_clean`** (árbol sucio intencional pre-commit).
+- **Nota:** `test_adversarial_binary_junk_file` falló 2× en matriz unit completa (`InvalidModelOutputError` / `os.urandom`); pasó en aislamiento — flake preexistente, no regresión Wave 1.
+
+---
+
 ## Queda por hacer (priorizado)
 
 ### P0 — Completar contratos ya existentes en la UI (Wave 1 del plan)
 
+_Wave 1 P0 + Task 8 verification gate cerrados — ver tabla y nota de verificación arriba._
+
 | ID | Qué | Por qué | Anclas |
 |----|-----|---------|--------|
-| W1-1 | Cablear modal de cuarentena a `get_quarantine` / `restore_note` | Backend listo; UI es stub estático | `consola_preview.html` ~1284; `funes/ui/bridge.py` 292+; `control_console.py` 767+ |
-| W1-2 | Incluir `failed_for_review` en listados activos (o UI explícita) | Hoy `list_active_items` solo `quarantined` | `funes/domain/quarantine.py` 63–67 |
-| W1-3 | `step2_transcribe` → `IngestionApplicationService` (no `ETLPipeline` directo) | Bypass del job store / idempotencia | `control_console.py` 931–949; `funes/application/ingestion.py` |
-| W1-4 | Bridge CRUD (`save_draft` / `delete_note` / `move_note`) por `document_id` | Hoy pasan `path` crudo | `funes/ui/bridge.py` 231–269, 444–451 |
-| W1-5 | `GraphLinker.document_id` vault-relative (centralizar) | Solo `get_graph_data` re-mapea | `funes/graph_engine/linker.py`; `control_console.get_graph_data` |
-| W1-6 | Honestidad README: graph loop no “siempre on” en GUI | Claims &gt; comportamiento medido | `README.md` § Bucle de Grafo |
-| W1-7 | Tier ultra-bajo RAM (&lt;8 GB / ~4 GB): catálogo + BM25-only | Objetivo de producto; eco actual = `qwen2.5:1.5b` @ min 3 GB | `funes/ram_governor/budget.py` 120–161, 361–363 |
+| ~~W1-1~~ | ~~Cablear modal de cuarentena~~ | _done_ | — |
+| ~~W1-2~~ | ~~Incluir `failed_for_review`~~ | _done_ | — |
+| ~~W1-3~~ | ~~`step2_transcribe` → ingestion service~~ | _done_ | — |
+| ~~W1-4~~ | ~~Bridge CRUD por `document_id`~~ | _done_ | — |
+| ~~W1-5~~ | ~~`GraphLinker.document_id` vault-relative~~ | _done_ | — |
+| ~~W1-6~~ | ~~Honestidad README graph loop~~ | _done_ | — |
+| ~~W1-7~~ | ~~Tier ultra-bajo RAM~~ | _done_ | — |
 
 ### P1 — Residuales de seguridad / calidad (parked P2 → cerrar o documentar)
 
 Ver [`docs/security-residual-findings.md`](security-residual-findings.md) (SEC-001…011). Priorizar al cerrar Wave 1:
-- Wikilinks `[[dir/note]]`
-- CSP `style-src` / innerHTML mock
-- AnythingLLM website fallback (dejarlo claramente opcional y desactivado offline)
-- DOCX contract body-deep; dual ETLPipeline console vs lifecycle
+- [x] Wikilinks `[[dir/note]]` — SEC-001/SEC-008 resueltos con regresiones de paths y grafo.
+- [ ] CSP `style-src` / innerHTML mock — regresión estática pasada; checkpoint visual humano pendiente, sin claim visual.
+- [x] AnythingLLM website fallback — SEC-004 resuelto; fallback sin navegador y política offline cubiertos.
+- [x] DOCX contract body-deep; dual ETLPipeline console vs lifecycle — exportación y ciclo ETL cubiertos por sus contratos focalizados.
+
+### Verificación residual (Task 9A/9B, 2026-08-10)
+
+- Matriz residual enfocada: **167 passed**, con un warning externo de deprecación de Chroma.
+- `pytest --collect-only -q`: **571 collected**.
+- `python3 -m pytest --collect-only -q`: **571 collected**; `python3 -m pytest` queda como comando canónico seguro para checkout Unicode.
+- Los fallos globales conocidos de `RAMGovernor` quedan fuera de esta matriz.
+- El checkpoint de árbol limpio y los release gates siguen pendientes; no se afirma que hayan pasado.
 
 ### P2 — Productización proactiva (Wave 2+, no en el plan Wave 1)
 

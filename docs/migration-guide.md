@@ -45,7 +45,17 @@ Optional flags:
 
 ### 3. Roll back
 
-Restores every applied entry from the manifest backup directory, rebuilds the MOC catalog, and reconciles the Chroma index when the manifest recorded `index_rebuilt: true`.
+Restores every applied entry from the manifest backup directory. Rollback then
+uses the manifest's rebuild flags independently:
+
+- `moc_rebuilt: true` refreshes the `_Indice_MOC.md` catalog; `false` leaves the
+  MOC untouched.
+- `index_rebuilt: true` reconciles the Chroma index for the processed themes;
+  `false` leaves Chroma untouched.
+
+File restoration is performed regardless of either flag. Therefore, a
+rollback may restore files without rebuilding either derived artifact, rebuild
+only one of them, or rebuild both.
 
 ```bash
 python scripts/migrate_vault.py /path/to/Vault --rollback .funes/migrations/<id>/manifest.json
@@ -81,7 +91,8 @@ Each run creates:
 ## Index and MOC rebuild
 
 - **MOC** — catalog-only regeneration via `_refresh_moc_catalog()` (no `auto_link_content` on apply or rollback)
-- **Index** — chunks output notes with `SemanticChunker` and reconciles Chroma chunk ids per document. Rollback repeats this when the manifest had `index_rebuilt: true`. If Chroma cannot initialize, migration still completes and `index_rebuilt` is `false` in the manifest.
+- **Index** — chunks output notes with `SemanticChunker` and reconciles Chroma chunk ids per document. Rollback repeats this only when the manifest has `index_rebuilt: true`; when it is `false`, rollback does not reconcile Chroma. If Chroma cannot initialize, migration still completes and `index_rebuilt` is `false` in the manifest.
+- **Rollback flags** — the manifest records the independent outcome of each rebuild. `moc_rebuilt: false` means rollback does not refresh the MOC, even if the index was rebuilt; `index_rebuilt: false` means rollback does not reconcile Chroma, even if the MOC was rebuilt.
 
 ## Troubleshooting
 

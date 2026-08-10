@@ -128,7 +128,10 @@ class ETLPipeline:
         self.chunker = SemanticChunker()
         self.atomic_gen = AtomicNoteGenerator(ollama_url=config.ollama_url)
         # Theme-aware output root — never the flat AppConfig General path.
-        self.linker = GraphLinker(self.vault.output_dir)
+        self.linker = GraphLinker(
+            self.vault.output_dir,
+            vault_root=self.vault.config.vault_path,
+        )
         self.job_store = JobStore(config.vault.vault_path)
         self.ingestion = IngestionApplicationService(
             config=config,
@@ -147,7 +150,10 @@ class ETLPipeline:
     def set_active_theme(self, theme_name: str) -> Path:
         """Switch the Vault theme and rebind collaborators that cache roots."""
         theme_dir = self.vault.set_active_theme(theme_name)
-        self.linker = GraphLinker(self.vault.output_dir)
+        self.linker = GraphLinker(
+            self.vault.output_dir,
+            vault_root=self.vault.config.vault_path,
+        )
         self.ingestion.linker = self.linker
         return theme_dir
 

@@ -96,6 +96,11 @@ class FunesChatModal(tk.Toplevel):
             model_resolver=lambda: (
                 self.config.custom_model_override or ram.recommend_model()
             ),
+            budget_decision_resolver=(
+                None
+                if self.config.custom_model_override
+                else ram.recommend_model_decision
+            ),
             ollama_url=self.config.ollama_url,
         )
         return service.ask(message, context)

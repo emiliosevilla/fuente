@@ -45,7 +45,7 @@ from funes.application.scheduler import (
     TaskClass,
     task_class_for_job,
 )
-from funes.config import AppConfig
+from funes.config import DEFAULT_ISSUE, AppConfig
 from funes.core.vault import VaultManager
 from funes.domain.documents import MarkdownDocument
 from funes.domain.errors import PathAuthorizationError
@@ -495,10 +495,18 @@ class IngestionApplicationService:
         validated = context.validated or self._validated_markdown(
             self._candidate(job, context)
         )
-        linked = self.linker.auto_link_content(validated, self._source_stem(job))
+        note_path = self._target_note_path(job)
+        current_relative_path = note_path.resolve().relative_to(
+            self.vault.output_dir.resolve()
+        ).as_posix()
+        linked = self.linker.auto_link_content(
+            validated,
+            self._source_stem(job),
+            current_relative_path=current_relative_path,
+        )
         # Linking rewrites the note body, so the text that actually reaches
         # disk is validated too, never just the model's candidate.
-        note_path = self._write_note(job, self._validated_markdown(linked))
+        atomic_write_text(note_path, self._validated_markdown(linked))
         document_id = self._document_id(job)
         self.job_store.upsert_document_identity(
             document_id=document_id,
@@ -630,22 +638,25 @@ class IngestionApplicationService:
             return ()
 
         cleared: list[str] = []
+        index_invalidated = True
         if plan.invalidate_chunk_index or plan.invalidate_note_index:
-            self._invalidate_index(job, plan)
-        if plan.discard_note_document_id:
+            index_invalidated = self._invalidate_index(job, plan)
+        if plan.discard_note_document_id and index_invalidated:
             cleared.append("note_document_id")
-        if plan.discard_dirty_artifact:
-            self._discard_artifact(job.dirty_artifact, "dirty")
+        if plan.discard_dirty_artifact and self._discard_artifact(
+            job.dirty_artifact, "dirty"
+        ):
             cleared.append("dirty_artifact")
-        if plan.discard_clean_artifact:
-            self._discard_artifact(job.clean_artifact, "clean")
+        if plan.discard_clean_artifact and self._discard_artifact(
+            job.clean_artifact, "clean"
+        ):
             cleared.append("clean_artifact")
         return tuple(cleared)
 
-    def _invalidate_index(self, job: JobRecord, plan: CompensationPlan) -> None:
+    def _invalidate_index(self, job: JobRecord, plan: CompensationPlan) -> bool:
         document_id = job.note_document_id
         if not document_id:
-            return
+            return False
         doomed_kinds = set()
         if plan.invalidate_chunk_index:
             doomed_kinds.add(CHUNK_ARTIFACT_KIND)
@@ -658,23 +669,25 @@ class IngestionApplicationService:
                 for artifact in artifacts
                 if artifact["kind"] in doomed_kinds
             ]
-            if plan.invalidate_chunk_index:
-                self.chroma.delete_chunks(
-                    [
-                        artifact["artifact_id"]
-                        for artifact in artifacts
-                        if artifact["kind"] == CHUNK_ARTIFACT_KIND
-                    ]
-                )
+            if plan.invalidate_chunk_index and not self.chroma.delete_chunks(
+                [
+                    artifact["artifact_id"]
+                    for artifact in artifacts
+                    if artifact["kind"] == CHUNK_ARTIFACT_KIND
+                ]
+            ):
+                return False
             self.job_store.delete_index_artifacts(document_id, artifact_ids=doomed)
+            return True
         except Exception as error:
             logger.warning(
                 "Could not invalidate index entries of document %s: %s",
                 document_id,
                 error,
             )
+            return False
 
-    def _discard_artifact(self, identity: Optional[str], root_name: str) -> None:
+    def _discard_artifact(self, identity: Optional[str], root_name: str) -> bool:
         """Delete a partial pipeline artifact from its own authorized root.
 
         Resolution is deliberately strict here: compensation may only delete
@@ -682,16 +695,18 @@ class IngestionApplicationService:
         anywhere else (notably at the original source) is left untouched.
         """
         if not identity:
-            return
+            return False
         try:
             path = self.path_resolver().resolve(identity, root_name=root_name)
         except (PathAuthorizationError, KeyError):
             logger.info("Skipping compensation for unauthorized artifact %s", identity)
-            return
+            return False
         try:
             path.unlink(missing_ok=True)
+            return True
         except OSError as error:
             logger.warning("Could not discard artifact %s: %s", identity, error)
+            return False
 
     # -- helpers ------------------------------------------------------------
 
@@ -700,9 +715,9 @@ class IngestionApplicationService:
     ) -> list[dict[str, Any]]:
         """Chunk source text with deterministic index identity metadata.
 
-        Passes identity kwargs into ``SemanticChunker``. Test doubles that reject
-        kwargs still work; doubles that keep custom ids are only stamped with
-        the required metadata so JobStore/Chroma reconcile stays intact.
+        Passes identity kwargs into ``SemanticChunker``. Doubles that keep
+        custom ids are only stamped with the required metadata so
+        JobStore/Chroma reconcile stays intact.
         """
         from funes.rag.index_records import ChunkIdentity, materialize_chunks
 
@@ -713,7 +728,7 @@ class IngestionApplicationService:
             relative_path=job.source_relative_path,
             source_hash=job.source_hash,
             theme=getattr(self.vault, "active_theme", "") or "",
-            issue="_Sin_Cuestion",
+            issue=str(context.metadata.get("issue") or DEFAULT_ISSUE),
             pipeline_version=job.pipeline_version,
         )
         identity_kwargs = {
@@ -724,12 +739,7 @@ class IngestionApplicationService:
             "issue": identity.issue,
             "pipeline_version": identity.pipeline_version,
         }
-        try:
-            chunks = self.chunker.chunk_markdown(
-                content, source_name, **identity_kwargs
-            )
-        except TypeError:
-            chunks = self.chunker.chunk_markdown(content, source_name)
+        chunks = self.chunker.chunk_markdown(content, source_name, **identity_kwargs)
 
         if not chunks:
             return []
@@ -889,13 +899,8 @@ class IngestionApplicationService:
         except FrontmatterError as error:
             raise InvalidModelOutputError(str(error)) from error
 
-    def _write_note(self, job: JobRecord, content: str) -> Path:
-        """Write the note atomically, overwriting the document's own note.
-
-        A resumed or reprocessed job must land on the note it already owns
-        instead of letting `save_atomic_note` pick a fresh, colliding name,
-        which is what would create duplicate notes for one source.
-        """
+    def _target_note_path(self, job: JobRecord) -> Path:
+        """Resolve the note target before linking or performing any write."""
         identity = self.job_store.get_document_identity(self._document_id(job)) or {}
         recorded = identity.get("relative_path")
         if recorded:
@@ -904,11 +909,9 @@ class IngestionApplicationService:
             except PathAuthorizationError:
                 target = None
             if target is not None:
-                atomic_write_text(target, content)
-                logger.info("Nota atómica reescrita en su ruta registrada: %s", target.name)
                 return target
-        return self.vault.save_atomic_note(
-            self._source_stem(job), content, source_ext=self._source_suffix(job)
+        return self.vault.atomic_note_path(
+            self._source_stem(job), source_ext=self._source_suffix(job)
         )
 
     def _durable_note_path(self, job: JobRecord) -> Path:

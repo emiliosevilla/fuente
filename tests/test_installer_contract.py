@@ -23,6 +23,7 @@ from funes.installer_contract import (
     step_install_model,
     wait_for_ollama_ready,
 )
+from funes.core.anythingllm_config import launch_anythingllm
 
 
 @pytest.fixture
@@ -193,6 +194,26 @@ def test_anythingllm_requires_confirmation(install_ctx):
 
     assert result.success is False
     assert "not installed" in result.message.lower()
+
+
+def test_launch_anythingllm_without_install_does_not_open_browser(monkeypatch):
+    monkeypatch.setattr(
+        "funes.core.anythingllm_config.get_anythingllm_paths",
+        lambda: {"app_path": None, "data_dir": None},
+    )
+    popen = MagicMock()
+    browser = MagicMock()
+    installer = MagicMock()
+    monkeypatch.setattr("funes.core.anythingllm_config.subprocess.Popen", popen)
+    monkeypatch.setattr("funes.core.anythingllm_config.webbrowser.open", browser)
+    monkeypatch.setattr(
+        "funes.core.anythingllm_config.install_anythingllm_autonomously", installer
+    )
+
+    assert launch_anythingllm() is False
+    popen.assert_not_called()
+    browser.assert_not_called()
+    installer.assert_not_called()
 
 
 def test_run_installation_second_run_no_duplicate_cloud_folders(tmp_path):

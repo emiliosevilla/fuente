@@ -3,977 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; base-uri 'none'; connect-src 'self'; font-src 'self'; img-src 'self' data:; object-src 'none'; script-src 'self' 'nonce-funes-console'; style-src 'self' 'unsafe-inline'">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; base-uri 'none'; connect-src 'self'; font-src 'self'; img-src 'self' data:; object-src 'none'; script-src 'self' 'nonce-funes-console'; style-src 'self'">
     <title>Funes Control Console — Estética Papiro (Vista Previa Definitiva)</title>
-    <style>
-        /* DESIGN SYSTEM ESTÉTICA PAPIRO - TIPOGRAFÍA MÁQUINA DE ESCRIBIR EN TODO EL TEXTO */
-        :root {
-            --bg-root: #DCD4C7;
-            --bg-card: #EAE2D5;
-            --bg-card-hover: #CDC3B3;
-            --bg-log: #E2DACD;
-            --border: #BFB4A3;
-            --border-accent: #161411;
-            --accent: #161411;
-            --accent-hover: #2E2B25;
-            --paper: #161411;
-            --muted: #5E564B;
-            --gold: #2E2B25;
-            --green: #16A34A;
-            --amber: #D97706;
-            --red: #DC2626;
-            --font-mono: 'Courier New', Courier, monospace;
-            --card-radius: 6px;
-            --border-width: 1px;
-            --shadow: 0 4px 18px rgba(0,0,0,0.06);
-        }
-
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-            font-family: var(--font-mono) !important;
-        }
-
-        input, select, option, textarea, button {
-            font-family: var(--font-mono) !important;
-            color: var(--paper);
-        }
-
-        body {
-            background-color: var(--bg-root);
-            color: var(--paper);
-            font-family: var(--font-mono);
-            min-height: 100vh;
-            padding: 24px 36px;
-            display: flex;
-            flex-direction: column;
-            gap: 18px;
-            user-select: none;
-        }
-
-        body.modal-open {
-            overflow: hidden !important;
-            height: 100vh !important;
-            touch-action: none;
-        }
-
-        /* 1. CABECERA EDITORIAL PAPIRO */
-        .masthead-container {
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-            border-bottom: 2px solid var(--border-accent);
-            padding-bottom: 16px;
-        }
-
-        .masthead-main {
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
-        }
-
-        .masthead-link {
-            font-size: 0.85rem;
-            font-weight: 600;
-            color: var(--muted);
-            cursor: pointer;
-            transition: color 0.2s ease, text-decoration 0.2s ease;
-        }
-
-        .masthead-link:hover {
-            color: var(--paper);
-            text-decoration: underline;
-        }
-
-        .masthead-title {
-            font-size: 2.6rem;
-            font-weight: 800;
-            letter-spacing: 3px;
-            color: var(--paper);
-            line-height: 1;
-        }
-
-        .masthead-tagline {
-            font-style: italic;
-            font-size: 0.9rem;
-            color: var(--muted);
-            margin-top: 4px;
-        }
-
-        /* BARRA DE HERRAMIENTAS UNIFICADA */
-        .toolbar-bar {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 10px;
-            flex-wrap: wrap;
-            margin-top: 4px;
-        }
-
-        .toolbar-group {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .btn-secondary, .btn-primary {
-            background-color: var(--bg-card);
-            color: var(--paper);
-            border: 1px solid var(--border-accent);
-            font-size: 0.8rem;
-            font-weight: 700;
-            padding: 8px 16px;
-            border-radius: var(--card-radius);
-            cursor: pointer;
-            transition: all 0.2s ease;
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-        }
-
-        .btn-secondary:hover, .btn-primary:hover {
-            background-color: var(--bg-card-hover);
-            transform: translateY(-1px);
-            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-        }
-
-        /* LAYOUT PRINCIPAL */
-        .layout-full {
-            display: flex;
-            flex-direction: column;
-            gap: 18px;
-            flex-grow: 1;
-        }
-
-        /* STATUS STRIP */
-        .status-strip {
-            background-color: var(--bg-card);
-            border: var(--border-width) solid var(--border);
-            box-shadow: var(--shadow);
-            border-radius: var(--card-radius);
-            padding: 12px 22px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            flex-wrap: wrap;
-            gap: 12px;
-        }
-
-        .status-item {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .status-label {
-            font-weight: 700;
-            font-size: 0.8rem;
-            color: var(--accent);
-        }
-
-        .status-val {
-            font-size: 0.8rem;
-            color: var(--paper);
-        }
-
-        .offline-badge {
-            font-weight: 700;
-            padding: 2px 8px;
-            border-radius: 999px;
-            border: 1px solid var(--border);
-            background: var(--bg-log);
-        }
-
-        .offline-badge.local-only {
-            color: var(--green);
-            border-color: var(--green);
-        }
-
-        .offline-badge.external-enabled {
-            color: var(--amber);
-            border-color: var(--amber);
-        }
-
-        #offline-mode-detail {
-            font-size: 0.72rem;
-            color: var(--muted);
-            margin-top: 4px;
-            display: block;
-        }
-
-        /* STATS GRID */
-        .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(5, 1fr);
-            gap: 14px;
-        }
-
-        .stat-card {
-            background-color: var(--bg-card);
-            border: var(--border-width) solid var(--border);
-            box-shadow: var(--shadow);
-            border-radius: var(--card-radius);
-            padding: 14px 18px;
-            display: flex;
-            flex-direction: column;
-            gap: 4px;
-            transition: transform 0.2s ease, background-color 0.2s ease;
-            cursor: pointer;
-        }
-
-        .stat-card:hover {
-            transform: translateY(-2px);
-            background-color: var(--bg-card-hover);
-            border-color: var(--border-accent);
-        }
-
-        .stat-title {
-            font-size: 0.82rem;
-            color: var(--muted);
-        }
-
-        .stat-num {
-            font-size: 2rem;
-            font-weight: 700;
-            color: var(--accent);
-        }
-
-        .stat-num.red { color: var(--red); }
-        .stat-num.green { color: var(--green); }
-        .stat-num.gold { color: var(--gold); }
-
-        /* GRAFO VISUAL */
-        .graph-section {
-            background-color: var(--bg-card);
-            border: var(--border-width) solid var(--border);
-            box-shadow: var(--shadow);
-            border-radius: var(--card-radius);
-            padding: 18px;
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-        }
-
-        .graph-title {
-            font-size: 0.95rem;
-            font-weight: 700;
-            color: var(--paper);
-            text-align: center;
-            border-bottom: 1px solid var(--border);
-            padding-bottom: 8px;
-        }
-
-        .subgraphs-container {
-            display: grid;
-            grid-template-columns: 1fr auto 1fr auto 1fr auto 1fr;
-            align-items: center;
-            gap: 12px;
-        }
-
-        .subgraph-box {
-            background-color: var(--bg-root);
-            border: var(--border-width) solid var(--border);
-            border-radius: var(--card-radius);
-            padding: 12px;
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-            height: 100%;
-        }
-
-        .subgraph-header {
-            display: flex;
-            flex-direction: column;
-            align-items: flex-start;
-            gap: 2px;
-            border-bottom: 1px solid var(--border);
-            padding-bottom: 6px;
-        }
-
-        .subgraph-title {
-            font-size: 0.76rem;
-            font-weight: 700;
-            color: var(--gold);
-        }
-
-        .node-badge {
-            font-size: 0.65rem;
-            font-weight: 600;
-            color: var(--muted);
-            font-family: var(--font-mono) !important;
-        }
-
-        .arrow-connector {
-            color: var(--accent);
-            font-weight: 700;
-            font-size: 1.2rem;
-            text-align: center;
-        }
-
-        .node-card {
-            background-color: var(--bg-card);
-            border: var(--border-width) solid var(--border-accent);
-            border-radius: var(--card-radius);
-            padding: 10px 12px;
-            cursor: pointer;
-            transition: all 0.2s ease;
-        }
-
-        .node-card:hover {
-            border-color: var(--accent);
-            background-color: var(--bg-card-hover);
-            transform: translateY(-2px);
-        }
-
-        .node-tag {
-            font-size: 0.68rem;
-            font-weight: 700;
-            color: var(--gold);
-        }
-
-        .node-name {
-            font-weight: 700;
-            font-size: 0.9rem;
-            color: var(--paper);
-            margin: 3px 0 2px 0;
-        }
-
-        .node-desc {
-            font-size: 0.74rem;
-            color: var(--muted);
-            line-height: 1.3;
-        }
-
-        /* LOG CONSOLE */
-        .log-section {
-            background-color: var(--bg-card);
-            border: var(--border-width) solid var(--border);
-            box-shadow: var(--shadow);
-            border-radius: var(--card-radius);
-            padding: 14px 18px;
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-        }
-
-        .log-header {
-            font-size: 0.85rem;
-            font-weight: 700;
-            color: var(--accent);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .log-actions {
-            display: flex;
-            gap: 6px;
-        }
-
-        .btn-small {
-            background-color: var(--bg-root);
-            border: 1px solid var(--border);
-            color: var(--paper);
-            font-size: 0.74rem;
-            font-weight: 600;
-            padding: 3px 8px;
-            border-radius: 4px;
-            cursor: pointer;
-        }
-
-        .btn-small:hover {
-            background-color: var(--bg-card-hover);
-        }
-
-        .log-console {
-            background-color: var(--bg-log);
-            border: 1px solid var(--border);
-            border-radius: 6px;
-            padding: 12px 16px;
-            font-size: 0.8rem;
-            color: var(--paper);
-            min-height: 130px;
-            max-height: 180px;
-            overflow-y: auto;
-            display: flex;
-            flex-direction: column;
-            gap: 5px;
-            user-select: text;
-        }
-
-        .log-time { color: var(--gold); font-weight: 700; }
-
-        /* BARRA DE ESTADO MINIMALISTA INFERIOR */
-        .bottom-status-bar {
-            background-color: var(--bg-card);
-            border: 1px solid var(--border);
-            border-radius: var(--card-radius);
-            padding: 6px 16px;
-            font-size: 0.78rem;
-            color: var(--paper);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        /* MODALES PAPIRO FLOTANTES */
-        .modal-overlay {
-            display: none;
-            position: fixed;
-            top: 0; left: 0; width: 100%; height: 100%;
-            background-color: rgba(22, 20, 17, 0.4);
-            backdrop-filter: blur(3px);
-            z-index: 1000;
-            justify-content: center;
-            align-items: center;
-            overscroll-behavior: contain;
-        }
-
-        .modal-container {
-            background-color: var(--bg-root);
-            border: 2px solid var(--border-accent);
-            border-radius: var(--card-radius);
-            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
-            width: 760px;
-            max-width: 95%;
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
-            max-height: 90vh;
-            overscroll-behavior: contain;
-        }
-
-        .modal-header {
-            background-color: var(--bg-card);
-            border-bottom: 1px solid var(--border);
-            padding: 14px 20px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .modal-title {
-            font-size: 1.05rem;
-            font-weight: 800;
-            color: var(--paper);
-        }
-
-        .modal-body {
-            padding: 20px;
-            display: flex;
-            flex-direction: column;
-            gap: 14px;
-            max-height: 60vh;
-            overflow-y: auto;
-            user-select: text;
-            overscroll-behavior: contain;
-        }
-
-        .modal-footer {
-            background-color: var(--bg-card);
-            border-top: 1px solid var(--border);
-            padding: 12px 20px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .close-btn {
-            background: none;
-            border: none;
-            font-size: 1.2rem;
-            cursor: pointer;
-            color: var(--muted);
-        }
-
-        /* ESTILOS ESPECÍFICOS PARA LECTOR DE NOTAS */
-        #modal-reader .modal-container {
-            width: 95vw;
-            height: 92vh;
-            max-width: 98vw;
-            max-height: 96vh;
-        }
-
-        #modal-reader .modal-body {
-            flex: 1;
-            height: calc(100% - 110px);
-            max-height: none;
-            padding: 16px 20px;
-            overflow: hidden;
-            display: flex;
-            flex-direction: column;
-        }
-
-        .reader-dual-pane {
-            display: flex;
-            gap: 16px;
-            height: 100%;
-            width: 100%;
-            overflow: hidden;
-        }
-
-        .reader-sidebar {
-            width: 310px;
-            min-width: 310px;
-            max-width: 310px;
-            flex-shrink: 0;
-            background-color: var(--bg-card);
-            border: 1px solid var(--border);
-            border-radius: var(--card-radius);
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
-            height: 100%;
-        }
-
-        @keyframes flipHourglass {
-            0% { transform: rotate(0deg); }
-            70% { transform: rotate(0deg); }
-            88% { transform: rotate(180deg); }
-            100% { transform: rotate(180deg); }
-        }
-
-        @keyframes flowSandStream {
-            0% { stroke-dashoffset: 0; }
-            100% { stroke-dashoffset: -14; }
-        }
-
-        @keyframes drainTopSand {
-            0% { transform: scaleY(1); }
-            70% { transform: scaleY(0.05); }
-            71% { transform: scaleY(0); }
-            100% { transform: scaleY(0); }
-        }
-
-        @keyframes fillBottomSand {
-            0% { transform: scaleY(0); }
-            5% { transform: scaleY(0.05); }
-            70% { transform: scaleY(1); }
-            100% { transform: scaleY(1); }
-        }
-
-        @keyframes dropParticleDot {
-            0% { transform: translateY(0); opacity: 1; }
-            85% { transform: translateY(40px); opacity: 1; }
-            100% { transform: translateY(42px); opacity: 0; }
-        }
-
-        .reader-search-wrapper {
-            position: relative;
-            width: 100%;
-            padding: 8px 10px;
-            box-sizing: border-box;
-            background-color: var(--bg-root);
-            border-bottom: 1px solid var(--border-accent);
-            flex-shrink: 0;
-        }
-
-        .reader-search-icon {
-            position: absolute;
-            left: 20px;
-            top: 50%;
-            transform: translateY(-50%);
-            color: var(--gold);
-            font-size: 0.82rem;
-            pointer-events: none;
-            opacity: 0.85;
-            z-index: 5;
-        }
-
-        .reader-search-input {
-            width: 100%;
-            padding: 8px 12px 8px 36px !important;
-            background-color: var(--bg-card) !important;
-            border: 1px solid var(--border-accent) !important;
-            border-radius: 6px !important;
-            font-size: 0.82rem;
-            color: var(--paper);
-            outline: none;
-            box-shadow: inset 0 1px 3px rgba(0,0,0,0.06);
-            transition: all 0.15s ease;
-            box-sizing: border-box;
-        }
-
-        .reader-search-input:focus {
-            border-color: var(--gold) !important;
-            box-shadow: 0 0 0 2px rgba(197, 160, 89, 0.25), inset 0 1px 3px rgba(0,0,0,0.06);
-        }
-
-        .reader-pinned-container {
-            flex-shrink: 0;
-            padding: 8px 10px 4px 10px;
-        }
-
-        .reader-pinned-item {
-            padding: 10px 12px;
-            font-size: 0.82rem;
-            font-weight: 700;
-            cursor: pointer;
-            background-color: var(--bg-card-hover);
-            border: 1px solid var(--border-accent);
-            border-radius: 4px;
-            color: var(--gold);
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            transition: background 0.15s, border-color 0.15s;
-        }
-
-        .reader-pinned-item:hover, .reader-pinned-item.active {
-            background-color: var(--bg-log);
-            border-color: var(--gold);
-            color: var(--paper);
-            box-shadow: 0 2px 6px rgba(0,0,0,0.06);
-        }
-
-        .reader-sidebar-divider {
-            font-size: 0.68rem;
-            font-weight: 800;
-            letter-spacing: 1px;
-            color: var(--muted);
-            padding: 8px 12px 4px 12px;
-            flex-shrink: 0;
-        }
-
-        .reader-note-list-scroll {
-            flex: 1;
-            overflow-y: scroll;
-            overscroll-behavior: contain;
-            padding: 0 10px 10px 10px;
-            scrollbar-width: thin;
-            scrollbar-color: var(--border-accent) var(--bg-card);
-        }
-
-        .reader-note-list {
-            list-style: none;
-            display: flex;
-            flex-direction: column;
-            gap: 4px;
-        }
-
-        .reader-note-item {
-            padding: 9px 12px;
-            font-size: 0.82rem;
-            cursor: pointer;
-            border: 1px solid var(--border);
-            border-radius: 4px;
-            background-color: var(--bg-card);
-            transition: background 0.15s;
-            line-height: 1.35;
-        }
-
-        .reader-note-item:hover, .reader-note-item.active {
-            background-color: var(--bg-card-hover);
-            border-color: var(--border-accent);
-            font-weight: 700;
-            color: var(--gold);
-        }
-
-        .reader-theme-label {
-            font-size: 0.72rem;
-            font-weight: 800;
-            letter-spacing: 0.8px;
-            color: var(--gold);
-            padding: 8px 4px 2px 4px;
-        }
-
-        .reader-issue-group {
-            list-style: none;
-            margin: 0 0 8px 0;
-            padding: 0;
-        }
-
-        .reader-issue-label {
-            font-size: 0.74rem;
-            font-weight: 700;
-            color: var(--muted);
-            padding: 6px 8px 2px 8px;
-        }
-
-        .reader-issue-group .reader-note-item {
-            margin-left: 8px;
-        }
-
-        .reader-view-pane {
-            flex: 1;
-            height: 100%;
-            background-color: var(--bg-log);
-            border: 1px solid var(--border);
-            border-radius: var(--card-radius);
-            padding: 24px 30px;
-            overflow-y: scroll;
-            overscroll-behavior: contain;
-            font-size: 0.88rem;
-            line-height: 1.6;
-            position: relative;
-            scrollbar-width: thin;
-            scrollbar-color: var(--border-accent) var(--bg-card);
-        }
-
-        .reader-note-list-scroll::-webkit-scrollbar,
-        .reader-view-pane::-webkit-scrollbar {
-            width: 7px;
-            height: 7px;
-        }
-
-        .reader-note-list-scroll::-webkit-scrollbar-track,
-        .reader-view-pane::-webkit-scrollbar-track {
-            background: var(--bg-card);
-            border-radius: 4px;
-        }
-
-        .reader-note-list-scroll::-webkit-scrollbar-thumb,
-        .reader-view-pane::-webkit-scrollbar-thumb {
-            background-color: var(--border-accent);
-            border-radius: 4px;
-            border: 1px solid var(--bg-root);
-        }
-
-        .reader-note-list-scroll::-webkit-scrollbar-thumb:hover,
-        .reader-view-pane::-webkit-scrollbar-thumb:hover {
-            background-color: var(--gold);
-        }
-
-        .reader-view-pane ul, .reader-view-pane ol {
-            padding-left: 28px !important;
-            margin-top: 10px !important;
-            margin-bottom: 14px !important;
-        }
-
-        .reader-view-pane li {
-            margin-bottom: 6px !important;
-            line-height: 1.55 !important;
-            padding-left: 4px !important;
-        }
-
-        .reader-view-pane p {
-            margin-bottom: 12px !important;
-            line-height: 1.65 !important;
-        }
-
-        .wikilink {
-            display: inline-flex;
-            align-items: center;
-            font-weight: 700;
-            color: var(--paper);
-            background-color: var(--bg-card);
-            border: 1px solid var(--border-accent);
-            border-radius: 4px;
-            padding: 1px 7px;
-            margin: 0 3px;
-            font-size: 0.82rem;
-            cursor: pointer;
-            text-decoration: none !important;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-            transition: all 0.15s ease;
-        }
-
-        .wikilink:hover {
-            background-color: var(--bg-card-hover);
-            color: var(--gold);
-            border-color: var(--border-accent);
-            transform: translateY(-1px);
-            box-shadow: 0 2px 6px rgba(0,0,0,0.08);
-        }
-
-        .wikilink-broken {
-            display: inline-flex;
-            align-items: center;
-            font-weight: 700;
-            color: var(--red);
-            background-color: var(--bg-card);
-            border: 1px dashed var(--red);
-            border-radius: 4px;
-            padding: 1px 7px;
-            margin: 0 3px;
-            font-size: 0.82rem;
-            cursor: pointer;
-            text-decoration: none !important;
-        }
-
-        /* ESTILOS ESPECÍFICOS PARA CHAT PAPIRO */
-        #modal-chat .modal-body {
-            max-height: none;
-            overflow: visible;
-            padding: 16px 20px;
-        }
-
-        .chat-container-box {
-            display: flex;
-            flex-direction: column;
-            height: 380px;
-            gap: 10px;
-        }
-
-        .chat-messages-scroll {
-            flex: 1;
-            min-height: 0;
-            background-color: var(--bg-log);
-            border: 1px solid var(--border);
-            border-radius: 6px;
-            padding: 14px;
-            overflow-y: auto;
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-        }
-
-        .chat-bubble {
-            padding: 10px 14px;
-            border-radius: 6px;
-            max-width: 85%;
-            font-size: 0.85rem;
-            line-height: 1.45;
-        }
-
-        .chat-bubble.user {
-            align-self: flex-start;
-            background-color: var(--bg-card);
-            border: 1px solid var(--border-accent);
-        }
-
-        .chat-bubble.ai {
-            align-self: flex-end;
-            background-color: var(--bg-card-hover);
-            border: 1px solid var(--border);
-        }
-
-        .chat-input-bar {
-            display: flex;
-            gap: 8px;
-            flex-shrink: 0;
-            padding-bottom: 2px;
-        }
-
-        .chat-input-field {
-            flex-grow: 1;
-            padding: 10px 14px;
-            background-color: var(--bg-log);
-            border: 1px solid var(--border-accent);
-            border-radius: 4px;
-            font-size: 0.85rem;
-            color: var(--paper);
-            outline: none;
-            font-family: inherit;
-            transition: border-color 0.2s ease, box-shadow 0.2s ease;
-        }
-
-        .chat-input-field:focus {
-            outline: none !important;
-            border-color: var(--gold) !important;
-            box-shadow: 0 0 0 2px rgba(139, 109, 56, 0.25) !important;
-        }
-
-        input:focus, select:focus, textarea:focus, button:focus {
-            outline: none !important;
-        }
-
-        /* BANDEJA DE APROBACIÓN — FORMULARIO DE METADATOS TIPADO */
-        #modal-approval .modal-container {
-            width: min(1080px, 96vw);
-            max-height: 88vh;
-        }
-
-        #modal-approval .modal-body {
-            display: grid;
-            grid-template-columns: 280px 1fr;
-            gap: 16px;
-            max-height: 68vh;
-            overflow: hidden;
-        }
-
-        .approval-pending-list {
-            border: 1px solid var(--border);
-            border-radius: var(--card-radius);
-            background: var(--bg-card);
-            overflow-y: auto;
-            padding: 8px;
-            display: flex;
-            flex-direction: column;
-            gap: 6px;
-        }
-
-        .approval-pending-item {
-            padding: 10px 12px;
-            border: 1px solid var(--border);
-            border-radius: 4px;
-            background: var(--bg-log);
-            cursor: pointer;
-            font-size: 0.8rem;
-            line-height: 1.35;
-        }
-
-        .approval-pending-item.active,
-        .approval-pending-item:hover {
-            border-color: var(--border-accent);
-            background: var(--bg-card-hover);
-            font-weight: 700;
-        }
-
-        .metadata-form-panel {
-            overflow-y: auto;
-            padding-right: 4px;
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-        }
-
-        .metadata-field {
-            display: flex;
-            flex-direction: column;
-            gap: 4px;
-        }
-
-        .metadata-field label {
-            font-size: 0.78rem;
-            font-weight: 700;
-            color: var(--muted);
-        }
-
-        .metadata-field input,
-        .metadata-field select,
-        .metadata-field textarea {
-            width: 100%;
-            padding: 8px 12px;
-            border: 1px solid var(--border);
-            border-radius: 4px;
-            background: var(--bg-log);
-            font-size: 0.82rem;
-        }
-
-        .metadata-field input.invalid,
-        .metadata-field select.invalid,
-        .metadata-field textarea.invalid {
-            border-color: var(--red);
-        }
-
-        .metadata-field-error {
-            font-size: 0.72rem;
-            color: var(--red);
-            min-height: 1em;
-        }
-
-        .metadata-diagnostic {
-            border: 1px dashed var(--border);
-            border-radius: var(--card-radius);
-            padding: 10px 12px;
-            background: var(--bg-card);
-        }
-
-        .metadata-diagnostic pre {
-            margin-top: 8px;
-            padding: 10px;
-            background: var(--bg-log);
-            border: 1px solid var(--border);
-            border-radius: 4px;
-            font-size: 0.72rem;
-            white-space: pre-wrap;
-            word-break: break-word;
-            max-height: 180px;
-            overflow-y: auto;
-        }
-    </style>
+    <!-- Font stack remains local and is defined in console.css: 'Courier New', Courier, monospace. -->
+    <link rel="stylesheet" href="funes/ui/static/console.css">
 </head>
 <body>
 
@@ -984,9 +17,9 @@
                 <h1 class="masthead-title">F U N E S</h1>
                 <div class="masthead-tagline">Formateo Universal de Notas, Estructuración y Síntesis</div>
             </div>
-            <div style="display:flex; gap:14px; align-items:center; margin-top:4px;">
+            <div class="console-layout-001">
                 <span class="masthead-link" data-onclick-command="triggerAction('quick_help')">Guía Rápida</span>
-                <span style="color:var(--border-accent); font-size:0.8rem;">|</span>
+                <span class="console-text-001">|</span>
                 <span class="masthead-link" data-onclick-command="openModal('modal-settings')">Ajustes</span>
             </div>
         </div>
@@ -1005,7 +38,7 @@
             </div>
             <div class="status-item">
                 <span class="status-label">● CHAT CON DOCUMENTOS:</span>
-                <span class="status-val" id="status-anything">Listo para usar (AnythingLLM)</span>
+                <span class="status-val" id="status-anything">Opcional · no comprobado</span>
             </div>
             <div class="status-item">
                 <span class="status-label">● BIBLIOTECA DE NOTAS:</span>
@@ -1019,14 +52,14 @@
         <!-- BARRA DE HERRAMIENTAS Y ACCIONES (TEMA, FUENTES, BUCLE OPTIMIZADO) -->
         <div class="toolbar-bar">
             <div class="toolbar-group">
-                <span style="font-size:0.95rem; font-weight:800; color:var(--paper); letter-spacing:0.5px; margin-right:4px;">TEMA:</span>
-                <select id="theme-select" style="background:var(--bg-card); color:var(--paper); border:1px solid var(--border-accent); border-radius:var(--card-radius); padding:8px 16px; font-size:0.8rem; font-weight:700; height:36px; box-sizing:border-box; cursor:pointer; font-family:var(--font-mono);" data-onchange-command="changeActiveTheme(this.value)">
+                <span class="console-layout-002">TEMA:</span>
+                <select id="theme-select" data-onchange-command="changeActiveTheme(this.value)" class="console-layout-003">
                     <option value="General">General</option>
                 </select>
                 <button class="btn-secondary" data-onclick-command="promptCreateTheme()">+ Nuevo Tema</button>
-                <span style="border-left:1px solid var(--border); height:18px; margin:0 4px;"></span>
+                <span class="console-layout-004"></span>
                 <button class="btn-primary" id="btn-run-optimized" data-onclick-command="triggerOptimizedCycle()">
-                    <span id="optimized-spinner" style="display:none;">⚙️</span> Nuevo Flujo de Trabajo
+                    <span id="optimized-spinner" class="is-hidden">⚙️</span> Nuevo Flujo de Trabajo
                 </button>
                 <button class="btn-secondary" data-onclick-command="triggerAction('flush_sources')">
                     Actualizar Fuentes
@@ -1139,7 +172,7 @@
         <!-- LÍNEA DE ESTADO MINIMALISTA INFERIOR -->
         <div class="bottom-status-bar">
             <span id="bottom-status-line">Estado: Listo • Vault: Funes_Vault • RAM: 0%</span>
-            <span style="font-size: 0.78rem; color: var(--muted);">'Funes' es una creación de Emilio Sevilla Ortego (funes_2026.1)</span>
+            <span class="console-text-002">'Funes' es una creación de Emilio Sevilla Ortego (funes_2026.1)</span>
         </div>
     </div>
 
@@ -1148,12 +181,12 @@
         <div class="modal-container">
             <div class="modal-header">
                 <div class="modal-title">FUNES EL MEMORIOSO — LECTOR DE NOTAS</div>
-                <div style="display: flex; gap: 6px; align-items: center;">
+                <div class="console-layout-005">
                     <button class="btn-small" id="btn-reader-back" data-onclick-command="goBackReaderNote()" disabled title="Volver a la nota anterior">◄ Atrás</button>
                     <button class="btn-small btn-toggle active" id="btn-reader-mode-list" data-onclick-command="switchReaderView('list')">Vista Notas</button>
                     <button class="btn-small btn-toggle" id="btn-reader-mode-graph" data-onclick-command="switchReaderView('graph')">Vista Gráfico</button>
                     <button class="btn-small btn-toggle" id="btn-reader-mode-moc" data-onclick-command="openMOCNote()">Mapa MOC</button>
-                    <span style="border-left: 1px solid var(--border); height: 16px; margin: 0 4px;"></span>
+                    <span class="console-layout-006"></span>
                     <button class="btn-small" data-onclick-command="triggerAction('copy_reader_note', {}, this)">Copiar</button>
                     <button class="btn-small" data-onclick-command="triggerAction('export_reader_note', {}, this)">Exportar</button>
                     <button class="btn-small" data-onclick-command="triggerAction('open_obsidian', {}, this)">Abrir en Obsidian</button>
@@ -1161,7 +194,7 @@
                 </div>
             </div>
             <div class="modal-body">
-                <div class="reader-dual-pane" id="reader-view-list">
+                <div class="reader-dual-pane reader-view" id="reader-view-list">
                     <div class="reader-sidebar">
                         <div class="reader-search-wrapper">
                             <span class="reader-search-icon">🔍</span>
@@ -1176,40 +209,40 @@
                         </div>
                     </div>
                     <div class="reader-view-pane" id="reader-content">
-                        <h2 style="color: var(--gold); border-bottom: 1px solid var(--border); padding-bottom: 6px;">Selecciona una nota</h2>
-                        <p style="margin-top: 10px; color: var(--muted);">Explora el mapa de conocimiento generado en 4_salida.</p>
+                        <h2 class="console-layout-007">Selecciona una nota</h2>
+                        <p class="console-layout-008">Explora el mapa de conocimiento generado en 4_salida.</p>
                     </div>
                 </div>
-                <div class="reader-graph-container" id="reader-view-graph" style="display: none; width: 100%; height: 100%; position: relative; background: var(--bg-card); border-radius: var(--card-radius); border: 1px solid var(--border); overflow: hidden;">
-                    <canvas id="obsidian-graph-canvas" style="width: 100%; height: 100%; display: block;"></canvas>
-                    <div style="position: absolute; bottom: 10px; left: 12px; font-size: 0.76rem; color: var(--muted); background: rgba(220, 212, 199, 0.92); padding: 5px 12px; border-radius: 4px; border: 1px solid var(--border);">
-                        Nodos: <b id="graph-nodes-count" style="color: var(--gold);">0</b> | Enlaces: <b id="graph-links-count" style="color: var(--accent);">0</b> • Haz clic en un nodo para leer la nota. Arrastra los nodos para mover el mapa.
+                <div class="reader-graph-container reader-view console-layout-009 is-hidden" id="reader-view-graph">
+                    <canvas id="obsidian-graph-canvas" class="graph-canvas console-layout-010"></canvas>
+                    <div class="console-layout-011">
+                        Nodos: <b id="graph-nodes-count" class="console-text-003">0</b> | Enlaces: <b id="graph-links-count" class="console-text-004">0</b> • Haz clic en un nodo para leer la nota. Arrastra los nodos para mover el mapa.
                     </div>
                 </div>
             </div>
-            <div class="modal-footer" style="justify-content: flex-end;">
+            <div class="modal-footer console-layout-012">
                 <button class="btn-secondary" data-onclick-command="closeModal('modal-reader')">Cerrar</button>
             </div>
         </div>
     </div>
 
     <!-- MODAL CREAR NUEVO TEMA -->
-    <div class="modal-overlay" id="modal-create-theme" style="z-index: 1100;">
-        <div class="modal-container" style="max-width: 480px; padding: 22px;">
-            <div class="modal-header" style="border-bottom: 1px solid var(--border-accent); padding-bottom: 10px; margin-bottom: 14px;">
-                <div class="modal-title" style="font-size: 0.95rem; font-weight: 700; color: var(--paper);">CREAR NUEVO TEMA INDEPENDIENTE</div>
+    <div class="modal-overlay console-layer-001" id="modal-create-theme">
+        <div class="modal-container console-layout-013">
+            <div class="modal-header console-layout-014">
+                <div class="modal-title console-text-005">CREAR NUEVO TEMA INDEPENDIENTE</div>
                 <button class="close-btn" data-onclick-command="closeModal('modal-create-theme')">&times;</button>
             </div>
-            <div class="modal-body" style="display: flex; flex-direction: column; gap: 14px;">
-                <p style="font-size: 0.85rem; color: var(--muted); line-height: 1.45; margin: 0;">
+            <div class="modal-body console-layout-015">
+                <p class="console-layout-016">
                     Ingresa el título del Tema para Funes. Se creará una bóveda Obsidian aislada con su correspondiente estructura de carpetas (1_entrada, 2_sucio, 3_limpio, 4_salida).
                 </p>
-                <div style="display: flex; flex-direction: column; gap: 6px; margin-top: 4px;">
-                    <label style="font-size: 0.8rem; font-weight: 700; color: var(--paper);">Título del Tema:</label>
-                    <input type="text" id="input-new-theme-name" placeholder="Ej: Derecho Civil, Historia Romana, Física Cuántica..." style="background: var(--bg-card); color: var(--paper); border: 1px solid var(--border-accent); border-radius: var(--card-radius); padding: 8px 12px; font-family: var(--font-mono); font-size: 0.85rem;" data-onkeydown-command="if(event.key==='Enter') submitCreateThemeModal()" />
+                <div class="console-layout-017">
+                    <label class="console-text-006">Título del Tema:</label>
+                    <input type="text" id="input-new-theme-name" placeholder="Ej: Derecho Civil, Historia Romana, Física Cuántica..." data-onkeydown-command="if(event.key==='Enter') submitCreateThemeModal()" / class="console-layout-018">
                 </div>
             </div>
-            <div class="modal-footer" style="margin-top: 18px; padding-top: 10px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: 10px;">
+            <div class="modal-footer console-layout-019">
                 <button class="btn-secondary" data-onclick-command="closeModal('modal-create-theme')">Cancelar</button>
                 <button class="btn-primary" data-onclick-command="submitCreateThemeModal()">✓ Crear Tema</button>
             </div>
@@ -1217,29 +250,29 @@
     </div>
 
     <!-- MODAL OPCIONES DE EXPORTACIÓN -->
-    <div class="modal-overlay" id="modal-export-options" style="z-index: 1100;">
-        <div class="modal-container" style="max-width: 400px; padding: 22px;">
-            <div class="modal-header" style="border-bottom: 1px solid var(--border-accent); padding-bottom: 10px; margin-bottom: 14px;">
-                <div class="modal-title" style="font-size: 0.95rem; font-weight: 700; color: var(--gold);">EXPORTAR NOTA</div>
+    <div class="modal-overlay console-layer-001" id="modal-export-options">
+        <div class="modal-container console-layout-020">
+            <div class="modal-header console-layout-014">
+                <div class="modal-title console-text-007">EXPORTAR NOTA</div>
                 <button class="close-btn" data-onclick-command="closeModal('modal-export-options')">&times;</button>
             </div>
-            <div class="modal-body" style="display: flex; flex-direction: column; gap: 14px;">
-                <p style="font-size: 0.85rem; color: var(--paper); line-height: 1.45; margin: 0;">
-                    Selecciona el formato de exportación para la nota <b id="export-modal-note-title" style="color: var(--gold);">"Nota"</b>:
+            <div class="modal-body console-layout-015">
+                <p class="console-layout-021">
+                    Selecciona el formato de exportación para la nota <b id="export-modal-note-title" class="console-text-003">"Nota"</b>:
                 </p>
-                <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 4px;">
-                    <button class="btn-primary" style="padding: 12px 16px; font-weight: 700; background: var(--bg-card); border: 1px solid var(--border-accent); border-radius: 6px; color: var(--paper); cursor: pointer; text-align: center;" data-onclick-command="executeExportFormat('markdown')">
+                <div class="console-layout-022">
+                    <button class="btn-primary console-layout-023" data-onclick-command="executeExportFormat('markdown')">
                         Exportar Markdown (.md)
                     </button>
-                    <button class="btn-primary" style="padding: 12px 16px; font-weight: 700; background: var(--bg-card); border: 1px solid var(--border-accent); border-radius: 6px; color: var(--paper); cursor: pointer; text-align: center;" data-onclick-command="executeExportFormat('pdf')">
+                    <button class="btn-primary console-layout-023" data-onclick-command="executeExportFormat('pdf')">
                         Exportar PDF (impresión asistida)
                     </button>
-                    <button class="btn-primary" style="padding: 12px 16px; font-weight: 700; background: var(--bg-card); border: 1px solid var(--border-accent); border-radius: 6px; color: var(--paper); cursor: pointer; text-align: center;" data-onclick-command="executeExportFormat('docx')">
+                    <button class="btn-primary console-layout-023" data-onclick-command="executeExportFormat('docx')">
                         Exportar Word (.docx)
                     </button>
                 </div>
             </div>
-            <div class="modal-footer" style="margin-top: 16px; padding-top: 10px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end;">
+            <div class="modal-footer console-layout-024">
                 <button class="btn-secondary" data-onclick-command="closeModal('modal-export-options')">Cancelar</button>
             </div>
         </div>
@@ -1247,7 +280,7 @@
 
     <!-- MODAL CHAT (FUNES EL CONVERSADOR) -->
     <div class="modal-overlay" id="modal-chat">
-        <div class="modal-container" style="width: 840px;">
+        <div class="modal-container console-layout-025">
             <div class="modal-header">
                 <div class="modal-title">FUNES EL CONVERSADOR — CHAT INTEGRADO</div>
                 <div>
@@ -1256,9 +289,9 @@
                     <button class="close-btn" data-onclick-command="closeModal('modal-chat')">&times;</button>
                 </div>
             </div>
-            <div id="chat-context-badge" style="background: var(--bg-card); border-bottom: 1px solid var(--border-accent); padding: 8px 16px; font-size: 0.8rem; color: var(--paper); display: flex; align-items: center; justify-content: space-between;">
-                <span><b>Contexto Activo:</b> <span id="chat-context-label" style="color: var(--gold); font-weight: 700;">Toda la Bóveda (4_salida)</span></span>
-                <small id="chat-context-subtext" style="color: var(--muted); font-size: 0.74rem;">Acceso a la totalidad del conocimiento en 4_salida</small>
+            <div id="chat-context-badge" class="console-layout-026">
+                <span><b>Contexto Activo:</b> <span id="chat-context-label" class="console-text-008">Toda la Bóveda (4_salida)</span></span>
+                <small id="chat-context-subtext" class="console-text-009">Acceso a la totalidad del conocimiento en 4_salida</small>
             </div>
             <div class="modal-body">
                 <div class="chat-container-box">
@@ -1274,7 +307,7 @@
                 </div>
             </div>
             <div class="modal-footer">
-                <span id="chat-privacy-footer" style="font-size: 0.78rem; color: var(--muted);">Modo solo local: inferencia en Ollama loopback (http://localhost:11434).</span>
+                <span id="chat-privacy-footer" class="console-text-002">Modo solo local: inferencia en Ollama loopback (http://localhost:11434).</span>
                 <button class="btn-secondary" data-onclick-command="closeModal('modal-chat')">Cerrar</button>
             </div>
         </div>
@@ -1284,12 +317,12 @@
     <div class="modal-overlay" id="modal-quarantine">
         <div class="modal-container">
             <div class="modal-header">
-                <div class="modal-title" style="color: var(--red);">ARCHIVOS EN CUARENTENA</div>
+                <div class="modal-title console-text-010">ARCHIVOS EN CUARENTENA</div>
                 <button class="close-btn" data-onclick-command="closeModal('modal-quarantine')">&times;</button>
             </div>
             <div class="modal-body" id="quarantine-list"></div>
             <div class="modal-footer">
-                <span style="font-size: 0.8rem; color: var(--muted);">Aislamiento seguro de archivos ilegibles sin detener el motor.</span>
+                <span class="console-text-011">Aislamiento seguro de archivos ilegibles sin detener el motor.</span>
                 <button class="btn-secondary" data-onclick-command="closeModal('modal-quarantine')">Cerrar</button>
             </div>
         </div>
@@ -1297,22 +330,22 @@
 
     <!-- MODAL ARCHIVOS POR PROCESAR -->
     <div class="modal-overlay" id="modal-stat-input">
-        <div class="modal-container" style="width: 680px;">
+        <div class="modal-container console-layout-027">
             <div class="modal-header">
-                <div class="modal-title" style="color: var(--gold);">ARCHIVOS POR PROCESAR (1_ENTRADA)</div>
+                <div class="modal-title console-text-003">ARCHIVOS POR PROCESAR (1_ENTRADA)</div>
                 <button class="close-btn" data-onclick-command="closeModal('modal-stat-input')">&times;</button>
             </div>
             <div class="modal-body">
-                <div style="background-color: var(--bg-card); border: 1px solid var(--border); padding: 14px; border-radius: 6px; display: flex; flex-direction: column; gap: 8px;">
-                    <div style="font-size: 0.88rem; font-weight: 700; color: var(--paper);">Desglose de la Carpeta de Ingesta:</div>
-                    <ul style="font-size: 0.8rem; color: var(--muted); margin: 0; padding-left: 18px; line-height: 1.6;">
-                        <li>Archivos locales directos en 1_entrada: <b id="stat-input-direct-count" style="color: var(--gold);">0</b></li>
-                        <li>Fuentes externas vinculadas: <b id="stat-input-sources-count" style="color: var(--gold);">0</b></li>
+                <div class="console-layout-028">
+                    <div class="console-text-012">Desglose de la Carpeta de Ingesta:</div>
+                    <ul class="console-layout-029">
+                        <li>Archivos locales directos en 1_entrada: <b id="stat-input-direct-count" class="console-text-003">0</b></li>
+                        <li>Fuentes externas vinculadas: <b id="stat-input-sources-count" class="console-text-003">0</b></li>
                     </ul>
                 </div>
             </div>
             <div class="modal-footer">
-                <span style="font-size: 0.8rem; color: var(--muted);">Archivos pendientes de transcripción y estructuración.</span>
+                <span class="console-text-011">Archivos pendientes de transcripción y estructuración.</span>
                 <button class="btn-secondary" data-onclick-command="closeModal('modal-stat-input')">Cerrar</button>
             </div>
         </div>
@@ -1320,23 +353,23 @@
 
     <!-- MODAL NOTAS PREPARADAS -->
     <div class="modal-overlay" id="modal-stat-notes">
-        <div class="modal-container" style="width: 680px;">
+        <div class="modal-container console-layout-027">
             <div class="modal-header">
                 <div class="modal-title">TELEMETRÍA DEL GRAFO DE CONOCIMIENTO</div>
                 <button class="close-btn" data-onclick-command="closeModal('modal-stat-notes')">&times;</button>
             </div>
             <div class="modal-body">
-                <div style="background-color: var(--bg-card); border: 1px solid var(--border); padding: 14px; border-radius: 6px; display: flex; flex-direction: column; gap: 8px;">
-                    <div style="font-size: 0.88rem; font-weight: 700; color: var(--paper);">Resumen de Notas e Interconexiones:</div>
-                    <ul style="font-size: 0.8rem; color: var(--muted); margin: 0; padding-left: 18px; line-height: 1.6;">
-                        <li>Notas inteligentes en 4_salida: <b id="stat-notes-total-count" style="color: var(--gold);">0</b></li>
-                        <li>Hiperenlaces cruzados ([[nota]]): <b id="stat-notes-links-count" style="color: var(--accent);">0</b></li>
-                        <li>Base de datos vectorial: <b style="color: var(--green);">ChromaDB Activo</b></li>
+                <div class="console-layout-028">
+                    <div class="console-text-012">Resumen de Notas e Interconexiones:</div>
+                    <ul class="console-layout-029">
+                        <li>Notas inteligentes en 4_salida: <b id="stat-notes-total-count" class="console-text-003">0</b></li>
+                        <li>Hiperenlaces cruzados ([[nota]]): <b id="stat-notes-links-count" class="console-text-004">0</b></li>
+                        <li>Base de datos vectorial: <b class="console-text-013">ChromaDB Activo</b></li>
                     </ul>
                 </div>
             </div>
             <div class="modal-footer">
-                <span style="font-size: 0.8rem; color: var(--muted);">Notas atómicas vectorizadas e hiperinterenlazadas en 4_salida.</span>
+                <span class="console-text-011">Notas atómicas vectorizadas e hiperinterenlazadas en 4_salida.</span>
                 <button class="btn-secondary" data-onclick-command="closeModal('modal-stat-notes')">Cerrar</button>
             </div>
         </div>
@@ -1344,24 +377,24 @@
 
     <!-- MODAL CONSUMO RAM -->
     <div class="modal-overlay" id="modal-stat-ram">
-        <div class="modal-container" style="width: 680px;">
+        <div class="modal-container console-layout-027">
             <div class="modal-header">
                 <div class="modal-title">RECURSOS Y MEMORIA RAM DEL SISTEMA</div>
                 <button class="close-btn" data-onclick-command="closeModal('modal-stat-ram')">&times;</button>
             </div>
             <div class="modal-body">
-                <div style="background-color: var(--bg-card); border: 1px solid var(--border); padding: 14px; border-radius: 6px; display: flex; flex-direction: column; gap: 10px;">
-                    <div style="font-size: 0.88rem; font-weight: 700; color: var(--paper);">Telemetría de Memoria del Sistema:</div>
-                    <ul style="font-size: 0.8rem; color: var(--muted); margin: 0; padding-left: 18px; line-height: 1.6;">
-                        <li>Uso actual de memoria RAM: <b id="stat-ram-usage-pct" style="color: var(--gold);">0%</b></li>
-                        <li>Margen de seguridad configurado: <b id="stat-ram-margin-pct" style="color: var(--paper);">20%</b></li>
-                        <li>Estado del recolector de basura (GC): <b style="color: var(--green);">Optimizado</b></li>
+                <div class="console-layout-030">
+                    <div class="console-text-012">Telemetría de Memoria del Sistema:</div>
+                    <ul class="console-layout-029">
+                        <li>Uso actual de memoria RAM: <b id="stat-ram-usage-pct" class="console-text-003">0%</b></li>
+                        <li>Margen de seguridad configurado: <b id="stat-ram-margin-pct" class="console-text-014">20%</b></li>
+                        <li>Estado del recolector de basura (GC): <b class="console-text-013">Optimizado</b></li>
                     </ul>
-                    <button class="btn-secondary" style="align-self: flex-start; margin-top: 4px;" data-onclick-command="triggerAction('stat_ram')">Purgar Memoria RAM Ahora</button>
+                    <button class="btn-secondary console-layout-031" data-onclick-command="triggerAction('stat_ram')">Purgar Memoria RAM Ahora</button>
                 </div>
             </div>
             <div class="modal-footer">
-                <span style="font-size: 0.8rem; color: var(--muted);">Gestión inteligente de memoria para modelos de IA local.</span>
+                <span class="console-text-011">Gestión inteligente de memoria para modelos de IA local.</span>
                 <button class="btn-secondary" data-onclick-command="closeModal('modal-stat-ram')">Cerrar</button>
             </div>
         </div>
@@ -1375,64 +408,64 @@
                 <button class="close-btn" data-onclick-command="closeModal('modal-settings')">&times;</button>
             </div>
             <div class="modal-body">
-                <div style="display: flex; gap: 10px; border-bottom: 1px solid var(--border); padding-bottom: 8px;">
-                    <button class="btn-small tab-btn" id="tab-btn-routes" style="font-weight: 700; background-color: var(--bg-card-hover);" data-onclick-command="switchSettingsTab('routes')">Memoria & Conexiones</button>
+                <div class="console-layout-032">
+                    <button class="btn-small tab-btn console-text-015" id="tab-btn-routes" data-onclick-command="switchSettingsTab('routes')">Memoria & Conexiones</button>
                     <button class="btn-small tab-btn" id="tab-btn-server" data-onclick-command="switchSettingsTab('server')">Servidor & IA</button>
                     <button class="btn-small tab-btn" id="tab-btn-template" data-onclick-command="switchSettingsTab('template')">Plantilla Nota</button>
                 </div>
 
                 <!-- PESTAÑA 1: MEMORIA & CONEXIONES -->
-                <div class="tab-panel" id="tab-panel-routes" style="display: flex; flex-direction: column; gap: 12px; margin-top: 8px;">
+                <div class="tab-panel console-layout-033" id="tab-panel-routes">
                     <!-- BÓVEDA PRINCIPAL -->
                     <div>
-                        <label style="font-size: 0.85rem; font-weight: 700; display: block; margin-bottom: 4px;">Ruta Principal de la Memoria de Funes:</label>
-                        <div style="display: flex; gap: 8px;">
-                            <input type="text" id="setting-vault-path" value="" readonly style="flex-grow: 1; padding: 8px 12px; border: 1px solid var(--border); background-color: var(--bg-log); color: var(--paper); font-family: var(--font-mono) !important; font-size: 0.85rem; border-radius: 4px; outline: none; cursor: default;">
-                            <button class="btn-secondary" style="white-space: nowrap;" data-onclick-command="browseVaultFolder()">Explorar...</button>
+                        <label class="console-layout-034">Ruta Principal de la Memoria de Funes:</label>
+                        <div class="console-layout-035">
+                            <input type="text" id="setting-vault-path" value="" readonly class="console-layout-036">
+                            <button class="btn-secondary console-layout-037" data-onclick-command="browseVaultFolder()">Explorar...</button>
                         </div>
-                        <span style="font-size: 0.72rem; color: var(--muted); margin-top: 3px; display: block;">Las carpetas 1_entrada, 2_sucio, 3_limpio y 4_salida están estructuradas automáticamente por Funes en esta bóveda.</span>
+                        <span class="console-layout-038">Las carpetas 1_entrada, 2_sucio, 3_limpio y 4_salida están estructuradas automáticamente por Funes en esta bóveda.</span>
                     </div>
 
                     <!-- CONEXIONES DE INGESTA (1_ENTRADA) -->
-                    <div style="border-top: 1px solid var(--border); padding-top: 10px;">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-                            <label style="font-size: 0.85rem; font-weight: 700; color: var(--paper);">Fuentes Vinculadas a 1_entrada (Ingesta):</label>
+                    <div class="console-layout-039">
+                        <div class="console-layout-040">
+                            <label class="console-text-016">Fuentes Vinculadas a 1_entrada (Ingesta):</label>
                             <button class="btn-small" data-onclick-command="addLinkedInputFolder()">+ Vincular Carpeta de Ingesta</button>
                         </div>
-                        <span style="font-size: 0.72rem; color: var(--muted); display: block; margin-bottom: 6px;">Archivos volcados en estas carpetas locales/compartidas serán recopilados hacia 1_entrada:</span>
-                        <div id="linked-input-folders-list" style="background-color: var(--bg-log); border: 1px solid var(--border); border-radius: 4px; padding: 8px; min-height: 54px; max-height: 90px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px;">
-                            <div style="font-size: 0.78rem; color: var(--muted); font-style: italic;">No hay carpetas de ingesta vinculadas.</div>
+                        <span class="console-layout-041">Archivos volcados en estas carpetas locales/compartidas serán recopilados hacia 1_entrada:</span>
+                        <div id="linked-input-folders-list" class="console-layout-042">
+                            <div class="console-text-017">No hay carpetas de ingesta vinculadas.</div>
                         </div>
                     </div>
 
                     <!-- CONEXIONES DE SALIDA (4_SALIDA) -->
-                    <div style="border-top: 1px solid var(--border); padding-top: 10px;">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-                            <label style="font-size: 0.85rem; font-weight: 700; color: var(--paper);">Destinos Vinculados a 4_salida (Difusión):</label>
+                    <div class="console-layout-039">
+                        <div class="console-layout-040">
+                            <label class="console-text-016">Destinos Vinculados a 4_salida (Difusión):</label>
                             <button class="btn-small" data-onclick-command="addLinkedOutputFolder()">+ Vincular Carpeta de Destino</button>
                         </div>
-                        <span style="font-size: 0.72rem; color: var(--muted); display: block; margin-bottom: 6px;">Notas preparadas en 4_salida se replicarán en estos destinos locales/compartidos:</span>
-                        <div id="linked-output-folders-list" style="background-color: var(--bg-log); border: 1px solid var(--border); border-radius: 4px; padding: 8px; min-height: 54px; max-height: 90px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px;">
-                            <div style="font-size: 0.78rem; color: var(--muted); font-style: italic;">No hay carpetas de destino vinculadas.</div>
+                        <span class="console-layout-041">Notas preparadas en 4_salida se replicarán en estos destinos locales/compartidos:</span>
+                        <div id="linked-output-folders-list" class="console-layout-042">
+                            <div class="console-text-017">No hay carpetas de destino vinculadas.</div>
                         </div>
                     </div>
                 </div>
 
                 <!-- PESTAÑA 2: SERVIDOR & IA -->
-                <div class="tab-panel" id="tab-panel-server" style="display: none; flex-direction: column; gap: 12px; margin-top: 8px;">
+                <div class="tab-panel console-layout-043" id="tab-panel-server">
                     <div>
-                        <label style="font-size: 0.85rem; font-weight: 700; display: block; margin-bottom: 4px;">Modelo LLM Ollama (Qwen Local):</label>
-                        <select id="setting-ollama-model" style="width: 100%; padding: 8px 12px; border: 1px solid var(--border); background-color: var(--bg-log); color: var(--paper); font-family: var(--font-mono) !important; font-size: 0.85rem; border-radius: 4px; cursor: pointer; outline: none;">
+                        <label class="console-layout-034">Modelo LLM Ollama (Qwen Local):</label>
+                        <select id="setting-ollama-model" class="console-layout-044">
                             <option value="qwen2.5:7b">qwen2.5:7b (Recomendado Papiro)</option>
                         </select>
                     </div>
                     <div>
-                        <label style="font-size: 0.85rem; font-weight: 700; display: block; margin-bottom: 4px;">URL Servidor:</label>
-                        <input id="setting-ollama-url" type="url" value="http://localhost:11434" style="width: 100%; box-sizing: border-box; padding: 8px 12px; border: 1px solid var(--border); background-color: var(--bg-log); color: var(--paper); font-family: var(--font-mono) !important; font-size: 0.85rem; border-radius: 4px; outline: none;">
+                        <label class="console-layout-034">URL Servidor:</label>
+                        <input id="setting-ollama-url" type="url" value="http://localhost:11434" class="console-layout-045">
                     </div>
                     <div>
-                        <label style="font-size: 0.85rem; font-weight: 700; display: block; margin-bottom: 4px;">Margen de Seguridad RAM:</label>
-                        <select id="setting-ram-margin" style="width: 100%; padding: 8px 12px; border: 1px solid var(--border); background-color: var(--bg-log); color: var(--paper); font-family: var(--font-mono) !important; font-size: 0.85rem; border-radius: 4px; cursor: pointer; outline: none;">
+                        <label class="console-layout-034">Margen de Seguridad RAM:</label>
+                        <select id="setting-ram-margin" class="console-layout-044">
                             <option value="10%">10%</option>
                             <option value="20%" selected>20%</option>
                             <option value="30%">30%</option>
@@ -1440,7 +473,7 @@
                             <option value="50%">50%</option>
                         </select>
                     </div>
-                    <label style="font-size: 0.78rem; color: var(--muted); display: flex; gap: 8px; align-items: flex-start;">
+                    <label class="console-layout-046">
                         <input id="setting-allow-non-loopback-ollama" type="checkbox">
                         <span>Permitir Ollama fuera de este equipo. Las solicitudes pueden salir del dispositivo.</span>
                     </label>
@@ -1448,18 +481,18 @@
                 </div>
 
                 <!-- PESTAÑA 3: PLANTILLA NOTA -->
-                <div class="tab-panel" id="tab-panel-template" style="display: none; flex-direction: column; gap: 12px; margin-top: 8px;">
+                <div class="tab-panel console-layout-043" id="tab-panel-template">
                     <div>
-                        <label style="font-size: 0.85rem; font-weight: 700; display: block; margin-bottom: 4px;">Encabezado Metadatos YAML:</label>
-                        <select id="setting-yaml-header" style="width: 100%; padding: 8px 12px; border: 1px solid var(--border); background-color: var(--bg-log); color: var(--paper); font-family: var(--font-mono) !important; font-size: 0.85rem; border-radius: 4px; cursor: pointer; outline: none;">
+                        <label class="console-layout-034">Encabezado Metadatos YAML:</label>
+                        <select id="setting-yaml-header" class="console-layout-044">
                             <option value="standard">Standard Funes (Completo con Tags e Interenlaces)</option>
                             <option value="strict">Obsidian Strict (Estándar Obsidian Core)</option>
                             <option value="minimal">Minimalista (Sólo Titular y Fecha)</option>
                         </select>
                     </div>
                     <div>
-                        <label style="font-size: 0.85rem; font-weight: 700; display: block; margin-bottom: 4px;">Índice MOC Global:</label>
-                        <select id="setting-auto-moc" style="width: 100%; padding: 8px 12px; border: 1px solid var(--border); background-color: var(--bg-log); color: var(--paper); font-family: var(--font-mono) !important; font-size: 0.85rem; border-radius: 4px; cursor: pointer; outline: none;">
+                        <label class="console-layout-034">Índice MOC Global:</label>
+                        <select id="setting-auto-moc" class="console-layout-044">
                             <option value="enabled">Generación Automática Activada (Recomendado)</option>
                             <option value="disabled">Generación Manual Únicamente</option>
                         </select>
@@ -1467,10 +500,10 @@
                 </div>
             </div>
             <div class="modal-footer">
-                <button class="btn-secondary" style="background-color: var(--bg-card); border: 1px solid var(--border-accent);" data-onclick-command="resetDefaultSettings()">Restaurar por Defecto</button>
-                <div style="display: flex; align-items: center; gap: 10px;">
-                    <span style="font-size: 0.78rem; color: var(--muted); font-weight: 700;">Local por defecto</span>
-                    <button class="btn-secondary" style="background-color: var(--accent); color: white;" data-onclick-command="saveSettings()">Guardar Ajustes</button>
+                <button class="btn-secondary console-text-018" data-onclick-command="resetDefaultSettings()">Restaurar por Defecto</button>
+                <div class="console-layout-047">
+                    <span class="console-text-019">Local por defecto</span>
+                    <button class="btn-secondary console-text-020" data-onclick-command="saveSettings()">Guardar Ajustes</button>
                 </div>
             </div>
         </div>
@@ -1484,10 +517,10 @@
                 <button class="close-btn" data-onclick-command="closeModal('modal-category')">&times;</button>
             </div>
             <div class="modal-body" id="category-modal-body">
-                <p style="font-size: 0.85rem; color: var(--muted);">Cargando listado de archivos...</p>
+                <p class="console-text-021">Cargando listado de archivos...</p>
             </div>
             <div class="modal-footer">
-                <span style="font-size: 0.78rem; color: var(--muted);">Doble clic abre el archivo con la app nativa del sistema.</span>
+                <span class="console-text-002">Doble clic abre el archivo con la app nativa del sistema.</span>
                 <button class="btn-secondary" data-onclick-command="closeModal('modal-category')">Cerrar</button>
             </div>
         </div>
@@ -1497,7 +530,7 @@
          Editor strategy (Task 6.3): TipTap excluded from packaged app — no vendored
          JS bundle. Body round-trip uses funes/ui/markdown_projection.py; approval
          persists NoteDocument (frontmatter + body_markdown), not editor DOM state. -->
-    <div class="modal-overlay" id="modal-approval" style="z-index: 1050;">
+    <div class="modal-overlay console-layer-002" id="modal-approval">
         <div class="modal-container">
             <div class="modal-header">
                 <div class="modal-title">BANDEJA DE APROBACIÓN — METADATOS SEGUROS</div>
@@ -1505,36 +538,36 @@
             </div>
             <div class="modal-body">
                 <div class="approval-pending-list" id="approval-pending-list">
-                    <p style="font-size:0.8rem; color:var(--muted); padding:8px;">Cargando notas pendientes...</p>
+                    <p class="console-layout-048">Cargando notas pendientes...</p>
                 </div>
                 <div class="metadata-form-panel" id="approval-metadata-form">
-                    <p style="font-size:0.82rem; color:var(--muted);">Selecciona una nota pendiente para revisar sus metadatos.</p>
-                    <div class="metadata-field" id="metadata-field-title" style="display:none;">
+                    <p class="console-text-022">Selecciona una nota pendiente para revisar sus metadatos.</p>
+                    <div class="metadata-field is-hidden" id="metadata-field-title">
                         <label for="metadata-title">Título</label>
                         <input type="text" id="metadata-title" autocomplete="off">
                         <span class="metadata-field-error" id="metadata-error-title"></span>
                     </div>
-                    <div class="metadata-field" id="metadata-field-tags" style="display:none;">
+                    <div class="metadata-field is-hidden" id="metadata-field-tags">
                         <label for="metadata-tags">Etiquetas (separadas por comas)</label>
                         <input type="text" id="metadata-tags" autocomplete="off" placeholder="etiqueta1, etiqueta2">
                         <span class="metadata-field-error" id="metadata-error-tags"></span>
                     </div>
-                    <div class="metadata-field" id="metadata-field-issue" style="display:none;">
+                    <div class="metadata-field is-hidden" id="metadata-field-issue">
                         <label for="metadata-issue">Cuestión</label>
                         <select id="metadata-issue"></select>
                         <span class="metadata-field-error" id="metadata-error-issue"></span>
                     </div>
-                    <div class="metadata-field" id="metadata-field-date" style="display:none;">
+                    <div class="metadata-field is-hidden" id="metadata-field-date">
                         <label for="metadata-date">Fecha</label>
                         <input type="date" id="metadata-date">
                         <span class="metadata-field-error" id="metadata-error-date"></span>
                     </div>
-                    <div class="metadata-field" id="metadata-field-sources" style="display:none;">
+                    <div class="metadata-field is-hidden" id="metadata-field-sources">
                         <label for="metadata-sources">Fuentes (una por línea)</label>
                         <textarea id="metadata-sources" rows="3" placeholder="Fuente 1&#10;Fuente 2"></textarea>
                         <span class="metadata-field-error" id="metadata-error-sources"></span>
                     </div>
-                    <div class="metadata-field" id="metadata-field-status" style="display:none;">
+                    <div class="metadata-field is-hidden" id="metadata-field-status">
                         <label for="metadata-status">Estado</label>
                         <select id="metadata-status">
                             <option value="pending_review">Pendiente de revisión</option>
@@ -1543,15 +576,15 @@
                         </select>
                         <span class="metadata-field-error" id="metadata-error-status"></span>
                     </div>
-                    <details class="metadata-diagnostic" id="metadata-diagnostic-panel" style="display:none;">
-                        <summary style="cursor:pointer; font-size:0.78rem; font-weight:700; color:var(--muted);">Vista diagnóstica — frontmatter YAML (solo lectura)</summary>
+                    <details class="metadata-diagnostic is-hidden" id="metadata-diagnostic-panel">
+                        <summary class="console-text-023">Vista diagnóstica — frontmatter YAML (solo lectura)</summary>
                         <pre id="metadata-raw-frontmatter"></pre>
                     </details>
                 </div>
             </div>
-            <div class="modal-footer" style="justify-content: space-between;">
-                <span id="approval-form-status" style="font-size:0.78rem; color:var(--muted);"></span>
-                <div style="display:flex; gap:10px;">
+            <div class="modal-footer console-layout-049">
+                <span id="approval-form-status" class="console-text-024"></span>
+                <div class="console-layout-050">
                     <button class="btn-secondary" data-onclick-command="closeModal('modal-approval')">Cerrar</button>
                     <button class="btn-secondary" id="btn-save-metadata" data-onclick-command="saveApprovalMetadata()" disabled>Guardar metadatos</button>
                     <button class="btn-primary" id="btn-approve-note" data-onclick-command="approveSelectedNote()" disabled>Aprobar nota</button>
@@ -1562,43 +595,43 @@
 
     <!-- MODAL GUÍA RÁPIDA -->
     <div class="modal-overlay" id="modal-help">
-        <div class="modal-container" style="width: 840px;">
+        <div class="modal-container console-layout-025">
             <div class="modal-header">
                 <div class="modal-title">GUÍA RÁPIDA DE USO — SISTEMA FUNES</div>
                 <button class="close-btn" data-onclick-command="closeModal('modal-help')">&times;</button>
             </div>
-            <div class="modal-body" style="gap: 14px; max-height: 75vh; overflow-y: auto; padding-right: 6px;">
+            <div class="modal-body console-layout-051">
                 <!-- 1. ORGANIZACIÓN EN TEMAS Y CUESTIONES -->
-                <div style="background: var(--bg-card); padding: 14px 18px; border: 1px solid var(--border); border-radius: var(--card-radius);">
-                    <h4 style="margin: 0 0 6px 0; color: var(--gold); font-size: 0.9rem;">1. Organización en Temas y Cuestiones</h4>
-                    <p style="font-size: 0.8rem; color: var(--paper); line-height: 1.45; margin: 0 0 8px 0;">
+                <div class="console-layout-052">
+                    <h4 class="console-layout-053">1. Organización en Temas y Cuestiones</h4>
+                    <p class="console-layout-054">
                         Funes te permite ordenar tu conocimiento en bloques independientes y asuntos específicos:
                     </p>
-                    <ul style="font-size: 0.78rem; color: var(--muted); margin: 0; padding-left: 18px; line-height: 1.55;">
+                    <ul class="console-layout-055">
                         <li><b>Temas:</b> Grandes bloques de conocimiento independientes elegibles en el menú <code>TEMA</code> de la cabecera. Cada Tema trabaja con su propia bóveda de notas (<code>1_entrada</code>, <code>2_sucio</code>, <code>3_limpio</code>, <code>4_salida</code>).</li>
                         <li><b>Cuestiones:</b> Subcarpetas temáticas dentro de <code>4_salida</code> que agrupan notas relacionadas entre sí. Las notas recién creadas sin clasificar quedan en <code>_Sin_Cuestion</code>.</li>
                     </ul>
                 </div>
 
                 <!-- 2. PROCESAMIENTO Y NUEVO FLUJO -->
-                <div style="background: var(--bg-card); padding: 14px 18px; border: 1px solid var(--border); border-radius: var(--card-radius);">
-                    <h4 style="margin: 0 0 6px 0; color: var(--gold); font-size: 0.9rem;">2. Procesamiento de Información y Nuevo Flujo de Trabajo</h4>
-                    <p style="font-size: 0.8rem; color: var(--paper); line-height: 1.45; margin: 0 0 8px 0;">
+                <div class="console-layout-052">
+                    <h4 class="console-layout-053">2. Procesamiento de Información y Nuevo Flujo de Trabajo</h4>
+                    <p class="console-layout-054">
                         Transformación automática del material en bruto en notas inteligentes estructuradas:
                     </p>
-                    <ul style="font-size: 0.78rem; color: var(--muted); margin: 0; padding-left: 18px; line-height: 1.55;">
+                    <ul class="console-layout-055">
                         <li><b>De Entrada a Limpio (1_entrada ➔ 3_limpio):</b> Ingesta de archivos, transcripción de audios y lectura de imágenes para obtener texto claro preservando 100% de la información original.</li>
                         <li><b>Nuevo Flujo de Trabajo:</b> Generación asistida por Inteligencia Artificial que analiza la información limpia, construye notas atómicas interconectadas, crea la <b>Nota Marco de Cuestión</b> y actualiza el <b>Mapa General de Contenidos (MOC)</b>.</li>
                     </ul>
                 </div>
 
                 <!-- 3. EDICIÓN, FUSIÓN Y PAPELERA DE CUARENTENA -->
-                <div style="background: var(--bg-card); padding: 14px 18px; border: 1px solid var(--border); border-radius: var(--card-radius);">
-                    <h4 style="margin: 0 0 6px 0; color: var(--gold); font-size: 0.9rem;">3. Edición, Fusión y Gestión de Notas</h4>
-                    <p style="font-size: 0.8rem; color: var(--paper); line-height: 1.45; margin: 0 0 8px 0;">
+                <div class="console-layout-052">
+                    <h4 class="console-layout-053">3. Edición, Fusión y Gestión de Notas</h4>
+                    <p class="console-layout-054">
                         Control total sobre tus notas desde el Lector de Funes:
                     </p>
-                    <ul style="font-size: 0.78rem; color: var(--muted); margin: 0; padding-left: 18px; line-height: 1.55;">
+                    <ul class="console-layout-055">
                         <li><b>Aprobación:</b> Revisa las notas generadas diferenciando entre notas pendientes de revisión y notas aprobadas.</li>
                         <li><b>Edición Guiada:</b> Modifica cómodamente el título, etiquetas, resumen ejecutivo y contenido de tus notas.</li>
                         <li><b>Fusión de Notas:</b> Combina varias notas seleccionadas en una sola sin perder fuentes ni referencias.</li>
@@ -1607,9 +640,9 @@
                 </div>
 
                 <!-- 4. CONSULTA E INTERACCIÓN CON IA LOCAL -->
-                <div style="background: var(--bg-card); padding: 14px 18px; border: 1px solid var(--border); border-radius: var(--card-radius);">
-                    <h4 style="margin: 0 0 6px 0; color: var(--gold); font-size: 0.9rem;">4. Consulta e Interacción con IA Local</h4>
-                    <ul style="font-size: 0.78rem; color: var(--paper); margin: 0; padding-left: 18px; line-height: 1.55;">
+                <div class="console-layout-052">
+                    <h4 class="console-layout-053">4. Consulta e Interacción con IA Local</h4>
+                    <ul class="console-layout-056">
                         <li><b>Hablar con esta Nota:</b> Inicia una conversación con la Inteligencia Artificial Local centrada únicamente en la nota actual.</li>
                         <li><b>Hablar con todas las Notas:</b> Consulta a la Inteligencia Artificial Local buscando respuestas en todas las notas de tu Tema activo.</li>
                         <li><b>Exportación:</b> Descarga instantáneamente cualquier nota en formato Markdown, PDF o Word.</li>
@@ -1617,7 +650,7 @@
                 </div>
             </div>
             <div class="modal-footer">
-                <span style="font-size: 0.78rem; color: var(--muted);">Funes v2026.1 • Formateo Universal de Notas, Estructuración y Síntesis</span>
+                <span class="console-text-002">Funes v2026.1 • Formateo Universal de Notas, Estructuración y Síntesis</span>
                 <button class="btn-secondary" data-onclick-command="closeModal('modal-help')">Cerrar</button>
             </div>
         </div>
@@ -1752,7 +785,7 @@
             const overlays = document.querySelectorAll('.modal-overlay');
             let isOpen = false;
             overlays.forEach(function(el) {
-                if (el.style.display === 'flex' || getComputedStyle(el).display === 'flex') {
+                if (el.classList.contains('is-open')) {
                     isOpen = true;
                 }
             });
@@ -1766,7 +799,7 @@
         function openModal(id) {
             const el = document.getElementById(id);
             if (el) {
-                el.style.display = 'flex';
+                el.classList.add('is-open');
             }
             updateModalBodyLock();
             if (id === 'modal-reader' || id === 'modal-chat') {
@@ -1822,9 +855,14 @@
         function setMetadataFormVisible(visible) {
             metadataFieldIds.forEach(function(field) {
                 const wrapper = document.getElementById('metadata-field-' + field);
-                if (wrapper) wrapper.style.display = visible ? 'flex' : 'none';
+                if (wrapper) {
+                    wrapper.classList.toggle('is-hidden', !visible);
+                    wrapper.classList.toggle('is-visible', visible);
+                }
             });
-            document.getElementById('metadata-diagnostic-panel').style.display = visible ? 'block' : 'none';
+            const diagnosticPanel = document.getElementById('metadata-diagnostic-panel');
+            diagnosticPanel.classList.toggle('is-hidden', !visible);
+            diagnosticPanel.classList.toggle('is-visible', visible);
             document.getElementById('btn-save-metadata').disabled = !visible;
             document.getElementById('btn-approve-note').disabled = !visible;
         }
@@ -1867,6 +905,14 @@
             openModal('modal-approval');
         }
 
+        function setTextMessage(container, text, className) {
+            container.replaceChildren();
+            const message = document.createElement('p');
+            message.className = className || '';
+            message.textContent = text;
+            container.appendChild(message);
+        }
+
         function loadApprovalInbox() {
             const listEl = document.getElementById('approval-pending-list');
             approvalSelectedNoteId = null;
@@ -1874,10 +920,10 @@
             setMetadataFormVisible(false);
             document.getElementById('approval-form-status').textContent = '';
             document.getElementById('metadata-raw-frontmatter').textContent = '';
-            listEl.innerHTML = '<p style="font-size:0.8rem; color:var(--muted); padding:8px;">Cargando notas pendientes...</p>';
+            setTextMessage(listEl, 'Cargando notas pendientes...', 'console-layout-048');
 
             if (!window.pywebview || !window.pywebview.api) {
-                listEl.innerHTML = '<p style="font-size:0.8rem; color:var(--muted); padding:8px;">Vista previa sin backend.</p>';
+                setTextMessage(listEl, 'Vista previa sin backend.', 'console-layout-048');
                 return;
             }
 
@@ -1888,7 +934,7 @@
                 const pending = (res && res.pending_notes) ? res.pending_notes : [];
                 listEl.replaceChildren();
                 if (!pending.length) {
-                    listEl.innerHTML = '<p style="font-size:0.8rem; color:var(--muted); padding:8px;">No hay notas pendientes de revisión.</p>';
+                    setTextMessage(listEl, 'No hay notas pendientes de revisión.', 'console-layout-048');
                     return;
                 }
                 pending.forEach(function(note) {
@@ -1980,14 +1026,14 @@
             if (!listEl) return;
             listEl.replaceChildren();
             const loading = document.createElement('p');
-            loading.style.cssText = 'font-size:0.85rem; color:var(--muted);';
+            loading.classList.add('console-text-028');
             loading.textContent = 'Cargando cuarentena...';
             listEl.appendChild(loading);
 
             if (!window.pywebview || !window.pywebview.api) {
                 listEl.replaceChildren();
                 const preview = document.createElement('p');
-                preview.style.cssText = 'font-size:0.85rem; color:var(--muted);';
+                preview.classList.add('console-text-028');
                 preview.textContent = 'Vista previa mock: sin bridge de cuarentena (lista vacía).';
                 listEl.appendChild(preview);
                 return;
@@ -2001,7 +1047,7 @@
             }).catch(function() {
                 listEl.replaceChildren();
                 const err = document.createElement('p');
-                err.style.cssText = 'font-size:0.85rem; color:var(--red);';
+                err.classList.add('console-text-029');
                 err.textContent = 'No se pudo cargar la cuarentena.';
                 listEl.appendChild(err);
             });
@@ -2013,9 +1059,9 @@
             listEl.replaceChildren();
             if (!notes || !notes.length) {
                 const empty = document.createElement('div');
-                empty.style.cssText = 'background-color: var(--bg-card); border: 1px solid var(--border); padding: 14px; border-radius: 6px;';
+                empty.classList.add('console-layout-063');
                 const msg = document.createElement('div');
-                msg.style.cssText = 'font-size: 0.85rem; color: var(--muted);';
+                msg.classList.add('console-text-021');
                 msg.textContent = 'No hay archivos en cuarentena actualmente.';
                 empty.appendChild(msg);
                 listEl.appendChild(empty);
@@ -2023,27 +1069,27 @@
             }
             notes.forEach(function(note) {
                 const card = document.createElement('div');
-                card.style.cssText = 'background-color: var(--bg-card); border: 1px solid var(--border); padding: 14px; border-radius: 6px; margin-bottom: 10px;';
+                card.classList.add('console-layout-064');
 
                 const filename = document.createElement('div');
-                filename.style.cssText = 'font-size: 0.9rem; font-weight: 600; color: var(--paper);';
+                filename.classList.add('console-text-030');
                 filename.textContent = note.original_filename || note.filename || note.stored_filename || 'Archivo';
 
                 const errorCode = document.createElement('div');
-                errorCode.style.cssText = 'font-size: 0.8rem; color: var(--muted); margin-top: 4px;';
+                errorCode.classList.add('console-layout-065');
                 errorCode.textContent = 'Código: ' + (note.error_code || 'desconocido');
 
                 const status = note.status || 'quarantined';
                 const statusLabel = document.createElement('div');
-                statusLabel.style.cssText = 'font-size: 0.8rem; margin-top: 4px;';
+                statusLabel.className = 'quarantine-status';
                 if (status === 'failed_for_review') {
-                    statusLabel.style.color = 'var(--amber, #d4a017)';
+                    statusLabel.classList.add('status-warning');
                     statusLabel.textContent = 'Estado: Revisión manual';
                 } else if (status === 'quarantined') {
-                    statusLabel.style.color = 'var(--muted)';
+                    statusLabel.classList.add('status-ok');
                     statusLabel.textContent = 'Estado: En cuarentena';
                 } else {
-                    statusLabel.style.color = 'var(--muted)';
+                    statusLabel.classList.add('status-ok');
                     statusLabel.textContent = 'Estado: ' + status;
                 }
 
@@ -2056,7 +1102,7 @@
                     restoreBtn.className = 'btn-small';
                     restoreBtn.type = 'button';
                     restoreBtn.textContent = 'Restaurar';
-                    restoreBtn.style.marginTop = '10px';
+                    restoreBtn.classList.add('console-layout-067');
                     const quarantineId = note.quarantine_id || note.path;
                     restoreBtn.addEventListener('click', function() {
                         restoreQuarantineItem(quarantineId);
@@ -2143,14 +1189,14 @@
         function closeModal(id) {
             const el = document.getElementById(id);
             if (el) {
-                el.style.display = 'none';
+                el.classList.remove('is-open');
             }
             updateModalBodyLock();
         }
 
         function populateOllamaModels(models, currentModel) {
             const select = document.getElementById('setting-ollama-model');
-            select.innerHTML = '';
+            select.replaceChildren();
             if (!models || !models.length) {
                 models = ["qwen2.5:7b", "qwen2.5-coder:7b", "qwen2.5:14b", "llama3.2"];
             }
@@ -2167,22 +1213,22 @@
 
         function switchSettingsTab(tabId) {
             document.querySelectorAll('.tab-panel').forEach(function(el) {
-                el.style.display = 'none';
+                el.classList.remove('is-active');
+                el.classList.add('is-hidden');
             });
             document.querySelectorAll('.tab-btn').forEach(function(el) {
-                el.style.fontWeight = '400';
-                el.style.backgroundColor = 'transparent';
+                el.classList.remove('is-active');
             });
 
             const activePanel = document.getElementById('tab-panel-' + tabId);
             if (activePanel) {
-                activePanel.style.display = 'flex';
+                activePanel.classList.remove('is-hidden');
+                activePanel.classList.add('is-active');
             }
 
             const activeBtn = document.getElementById('tab-btn-' + tabId);
             if (activeBtn) {
-                activeBtn.style.fontWeight = '700';
-                activeBtn.style.backgroundColor = 'var(--bg-card-hover)';
+                activeBtn.classList.add('is-active');
             }
         }
 
@@ -2197,7 +1243,7 @@
                 input.id = 'browser-folder-picker';
                 input.setAttribute('webkitdirectory', '');
                 input.setAttribute('directory', '');
-                input.style.display = 'none';
+                input.className = 'is-hidden';
                 document.body.appendChild(input);
             }
             input.addEventListener('change', function(e) {
@@ -2314,19 +1360,19 @@
                 container.replaceChildren();
                 if (folders.length === 0) {
                     const empty = document.createElement('div');
-                    empty.style.cssText = 'font-size: 0.78rem; color: var(--muted); font-style: italic;';
+                    empty.classList.add('console-text-017');
                     empty.textContent = emptyMessage;
                     container.appendChild(empty);
                     return;
                 }
                 folders.forEach(function(folder, index) {
                     const item = document.createElement('div');
-                    item.style.cssText = 'display: flex; justify-content: space-between; align-items: center; background-color: var(--bg-card); padding: 4px 8px; border-radius: 4px; font-size: 0.78rem; border: 1px solid var(--border);';
+                    item.classList.add('console-layout-067');
                     const label = document.createElement('span');
                     label.textContent = folder;
                     const remove = document.createElement('button');
                     remove.type = 'button';
-                    remove.style.cssText = 'color: var(--red); cursor: pointer; font-weight: 700; border: 0; background: transparent;';
+                    remove.classList.add('console-text-031');
                     remove.textContent = '×';
                     remove.addEventListener('click', function() { removeFolder(index); });
                     item.append(label, remove);
@@ -2364,12 +1410,10 @@
             if (!btnEl) return;
             const originalText = btnEl.innerText;
             btnEl.innerText = feedbackText;
-            btnEl.style.color = 'var(--gold)';
-            btnEl.style.borderColor = 'var(--gold)';
+            btnEl.classList.add('status-ok');
             setTimeout(function() {
                 btnEl.innerText = originalText;
-                btnEl.style.color = '';
-                btnEl.style.borderColor = '';
+                btnEl.classList.remove('status-ok');
             }, 1500);
         }
 
@@ -2442,8 +1486,7 @@
         function fallbackCopyText(text, btnEl, title) {
             const textArea = document.createElement('textarea');
             textArea.value = text;
-            textArea.style.position = 'fixed';
-            textArea.style.opacity = '0';
+            textArea.className = 'clipboard-buffer';
             document.body.appendChild(textArea);
             textArea.select();
             try {
@@ -2588,38 +1631,20 @@
             if (!toast) {
                 toast = document.createElement('div');
                 toast.id = 'papiro-toast';
-                toast.style.cssText = `
-                    position: fixed;
-                    bottom: 24px;
-                    right: 24px;
-                    background: var(--bg-card);
-                    color: var(--paper);
-                    border: 1px solid var(--border-accent);
-                    border-radius: var(--card-radius);
-                    padding: 12px 20px;
-                    font-family: var(--font-mono);
-                    font-size: 0.85rem;
-                    font-weight: 700;
-                    box-shadow: 0 4px 18px rgba(0,0,0,0.35);
-                    z-index: 99999;
-                    display: flex;
-                    align-items: center;
-                    gap: 10px;
-                    transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
-                    opacity: 0;
-                    transform: translateY(14px);
-                `;
+                toast.classList.add('console-layout-079');
+                toast.classList.add('toast', 'is-hidden');
                 document.body.appendChild(toast);
             }
-            toast.style.borderColor = isError ? 'var(--red)' : 'var(--gold)';
+            toast.classList.toggle('status-error', Boolean(isError));
+            toast.classList.toggle('status-ok', !isError);
             toast.textContent = message;
-            toast.style.opacity = '1';
-            toast.style.transform = 'translateY(0)';
+            toast.classList.remove('is-hidden');
+            toast.classList.add('is-visible');
 
             if (toast.timeoutId) clearTimeout(toast.timeoutId);
             toast.timeoutId = setTimeout(() => {
-                toast.style.opacity = '0';
-                toast.style.transform = 'translateY(14px)';
+                toast.classList.remove('is-visible');
+                toast.classList.add('is-hidden');
             }, 3800);
         }
 
@@ -2643,7 +1668,7 @@
         function renderThemeSelect() {
             const select = document.getElementById('theme-select');
             if (!select) return;
-            select.innerHTML = '';
+            select.replaceChildren();
             availableThemes.forEach(function(t) {
                 const opt = document.createElement('option');
                 opt.value = t;
@@ -2708,7 +1733,7 @@
             const btn = document.getElementById('btn-run-optimized');
             const spinner = document.getElementById('optimized-spinner');
             if (btn) btn.disabled = true;
-            if (spinner) spinner.style.display = 'inline-block';
+            if (spinner) spinner.classList.add('is-active');
 
             const activeDisplay = currentActiveTheme.replace(/_/g, ' ');
             const issueLabel = issueName ? ' para la Cuestión "' + issueName + '"' : ' en el Tema "' + activeDisplay + '"';
@@ -2717,21 +1742,21 @@
             if (window.pywebview && window.pywebview.api) {
                 window.pywebview.api.run_optimized_cycle(issueName || '').then(function(res) {
                     if (btn) btn.disabled = false;
-                    if (spinner) spinner.style.display = 'none';
+                    if (spinner) spinner.classList.remove('is-active');
                     if (res && res.log) log(res.log);
                     if (res && res.stats) updateDashboardStats(res.stats);
                     if (typeof loadReaderNotes === 'function') loadReaderNotes();
                     showPapiroToast('Nuevo Flujo de Trabajo completado exitosamente.');
                 }).catch(function(err) {
                     if (btn) btn.disabled = false;
-                    if (spinner) spinner.style.display = 'none';
+                    if (spinner) spinner.classList.remove('is-active');
                     log('Error al ejecutar Nuevo Flujo de Trabajo: ' + err);
                     showPapiroToast('Error al ejecutar Flujo de Trabajo', true);
                 });
             } else {
                 setTimeout(function() {
                     if (btn) btn.disabled = false;
-                    if (spinner) spinner.style.display = 'none';
+                    if (spinner) spinner.classList.remove('is-active');
                     log('Nuevo Flujo de Trabajo completado (vista previa). Se generaron notas marco e índice MOC.');
                     showPapiroToast('Nuevo Flujo de Trabajo completado exitosamente.');
                 }, 1200);
@@ -2818,20 +1843,20 @@
             bubble.append(sender, document.createTextNode(' ' + String(text == null ? '' : text)));
             if (meta && meta.error) {
                 const err = document.createElement('div');
-                err.style.cssText = 'margin-top:6px; font-size:0.75rem; color: var(--red, #DC2626); font-weight:700;';
+                err.classList.add('console-layout-068');
                 err.textContent = 'Error: ' + (meta.error.message || meta.error.code || 'fallo de Ollama');
                 bubble.appendChild(err);
             }
             if (meta && meta.retrieval_mode) {
                 const mode = document.createElement('div');
-                mode.style.cssText = 'margin-top:4px; font-size:0.72rem; color: var(--muted);';
+                mode.classList.add('console-layout-069');
                 mode.textContent = 'Modo de recuperación: ' + meta.retrieval_mode;
                 bubble.appendChild(mode);
             }
             const labels = formatChatSourceLabels(sources, meta && meta.source_labels);
             if (labels.length) {
                 const sourceText = document.createElement('div');
-                sourceText.style.cssText = 'margin-top:6px; font-size:0.75rem; color: var(--muted);';
+                sourceText.classList.add('console-layout-070');
                 sourceText.textContent = 'Fuentes: ' + labels.join(', ');
                 bubble.appendChild(sourceText);
             }
@@ -2920,13 +1945,25 @@
             if (view === 'list') {
                 if (listBtn) listBtn.classList.add('active');
                 if (graphBtn) graphBtn.classList.remove('active');
-                if (listView) listView.style.display = 'flex';
-                if (graphView) graphView.style.display = 'none';
+                if (listView) {
+                    listView.classList.remove('is-hidden');
+                    listView.classList.add('is-active');
+                }
+                if (graphView) {
+                    graphView.classList.remove('is-active');
+                    graphView.classList.add('is-hidden');
+                }
             } else {
                 if (graphBtn) graphBtn.classList.add('active');
                 if (listBtn) listBtn.classList.remove('active');
-                if (listView) listView.style.display = 'none';
-                if (graphView) graphView.style.display = 'block';
+                if (listView) {
+                    listView.classList.remove('is-active');
+                    listView.classList.add('is-hidden');
+                }
+                if (graphView) {
+                    graphView.classList.remove('is-hidden');
+                    graphView.classList.add('is-active');
+                }
                 loadObsidianGraphView();
             }
         }
@@ -2975,8 +2012,6 @@
 
             canvas.width = width * dpr;
             canvas.height = height * dpr;
-            canvas.style.width = width + 'px';
-            canvas.style.height = height + 'px';
 
             let nodes = data.nodes || [];
             let links = data.links || [];
@@ -3062,7 +2097,7 @@
                     isPanning = true;
                     panStartX = sx - panX;
                     panStartY = sy - panY;
-                    canvas.style.cursor = 'grabbing';
+                    canvas.classList.add('is-panning');
                 }
             };
 
@@ -3089,7 +2124,7 @@
                             break;
                         }
                     }
-                    canvas.style.cursor = hoveredNode ? 'pointer' : (isPanning ? 'grabbing' : 'grab');
+                    canvas.classList.toggle('is-hovered', Boolean(hoveredNode));
                 }
             };
 
@@ -3100,7 +2135,8 @@
                 }
                 draggedNode = null;
                 isPanning = false;
-                canvas.style.cursor = hoveredNode ? 'pointer' : 'grab';
+                canvas.classList.remove('is-panning');
+                canvas.classList.toggle('is-hovered', Boolean(hoveredNode));
             };
 
             canvas.onwheel = function(e) {
@@ -3318,17 +2354,17 @@
             currentSelectedNoteTitle = noteTitle;
             const bar = document.createElement('div');
             bar.id = 'note-action-bar';
-            bar.style.cssText = 'position: sticky; top: -24px; z-index: 20; display: flex; justify-content: space-between; align-items: center; background: var(--bg-card); border: 1px solid var(--border-accent); padding: 10px 16px; border-radius: 6px; margin: -24px -30px 16px -30px; box-shadow: 0 4px 12px rgba(0,0,0,0.12);';
+            bar.classList.add('console-layout-071');
             const title = document.createElement('span');
-            title.style.cssText = 'font-size: 0.85rem; font-weight: 700; color: var(--gold);';
+            title.classList.add('console-text-032');
             title.textContent = 'Nota: ' + noteTitle;
             const actions = document.createElement('div');
-            actions.style.cssText = 'display: flex; flex-direction: column; gap: 4px; align-items: flex-end;';
+            actions.classList.add('console-layout-072');
             [['single_note', 'Hablar con esta Nota'], ['all_notes', 'Hablar con todas las Notas']].forEach(function(action) {
                 const button = document.createElement('button');
                 button.type = 'button';
                 button.className = 'btn-small';
-                button.style.cssText = 'font-weight: 700; background: var(--bg-card-hover); border: 1px solid var(--border-accent); width: 220px; text-align: center;';
+                button.classList.add('console-layout-073');
                 button.textContent = action[1];
                 button.addEventListener('click', function() { launchChatWithContext(action[0]); });
                 actions.appendChild(button);
@@ -3370,81 +2406,80 @@
             reader.appendChild(noteContent);
         }
 
+        function createMockNoteContent(note) {
+            const content = document.createElement('div');
+            content.className = 'note-content';
+            const badge = document.createElement('div');
+            badge.className = 'note-badge';
+            badge.textContent = 'Vista previa local';
+            const heading = document.createElement('h1');
+            heading.textContent = note.title || 'Nota';
+            const paragraph = document.createElement('p');
+            paragraph.textContent = 'La vista previa local representa esta nota mediante nodos DOM tipados.';
+            content.append(badge, heading, paragraph);
+            return content;
+        }
+
         const LOCAL_MOCK_NOTES = [
             {
                 title: "Índice MOC — Mapa de Conocimiento Global",
                 path: "_Indice_MOC.md",
-                html: "<div class='note-content'><div class='note-badge'>YAML Metadata: moc, indice, mapa</div><h1 style='color:var(--gold);'>Índice MOC — Mapa de Conocimiento Global</h1><h3 style='color:var(--accent); margin-top:12px;'>Resumen Ejecutivo</h3><ul style='color:var(--muted); font-size:0.85rem;'><li><b>¿Qué?</b>: Índice central navegable y estructurado del Vault Funes.</li><li><b>¿Cuándo?</b>: Generado automáticamente por el Vault Engine.</li><li><b>¿Quién?</b>: Funes Vault Engine.</li><li><b>¿Cómo?</b>: Hiperenlaces Wiki cruzados y navegación jerárquica.</li></ul><h3 style='color:var(--accent); margin-top:12px;'>Índice General de Conocimiento (15 Notas Atómicas)</h3><ul style='color:var(--paper); font-size:0.85rem;'><li>[[Nota_Arquitectura_Funes]] — Arquitectura General de Funes</li><li>[[Nota_ETL_Pipeline_Ingesta]] — Pipeline ETL de Ingesta y Procesamiento</li><li>[[Nota_Motor_IA_Local]] — Motor de Inferencia IA Local y Ollama</li><li>[[Nota_Base_Datos_Vectorial]] — Base de Datos Vectorial ChromaDB</li><li>[[Nota_Optimizacion_RAM]] — Gobernador de Memoria RAM</li><li>[[Nota_Formato_Papiro]] — Estética Editorial Papiro y Consola UI</li><li>[[Nota_Graph_Engine_Optimizado]] — Grafo Interactivo de Conocimiento</li><li>[[Nota_Notas_Atomicas]] — Estructuración en Notas Atómicas</li><li>[[Nota_Gestor_Cuarentena]] — Aislamiento y Recuperación de Cuarentena</li><li>[[Nota_Integracion_Obsidian]] — Sincronización Bidireccional Obsidian</li><li>[[Nota_AnythingLLM_Conexion]] — Integración Desktop AnythingLLM</li><li>[[Nota_Telemetria_y_Logs]] — Registros y Gazette Logging</li><li>[[Nota_Seguridad_y_Privacidad]] — Privacidad 100% Offline</li><li>[[Nota_Manual_Usuario_Avanzado]] — Manual de Uso Avanzado y Atajos</li></ul></div>"
             },
             {
                 title: "Arquitectura General de Funes",
                 path: "Nota_Arquitectura_Funes.md",
-                html: "<div class='note-content'><div class='note-badge'>YAML Metadata: arquitectura, funes, pipeline</div><h1 style='color:var(--gold);'>Arquitectura General de Funes</h1><h3 style='color:var(--accent); margin-top:12px;'>Resumen Ejecutivo</h3><ul style='color:var(--muted); font-size:0.85rem;'><li><b>¿Qué?</b>: Sistema local de procesamiento de conocimiento de 4 etapas.</li><li><b>¿Cuándo?</b>: Versión 2026.</li><li><b>¿Quién?</b>: Funes Engine.</li><li><b>¿Cómo?</b>: Ingesta ➔ Transcripción ➔ Estructuración ➔ Consulta.</li></ul><h3 style='color:var(--accent); margin-top:12px;'>Desarrollo</h3><p style='font-size:0.85rem; color:var(--paper); line-height:1.5;'>El sistema Funes estructura la información desacoplando la ingesta del almacenamiento definitivo. Integra el [[Nota_Motor_IA_Local]] para síntesis y la [[Nota_Base_Datos_Vectorial]] para la búsqueda semántica rápida, todo enmarcado en el diseño [[Nota_Formato_Papiro]]. Véase también [[Nota_ETL_Pipeline_Ingesta]].</p></div>"
             },
             {
                 title: "Pipeline ETL de Ingesta y Procesamiento",
                 path: "Nota_ETL_Pipeline_Ingesta.md",
-                html: "<div class='note-content'><div class='note-badge'>YAML Metadata: etl, pipeline, ingesta</div><h1 style='color:var(--gold);'>Pipeline ETL de Ingesta y Procesamiento</h1><h3 style='color:var(--accent); margin-top:12px;'>Resumen Ejecutivo</h3><ul style='color:var(--muted); font-size:0.85rem;'><li><b>¿Qué?</b>: Ingesta multiformato de 4 estaciones independientes.</li><li><b>¿Cuándo?</b>: Monitoreo continuo mediante el módulo Watcher.</li><li><b>¿Quién?</b>: ETLPipeline + Extractores Especializados.</li><li><b>¿Cómo?</b>: Transición 1_entrada ➔ 2_sucio ➔ 3_limpio ➔ 4_salida.</li></ul><h3 style='color:var(--accent); margin-top:12px;'>Detalles del Flujo</h3><p style='font-size:0.85rem; color:var(--paper); line-height:1.5;'>El ciclo procesa archivos depositados en 1_entrada. En caso de fallos de lectura, se aíslan automáticamente según la norma descrita en [[Nota_Gestor_Cuarentena]].</p></div>"
             },
             {
                 title: "Motor de IA Local y Ollama",
                 path: "Nota_Motor_IA_Local.md",
-                html: "<div class='note-content'><div class='note-badge'>YAML Metadata: ollama, qwen, ia-local</div><h1 style='color:var(--gold);'>Motor de IA Local y Ollama</h1><h3 style='color:var(--accent); margin-top:12px;'>Resumen Ejecutivo</h3><ul style='color:var(--muted); font-size:0.85rem;'><li><b>¿Qué?</b>: Inferencia 100% privada mediante modelos LLM locales.</li><li><b>¿Cuándo?</b>: En tiempo real durante el procesamiento.</li><li><b>¿Quién?</b>: Ollama API + Qwen 2.5.</li><li><b>¿Cómo?</b>: Conexión HTTP local en puerto 11434.</li></ul><h3 style='color:var(--accent); margin-top:12px;'>Desarrollo</h3><p style='font-size:0.85rem; color:var(--paper); line-height:1.5;'>El motor utiliza Ollama ejecutado en la máquina del usuario. Incluye gestión de memoria controlada por el [[Nota_Optimizacion_RAM]] para evitar saturación del sistema durante tareas intensivas de sintetizado.</p></div>"
             },
             {
                 title: "Base de Datos Vectorial ChromaDB",
                 path: "Nota_Base_Datos_Vectorial.md",
-                html: "<div class='note-content'><div class='note-badge'>YAML Metadata: chromadb, embeddings, vectorial</div><h1 style='color:var(--gold);'>Base de Datos Vectorial ChromaDB</h1><h3 style='color:var(--accent); margin-top:12px;'>Resumen Ejecutivo</h3><ul style='color:var(--muted); font-size:0.85rem;'><li><b>¿Qué?</b>: Almacenamiento vectorial embebido.</li><li><b>¿Cuándo?</b>: Durante la etapa 3 de estructuración.</li><li><b>¿Quién?</b>: ChromaDB Engine.</li><li><b>¿Cómo?</b>: Generación de embeddings semánticos para RAG.</li></ul><h3 style='color:var(--accent); margin-top:12px;'>Desarrollo</h3><p style='font-size:0.85rem; color:var(--paper); line-height:1.5;'>Permite la consulta directa en idioma natural desde el conversador local. Se integra con la generación de [[Nota_Notas_Atomicas]] para mantener trazabilidad entre párrafos y documentos de origen.</p></div>"
             },
             {
                 title: "Gobernador de RAM y Memoria",
                 path: "Nota_Optimizacion_RAM.md",
-                html: "<div class='note-content'><div class='note-badge'>YAML Metadata: ram, gobernador, memoria</div><h1 style='color:var(--gold);'>Gobernador de RAM y Memoria</h1><h3 style='color:var(--accent); margin-top:12px;'>Resumen Ejecutivo</h3><ul style='color:var(--muted); font-size:0.85rem;'><li><b>¿Qué?</b>: Sistema de protección de recursos de hardware.</li><li><b>¿Cuándo?</b>: Monitorización continua.</li><li><b>¿Quién?</b>: RAM Governor.</li><li><b>¿Cómo?</b>: Cálculo dinámico del margen de seguridad.</li></ul><h3 style='color:var(--accent); margin-top:12px;'>Desarrollo</h3><p style='font-size:0.85rem; color:var(--paper); line-height:1.5;'>Regula la carga del [[Nota_Motor_IA_Local]] según el porcentaje libre de memoria RAM, garantizando una experiencia fluida sin cuelgues del sistema operativo.</p></div>"
             },
             {
                 title: "Estética Editorial Papiro y Consola UI",
                 path: "Nota_Formato_Papiro.md",
-                html: "<div class='note-content'><div class='note-badge'>YAML Metadata: papiro, ui, diseno</div><h1 style='color:var(--gold);'>Estética Editorial Papiro y Consola UI</h1><h3 style='color:var(--accent); margin-top:12px;'>Resumen Ejecutivo</h3><ul style='color:var(--muted); font-size:0.85rem;'><li><b>¿Qué?</b>: Sistema de diseño visual anticuario-tecnológico.</li><li><b>¿Cuándo?</b>: Interfaz gráfica de la consola.</li><li><b>¿Quién?</b>: PyWebView + HTML5 Canvas.</li><li><b>¿Cómo?</b>: Colores pergamino, tipografía monoespaciada y bordes biselados.</li></ul><h3 style='color:var(--accent); margin-top:12px;'>Desarrollo</h3><p style='font-size:0.85rem; color:var(--paper); line-height:1.5;'>Ofrece una experiencia visual premium con soporte para Grafo Interactivo de Obsidian [[Nota_Graph_Engine_Optimizado]], navegación nativa e hiperenlaces bi-direccionales vinculados a [[Nota_Notas_Atomicas]].</p></div>"
             },
             {
                 title: "Grafo Interactivo de Conocimiento",
                 path: "Nota_Graph_Engine_Optimizado.md",
-                html: "<div class='note-content'><div class='note-badge'>YAML Metadata: grafo, canvas, optimizado</div><h1 style='color:var(--gold);'>Grafo Interactivo de Conocimiento</h1><h3 style='color:var(--accent); margin-top:12px;'>Resumen Ejecutivo</h3><ul style='color:var(--muted); font-size:0.85rem;'><li><b>¿Qué?</b>: Motor Force-Directed en HTML5 Canvas con soporte HiDPI Retina.</li><li><b>¿Cuándo?</b>: Modo Vista Gráfico del lector.</li><li><b>¿Quién?</b>: OptimizadoGraphLoop.</li><li><b>¿Cómo?</b>: Simulación de física de muelles y repulsión de Coulomb.</li></ul><h3 style='color:var(--accent); margin-top:12px;'>Desarrollo</h3><p style='font-size:0.85rem; color:var(--paper); line-height:1.5;'>Permite explorar visualmente las conexiones de red entre [[Nota_Notas_Atomicas]] e hipervínculos bidireccionales.</p></div>"
             },
             {
                 title: "Estructuración en Notas Atómicas",
                 path: "Nota_Notas_Atomicas.md",
-                html: "<div class='note-content'><div class='note-badge'>YAML Metadata: notas-atomicas, zettelkasten, obsidian</div><h1 style='color:var(--gold);'>Estructuración en Notas Atómicas</h1><h3 style='color:var(--accent); margin-top:12px;'>Resumen Ejecutivo</h3><ul style='color:var(--muted); font-size:0.85rem;'><li><b>¿Qué?</b>: Formatos independientes y reusables de información.</li><li><b>¿Cuándo?</b>: Etapa final de síntesis.</li><li><b>¿Quién?</b>: Vault Funes.</li><li><b>¿Cómo?</b>: Plantilla YAML + resumen ejecutivo + hiperenlaces.</li></ul><h3 style='color:var(--accent); margin-top:12px;'>Desarrollo</h3><p style='font-size:0.85rem; color:var(--paper); line-height:1.5;'>Las notas atómicas permiten una navegación fluida dentro de la consola Papiro y su visualización en el mapa de conocimiento junto a la [[Nota_Base_Datos_Vectorial]] y el [[Nota_Formato_Papiro]].</p></div>"
             },
             {
                 title: "Aislamiento y Recuperación de Cuarentena",
                 path: "Nota_Gestor_Cuarentena.md",
-                html: "<div class='note-content'><div class='note-badge'>YAML Metadata: cuarentena, aislamiento, errores</div><h1 style='color:var(--gold);'>Aislamiento y Recuperación de Cuarentena</h1><h3 style='color:var(--accent); margin-top:12px;'>Resumen Ejecutivo</h3><ul style='color:var(--muted); font-size:0.85rem;'><li><b>¿Qué?</b>: Sub-sistema de contención preventiva de errores I/O.</li><li><b>¿Cuándo?</b>: Al detectar archivos ilegibles o corruptos.</li><li><b>¿Quién?</b>: QuarantineManager.</li><li><b>¿Cómo?</b>: Aislamiento en .quarantine/ con registro de fallos.</li></ul><h3 style='color:var(--accent); margin-top:12px;'>Desarrollo</h3><p style='font-size:0.85rem; color:var(--paper); line-height:1.5;'>Permite diagnosticar y restaurar documentos a 1_entrada/ cuando se corrigen permisos o formatos. Integrado con [[Nota_ETL_Pipeline_Ingesta]].</p></div>"
             },
             {
                 title: "Sincronización Bidireccional Obsidian",
                 path: "Nota_Integracion_Obsidian.md",
-                html: "<div class='note-content'><div class='note-badge'>YAML Metadata: obsidian, vault, uri</div><h1 style='color:var(--gold);'>Sincronización Bidireccional Obsidian</h1><h3 style='color:var(--accent); margin-top:12px;'>Resumen Ejecutivo</h3><ul style='color:var(--muted); font-size:0.85rem;'><li><b>¿Qué?</b>: Conexión nativa con Obsidian Vault.</li><li><b>¿Cuándo?</b>: Apertura nativa de archivos Markdown.</li><li><b>¿Quién?</b>: VaultManager + obsidian://open protocol.</li><li><b>¿Cómo?</b>: Apertura instantánea de notas Zettelkasten.</li></ul><h3 style='color:var(--accent); margin-top:12px;'>Desarrollo</h3><p style='font-size:0.85rem; color:var(--paper); line-height:1.5;'>Permite conmutar con un solo clic hacia la app Obsidian para edición avanzada. Consulte también [[Nota_Notas_Atomicas]].</p></div>"
             },
             {
                 title: "Integración Desktop AnythingLLM",
                 path: "Nota_AnythingLLM_Conexion.md",
-                html: "<div class='note-content'><div class='note-badge'>YAML Metadata: anythingllm, api, rag</div><h1 style='color:var(--gold);'>Integración Desktop AnythingLLM</h1><h3 style='color:var(--accent); margin-top:12px;'>Resumen Ejecutivo</h3><ul style='color:var(--muted); font-size:0.85rem;'><li><b>¿Qué?</b>: Vinculación de workspaces con AnythingLLM Desktop.</li><li><b>¿Cuándo?</b>: Sincronización multi-documento.</li><li><b>¿Quién?</b>: AnythingLLMConfigurator.</li><li><b>¿Cómo?</b>: API REST local en puerto 3001.</li></ul><h3 style='color:var(--accent); margin-top:12px;'>Desarrollo</h3><p style='font-size:0.85rem; color:var(--paper); line-height:1.5;'>Conecta las notas procesadas con el entorno AnythingLLM. Se apoya en [[Nota_Base_Datos_Vectorial]] y [[Nota_Motor_IA_Local]].</p></div>"
             },
             {
                 title: "Registros y Gazette Logging",
                 path: "Nota_Telemetria_y_Logs.md",
-                html: "<div class='note-content'><div class='note-badge'>YAML Metadata: gazette, logs, auditoria</div><h1 style='color:var(--gold);'>Registros y Gazette Logging</h1><h3 style='color:var(--accent); margin-top:12px;'>Resumen Ejecutivo</h3><ul style='color:var(--muted); font-size:0.85rem;'><li><b>¿Qué?</b>: Consola de actividad y auditoría en tiempo real.</li><li><b>¿Cuándo?</b>: Monitorización continua.</li><li><b>¿Quién?</b>: Gazette Logger.</li><li><b>¿Cómo?</b>: Almacenamiento local con rotación de archivos.</li></ul><h3 style='color:var(--accent); margin-top:12px;'>Desarrollo</h3><p style='font-size:0.85rem; color:var(--paper); line-height:1.5;'>Informa de la ingesta de archivos, síntesis con Ollama y avisos del [[Nota_Optimizacion_RAM]].</p></div>"
             },
             {
                 title: "Privacidad 100% Offline",
                 path: "Nota_Seguridad_y_Privacidad.md",
-                html: "<div class='note-content'><div class='note-badge'>YAML Metadata: privacidad, offline, local-first</div><h1 style='color:var(--gold);'>Privacidad 100% Offline</h1><h3 style='color:var(--accent); margin-top:12px;'>Resumen Ejecutivo</h3><ul style='color:var(--muted); font-size:0.85rem;'><li><b>¿Qué?</b>: Garantía estricta de procesamiento local sin telemetría.</li><li><b>¿Cuándo?</b>: En todas las operaciones.</li><li><b>¿Quién?</b>: Arquitectura Local-First.</li><li><b>¿Cómo?</b>: Modelos y almacenamiento en el equipo local.</li></ul><h3 style='color:var(--accent); margin-top:12px;'>Desarrollo</h3><p style='font-size:0.85rem; color:var(--paper); line-height:1.5;'>Todo el conocimiento se mantiene protegido en el equipo local. Véase también [[Nota_Motor_IA_Local]].</p></div>"
             },
             {
                 title: "Manual de Uso Avanzado y Atajos",
                 path: "Nota_Manual_Usuario_Avanzado.md",
-                html: "<div class='note-content'><div class='note-badge'>YAML Metadata: manual, atajos, guia, usuario</div><h1 style='color:var(--gold);'>Manual de Uso Avanzado y Atajos de Teclado</h1><h3 style='color:var(--accent); margin-top:12px;'>Resumen Ejecutivo</h3><ul style='color:var(--muted); font-size:0.85rem;'><li><b>¿Qué?</b>: Guía detallada de operación avanzada de la Consola Funes.</li><li><b>¿Cuándo?</b>: Versión 2026.1.</li><li><b>¿Quién?</b>: Funes User Documentation.</li><li><b>¿Cómo?</b>: Explicaciones extensas, tablas de atajos y flujo paso a paso.</li></ul><h3 style='color:var(--accent); margin-top:16px;'>1. Introducción a la Filosofía Papiro</h3><p style='font-size:0.85rem; color:var(--paper); line-height:1.6;'>La Consola Funes combina la calidez visual de una imprenta editorial anticuaria con la velocidad de un pipeline ETL local. Cualquier archivo depositado en 1_entrada es digerido y estructurado en notas atómicas independientes.</p><h3 style='color:var(--accent); margin-top:16px;'>2. Atajos de Teclado y Controles Rápidos</h3><table style='width:100%; border-collapse:collapse; font-size:0.82rem; margin-top:10px; color:var(--paper);'><tr style='border-bottom:1px solid var(--border-accent); text-align:left;'><th>Tecla / Combinación</th><th>Acción</th><th>Alcance</th></tr><tr><td><b>Escape</b></td><td>Cerrar modal o emergente activo</td><td>Global UI</td></tr><tr><td><b>Click Backdrop</b></td><td>Cerrar modal en primer plano</td><td>Modales Papiro</td></tr><tr><td><b>Rueda del Ratón</b></td><td>Zoom dinámico sobre el grafo</td><td>Vista Gráfico</td></tr><tr><td><b>Arrastrar Nodo</b></td><td>Reorganizar posición espacial de notas</td><td>Vista Gráfico</td></tr><tr><td><b>Doble Click Nodo</b></td><td>Abrir nota asociada en el lector</td><td>Vista Gráfico</td></tr></table><h3 style='color:var(--accent); margin-top:16px;'>3. Procedimiento de Ingesta Paso a Paso</h3><p style='font-size:0.85rem; color:var(--paper); line-height:1.6;'>Paso 1: Coloque los documentos en 1_entrada.<br>Paso 2: El sistema ejecuta el [[Nota_ETL_Pipeline_Ingesta]].<br>Paso 3: Si se producen errores de lectura, el archivo se transfiere a la [[Nota_Gestor_Cuarentena]].<br>Paso 4: Consulte los gráficos y resúmenes en el lector interactivo con el [[Nota_Graph_Engine_Optimizado]] y revise el [[_Indice_MOC]].</p><h3 style='color:var(--accent); margin-top:16px;'>4. Preguntas Frecuentes (FAQ)</h3><p style='font-size:0.85rem; color:var(--paper); line-height:1.6;'><b>¿Los datos salen del equipo?</b> No. Funes cumple con el principio de privacidad local [[Nota_Seguridad_y_Privacidad]].<br><b>¿Se integra con Obsidian?</b> Sí, mediante el protocolo nativo descrito en [[Nota_Integracion_Obsidian]].<br><b>¿Cómo se protege el hardware?</b> Con el monitoreo de recursos del [[Nota_Optimizacion_RAM]].</p></div>"
             }
         ];
 
@@ -3657,9 +2692,7 @@
                     currentSelectedNotePath = found.path;
                     const reader = document.getElementById('reader-content');
                     reader.replaceChildren(createNoteActionBar(found.title));
-                    const wrap = document.createElement('div');
-                    wrap.innerHTML = found.html;
-                    while (wrap.firstChild) reader.appendChild(wrap.firstChild);
+                    reader.appendChild(createMockNoteContent(found));
                 } else {
                     currentSelectedNoteTitle = displayTitle;
                     currentSelectedNotePath = '';
@@ -3697,20 +2730,20 @@
             bodyEl.replaceChildren();
             if (!files || !files.length) {
                 const empty = document.createElement('p');
-                empty.style.cssText = 'font-size:0.85rem; color:var(--muted);';
+                empty.classList.add('console-text-028');
                 empty.textContent = 'No hay archivos archivados en esta sección.';
                 bodyEl.appendChild(empty);
                 return;
             }
             const ul = document.createElement('ul');
-            ul.style.cssText = 'list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 8px;';
+            ul.classList.add('console-layout-074');
             files.forEach(function(f) {
                 const li = document.createElement('li');
-                li.style.cssText = 'background: var(--bg-card); padding: 10px 14px; border: 1px solid var(--border); border-radius: 4px; display: flex; justify-content: space-between; align-items: center; cursor: pointer; font-size: 0.85rem;';
+                li.classList.add('console-layout-075');
                 const description = document.createElement('span');
                 description.textContent = '📄 ' + f.name + ' ';
                 const folder = document.createElement('small');
-                folder.style.cssText = 'color:var(--muted); margin-left:8px;';
+                folder.classList.add('console-layout-076');
                 folder.textContent = '(' + (f.folder || 'vault') + ')';
                 description.appendChild(folder);
                 const open = document.createElement('button');
@@ -3746,11 +2779,10 @@
             const query = rawInput.toLowerCase().trim();
 
             document.querySelectorAll('.reader-note-item, .reader-pinned-item').forEach(function(el) {
-                if (!query || el.innerText.toLowerCase().includes(query)) {
-                    el.style.display = 'flex';
-                } else {
-                    el.style.display = 'none';
-                }
+                el.classList.toggle(
+                    'is-filtered-out',
+                    Boolean(query && !el.innerText.toLowerCase().includes(query))
+                );
             });
 
             if (query.length > 0 && query !== lastSearchQuery) {
@@ -3762,15 +2794,15 @@
                 const readerContent = document.getElementById('reader-content');
                 if (readerContent) {
                     const emptyState = document.createElement('div');
-                    emptyState.style.cssText = 'display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; min-height: 380px; text-align: center; color: var(--muted); gap: 18px; padding: 20px;';
+                    emptyState.classList.add('console-layout-077');
                     const hourglass = document.createElement('div');
-                    hourglass.style.cssText = 'font-size: 4rem; animation: flipHourglass 4s infinite cubic-bezier(0.65, 0, 0.35, 1);';
+                    hourglass.classList.add('console-text-033');
                     hourglass.textContent = '⌛';
                     const title = document.createElement('div');
-                    title.style.cssText = 'font-size: 0.92rem; font-weight: 700; color: var(--paper); letter-spacing: 0.5px;';
+                    title.classList.add('console-text-034');
                     title.append('Búsqueda activa: "', document.createTextNode(rawInput), '"');
                     const help = document.createElement('div');
-                    help.style.cssText = 'font-size: 0.8rem; color: var(--muted); max-width: 340px; line-height: 1.45;';
+                    help.classList.add('console-layout-078');
                     help.textContent = 'Selecciona una de las notas filtradas en la columna izquierda para desplegar su lectura.';
                     emptyState.append(hourglass, title, help);
                     readerContent.replaceChildren(emptyState);
@@ -3866,7 +2898,7 @@
             document.addEventListener('keydown', function(e) {
                 if (e.key === 'Escape') {
                     document.querySelectorAll('.modal-overlay').forEach(function(overlay) {
-                        if (overlay.style.display === 'flex' || getComputedStyle(overlay).display === 'flex') {
+                        if (overlay.classList.contains('is-open')) {
                             closeModal(overlay.id);
                         }
                     });

@@ -3,12 +3,16 @@ from __future__ import annotations
 
 import logging
 import sys
+from types import SimpleNamespace
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
 
-from funes.domain.jobs import CURRENT_PIPELINE_VERSION
+from funes.application.ingestion import IngestionApplicationService, _RunContext
+from funes.config import DEFAULT_ISSUE, get_default_config
+from funes.core.vault import VaultManager
+from funes.domain.jobs import CURRENT_PIPELINE_VERSION, JobRecord
 from funes.rag.chroma_store import ChromaInitError, ChromaStore, _patch_sqlite_for_chroma
 from funes.rag.index_records import (
     REQUIRED_CHUNK_METADATA_KEYS,
@@ -54,6 +58,121 @@ class _RecordingChroma:
             if len(hits) >= n_results:
                 break
         return hits
+
+
+class _ExplodingChunker:
+    def __init__(self) -> None:
+        self.identity_kwargs: dict = {}
+
+    def chunk_markdown(self, content, source_name, **identity_kwargs):
+        self.identity_kwargs = identity_kwargs
+        raise TypeError("bug inside chunker")
+
+
+class _RecordingChunker:
+    def __init__(self) -> None:
+        self.calls: list[dict] = []
+        self.chunks: list[dict] = []
+
+    def chunk_markdown(self, content, source_name, **identity_kwargs):
+        self.calls.append(identity_kwargs)
+        self.chunks = [
+            {
+                "id": f"chunk-{index}",
+                "content": content,
+                "metadata": dict(identity_kwargs),
+            }
+            for index in range(2)
+        ]
+        return self.chunks
+
+
+def _chunking_service(vault, chunker):
+    service = object.__new__(IngestionApplicationService)
+    service.vault = vault
+    service.chunker = chunker
+    return service
+
+
+def _chunking_job(*, clean_artifact=None) -> JobRecord:
+    return JobRecord(
+        job_id="job-sec-007",
+        source_hash="source-hash",
+        source_relative_path="4_salida/a.md",
+        stage="saved_clean",
+        attempt_count=1,
+        status="pending",
+        error_code=None,
+        error_message=None,
+        dirty_artifact=None,
+        clean_artifact=clean_artifact,
+        note_document_id="document-sec-007",
+        created_at="now",
+        updated_at="now",
+        pipeline_version=CURRENT_PIPELINE_VERSION,
+        revision=0,
+    )
+
+
+def test_chunker_internal_type_error_is_not_retried_without_identity():
+    chunker = _ExplodingChunker()
+    service = _chunking_service(SimpleNamespace(active_theme="Tema"), chunker)
+    context = _RunContext(content="# contenido", metadata={"issue": "Contratos"})
+
+    with pytest.raises(TypeError, match="bug inside chunker"):
+        service._chunk_for_index(
+            _chunking_job(), context, "document-sec-007"
+        )
+
+    assert chunker.identity_kwargs["issue"] == "Contratos"
+
+
+def test_chunk_identity_uses_extractor_metadata_and_default_issue():
+    chunker = _RecordingChunker()
+    service = _chunking_service(SimpleNamespace(active_theme="Tema"), chunker)
+
+    service._chunk_for_index(
+        _chunking_job(),
+        _RunContext(content="# contenido", metadata={"issue": "Contratos"}),
+        "document-sec-007",
+    )
+    assert [call["issue"] for call in chunker.calls] == ["Contratos"]
+    assert all(chunk["metadata"]["issue"] == "Contratos" for chunk in chunker.chunks)
+
+    chunker.calls.clear()
+    service._chunk_for_index(
+        _chunking_job(),
+        _RunContext(content="# contenido", metadata={}),
+        "document-sec-007",
+    )
+    assert chunker.calls[0]["issue"] == DEFAULT_ISSUE
+
+
+def test_chunk_identity_restores_issue_from_clean_frontmatter_after_reopen(temp_vault_path):
+    config = get_default_config(temp_vault_path)
+    first_vault = VaultManager(config.vault)
+    clean_path = first_vault.save_clean_md(
+        "a.md", "# contenido\n", {"issue": "Contratos"}
+    )
+    clean_artifact = clean_path.relative_to(temp_vault_path).as_posix()
+
+    reopened_vault = VaultManager(config.vault)
+    chunker = _RecordingChunker()
+    service = _chunking_service(reopened_vault, chunker)
+    service.path_resolver = reopened_vault.path_resolver
+
+    materialized = service._chunk_for_index(
+        _chunking_job(clean_artifact=clean_artifact),
+        _RunContext(),
+        "document-sec-007",
+    )
+
+    assert len(chunker.calls) == 1
+    assert chunker.calls[0]["issue"] == "Contratos"
+    assert materialized
+    assert all(
+        chunk["metadata"]["issue"] == "Contratos" for chunk in materialized
+    )
 
 
 def _publish(store: _RecordingChroma, chunks: list[dict], previous_ids: set[str]) -> set[str]:
@@ -250,6 +369,11 @@ def test_chroma_query_similar_surfaces_source_fields_via_mock(tmp_path):
 
     with patch.dict(sys.modules, {"chromadb": mock_chromadb}):
         hits = store.query_similar("q", n_results=1)
+    mock_collection.query.assert_called_once_with(
+        query_texts=["q"],
+        n_results=1,
+        include=["documents", "metadatas", "distances"],
+    )
     assert len(hits) == 1
     assert query_result_source_fields(hits[0]) == {
         "document_id": "doc-m",

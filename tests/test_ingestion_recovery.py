@@ -62,6 +62,13 @@ class _FakeChroma:
         return set(self.vectors)
 
 
+class _FailedDeleteChroma(_FakeChroma):
+    """Simulates an index that refuses compensation cleanup."""
+
+    def delete_chunks(self, ids) -> bool:
+        return False
+
+
 class _CrashAfterIndexingChroma(_FakeChroma):
     """Loses the process right after the vectors reach the index."""
 
@@ -119,6 +126,16 @@ class _FakeGenerator:
                 "history": [],
             }
         ) + f"# {stem}\n\n{clean_md_content}"
+
+
+class _RecordingLinker(GraphLinker):
+    def __init__(self, output_dir: Path) -> None:
+        super().__init__(output_dir)
+        self.seen_current_relative_path: str | None = None
+
+    def auto_link_content(self, note_content, current_title, **kwargs):
+        self.seen_current_relative_path = kwargs.get("current_relative_path")
+        return super().auto_link_content(note_content, current_title, **kwargs)
 
 
 class _BrokenGenerator:
@@ -227,7 +244,7 @@ def _build_harness(
         chunker=chunker if chunker is not None else SemanticChunker(),
         chroma=chroma,
         atomic_generator=generator,
-        linker=GraphLinker(vault.output_dir),
+        linker=_RecordingLinker(vault.output_dir),
         ram_governor=_FakeGovernor(),
         # The real stabilizer polls the file size for seconds; ingestion only
         # needs to know the file is present and non-empty.
@@ -272,6 +289,43 @@ def test_ingesting_a_source_completes_and_records_its_identities(harness):
     assert identity["relative_path"] == "4_salida/informe_trimestral.md"
     assert identity["content_hash"] == job.source_hash
     assert harness.notes() == [harness.vault.output_dir / "informe_trimestral.md"]
+
+
+def test_ingestion_passes_output_relative_path_to_linker(harness):
+    job = _ingest(harness)
+    identity = harness.store.get_document_identity(job.note_document_id)
+    expected = Path(identity["relative_path"]).relative_to("4_salida").as_posix()
+
+    assert harness.service.linker.seen_current_relative_path == expected
+
+
+def test_ingestion_resolves_target_before_single_atomic_note_write(harness, monkeypatch):
+    from funes.application import ingestion as ingestion_module
+
+    events: list[tuple[str, Path]] = []
+    original_resolve = harness.vault.atomic_note_path
+    original_write = ingestion_module.atomic_write_text
+
+    def resolve(*args, **kwargs):
+        target = original_resolve(*args, **kwargs)
+        events.append(("resolve", target))
+        return target
+
+    def write(path, content):
+        identity = harness.store.get_document_identity(
+            document_id_for_source(SOURCE_IDENTITY)
+        )
+        assert identity["relative_path"] == SOURCE_IDENTITY
+        events.append(("write", Path(path)))
+        return original_write(path, content)
+
+    monkeypatch.setattr(harness.vault, "atomic_note_path", resolve)
+    monkeypatch.setattr(ingestion_module, "atomic_write_text", write)
+
+    job = _ingest(harness)
+
+    assert job.stage == "completed"
+    assert [kind for kind, _path in events] == ["resolve", "write"]
 
 
 def test_reprocessing_the_same_source_hash_does_not_create_duplicate_notes(harness):
@@ -398,6 +452,50 @@ def test_stage_failure_quarantines_the_source_and_discards_partial_artifacts(
 
         with pytest.raises(JobNotResumableError):
             harness.service.resume(failed.job_id)
+    finally:
+        harness.store.close()
+
+
+def test_failed_dirty_compensation_preserves_dirty_artifact_identity(
+    temp_vault_path, monkeypatch
+):
+    harness = _build_harness(temp_vault_path, generator=_ExplodingGenerator())
+    original_unlink = Path.unlink
+
+    def fail_dirty_unlink(path, *args, **kwargs):
+        if harness.vault.dirty_dir in path.parents:
+            raise OSError("dirty artifact is temporarily locked")
+        return original_unlink(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "unlink", fail_dirty_unlink)
+    try:
+        job = harness.service.submit(SOURCE_IDENTITY)
+        failed = harness.service.resume(job.job_id)
+
+        assert failed.stage == "quarantined"
+        assert failed.dirty_artifact.startswith("2_sucio/")
+        dirty_path = harness.vault.config.vault_path / failed.dirty_artifact
+        assert dirty_path.exists()
+    finally:
+        harness.store.close()
+
+
+def test_failed_index_compensation_preserves_index_identity(
+    temp_vault_path, monkeypatch
+):
+    harness = _build_harness(temp_vault_path, chroma=_FailedDeleteChroma())
+
+    def fail_note_index(_job, _context):
+        raise RuntimeError("note index is temporarily unavailable")
+
+    monkeypatch.setattr(harness.service, "_run_index_note", fail_note_index)
+    try:
+        job = harness.service.submit(SOURCE_IDENTITY)
+        failed = harness.service.resume(job.job_id)
+
+        assert failed.stage == "quarantined"
+        assert failed.note_document_id is not None
+        assert harness.chunk_artifacts()
     finally:
         harness.store.close()
 

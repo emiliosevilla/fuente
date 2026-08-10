@@ -1,7 +1,7 @@
 import unittest
 import tempfile
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, call, patch
 
 from funes.rag.chroma_store import ChromaStore, _patch_sqlite_for_chroma
 from funes.rag.semantic_chunker import SemanticChunker
@@ -40,6 +40,8 @@ class TestRAG(unittest.TestCase):
             "ids": [["doc_123"]]
         }
         mock_collection.get.return_value = {
+            "ids": ["id-a", "id-b", "id-c"],
+            "documents": ["doc-a", "doc-b", "doc-c"],
             "metadatas": [{"title": "Nota Alpha"}, {"title": "Nota Beta"}, {"other": "val"}]
         }
 
@@ -69,11 +71,26 @@ class TestRAG(unittest.TestCase):
             self.assertEqual(len(results), 1)
             self.assertEqual(results[0]["id"], "doc_123")
             self.assertEqual(results[0]["content"], "Contenido recuperado semánticamente")
+            mock_collection.query.assert_called_once_with(
+                query_texts=["concepto clave"],
+                n_results=5,
+                include=["documents", "metadatas", "distances"],
+            )
+
+            all_chunks = store.get_all_chunks()
+            self.assertEqual([chunk["id"] for chunk in all_chunks], ["id-a", "id-b", "id-c"])
 
             # Obtener títulos
             titles = store.get_all_notes_titles()
             self.assertIn("Nota Alpha", titles)
             self.assertIn("Nota Beta", titles)
+            self.assertEqual(
+                mock_collection.get.call_args_list,
+                [
+                    call(include=["documents", "metadatas"]),
+                    call(include=["documents", "metadatas"]),
+                ],
+            )
 
     def test_sqlite_patch_logic(self):
         # Probar que el parche de SQLite no falla ni lanza excepciones imprevistas
@@ -153,4 +170,3 @@ Más información detallada sobre la subsección.
 
 if __name__ == "__main__":
     unittest.main()
-

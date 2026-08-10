@@ -192,6 +192,7 @@ def test_flush_mode_processes_input_without_background_monitor(tmp_path):
     assert created["monitors"] == []
     assert lifecycle.monitor is None
     assert len(created["graph_loops"]) == 1
+    assert lifecycle.graph_loop is created["graph_loops"][0]
     assert created["graph_loops"][0].started is False
     assert created["graph_loops"][0].refine_calls == 1
 

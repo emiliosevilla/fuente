@@ -237,15 +237,18 @@ class FunesConsoleBackend:
 
     def _resolve_step2_ingestion(
         self,
-    ) -> tuple[IngestionApplicationService, JobStore, Optional[ETLPipeline]]:
-        """Return ingestion collaborators for step2 without duplicating lifecycle pipeline."""
+    ) -> Optional[tuple[IngestionApplicationService, JobStore]]:
+        """Return only ingestion collaborators owned by an active runtime."""
         if self._ingestion_service is not None and self._ingestion_job_store is not None:
-            return self._ingestion_service, self._ingestion_job_store, None
-        if self.lifecycle is not None and self.lifecycle.pipeline is not None:
+            return self._ingestion_service, self._ingestion_job_store
+        if (
+            self.lifecycle is not None
+            and self.lifecycle.is_running
+            and self.lifecycle.pipeline is not None
+        ):
             pipeline = self.lifecycle.pipeline
-            return pipeline.ingestion, pipeline.job_store, None
-        pipeline = ETLPipeline(self.config)
-        return pipeline.ingestion, pipeline.job_store, pipeline
+            return pipeline.ingestion, pipeline.job_store
+        return None
 
     def attach_lifecycle(self, lifecycle: ApplicationLifecycle) -> None:
         """Share the lifecycle-owned VaultManager for theme-scoped processing."""
@@ -271,6 +274,15 @@ class FunesConsoleBackend:
         else:
             self.vault.set_active_theme(theme_name)
         return self.vault.active_theme
+
+    def _refine_graph(self, target_issue: Optional[str] = None) -> dict:
+        """Delegate graph work to the lifecycle-owned, serialized loop."""
+        if self.lifecycle is None or not self.lifecycle.is_running:
+            return {
+                "error": "graph_service_unavailable",
+                "message": "The lifecycle-owned graph service is not started",
+            }
+        return self.lifecycle.refine_graph(target_issue=target_issue)
 
     def _apply_settings_config(self, config: AppConfig) -> None:
         """Refresh settings consumers after their durable config has been written."""
@@ -832,11 +844,9 @@ historial:
         elif action_name == "run_optimized_cycle":
             target_issue = payload.get("target_issue")
             try:
-                loop = OptimizadoGraphLoop(
-                    self.vault.output_dir,
-                    vault_root=self.vault.config.vault_path,
-                )
-                res = loop.refine_knowledge_graph(target_issue=target_issue)
+                res = self._refine_graph(target_issue=target_issue)
+                if "error" in res:
+                    return res
                 msg = f"Ciclo Optimizado completado para Cuestión '{target_issue or 'Todas'}'. Notas procesadas: {res.get('processed_notes', 0)}."
                 return {"log": msg, "result": res, "refresh": True, "stats": self.get_stats_dict()}
             except Exception as e:
@@ -854,11 +864,9 @@ historial:
             }
         elif action_name == "reindex_notes":
             try:
-                loop = OptimizadoGraphLoop(
-                    self.vault.output_dir,
-                    vault_root=self.vault.config.vault_path,
-                )
-                loop.refine_knowledge_graph()
+                res = self._refine_graph()
+                if "error" in res:
+                    return res
                 notes_count = len(list(self.vault.output_dir.rglob("*.md"))) if self.vault.output_dir.exists() else 0
                 return {
                     "log": f"Se regeneró el mapa de notas e interconexiones. Total notas preparadas: {notes_count}",
@@ -981,7 +989,13 @@ historial:
             }
         elif action_name == "step2_transcribe":
             try:
-                ingestion, _job_store, ephemeral_pipeline = self._resolve_step2_ingestion()
+                resolved = self._resolve_step2_ingestion()
+                if resolved is None:
+                    return {
+                        "error": "ingestion_service_unavailable",
+                        "message": "The lifecycle-owned ingestion service is not started",
+                    }
+                ingestion, _job_store = resolved
                 input_dir = self.vault.input_dir
                 input_files = (
                     [
@@ -993,36 +1007,32 @@ historial:
                     else []
                 )
                 log_lines: list[str] = []
-                try:
-                    for file_path in input_files:
-                        try:
-                            identity = ingestion.vault_relative_identity(file_path)
-                            job = ingestion.submit(identity)
-                            if job.stage != "completed":
-                                job = ingestion.resume(job.job_id)
-                            if job.stage == "completed":
-                                log_lines.append(f"[OK] {file_path.name}")
-                            else:
-                                log_lines.append(
-                                    f"[PENDIENTE] {file_path.name}: "
-                                    f"stage={job.stage} code={job.error_code}"
-                                )
-                        except SourceNotStableError:
+                for file_path in input_files:
+                    try:
+                        identity = ingestion.vault_relative_identity(file_path)
+                        job = ingestion.submit(identity)
+                        if job.stage != "completed":
+                            job = ingestion.resume(job.job_id)
+                        if job.stage == "completed":
+                            log_lines.append(f"[OK] {file_path.name}")
+                        else:
                             log_lines.append(
-                                f"[OMITIDO] {file_path.name}: archivo no estabilizado"
+                                f"[PENDIENTE] {file_path.name}: "
+                                f"stage={job.stage} code={job.error_code}"
                             )
-                        except PathAuthorizationError:
-                            log_lines.append(
-                                f"[OMITIDO] {file_path.name}: ruta no autorizada"
-                            )
-                        except Exception as err:
-                            self.quarantine_service.handle_failure(
-                                file_path, err, attempt_count=1
-                            )
-                            log_lines.append(f"[ERROR] {file_path.name}: {err}")
-                finally:
-                    if ephemeral_pipeline is not None:
-                        ephemeral_pipeline.close()
+                    except SourceNotStableError:
+                        log_lines.append(
+                            f"[OMITIDO] {file_path.name}: archivo no estabilizado"
+                        )
+                    except PathAuthorizationError:
+                        log_lines.append(
+                            f"[OMITIDO] {file_path.name}: ruta no autorizada"
+                        )
+                    except Exception as err:
+                        self.quarantine_service.handle_failure(
+                            file_path, err, attempt_count=1
+                        )
+                        log_lines.append(f"[ERROR] {file_path.name}: {err}")
                 message = "Estructuración de datos completada hacia 3_limpio."
                 if log_lines:
                     message = message + "\n" + "\n".join(log_lines)
@@ -1035,11 +1045,9 @@ historial:
                 return {"log": f"Error en Transcripción: {e}"}
         elif action_name == "step3_structure":
             try:
-                loop = OptimizadoGraphLoop(
-                    self.vault.output_dir,
-                    vault_root=self.vault.config.vault_path,
-                )
-                loop.refine_knowledge_graph()
+                res = self._refine_graph()
+                if "error" in res:
+                    return res
                 configure_anythingllm_integration(self.vault.output_dir)
                 notes_count = len(list(self.vault.output_dir.rglob("*.md"))) if self.vault.output_dir.exists() else 0
                 return {
@@ -1070,7 +1078,10 @@ historial:
                 "alert": "Ajustes restaurados a los valores por defecto del sistema Papiro."
             }
 
-        return {"log": f"Acción '{action_name}' procesada."}
+        return {
+            "error": "action_not_allowed",
+            "message": "Acción no permitida",
+        }
 
     def select_folder(self, title: str = "Seleccionar Carpeta") -> str:
         """
@@ -1332,9 +1343,8 @@ historial:
                 if separator
                 else re.sub(r"^Nota_", "", note_name).replace("_", " ")
             )
-            note_file = note_name if note_name.endswith(".md") else f"{note_name}.md"
             try:
-                resolved_note = resolver.resolve_unique_note_basename(note_file)
+                resolved_note = resolver.resolve_wikilink_target(note_name)
                 document_id = document_id_for_relative_path(
                     self._vault_relative_identity(resolved_note)
                 )

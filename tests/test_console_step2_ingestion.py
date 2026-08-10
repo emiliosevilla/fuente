@@ -1,6 +1,8 @@
 """Console step2_transcribe must route through durable ingestion jobs (Task 3)."""
 from pathlib import Path
 
+import pytest
+
 from funes.application.ingestion import IngestionApplicationService
 from funes.config import get_default_config
 from funes.control_console import FunesConsoleBackend
@@ -49,3 +51,16 @@ def test_step2_transcribe_uses_job_store(tmp_path):
     assert jobs, "step2 must create durable jobs"
     assert not source.exists(), "successful ingest removes/moves the input source"
     store.close()
+
+
+def test_step2_without_lifecycle_does_not_construct_pipeline(tmp_path, monkeypatch):
+    monkeypatch.setattr(
+        "funes.control_console.ETLPipeline",
+        lambda *_: pytest.fail("console must not construct an ad-hoc ETLPipeline"),
+    )
+
+    result = FunesConsoleBackend(tmp_path / "Vault").handle_action(
+        "step2_transcribe", {}
+    )
+
+    assert result["error"] == "ingestion_service_unavailable"

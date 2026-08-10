@@ -107,8 +107,11 @@ class ApplicationLifecycle:
             self.pipeline = self._pipeline_factory(self.config)
 
             if self.mode == MODE_FLUSH:
-                self.last_flush_result = self._run_flush_once()
+                # The one-shot graph loop is still lifecycle-owned. Mark the
+                # lifecycle running before the flush so its public graph
+                # service contract is the same in every mode.
                 self._started = True
+                self.last_flush_result = self._run_flush_once()
                 return
 
             self.monitor = self._monitor_factory(self.pipeline)
@@ -178,6 +181,19 @@ class ApplicationLifecycle:
         )
         return theme_dir
 
+    def refine_graph(self, target_issue: str | None = None) -> dict:
+        """Refine the lifecycle-owned graph loop, or fail closed.
+
+        Console actions must never create a second loop: the loop started (or
+        assigned for a flush) by this lifecycle is the sole graph owner.
+        """
+        if not self._started or self.pipeline is None or self.graph_loop is None:
+            return {
+                "error": "graph_service_unavailable",
+                "message": "The lifecycle-owned graph service is not started",
+            }
+        return self.graph_loop.refine_knowledge_graph(target_issue=target_issue)
+
     def _run_flush_once(self) -> dict:
         assert self.pipeline is not None
         self.pipeline.resume_pending_jobs()
@@ -196,8 +212,8 @@ class ApplicationLifecycle:
 
         refine_result = None
         if self.refine_graph_on_flush:
-            graph_loop = self._graph_loop_factory(self.pipeline.vault.output_dir)
-            refine_result = graph_loop.refine_knowledge_graph()
+            self.graph_loop = self._graph_loop_factory(self.pipeline.vault.output_dir)
+            refine_result = self.refine_graph()
 
         return {
             "files_found": len(input_files),

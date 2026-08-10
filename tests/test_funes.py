@@ -8,6 +8,7 @@ from funes.core.vault import VaultManager
 from funes.domain.frontmatter import parse_frontmatter, serialize_frontmatter
 from funes.extractors.registry import ExtractorRegistry
 from funes.extractors.office_pdf import TextAndOfficeExtractor
+from funes.ram_governor.budget import MODEL_CATALOG
 from funes.ram_governor.governor import RAMGovernor
 from funes.rag.semantic_chunker import SemanticChunker
 from funes.graph_engine.linker import GraphLinker
@@ -123,7 +124,16 @@ Ver también: `Proyecto Alpha en codigo inline`
         
         model = gov.recommend_model()
         self.assertIsInstance(model, str)
-        self.assertTrue(len(model) > 0)
+        decision = gov.last_budget_decision()
+        self.assertIsNotNone(decision)
+        if model:
+            self.assertIn(model, {entry.id for entry in MODEL_CATALOG})
+            self.assertTrue(decision["allowed"])
+            self.assertEqual(decision["model_id"], model)
+        else:
+            self.assertFalse(decision["allowed"])
+            self.assertIsNone(decision["model_id"])
+            self.assertIn("bm25_only", decision["reason"].lower())
 
     def test_semantic_chunker(self):
         chunker = SemanticChunker(max_chunk_size=100)

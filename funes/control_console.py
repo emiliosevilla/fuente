@@ -17,7 +17,7 @@ import logging.handlers
 import subprocess
 import threading
 import webbrowser
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Mapping, Optional, Dict, Any, List
 
@@ -38,7 +38,20 @@ from funes.application.export import (
     ExportFileExistsError,
     UnsupportedExportFormatError,
 )
+from funes.application.health import HealthService
+from funes.application.job_control import (
+    JobControlService,
+    decode_cursor,
+    validate_cursor,
+    validate_expected_revision,
+    validate_filters,
+    validate_job_id,
+    validate_limit,
+    validate_reason,
+)
 from funes.application.notes import NotesApplicationService
+from funes.application.onboarding import OnboardingService
+from funes.application.review_export import ReviewExportApplicationService
 from funes.application.retrieval import RetrievalApplicationService
 from funes.application.settings import SettingsService, SettingsValidationError
 from funes.config import (
@@ -64,9 +77,11 @@ from funes.domain.metadata_form import (
 )
 from funes.domain.paths import AuthorizedPathResolver, document_id_for_relative_path
 from funes.domain.quarantine import QuarantineService
+from funes.domain.runtime_policy import resolve_runtime_policy
 from funes.infrastructure.atomic_files import atomic_write_json, atomic_write_text
 from funes.infrastructure.sqlite_store import JobStore
 from funes.rag.chroma_store import ChromaStore
+from funes.rag.vault_corpus import VaultCorpusProvider
 from funes.ui.bridge import FunesPyWebViewApi
 from funes.core.app_checker import check_and_prompt_user_apps_closed, launch_obsidian
 from funes.core.anythingllm_config import (
@@ -79,6 +94,7 @@ from funes.watcher.watcher import ETLPipeline
 from funes.graph_engine.linker import CANONICAL_MOC_FILENAME, GraphLinker
 from funes.graph_engine.optimized_loop import OptimizadoGraphLoop
 from funes.ram_governor.governor import RAMGovernor
+from funes.ram_governor.budget import select_llm_model
 
 logger = logging.getLogger(__name__)
 
@@ -297,7 +313,12 @@ class FunesConsoleBackend:
     def __init__(self, vault_path: Path):
         self.vault_path = vault_path.resolve()
         self.config = get_default_config(self.vault_path)
+        self.runtime_policy = resolve_runtime_policy(self.config, budget=None)
         self.vault = VaultManager(self.config.vault)
+        self.onboarding_service = OnboardingService(
+            self.vault_path,
+            path_resolver=self.vault.path_resolver(),
+        )
         self.sync_manager = FolderSyncManager(self.vault_path)
         self.quarantine_service = self.vault.quarantine_service
         self.ram_governor = RAMGovernor(
@@ -316,9 +337,13 @@ class FunesConsoleBackend:
         self._chat_service: Optional[ChatApplicationService] = None
         self._notes_service: Optional[NotesApplicationService] = None
         self._export_service: Optional[ExportApplicationService] = None
+        self._review_export_service: Optional[ReviewExportApplicationService] = None
         self._job_store: Optional[JobStore] = None
         self._ingestion_service: Optional[IngestionApplicationService] = None
         self._ingestion_job_store: Optional[JobStore] = None
+        self._job_control_service: Optional[JobControlService] = None
+        self._ollama_models_measured = False
+        self._live_settings_apply = False
 
     def attach_ingestion_service(
         self,
@@ -328,6 +353,7 @@ class FunesConsoleBackend:
         """Attach a pre-built ingestion service (tests / offline harness)."""
         self._ingestion_service = ingestion
         self._ingestion_job_store = job_store
+        self._job_control_service = None
 
     def _resolve_step2_ingestion(
         self,
@@ -352,6 +378,9 @@ class FunesConsoleBackend:
             )
         self.lifecycle = lifecycle
         self.vault = lifecycle.pipeline.vault
+        self.runtime_policy = getattr(
+            lifecycle.pipeline, "runtime_policy", self.runtime_policy
+        )
         self.quarantine_service = self.vault.quarantine_service
         # Prefer the pipeline chroma + reset chat/retrieval so BM25 shares one cache.
         self._chroma_store = getattr(lifecycle.pipeline, "chroma", None)
@@ -359,7 +388,14 @@ class FunesConsoleBackend:
         self._chat_service = None
         self._notes_service = None
         self._export_service = None
+        self._review_export_service = None
         self._job_store = None
+        self._job_control_service = None
+        # A test/offline attachment is an explicit alternate collaborator.
+        # Once a real lifecycle is attached, its pipeline owns the reloadable
+        # ingestion service and JobStore used by the queue API.
+        self._ingestion_service = None
+        self._ingestion_job_store = None
 
     def _apply_theme(self, theme_name: str) -> str:
         """Activate a theme on the lifecycle pipeline when attached, else locally."""
@@ -382,6 +418,8 @@ class FunesConsoleBackend:
         """Refresh settings consumers after their durable config has been written."""
         vault_changed = self.vault_path != config.vault.vault_path
         self.config = config
+        if not self._live_settings_apply:
+            self.runtime_policy = resolve_runtime_policy(config, budget=None)
         self.vault_path = config.vault.vault_path
         self.ram_governor = RAMGovernor(
             ollama_url=config.ollama_url,
@@ -389,6 +427,13 @@ class FunesConsoleBackend:
         )
         # Model/URL changes must rebuild the chat provider on next ask.
         self._chat_service = None
+        if (
+            not vault_changed
+            and self.lifecycle is not None
+            and self.lifecycle.pipeline is not None
+            and self.lifecycle.is_running
+        ):
+            self.lifecycle.set_config(config)
         if vault_changed:
             self.vault = VaultManager(config.vault)
             self.sync_manager = FolderSyncManager(self.vault_path)
@@ -397,6 +442,140 @@ class FunesConsoleBackend:
             self._retrieval_service = None
             self._notes_service = None
             self._job_store = None
+            self._review_export_service = None
+            self._job_control_service = None
+
+    @staticmethod
+    def _policy_dict(policy) -> Dict[str, Any]:
+        return {
+            "profile": policy.profile.value,
+            "retrieval_mode": policy.retrieval_mode,
+            "vector_index_enabled": policy.vector_index_enabled,
+            "audio_mode": policy.audio_mode.value,
+            "whisper_model_path": (
+                str(policy.whisper_model_path)
+                if policy.whisper_model_path is not None
+                else None
+            ),
+            "allow_model_download": policy.allow_model_download,
+            "selected_model": policy.selected_model,
+            "llm_available": policy.llm_available,
+            "reason": policy.reason,
+        }
+
+    def _measure_policy_for_config(self, config: AppConfig):
+        """Use the read-only health seam before admitting a chat model."""
+        governor = RAMGovernor(
+            ollama_url=config.ollama_url,
+            safety_margin_pct=config.ram_safety_margin_pct,
+        )
+        budget = select_llm_model(governor.measure_memory())
+        snapshot = HealthService(config, budget=budget).snapshot()
+        policy = resolve_runtime_policy(
+            config,
+            budget,
+            installed_models=snapshot.installed_models,
+        )
+        return snapshot, policy
+
+    def _restore_live_settings(
+        self,
+        previous_config: AppConfig,
+        previous_policy,
+        previous_services: tuple,
+    ) -> None:
+        """Restore durable and in-memory state after a live apply failure."""
+        save_config(previous_config)
+        self.settings_service.config = previous_config
+        self.config = previous_config
+        self.vault_path = previous_config.vault.vault_path
+        self.runtime_policy = previous_policy
+        self.ram_governor = RAMGovernor(
+            ollama_url=previous_config.ollama_url,
+            safety_margin_pct=previous_config.ram_safety_margin_pct,
+        )
+        if self.lifecycle is not None and self.lifecycle.pipeline is not None:
+            self.lifecycle.set_config(previous_config)
+            self.lifecycle.set_runtime_policy(previous_policy)
+            self._chroma_store = getattr(self.lifecycle.pipeline, "chroma", None)
+        (
+            self._retrieval_service,
+            self._chat_service,
+            self._notes_service,
+            self._export_service,
+        ) = previous_services
+
+    def get_job_control_service(self) -> JobControlService:
+        """Return queue control backed by the active lifecycle's job store."""
+        resolved = self._resolve_step2_ingestion()
+        if resolved is None:
+            raise RuntimeError("The lifecycle-owned job queue is not started")
+        ingestion, job_store = resolved
+        if (
+            self._job_control_service is None
+            or self._job_control_service.ingestion is not ingestion
+            or self._job_control_service.job_store is not job_store
+        ):
+            self._job_control_service = JobControlService(
+                job_store,
+                ingestion=ingestion,
+            )
+        return self._job_control_service
+
+    def get_jobs(
+        self,
+        filters: Mapping[str, Any] | None = None,
+        limit: int = 50,
+        cursor: str | None = None,
+    ) -> Dict[str, Any]:
+        """Return a JSON-safe queue page from the lifecycle-owned store."""
+        filters = validate_filters(filters)
+        validate_limit(limit)
+        validate_cursor(cursor)
+        page = self.get_job_control_service().list_jobs(
+            status=filters.get("status"),
+            stage=filters.get("stage"),
+            limit=limit,
+            cursor=cursor,
+        )
+        return {
+            "items": [asdict(item) for item in page.items],
+            "next_cursor": page.next_cursor,
+        }
+
+    def get_job_detail(self, job_id: str) -> Dict[str, Any]:
+        """Return a JSON-safe job detail and its durable history."""
+        validate_job_id(job_id)
+        detail = self.get_job_control_service().get_job(job_id)
+        return {
+            "job": asdict(detail.job),
+            "events": [asdict(event) for event in detail.events],
+            "schedule_decisions": [dict(decision) for decision in detail.schedule_decisions],
+            "reason": detail.reason,
+        }
+
+    def resume_job(self, job_id: str, expected_revision: int) -> Dict[str, Any]:
+        """Resume one job through the lifecycle-owned ingestion service."""
+        validate_job_id(job_id)
+        validate_expected_revision(expected_revision)
+        return asdict(
+            self.get_job_control_service().resume(
+                job_id, expected_revision=expected_revision
+            )
+        )
+
+    def cancel_job(
+        self, job_id: str, expected_revision: int, reason: str
+    ) -> Dict[str, Any]:
+        """Request cancellation and return the durable resulting job record."""
+        validate_job_id(job_id)
+        validate_expected_revision(expected_revision)
+        reason = validate_reason(reason)
+        return asdict(
+            self.get_job_control_service().request_cancel(
+                job_id, expected_revision=expected_revision, reason=reason
+            )
+        )
 
     def _get_chroma_store(self) -> ChromaStore:
         if self.lifecycle is not None and self.lifecycle.pipeline is not None:
@@ -411,10 +590,24 @@ class FunesConsoleBackend:
     def get_retrieval_service(self) -> RetrievalApplicationService:
         """Shared retrieval service (hybrid searcher reused from Chroma when possible)."""
         if self._retrieval_service is None:
-            self._retrieval_service = RetrievalApplicationService(
-                self._get_chroma_store(),
-                ram_governor=self.ram_governor,
-            )
+            if self.runtime_policy.vector_index_enabled:
+                self._retrieval_service = RetrievalApplicationService(
+                    self._get_chroma_store(),
+                    runtime_policy=self.runtime_policy,
+                    ram_governor=self.ram_governor,
+                )
+            else:
+                corpus = VaultCorpusProvider(
+                    self.vault.config.vault_path,
+                    output_roots=(self.vault.output_dir,),
+                    path_resolver=self._path_resolver(),
+                )
+                self._retrieval_service = RetrievalApplicationService(
+                    None,
+                    corpus_provider=corpus,
+                    runtime_policy=self.runtime_policy,
+                    ram_governor=self.ram_governor,
+                )
         return self._retrieval_service
 
     def get_chat_service(self) -> ChatApplicationService:
@@ -445,8 +638,13 @@ class FunesConsoleBackend:
                 vault=self.vault,
                 path_resolver=self._path_resolver(),
                 job_store=self._job_store,
-                chroma_store=self._get_chroma_store(),
+                chroma_store=(
+                    self._get_chroma_store()
+                    if self.runtime_policy.vector_index_enabled
+                    else None
+                ),
                 index_notifier=self.notify_index_changed,
+                runtime_policy=self.runtime_policy,
             )
         return self._notes_service
 
@@ -458,6 +656,35 @@ class FunesConsoleBackend:
                 path_resolver=self._path_resolver(),
             )
         return self._export_service
+
+    def get_review_export_service(self) -> ReviewExportApplicationService:
+        """Return the approval/export coordinator for browser download mode."""
+        if self._review_export_service is None:
+            self._review_export_service = ReviewExportApplicationService(
+                self.get_notes_service(),
+                self.get_export_service(),
+            )
+        return self._review_export_service
+
+    def approve_and_export(
+        self,
+        document_id: str,
+        expected_revision: int,
+        export_format: str,
+        metadata_patch: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """Approve canonically, then prepare a browser download payload.
+
+        Browser mode deliberately has no destination path. Revision and metadata
+        failures remain exceptions; only known export projection failures are
+        represented by the coordinator's partial result.
+        """
+        return self.get_review_export_service().approve_and_prepare_export(
+            document_id,
+            expected_revision,
+            export_format,
+            metadata_patch=metadata_patch,
+        ).as_dict()
 
     def export_note(
         self,
@@ -493,7 +720,7 @@ class FunesConsoleBackend:
         """Invalidate BM25 caches after ingestion writes (parked Task 4.2 wiring)."""
         if self._retrieval_service is not None:
             self._retrieval_service.notify_index_changed()
-        else:
+        elif self.runtime_policy.vector_index_enabled:
             chroma = self._get_chroma_store()
             invalidate = getattr(chroma, "invalidate_bm25_cache", None)
             if callable(invalidate):
@@ -502,9 +729,79 @@ class FunesConsoleBackend:
     def save_settings(self, settings: Dict[str, Any]) -> Dict[str, Any]:
         """Apply validated canonical settings from the typed UI bridge."""
         try:
-            result = self.settings_service.apply(**settings)
+            prepared = self.settings_service.prepare(**settings)
         except (SettingsValidationError, TypeError, ValueError) as error:
             return {"error": "invalid_settings", "message": str(error)}
+
+        live = (
+            self.lifecycle is not None
+            and self.lifecycle.is_running
+            and self.lifecycle.pipeline is not None
+        )
+        if live and prepared.config.vault.vault_path != self.config.vault.vault_path:
+            return {
+                "error": "vault_change_requires_restart",
+                "message": "Changing the Vault path requires restarting Funes.",
+            }
+
+        previous_config = self.config
+        previous_policy = self.runtime_policy
+        previous_services = (
+            self._retrieval_service,
+            self._chat_service,
+            self._notes_service,
+            self._export_service,
+        )
+        try:
+            measured_snapshot = None
+            if live:
+                measured_snapshot, next_policy = self._measure_policy_for_config(
+                    prepared.config
+                )
+                self._live_settings_apply = True
+            result = self.settings_service.apply(**settings)
+            if live:
+                self._live_settings_apply = False
+                assert self.lifecycle is not None
+                self.lifecycle.set_runtime_policy(next_policy)
+                self.runtime_policy = next_policy
+                self._chroma_store = getattr(self.lifecycle.pipeline, "chroma", None)
+                self._retrieval_service = None
+                self._chat_service = None
+                self._notes_service = None
+                self._export_service = None
+                self._review_export_service = None
+                # Construct all policy-aware consumers now so a failure is
+                # rolled back before the success response is observable.
+                self.get_retrieval_service()
+                self.get_chat_service()
+                self.get_notes_service()
+        except (SettingsValidationError, TypeError, ValueError) as error:
+            self._live_settings_apply = False
+            if live and self.config != previous_config:
+                try:
+                    self._restore_live_settings(
+                        previous_config, previous_policy, previous_services
+                    )
+                except Exception as rollback_error:
+                    return {
+                        "error": "settings_rollback_failed",
+                        "message": f"{error}; rollback failed: {rollback_error}",
+                    }
+            return {"error": "invalid_settings", "message": str(error)}
+        except Exception as error:
+            self._live_settings_apply = False
+            if live:
+                try:
+                    self._restore_live_settings(
+                        previous_config, previous_policy, previous_services
+                    )
+                except Exception as rollback_error:
+                    return {
+                        "error": "settings_rollback_failed",
+                        "message": f"{error}; rollback failed: {rollback_error}",
+                    }
+            return {"error": "settings_apply_failed", "message": str(error)}
         response = {
             "log": (
                 "[AJUSTES] Memoria y conexiones guardadas. "
@@ -514,6 +811,10 @@ class FunesConsoleBackend:
             "stats": self.get_stats_dict(),
             "offline_mode": describe_offline_mode(self.config),
         }
+        if live:
+            response["policy"] = self._policy_dict(self.runtime_policy)
+            response["health"] = self.get_health()
+            response["queue"] = self.get_jobs(limit=50)
         if result.non_loopback_warning:
             response["warning"] = result.non_loopback_warning
         return response
@@ -548,7 +849,39 @@ class FunesConsoleBackend:
             "vault_path": str(self.vault_path),
             "stats": stats,
             "offline_mode": describe_offline_mode(self.config),
+            "onboarding": self.get_onboarding_status().as_dict(),
         }
+
+    def get_onboarding_status(self):
+        """Return onboarding state without prompting or writing the Vault."""
+        return self.onboarding_service.status()
+
+    def reopen_onboarding(self) -> Dict[str, Any]:
+        """Reopen the onboarding panel only from an explicit Help action."""
+        return self.onboarding_service.reopen().as_dict()
+
+    def dismiss_onboarding(self) -> Dict[str, Any]:
+        return self.onboarding_service.dismiss().as_dict()
+
+    def install_demo_vault(self) -> Dict[str, Any]:
+        result = self.onboarding_service.install_demo_vault()
+        response = result.as_dict()
+        response["onboarding"] = self.get_onboarding_status().as_dict()
+        if result.status == "demo_installed":
+            response["refresh"] = True
+            response["stats"] = self.get_stats_dict()
+        return response
+
+    def get_health(self) -> Dict[str, Any]:
+        """Measure current runtime health without caching or changing state."""
+        return HealthService(
+            self.config,
+            budget_resolver=self._health_budget_decision,
+        ).snapshot().to_dict()
+
+    def _health_budget_decision(self):
+        """Resolve health policy without updating RAMGovernor's last decision."""
+        return select_llm_model(self.ram_governor.measure_memory())
 
     def get_stats_dict(self) -> Dict[str, Any]:
         input_dir = self.vault.input_dir
@@ -583,6 +916,10 @@ class FunesConsoleBackend:
         }
 
     def handle_action(self, action_name: str, payload: dict) -> Dict[str, Any]:
+        if action_name == "install_demo_vault":
+            return self.install_demo_vault()
+        elif action_name == "dismiss_onboarding":
+            return self.dismiss_onboarding()
         # --- TEMAS Y CUESTIONES ---
         if action_name == "get_themes":
             return {
@@ -1142,7 +1479,6 @@ historial:
                 res = self._refine_graph()
                 if "error" in res:
                     return res
-                configure_anythingllm_integration(self.vault.output_dir)
                 notes_count = len(list(self.vault.output_dir.rglob("*.md"))) if self.vault.output_dir.exists() else 0
                 return {
                     "log": f"[PASO 3 ESTRUCTURACIÓN] Grafo refinado e hiperinterenlazado. Notas en 4_salida: {notes_count}.",
@@ -1245,20 +1581,19 @@ historial:
 
     def get_ollama_models(self) -> List[str]:
         models = []
+        self._ollama_models_measured = False
         try:
             import urllib.request
             req = urllib.request.Request(f"{self.config.ollama_url.rstrip('/')}/api/tags")
             with urllib.request.urlopen(req, timeout=2.0) as resp:
                 data = json.loads(resp.read().decode("utf-8"))
+                self._ollama_models_measured = True
                 fetched = [m["name"] for m in data.get("models", [])]
                 qwen_models = [m for m in fetched if "qwen" in m.lower()]
                 other_models = [m for m in fetched if "qwen" not in m.lower()]
                 models = qwen_models + other_models
         except Exception:
             pass
-
-        if not models:
-            models = ["qwen2.5:7b", "qwen2.5-coder:7b", "qwen2.5:14b", "llama3.2"]
         return models
 
     def get_settings_info(self) -> Dict[str, Any]:
@@ -1277,10 +1612,15 @@ historial:
             "input_connected_folders": connected_input,
             "output_connected_folders": connected_output,
             "models": self.get_ollama_models(),
+            "models_measured": self._ollama_models_measured,
             "current_model": self.config.custom_model_override,
             "ollama_url": str(self.config.ollama_url),
             "ram_margin": f"{self.config.ram_safety_margin_pct * 100:g}%",
             "allow_non_loopback_ollama": self.config.allow_non_loopback_ollama,
+            "resource_profile": self.config.resource_profile,
+            "audio_mode": self.config.audio_mode,
+            "whisper_model_path": self.config.whisper_model_path,
+            "policy": self._policy_dict(self.runtime_policy),
             "offline_mode": describe_offline_mode(self.config),
         }
 

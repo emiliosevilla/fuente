@@ -40,10 +40,20 @@ PIPELINE_STAGES: tuple[str, ...] = (
     "completed",
     "failed",
     "quarantined",
+    "cancelled",
+    "skipped",
 )
 
 #: Job-level lifecycle status, distinct from the finer-grained `stage`.
-JOB_STATUSES: tuple[str, ...] = ("pending", "claimed", "completed", "failed", "quarantined")
+JOB_STATUSES: tuple[str, ...] = (
+    "pending",
+    "claimed",
+    "completed",
+    "failed",
+    "quarantined",
+    "cancelled",
+    "skipped",
+)
 
 DEFAULT_STAGE = "discovered"
 DEFAULT_STATUS = "pending"
@@ -111,6 +121,8 @@ class JobRecord:
     updated_at: str
     pipeline_version: str
     revision: int
+    cancel_requested_at: Optional[str] = None
+    cancel_reason: Optional[str] = None
 
 
 @dataclass(frozen=True)
@@ -195,9 +207,20 @@ _ACTIVE_STAGES: tuple[str, ...] = (
 #: Stages with no outgoing transitions: once reached, a job only moves again
 #: via a brand-new job or an explicit reprocess. In-flight retry decisions are
 #: owned by the retry policy below (Task 5.3), not by edges out of these stages.
-_TERMINAL_STAGES: tuple[str, ...] = ("completed", "failed", "quarantined")
+_TERMINAL_STAGES: tuple[str, ...] = (
+    "completed",
+    "failed",
+    "quarantined",
+    "cancelled",
+    "skipped",
+)
 
-_TERMINAL_FAILURE_STAGES: tuple[str, ...] = ("failed", "quarantined")
+_TERMINAL_FAILURE_STAGES: tuple[str, ...] = (
+    "failed",
+    "quarantined",
+    "cancelled",
+    "skipped",
+)
 
 #: The full transition graph: stage -> allowed next stages.
 PIPELINE_TRANSITIONS: dict[str, tuple[str, ...]] = {}
@@ -267,6 +290,8 @@ _STAGE_ARTIFACTS: dict[str, tuple[str, ...]] = {
     "completed": ("dirty", "clean", "chunk_index", "note", "note_index"),
     "failed": (),
     "quarantined": (),
+    "cancelled": (),
+    "skipped": (),
 }
 
 assert set(_STAGE_ARTIFACTS) == set(PIPELINE_STAGES), (
@@ -570,4 +595,3 @@ def _class_label(error_class: ErrorClass) -> str:
     if error_class is ErrorClass.INVALID_MODEL_OUTPUT:
         return "Invalid model output"
     return "Processing error"
-

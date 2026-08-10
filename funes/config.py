@@ -13,6 +13,8 @@ from funes.infrastructure.atomic_files import atomic_write_json
 logger = logging.getLogger(__name__)
 DEFAULT_OLLAMA_URL = "http://localhost:11434"
 DEFAULT_ISSUE = "_Sin_Cuestion"
+VALID_RESOURCE_PROFILES = ("auto", "eco_strict")
+VALID_AUDIO_MODES = ("auto", "skip", "tiny_cpu")
 
 
 def is_loopback_ollama_url(url: str) -> bool:
@@ -168,6 +170,9 @@ class AppConfig:
     allow_non_loopback_ollama: bool = False
     optimized_loop_interval_sec: int = 300  # 5 minutos entre pasadas de refinamiento
     atomic_note_template: str = DEFAULT_ATOMIC_NOTE_TEMPLATE
+    resource_profile: str = "auto"
+    audio_mode: str = "auto"
+    whisper_model_path: str | None = None
 
     def to_dict(self) -> dict:
         return {
@@ -183,6 +188,9 @@ class AppConfig:
             "allow_non_loopback_ollama": self.allow_non_loopback_ollama,
             "optimized_loop_interval_sec": self.optimized_loop_interval_sec,
             "atomic_note_template": self.atomic_note_template,
+            "resource_profile": self.resource_profile,
+            "audio_mode": self.audio_mode,
+            "whisper_model_path": self.whisper_model_path,
         }
 
     @classmethod
@@ -196,6 +204,18 @@ class AppConfig:
         allow_non_loopback = raw_opt_in if isinstance(raw_opt_in, bool) else False
         raw_url = data.get("ollama_url", DEFAULT_OLLAMA_URL)
         ollama_url = raw_url if isinstance(raw_url, str) else DEFAULT_OLLAMA_URL
+        raw_profile = data.get("resource_profile", "auto")
+        resource_profile = (
+            raw_profile if raw_profile in VALID_RESOURCE_PROFILES else "auto"
+        )
+        raw_audio_mode = data.get("audio_mode", "auto")
+        audio_mode = raw_audio_mode if raw_audio_mode in VALID_AUDIO_MODES else "auto"
+        raw_whisper_path = data.get("whisper_model_path")
+        whisper_model_path = (
+            raw_whisper_path.strip()
+            if isinstance(raw_whisper_path, str) and raw_whisper_path.strip()
+            else None
+        )
         try:
             validate_ollama_url(ollama_url, allow_non_loopback)
         except ValueError:
@@ -220,6 +240,9 @@ class AppConfig:
             allow_non_loopback_ollama=allow_non_loopback,
             optimized_loop_interval_sec=int(data.get("optimized_loop_interval_sec", 300)),
             atomic_note_template=data.get("atomic_note_template", DEFAULT_ATOMIC_NOTE_TEMPLATE),
+            resource_profile=resource_profile,
+            audio_mode=audio_mode,
+            whisper_model_path=whisper_model_path,
         )
 
 

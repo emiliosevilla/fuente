@@ -20,6 +20,8 @@ EXPECTED_MODAL_IDS = {
     "modal-category",
     "modal-approval",
     "modal-help",
+    "modal-health",
+    "modal-job-queue",
 }
 
 

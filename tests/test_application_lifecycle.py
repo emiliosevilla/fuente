@@ -12,6 +12,7 @@ import pytest
 from funes.application.lifecycle import ApplicationLifecycle
 from funes.config import get_default_config
 from funes.core.vault import VaultManager
+from funes.domain.runtime_policy import resolve_runtime_policy
 from funes.graph_engine.optimized_loop import OptimizadoGraphLoop
 from funes.watcher.watcher import FolderMonitor
 
@@ -30,6 +31,10 @@ class FakePipeline:
         self.resume_calls = 0
         self.closed = False
         self.linker_output_dirs: list = []
+        self.runtime_policy = None
+
+    def set_runtime_policy(self, policy) -> None:
+        self.runtime_policy = policy
 
     def set_active_theme(self, theme_name: str):
         theme_dir = self.vault.set_active_theme(theme_name)
@@ -107,6 +112,29 @@ def _fake_factories():
         return loop
 
     return created, pipeline_factory, monitor_factory, graph_loop_factory
+
+
+def test_live_runtime_policy_reconfiguration_keeps_existing_pipeline(tmp_path):
+    config = get_default_config(tmp_path / "vault")
+    created, pipeline_factory, monitor_factory, graph_loop_factory = _fake_factories()
+    lifecycle = ApplicationLifecycle(
+        config,
+        pipeline_factory=pipeline_factory,
+        monitor_factory=monitor_factory,
+        graph_loop_factory=graph_loop_factory,
+    )
+    lifecycle.start()
+    pipeline = lifecycle.pipeline
+    eco_config = get_default_config(tmp_path / "eco-vault")
+    eco_config.resource_profile = "eco_strict"
+    eco_policy = resolve_runtime_policy(eco_config, budget=None)
+
+    lifecycle.set_runtime_policy(eco_policy)
+
+    assert lifecycle.pipeline is pipeline
+    assert pipeline.runtime_policy is eco_policy
+    assert len(created["pipelines"]) == 1
+    lifecycle.stop()
 
 
 def test_continuous_mode_starts_monitor_and_graph_loop_after_pipeline(tmp_path):

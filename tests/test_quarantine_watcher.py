@@ -6,12 +6,13 @@ from funes.config import get_default_config
 from funes.domain.quarantine import InvalidModelOutputError
 from funes.graph_engine.atomic_generator import AtomicNoteGenerator
 from funes.watcher.watcher import ETLPipeline
-from tests.conftest import patch_abundant_ram
+from tests.conftest import explicit_test_runtime_policy, patch_abundant_ram
 
 
 def test_watcher_quarantines_exhausted_io_with_actual_attempt_count(tmp_path):
     config = get_default_config(tmp_path / "vault")
     pipeline = ETLPipeline(config)
+    pipeline.set_runtime_policy(explicit_test_runtime_policy())
     patch_abundant_ram(pipeline.ram_governor)
     source = config.vault.input_dir / "network.txt"
     source.write_text("input", encoding="utf-8")
@@ -31,6 +32,7 @@ def test_watcher_quarantines_exhausted_io_with_actual_attempt_count(tmp_path):
 def test_watcher_retries_corrupt_content_before_quarantining(tmp_path):
     config = get_default_config(tmp_path / "vault")
     pipeline = ETLPipeline(config)
+    pipeline.set_runtime_policy(explicit_test_runtime_policy())
     patch_abundant_ram(pipeline.ram_governor)
     source = config.vault.input_dir / "corrupt.txt"
     source.write_text("input", encoding="utf-8")
@@ -60,6 +62,7 @@ def test_invalid_model_output_is_not_converted_to_successful_fallback():
 def test_watcher_preserves_source_when_model_output_is_invalid(tmp_path):
     config = get_default_config(tmp_path / "vault")
     pipeline = ETLPipeline(config)
+    pipeline.set_runtime_policy(explicit_test_runtime_policy())
     patch_abundant_ram(pipeline.ram_governor)
     source = config.vault.input_dir / "model-input.txt"
     source.write_text("input", encoding="utf-8")

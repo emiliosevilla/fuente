@@ -8,7 +8,7 @@
 
 **Tech Stack:** Python 3.10+, pytest, SQLite migrations/JobStore, PyWebView HTML/JavaScript, local Ollama HTTP API, BM25Okapi, optional ChromaDB, optional faster-whisper, Obsidian Markdown.
 
-## Scope and constraints
+## Global Constraints
 
 - Prerequisite: complete `2026-08-10-funes-residual-hardening.md`, especially lifecycle ownership, AnythingLLM no-browser fallback, and strict UI sinks.
 - Default remains local-only. Non-loopback Ollama requires the existing explicit opt-in and warning.
@@ -18,10 +18,12 @@
 - Cancellation is cooperative at stage boundaries. This wave does not kill Whisper/Ollama midway through an operation.
 - The UI must not show Eco controls until queue/reason visibility is implemented.
 - TipTap, cloud LLM defaults, SaaS sync, automatic model installation, nightly embeddings, persistent BM25 for very large Vaults, and a supported AnythingLLM API integration are out of scope.
-- Preserve the five pre-existing generated-file modifications measured at baseline; do not stage them.
+- Preserve the current uncommitted `docs/task.md` change; do not discard or stage it until Task 11 explicitly reconciles the documentation.
 - No Git write unless explicitly authorized by the human in the implementation session.
 
-**Measured baseline (2026-08-10):** branch `dev`, HEAD `418b150bdbcf9bc121fb42ed7ab949d8f5a57e7a`, aligned with `origin/dev`, five generated-file modifications.
+**Measured baseline (2026-08-10):** branch `dev`, HEAD `b19acb0de62515eacbf8fcacdff467f7a12afe83`, aligned with `origin/dev`; one uncommitted file, `docs/task.md`.
+
+This is one Wave 2 plan rather than separate feature plans because every user-facing surface depends on the same `RuntimePolicy`, the queue must expose durable reasons before Eco controls are enabled, and the final health/demo/review flows are the integration gate. Tasks 1–10 still produce independently testable increments and must be reviewed at each boundary.
 
 ## File map
 
@@ -303,6 +305,7 @@ git commit -m "feat: expose measured first-run health"
 - Modify: `funes/infrastructure/sqlite_store.py`
 - Modify: `tests/test_job_transitions.py`
 - Modify: `tests/test_job_store.py`
+- Modify: `tests/test_index_reconciliation.py` (explicitar los nuevos campos nullable en todas las factorías `JobRecord`)
 
 **Interfaces:**
 - Terminal stages/statuses: `cancelled`, `skipped`
@@ -546,6 +549,7 @@ git commit -m "feat: add Chroma-free Vault BM25 retrieval"
 - Add: `tests/test_eco_ingestion.py`
 - Modify: `tests/test_ingestion_recovery.py`
 - Modify: `tests/test_scheduler_limits.py`
+- Modify: `tests/test_theme_pipeline_scope.py`
 
 **Interfaces:**
 - `AudioExtractor(policy: RuntimePolicy, model_factory: Callable | None = None)`
@@ -865,15 +869,33 @@ Expected: PASS offline with no cache/bytecode artifacts.
 
 - [ ] **Step 2: Prove zero-access Eco behavior with spies**
 
-Run the focused `ForbiddenChroma`, `ImportBomb`, browser, installer, and model-download tests together. Expected: zero calls. Record the count in the Wave 2 ledger.
+Run:
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -p no:cacheprovider \
+  tests/test_eco_ingestion.py \
+  tests/test_audio_policy.py \
+  tests/test_vault_corpus.py \
+  tests/test_chat_retrieval_contract.py \
+  tests/test_anythingllm_optional.py \
+  tests/test_installer_contract.py \
+  tests/test_html_safety_contract.py \
+  tests/security/test_bridge_payloads.py -q
+```
+
+Expected: PASS; `ForbiddenChroma`, `ImportBomb`, browser, installer, and model-download spies record zero calls. Record the measured zero-call assertions in the Wave 2 ledger.
 
 - [ ] **Step 3: Run restart and race tests**
 
-Run JobStore migration from 002→003, cancellation restart, stale revision, pagination, and scheduler lease-release tests. Expected: no lost reason, duplicate page row, or leaked lease/lock.
+Run: `PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -p no:cacheprovider tests/test_job_store.py tests/test_job_control.py tests/test_ingestion_recovery.py tests/test_scheduler_limits.py -q`
+
+Expected: PASS; migration 002→003, cancellation restart, stale revisions, pagination, and scheduler lease-release tests show no lost reason, duplicate page row, or leaked lease/lock.
 
 - [ ] **Step 4: Run the demo smoke**
 
-In a temporary Vault: install demo → list/retrieve via BM25 Eco → approve one note → export Markdown and DOCX → rerun demo installer. Expected: completes under five minutes, second install changes no existing file, no external process/network starts.
+Run: `PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -p no:cacheprovider tests/test_demo_vault.py tests/test_vault_corpus.py tests/test_review_export_flow.py -q`
+
+The integration fixture must execute this sequence in one temporary Vault: install demo → list/retrieve via BM25 Eco → approve one note → export Markdown and DOCX → rerun demo installer. Expected: completes under five minutes, second install changes no existing file, and no external process/network starts.
 
 - [ ] **Step 5: Update product documentation and ledger**
 
@@ -889,7 +911,7 @@ Expected: PASS. Do not state a pass count until this exact command is measured.
 
 Run: `git status --short --branch`
 
-Expected: planned Wave 2 source/docs/tests plus the five pre-existing generated-file modifications. No Chroma database, demo-generated Vault, bytecode, cache, or installer receipt may appear.
+Expected: planned Wave 2 source/docs/tests plus the deliberately preserved `docs/task.md` change until it is reconciled. No Chroma database, demo-generated Vault, bytecode, cache, or installer receipt may appear.
 
 - [ ] **Step 8: Commit documentation only if explicitly authorized**
 

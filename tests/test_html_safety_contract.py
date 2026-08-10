@@ -111,3 +111,14 @@ def test_hostile_filename_is_inserted_as_text():
     )
     assert re.search(r"filename\.textContent\s*=\s*note\.", source)
     assert "filename.innerHTML" not in source
+
+
+def test_approval_inbox_exposes_partial_approve_export_flow():
+    source = (Path(__file__).resolve().parent.parent / "consola_preview.html").read_text(
+        encoding="utf-8"
+    )
+    assert 'id="approval-export-format"' in source
+    assert 'Aprobar y exportar' in source
+    assert "approve_and_export(" in source
+    assert "Aprobada; exportación falló" in source
+    assert "export_payload" in source

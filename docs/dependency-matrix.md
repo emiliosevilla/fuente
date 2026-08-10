@@ -48,6 +48,22 @@ python -c "import webview; from faster_whisper import WhisperModel; import pytes
 
 Linux-only: core includes `pysqlite3-binary` when `platform_system == "Linux"` for ChromaDB on SQLite &lt; 3.35.
 
+### Runtime profiles and resource policy
+
+`pyproject.toml` sigue declarando `chromadb` dentro del conjunto core. Esa declaración de empaquetado no significa que todos los perfiles inicialicen la capa vectorial:
+
+- **Auto** conserva el camino híbrido/vectorial y solo usa un modelo LLM local exacto si la medición de recursos y el catálogo instalado lo autorizan. La política no descarga automáticamente el LLM elegido.
+- **Eco estricto** usa BM25 sobre el corpus Markdown autorizado del Vault. No construye, lee, consulta ni escribe Chroma, aunque el paquete esté instalado en el entorno core.
+- El estado efectivo se obtiene de la política medida y del panel Health; la configuración guardada (`Auto`/`Eco estricto`) no sustituye esa medición.
+
+El extra `audio` es opcional. En Eco el audio se omite por defecto (`skip`), sin importar `faster-whisper`; `tiny_cpu` requiere que el usuario proporcione un `whisper_model_path` que apunte a archivos locales existentes. No se descarga el modelo `tiny` durante el arranque o la ejecución.
+
+### Demo empaquetado e integraciones externas
+
+El Vault demo forma parte del paquete como `funes.resources.demo_vault`, con su manifiesto y notas Markdown incluidos en los datos de paquete. Su instalación es explícita, offline, idempotente y collision-safe; el preflight bloquea una colisión antes de escribir. Las pruebas de empaquetado y el smoke de demo verifican que los recursos se pueden leer desde el paquete sin descargas ni servicios externos.
+
+AnythingLLM queda fuera de las dependencias core y del camino de instalación por defecto. Si se usa, es una integración externa de terceros opt-in; su presencia no se deduce de esta matriz ni se promete como servicio disponible.
+
 ## Recorded package versions (2026-08-09)
 
 Measured from the development environment (`pip show` / `pip index versions`). Versions marked *expected* were not installed locally but match current PyPI releases at verification time.

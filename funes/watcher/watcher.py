@@ -13,6 +13,7 @@ from funes.application.ingestion import (
 from funes.config import AppConfig
 from funes.core.vault import VaultManager
 from funes.domain.errors import PathAuthorizationError
+from funes.domain.runtime_policy import RuntimePolicy, resolve_runtime_policy
 from funes.domain.jobs import (
     TRANSIENT_IO_INITIAL_BACKOFF_SECONDS,
     TRANSIENT_IO_MAX_ATTEMPTS,
@@ -118,13 +119,18 @@ class ETLPipeline:
 
     def __init__(self, config: AppConfig, active_theme: str = "General"):
         self.config = config
+        self.runtime_policy = resolve_runtime_policy(config, budget=None)
         self.vault = VaultManager(config.vault, active_theme=active_theme)
-        self.extractors = ExtractorRegistry()
+        self.extractors = ExtractorRegistry(self.runtime_policy)
         self.ram_governor = RAMGovernor(
             ollama_url=config.ollama_url,
             safety_margin_pct=config.ram_safety_margin_pct
         )
-        self.chroma = ChromaStore(config.vault.chroma_dir)
+        self.chroma = (
+            ChromaStore(config.vault.chroma_dir)
+            if self.runtime_policy.vector_index_enabled
+            else None
+        )
         self.chunker = SemanticChunker()
         self.atomic_gen = AtomicNoteGenerator(ollama_url=config.ollama_url)
         # Theme-aware output root — never the flat AppConfig General path.
@@ -142,10 +148,52 @@ class ETLPipeline:
             chroma=self.chroma,
             atomic_generator=self.atomic_gen,
             linker=self.linker,
+            runtime_policy=self.runtime_policy,
             ram_governor=self.ram_governor,
             copy_to_dirty=self._safe_copy_to_dirty,
             stabilize=self._wait_until_stable,
         )
+
+    def set_runtime_policy(self, policy: RuntimePolicy) -> None:
+        """Apply policy to existing collaborators without eager Chroma creation."""
+        previous = self.runtime_policy
+        previous_chroma = self.chroma
+        next_chroma = previous_chroma
+        if policy.vector_index_enabled:
+            if next_chroma is None:
+                next_chroma = ChromaStore(self.config.vault.chroma_dir)
+        elif previous.vector_index_enabled:
+            next_chroma = None
+
+        try:
+            self.extractors.set_runtime_policy(policy)
+            self.ingestion.set_runtime_policy(policy)
+        except Exception:
+            # The collaborators may have changed themselves before raising;
+            # restore the prior policy before exposing the failure to callers.
+            try:
+                self.extractors.set_runtime_policy(previous)
+                self.ingestion.set_runtime_policy(previous)
+            finally:
+                self.runtime_policy = previous
+                self.chroma = previous_chroma
+                self.ingestion.chroma = previous_chroma
+            raise
+
+        self.runtime_policy = policy
+        self.chroma = next_chroma
+        self.ingestion.chroma = next_chroma
+
+    def set_config(self, config: AppConfig) -> None:
+        """Refresh mutable runtime settings without replacing this pipeline."""
+        self.config = config
+        self.ingestion.config = config
+        self.atomic_gen.ollama_url = config.ollama_url.rstrip("/")
+        self.ram_governor = RAMGovernor(
+            ollama_url=config.ollama_url,
+            safety_margin_pct=config.ram_safety_margin_pct,
+        )
+        self.ingestion.ram_governor = self.ram_governor
 
     def set_active_theme(self, theme_name: str) -> Path:
         """Switch the Vault theme and rebind collaborators that cache roots."""

@@ -17,6 +17,7 @@ from funes.application.retrieval import (
     RetrievalApplicationService,
 )
 from funes.rag.hybrid_search import HybridSearcher
+from funes.domain.runtime_policy import RuntimePolicy
 
 
 class FakeChroma:
@@ -209,6 +210,19 @@ def test_low_memory_uses_bm25_and_records_degradation(corpus: FakeChroma):
     assert any(c["document_id"] == "note-b" for c in ctx["chunks"])
 
 
+def test_hybrid_ram_fallback_keeps_historical_bm25_public_mode(corpus: FakeChroma):
+    service = RetrievalApplicationService(
+        corpus,
+        should_fallback_to_bm25=lambda: True,
+    )
+
+    ctx = service.build_context("arrendamiento", "all_notes", limit=3)
+
+    assert ctx["mode"] == "bm25"
+    assert ctx["degraded"] is True
+    assert corpus.query_calls == 0
+
+
 def test_issue_and_theme_scopes(corpus: FakeChroma):
     service = RetrievalApplicationService(
         corpus, should_fallback_to_bm25=lambda: False
@@ -286,3 +300,47 @@ def test_bm25_cache_invalidates_on_index_change(corpus: FakeChroma):
     assert ctx["has_context"] is True
     assert searcher.cache_is_warm
     assert any(c["document_id"] == "note-d" for c in ctx["chunks"])
+
+
+def test_eco_strict_retrieval_never_touches_chroma():
+    class ForbiddenChroma:
+        def __getattribute__(self, name):
+            if name.startswith("_"):
+                return object.__getattribute__(self, name)
+            raise AssertionError(f"Chroma touched in eco mode: {name}")
+
+    class CorpusProvider:
+        def load(self):
+            return [
+                {
+                    "id": "doc-1:hash:0",
+                    "content": "Contrato de arrendamiento autorizado.",
+                    "metadata": {
+                        "document_id": "doc-1",
+                        "relative_path": "Tema/4_salida/Contratos/nota.md",
+                        "theme": "Tema",
+                        "issue": "Contratos",
+                    },
+                }
+            ]
+
+    policy = RuntimePolicy(
+        profile="eco_strict",
+        retrieval_mode="bm25_vault",
+        vector_index_enabled=False,
+        audio_mode="skip",
+        whisper_model_path=None,
+        allow_model_download=False,
+        selected_model=None,
+        llm_available=False,
+        reason="eco_strict test policy",
+    )
+    service = RetrievalApplicationService(
+        ForbiddenChroma(), corpus_provider=CorpusProvider(), runtime_policy=policy
+    )
+
+    hits = service.search("contrato", limit=3)
+
+    assert hits
+    assert hits[0]["document_id"] == "doc-1"
+    assert hits[0]["relative_path"] == "Tema/4_salida/Contratos/nota.md"

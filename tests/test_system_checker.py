@@ -11,6 +11,7 @@ from funes.core.app_checker import (
     get_running_user_apps,
     launch_obsidian,
 )
+from funes.ram_governor.budget import MODEL_CATALOG
 from funes.ram_governor.governor import RAMGovernor
 from funes.watcher.watcher import is_temporary_or_system_file, wait_until_file_stable
 
@@ -68,7 +69,16 @@ class TestSystemChecker(unittest.TestCase):
 
         recommended = gov.recommend_model()
         self.assertIsInstance(recommended, str)
-        self.assertTrue(len(recommended) > 0)
+        decision = gov.last_budget_decision()
+        self.assertIsNotNone(decision)
+        if recommended:
+            self.assertIn(recommended, {entry.id for entry in MODEL_CATALOG})
+            self.assertTrue(decision["allowed"])
+            self.assertEqual(decision["model_id"], recommended)
+        else:
+            self.assertFalse(decision["allowed"])
+            self.assertIsNone(decision["model_id"])
+            self.assertIn("bm25_only", decision["reason"].lower())
 
     def test_ram_governor_model_tier_selection(self):
         gov = RAMGovernor()

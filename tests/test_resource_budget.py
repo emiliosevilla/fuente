@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import unittest
+from contextlib import redirect_stdout
+from io import StringIO
 from unittest import mock
 
 from funes.ram_governor.budget import (
     MODEL_CATALOG,
+    BudgetDecision,
     OLLAMA_PURGE_KEEP_ALIVE,
     MeasurementStatus,
     ResourceKind,
@@ -107,6 +110,33 @@ class TestResourceBudgets(unittest.TestCase):
 
 
 class TestRAMGovernorBudgets(unittest.TestCase):
+    def test_setup_optimal_model_skips_ollama_for_bm25_only(self):
+        gov = RAMGovernor()
+        decision = BudgetDecision(
+            allowed=False,
+            resource_kind=ResourceKind.LLM_INFERENCE,
+            reason="bm25_only; no catalog model fits usable_headroom_gb=0.52",
+            model_id=None,
+        )
+        ram_info = {
+            "measurement_status": "measured",
+            "total_gb": 3.0,
+            "available_gb": 0.8,
+        }
+        output = StringIO()
+
+        with mock.patch.object(gov, "get_system_ram_info", return_value=ram_info):
+            with mock.patch.object(gov, "recommend_model_decision", return_value=decision):
+                with mock.patch.object(gov, "check_ollama_status") as check_status:
+                    with mock.patch.object(gov, "ensure_model_available") as ensure_model:
+                        with redirect_stdout(output):
+                            result = gov.setup_optimal_model()
+
+        self.assertEqual(result, "")
+        self.assertIn("BM25-only", output.getvalue())
+        check_status.assert_not_called()
+        ensure_model.assert_not_called()
+
     def test_macos_fallback_does_not_fabricate_available_gb(self):
         gov = RAMGovernor(safety_margin_pct=0.35)
         with mock.patch("funes.ram_governor.governor.HAS_PSUTIL", False):

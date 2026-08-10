@@ -4,6 +4,7 @@ from __future__ import annotations
 import base64
 import html
 import io
+import json
 import re
 from dataclasses import dataclass
 from pathlib import Path
@@ -32,6 +33,8 @@ _FORMAT_MIME: dict[ExportFormat, str] = {
     ),
     "pdf": "application/pdf",
 }
+
+_DOCX_FENCE_RE = re.compile(r"^\s*(`{3,}|~{3,})(.*)$")
 
 
 class ExportFileExistsError(FileExistsError):
@@ -217,14 +220,96 @@ class ExportApplicationService:
 
     @staticmethod
     def _render_docx(note: NoteDocument) -> bytes:
+        canonical = note.to_markdown()
+        metadata, body = parse_frontmatter(canonical)
         document = Document()
         document.add_heading(note.title or Path(note.relative_path).stem, level=0)
         document.add_paragraph(f"Ruta: {note.relative_path}")
         document.add_paragraph("---")
-        document.add_paragraph(note.to_markdown())
+
+        metadata_table = document.add_table(rows=0, cols=2)
+        metadata_table.style = "Table Grid"
+        for key in sorted(metadata):
+            cells = metadata_table.add_row().cells
+            cells[0].text = str(key)
+            cells[1].text = ExportApplicationService._docx_metadata_value(
+                metadata[key]
+            )
+
+        paragraph_lines: list[str] = []
+        code_lines: list[str] = []
+        code_fence: str | None = None
+
+        def flush_paragraph() -> None:
+            if paragraph_lines:
+                document.add_paragraph("\n".join(paragraph_lines))
+                paragraph_lines.clear()
+
+        def flush_code() -> None:
+            code_paragraph = document.add_paragraph(style="No Spacing")
+            code_run = code_paragraph.add_run("\n".join(code_lines))
+            code_run.font.name = "Courier New"
+            code_lines.clear()
+
+        def is_closing_fence(line: str, opening_fence: str) -> bool:
+            stripped = line.strip()
+            return (
+                bool(stripped)
+                and stripped[0] == opening_fence[0]
+                and len(stripped) >= len(opening_fence)
+                and set(stripped) == {opening_fence[0]}
+            )
+
+        for line in body.splitlines():
+            if code_fence is not None:
+                if is_closing_fence(line, code_fence):
+                    flush_code()
+                    code_fence = None
+                else:
+                    code_lines.append(line)
+                continue
+
+            fence = _DOCX_FENCE_RE.match(line)
+            if fence:
+                flush_paragraph()
+                code_fence = fence.group(1)
+                continue
+
+            if not line.strip():
+                flush_paragraph()
+                continue
+
+            heading = re.match(r"^(#{1,3})\s+(.*)$", line)
+            if heading:
+                flush_paragraph()
+                document.add_heading(heading.group(2), level=len(heading.group(1)))
+                continue
+
+            if line.startswith("- "):
+                flush_paragraph()
+                document.add_paragraph(line[2:], style="List Bullet")
+                continue
+
+            numbered = re.match(r"^(\d+)\.\s+(.*)$", line)
+            if numbered:
+                flush_paragraph()
+                document.add_paragraph(numbered.group(2), style="List Number")
+                continue
+
+            paragraph_lines.append(line)
+
+        flush_paragraph()
+        if code_fence is not None:
+            flush_code()
         buffer = io.BytesIO()
         document.save(buffer)
         return buffer.getvalue()
+
+    @staticmethod
+    def _docx_metadata_value(value: object) -> str:
+        if isinstance(value, (list, dict)):
+            return json.dumps(value, ensure_ascii=False, sort_keys=True)
+        return str(value)
 
     def _render_print_html(self, note: NoteDocument) -> str:
         """Render user-assisted print HTML from canonical frontmatter + body."""

@@ -17,8 +17,9 @@ import logging.handlers
 import subprocess
 import threading
 import webbrowser
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional, Dict, Any, List
+from typing import Mapping, Optional, Dict, Any, List
 
 if sys.platform == "win32":
     if hasattr(sys.stdout, "reconfigure"):
@@ -132,6 +133,57 @@ THEME = {
 FONT_TYPEWRITER = "Courier"
 
 
+@dataclass(frozen=True)
+class QuarantineItemView:
+    """Presentation data and allowed actions for one active quarantine item."""
+
+    status_label: str
+    can_restore: bool
+    quarantine_id: str = ""
+    original_filename: str = ""
+    timestamp: str = ""
+    error_message: str = ""
+
+
+def quarantine_item_view(item: Mapping[str, Any]) -> QuarantineItemView:
+    """Map a quarantine record to fail-closed, renderable UI semantics."""
+
+    status = item.get("status")
+    if status == "quarantined":
+        status_label = "Cuarentena"
+        can_restore = True
+    elif status == "failed_for_review":
+        status_label = "Revisión manual"
+        can_restore = False
+    else:
+        status_label = "Revisión manual"
+        can_restore = False
+
+    return QuarantineItemView(
+        status_label=status_label,
+        can_restore=can_restore,
+        quarantine_id=str(item.get("quarantine_id") or ""),
+        original_filename=str(item.get("original_filename") or ""),
+        timestamp=str(item.get("timestamp") or ""),
+        error_message=str(item.get("error_message") or ""),
+    )
+
+
+class _TkWidgetFactory:
+    """Small production adapter so the renderer can use recording fakes."""
+
+    def frame(self, parent, **kwargs):
+        return tk.Frame(parent, **kwargs)
+
+    def label(self, parent, **kwargs):
+        return tk.Label(parent, **kwargs)
+
+    def button(self, parent, *, command=None, command_callback=None, **kwargs):
+        if command == "restore":
+            command = command_callback
+        return tk.Button(parent, command=command, **kwargs)
+
+
 class QuarantineModal(tk.Toplevel):
     """Modal flotante Papiro para Cuarentena."""
 
@@ -146,36 +198,78 @@ class QuarantineModal(tk.Toplevel):
 
         self._setup_ui()
 
-    def _setup_ui(self):
-        hdr = tk.Frame(self, bg=THEME["bg_card"], padx=20, pady=12, highlightbackground=THEME["border"], highlightthickness=1)
+    def _setup_ui(self, widget_factory=None):
+        widget_factory = widget_factory or _TkWidgetFactory(self)
+
+        hdr = widget_factory.frame(self, bg=THEME["bg_card"], padx=20, pady=12, highlightbackground=THEME["border"], highlightthickness=1)
         hdr.pack(fill="x")
 
-        tk.Label(hdr, text="ARCHIVOS EN CUARENTENA Y AVISOS DE INGESTA", font=(FONT_TYPEWRITER, 13, "bold"), fg=THEME["red"], bg=THEME["bg_card"]).pack(side="left")
+        widget_factory.label(hdr, text="ARCHIVOS EN CUARENTENA Y AVISOS DE INGESTA", font=(FONT_TYPEWRITER, 13, "bold"), fg=THEME["red"], bg=THEME["bg_card"]).pack(side="left")
 
         items = self.quarantine_service.list_active_items()
 
         if not items:
-            empty_frame = tk.Frame(self, bg=THEME["bg_root"], pady=60)
+            empty_frame = widget_factory.frame(self, bg=THEME["bg_root"], pady=60)
             empty_frame.pack(fill="both", expand=True)
-            tk.Label(empty_frame, text="[OK] No hay ningún archivo en cuarentena. La bóveda está limpia.", font=(FONT_TYPEWRITER, 11, "bold"), fg=THEME["green"], bg=THEME["bg_root"]).pack()
+            widget_factory.label(empty_frame, text="[OK] No hay ningún archivo en cuarentena. La bóveda está limpia.", font=(FONT_TYPEWRITER, 11, "bold"), fg=THEME["green"], bg=THEME["bg_root"]).pack()
             return
 
-        container = tk.Frame(self, bg=THEME["bg_root"], padx=20, pady=15)
+        container = widget_factory.frame(self, bg=THEME["bg_root"], padx=20, pady=15)
         container.pack(fill="both", expand=True)
 
         for item in items:
-            card = tk.Frame(container, bg=THEME["bg_card"], highlightbackground=THEME["border"], highlightthickness=1, padx=14, pady=10)
-            card.pack(fill="x", pady=6)
+            self._render_item_card(container, quarantine_item_view(item), widget_factory)
 
-            top_line = tk.Frame(card, bg=THEME["bg_card"])
-            top_line.pack(fill="x")
+    def _render_item_card(self, parent, view: QuarantineItemView, widget_factory):
+        card = widget_factory.frame(
+            parent,
+            bg=THEME["bg_card"],
+            highlightbackground=THEME["border"],
+            highlightthickness=1,
+            padx=14,
+            pady=10,
+        )
+        card.pack(fill="x", pady=6)
 
-            tk.Label(top_line, text=f"Archivo: {item['original_filename']}", font=(FONT_TYPEWRITER, 10, "bold"), fg=THEME["paper"], bg=THEME["bg_card"]).pack(side="left")
-            tk.Label(top_line, text=f"Fecha: {item['timestamp']}", font=(FONT_TYPEWRITER, 9), fg=THEME["muted"], bg=THEME["bg_card"]).pack(side="right")
+        top_line = widget_factory.frame(card, bg=THEME["bg_card"])
+        top_line.pack(fill="x")
 
-            tk.Label(card, text=f"Causa: {item['error_message']}", font=(FONT_TYPEWRITER, 10), fg=THEME["paper"], bg=THEME["bg_card"], anchor="w", justify="left").pack(fill="x", pady=(4, 6))
+        widget_factory.label(
+            top_line,
+            text=f"Archivo: {view.original_filename}",
+            font=(FONT_TYPEWRITER, 10, "bold"),
+            fg=THEME["paper"],
+            bg=THEME["bg_card"],
+        ).pack(side="left")
+        widget_factory.label(
+            top_line,
+            text=f"Fecha: {view.timestamp}",
+            font=(FONT_TYPEWRITER, 9),
+            fg=THEME["muted"],
+            bg=THEME["bg_card"],
+        ).pack(side="right")
 
-            btn_rest = tk.Button(
+        widget_factory.label(
+            card,
+            text=f"Estado: {view.status_label}",
+            font=(FONT_TYPEWRITER, 9, "bold"),
+            fg=THEME["red"] if not view.can_restore else THEME["green"],
+            bg=THEME["bg_card"],
+            anchor="w",
+            justify="left",
+        ).pack(fill="x", pady=(4, 0))
+        widget_factory.label(
+            card,
+            text=f"Causa: {view.error_message}",
+            font=(FONT_TYPEWRITER, 10),
+            fg=THEME["paper"],
+            bg=THEME["bg_card"],
+            anchor="w",
+            justify="left",
+        ).pack(fill="x", pady=(4, 6))
+
+        if view.can_restore:
+            widget_factory.button(
                 card,
                 text="Restaurar y Reintentar",
                 font=(FONT_TYPEWRITER, 9, "bold"),
@@ -184,9 +278,9 @@ class QuarantineModal(tk.Toplevel):
                 relief="solid",
                 bd=1,
                 cursor="hand2",
-                command=lambda qid=item['quarantine_id']: self._restore_action(qid)
-            )
-            btn_rest.pack(side="left")
+                command="restore",
+                command_callback=lambda qid=view.quarantine_id: self._restore_action(qid),
+            ).pack(side="left")
 
     def _restore_action(self, quarantine_id: str):
         if self.on_restore_callback(quarantine_id):
@@ -1652,6 +1746,9 @@ def launch_control_console(vault_path: Optional[Path] = None):
         backend.attach_lifecycle(lifecycle)
         if HAS_WEBVIEW and html_file.exists():
             api = FunesPyWebViewApi(backend)
+            # PyWebView blocks browser downloads unless this setting is enabled
+            # before the native window is created.
+            webview.settings["ALLOW_DOWNLOADS"] = True
             window = webview.create_window(
                 "Funes Control Console — Estética Papiro",
                 url=html_file.as_uri(),

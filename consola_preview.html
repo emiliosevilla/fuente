@@ -53,9 +53,21 @@
         <div class="toolbar-bar">
             <div class="toolbar-group">
                 <span class="console-layout-002">TEMA:</span>
-                <select id="theme-select" data-onchange-command="changeActiveTheme(this.value)" class="console-layout-003">
-                    <option value="General">General</option>
-                </select>
+                <div id="theme-select" class="theme-select-control">
+                    <button
+                        id="theme-select-trigger"
+                        type="button"
+                        class="console-layout-003 theme-select-trigger"
+                        data-onclick-command="toggleThemeMenu()"
+                        data-onkeydown-command="handleThemeTriggerKeydown(event)"
+                        aria-haspopup="listbox"
+                        aria-expanded="false"
+                        aria-controls="theme-select-menu">
+                        <span id="theme-select-label">General</span>
+                        <span class="theme-select-chevron" aria-hidden="true">▾</span>
+                    </button>
+                    <div id="theme-select-menu" class="theme-select-menu" role="listbox" aria-labelledby="theme-select-trigger"></div>
+                </div>
                 <button class="btn-secondary" data-onclick-command="promptCreateTheme()">+ Nuevo Tema</button>
                 <span class="console-layout-004"></span>
                 <button class="btn-primary" id="btn-run-optimized" data-onclick-command="triggerOptimizedCycle()">
@@ -220,9 +232,6 @@
                     </div>
                 </div>
             </div>
-            <div class="modal-footer console-layout-012">
-                <button class="btn-secondary" data-onclick-command="closeModal('modal-reader')">Cerrar</button>
-            </div>
         </div>
     </div>
 
@@ -265,7 +274,7 @@
                         Exportar Markdown (.md)
                     </button>
                     <button class="btn-primary console-layout-023" data-onclick-command="executeExportFormat('pdf')">
-                        Exportar PDF (impresión asistida)
+                        Imprimir / Guardar como PDF
                     </button>
                     <button class="btn-primary console-layout-023" data-onclick-command="executeExportFormat('docx')">
                         Exportar Word (.docx)
@@ -308,7 +317,6 @@
             </div>
             <div class="modal-footer">
                 <span id="chat-privacy-footer" class="console-text-002">Modo solo local: inferencia en Ollama loopback (http://localhost:11434).</span>
-                <button class="btn-secondary" data-onclick-command="closeModal('modal-chat')">Cerrar</button>
             </div>
         </div>
     </div>
@@ -323,7 +331,6 @@
             <div class="modal-body" id="quarantine-list"></div>
             <div class="modal-footer">
                 <span class="console-text-011">Aislamiento seguro de archivos ilegibles sin detener el motor.</span>
-                <button class="btn-secondary" data-onclick-command="closeModal('modal-quarantine')">Cerrar</button>
             </div>
         </div>
     </div>
@@ -346,7 +353,6 @@
             </div>
             <div class="modal-footer">
                 <span class="console-text-011">Archivos pendientes de transcripción y estructuración.</span>
-                <button class="btn-secondary" data-onclick-command="closeModal('modal-stat-input')">Cerrar</button>
             </div>
         </div>
     </div>
@@ -370,7 +376,6 @@
             </div>
             <div class="modal-footer">
                 <span class="console-text-011">Notas atómicas vectorizadas e hiperinterenlazadas en 4_salida.</span>
-                <button class="btn-secondary" data-onclick-command="closeModal('modal-stat-notes')">Cerrar</button>
             </div>
         </div>
     </div>
@@ -395,7 +400,6 @@
             </div>
             <div class="modal-footer">
                 <span class="console-text-011">Gestión inteligente de memoria para modelos de IA local.</span>
-                <button class="btn-secondary" data-onclick-command="closeModal('modal-stat-ram')">Cerrar</button>
             </div>
         </div>
     </div>
@@ -521,7 +525,6 @@
             </div>
             <div class="modal-footer">
                 <span class="console-text-002">Doble clic abre el archivo con la app nativa del sistema.</span>
-                <button class="btn-secondary" data-onclick-command="closeModal('modal-category')">Cerrar</button>
             </div>
         </div>
     </div>
@@ -585,7 +588,6 @@
             <div class="modal-footer console-layout-049">
                 <span id="approval-form-status" class="console-text-024"></span>
                 <div class="console-layout-050">
-                    <button class="btn-secondary" data-onclick-command="closeModal('modal-approval')">Cerrar</button>
                     <button class="btn-secondary" id="btn-save-metadata" data-onclick-command="saveApprovalMetadata()" disabled>Guardar metadatos</button>
                     <button class="btn-primary" id="btn-approve-note" data-onclick-command="approveSelectedNote()" disabled>Aprobar nota</button>
                 </div>
@@ -651,7 +653,6 @@
             </div>
             <div class="modal-footer">
                 <span class="console-text-002">Funes v2026.1 • Formateo Universal de Notas, Estructuración y Síntesis</span>
-                <button class="btn-secondary" data-onclick-command="closeModal('modal-help')">Cerrar</button>
             </div>
         </div>
     </div>
@@ -670,10 +671,12 @@
             if (command.startsWith('switchSettingsTab(')) return switchSettingsTab(args[0]);
             if (command.startsWith('executeExportFormat(')) return executeExportFormat(args[0]);
             if (command.startsWith('changeActiveTheme(')) return changeActiveTheme(element.value);
+            if (command === 'handleThemeTriggerKeydown(event)') return handleThemeTriggerKeydown(event);
             if (command === 'togglePathMode(this)') return togglePathMode(element);
 
             const handlers = {
                 'promptCreateTheme()': promptCreateTheme,
+                'toggleThemeMenu()': toggleThemeMenu,
                 'triggerOptimizedCycle()': triggerOptimizedCycle,
                 'clearLogView()': clearLogView,
                 'openMOCNote()': openMOCNote,
@@ -1500,6 +1503,7 @@
         }
 
         let lastExportButtonRef = null;
+        let exportInFlight = false;
 
         function exportCurrentReaderNote(btnEl) {
             lastExportButtonRef = btnEl;
@@ -1537,41 +1541,90 @@
         function executeExportFormat(format) {
             closeModal('modal-export-options');
             if (!currentSelectedDocumentId) {
-                alert('No hay ninguna nota seleccionada para exportar.');
+                showPapiroToast('No hay ninguna nota seleccionada para exportar.', true);
                 return;
             }
+            if (exportInFlight) return;
+            exportInFlight = true;
+
+            // Open the print window inside the user gesture. Opening it after
+            // the async bridge response is vulnerable to popup blocking.
+            let printWindow = null;
+            if (format === 'pdf') {
+                printWindow = openUserAssistedPdfPrintWindow();
+                if (!printWindow) {
+                    exportInFlight = false;
+                    return;
+                }
+            }
+
             if (window.pywebview && window.pywebview.api && window.pywebview.api.export_note) {
                 window.pywebview.api.export_note(currentSelectedDocumentId, format).then(function(res) {
-                    handleCanonicalExportResponse(res, format);
-                }).catch(function() {
-                    alert('No se pudo exportar la nota desde el documento canónico.');
+                    handleCanonicalExportResponse(res, format, printWindow);
+                    exportInFlight = false;
+                }).catch(function(error) {
+                    closePrintWindowOnError(printWindow);
+                    exportInFlight = false;
+                    reportExportError('No se pudo exportar la nota desde el documento canónico.', error);
                 });
                 return;
             }
-            alert('La exportación determinista requiere la consola Funes (PyWebView).');
+            closePrintWindowOnError(printWindow);
+            exportInFlight = false;
+            reportExportError('La exportación determinista requiere la consola Funes (PyWebView).');
         }
 
-        function handleCanonicalExportResponse(res, format) {
+        function reportExportError(message, error) {
+            const detail = error && error.message ? ' ' + error.message : '';
+            log('Error de exportación: ' + message + detail);
+            showPapiroToast(message, true);
+        }
+
+        function handleCanonicalExportResponse(res, format, printWindow) {
             if (!res || res.error) {
-                alert((res && res.message) || 'No se pudo exportar la nota.');
-                return;
+                closePrintWindowOnError(printWindow);
+                reportExportError((res && (res.message || res.error)) || 'No se pudo exportar la nota.');
+                return false;
             }
             const title = currentSelectedNoteTitle || 'nota_funes';
-            if (res.mode === 'user_assisted_print' && res.print_html) {
-                openUserAssistedPdfPrint(res.print_html);
-                if (lastExportButtonRef) showButtonFeedback(lastExportButtonRef, '✓ PDF (impresión)');
-                log('Nota "' + title + '" preparada para PDF mediante impresión asistida del navegador.');
-            } else if (res.content) {
-                downloadTextBlob(res.content, res.filename || (title + '.md'), res.content_type || 'text/markdown;charset=utf-8');
-                if (lastExportButtonRef) showButtonFeedback(lastExportButtonRef, '✓ ¡Exportado!');
-                log('Nota "' + title + '" exportada como ' + (res.filename || format) + ' desde documento canónico.');
-            } else if (res.content_base64) {
-                downloadBase64Blob(res.content_base64, res.filename || (title + '.docx'), res.content_type);
-                if (lastExportButtonRef) showButtonFeedback(lastExportButtonRef, '✓ ¡Exportado!');
-                log('Nota "' + title + '" exportada como ' + (res.filename || format) + ' desde documento canónico.');
-            } else if (res.status === 'exported') {
-                if (lastExportButtonRef) showButtonFeedback(lastExportButtonRef, '✓ ¡Exportado!');
-                log((res.log || ('Nota exportada en ' + (res.path || ''))));
+            try {
+                if (format === 'pdf') {
+                    if (res.mode !== 'user_assisted_print' || typeof res.print_html !== 'string' || !res.print_html) {
+                        closePrintWindowOnError(printWindow);
+                        reportExportError('La respuesta PDF no contiene una impresión asistida válida.');
+                        return false;
+                    }
+                    if (!completeUserAssistedPdfPrint(printWindow, res.print_html)) {
+                        reportExportError('No se pudo abrir la impresión para guardar la nota como PDF.');
+                        return false;
+                    }
+                    showPapiroToast('Impresión abierta: elige “Guardar como PDF”.');
+                    log('Nota "' + title + '" preparada para PDF mediante impresión asistida del navegador.');
+                    return true;
+                }
+                if (format === 'markdown' && typeof res.content === 'string') {
+                    downloadTextBlob(res.content, res.filename || (title + '.md'), res.content_type || 'text/markdown;charset=utf-8');
+                    showPapiroToast('Descarga Markdown iniciada.');
+                    log('Nota "' + title + '" exportada como ' + (res.filename || format) + ' desde documento canónico.');
+                    return true;
+                }
+                if (format === 'docx' && typeof res.content_base64 === 'string' && res.content_base64) {
+                    downloadBase64Blob(res.content_base64, res.filename || (title + '.docx'), res.content_type);
+                    showPapiroToast('Descarga Word iniciada.');
+                    log('Nota "' + title + '" exportada como ' + (res.filename || format) + ' desde documento canónico.');
+                    return true;
+                }
+                if (res.status === 'exported') {
+                    showPapiroToast('Exportación guardada en el destino configurado.');
+                    log((res.log || ('Nota exportada en ' + (res.path || ''))));
+                    return true;
+                }
+                reportExportError('La respuesta de exportación no contiene un archivo reconocible.');
+                return false;
+            } catch (error) {
+                closePrintWindowOnError(printWindow);
+                reportExportError('No se pudo preparar la descarga de la nota.', error);
+                return false;
             }
         }
 
@@ -1590,28 +1643,54 @@
 
         function triggerBlobDownload(blob, fileName) {
             const link = document.createElement('a');
-            link.href = URL.createObjectURL(blob);
+            const objectUrl = URL.createObjectURL(blob);
+            link.href = objectUrl;
             link.download = fileName;
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
-            URL.revokeObjectURL(link.href);
+            // Let WebKit consume the download URL before releasing it.
+            setTimeout(function() { URL.revokeObjectURL(objectUrl); }, 1000);
+            return true;
         }
 
-        function openUserAssistedPdfPrint(printHtml) {
+        function openUserAssistedPdfPrintWindow() {
             const printWindow = window.open('', '_blank', 'width=850,height=950');
             if (!printWindow) {
-                alert('Por favor permite ventanas emergentes para generar el PDF asistido.');
-                return;
+                reportExportError('Permite ventanas emergentes para imprimir o guardar la nota como PDF.');
+                return null;
             }
+            return printWindow;
+        }
+
+        function completeUserAssistedPdfPrint(printWindow, printHtml) {
+            if (!printWindow || printWindow.closed) return false;
             printWindow.document.open();
             printWindow.document.write(printHtml);
             printWindow.document.close();
             printWindow.focus();
+            // The popup was opened synchronously; defer only one event turn so
+            // the canonical HTML is present before invoking the native dialog.
             setTimeout(function() {
-                printWindow.print();
-                printWindow.close();
-            }, 350);
+                if (!printWindow.closed) printWindow.print();
+            }, 0);
+            return true;
+        }
+
+        function closePrintWindowOnError(printWindow) {
+            if (printWindow && !printWindow.closed) printWindow.close();
+        }
+
+        function openUserAssistedPdfPrint(printHtml) {
+            const printWindow = openUserAssistedPdfPrintWindow();
+            if (!printWindow) return false;
+            try {
+                return completeUserAssistedPdfPrint(printWindow, printHtml);
+            } catch (error) {
+                closePrintWindowOnError(printWindow);
+                reportExportError('No se pudo preparar la impresión PDF.', error);
+                return false;
+            }
         }
 
         function downloadMarkdownFile() {
@@ -1650,6 +1729,11 @@
 
         let availableThemes = ['General'];
         let currentActiveTheme = 'General';
+        let themeChangeRequest = 0;
+
+        function themeDisplayName(themeName) {
+            return String(themeName || '').replace(/_/g, ' ');
+        }
 
         function loadThemes() {
             if (window.pywebview && window.pywebview.api) {
@@ -1666,31 +1750,123 @@
         }
 
         function renderThemeSelect() {
-            const select = document.getElementById('theme-select');
-            if (!select) return;
-            select.replaceChildren();
+            const menu = document.getElementById('theme-select-menu');
+            const label = document.getElementById('theme-select-label');
+            if (!menu) return;
+            menu.replaceChildren();
             availableThemes.forEach(function(t) {
-                const opt = document.createElement('option');
-                opt.value = t;
-                // Muestra la versión con espacios tal como la escribió el usuario (no la versión con guiones bajos)
-                opt.innerText = t.replace(/_/g, ' ');
-                if (t === currentActiveTheme || t.replace(/_/g, ' ') === currentActiveTheme.replace(/_/g, ' ')) {
-                    opt.selected = true;
-                }
-                select.appendChild(opt);
+                const option = document.createElement('button');
+                const isActive = t === currentActiveTheme || themeDisplayName(t) === themeDisplayName(currentActiveTheme);
+                option.type = 'button';
+                option.className = 'theme-select-option';
+                option.setAttribute('role', 'option');
+                option.setAttribute('aria-selected', String(isActive));
+                option.dataset.themeName = t;
+                option.textContent = themeDisplayName(t);
+                option.classList.toggle('active', isActive);
+                option.addEventListener('click', function() {
+                    changeActiveTheme(t);
+                    closeThemeMenu();
+                    const trigger = document.getElementById('theme-select-trigger');
+                    if (trigger) trigger.focus();
+                });
+                option.addEventListener('keydown', handleThemeOptionKeydown);
+                menu.appendChild(option);
             });
+            if (label) label.textContent = themeDisplayName(currentActiveTheme);
+        }
+
+        function closeThemeMenu() {
+            const menu = document.getElementById('theme-select-menu');
+            const trigger = document.getElementById('theme-select-trigger');
+            if (menu) menu.classList.remove('is-open');
+            if (trigger) trigger.setAttribute('aria-expanded', 'false');
+        }
+
+        function openThemeMenu() {
+            const menu = document.getElementById('theme-select-menu');
+            const trigger = document.getElementById('theme-select-trigger');
+            if (!menu || !trigger) return;
+            menu.classList.add('is-open');
+            trigger.setAttribute('aria-expanded', 'true');
+        }
+
+        function toggleThemeMenu() {
+            const menu = document.getElementById('theme-select-menu');
+            if (!menu) return;
+            if (menu.classList.contains('is-open')) {
+                closeThemeMenu();
+            } else {
+                openThemeMenu();
+            }
+        }
+
+        function focusThemeOption(offset) {
+            const options = Array.from(document.querySelectorAll('#theme-select-menu [role="option"]'));
+            if (!options.length) return;
+            const currentIndex = options.indexOf(document.activeElement);
+            const nextIndex = currentIndex < 0 ? 0 : (currentIndex + offset + options.length) % options.length;
+            options[nextIndex].focus();
+        }
+
+        function handleThemeOptionKeydown(event) {
+            if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+                event.preventDefault();
+                focusThemeOption(event.key === 'ArrowDown' ? 1 : -1);
+            } else if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                event.currentTarget.click();
+            } else if (event.key === 'Escape') {
+                event.preventDefault();
+                closeThemeMenu();
+                const trigger = document.getElementById('theme-select-trigger');
+                if (trigger) trigger.focus();
+            }
+        }
+
+        function handleThemeTriggerKeydown(event) {
+            if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                toggleThemeMenu();
+            } else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+                event.preventDefault();
+                openThemeMenu();
+                focusThemeOption(event.key === 'ArrowDown' ? 1 : -1);
+            } else if (event.key === 'Escape') {
+                event.preventDefault();
+                closeThemeMenu();
+            }
         }
 
         function changeActiveTheme(themeName) {
             if (!themeName) return;
+            const previousTheme = currentActiveTheme;
+            const requestId = ++themeChangeRequest;
             currentActiveTheme = themeName;
-            const displayTitle = themeName.replace(/_/g, ' ');
+            renderThemeSelect();
+            const displayTitle = themeDisplayName(themeName);
             log('Cambiando Tema activo a: "' + displayTitle + '"...');
             if (window.pywebview && window.pywebview.api) {
-                window.pywebview.api.set_theme(themeName).then(function(res) {
+                Promise.resolve().then(function() {
+                    return window.pywebview.api.set_theme(themeName);
+                }).then(function(res) {
+                    if (requestId !== themeChangeRequest) return;
+                    if (res && res.error) {
+                        currentActiveTheme = previousTheme;
+                        renderThemeSelect();
+                        log('No se pudo activar el Tema "' + displayTitle + '": ' + (res.message || res.error));
+                        showPapiroToast('No se pudo activar el Tema seleccionado.');
+                        return;
+                    }
                     if (res && res.log) log(res.log);
                     if (res && res.stats) updateDashboardStats(res.stats);
                     if (typeof loadReaderNotes === 'function') loadReaderNotes();
+                }).catch(function(error) {
+                    if (requestId !== themeChangeRequest) return;
+                    currentActiveTheme = previousTheme;
+                    renderThemeSelect();
+                    log('No se pudo activar el Tema "' + displayTitle + '": ' + (error && error.message ? error.message : error));
+                    showPapiroToast('No se pudo activar el Tema seleccionado.');
                 });
             } else {
                 log('Tema activo (vista previa): ' + displayTitle);
@@ -2305,6 +2481,7 @@
 
         function launchChatWithContext(mode) {
             activeChatContextMode = mode;
+            syncChatContextButtons();
             activeChatNoteTitle = currentSelectedNoteTitle || 'esta nota';
             activeChatNotePath = currentSelectedNotePath || '';
             activeChatDocumentId = currentSelectedDocumentId || '';
@@ -2313,6 +2490,14 @@
             openModal('modal-chat');
 
             updateChatContextBadge();
+        }
+
+        function syncChatContextButtons() {
+            document.querySelectorAll('[data-chat-context-mode]').forEach(function(button) {
+                const isActive = button.dataset.chatContextMode === activeChatContextMode;
+                button.classList.toggle('active', isActive);
+                button.setAttribute('aria-pressed', String(isActive));
+            });
         }
 
         function updateChatContextBadge() {
@@ -2365,10 +2550,13 @@
                 button.type = 'button';
                 button.className = 'btn-small';
                 button.classList.add('console-layout-073');
+                button.dataset.chatContextMode = action[0];
+                button.setAttribute('aria-pressed', 'false');
                 button.textContent = action[1];
                 button.addEventListener('click', function() { launchChatWithContext(action[0]); });
                 actions.appendChild(button);
             });
+            syncChatContextButtons();
             bar.append(title, actions);
             return bar;
         }
@@ -2877,6 +3065,10 @@
 
         document.addEventListener('DOMContentLoaded', function() {
             loadThemes();
+            document.addEventListener('click', function(event) {
+                const themeControl = document.getElementById('theme-select');
+                if (themeControl && !themeControl.contains(event.target)) closeThemeMenu();
+            });
             document.querySelectorAll('.modal-overlay').forEach(function(overlay) {
                 overlay.addEventListener('click', function(e) {
                     if (e.target === overlay) {

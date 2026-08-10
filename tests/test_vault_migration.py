@@ -198,6 +198,59 @@ def test_rollback_restores_content_and_paths(vault_tree: Path):
     assert note.read_text(encoding="utf-8") == LEGACY_NOTE
 
 
+@pytest.mark.parametrize(
+    ("rebuild_moc", "rebuild_index"),
+    [
+        (False, False),
+        (False, True),
+        (True, False),
+        (True, True),
+    ],
+)
+def test_rollback_side_effects_follow_manifest_flags(
+    vault_tree: Path,
+    rebuild_moc: bool,
+    rebuild_index: bool,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    note = _write_note(vault_tree, "4_salida/_Sin_Cuestion/legacy.md", LEGACY_NOTE)
+    migrator = VaultMigrator(vault_tree, chroma=FakeChroma())
+    manifest = migrator.apply(
+        rebuild_moc=rebuild_moc,
+        rebuild_index=rebuild_index,
+    )
+    manifest_path = migrator._manifest_file(manifest)
+    calls: list[tuple[str, list[str] | None]] = []
+
+    def refresh_moc() -> list[str]:
+        calls.append(("moc", None))
+        return []
+
+    def rebuild(themes: list[str]) -> bool:
+        calls.append(("index", list(themes)))
+        return True
+
+    monkeypatch.setattr(migrator, "_refresh_moc_catalog", refresh_moc)
+    monkeypatch.setattr(migrator, "_rebuild_index", rebuild)
+
+    rolled, restored = migrator.rollback(manifest_path)
+
+    expected_calls: list[tuple[str, list[str] | None]] = []
+    if rebuild_moc:
+        expected_calls.append(("moc", None))
+    if rebuild_index:
+        expected_calls.append(
+            (
+                "index",
+                manifest.themes_processed or migrator.vault.get_available_themes(),
+            )
+        )
+    assert calls == expected_calls
+    assert rolled.status == "rolled_back"
+    assert restored == 1
+    assert note.read_text(encoding="utf-8") == LEGACY_NOTE
+
+
 def test_cli_dry_run_and_apply(vault_tree: Path):
     _write_note(vault_tree, "4_salida/_Sin_Cuestion/legacy.md", LEGACY_NOTE)
 

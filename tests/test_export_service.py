@@ -3,8 +3,11 @@ from __future__ import annotations
 
 import base64
 import html
+import io
+import json
 from pathlib import Path
 
+from docx import Document
 import pytest
 
 from funes.application.export import (
@@ -19,24 +22,36 @@ from funes.domain.paths import AuthorizedPathResolver, document_id_for_relative_
 from funes.infrastructure.sqlite_store import JobStore
 
 
-def _pending_markdown(*, body: str, title: str = "Nota Export") -> str:
-    return serialize_frontmatter(
-        {
-            "schema_version": 1,
-            "title": title,
-            "date": "2026-08-09",
-            "author": "Funes",
-            "tags": ["export"],
-            "issue": "_Sin_Cuestion",
-            "status": "approved",
-            "sources": [],
-            "history": [],
-        }
-    ) + body
+def _pending_markdown(
+    *, body: str, title: str = "Nota Export", extra_metadata: dict | None = None
+) -> str:
+    metadata = {
+        "schema_version": 1,
+        "title": title,
+        "date": "2026-08-09",
+        "author": "Funes",
+        "tags": ["export"],
+        "issue": "_Sin_Cuestion",
+        "status": "approved",
+        "sources": [],
+        "history": [],
+    }
+    if extra_metadata:
+        metadata.update(extra_metadata)
+    return serialize_frontmatter(metadata) + body
 
 
-def _write_note(vault_manager, *, body: str, title: str = "Nota_Export") -> tuple[str, Path]:
-    note_path = vault_manager.save_atomic_note(title=title, content=_pending_markdown(body=body))
+def _write_note(
+    vault_manager,
+    *,
+    body: str,
+    title: str = "Nota_Export",
+    extra_metadata: dict | None = None,
+) -> tuple[str, Path]:
+    note_path = vault_manager.save_atomic_note(
+        title=title,
+        content=_pending_markdown(body=body, extra_metadata=extra_metadata),
+    )
     relative = note_path.resolve().relative_to(
         vault_manager.config.vault_path.resolve()
     ).as_posix()
@@ -96,6 +111,128 @@ def test_docx_export_is_real_docx_not_html_doc(export_stack):
     assert payload.filename.endswith(".docx")
     assert raw.startswith(b"PK")
     assert b"[Content_Types].xml" in raw or b"word/" in raw
+
+
+def test_docx_projects_canonical_metadata_and_body_structures(export_stack):
+    export_service, _, vault_manager, _ = export_stack
+    body = (
+        "# Resumen Ejecutivo\n\n"
+        "Primer párrafo\ncontinúa en la misma sección.\n\n"
+        "## Desarrollo\n\n"
+        "### Detalle\n\n"
+        "- elemento\n"
+        "1. paso\n"
+    )
+    document_id, _ = _write_note(
+        vault_manager, body=body, title="Nota Estructurada"
+    )
+    note = export_service.notes_service.get_note(document_id)
+
+    payload = export_service.prepare_download(document_id, "docx")
+    document = Document(io.BytesIO(payload.content_bytes or b""))
+    texts = [paragraph.text for paragraph in document.paragraphs]
+
+    assert note.title in texts
+    assert any(note.relative_path in text for text in texts)
+    assert "Resumen Ejecutivo" in texts
+    assert "Primer párrafo\ncontinúa en la misma sección." in texts
+    assert any(
+        paragraph.style.name == "Heading 2" and paragraph.text == "Desarrollo"
+        for paragraph in document.paragraphs
+    )
+    assert any(
+        paragraph.style.name == "Heading 3" and paragraph.text == "Detalle"
+        for paragraph in document.paragraphs
+    )
+    assert any(
+        paragraph.style.name == "List Bullet" and paragraph.text == "elemento"
+        for paragraph in document.paragraphs
+    )
+    assert any(
+        paragraph.style.name == "List Number" and paragraph.text == "paso"
+        for paragraph in document.paragraphs
+    )
+    assert all(len(row.cells) == 2 for row in document.tables[0].rows)
+    assert [row.cells[0].text for row in document.tables[0].rows] == sorted(
+        note.frontmatter
+    )
+    metadata_rows = {
+        row.cells[0].text: row.cells[1].text for row in document.tables[0].rows
+    }
+    assert metadata_rows["tags"] == json.dumps(
+        note.frontmatter["tags"], ensure_ascii=False, sort_keys=True
+    )
+    assert metadata_rows["history"] == json.dumps(
+        note.frontmatter["history"], ensure_ascii=False, sort_keys=True
+    )
+    assert note.to_markdown() not in texts
+
+
+def test_docx_serializes_dict_metadata_as_sorted_json(export_stack):
+    export_service, _, vault_manager, _ = export_stack
+    extra_metadata = {"custom_metadata": {"zeta": 2, "alpha": 1}}
+    document_id, _ = _write_note(
+        vault_manager,
+        body="# Metadata\n",
+        extra_metadata=extra_metadata,
+    )
+
+    note = export_service.notes_service.get_note(document_id)
+    payload = export_service.prepare_download(document_id, "docx")
+    document = Document(io.BytesIO(payload.content_bytes or b""))
+    metadata_rows = {
+        row.cells[0].text: row.cells[1].text for row in document.tables[0].rows
+    }
+
+    assert all(len(row.cells) == 2 for row in document.tables[0].rows)
+    assert metadata_rows["custom_metadata"] == '{"alpha": 1, "zeta": 2}'
+    assert metadata_rows["custom_metadata"] == json.dumps(
+        note.frontmatter["custom_metadata"], ensure_ascii=False, sort_keys=True
+    )
+
+
+def test_docx_preserves_paragraphs_code_and_unsupported_markdown(export_stack):
+    export_service, _, vault_manager, _ = export_stack
+    table = "| Col A | Col B |\n| --- | --- |\n| uno | dos |"
+    body = (
+        "Primera línea\n"
+        "segunda línea\n\n"
+        "Párrafo separado\n\n"
+        "```python\n"
+        "def saludo():\n"
+        "    return \"hola\"\n"
+        "\n"
+        "```\n\n"
+        f"{table}\n\n"
+        "> cita literal\n\n"
+        "#### Heading literal\n"
+    )
+    document_id, _ = _write_note(vault_manager, body=body)
+
+    payload = export_service.prepare_download(document_id, "docx")
+    document = Document(io.BytesIO(payload.content_bytes or b""))
+    paragraphs = document.paragraphs
+
+    assert "Primera línea\nsegunda línea" in [paragraph.text for paragraph in paragraphs]
+    assert "Párrafo separado" in [paragraph.text for paragraph in paragraphs]
+
+    code_paragraph = next(
+        paragraph for paragraph in paragraphs if "def saludo():" in paragraph.text
+    )
+    assert code_paragraph.style.name == "No Spacing"
+    assert code_paragraph.text == 'def saludo():\n    return "hola"\n'
+    assert any(
+        run.font.name == "Courier New" for run in code_paragraph.runs
+    )
+
+    texts = [paragraph.text for paragraph in paragraphs]
+    assert table in texts
+    assert "> cita literal" in texts
+    assert "#### Heading literal" in texts
+    assert all(
+        fragment in "\n".join(texts)
+        for fragment in ("| Col A | Col B |", "| --- | --- |", "| uno | dos |")
+    )
 
 
 def test_pdf_export_is_user_assisted_with_escaped_html(export_stack):

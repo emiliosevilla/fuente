@@ -981,6 +981,16 @@
     background:var(--bg-card); color:var(--paper); border:1px solid var(--border-accent); border-radius:var(--card-radius); padding:8px 16px; font-size:0.8rem; font-weight:700; height:36px; box-sizing:border-box; cursor:pointer; font-family:var(--font-mono);
 }
 
+.theme-select-control { position: relative; min-width: 180px; }
+.theme-select-trigger { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; text-align: left; transition: all 0.2s ease; }
+.theme-select-trigger:hover { background: var(--bg-card-hover); transform: translateY(-1px); box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+.theme-select-trigger:focus-visible, .theme-select-option:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+.theme-select-chevron { color: var(--gold); font-size: 0.9rem; }
+.theme-select-menu { display: none; position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: 100; padding: 4px; background: var(--bg-card); border: 1px solid var(--border-accent); border-radius: var(--card-radius); box-shadow: 0 8px 18px rgba(0,0,0,0.28); }
+.theme-select-menu.is-open { display: grid; gap: 2px; }
+.theme-select-option { width: 100%; padding: 8px 10px; border: 1px solid transparent; border-radius: 4px; background: transparent; color: var(--paper); font: inherit; text-align: left; cursor: pointer; }
+.theme-select-option:hover, .theme-select-option.active { background: var(--bg-card-hover); border-color: var(--border-accent); color: var(--gold); }
+
 .console-layout-004 {
     border-left:1px solid var(--border); height:18px; margin:0 4px;
 }
@@ -1392,6 +1402,8 @@
 .console-layout-073 {
     font-weight: 700; background: var(--bg-card-hover); border: 1px solid var(--border-accent); width: 220px; text-align: center;
 }
+
+.btn-toggle.active, .console-layout-073.active { background: var(--bg-log); border-color: var(--gold); color: var(--gold); }
 
 .console-layout-074 {
     list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 8px;

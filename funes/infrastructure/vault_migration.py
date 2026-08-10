@@ -406,7 +406,8 @@ class VaultMigrator:
 
         manifest.status = "rolled_back"
         self._persist_manifest(manifest, manifest_path)
-        self._refresh_moc_catalog()
+        if manifest.moc_rebuilt:
+            self._refresh_moc_catalog()
         if manifest.index_rebuilt:
             self._rebuild_index(manifest.themes_processed or self.vault.get_available_themes())
         return manifest, restored_count

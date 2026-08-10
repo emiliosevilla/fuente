@@ -37,7 +37,21 @@ Frontmatter migration is **reversible per manifest**. Full procedure:
 python scripts/migrate_vault.py /path/to/Vault --rollback .funes/migrations/<migration_id>/manifest.json
 ```
 
-See [`migration-guide.md`](migration-guide.md) for manifest layout, Chroma index rebuild behaviour, and the `--skip-moc` / rollback MOC caveat (rollback refreshes the MOC catalog even when apply used `--skip-moc`).
+See [`migration-guide.md`](migration-guide.md) for the manifest layout and the independent MOC/Chroma rebuild behavior controlled by `moc_rebuilt` and `index_rebuilt`.
+
+### Manifest-controlled rebuilds
+
+Rollback restores all applied files from the manifest backups regardless of the
+rebuild flags. After restoration, it applies each flag independently:
+
+- `moc_rebuilt: true` refreshes the MOC catalog; `moc_rebuilt: false` does not
+  refresh it.
+- `index_rebuilt: true` reconciles Chroma; `index_rebuilt: false` does not
+  reconcile it.
+
+The flags may therefore produce any of four valid outcomes: neither artifact,
+only the MOC, only Chroma, or both. A false flag is authoritative even when the
+other flag is true.
 
 ### When to use Vault rollback
 
@@ -63,6 +77,7 @@ See [`migration-guide.md`](migration-guide.md) for manifest layout, Chroma index
 | Notes edited manually after migration | Restore from Obsidian sync/backup; manifest rollback only restores pre-migration snapshots for manifest entries |
 | Quarantine items | Use quarantine restore APIs / console; not reversed by migration rollback |
 | `.funes/state.db` job history | Restore from filesystem backup or let jobs resume; no automatic down-migration |
+| MOC catalog | Migration rollback refreshes when manifest recorded `moc_rebuilt: true`; otherwise run MOC regeneration manually |
 | Chroma index | Migration rollback reconciles when manifest recorded `index_rebuilt: true`; otherwise run index reconciliation manually |
 
 ## Escalation

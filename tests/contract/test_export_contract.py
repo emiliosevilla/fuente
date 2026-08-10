@@ -2,7 +2,10 @@
 from __future__ import annotations
 
 import base64
+import io
+import json
 
+from docx import Document
 import pytest
 
 from funes.application.export import ExportApplicationService
@@ -130,3 +133,72 @@ def test_bridge_docx_export_round_trips_real_docx(temp_vault_manager):
     assert result["filename"].endswith(".docx")
     raw = base64.b64decode(result["content_base64"])
     assert raw.startswith(b"PK")
+
+    document = Document(io.BytesIO(raw))
+    note = backend.get_notes_service().get_note(document_id)
+    assert "Nota_Export" in [paragraph.text for paragraph in document.paragraphs]
+    assert any(
+        paragraph.style.name == "Heading 1" and paragraph.text == "Cuerpo"
+        for paragraph in document.paragraphs
+    )
+    assert any(
+        "Texto canónico." in paragraph.text for paragraph in document.paragraphs
+    )
+    assert all(len(row.cells) == 2 for row in document.tables[0].rows)
+    assert [row.cells[0].text for row in document.tables[0].rows] == sorted(
+        note.frontmatter
+    )
+    metadata_rows = {
+        row.cells[0].text: row.cells[1].text for row in document.tables[0].rows
+    }
+    assert metadata_rows["tags"] == json.dumps(
+        note.frontmatter["tags"], ensure_ascii=False, sort_keys=True
+    )
+    assert note.to_markdown() not in [paragraph.text for paragraph in document.paragraphs]
+
+
+def test_bridge_docx_keeps_code_and_unsupported_markdown_literal(temp_vault_manager):
+    temp_vault_manager.create_theme(THEME)
+    temp_vault_manager.create_issue_in_theme(ISSUE)
+    body = (
+        "Antes\n"
+        "continúa\n\n"
+        "```python\n"
+        "print(\"hola\")\n"
+        "```\n\n"
+        "| A | B |\n"
+        "| --- | --- |\n"
+        "| 1 | 2 |\n\n"
+        "> bloque literal\n\n"
+        "#### Nivel cuatro literal\n"
+    )
+    document_id, _ = write_note_under_theme(
+        temp_vault_manager,
+        theme=THEME,
+        issue=ISSUE,
+        title="Nota_7B",
+        body=body,
+        status="approved",
+    )
+
+    backend = FunesConsoleBackend(temp_vault_manager.config.vault_path)
+    backend.vault = temp_vault_manager
+    result = FunesPyWebViewApi(backend).export_note(document_id, "docx")
+    assert "error" not in result
+
+    document = Document(io.BytesIO(base64.b64decode(result["content_base64"])))
+    paragraphs = document.paragraphs
+    assert "Antes\ncontinúa" in [paragraph.text for paragraph in paragraphs]
+
+    code_paragraph = next(
+        paragraph for paragraph in paragraphs if 'print("hola")' in paragraph.text
+    )
+    assert code_paragraph.style.name == "No Spacing"
+    assert any(run.font.name == "Courier New" for run in code_paragraph.runs)
+    assert "| A | B |\n| --- | --- |\n| 1 | 2 |" in [
+        paragraph.text for paragraph in paragraphs
+    ]
+    assert "> bloque literal" in [paragraph.text for paragraph in paragraphs]
+    assert "#### Nivel cuatro literal" in [
+        paragraph.text for paragraph in paragraphs
+    ]

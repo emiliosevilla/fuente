@@ -182,6 +182,7 @@ def test_on_step_start_callback_fires_in_order(tmp_path):
 
 
 def test_anythingllm_requires_confirmation(install_ctx):
+    install_ctx.install_anythingllm = True
     install_ctx.confirm = lambda _t, _m: False
 
     with patch(

@@ -19,6 +19,7 @@ from funes.ram_governor.budget import (
     measured_snapshot,
 )
 from funes.application.retrieval import MODE_BM25, MODE_HYBRID, RetrievalApplicationService
+from funes.domain.runtime_policy import RuntimePolicy
 from funes.control_console import FunesConsoleBackend
 from funes.ui.bridge import FunesPyWebViewApi
 
@@ -312,3 +313,28 @@ def test_native_handler_receives_same_keys(grounded_service):
         "model",
     }
     assert required.issubset(result.keys())
+
+
+def test_chat_is_honest_when_eco_policy_has_no_fitting_model(grounded_service):
+    service, provider, _store = grounded_service
+    service.retrieval.runtime_policy = RuntimePolicy(
+        profile="eco_strict",
+        retrieval_mode="bm25_vault",
+        vector_index_enabled=False,
+        audio_mode="skip",
+        whisper_model_path=None,
+        allow_model_download=False,
+        selected_model=None,
+        llm_available=False,
+        reason="eco_strict disables unavailable local model",
+    )
+
+    result = service.ask("¿Qué garantiza la fianza?")
+
+    assert result["ok"] is True
+    assert result["degraded"] is True
+    assert result["retrieval_mode"] == "bm25_vault"
+    assert result["degradation_reason"] == "eco_strict disables unavailable local model"
+    assert result["sources"]
+    assert not provider.calls
+    assert "modelo" not in result["text"].lower() or "omitió" in result["text"].lower()

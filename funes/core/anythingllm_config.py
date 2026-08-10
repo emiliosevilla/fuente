@@ -138,8 +138,11 @@ def launch_anythingllm() -> bool:
 
 def configure_anythingllm_integration(output_dir: Path) -> bool:
     """
-    Auto-configura AnythingLLM Desktop para usar Ollama local con el modelo Qwen recomendado
-    y vincula el Workspace 'Habla con Funes' a la carpeta 4_salida.
+    Legacy, unsupported third-party integration action.
+
+    This helper is retained only for an explicit opt-in installer or legacy
+    user action. Normal Funes runtime, first-run, and Step 3 paths must never
+    call it; it may write AnythingLLM-owned configuration and database files.
     """
     try:
         paths = get_anythingllm_paths()

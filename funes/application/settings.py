@@ -6,12 +6,49 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Callable, Iterable
 
-from funes.config import AppConfig, save_config, validate_ollama_url
+from funes.config import (
+    AppConfig,
+    VALID_AUDIO_MODES,
+    VALID_RESOURCE_PROFILES,
+    save_config,
+    validate_ollama_url,
+)
 from funes.infrastructure.atomic_files import atomic_write_json
 
 
 class SettingsValidationError(ValueError):
     """Raised when a requested settings change is unsafe or malformed."""
+
+
+def _validated_choice(value: object, allowed: tuple[str, ...], field: str) -> str:
+    candidate = getattr(value, "value", value)
+    if not isinstance(candidate, str) or candidate not in allowed:
+        raise SettingsValidationError(f"{field} must be one of: {', '.join(allowed)}")
+    return candidate
+
+
+def _normalized_path(value: str | Path | None) -> str | None:
+    if value is None:
+        return None
+    raw = str(value).strip()
+    if not raw:
+        return None
+    if "://" in raw:
+        raise SettingsValidationError("whisper_model_path must be a local path")
+    return str(Path(raw).expanduser().resolve())
+
+
+def _validate_tiny_cpu_path(path: str | None) -> str:
+    if path is None:
+        raise SettingsValidationError(
+            "whisper_model_path must point to an existing local directory or file"
+        )
+    candidate = Path(path)
+    if not candidate.exists() or not (candidate.is_file() or candidate.is_dir()):
+        raise SettingsValidationError(
+            "whisper_model_path must point to an existing local directory or file"
+        )
+    return str(candidate.resolve())
 
 
 @dataclass(frozen=True)
@@ -39,9 +76,57 @@ class SettingsService:
         ram_safety_margin_pct: float | None = None,
         ollama_url: str | None = None,
         allow_non_loopback_ollama: bool | None = None,
+        resource_profile: str | None = None,
+        audio_mode: str | None = None,
+        whisper_model_path: str | Path | None = None,
         input_connected_folders: Iterable[str | Path] | None = None,
         output_connected_folders: Iterable[str | Path] | None = None,
     ) -> SettingsApplicationResult:
+        result = self.prepare(
+            vault_path=vault_path,
+            custom_model_override=custom_model_override,
+            ram_safety_margin_pct=ram_safety_margin_pct,
+            ollama_url=ollama_url,
+            allow_non_loopback_ollama=allow_non_loopback_ollama,
+            resource_profile=resource_profile,
+            audio_mode=audio_mode,
+            whisper_model_path=whisper_model_path,
+            input_connected_folders=input_connected_folders,
+            output_connected_folders=output_connected_folders,
+        )
+        updated_config = result.config
+        save_config(updated_config)
+        if input_connected_folders is not None:
+            self._save_connected_folders(
+                updated_config.vault.vault_path / ".funes_connected_folders.json",
+                input_connected_folders,
+            )
+        if output_connected_folders is not None:
+            self._save_connected_folders(
+                updated_config.vault.vault_path / ".funes_output_connected_folders.json",
+                output_connected_folders,
+            )
+
+        self.config = updated_config
+        if self._on_applied is not None:
+            self._on_applied(updated_config)
+        return result
+
+    def prepare(
+        self,
+        *,
+        vault_path: str | Path | None = None,
+        custom_model_override: str | None = None,
+        ram_safety_margin_pct: float | None = None,
+        ollama_url: str | None = None,
+        allow_non_loopback_ollama: bool | None = None,
+        resource_profile: str | None = None,
+        audio_mode: str | None = None,
+        whisper_model_path: str | Path | None = None,
+        input_connected_folders: Iterable[str | Path] | None = None,
+        output_connected_folders: Iterable[str | Path] | None = None,
+    ) -> SettingsApplicationResult:
+        """Validate and build the next config without persisting it."""
         target_vault_path = Path(vault_path).resolve() if vault_path else self.config.vault.vault_path
         target_vault = replace(self.config.vault, vault_path=target_vault_path)
         allow_non_loopback = (
@@ -69,6 +154,26 @@ class SettingsService:
         if custom_model_override is not None:
             selected_model = custom_model_override.strip() or None
 
+        selected_profile = _validated_choice(
+            self.config.resource_profile
+            if resource_profile is None
+            else resource_profile,
+            VALID_RESOURCE_PROFILES,
+            "resource_profile",
+        )
+        selected_audio_mode = _validated_choice(
+            self.config.audio_mode if audio_mode is None else audio_mode,
+            VALID_AUDIO_MODES,
+            "audio_mode",
+        )
+        selected_whisper_path = _normalized_path(
+            self.config.whisper_model_path
+            if whisper_model_path is None
+            else whisper_model_path
+        )
+        if selected_audio_mode == "tiny_cpu":
+            selected_whisper_path = _validate_tiny_cpu_path(selected_whisper_path)
+
         updated_config = replace(
             self.config,
             vault=target_vault,
@@ -76,22 +181,10 @@ class SettingsService:
             custom_model_override=selected_model,
             ram_safety_margin_pct=selected_margin,
             allow_non_loopback_ollama=allow_non_loopback,
+            resource_profile=selected_profile,
+            audio_mode=selected_audio_mode,
+            whisper_model_path=selected_whisper_path,
         )
-        save_config(updated_config)
-        if input_connected_folders is not None:
-            self._save_connected_folders(
-                target_vault_path / ".funes_connected_folders.json",
-                input_connected_folders,
-            )
-        if output_connected_folders is not None:
-            self._save_connected_folders(
-                target_vault_path / ".funes_output_connected_folders.json",
-                output_connected_folders,
-            )
-
-        self.config = updated_config
-        if self._on_applied is not None:
-            self._on_applied(updated_config)
         return SettingsApplicationResult(updated_config, warning)
 
     @staticmethod

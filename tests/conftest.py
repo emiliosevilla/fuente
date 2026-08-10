@@ -9,6 +9,7 @@ import pytest
 
 from funes.config import get_default_config
 from funes.core.vault import VaultManager
+from funes.domain.runtime_policy import AudioMode, ExecutionProfile, RuntimePolicy
 from funes.ram_governor.budget import measured_snapshot
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -19,6 +20,21 @@ def patch_abundant_ram(governor) -> None:
     """Make ETL/scheduler tests independent of the host's free RAM."""
     governor.measure_memory = lambda: measured_snapshot(
         total_gb=32.0, available_gb=24.0, safety_margin_pct=0.35
+    )
+
+
+def explicit_test_runtime_policy() -> RuntimePolicy:
+    """Provide a measured-independent policy for legacy generation tests."""
+    return RuntimePolicy(
+        profile=ExecutionProfile.AUTO,
+        retrieval_mode="hybrid",
+        vector_index_enabled=True,
+        audio_mode=AudioMode.AUTO,
+        whisper_model_path=None,
+        allow_model_download=False,
+        selected_model="test-model",
+        llm_available=True,
+        reason="explicit test policy",
     )
 
 

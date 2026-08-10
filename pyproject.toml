@@ -63,6 +63,7 @@ include = ["funes*"]
 [tool.setuptools.package-data]
 "funes.infrastructure.migrations" = ["*.sql"]
 "funes.ui.static" = ["*.css"]
+"funes.resources.demo_vault" = ["manifest.json", "notes/*.md"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

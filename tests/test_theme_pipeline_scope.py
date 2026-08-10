@@ -16,6 +16,7 @@ from funes.control_console import FunesConsoleBackend
 from funes.core.folder_sync import FolderSyncManager
 from funes.core.vault import VaultManager, document_id_for_relative_path
 from funes.domain.frontmatter import serialize_frontmatter
+from funes.domain.runtime_policy import ExecutionProfile, RuntimePolicy
 from funes.graph_engine.optimized_loop import OptimizadoGraphLoop
 from funes.watcher.watcher import ETLPipeline, FolderMonitor
 
@@ -67,6 +68,19 @@ def themed_pipeline(temp_vault_path):
         root.mkdir(parents=True, exist_ok=True)
 
     pipeline = ETLPipeline(config)
+    pipeline.set_runtime_policy(
+        RuntimePolicy(
+            profile=ExecutionProfile.AUTO,
+            retrieval_mode="hybrid",
+            vector_index_enabled=True,
+            audio_mode="auto",
+            whisper_model_path=None,
+            allow_model_download=False,
+            selected_model="qwen2.5:1.5b",
+            llm_available=True,
+            reason="test fixture provides an installed model explicitly",
+        )
+    )
     patch_abundant_ram(pipeline.ram_governor)
     pipeline.vault.create_theme(THEME)
     # create_theme already activates the Theme; rebind linker caches.

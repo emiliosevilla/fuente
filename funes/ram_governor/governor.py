@@ -467,7 +467,17 @@ class RAMGovernor:
         print(f"[+] Margen de seguridad: {int(self.safety_margin_pct * 100)}% reservado para evitar lag en el sistema host.")
 
         decision = self.recommend_model_decision()
-        model = decision.model_id or MODEL_CATALOG[0].id
+        if not decision.allowed or llm_inference_mode(decision) == BM25_ONLY_POLICY:
+            print("[!] Modo BM25-only: no se instalará ningún modelo Ollama.")
+            print(f"[+] Motivo: {decision.reason}")
+            return ""
+
+        model = decision.model_id
+        if not model:
+            print("[!] No hay un modelo LLM permitido; se mantiene el modo BM25-only.")
+            print(f"[+] Motivo: {decision.reason}")
+            return ""
+
         print(f"[+] Modelo Qwen óptimo seleccionado: '{model}'")
         print(f"[+] Motivo: {decision.reason}")
 

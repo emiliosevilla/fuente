@@ -94,16 +94,16 @@ _Wave 1 P0 + Task 8 verification gate cerrados — ver tabla y nota de verificac
 
 Ver [`docs/security-residual-findings.md`](security-residual-findings.md) (SEC-001…011). Priorizar al cerrar Wave 1:
 - [x] Wikilinks `[[dir/note]]` — SEC-001/SEC-008 resueltos con regresiones de paths y grafo.
-- [ ] CSP `style-src` / innerHTML mock — regresión estática pasada; checkpoint visual humano pendiente, sin claim visual.
+- [x] CSP `style-src` / innerHTML mock — regresión estática pasada y consola verificada visualmente en el launcher nativo; SEC-002 resuelto.
 - [x] AnythingLLM website fallback — SEC-004 resuelto; fallback sin navegador y política offline cubiertos.
 - [x] DOCX contract body-deep; dual ETLPipeline console vs lifecycle — exportación y ciclo ETL cubiertos por sus contratos focalizados.
 
 ### Verificación residual (Task 9A/9B, 2026-08-10)
 
 - Matriz residual enfocada: **167 passed**, con un warning externo de deprecación de Chroma.
-- `pytest --collect-only -q`: **571 collected**.
-- `python3 -m pytest --collect-only -q`: **571 collected**; `python3 -m pytest` queda como comando canónico seguro para checkout Unicode.
-- Los fallos globales conocidos de `RAMGovernor` quedan fuera de esta matriz.
+- `PYTHONDONTWRITEBYTECODE=1 python3 -m pytest --collect-only -q`: **585 collected**.
+- `PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -q`: **584 passed, 1 skipped**, con un warning externo de deprecación de ChromaDB.
+- Los fallos globales de `RAMGovernor` quedaron resueltos alineando los tests legacy con la decisión explícita `bm25_only` y bloqueando el bypass del instalador.
 - El checkpoint de árbol limpio y los release gates siguen pendientes; no se afirma que hayan pasado.
 
 ### P2 — Productización proactiva (Wave 2+, no en el plan Wave 1)

@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Callable, Optional
 
 from funes.config import AppConfig
+from funes.domain.runtime_policy import RuntimePolicy
 from funes.graph_engine.optimized_loop import OptimizadoGraphLoop
 from funes.watcher.watcher import ETLPipeline, FolderMonitor
 
@@ -180,6 +181,27 @@ class ApplicationLifecycle:
             self.pipeline.vault.output_dir,
         )
         return theme_dir
+
+    def set_runtime_policy(self, policy: RuntimePolicy) -> None:
+        """Apply a derived policy to the already-owned pipeline instance."""
+        if self.pipeline is None:
+            raise RuntimeError(
+                "ApplicationLifecycle.set_runtime_policy() requires a started pipeline"
+            )
+        self.pipeline.set_runtime_policy(policy)
+
+    def set_config(self, config: AppConfig) -> None:
+        """Refresh settings on the existing pipeline without rebuilding it."""
+        if self.pipeline is None:
+            raise RuntimeError(
+                "ApplicationLifecycle.set_config() requires a started pipeline"
+            )
+        self.config = config
+        setter = getattr(self.pipeline, "set_config", None)
+        if callable(setter):
+            setter(config)
+        else:
+            self.pipeline.config = config
 
     def refine_graph(self, target_issue: str | None = None) -> dict:
         """Refine the lifecycle-owned graph loop, or fail closed.

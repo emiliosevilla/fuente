@@ -17,6 +17,7 @@ from funes.ram_governor.budget import BM25_ONLY_POLICY, BudgetDecision, llm_infe
 
 from funes.application.retrieval import (
     MODE_NONE,
+    MODE_BM25_VAULT,
     SCOPE_ALL_NOTES,
     SCOPE_ISSUE,
     SCOPE_SINGLE_NOTE,
@@ -235,6 +236,28 @@ class ChatApplicationService:
             if self._budget_decision_resolver is not None
             else None
         )
+        runtime_policy = getattr(self.retrieval, "runtime_policy", None)
+        if runtime_policy is not None and not bool(
+            getattr(runtime_policy, "llm_available", True)
+        ):
+            policy_reason = str(
+                getattr(runtime_policy, "reason", "local model unavailable under policy")
+            )
+            policy_mode = (
+                MODE_BM25_VAULT
+                if getattr(runtime_policy, "retrieval_mode", "") == MODE_BM25_VAULT
+                else retrieval_mode
+            )
+            return self._bm25_only_result(
+                query=query,
+                evidence=evidence,
+                sources=sources,
+                retrieval_mode=policy_mode,
+                has_context=has_context,
+                budget_reason=policy_reason,
+                degraded=True,
+                degradation_reason=policy_reason,
+            )
         if budget_decision is not None and llm_inference_mode(budget_decision) == BM25_ONLY_POLICY:
             return self._bm25_only_result(
                 query=query,
@@ -320,9 +343,12 @@ class ChatApplicationService:
         degradation_reason: Optional[str] = None,
     ) -> dict[str, Any]:
         preamble = (
-            "El modelo local (Ollama) se omitió por falta de RAM disponible. "
-            "Respuesta basada solo en búsqueda BM25 sobre las notas indexadas."
+            "No hay un modelo local disponible bajo la política actual y no se "
+            "invocó al proveedor de chat; la generación se omitió. El siguiente contenido es evidencia "
+            "recuperada, no una respuesta generada por un LLM."
         )
+        if "bm25" in budget_reason.lower() or retrieval_mode == MODE_BM25_VAULT:
+            preamble += " Búsqueda BM25 sobre las notas autorizadas."
         if has_context and evidence:
             body = (
                 f"{preamble}\n\n"
@@ -344,6 +370,7 @@ class ChatApplicationService:
             ok=True,
             degraded=degraded or True,
             degradation_reason=degradation_reason or budget_reason,
+            policy_reason=budget_reason,
         )
 
     @staticmethod
@@ -358,6 +385,7 @@ class ChatApplicationService:
         ok: bool,
         degraded: bool = False,
         degradation_reason: Optional[str] = None,
+        policy_reason: Optional[str] = None,
     ) -> dict[str, Any]:
         safe_text = text or ""
         labels = [_source_label(src) for src in sources]
@@ -373,5 +401,6 @@ class ChatApplicationService:
             "has_context": has_context,
             "degraded": degraded,
             "degradation_reason": degradation_reason,
+            "policy_reason": policy_reason,
             "model": model,
         }

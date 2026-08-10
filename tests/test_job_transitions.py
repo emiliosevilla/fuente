@@ -6,6 +6,7 @@ import dataclasses
 import pytest
 
 from funes.domain.jobs import (
+    JOB_STATUSES,
     PIPELINE_STAGES,
     PIPELINE_TRANSITIONS,
     CompensationPlan,
@@ -46,6 +47,8 @@ def make_job(**overrides: object) -> JobRecord:
         dirty_artifact=None,
         clean_artifact=None,
         note_document_id=None,
+        cancel_requested_at=None,
+        cancel_reason=None,
         created_at="2026-01-01T00:00:00+00:00",
         updated_at="2026-01-01T00:00:00+00:00",
         pipeline_version="1",
@@ -110,6 +113,38 @@ def test_every_active_stage_can_transition_to_quarantined(stage):
     assert result.job.error_code == "needs_review"
 
 
+@pytest.mark.parametrize("stage", HAPPY_PATH[:-1])
+def test_every_active_stage_can_transition_to_cancelled(stage):
+    job = make_job(stage=stage, status="claimed")
+    result = transition(
+        job,
+        "cancelled",
+        error_code="cancelled_by_user",
+        error_message="usuario",
+    )
+
+    assert result.job.stage == "cancelled"
+    assert result.job.status == "cancelled"
+    assert result.job.error_code == "cancelled_by_user"
+    assert result.job.error_message == "usuario"
+    assert result.compensation == compensation_plan_for_stage(stage)
+
+
+@pytest.mark.parametrize("stage", HAPPY_PATH[:-1])
+def test_every_active_stage_can_transition_to_skipped(stage):
+    result = transition(
+        make_job(stage=stage, status="claimed"),
+        "skipped",
+        error_code="skipped_by_policy",
+        error_message="fuera de alcance",
+    )
+
+    assert result.job.stage == "skipped"
+    assert result.job.status == "skipped"
+    assert result.job.error_code == "skipped_by_policy"
+    assert result.compensation == compensation_plan_for_stage(stage)
+
+
 # ---------------------------------------------------------------------------
 # Illegal transitions
 # ---------------------------------------------------------------------------
@@ -146,7 +181,9 @@ def test_moving_backwards_is_illegal():
         transition(job, "copied_dirty")
 
 
-@pytest.mark.parametrize("terminal_stage", ["completed", "failed", "quarantined"])
+@pytest.mark.parametrize(
+    "terminal_stage", ["completed", "failed", "quarantined", "cancelled", "skipped"]
+)
 @pytest.mark.parametrize("target", ["discovered", "stabilized", "saved_note"])
 def test_terminal_stages_have_no_outgoing_transitions(terminal_stage, target):
     job = make_job(
@@ -197,6 +234,13 @@ def test_transition_to_quarantined_without_error_code_is_rejected():
     job = make_job(stage="extracted", status="claimed")
     with pytest.raises(MissingErrorCodeError):
         transition(job, "quarantined")
+
+
+@pytest.mark.parametrize("target", ["cancelled", "skipped"])
+def test_transition_to_cancelled_or_skipped_without_error_code_is_rejected(target):
+    job = make_job(stage="extracted", status="claimed")
+    with pytest.raises(MissingErrorCodeError):
+        transition(job, target)
 
 
 def test_transition_to_failed_with_empty_error_code_is_rejected():
@@ -321,8 +365,12 @@ def test_pipeline_transitions_covers_every_declared_stage():
 
 
 def test_terminal_stages_map_to_no_transitions():
-    for stage in ("completed", "failed", "quarantined"):
+    for stage in ("completed", "failed", "quarantined", "cancelled", "skipped"):
         assert PIPELINE_TRANSITIONS[stage] == ()
+
+
+def test_job_status_vocabulary_contains_new_terminal_statuses():
+    assert {"cancelled", "skipped"}.issubset(JOB_STATUSES)
 
 
 def test_compensation_plan_defaults_are_all_false():

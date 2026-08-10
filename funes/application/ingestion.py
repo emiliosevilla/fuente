@@ -41,6 +41,7 @@ from typing import Any, Callable, Optional
 from funes.application.scheduler import (
     BudgetDeferredError,
     ResourceScheduler,
+    ScheduleDecision,
     ScheduleAction,
     TaskClass,
     task_class_for_job,
@@ -56,6 +57,7 @@ from funes.domain.jobs import (
     CompensationPlan,
     ErrorClass,
     FailureAction,
+    JobConflictError,
     JobRecord,
     classify_exception,
     evaluate_failure,
@@ -64,6 +66,9 @@ from funes.domain.jobs import (
 )
 from funes.domain.paths import AuthorizedPathResolver
 from funes.domain.quarantine import InvalidModelOutputError
+from funes.domain.runtime_policy import RuntimePolicy
+from funes.extractors.audio import AudioModelUnavailableError
+from funes.extractors.base import ExtractionResult
 from funes.infrastructure.atomic_files import atomic_write_text
 from funes.infrastructure.sqlite_store import JobStore
 from funes.ram_governor.budget import unavailable_snapshot
@@ -71,7 +76,9 @@ from funes.ram_governor.budget import unavailable_snapshot
 logger = logging.getLogger(__name__)
 
 #: Stages a job can never leave; `resume()` refuses to advance them.
-TERMINAL_STAGES: frozenset[str] = frozenset({"completed", "failed", "quarantined"})
+TERMINAL_STAGES: frozenset[str] = frozenset(
+    {"completed", "failed", "quarantined", "cancelled", "skipped"}
+)
 
 #: `index_artifacts.kind` values this service publishes.
 CHUNK_ARTIFACT_KIND = "chroma_chunk"
@@ -193,6 +200,7 @@ class IngestionApplicationService:
         chroma: Any,
         atomic_generator: Any,
         linker: Any,
+        runtime_policy: RuntimePolicy | None = None,
         ram_governor: Any = None,
         scheduler: Optional[ResourceScheduler] = None,
         copy_to_dirty: Optional[Callable[[Path], Path]] = None,
@@ -206,10 +214,21 @@ class IngestionApplicationService:
         self.chroma = chroma
         self.atomic_generator = atomic_generator
         self.linker = linker
+        self.runtime_policy = runtime_policy
         self.ram_governor = ram_governor
         self._copy_to_dirty = copy_to_dirty
         self._stabilize = stabilize or _default_stabilize
         self.scheduler = scheduler or self._build_scheduler()
+
+    def set_runtime_policy(self, policy: RuntimePolicy) -> None:
+        self.runtime_policy = policy
+        setter = getattr(self.extractors, "set_runtime_policy", None)
+        if callable(setter):
+            setter(policy)
+
+    def _vector_index_enabled(self) -> bool:
+        """Legacy harnesses remain Auto; an injected policy is authoritative."""
+        return self.runtime_policy is None or self.runtime_policy.vector_index_enabled
 
     def _build_scheduler(self) -> ResourceScheduler:
         governor = self.ram_governor
@@ -281,7 +300,13 @@ class IngestionApplicationService:
         )
         return self._advance(job, "stabilized")
 
-    def resume(self, job_id: str, *, respect_scheduler: bool = True) -> JobRecord:
+    def resume(
+        self,
+        job_id: str,
+        *,
+        expected_revision: int | None = None,
+        respect_scheduler: bool = True,
+    ) -> JobRecord:
         """Advance one job from its last durable stage to a terminal stage.
 
         When *respect_scheduler* is true (default), each stage is admitted by
@@ -289,12 +314,25 @@ class IngestionApplicationService:
         last durable stage and never quarantines the source.
         """
         job = self.job_store.get_job(job_id)
+        if expected_revision is not None and job.revision != expected_revision:
+            raise JobConflictError(job.job_id)
         if job.stage == "completed":
             return job
         if job.stage in TERMINAL_STAGES:
             raise JobNotResumableError(job.job_id, job.stage)
+        if self._llm_unavailable_under_policy(job):
+            return self._wait_for_unavailable_llm(job)
+        if job.cancel_requested_at:
+            return self.cancel_requested(
+                job.job_id, expected_revision=job.revision
+            )
         if job.status == DEFAULT_STATUS:
-            job = self.job_store.claim_job(job.job_id, expected_revision=job.revision)
+            job = self.job_store.claim_job(
+                job.job_id,
+                expected_revision=(
+                    expected_revision if expected_revision is not None else job.revision
+                ),
+            )
         else:
             logger.info(
                 "Resuming job %s from durable stage %s (attempt %s)",
@@ -309,6 +347,15 @@ class IngestionApplicationService:
 
         context = _RunContext()
         while job.stage not in TERMINAL_STAGES:
+            # A worker may have received a request while the previous safe
+            # stage completed. Reloading here makes the next boundary the
+            # only place where cancellation becomes effective.
+            job = self.job_store.get_job(job.job_id)
+            cancelled = self._cancel_if_requested(job)
+            if cancelled is not None:
+                return cancelled
+            if self._llm_unavailable_under_policy(job):
+                return self._wait_for_unavailable_llm(job)
             leased = False
             if respect_scheduler:
                 try:
@@ -334,28 +381,85 @@ class IngestionApplicationService:
                     )
                     return job
                 leased = True
-            handler = getattr(self, _STAGE_HANDLERS[job.stage])
             try:
-                job = handler(job, context)
-            except BudgetDeferredError as error:
-                self.scheduler.record_wait(
-                    job,
-                    task_class=error.task_class,
-                    reason=error.reason,
-                )
-                logger.info("Job %s deferred mid-stage: %s", job.job_id, error.reason)
-                return job
-            except Exception as error:
-                # Stages may persist attempt rows mid-flight (content retries),
-                # so reload before failure handling to avoid a stale CAS revision.
+                # Scheduler admission and the handler are separate race
+                # boundaries: a cancellation request may arrive after the
+                # lease is acquired but before any stage side effect starts.
+                # Reload here so that no handler runs for a requested job.
                 job = self.job_store.get_job(job.job_id)
-                return self._fail(job, error)
+                cancelled = self._cancel_if_requested(job)
+                if cancelled is not None:
+                    return cancelled
+
+                handler = getattr(self, _STAGE_HANDLERS[job.stage])
+                try:
+                    job = handler(job, context)
+                except BudgetDeferredError as error:
+                    self.scheduler.record_wait(
+                        job,
+                        task_class=error.task_class,
+                        reason=error.reason,
+                    )
+                    logger.info(
+                        "Job %s deferred mid-stage: %s", job.job_id, error.reason
+                    )
+                    return job
+                except Exception as error:
+                    # Stages may persist attempt rows mid-flight (content
+                    # retries), so reload before failure handling to avoid a
+                    # stale CAS revision.
+                    job = self.job_store.get_job(job.job_id)
+                    cancelled = self._cancel_if_requested(job)
+                    if cancelled is not None:
+                        return cancelled
+                    return self._fail(job, error)
             finally:
                 if leased:
+                    # `_cancel_if_requested` also releases its resources. The
+                    # store-level DELETEs are idempotent, so normal cleanup
+                    # remains safe on this early-return path.
                     self.scheduler.release(
                         job.job_id, document_id=self._document_id(job)
                     )
         return job
+
+    def cancel_requested(
+        self, job_id: str, *, expected_revision: int | None = None
+    ) -> JobRecord:
+        """Apply a requested cancellation at a safe boundary."""
+        job = self.job_store.get_job(job_id)
+        if expected_revision is not None and job.revision != expected_revision:
+            raise JobConflictError(job.job_id)
+        cancelled = self._cancel_if_requested(job)
+        return cancelled if cancelled is not None else job
+
+    def _cancel_if_requested(self, job: JobRecord) -> JobRecord | None:
+        if not job.cancel_requested_at:
+            return None
+        if job.stage == "cancelled":
+            return job
+        if job.stage in TERMINAL_STAGES:
+            return job
+        document_id = self._document_id(job)
+        result = transition(
+            job,
+            "cancelled",
+            error_code="cancelled_by_user",
+            error_message=job.cancel_reason or "cancelled by user",
+        )
+        try:
+            cleared = self._apply_compensation(job, result.compensation)
+            return self.job_store.update_job(
+                job.job_id,
+                expected_revision=job.revision,
+                stage=result.job.stage,
+                status=result.job.status,
+                error_code=result.job.error_code,
+                error_message=result.job.error_message,
+                clear_fields=cleared,
+            )
+        finally:
+            self.scheduler.release(job.job_id, document_id=document_id)
 
     def process_pending(self, limit: int = 1) -> list[JobRecord]:
         """Resume up to *limit* jobs ordered by scheduler policy.
@@ -379,6 +483,40 @@ class IngestionApplicationService:
         for item in planned:
             results.append(self.resume(item.job.job_id, respect_scheduler=True))
         return results
+
+    def _llm_unavailable_under_policy(self, job: JobRecord) -> bool:
+        policy = self.runtime_policy
+        return bool(
+            policy is not None
+            and job.stage == "indexed_chunks"
+            and not policy.llm_available
+        )
+
+    def _wait_for_unavailable_llm(self, job: JobRecord) -> JobRecord:
+        reason = "llm_unavailable_under_policy"
+        decision = ScheduleDecision(
+            job=job,
+            task_class=TaskClass.LLM_GENERATION,
+            action=ScheduleAction.WAIT,
+            reason=reason,
+        )
+        persist = getattr(self.scheduler, "_persist", None)
+        if callable(persist):
+            persist(decision)
+        else:
+            self.job_store.record_schedule_decision(
+                job_id=job.job_id,
+                task_class=decision.task_class.value,
+                action=decision.action.value,
+                reason=decision.reason,
+            )
+        if job.status == DEFAULT_STATUS:
+            return job
+        return self.job_store.update_job(
+            job.job_id,
+            expected_revision=job.revision,
+            status=DEFAULT_STATUS,
+        )
 
     def path_resolver(self) -> AuthorizedPathResolver:
         return self.vault.path_resolver()
@@ -413,9 +551,17 @@ class IngestionApplicationService:
         dirty_path = self._recorded_artifact(job.dirty_artifact)
         if dirty_path is None:
             raise MissingArtifactError(job.job_id, "dirty copy")
-        job, context.content, context.metadata = self._extract_with_content_retries(
-            job, dirty_path
-        )
+        job, result = self._extract_with_content_retries(job, dirty_path)
+        if result.status == "skipped":
+            return self._skip_job(
+                job,
+                result.reason or "extraction_skipped",
+                "Extraction skipped by runtime policy",
+            )
+        if result.content is None:
+            raise ValueError("completed extraction returned no content")
+        context.content = result.content
+        context.metadata = result.metadata
         return self._advance(job, "extracted")
 
     def _run_save_clean(self, job: JobRecord, context: _RunContext) -> JobRecord:
@@ -431,6 +577,16 @@ class IngestionApplicationService:
 
     def _run_index_chunks(self, job: JobRecord, context: _RunContext) -> JobRecord:
         document_id = self._document_id(job)
+        if not self._vector_index_enabled():
+            self._record_vector_degradation(job)
+            if self.job_store.get_document_identity(document_id) is None:
+                self.job_store.upsert_document_identity(
+                    document_id=document_id,
+                    relative_path=job.source_relative_path,
+                    content_hash=job.source_hash,
+                )
+            return self._advance(job, "indexed_chunks", note_document_id=document_id)
+
         chunks = self._chunk_for_index(job, context, document_id)
         chunk_ids = [chunk["id"] for chunk in chunks]
         published = {
@@ -519,6 +675,8 @@ class IngestionApplicationService:
         document_id = self._document_id(job)
         # Index entries are published only for a note that is already on disk.
         self._durable_note_path(job)
+        if not self._vector_index_enabled():
+            return self._advance(job, "indexed_note")
         self.job_store.add_index_artifact(
             artifact_id=f"{document_id}:note",
             document_id=document_id,
@@ -533,12 +691,52 @@ class IngestionApplicationService:
         # it is dropped only after the note and its index entry are durable
         # *and* the job has committed `completed`.
         self._durable_note_path(job)
+        if not self._vector_index_enabled():
+            completed = self._advance(job, "completed")
+            self._delete_source(completed)
+            return completed
         artifacts = self.job_store.list_index_artifacts(self._document_id(job))
         if not any(artifact["kind"] == NOTE_ARTIFACT_KIND for artifact in artifacts):
             raise MissingArtifactError(job.job_id, "published note index entry")
         completed = self._advance(job, "completed")
         self._delete_source(completed)
         return completed
+
+    def _record_vector_degradation(self, job: JobRecord) -> None:
+        decision = ScheduleDecision(
+            job=job,
+            task_class=TaskClass.EMBEDDING,
+            action=ScheduleAction.DEGRADE,
+            reason="eco_strict_vector_index_disabled",
+        )
+        persist = getattr(self.scheduler, "_persist", None)
+        if callable(persist):
+            persist(decision)
+        else:
+            self.job_store.record_schedule_decision(
+                job_id=job.job_id,
+                task_class=decision.task_class.value,
+                action=decision.action.value,
+                reason=decision.reason,
+            )
+
+    def _skip_job(self, job: JobRecord, reason: str, message: str) -> JobRecord:
+        result = transition(
+            job,
+            "skipped",
+            error_code=reason,
+            error_message=message,
+        )
+        cleared = self._apply_compensation(job, result.compensation)
+        return self.job_store.update_job(
+            job.job_id,
+            expected_revision=job.revision,
+            stage=result.job.stage,
+            status=result.job.status,
+            error_code=result.job.error_code,
+            error_message=result.job.error_message,
+            clear_fields=cleared,
+        )
 
     # -- failure handling ---------------------------------------------------
 
@@ -654,6 +852,8 @@ class IngestionApplicationService:
         return tuple(cleared)
 
     def _invalidate_index(self, job: JobRecord, plan: CompensationPlan) -> bool:
+        if not self._vector_index_enabled():
+            return True
         document_id = job.note_document_id
         if not document_id:
             return False
@@ -842,9 +1042,11 @@ class IngestionApplicationService:
         dirty_path = self._recorded_artifact(job.dirty_artifact)
         if dirty_path is None:
             raise MissingArtifactError(job.job_id, "dirty copy")
-        _updated_job, context.content, context.metadata = (
-            self._extract_with_content_retries(job, dirty_path)
-        )
+        _updated_job, result = self._extract_with_content_retries(job, dirty_path)
+        if result.status == "skipped" or result.content is None:
+            raise MissingArtifactError(job.job_id, "completed extraction content")
+        context.content = result.content
+        context.metadata = result.metadata
         return context.content
 
     def _candidate(self, job: JobRecord, context: _RunContext) -> str:
@@ -865,7 +1067,14 @@ class IngestionApplicationService:
         """Pick a model under the scheduler's authoritative ``evaluate_resource`` gate."""
         from funes.ram_governor.budget import ResourceKind, evaluate_resource
 
-        model_name = self.config.custom_model_override or None
+        if self.runtime_policy is not None and not self.runtime_policy.llm_available:
+            raise ModelUnavailableError("llm_unavailable_under_policy")
+
+        model_name = (
+            self.runtime_policy.selected_model
+            if self.runtime_policy is not None
+            else self.config.custom_model_override or None
+        )
         snapshot = self.scheduler.memory_probe()
         if not model_name:
             model_name, _ = self.scheduler._nominate_llm(snapshot)
@@ -882,7 +1091,9 @@ class IngestionApplicationService:
             raise ModelUnavailableError(gate.reason)
         if not model_name:
             raise ModelUnavailableError("No model configured for note generation")
-        if self.ram_governor is not None:
+        if self.ram_governor is not None and (
+            self.runtime_policy is None or self.runtime_policy.allow_model_download
+        ):
             self.ram_governor.ensure_model_available(model_name)
         return model_name
 
@@ -969,7 +1180,7 @@ class IngestionApplicationService:
 
     def _extract_with_content_retries(
         self, job: JobRecord, dirty_path: Path
-    ) -> tuple[JobRecord, str, dict]:
+    ) -> tuple[JobRecord, ExtractionResult]:
         """Retry corrupt/unsupported extraction failures under the domain policy.
 
         Each attempt is persisted on the job (stage event + error fields) so the
@@ -982,8 +1193,20 @@ class IngestionApplicationService:
         max_attempts = max_attempts_for_error_class(ErrorClass.CORRUPT_OR_UNSUPPORTED)
         for attempt in range(1, max_attempts + 1):
             try:
-                content, metadata = self.extractors.extract(dirty_path)
-                return job, content, metadata
+                result = self.extractors.extract(dirty_path)
+                if isinstance(result, ExtractionResult):
+                    extracted = result
+                else:
+                    content, metadata = result
+                    extracted = ExtractionResult(content, dict(metadata))
+                return job, extracted
+            except AudioModelUnavailableError as error:
+                return job, ExtractionResult(
+                    content=None,
+                    metadata={"original_file": dirty_path.name, "type": "audio"},
+                    status="skipped",
+                    reason=error.code,
+                )
             except Exception as error:
                 error_code = self._content_error_code(error)
                 if not error_code:

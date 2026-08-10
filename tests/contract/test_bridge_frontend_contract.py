@@ -88,6 +88,18 @@ def test_every_registered_action_has_valid_fixture_payload():
     assert set(VALID_ACTION_PAYLOADS) == schemas
 
 
+def test_onboarding_actions_are_available_only_for_pending_state():
+    source = CONSOLA_HTML.read_text(encoding="utf-8")
+
+    assert 'id="onboarding-actions"' in source
+    assert 'id="onboarding-create-demo"' in source
+    assert 'id="onboarding-dismiss"' in source
+    assert "actionsEl.hidden = status.status !== 'pending';" in source
+    assert "if (status.show_first_run_panel) showOnboardingPanel();" in source
+    assert "else hideOnboardingPanel();" in source
+    assert "openOnboardingFromHelp()" in source
+
+
 @pytest.mark.parametrize("action", sorted(FunesPyWebViewApi._ACTION_SCHEMAS))
 def test_typed_actions_accept_valid_payloads(action, temp_vault_path):
     bridge = FunesPyWebViewApi(FunesConsoleBackend(temp_vault_path))
@@ -159,3 +171,54 @@ def test_unknown_trigger_action_is_fail_closed(temp_vault_path):
         "error": "unknown_action",
         "message": "Action is not authorized",
     }
+
+
+def test_health_is_exposed_as_a_read_only_bridge_method(temp_vault_path):
+    bridge = FunesPyWebViewApi(FunesConsoleBackend(temp_vault_path))
+    bridge.backend.get_health = lambda: {"checked_at": "test", "vault": {"status": "missing"}}
+
+    assert bridge.get_health() == {
+        "checked_at": "test",
+        "vault": {"status": "missing"},
+    }
+
+
+def test_approve_and_export_bridge_contract_has_no_destination_path_parameter():
+    parameters = inspect.signature(FunesPyWebViewApi.approve_and_export).parameters
+
+    assert tuple(parameters) == (
+        "self",
+        "document_id",
+        "expected_revision",
+        "export_format",
+        "metadata_patch",
+    )
+    assert "destination_path" not in parameters
+
+
+def test_approval_ui_wires_typed_approve_export_and_retry_without_second_approval():
+    source = CONSOLA_HTML.read_text(encoding="utf-8")
+
+    assert 'id="approval-export-format"' in source
+    assert "Aprobar y exportar" in source
+    assert "approveAndExportSelectedNote()" in source
+    assert "window.pywebview.api.approve_and_export(" in source
+    assert "currentSelectedDocumentId" in source
+    assert "currentSelectedNoteRevision" in source
+    assert "currentSelectedNoteMetadata" in source
+    assert "Aprobada; exportación falló" in source
+    assert "loadApprovalInbox(true)" in source
+    assert "retryFailedApprovalExport()" in source
+    assert "'retryFailedApprovalExport()': retryFailedApprovalExport" in source
+    assert "window.pywebview.api.export_note(" in source
+
+
+def test_approval_export_ui_consumes_prepared_payload_by_format():
+    source = CONSOLA_HTML.read_text(encoding="utf-8")
+
+    assert "res.export_status === 'prepared'" in source
+    assert "res.export_payload" in source
+    assert "handleCanonicalExportResponse(res.export_payload" in source
+    assert "format === 'markdown'" in source
+    assert "format === 'docx'" in source
+    assert "format === 'pdf'" in source

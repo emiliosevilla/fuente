@@ -4,7 +4,20 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, Mapping, Optional
 
-from funes.domain.errors import PathAuthorizationError
+from funes.application.job_control import (
+    decode_cursor,
+    validate_expected_revision,
+    validate_filters,
+    validate_job_id,
+    validate_limit,
+    validate_reason,
+)
+from funes.domain.jobs import JobConflictError, JobNotFoundError
+from funes.domain.errors import (
+    InvalidNoteTransitionError,
+    NoteRevisionConflictError,
+    PathAuthorizationError,
+)
 
 if TYPE_CHECKING:
     from funes.control_console import FunesConsoleBackend
@@ -70,6 +83,145 @@ class FunesPyWebViewApi:
     def get_settings_info(self) -> dict[str, Any]:
         return self.backend.get_settings_info()
 
+    def get_health(self) -> dict[str, Any]:
+        """Return a current read-only health snapshot for the first-run UI."""
+        return self.backend.get_health()
+
+    def get_onboarding(self) -> dict[str, Any]:
+        """Return onboarding state without causing an automatic installation."""
+        return self.backend.get_onboarding_status().as_dict()
+
+    def install_demo_vault(self) -> dict[str, Any]:
+        """Perform the explicit demo installation action."""
+        return self.backend.install_demo_vault()
+
+    def dismiss_onboarding(self) -> dict[str, Any]:
+        """Persist the explicit "Ahora no" decision atomically."""
+        return self.backend.dismiss_onboarding()
+
+    def reopen_onboarding(self) -> dict[str, Any]:
+        """Reopen the panel only when the user explicitly chooses it from Help."""
+        return self.backend.reopen_onboarding()
+
+    def approve_and_export(
+        self,
+        document_id: object,
+        expected_revision: object,
+        export_format: object,
+        metadata_patch: object = None,
+    ) -> dict[str, Any] | ErrorResult:
+        """Approve canonically, then prepare a browser download projection."""
+        note = self._text(document_id, "document_id")
+        if isinstance(note, dict):
+            return note
+        if "/" in note or "\\" in note or note.endswith(".md"):
+            return self._error("path_not_authorized", "Path is not authorized")
+        revision_error = self._revision(expected_revision)
+        if revision_error is not None:
+            return revision_error
+        if not isinstance(export_format, str) or export_format.strip().lower() not in {
+            "markdown", "md", "docx", "word", "pdf"
+        }:
+            return self._error("invalid_payload", "format is not supported")
+
+        normalized_metadata = None
+        if metadata_patch is not None:
+            if not isinstance(metadata_patch, Mapping):
+                return self._error("invalid_payload", "metadata_patch must be an object")
+            parsed = self._payload(metadata_patch)
+            if isinstance(parsed, dict) and "error" in parsed:
+                return parsed
+            assert isinstance(parsed, dict)
+            validated = self.backend.handle_action(
+                "validate_note_metadata", {"metadata": parsed}
+            )
+            if validated.get("error"):
+                return validated
+            normalized_metadata = validated.get("metadata", parsed)
+        try:
+            return self.backend.approve_and_export(
+                note,
+                int(expected_revision),
+                export_format.strip().lower(),
+                metadata_patch=normalized_metadata,
+            )
+        except (NoteRevisionConflictError, InvalidNoteTransitionError) as error:
+            return {"error": error.code, "message": str(error)}
+        except (TypeError, ValueError) as error:
+            return self._error("invalid_payload", str(error))
+
+    def get_jobs(
+        self,
+        filters: object = None,
+        limit: object = 50,
+        cursor: object = None,
+    ) -> dict[str, Any] | ErrorResult:
+        """Return one validated, JSON-safe queue page."""
+        try:
+            parsed_filters = validate_filters(filters)
+            validate_limit(limit)
+            if cursor is not None and not isinstance(cursor, str):
+                raise ValueError("cursor must be a string or None")
+            if cursor is not None:
+                decode_cursor(cursor)
+        except (TypeError, ValueError) as error:
+            return self._error("invalid_payload", str(error))
+        try:
+            return self.backend.get_jobs(parsed_filters, limit, cursor)
+        except (JobConflictError, JobNotFoundError) as error:
+            return self._job_error(error)
+        except (TypeError, ValueError) as error:
+            return self._error("invalid_payload", str(error))
+
+    def get_job_detail(self, job_id: object) -> dict[str, Any] | ErrorResult:
+        """Return one validated job detail projection."""
+        valid_job_id = self._job_id(job_id)
+        if isinstance(valid_job_id, dict):
+            return valid_job_id
+        try:
+            return self.backend.get_job_detail(valid_job_id)
+        except (JobConflictError, JobNotFoundError) as error:
+            return self._job_error(error)
+
+    def resume_job(
+        self, job_id: object, expected_revision: object
+    ) -> dict[str, Any] | ErrorResult:
+        """Resume a job with an opaque ID and optimistic revision."""
+        valid_job_id = self._job_id(job_id)
+        if isinstance(valid_job_id, dict):
+            return valid_job_id
+        revision_error = self._revision(expected_revision)
+        if revision_error is not None:
+            return revision_error
+        try:
+            return self.backend.resume_job(valid_job_id, expected_revision)
+        except (JobConflictError, JobNotFoundError) as error:
+            return self._job_error(error)
+        except (TypeError, ValueError) as error:
+            return self._error("invalid_payload", str(error))
+
+    def cancel_job(
+        self, job_id: object, expected_revision: object, reason: object
+    ) -> dict[str, Any] | ErrorResult:
+        """Request cancellation with a bounded, non-empty durable reason."""
+        valid_job_id = self._job_id(job_id)
+        if isinstance(valid_job_id, dict):
+            return valid_job_id
+        revision_error = self._revision(expected_revision)
+        if revision_error is not None:
+            return revision_error
+        valid_reason = self._text(reason, "reason")
+        if isinstance(valid_reason, dict):
+            return valid_reason
+        if len(valid_reason) > 500:
+            return self._error("invalid_payload", "reason must contain between 1 and 500 characters")
+        try:
+            return self.backend.cancel_job(valid_job_id, expected_revision, valid_reason)
+        except (JobConflictError, JobNotFoundError) as error:
+            return self._job_error(error)
+        except (TypeError, ValueError) as error:
+            return self._error("invalid_payload", str(error))
+
     def save_settings(self, settings: object) -> dict[str, Any]:
         parsed = self._payload(settings)
         if isinstance(parsed, dict) and "error" in parsed:
@@ -81,15 +233,28 @@ class FunesPyWebViewApi:
             "ram_safety_margin_pct",
             "ollama_url",
             "allow_non_loopback_ollama",
+            "resource_profile",
+            "audio_mode",
+            "whisper_model_path",
             "input_connected_folders",
             "output_connected_folders",
         }
         if set(parsed) - allowed:
             return self._error("invalid_payload", "Unsupported settings field")
-        string_fields = {"vault_path", "custom_model_override", "ollama_url"}
+        string_fields = {
+            "vault_path",
+            "custom_model_override",
+            "ollama_url",
+            "resource_profile",
+            "audio_mode",
+        }
         for field in string_fields & set(parsed):
             if not isinstance(parsed[field], str):
                 return self._error("invalid_payload", f"{field} must be a string")
+        if "whisper_model_path" in parsed and parsed["whisper_model_path"] is not None and not isinstance(
+            parsed["whisper_model_path"], str
+        ):
+            return self._error("invalid_payload", "whisper_model_path must be a string or null")
         if "ram_safety_margin_pct" in parsed and (
             isinstance(parsed["ram_safety_margin_pct"], bool)
             or not isinstance(parsed["ram_safety_margin_pct"], (int, float))
@@ -457,3 +622,25 @@ class FunesPyWebViewApi:
             return self.backend.handle_action(action, {"document_id": note})
         except PathAuthorizationError as error:
             return {"error": error.code, "message": str(error)}
+
+    @staticmethod
+    def _job_error(error: Exception) -> ErrorResult:
+        return {"error": getattr(error, "code", "job_control_error"), "message": str(error)}
+
+    @staticmethod
+    def _job_id(value: object) -> str | ErrorResult:
+        if not isinstance(value, str) or not value.strip():
+            return FunesPyWebViewApi._error("invalid_payload", "job_id is required")
+        try:
+            validate_job_id(value)
+        except ValueError as error:
+            return FunesPyWebViewApi._error("invalid_payload", str(error))
+        return value
+
+    @staticmethod
+    def _revision(value: object) -> ErrorResult | None:
+        try:
+            validate_expected_revision(value)
+        except ValueError as error:
+            return FunesPyWebViewApi._error("invalid_payload", str(error))
+        return None

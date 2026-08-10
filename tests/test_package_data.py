@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 import shutil
@@ -57,5 +58,32 @@ def test_console_css_is_present_and_byte_identical_in_wheel(tmp_path):
     assert installed_css.is_file()
     assert installed_css.read_bytes() == source_css.read_bytes()
 
+    probe = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            (
+                "from importlib import resources; "
+                "root = resources.files('funes.resources.demo_vault'); "
+                "manifest = root.joinpath('manifest.json').read_text(encoding='utf-8'); "
+                "assert 'demo_version' in manifest; "
+                "[root.joinpath('notes', name).read_text(encoding='utf-8') for name in "
+                "('Introduccion.md', 'Arquitectura_Local.md', 'Flujo_Revision.md')]"
+            ),
+        ],
+        check=True,
+        cwd=source_root,
+        env={**os.environ, "PYTHONPATH": str(target)},
+        capture_output=True,
+        text=True,
+    )
+    assert probe.returncode == 0
+
     with zipfile.ZipFile(wheels[0]) as archive:
         assert "funes/ui/static/console.css" in archive.namelist()
+        assert "funes/resources/demo_vault/manifest.json" in archive.namelist()
+        assert {
+            "funes/resources/demo_vault/notes/Introduccion.md",
+            "funes/resources/demo_vault/notes/Arquitectura_Local.md",
+            "funes/resources/demo_vault/notes/Flujo_Revision.md",
+        } <= set(archive.namelist())

@@ -25,9 +25,11 @@ from funes.application.ingestion import (
     JobNotResumableError,
     document_id_for_source,
 )
+from funes.application.job_control import JobControlService
 from funes.config import get_default_config
 from funes.core.vault import VaultManager
 from funes.domain.frontmatter import serialize_frontmatter
+from funes.domain.runtime_policy import AudioMode, ExecutionProfile, RuntimePolicy
 from funes.extractors.registry import ExtractorRegistry
 from funes.graph_engine.linker import GraphLinker
 from funes.infrastructure.sqlite_store import JobStore
@@ -226,6 +228,7 @@ def _build_harness(
     generator: Any = None,
     crash_stage: Optional[str] = None,
     source_text: str = SOURCE_TEXT,
+    source_name: str = SOURCE_NAME,
 ) -> _Harness:
     config = get_default_config(vault_path)
     vault = VaultManager(config.vault)
@@ -251,7 +254,7 @@ def _build_harness(
         stabilize=lambda path: path.is_file() and path.stat().st_size > 0,
     )
 
-    source_path = vault.input_dir / SOURCE_NAME
+    source_path = vault.input_dir / source_name
     source_path.write_text(source_text, encoding="utf-8")
     return _Harness(
         service=service,
@@ -559,3 +562,116 @@ def test_published_note_index_artifact_is_recorded_for_the_document(harness):
     kinds = {artifact["kind"] for artifact in artifacts}
     assert NOTE_ARTIFACT_KIND in kinds
     assert CHUNK_ARTIFACT_KIND in kinds
+
+
+def test_cancellation_wins_at_next_boundary_after_saved_clean(harness):
+    control = JobControlService(harness.store, ingestion=harness.service)
+    generated: list[str] = []
+    original_generate = harness.generator.generate_atomic_note
+
+    def record_generation(*args, **kwargs):
+        generated.append(kwargs.get("file_name") or args[-1])
+        return original_generate(*args, **kwargs)
+
+    harness.generator.generate_atomic_note = record_generation
+    original_save_clean = harness.service._run_save_clean
+
+    def save_clean_then_cancel(job, context):
+        updated = original_save_clean(job, context)
+        control.request_cancel(
+            updated.job_id,
+            expected_revision=updated.revision,
+            reason="cancelar tras extracción",
+        )
+        return updated
+
+    harness.service._run_save_clean = save_clean_then_cancel
+    submitted = harness.service.submit(SOURCE_IDENTITY)
+
+    cancelled = harness.service.resume(submitted.job_id)
+
+    assert cancelled.stage == "cancelled"
+    assert cancelled.status == "cancelled"
+    assert generated == []
+    assert harness.source_path.exists()
+    assert cancelled.dirty_artifact is None
+    assert cancelled.clean_artifact is None
+    assert harness.store.list_resource_leases() == []
+    assert harness.store.get_document_lock(document_id_for_source(SOURCE_IDENTITY)) is None
+
+
+def test_cancellation_between_scheduler_admit_and_handler_is_safe(harness, monkeypatch):
+    control = JobControlService(harness.store, ingestion=harness.service)
+    admitted = False
+    handlers_called: list[str] = []
+    original_admit = harness.service.scheduler.admit
+    original_copy_to_dirty = harness.service._run_copy_to_dirty
+
+    def admit_then_cancel(job, **kwargs):
+        nonlocal admitted
+        decision = original_admit(job, **kwargs)
+        if decision.action.value == "run" and not admitted:
+            admitted = True
+            current = harness.store.get_job(job.job_id)
+            control.request_cancel(
+                job.job_id,
+                expected_revision=current.revision,
+                reason="cancelar durante la ventana de scheduler",
+            )
+        return decision
+
+    def unexpected_handler(job, context):
+        handlers_called.append(job.stage)
+        return original_copy_to_dirty(job, context)
+
+    monkeypatch.setattr(harness.service.scheduler, "admit", admit_then_cancel)
+    monkeypatch.setattr(harness.service, "_run_copy_to_dirty", unexpected_handler)
+    submitted = harness.service.submit(SOURCE_IDENTITY)
+
+    cancelled = harness.service.resume(submitted.job_id)
+
+    assert admitted
+    assert handlers_called == []
+    assert cancelled.stage == "cancelled"
+    assert cancelled.status == "cancelled"
+    assert harness.source_path.exists()
+    assert harness.store.list_resource_leases() == []
+    assert harness.store.get_document_lock(document_id_for_source(SOURCE_IDENTITY)) is None
+
+
+def test_missing_local_audio_model_skips_preserves_source_and_can_requeue(
+    temp_vault_path,
+):
+    harness = _build_harness(temp_vault_path, source_name="grabacion.mp3")
+    policy = RuntimePolicy(
+        profile=ExecutionProfile.AUTO,
+        retrieval_mode="hybrid",
+        vector_index_enabled=True,
+        audio_mode=AudioMode.TINY_CPU,
+        whisper_model_path=None,
+        allow_model_download=False,
+        selected_model="qwen2.5:1.5b",
+        llm_available=True,
+        reason="test local audio model unavailable",
+    )
+    harness.service.set_runtime_policy(policy)
+    try:
+        submitted = harness.service.submit("1_entrada/grabacion.mp3")
+        skipped = harness.service.resume(submitted.job_id)
+
+        assert skipped.stage == "skipped"
+        assert skipped.status == "skipped"
+        assert skipped.error_code == "audio_model_unavailable"
+        assert harness.source_path.exists()
+        assert skipped.dirty_artifact is None
+        assert harness.generator.calls == []
+
+        control = JobControlService(harness.store, ingestion=harness.service)
+        requeued = control.requeue_skipped(
+            skipped.job_id, expected_revision=skipped.revision
+        )
+        assert requeued.status == "pending"
+        assert requeued.source_relative_path == "1_entrada/grabacion.mp3"
+        assert harness.source_path.exists()
+    finally:
+        harness.store.close()

@@ -37,7 +37,13 @@ _FORMAT_MIME: dict[ExportFormat, str] = {
 _DOCX_FENCE_RE = re.compile(r"^\s*(`{3,}|~{3,})(.*)$")
 
 
-class ExportFileExistsError(FileExistsError):
+class ExportProjectionError(Exception):
+    """Known failure while projecting a canonical note into an export payload."""
+
+    code = "export_projection_failed"
+
+
+class ExportFileExistsError(ExportProjectionError, FileExistsError):
     """Raised when an export target exists and overwrite was not confirmed."""
 
     code = "export_file_exists"
@@ -47,7 +53,7 @@ class ExportFileExistsError(FileExistsError):
         super().__init__(f"Export destination already exists: {destination}")
 
 
-class UnsupportedExportFormatError(ValueError):
+class UnsupportedExportFormatError(ExportProjectionError, ValueError):
     """Raised when the UI requests an unsupported export format."""
 
     code = "unsupported_export_format"

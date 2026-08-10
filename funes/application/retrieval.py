@@ -11,10 +11,11 @@ BM25 stack. It:
 from __future__ import annotations
 
 import logging
-from typing import Any, Callable, Mapping, Optional, Sequence
+from typing import Any, Callable, Mapping, Optional, Protocol, Sequence
 
 from funes.rag.hybrid_search import HybridSearcher, docs_from_chroma_store
 from funes.rag.index_records import query_result_source_fields
+from funes.domain.runtime_policy import RuntimePolicy
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +28,8 @@ VALID_SCOPES: frozenset[str] = frozenset(
 )
 
 MODE_HYBRID = "hybrid"
+MODE_BM25_VAULT = "bm25_vault"
+# Historical public mode for RAM fallback in hybrid retrieval.
 MODE_BM25 = "bm25"
 MODE_NONE = "none"
 
@@ -41,6 +44,19 @@ _CANDIDATE_MULTIPLIER = 4
 
 
 RamPolicy = Callable[[], bool]
+
+
+class CorpusProvider(Protocol):
+    def load(self) -> list[dict[str, object]]:
+        """Return the current deterministic retrieval corpus."""
+
+
+class _ChromaCorpusProvider:
+    def __init__(self, chroma_store: Any) -> None:
+        self.chroma_store = chroma_store
+
+    def load(self) -> list[dict[str, object]]:
+        return list(docs_from_chroma_store(self.chroma_store))
 
 
 def _empty_context(
@@ -129,12 +145,14 @@ def matches_scope(
 
 
 class RetrievalApplicationService:
-    """Application-facing retrieval over Chroma + cached BM25/RRF."""
+    """Policy-selected retrieval over Vault BM25 or Chroma hybrid search."""
 
     def __init__(
         self,
-        chroma_store: Any,
+        chroma_store: Any | None = None,
         *,
+        corpus_provider: CorpusProvider | None = None,
+        runtime_policy: RuntimePolicy | None = None,
         ram_governor: Any = None,
         hybrid_searcher: Optional[HybridSearcher] = None,
         should_fallback_to_bm25: Optional[RamPolicy] = None,
@@ -143,10 +161,20 @@ class RetrievalApplicationService:
         snippet_chars: int = DEFAULT_SNIPPET_CHARS,
     ) -> None:
         self.chroma_store = chroma_store
+        self.runtime_policy = runtime_policy
+        selected_mode = getattr(runtime_policy, "retrieval_mode", MODE_HYBRID)
+        self._uses_vault_corpus = selected_mode == MODE_BM25_VAULT
+        self._retrieval_mode = MODE_BM25_VAULT if self._uses_vault_corpus else MODE_HYBRID
+        if self._uses_vault_corpus:
+            if corpus_provider is None:
+                raise ValueError("corpus_provider is required for bm25_vault retrieval")
+        elif chroma_store is None:
+            raise ValueError("chroma_store is required for hybrid retrieval")
+        self.corpus_provider = corpus_provider or _ChromaCorpusProvider(chroma_store)
         self._ram_governor = ram_governor
         # Prefer the store's process-local searcher so add/delete invalidation
         # (ChromaStore.invalidate_bm25_cache) keeps chat retrieval warm/coherent.
-        if hybrid_searcher is None:
+        if hybrid_searcher is None and not self._uses_vault_corpus:
             store_searcher = getattr(chroma_store, "_hybrid_searcher", None)
             if callable(store_searcher):
                 try:
@@ -163,14 +191,15 @@ class RetrievalApplicationService:
     def notify_index_changed(self) -> None:
         """Invalidate the BM25 cache after ingestion add/delete."""
         self._searcher.invalidate_cache()
-        invalidate = getattr(self.chroma_store, "invalidate_bm25_cache", None)
-        if callable(invalidate):
-            invalidate()
+        if not self._uses_vault_corpus:
+            invalidate = getattr(self.chroma_store, "invalidate_bm25_cache", None)
+            if callable(invalidate):
+                invalidate()
 
     def search(
         self,
         query: str,
-        scope: str,
+        scope: str = SCOPE_ALL_NOTES,
         limit: int = DEFAULT_LIMIT,
         *,
         document_id: Optional[str] = None,
@@ -214,9 +243,15 @@ class RetrievalApplicationService:
         limit = max(1, int(limit))
         degraded = False
         degradation_reason: Optional[str] = None
-        mode = MODE_HYBRID
+        mode = self._retrieval_mode
 
-        if self._ram_fallback_active():
+        if self._uses_vault_corpus:
+            degraded = True
+            degradation_reason = str(
+                getattr(self.runtime_policy, "reason", "bm25_vault policy selected")
+            )
+            raw_hits = self._bm25_search(q, candidate_limit=limit)
+        elif self._ram_fallback_active():
             degraded = True
             degradation_reason = DEGRADATION_RAM
             mode = MODE_BM25
@@ -240,7 +275,7 @@ class RetrievalApplicationService:
                 scope=scope_kind,
                 degraded=degraded,
                 degradation_reason=degradation_reason,
-                mode=mode if degraded else MODE_NONE,
+                mode=mode if degraded or mode == MODE_BM25_VAULT else MODE_NONE,
             )
 
         sources = self._unique_sources(bounded)
@@ -285,7 +320,7 @@ class RetrievalApplicationService:
             return False
 
     def _ensure_bm25(self) -> None:
-        self._searcher.ensure_index(lambda: docs_from_chroma_store(self.chroma_store))
+        self._searcher.ensure_index(self.corpus_provider.load)
 
     def _bm25_search(self, query: str, *, candidate_limit: int) -> list[dict]:
         self._ensure_bm25()
@@ -329,7 +364,7 @@ class RetrievalApplicationService:
         if self._searcher.bm25.documents:
             corpus = list(self._searcher.bm25.documents.values())
         else:
-            corpus = docs_from_chroma_store(self.chroma_store)
+            corpus = list(self.corpus_provider.load())
         scoped_docs = [
             doc
             for doc in corpus

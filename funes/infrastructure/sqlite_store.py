@@ -144,8 +144,9 @@ class JobStore:
             INSERT INTO jobs (
                 job_id, source_hash, source_relative_path, stage, attempt_count,
                 status, error_code, error_message, dirty_artifact, clean_artifact,
-                note_document_id, created_at, updated_at, pipeline_version, revision
-            ) VALUES (?, ?, ?, ?, 0, ?, NULL, NULL, NULL, NULL, NULL, ?, ?, ?, 1)
+                note_document_id, cancel_requested_at, cancel_reason, created_at,
+                updated_at, pipeline_version, revision
+            ) VALUES (?, ?, ?, ?, 0, ?, NULL, NULL, NULL, NULL, NULL, NULL, NULL, ?, ?, ?, 1)
             """,
             (
                 job_id,
@@ -216,6 +217,49 @@ class JobStore:
         rows = self._connection.execute(query, params).fetchall()
         return [self._row_to_job(row) for row in rows]
 
+    def list_jobs_page(
+        self,
+        *,
+        status: Optional[str] = None,
+        stage: Optional[str] = None,
+        limit: int = 50,
+        before: Optional[tuple[str, str]] = None,
+    ) -> list[JobRecord]:
+        """Return a stable, newest-first page of jobs.
+
+        ``before`` is an exclusive ``(updated_at, job_id)`` cursor. The job
+        ID is the deterministic tie-breaker when multiple writes share the
+        same timestamp. The legacy ``list_jobs`` method intentionally keeps
+        its FIFO ``updated_at ASC`` ordering for the ingestion scheduler.
+        """
+        if not isinstance(limit, int) or isinstance(limit, bool) or limit < 1:
+            raise ValueError("limit must be a positive integer")
+
+        query = "SELECT * FROM jobs"
+        clauses: list[str] = []
+        params: list[Any] = []
+        if status is not None:
+            clauses.append("status = ?")
+            params.append(status)
+        if stage is not None:
+            clauses.append("stage = ?")
+            params.append(stage)
+        if before is not None:
+            try:
+                before_updated_at, before_job_id = before
+            except (TypeError, ValueError) as error:
+                raise ValueError("before must be a (updated_at, job_id) cursor") from error
+            clauses.append(
+                "(updated_at < ? OR (updated_at = ? AND job_id < ?))"
+            )
+            params.extend([before_updated_at, before_updated_at, before_job_id])
+        if clauses:
+            query += " WHERE " + " AND ".join(clauses)
+        query += " ORDER BY updated_at DESC, job_id DESC LIMIT ?"
+        params.append(limit)
+        rows = self._connection.execute(query, params).fetchall()
+        return [self._row_to_job(row) for row in rows]
+
     def claim_job(
         self,
         job_id: str,
@@ -251,6 +295,46 @@ class JobStore:
             raise JobConflictError(job_id)
         job = self.get_job(job_id)
         self._record_stage_event(job)
+        return job
+
+    def request_cancel(
+        self,
+        job_id: str,
+        expected_revision: int,
+        reason: str,
+    ) -> JobRecord:
+        """Record a durable cancellation request using revision-checked CAS.
+
+        This records the request only; transitioning the job to the terminal
+        ``cancelled`` stage belongs to the later control service.
+        """
+        if not isinstance(reason, str):
+            raise TypeError("reason must be a string")
+        normalized_reason = reason.strip()
+        if not 1 <= len(normalized_reason) <= 500:
+            raise ValueError("reason must contain between 1 and 500 characters")
+
+        now = _timestamp()
+        cursor = self._execute_cas_update(
+            """
+            UPDATE jobs
+            SET cancel_requested_at = ?, cancel_reason = ?,
+                revision = revision + 1, updated_at = ?
+            WHERE job_id = ? AND revision = ?
+            """,
+            (now, normalized_reason, now, job_id, expected_revision),
+            job_id=job_id,
+        )
+        if cursor.rowcount != 1:
+            if self._job_row(job_id) is None:
+                raise JobNotFoundError(job_id)
+            raise JobConflictError(job_id)
+        job = self.get_job(job_id)
+        self._record_stage_event(
+            job,
+            error_code="cancel_requested",
+            error_message=normalized_reason,
+        )
         return job
 
     def update_job(
@@ -329,7 +413,13 @@ class JobStore:
         ).fetchall()
         return [self._row_to_stage_event(row) for row in rows]
 
-    def _record_stage_event(self, job: JobRecord) -> None:
+    def _record_stage_event(
+        self,
+        job: JobRecord,
+        *,
+        error_code: Optional[str] = None,
+        error_message: Optional[str] = None,
+    ) -> None:
         self._connection.execute(
             """
             INSERT INTO stage_events (job_id, stage, status, error_code, error_message, revision, created_at)
@@ -339,8 +429,8 @@ class JobStore:
                 job.job_id,
                 job.stage,
                 job.status,
-                job.error_code,
-                job.error_message,
+                job.error_code if error_code is None else error_code,
+                job.error_message if error_message is None else error_message,
                 job.revision,
                 job.updated_at,
             ),
@@ -782,6 +872,8 @@ class JobStore:
             updated_at=row["updated_at"],
             pipeline_version=row["pipeline_version"],
             revision=row["revision"],
+            cancel_requested_at=row["cancel_requested_at"],
+            cancel_reason=row["cancel_reason"],
         )
 
     @staticmethod

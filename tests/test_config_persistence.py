@@ -29,6 +29,9 @@ class TestConfigPersistenceAndSettings(unittest.TestCase):
         self.assertEqual(cfg.vault.output_dir_name, "4_salida")
         self.assertIsNone(cfg.custom_model_override)
         self.assertEqual(cfg.ram_safety_margin_pct, 0.35)
+        self.assertEqual(cfg.resource_profile, "auto")
+        self.assertEqual(cfg.audio_mode, "auto")
+        self.assertIsNone(cfg.whisper_model_path)
 
     def test_save_and_load_custom_config(self):
         cfg = load_config(self.vault_path)
@@ -49,6 +52,27 @@ class TestConfigPersistenceAndSettings(unittest.TestCase):
         self.assertEqual(loaded.custom_model_override, "qwen2.5:7b")
         self.assertEqual(loaded.ram_safety_margin_pct, 0.30)
         self.assertIn("# Custom Note Template", loaded.atomic_note_template)
+
+    def test_runtime_policy_settings_round_trip(self):
+        cfg = load_config(self.vault_path)
+        cfg.resource_profile = "eco_strict"
+        cfg.audio_mode = "tiny_cpu"
+        cfg.whisper_model_path = str(self.test_dir / "whisper")
+        (self.test_dir / "whisper").mkdir()
+
+        save_config(cfg)
+        loaded = load_config(self.vault_path)
+
+        self.assertEqual(loaded.resource_profile, "eco_strict")
+        self.assertEqual(loaded.audio_mode, "tiny_cpu")
+        self.assertEqual(loaded.whisper_model_path, str(self.test_dir / "whisper"))
+
+    def test_invalid_resource_profile_falls_back_to_auto(self):
+        config = AppConfig.from_dict(
+            {"vault_path": str(self.vault_path), "resource_profile": "unknown"}
+        )
+
+        self.assertEqual(config.resource_profile, "auto")
 
     def test_ram_governor_viable_models_filtering(self):
         gov = RAMGovernor(safety_margin_pct=0.35)

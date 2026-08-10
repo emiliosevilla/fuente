@@ -5,8 +5,23 @@ import pytest
 from funes.application.settings import SettingsService, SettingsValidationError
 from funes.config import get_config_file_path, load_config
 from funes.control_console import FunesConsoleBackend
+from funes.domain.runtime_policy import AudioMode, ExecutionProfile, RuntimePolicy
 from funes.ui.bridge import FunesPyWebViewApi
 from funes.watcher.watcher import ETLPipeline
+
+
+def _configured_model_test_policy() -> RuntimePolicy:
+    return RuntimePolicy(
+        profile=ExecutionProfile.AUTO,
+        retrieval_mode="hybrid",
+        vector_index_enabled=True,
+        audio_mode=AudioMode.AUTO,
+        whisper_model_path=None,
+        allow_model_download=False,
+        selected_model="configured-model",
+        llm_available=True,
+        reason="test policy explicitly provides the configured local model",
+    )
 
 
 def test_settings_service_persists_canonical_settings_and_connected_folders(
@@ -93,6 +108,70 @@ def test_settings_service_notifies_active_consumers_after_persisting(temp_vault_
     assert result.config.custom_model_override == "llama3.2"
 
 
+def test_settings_service_persists_runtime_policy_settings(temp_vault_path, tmp_path):
+    whisper_dir = tmp_path / "whisper"
+    whisper_dir.mkdir()
+
+    result = SettingsService(load_config(temp_vault_path)).apply(
+        resource_profile="eco_strict",
+        audio_mode="tiny_cpu",
+        whisper_model_path=whisper_dir,
+    )
+
+    assert result.config.resource_profile == "eco_strict"
+    assert result.config.audio_mode == "tiny_cpu"
+    assert result.config.whisper_model_path == str(whisper_dir.resolve())
+    reloaded = load_config(temp_vault_path)
+    assert reloaded.resource_profile == "eco_strict"
+    assert reloaded.audio_mode == "tiny_cpu"
+    assert reloaded.whisper_model_path == str(whisper_dir.resolve())
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [("resource_profile", "unknown"), ("audio_mode", "unknown")],
+)
+def test_settings_service_rejects_unknown_runtime_policy_values(
+    temp_vault_path, field, value
+):
+    with pytest.raises(SettingsValidationError, match=field):
+        SettingsService(load_config(temp_vault_path)).apply(**{field: value})
+
+
+def test_settings_service_requires_existing_local_whisper_path(temp_vault_path, tmp_path):
+    with pytest.raises(SettingsValidationError, match="whisper_model_path"):
+        SettingsService(load_config(temp_vault_path)).apply(
+            audio_mode="tiny_cpu",
+            whisper_model_path=tmp_path / "missing-whisper",
+        )
+
+
+def test_settings_service_accepts_existing_local_file_for_tiny_cpu(
+    temp_vault_path, tmp_path
+):
+    whisper_model = tmp_path / "model.bin"
+    whisper_model.write_bytes(b"local model")
+
+    result = SettingsService(load_config(temp_vault_path)).apply(
+        audio_mode="tiny_cpu",
+        whisper_model_path=whisper_model,
+    )
+
+    assert result.config.audio_mode == "tiny_cpu"
+    assert result.config.whisper_model_path == str(whisper_model.resolve())
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [("resource_profile", 1), ("audio_mode", False)],
+)
+def test_settings_service_rejects_non_string_runtime_policy_values(
+    temp_vault_path, field, value
+):
+    with pytest.raises(SettingsValidationError, match=field):
+        SettingsService(load_config(temp_vault_path)).apply(**{field: value})
+
+
 def test_typed_bridge_uses_canonical_settings_payload_and_backend_service(
     temp_vault_path,
 ):
@@ -165,6 +244,7 @@ def test_saved_model_and_url_drive_generation_and_chat_requests(
             "ollama_url": configured_url,
         }
     )
+    backend.runtime_policy = _configured_model_test_policy()
 
     pipeline = ETLPipeline(backend.config)
     generation_calls = []

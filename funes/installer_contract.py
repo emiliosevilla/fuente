@@ -66,8 +66,8 @@ class InstallationContext:
     log: Optional[LogCallback] = None
     on_step_start: Optional[StepStartCallback] = None
     install_model: bool = True
-    install_anythingllm: bool = True
-    configure_anythingllm: bool = True
+    install_anythingllm: bool = False
+    configure_anythingllm: bool = False
     create_shortcuts: bool = True
     existing_receipt: Optional[Dict[str, Any]] = None
 
@@ -167,12 +167,18 @@ def detect_anythingllm_installed() -> bool:
     return is_anythingllm_installed()
 
 
-def detect_prerequisites(ollama_url: str = DEFAULT_OLLAMA_URL) -> PrerequisiteStatus:
+def detect_prerequisites(
+    ollama_url: str = DEFAULT_OLLAMA_URL,
+    *,
+    include_anythingllm: bool = False,
+) -> PrerequisiteStatus:
     return PrerequisiteStatus(
         obsidian_installed=detect_obsidian_installed(),
         ollama_binary_installed=detect_ollama_binary_installed(),
         ollama_api_ready=is_ollama_api_ready(ollama_url),
-        anythingllm_installed=detect_anythingllm_installed(),
+        anythingllm_installed=(
+            detect_anythingllm_installed() if include_anythingllm else False
+        ),
     )
 
 
@@ -345,6 +351,14 @@ def step_install_model(ctx: InstallationContext) -> InstallStepResult:
 
 
 def step_install_anythingllm(ctx: InstallationContext) -> InstallStepResult:
+    if not ctx.install_anythingllm:
+        return InstallStepResult(
+            name="anythingllm_install",
+            success=True,
+            message="AnythingLLM installation skipped by user",
+            skipped=True,
+        )
+
     from funes.core.anythingllm_config import (
         install_anythingllm_autonomously,
         is_anythingllm_installed,
@@ -355,14 +369,6 @@ def step_install_anythingllm(ctx: InstallationContext) -> InstallStepResult:
             name="anythingllm_install",
             success=True,
             message="AnythingLLM Desktop already installed",
-            skipped=True,
-        )
-
-    if not ctx.install_anythingllm:
-        return InstallStepResult(
-            name="anythingllm_install",
-            success=True,
-            message="AnythingLLM installation skipped by user",
             skipped=True,
         )
 
@@ -505,7 +511,11 @@ def run_installation(ctx: InstallationContext) -> List[InstallStepResult]:
     results.append(_run_named_step("anythingllm_config", lambda: step_configure_anythingllm(ctx)))
     results.append(_run_named_step("shortcuts", lambda: step_create_shortcuts(ctx)))
 
-    prereqs = detect_prerequisites()
+    prereqs = detect_prerequisites(
+        include_anythingllm=(
+            ctx.install_anythingllm or ctx.configure_anythingllm
+        )
+    )
     receipt = build_receipt(ctx, results, prereqs, model_name=model_step.model_name)
     save_receipt(ctx.base_dir, receipt)
     log(f"[+] Installation receipt saved to {receipt_path(ctx.base_dir)}")

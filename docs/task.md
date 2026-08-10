@@ -102,22 +102,39 @@ Ver [`docs/security-residual-findings.md`](security-residual-findings.md) (SEC-0
 
 - Matriz residual enfocada: **167 passed**, con un warning externo de deprecación de Chroma.
 - `PYTHONDONTWRITEBYTECODE=1 python3 -m pytest --collect-only -q`: **585 collected**.
-- `PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -q`: **584 passed, 1 skipped**, con un warning externo de deprecación de ChromaDB.
+- La medición histórica de Wave 1 registró `PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -q`: **584 passed, 1 skipped**, con un warning externo de deprecación de ChromaDB; no se reutiliza para declarar la suite completa de Wave 2 en este checkout.
 - Los fallos globales de `RAMGovernor` quedaron resueltos alineando los tests legacy con la decisión explícita `bm25_only` y bloqueando el bypass del instalador.
-- El checkpoint de árbol limpio y los release gates siguen pendientes; no se afirma que hayan pasado.
+- El texto preexistente registraba un checkpoint histórico posterior al merge con resultado `READY`; no describe este checkout. Actualmente hay cambios sin publicar, por lo que no se afirma árbol limpio ni release gate vigente. El gate de release requiere un checkpoint limpio autorizado.
 
-### P2 — Productización proactiva (Wave 2+, no en el plan Wave 1)
+### Wave 2 — productización (Task 11, 2026-08-10)
 
-Sugerencias alineadas con gratuito / local / low-RAM (ordenadas por apalancamiento):
+La evidencia focalizada de este checkout cubre el comportamiento de Wave 2 y se complementa con la medición exacta de la suite completa; ambas siguen separadas del release gate. Se marca como entregado únicamente lo que tiene evidencia medida:
 
-1. **Modo “Eco estricto” en UI** — badge visible: modelo + “solo BM25 si no cabe LLM”; un clic para degradar embeddings/LLM. Engancha `should_fallback_to_bm25` / `BudgetDecision`.
-2. **First-run / health panel honesto** — Ollama loopback, modelo presente, Tesseract/FFmpeg opcionales, extras pip; sin fingir “100% offline” si hay claims de red.
-3. **Cola de jobs visible** — historial JobStore en consola (resume / cancel / reason). El store ya existe; falta superficie.
-4. **Whisper tiny / skip-audio en &lt;8 GB** — no arrancar faster-whisper por defecto en eco; extra `[audio]` ya es opcional.
-5. **Retrieval “CPU-first”** — BM25 por defecto en eco; embeddings bajo demanda o batch nocturno headless.
-6. **Export + aprobación en un flujo** — “aprobar y exportar” desde inbox (servicios ya existen).
-7. **Temas: onboarding de un Vault demo pequeño** — fixture offline para pruebas humanas &lt;5 min.
-8. **AnythingLLM = integración opcional de tercera** — no parte del camino crítico; chat nativo Ollama es el default documentado.
+| Área | Estado documentado | Evidencia medida |
+|------|--------------------|------------------|
+| Política `Auto` vs `Eco estricto` | ✅ Entregado | Matriz focalizada Task 11: **245 passed**; distingue el perfil configurado de la política efectiva medida. |
+| Eco sin acceso vectorial ni descargas | ✅ Entregado | Pruebas de acceso cero Eco/AnythingLLM/HTML/security: **52 passed**; sin construcción/lectura/escritura de Chroma, importaciones prohibidas, navegador ni descargas. |
+| Audio `skip` y `tiny_cpu` local | ✅ Entregado | Cubierto por la matriz y la prueba de acceso cero: Eco omite audio; `tiny_cpu` exige un modelo local explícito. |
+| Health medido | ✅ Entregado | La matriz focalizada cubre el snapshot de solo lectura y sus estados actuales; la UI no convierte ausencia en disponibilidad. |
+| Cola, cancelación, requeue y razones | ✅ Entregado | Pruebas de restart/race: **77 passed**; razones, cancelación cooperativa, estados terminales y requeue sobreviven a reinicio/CAS. |
+| Approve → export | ✅ Entregado | La matriz y el smoke cubren aprobación canónica y éxito parcial: una exportación fallida no revierte la aprobación. |
+| Demo offline collision-safe | ✅ Entregado | Smoke demo/Vault/review-export: **14 passed**; instalación explícita, idempotente, atómica y bloqueada ante colisiones, sin proceso/red externos. |
+| AnythingLLM | ✅ Entregado | Es una integración externa opt-in; no es prerrequisito ni participa en el camino por defecto. |
+
+Verificaciones adicionales de Tarea 10 (demo/package/path/UI): **86 passed**. La orden exacta de suite completa `PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -p no:cacheprovider tests -q`, ejecutada después de añadir el smoke integrado de Task 11, quedó medida en **732 passed, 1 skipped**, con **1 warning externo de deprecación de ChromaDB**. Esta medición no declara verde `scripts/release_gate.py`: el release gate y el árbol limpio siguen pendientes de un checkpoint limpio autorizado.
+
+### P2 — Estado histórico de propuestas de Wave 2
+
+Estas propuestas constaban como trabajo futuro antes de Wave 2. Las superficies incluidas en Task 11 quedan cubiertas por la evidencia focalizada anterior; no deben interpretarse como pendientes del checkout actual:
+
+1. ~~Modo “Eco estricto” en UI~~ — cubierto con política efectiva, badge y BM25.
+2. ~~First-run / health panel honesto~~ — cubierto con snapshots medidos y estados explícitos.
+3. ~~Cola de jobs visible~~ — cubierto con paginación, razones, cancelación y requeue.
+4. ~~Whisper tiny / skip-audio~~ — cubierto con `skip` Eco y `tiny_cpu` local explícito.
+5. ~~Retrieval “CPU-first”~~ — cubierto con BM25 de Vault sin Chroma en Eco.
+6. ~~Export + aprobación en un flujo~~ — cubierto con resultado parcial sin revertir aprobación.
+7. ~~Vault demo pequeño~~ — cubierto con instalación offline empaquetada y collision-safe.
+8. ~~AnythingLLM opcional~~ — cubierto como integración externa opt-in.
 
 ### Explicitamente fuera (YAGNI ahora)
 - TipTap / editores ricos como fuente de verdad (ya excluido en 6.3).
@@ -129,12 +146,12 @@ Sugerencias alineadas con gratuito / local / low-RAM (ordenadas por apalancamien
 
 ## Cómo trabajar esto
 
-1. Ejecutar Wave 1 con el plan ligado arriba (`subagent-driven-development` o `executing-plans`).
-2. Tras cada tarea: tests + release gate subset; actualizar este `docs/task.md` (marcar ítems).
-3. Al cerrar Wave 1: triage SEC-* y abrir plan Wave 2 (Eco UI + jobs visibles) si sigue siendo prioridad.
+1. Wave 1 y sus verificaciones quedan como histórico del desarrollo (`subagent-driven-development` o `executing-plans`).
+2. Wave 2 se documenta con evidencia focalizada por tarea; la suite completa y el release gate quedan separados del cierre documental.
+3. Cualquier cambio posterior debe conservar el gate de release fail-closed y ejecutarlo solo desde un checkpoint limpio autorizado.
 
 ---
 
 ## Definition of Done del producto (sigue vigente)
 
-La DoD del hardening (§13 del plan 2026-08-07) sigue siendo la barra. Wave 1 cierra el **hueco UI/contrato** de cuarentena e ingesta manual y endurece el **camino &lt;8 GB**. Wave 2+ mejora la experiencia sin romper el core local-first.
+La DoD del hardening (§13 del plan 2026-08-07) sigue siendo la barra. Wave 1 cerró el **hueco UI/contrato** de cuarentena e ingesta manual y endureció el **camino &lt;8 GB**. Wave 2 añade política Eco, operación visible, aprobación/exportación y demo offline sin romper el core local-first; su release final sigue pendiente del checkpoint autorizado indicado arriba.

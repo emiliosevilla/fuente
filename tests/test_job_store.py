@@ -16,6 +16,74 @@ from funes.domain.jobs import (
 from funes.infrastructure.sqlite_store import JobStore
 
 
+def _seed_pre_cancellation_database(vault_root: Path) -> tuple[Path, str]:
+    db_path = vault_root / ".funes" / "state.db"
+    db_path.parent.mkdir(parents=True)
+    connection = sqlite3.connect(db_path)
+    try:
+        connection.execute(
+            "CREATE TABLE schema_migrations (version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL)"
+        )
+        migrations_dir = Path(__file__).resolve().parents[1] / "funes" / "infrastructure" / "migrations"
+        for version in (1, 2):
+            connection.executescript(
+                (migrations_dir / f"{version:03d}_{'jobs' if version == 1 else 'scheduler'}.sql").read_text(
+                    encoding="utf-8"
+                )
+            )
+            connection.execute(
+                "INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)",
+                (version, f"2026-01-01T00:00:0{version}+00:00"),
+            )
+        job_id = "legacy-job"
+        connection.execute(
+            """
+            INSERT INTO jobs (
+                job_id, source_hash, source_relative_path, stage, attempt_count,
+                status, error_code, error_message, dirty_artifact, clean_artifact,
+                note_document_id, created_at, updated_at, pipeline_version, revision
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                job_id,
+                "legacy-hash",
+                "1_entrada/legacy.txt",
+                "stabilized",
+                1,
+                "claimed",
+                None,
+                None,
+                None,
+                None,
+                None,
+                "2026-01-01T00:00:00+00:00",
+                "2026-01-01T00:00:01+00:00",
+                "1",
+                2,
+            ),
+        )
+        connection.execute(
+            """
+            INSERT INTO stage_events (
+                job_id, stage, status, error_code, error_message, revision, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                job_id,
+                "stabilized",
+                "claimed",
+                None,
+                None,
+                2,
+                "2026-01-01T00:00:01+00:00",
+            ),
+        )
+        connection.commit()
+    finally:
+        connection.close()
+    return db_path, job_id
+
+
 class _FlakyConnection:
     """Proxy that raises `sqlite3.OperationalError` once for a matching statement.
 
@@ -67,6 +135,8 @@ def test_create_job_defaults_stage_status_and_pipeline_version(tmp_path):
         assert job.created_at == job.updated_at
         assert job.error_code is None
         assert job.note_document_id is None
+        assert job.cancel_requested_at is None
+        assert job.cancel_reason is None
     finally:
         store.close()
 
@@ -284,6 +354,52 @@ def test_update_job_rejects_stale_revision_without_mutating_record(tmp_path):
         store.close()
 
 
+def test_request_cancel_is_cas_protected_and_records_request_event(tmp_path):
+    store = JobStore(tmp_path / "vault")
+    try:
+        job = store.create_job(source_hash="hash-cancel", source_relative_path="a.txt")
+
+        requested = store.request_cancel(
+            job.job_id,
+            expected_revision=job.revision,
+            reason="usuario lo ha solicitado",
+        )
+
+        assert requested.stage == job.stage
+        assert requested.status == job.status
+        assert requested.revision == job.revision + 1
+        assert requested.cancel_requested_at
+        assert requested.cancel_reason == "usuario lo ha solicitado"
+        assert requested.error_code is None
+
+        events = store.list_stage_events(job.job_id)
+        assert len(events) == 2
+        assert events[-1].stage == requested.stage
+        assert events[-1].status == requested.status
+        assert events[-1].error_code == "cancel_requested"
+        assert events[-1].error_message == requested.cancel_reason
+
+        with pytest.raises(JobConflictError):
+            store.request_cancel(
+                job.job_id,
+                expected_revision=job.revision,
+                reason="segunda solicitud obsoleta",
+            )
+    finally:
+        store.close()
+
+
+@pytest.mark.parametrize("reason", ["", "   ", "x" * 501])
+def test_request_cancel_rejects_invalid_reason(tmp_path, reason):
+    store = JobStore(tmp_path / "vault")
+    try:
+        job = store.create_job(source_hash="hash-cancel-validation", source_relative_path="a.txt")
+        with pytest.raises(ValueError):
+            store.request_cancel(job.job_id, expected_revision=job.revision, reason=reason)
+    finally:
+        store.close()
+
+
 def test_update_job_can_record_failure_fields(tmp_path):
     store = JobStore(tmp_path / "vault")
     try:
@@ -367,7 +483,7 @@ def test_migrations_are_recorded_and_not_reapplied(tmp_path):
             row[0]
             for row in raw_connection.execute("SELECT version FROM schema_migrations")
         ]
-        assert versions == [1, 2]
+        assert versions == [1, 2, 3]
     finally:
         raw_connection.close()
 
@@ -380,9 +496,38 @@ def test_migrations_are_recorded_and_not_reapplied(tmp_path):
             for row in raw_connection.execute("SELECT version FROM schema_migrations")
         ]
         raw_connection.close()
-        assert versions == [1, 2]
+        assert versions == [1, 2, 3]
     finally:
         reopened.close()
+
+
+def test_migration_003_preserves_legacy_rows_and_adds_nullable_fields(tmp_path):
+    vault_root = tmp_path / "legacy-vault"
+    db_path, job_id = _seed_pre_cancellation_database(vault_root)
+
+    store = JobStore(vault_root)
+    try:
+        job = store.get_job(job_id)
+        assert job.source_hash == "legacy-hash"
+        assert job.stage == "stabilized"
+        assert job.revision == 2
+        assert job.cancel_requested_at is None
+        assert job.cancel_reason is None
+        assert len(store.list_stage_events(job_id)) == 1
+        assert {row[0] for row in store._connection.execute("SELECT version FROM schema_migrations")} == {
+            1,
+            2,
+            3,
+        }
+        columns = {
+            row[1]: row[3]
+            for row in store._connection.execute("PRAGMA table_info(jobs)")
+        }
+        assert columns["cancel_requested_at"] == 0
+        assert columns["cancel_reason"] == 0
+        assert db_path.exists()
+    finally:
+        store.close()
 
 
 def test_schema_has_required_tables_and_indexes(tmp_path):
@@ -416,8 +561,57 @@ def test_schema_has_required_tables_and_indexes(tmp_path):
             "idx_jobs_status",
             "idx_jobs_stage",
             "idx_jobs_updated_at",
+            "idx_jobs_updated_job",
         ):
             assert expected in indexes
+    finally:
+        store.close()
+
+
+def test_list_jobs_page_uses_stable_cursor_for_equal_timestamps(tmp_path):
+    store = JobStore(tmp_path / "vault")
+    try:
+        jobs = [
+            store.create_job(source_hash=f"page-hash-{index}", source_relative_path=f"{index}.txt")
+            for index in range(5)
+        ]
+        timestamp = "2026-01-01T00:00:00+00:00"
+        for job in jobs:
+            store._connection.execute(
+                "UPDATE jobs SET updated_at = ? WHERE job_id = ?", (timestamp, job.job_id)
+            )
+
+        expected = sorted((job.job_id for job in jobs), reverse=True)
+        page_ids: list[str] = []
+        cursor = None
+        while True:
+            page = store.list_jobs_page(limit=2, before=cursor)
+            if not page:
+                break
+            page_ids.extend(job.job_id for job in page)
+            cursor = (page[-1].updated_at, page[-1].job_id)
+
+        assert page_ids == expected
+        assert len(page_ids) == len(set(page_ids)) == len(jobs)
+    finally:
+        store.close()
+
+
+def test_list_jobs_keeps_updated_at_ascending_fifo_order(tmp_path):
+    store = JobStore(tmp_path / "vault")
+    try:
+        first = store.create_job(source_hash="fifo-first", source_relative_path="first.txt")
+        second = store.create_job(source_hash="fifo-second", source_relative_path="second.txt")
+        store._connection.execute(
+            "UPDATE jobs SET updated_at = ? WHERE job_id = ?",
+            ("2026-01-01T00:00:02+00:00", first.job_id),
+        )
+        store._connection.execute(
+            "UPDATE jobs SET updated_at = ? WHERE job_id = ?",
+            ("2026-01-01T00:00:01+00:00", second.job_id),
+        )
+
+        assert [job.job_id for job in store.list_jobs()] == [second.job_id, first.job_id]
     finally:
         store.close()
 

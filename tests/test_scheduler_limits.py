@@ -23,6 +23,7 @@ from funes.config import get_default_config
 from funes.core.vault import VaultManager
 from funes.domain.frontmatter import serialize_frontmatter
 from funes.domain.jobs import JobRecord
+from funes.domain.runtime_policy import ExecutionProfile, RuntimePolicy
 from funes.extractors.registry import ExtractorRegistry
 from funes.graph_engine.linker import GraphLinker
 from funes.infrastructure.sqlite_store import JobStore
@@ -614,3 +615,48 @@ def test_claim_resource_lease_is_atomic_under_concurrency(tmp_path):
     finally:
         store_a.close()
         store_b.close()
+
+
+def test_unavailable_policy_llm_waits_at_indexed_chunks_without_fake_success(tmp_path):
+    vault_path = tmp_path / "vault"
+    config = get_default_config(vault_path)
+    vault = VaultManager(config.vault)
+    store = JobStore(vault_path)
+    policy = RuntimePolicy(
+        profile=ExecutionProfile.AUTO,
+        retrieval_mode="hybrid",
+        vector_index_enabled=True,
+        audio_mode="auto",
+        whisper_model_path=None,
+        allow_model_download=False,
+        selected_model=None,
+        llm_available=False,
+        reason="no exact installed model",
+    )
+    service = IngestionApplicationService(
+        config=config,
+        vault=vault,
+        job_store=store,
+        extractors=ExtractorRegistry(),
+        chunker=SemanticChunker(),
+        chroma=_FakeChroma(),
+        atomic_generator=_FakeGenerator(),
+        linker=GraphLinker(vault.output_dir),
+        runtime_policy=policy,
+        ram_governor=_ProbeGovernor(
+            measured_snapshot(total_gb=32.0, available_gb=20.0, safety_margin_pct=0.35)
+        ),
+        stabilize=lambda _p: True,
+    )
+    try:
+        job = _job(store, path="1_entrada/no-model.txt", stage="indexed_chunks")
+
+        result = service.resume(job.job_id)
+
+        assert result.stage == "indexed_chunks"
+        assert result.status == "pending"
+        decisions = store.list_schedule_decisions(job.job_id)
+        assert decisions[-1]["action"] == ScheduleAction.WAIT.value
+        assert decisions[-1]["reason"] == "llm_unavailable_under_policy"
+    finally:
+        store.close()

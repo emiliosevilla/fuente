@@ -19,6 +19,7 @@ from funes.domain.metadata_form import validate_metadata_fields, validate_metada
 from funes.domain.paths import AuthorizedPathResolver, document_id_for_relative_path
 from funes.infrastructure.atomic_files import atomic_write_text
 from funes.infrastructure.sqlite_store import JobStore
+from funes.domain.runtime_policy import RuntimePolicy
 from funes.rag.chroma_store import ChromaStore
 from funes.rag.semantic_chunker import SemanticChunker
 
@@ -39,6 +40,7 @@ class NotesApplicationService:
         chroma_store: Optional[ChromaStore] = None,
         chunker: Optional[SemanticChunker] = None,
         index_notifier: Optional[IndexNotifier] = None,
+        runtime_policy: RuntimePolicy | None = None,
     ) -> None:
         self.vault = vault
         self.path_resolver = path_resolver
@@ -46,6 +48,7 @@ class NotesApplicationService:
         self.chroma = chroma_store
         self.chunker = chunker or SemanticChunker()
         self._index_notifier = index_notifier
+        self.runtime_policy = runtime_policy
 
     @staticmethod
     def _looks_like_relative_path(identifier: str) -> bool:
@@ -248,7 +251,10 @@ class NotesApplicationService:
 
     def _reindex_after_approval(self, note: NoteDocument) -> None:
         """Publish chunk vectors only after the approved note is durable on disk."""
-        if self.chroma is None:
+        if self.chroma is None or (
+            self.runtime_policy is not None
+            and not self.runtime_policy.vector_index_enabled
+        ):
             return
 
         issue = str(note.frontmatter.get("issue") or "_Sin_Cuestion")

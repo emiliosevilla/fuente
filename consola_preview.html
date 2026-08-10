@@ -34,15 +34,15 @@
             </div>
             <div class="status-item">
                 <span class="status-label">● MOTOR DE IA LOCAL:</span>
-                <span class="status-val" id="status-ollama">Disponible (Qwen 2.5 7B)</span>
+                    <span class="status-val" id="status-ollama">No medido</span>
             </div>
             <div class="status-item">
                 <span class="status-label">● CHAT CON DOCUMENTOS:</span>
-                <span class="status-val" id="status-anything">Opcional · no comprobado</span>
+                    <span class="status-val" id="status-anything">No medido</span>
             </div>
             <div class="status-item">
                 <span class="status-label">● BIBLIOTECA DE NOTAS:</span>
-                <span class="status-val" id="status-obsidian">Conectada y lista (Obsidian)</span>
+                    <span class="status-val" id="status-obsidian">No medido</span>
             </div>
         </div>
     </div>
@@ -78,6 +78,12 @@
                 </button>
                 <button class="btn-secondary" data-onclick-command="openApprovalInbox()">
                     Bandeja de Aprobación
+                </button>
+                <button class="btn-secondary" id="btn-open-job-queue" data-onclick-command="openModal('modal-job-queue')">
+                    Cola de trabajos
+                </button>
+                <button class="btn-secondary" id="btn-open-health" data-onclick-command="openModal('modal-health')">
+                    Salud medida
                 </button>
             </div>
         </div>
@@ -183,7 +189,7 @@
 
         <!-- LÍNEA DE ESTADO MINIMALISTA INFERIOR -->
         <div class="bottom-status-bar">
-            <span id="bottom-status-line">Estado: Listo • Vault: Funes_Vault • RAM: 0%</span>
+            <span id="bottom-status-line">Estado: No medido • Vault: No medido • RAM: No medido</span>
             <span class="console-text-002">'Funes' es una creación de Emilio Sevilla Ortego (funes_2026.1)</span>
         </div>
     </div>
@@ -294,7 +300,10 @@
                 <div class="modal-title">FUNES EL CONVERSADOR — CHAT INTEGRADO</div>
                 <div>
                     <button class="btn-small" data-onclick-command="clearChatHistory()">Limpiar Historial</button>
-                    <button class="btn-small" data-onclick-command="triggerAction('open_anything_desktop')">Abrir AnythingLLM Desktop</button>
+                    <div id="anythingllm-optional-panel" hidden aria-hidden="true">
+                        <span>Integración externa AnythingLLM (tercero, opcional)</span>
+                        <button class="btn-small" data-onclick-command="triggerAction('open_anything_desktop')">Abrir AnythingLLM Desktop</button>
+                    </div>
                     <button class="close-btn" data-onclick-command="closeModal('modal-chat')">&times;</button>
                 </div>
             </div>
@@ -460,7 +469,7 @@
                     <div>
                         <label class="console-layout-034">Modelo LLM Ollama (Qwen Local):</label>
                         <select id="setting-ollama-model" class="console-layout-044">
-                            <option value="qwen2.5:7b">qwen2.5:7b (Recomendado Papiro)</option>
+                            <option value="" disabled selected>Modelos no medidos</option>
                         </select>
                     </div>
                     <div>
@@ -482,6 +491,23 @@
                         <span>Permitir Ollama fuera de este equipo. Las solicitudes pueden salir del dispositivo.</span>
                     </label>
                     <span id="offline-mode-detail">Modo solo local: inferencia en Ollama loopback; la consola no carga recursos de red en tiempo de ejecución.</span>
+                    <fieldset id="eco-controls" disabled>
+                        <legend>Perfil de ejecución medido</legend>
+                        <label for="setting-resource-profile">Perfil</label>
+                        <select id="setting-resource-profile">
+                            <option value="auto">Auto</option>
+                            <option value="eco_strict">Eco estricto</option>
+                        </select>
+                        <label for="setting-audio-mode">Audio</label>
+                        <select id="setting-audio-mode">
+                            <option value="auto">Auto</option>
+                            <option value="skip">Omitir audio</option>
+                            <option value="tiny_cpu">Tiny local CPU</option>
+                        </select>
+                        <label for="setting-whisper-model-path">Ruta local Whisper (Tiny CPU)</label>
+                        <input id="setting-whisper-model-path" type="text" autocomplete="off" placeholder="Ruta local opcional">
+                        <span id="eco-policy-summary">Esperando la primera medición de salud.</span>
+                    </fieldset>
                 </div>
 
                 <!-- PESTAÑA 3: PLANTILLA NOTA -->
@@ -590,10 +616,81 @@
                 <div class="console-layout-050">
                     <button class="btn-secondary" id="btn-save-metadata" data-onclick-command="saveApprovalMetadata()" disabled>Guardar metadatos</button>
                     <button class="btn-primary" id="btn-approve-note" data-onclick-command="approveSelectedNote()" disabled>Aprobar nota</button>
+                    <select id="approval-export-format" aria-label="Formato de aprobación y exportación">
+                        <option value="markdown">Markdown</option>
+                        <option value="docx">Word</option>
+                        <option value="pdf">PDF</option>
+                    </select>
+                    <button class="btn-primary" id="btn-approve-export" data-onclick-command="approveAndExportSelectedNote()" disabled>Aprobar y exportar</button>
+                    <button class="btn-secondary" id="btn-retry-approval-export" data-onclick-command="retryFailedApprovalExport()" hidden>Reintentar exportación</button>
                 </div>
             </div>
         </div>
     </div>
+
+    <!-- MODAL COLA DE TRABAJOS (Task 8B: lectura y control durable) -->
+    <div class="modal-overlay" id="modal-job-queue">
+        <div class="modal-container modal-wide">
+            <div class="modal-header">
+                <div class="modal-title">COLA DE TRABAJOS — ESTADO DURABLE</div>
+                <div>
+                    <button class="btn-small" id="job-queue-load" data-onclick-command="loadJobQueue()">Cargar</button>
+                    <button class="btn-small" id="job-queue-refresh" data-onclick-command="refreshJobQueue()">Actualizar</button>
+                    <button class="close-btn" data-onclick-command="closeModal('modal-job-queue')">&times;</button>
+                </div>
+            </div>
+            <div class="modal-body">
+                <div id="job-queue-status" role="status">La cola aún no se ha medido.</div>
+                <div id="job-queue-list" aria-live="polite"></div>
+                <div id="job-queue-detail" class="is-hidden" aria-live="polite"></div>
+                <div id="job-queue-pagination">
+                    <button class="btn-small" id="job-queue-previous-page" disabled data-onclick-command="loadPreviousJobPage()">Anterior</button>
+                    <button class="btn-small" id="job-queue-next-page" disabled data-onclick-command="loadNextJobPage()">Siguiente</button>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <span>Las acciones mutan solo mediante el bridge validado y la revisión esperada.</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL SALUD MEDIDA (solo lectura) -->
+    <div class="modal-overlay" id="modal-health">
+        <div class="modal-container modal-wide">
+            <div class="modal-header">
+                <div class="modal-title">SALUD DEL ENTORNO — MEDICIÓN ACTUAL</div>
+                <div>
+                    <button class="btn-small" id="health-refresh" data-onclick-command="refreshHealth()">Actualizar medición</button>
+                    <button class="close-btn" data-onclick-command="closeModal('modal-health')">&times;</button>
+                </div>
+            </div>
+            <div class="modal-body">
+                <div id="health-status" role="status">La salud aún no se ha medido.</div>
+                <div id="health-panel" aria-live="polite"></div>
+            </div>
+            <div class="modal-footer">
+                <span id="health-checked-at">Sin medición.</span>
+            </div>
+        </div>
+    </div>
+
+    <section class="onboarding-panel" id="onboarding-panel" hidden>
+        <div class="modal-container modal-wide">
+            <div class="modal-header">
+                <div class="modal-title">PRIMER ARRANQUE — VAULT DEMO OFFLINE</div>
+                <button class="close-btn" data-onclick-command="hideOnboardingPanel()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p>Un ejemplo local y pequeño para conocer el flujo de Funes. No descarga modelos ni activa servicios externos.</p>
+                <div id="onboarding-status" role="status" aria-live="polite"></div>
+                <div id="onboarding-collisions" class="is-hidden" role="alert"></div>
+            </div>
+            <div class="modal-footer" id="onboarding-actions" hidden>
+                <button class="btn-primary" id="onboarding-create-demo" data-onclick-command="createDemoVault()">Crear Vault demo</button>
+                <button class="btn-secondary" id="onboarding-dismiss" data-onclick-command="dismissOnboarding()">Ahora no</button>
+            </div>
+        </div>
+    </section>
 
     <!-- MODAL GUÍA RÁPIDA -->
     <div class="modal-overlay" id="modal-help">
@@ -650,6 +747,9 @@
                         <li><b>Exportación:</b> Descarga instantáneamente cualquier nota en formato Markdown, PDF o Word.</li>
                     </ul>
                 </div>
+                <div class="console-layout-052">
+                    <button class="btn-secondary" data-onclick-command="openOnboardingFromHelp()">Reabrir onboarding</button>
+                </div>
             </div>
             <div class="modal-footer">
                 <span class="console-text-002">Funes v2026.1 • Formateo Universal de Notas, Estructuración y Síntesis</span>
@@ -692,6 +792,17 @@
                 'openApprovalInbox()': openApprovalInbox,
                 'saveApprovalMetadata()': saveApprovalMetadata,
                 'approveSelectedNote()': approveSelectedNote,
+                'approveAndExportSelectedNote()': approveAndExportSelectedNote,
+                'retryFailedApprovalExport()': retryFailedApprovalExport,
+                'loadJobQueue()': loadJobQueue,
+                'refreshJobQueue()': refreshJobQueue,
+                'loadNextJobPage()': loadNextJobPage,
+                'loadPreviousJobPage()': loadPreviousJobPage,
+                'refreshHealth()': refreshHealth,
+                'createDemoVault()': createDemoVault,
+                'dismissOnboarding()': dismissOnboarding,
+                'openOnboardingFromHelp()': openOnboardingFromHelp,
+                'hideOnboardingPanel()': hideOnboardingPanel,
             };
             if (handlers[command]) handlers[command]();
         }
@@ -729,6 +840,85 @@
 
         function clearLogView() {
             document.getElementById('log-console').replaceChildren();
+        }
+
+        function renderOnboarding(status) {
+            if (!status) return;
+            const statusEl = document.getElementById('onboarding-status');
+            const collisionsEl = document.getElementById('onboarding-collisions');
+            if (statusEl) {
+                if (status.status === 'pending') {
+                    statusEl.textContent = 'Puedes crear un conjunto de notas demo local cuando lo decidas.';
+                } else if (status.status === 'dismissed') {
+                    statusEl.textContent = 'El onboarding está pospuesto. Puedes volver a abrirlo desde esta Guía Rápida.';
+                } else {
+                    statusEl.textContent = 'El Vault demo ya está instalado.';
+                }
+            }
+            if (collisionsEl) {
+                collisionsEl.replaceChildren();
+                collisionsEl.classList.add('is-hidden');
+            }
+            const actionsEl = document.getElementById('onboarding-actions');
+            if (actionsEl) actionsEl.hidden = status.status !== 'pending';
+            if (status.show_first_run_panel) showOnboardingPanel();
+            else hideOnboardingPanel();
+        }
+
+        function showOnboardingPanel() {
+            const panel = document.getElementById('onboarding-panel');
+            if (panel) panel.hidden = false;
+        }
+
+        function hideOnboardingPanel() {
+            const panel = document.getElementById('onboarding-panel');
+            if (panel) panel.hidden = true;
+        }
+
+        function renderDemoInstallResult(result) {
+            if (!result) return;
+            renderOnboarding(result.onboarding);
+            const collisionsEl = document.getElementById('onboarding-collisions');
+            if (result.status === 'blocked' && collisionsEl) {
+                collisionsEl.classList.remove('is-hidden');
+                collisionsEl.textContent = result.message || 'Instalación bloqueada.';
+                (result.collisions || []).forEach(function(path) {
+                    const item = document.createElement('div');
+                    item.textContent = String(path);
+                    collisionsEl.appendChild(item);
+                });
+            } else if (result.status === 'demo_installed') {
+                log(result.message || 'Vault demo instalado.');
+                hideOnboardingPanel();
+            }
+        }
+
+        function createDemoVault() {
+            if (!(window.pywebview && window.pywebview.api)) {
+                renderOnboarding({ status: 'pending', show_first_run_panel: true });
+                return;
+            }
+            window.pywebview.api.install_demo_vault().then(renderDemoInstallResult);
+        }
+
+        function dismissOnboarding() {
+            if (!(window.pywebview && window.pywebview.api)) {
+                hideOnboardingPanel();
+                return;
+            }
+            window.pywebview.api.dismiss_onboarding().then(function(status) {
+                renderOnboarding(status);
+                hideOnboardingPanel();
+            });
+        }
+
+        function openOnboardingFromHelp() {
+            closeModal('modal-help');
+            if (window.pywebview && window.pywebview.api) {
+                window.pywebview.api.reopen_onboarding().then(renderOnboarding);
+            } else {
+                renderOnboarding({ status: 'dismissed', show_first_run_panel: true });
+            }
         }
 
         function applyOfflineModeState(offlineMode) {
@@ -815,10 +1005,14 @@
             if (id === 'modal-stat-ram') { loadStatRamData(); }
             if (id === 'modal-approval') { loadApprovalInbox(); }
             if (id === 'modal-quarantine') { loadQuarantineData(); }
+            if (id === 'modal-job-queue') { loadJobQueue(); }
+            if (id === 'modal-health') { refreshHealth(); }
         }
 
         let approvalSelectedNoteId = null;
         let approvalSelectedRevision = null;
+        let failedApprovalExportDocumentId = null;
+        let failedApprovalExportFormat = null;
         const metadataFieldIds = ['title', 'tags', 'issue', 'date', 'sources', 'status'];
 
         function bindApprovalDiagnosticPanel() {
@@ -832,6 +1026,379 @@
                         document.getElementById('metadata-raw-frontmatter').textContent = res.raw_frontmatter;
                     }
                 });
+            });
+        }
+
+        let queueCursor = null;
+        let queueNextCursor = null;
+        let queueCursorHistory = [];
+        let healthSnapshotReceived = false;
+
+        const QUEUE_TERMINAL_STATUSES = new Set([
+            'completed', 'failed', 'quarantined', 'cancelled', 'skipped'
+        ]);
+        const QUEUE_TERMINAL_STAGES = new Set([
+            'completed', 'failed', 'quarantined', 'cancelled', 'skipped'
+        ]);
+
+        function queueApiAvailable() {
+            return Boolean(window.pywebview && window.pywebview.api);
+        }
+
+        function queueValue(value, fallback) {
+            return value === null || value === undefined || value === ''
+                ? fallback
+                : String(value);
+        }
+
+        function appendQueueField(parent, label, value, className) {
+            const field = document.createElement('div');
+            if (className) field.classList.add(className);
+            const labelEl = document.createElement('strong');
+            labelEl.textContent = label + ': ';
+            const valueEl = document.createElement('span');
+            valueEl.textContent = queueValue(value, '—');
+            field.append(labelEl, valueEl);
+            parent.appendChild(field);
+            return field;
+        }
+
+        function isResumeAvailable(job) {
+            return Boolean(job && typeof job === 'object' && job.resume_available === true);
+        }
+
+        function isCancelAvailable(job) {
+            return Boolean(job)
+                && !QUEUE_TERMINAL_STATUSES.has(job.status)
+                && !QUEUE_TERMINAL_STAGES.has(job.stage);
+        }
+
+        function queueStatus(message, isError) {
+            const status = document.getElementById('job-queue-status');
+            if (!status) return;
+            status.textContent = String(message || '');
+            status.classList.toggle('status-error', Boolean(isError));
+        }
+
+        function setQueueBusy(isBusy) {
+            ['job-queue-load', 'job-queue-refresh'].forEach(function(id) {
+                const button = document.getElementById(id);
+                if (button) button.disabled = isBusy;
+            });
+        }
+
+        function updateQueuePagination() {
+            const previous = document.getElementById('job-queue-previous-page');
+            const next = document.getElementById('job-queue-next-page');
+            if (previous) previous.disabled = queueCursorHistory.length === 0;
+            if (next) next.disabled = !queueNextCursor;
+        }
+
+        function renderJobDetail(detail) {
+            const panel = document.getElementById('job-queue-detail');
+            if (!panel) return;
+            panel.replaceChildren();
+            panel.classList.remove('is-hidden');
+            if (!detail || detail.error) {
+                const error = document.createElement('p');
+                error.textContent = queueValue(detail && (detail.message || detail.error), 'No se pudo cargar el detalle.');
+                panel.appendChild(error);
+                return;
+            }
+            const job = detail.job || {};
+            const heading = document.createElement('h3');
+            heading.textContent = 'Detalle del trabajo ' + queueValue(job.job_id, 'sin ID');
+            panel.appendChild(heading);
+            appendQueueField(panel, 'Etapa', job.stage);
+            appendQueueField(panel, 'Estado', job.status);
+            appendQueueField(panel, 'Razón durable', detail.reason || job.cancel_reason || job.error_message);
+            appendQueueField(panel, 'Revisión', job.revision);
+            const eventsHeading = document.createElement('h4');
+            eventsHeading.textContent = 'Eventos durables';
+            panel.appendChild(eventsHeading);
+            const events = document.createElement('ul');
+            (Array.isArray(detail.events) ? detail.events : []).forEach(function(event) {
+                const item = document.createElement('li');
+                item.textContent = [
+                    queueValue(event.created_at, 'sin fecha'),
+                    queueValue(event.stage, 'sin etapa'),
+                    queueValue(event.status, 'sin estado'),
+                    queueValue(event.error_message || event.error_code, '')
+                ].filter(Boolean).join(' · ');
+                events.appendChild(item);
+            });
+            if (!events.childNodes.length) {
+                const empty = document.createElement('li');
+                empty.textContent = 'Sin eventos durables.';
+                events.appendChild(empty);
+            }
+            panel.appendChild(events);
+        }
+
+        function loadJobDetail(jobId) {
+            if (!queueApiAvailable()) {
+                queueStatus('Bridge no conectado; no se ha medido el detalle.', true);
+                return;
+            }
+            window.pywebview.api.get_job_detail(jobId).then(renderJobDetail).catch(function(error) {
+                queueStatus('No se pudo cargar el detalle: ' + String(error), true);
+            });
+        }
+
+        function cancelQueueJob(jobId, expectedRevision) {
+            const promptedReason = window.prompt('Indica una razón durable para cancelar este trabajo:');
+            const reason = typeof promptedReason === 'string' ? promptedReason : '';
+            if (!reason.trim()) {
+                queueStatus('La cancelación requiere una razón no vacía.', true);
+                return;
+            }
+            const normalizedReason = reason.trim();
+            if (!window.confirm('¿Confirmas cancelar el trabajo? La razón quedará registrada.')) return;
+            if (!queueApiAvailable()) {
+                queueStatus('Bridge no conectado; no se ha cancelado el trabajo.', true);
+                return;
+            }
+            window.pywebview.api.cancel_job(jobId, expectedRevision, normalizedReason).then(function(result) {
+                if (result && result.error) {
+                    queueStatus(result.message || result.error, true);
+                    return;
+                }
+                queueStatus('Cancelación registrada.');
+                refreshJobQueue();
+            }).catch(function(error) {
+                queueStatus('No se pudo cancelar el trabajo: ' + String(error), true);
+            });
+        }
+
+        function resumeQueueJob(jobId, expectedRevision) {
+            if (!queueApiAvailable()) {
+                queueStatus('Bridge no conectado; no se ha reanudado el trabajo.', true);
+                return;
+            }
+            window.pywebview.api.resume_job(jobId, expectedRevision).then(function(result) {
+                if (result && result.error) {
+                    queueStatus(result.message || result.error, true);
+                    return;
+                }
+                queueStatus('Trabajo enviado a reanudación.');
+                refreshJobQueue();
+            }).catch(function(error) {
+                queueStatus('No se pudo reanudar el trabajo: ' + String(error), true);
+            });
+        }
+
+        function renderJobQueue(page) {
+            const list = document.getElementById('job-queue-list');
+            if (!list) return;
+            list.replaceChildren();
+            if (!page || page.error) {
+                const error = document.createElement('p');
+                error.textContent = queueValue(page && (page.message || page.error), 'No se pudo cargar la cola.');
+                list.appendChild(error);
+                queueStatus(error.textContent, true);
+                return;
+            }
+            const items = Array.isArray(page.items) ? page.items : [];
+            if (!items.length) {
+                const empty = document.createElement('p');
+                empty.textContent = 'No hay trabajos para los filtros actuales.';
+                list.appendChild(empty);
+            }
+            items.forEach(function(job) {
+                const row = document.createElement('article');
+                row.classList.add('graph-section');
+                appendQueueField(row, 'Trabajo', job.job_id);
+                appendQueueField(row, 'Fuente', job.source_relative_path);
+                appendQueueField(row, 'Etapa', job.stage);
+                appendQueueField(row, 'Estado', job.status);
+                appendQueueField(row, 'Razón durable', job.reason || job.cancel_reason || job.error_message);
+                appendQueueField(row, 'Actualizado', job.updated_at);
+                appendQueueField(row, 'Revisión', job.revision);
+
+                const actions = document.createElement('div');
+                const detailButton = document.createElement('button');
+                detailButton.type = 'button';
+                detailButton.className = 'btn-small';
+                detailButton.textContent = 'Ver eventos';
+                detailButton.addEventListener('click', function() {
+                    loadJobDetail(job.job_id);
+                });
+                actions.appendChild(detailButton);
+
+                if (isResumeAvailable(job)) {
+                    const resume = document.createElement('button');
+                    resume.type = 'button';
+                    resume.className = 'btn-small';
+                    resume.textContent = 'Reanudar';
+                    resume.addEventListener('click', function() {
+                        resumeQueueJob(job.job_id, job.revision);
+                    });
+                    actions.appendChild(resume);
+                }
+                if (isCancelAvailable(job)) {
+                    const cancel = document.createElement('button');
+                    cancel.type = 'button';
+                    cancel.className = 'btn-small';
+                    cancel.textContent = 'Cancelar';
+                    cancel.addEventListener('click', function() {
+                        cancelQueueJob(job.job_id, job.revision);
+                    });
+                    actions.appendChild(cancel);
+                }
+                row.appendChild(actions);
+                list.appendChild(row);
+            });
+            queueNextCursor = page.next_cursor || null;
+            queueStatus(items.length + ' trabajo(s) medido(s).');
+            updateQueuePagination();
+        }
+
+        function loadJobQueue(cursor) {
+            if (cursor === undefined) cursor = queueCursor;
+            queueCursor = cursor || null;
+            if (!queueApiAvailable()) {
+                queueStatus('Bridge no conectado; la cola no se ha medido.', true);
+                return;
+            }
+            setQueueBusy(true);
+            const statusFilter = document.getElementById('job-queue-status-filter');
+            const filters = statusFilter && statusFilter.value ? {status: statusFilter.value} : {};
+            window.pywebview.api.get_jobs(filters, 50, queueCursor).then(renderJobQueue).catch(function(error) {
+                queueStatus('No se pudo cargar la cola: ' + String(error), true);
+            }).finally(function() {
+                setQueueBusy(false);
+            });
+        }
+
+        function refreshJobQueue() {
+            queueCursor = null;
+            queueNextCursor = null;
+            queueCursorHistory = [];
+            loadJobQueue(null);
+        }
+
+        function loadNextJobPage() {
+            if (!queueNextCursor) return;
+            queueCursorHistory.push(queueCursor);
+            loadJobQueue(queueNextCursor);
+        }
+
+        function loadPreviousJobPage() {
+            if (!queueCursorHistory.length) return;
+            loadJobQueue(queueCursorHistory.pop());
+        }
+
+        function renderHealthItem(container, key, item) {
+            const row = document.createElement('article');
+            row.classList.add('graph-section');
+            const heading = document.createElement('h3');
+            heading.textContent = (item && item.label) || key;
+            const status = document.createElement('strong');
+            status.classList.add('health-item-status');
+            status.dataset.status = item && item.status ? String(item.status) : 'unknown';
+            status.textContent = item && item.status ? String(item.status) : 'unknown';
+            const detail = document.createElement('p');
+            const optionalUnavailable = item && item.required === false && item.status !== 'ok';
+            detail.textContent = optionalUnavailable
+                ? 'Opcional/no detectado. ' + queueValue(item.detail, '')
+                : queueValue(item && item.detail, 'Sin detalle medido.');
+            row.append(heading, status, detail);
+            container.appendChild(row);
+        }
+
+        function enableEcoControls(enabled) {
+            const controls = document.getElementById('eco-controls');
+            if (controls) controls.disabled = !enabled;
+        }
+
+        function isValidHealthSnapshot(snapshot) {
+            return Boolean(
+                snapshot
+                && !snapshot.error
+                && typeof snapshot.checked_at === 'string'
+                && snapshot.checked_at.trim()
+                && snapshot.vault
+                && typeof snapshot.vault === 'object'
+                && typeof snapshot.vault.status === 'string'
+                && snapshot.ollama
+                && typeof snapshot.ollama === 'object'
+                && typeof snapshot.ollama.status === 'string'
+                && snapshot.policy
+                && typeof snapshot.policy === 'object'
+            );
+        }
+
+        function renderHealthSnapshot(snapshot) {
+            const panel = document.getElementById('health-panel');
+            if (!panel) return;
+            if (!snapshot || snapshot.error) {
+                panel.replaceChildren();
+                const error = document.createElement('p');
+                error.textContent = queueValue(snapshot && (snapshot.message || snapshot.error), 'No se pudo medir la salud.');
+                panel.appendChild(error);
+                return;
+            }
+            if (!isValidHealthSnapshot(snapshot)) {
+                panel.replaceChildren();
+                const error = document.createElement('p');
+                error.textContent = 'Respuesta de salud incompleta; no se ha resuelto el estado.';
+                panel.appendChild(error);
+                return;
+            }
+            panel.replaceChildren();
+            healthSnapshotReceived = true;
+            enableEcoControls(true);
+            renderHealthItem(panel, 'vault', snapshot.vault);
+            renderHealthItem(panel, 'ollama', snapshot.ollama);
+            Object.keys(snapshot.tools || {}).forEach(function(key) {
+                renderHealthItem(panel, key, snapshot.tools[key]);
+            });
+            Object.keys(snapshot.extras || {}).forEach(function(key) {
+                renderHealthItem(panel, key, snapshot.extras[key]);
+            });
+
+            const ollamaStatus = document.getElementById('status-ollama');
+            if (ollamaStatus) ollamaStatus.textContent = snapshot.ollama && snapshot.ollama.status
+                ? String(snapshot.ollama.status) : 'unknown';
+            const anything = snapshot.tools && snapshot.tools.anythingllm;
+            const anythingStatus = document.getElementById('status-anything');
+            if (anythingStatus) anythingStatus.textContent = anything && anything.status === 'ok'
+                ? 'ok (medido)' : 'Opcional/no detectado';
+            const panelAnything = document.getElementById('anythingllm-optional-panel');
+            const desktopInstalled = Boolean(anything && anything.status === 'ok');
+            if (panelAnything) {
+                panelAnything.hidden = !desktopInstalled;
+                panelAnything.setAttribute('aria-hidden', desktopInstalled ? 'false' : 'true');
+            }
+            const policy = snapshot.policy || {};
+            const profile = document.getElementById('setting-resource-profile');
+            const audio = document.getElementById('setting-audio-mode');
+            if (profile && policy.profile) profile.value = String(policy.profile);
+            if (audio && policy.audio_mode) audio.value = String(policy.audio_mode);
+            const policySummary = document.getElementById('eco-policy-summary');
+            if (policySummary) policySummary.textContent = queueValue(policy.reason, 'Política medida sin razón adicional.');
+            const checkedAt = document.getElementById('health-checked-at');
+            if (checkedAt) checkedAt.textContent = 'Medido: ' + queueValue(snapshot.checked_at, 'sin fecha');
+            const status = document.getElementById('health-status');
+            if (status) status.textContent = 'Salud medida; cada estado procede del snapshot actual.';
+            const bottomStatus = document.getElementById('bottom-status-line');
+            if (bottomStatus) {
+                bottomStatus.textContent = 'Estado: Medido • Vault: '
+                    + queueValue(snapshot.vault && snapshot.vault.status, 'unknown')
+                    + ' • RAM: Medido';
+            }
+        }
+
+        function refreshHealth() {
+            if (!queueApiAvailable()) {
+                const status = document.getElementById('health-status');
+                if (status) status.textContent = 'Bridge no conectado; la salud no se ha medido.';
+                return;
+            }
+            const status = document.getElementById('health-status');
+            if (status) status.textContent = 'Midiendo salud...';
+            window.pywebview.api.get_health().then(renderHealthSnapshot).catch(function(error) {
+                if (status) status.textContent = 'No se pudo medir la salud: ' + String(error);
             });
         }
 
@@ -868,6 +1435,7 @@
             diagnosticPanel.classList.toggle('is-visible', visible);
             document.getElementById('btn-save-metadata').disabled = !visible;
             document.getElementById('btn-approve-note').disabled = !visible;
+            document.getElementById('btn-approve-export').disabled = !visible;
         }
 
         function populateIssueOptions(issues, selectedIssue) {
@@ -916,10 +1484,16 @@
             container.appendChild(message);
         }
 
-        function loadApprovalInbox() {
+        function loadApprovalInbox(preserveRetry) {
             const listEl = document.getElementById('approval-pending-list');
             approvalSelectedNoteId = null;
             approvalSelectedRevision = null;
+            if (!preserveRetry) {
+                failedApprovalExportDocumentId = null;
+                failedApprovalExportFormat = null;
+            }
+            const retryButton = document.getElementById('btn-retry-approval-export');
+            if (retryButton) retryButton.hidden = !preserveRetry;
             setMetadataFormVisible(false);
             document.getElementById('approval-form-status').textContent = '';
             document.getElementById('metadata-raw-frontmatter').textContent = '';
@@ -1021,6 +1595,76 @@
                 if (res && res.log) log(res.log);
                 document.getElementById('approval-form-status').textContent = 'Nota aprobada';
                 loadApprovalInbox();
+            });
+        }
+
+        function approveAndExportSelectedNote() {
+            if (!approvalSelectedNoteId || approvalSelectedRevision === null) return;
+            const format = document.getElementById('approval-export-format').value;
+            const currentSelectedDocumentId = approvalSelectedNoteId;
+            const currentSelectedNoteRevision = approvalSelectedRevision;
+            const currentSelectedNoteMetadata = collectMetadataFormValues();
+            let printWindow = null;
+            if (format === 'pdf') printWindow = openUserAssistedPdfPrintWindow();
+            document.getElementById('approval-form-status').textContent = 'Aprobando y preparando exportación...';
+            window.pywebview.api.approve_and_export(currentSelectedDocumentId, currentSelectedNoteRevision, format, currentSelectedNoteMetadata).then(function(res) {
+                if (res && res.field_errors) {
+                    closePrintWindowOnError(printWindow);
+                    showMetadataFieldErrors(res.field_errors);
+                    document.getElementById('approval-form-status').textContent = res.message || 'Metadatos inválidos';
+                    return;
+                }
+                if (res && res.error) {
+                    closePrintWindowOnError(printWindow);
+                    document.getElementById('approval-form-status').textContent = res.message || res.error;
+                    return;
+                }
+                if (res && res.approval_status === 'approved' && res.export_status === 'failed') {
+                    failedApprovalExportDocumentId = currentSelectedDocumentId;
+                    failedApprovalExportFormat = format;
+                    closePrintWindowOnError(printWindow);
+                    document.getElementById('approval-form-status').textContent = 'Aprobada; exportación falló';
+                    loadApprovalInbox(true);
+                    return;
+                }
+                const payload = res && res.export_payload;
+                const prepared = res && res.export_status === 'prepared'
+                    && payload && handleCanonicalExportResponse(res.export_payload, format, printWindow);
+                if (prepared) {
+                    failedApprovalExportDocumentId = null;
+                    failedApprovalExportFormat = null;
+                    document.getElementById('approval-form-status').textContent = 'Nota aprobada y exportación preparada';
+                    loadApprovalInbox(false);
+                } else {
+                    closePrintWindowOnError(printWindow);
+                }
+            }).catch(function(error) {
+                closePrintWindowOnError(printWindow);
+                document.getElementById('approval-form-status').textContent = 'No se pudo confirmar la aprobación ni preparar la exportación';
+                log('Error de aprobación/exportación no confirmado: ' + String(error));
+            });
+        }
+
+        function retryFailedApprovalExport() {
+            if (!failedApprovalExportDocumentId || !failedApprovalExportFormat
+                || !window.pywebview || !window.pywebview.api
+                || !window.pywebview.api.export_note) return;
+            const format = failedApprovalExportFormat;
+            const documentId = failedApprovalExportDocumentId;
+            let printWindow = null;
+            if (format === 'pdf') printWindow = openUserAssistedPdfPrintWindow();
+            window.pywebview.api.export_note(documentId, format).then(function(res) {
+                if (handleCanonicalExportResponse(res, format, printWindow)) {
+                    failedApprovalExportDocumentId = null;
+                    failedApprovalExportFormat = null;
+                    const retryButton = document.getElementById('btn-retry-approval-export');
+                    if (retryButton) retryButton.hidden = true;
+                    document.getElementById('approval-form-status').textContent = 'Exportación reintentada correctamente';
+                }
+            }).catch(function(error) {
+                closePrintWindowOnError(printWindow);
+                document.getElementById('approval-form-status').textContent = 'Aprobada; exportación falló';
+                log('Error al reintentar exportación: ' + String(error));
             });
         }
 
@@ -1201,7 +1845,21 @@
             const select = document.getElementById('setting-ollama-model');
             select.replaceChildren();
             if (!models || !models.length) {
-                models = ["qwen2.5:7b", "qwen2.5-coder:7b", "qwen2.5:14b", "llama3.2"];
+                if (currentModel) {
+                    const configured = document.createElement('option');
+                    configured.value = currentModel;
+                    configured.textContent = String(currentModel) + ' (no medido)';
+                    configured.selected = true;
+                    select.appendChild(configured);
+                    return;
+                }
+                const unavailable = document.createElement('option');
+                unavailable.value = '';
+                unavailable.textContent = 'Modelos no medidos';
+                unavailable.disabled = true;
+                unavailable.selected = true;
+                select.appendChild(unavailable);
+                return;
             }
             models.forEach(function(m) {
                 const opt = document.createElement('option');
@@ -1396,6 +2054,11 @@
                     if (info.ollama_url) { document.getElementById('setting-ollama-url').value = info.ollama_url; }
                     if (info.ram_margin) { document.getElementById('setting-ram-margin').value = info.ram_margin; }
                     document.getElementById('setting-allow-non-loopback-ollama').checked = !!info.allow_non_loopback_ollama;
+                    if (info.resource_profile) { document.getElementById('setting-resource-profile').value = info.resource_profile; }
+                    if (info.audio_mode) { document.getElementById('setting-audio-mode').value = info.audio_mode; }
+                    if (info.whisper_model_path !== undefined && document.getElementById('setting-whisper-model-path')) {
+                        document.getElementById('setting-whisper-model-path').value = info.whisper_model_path || '';
+                    }
                     if (info.offline_mode) { applyOfflineModeState(info.offline_mode); }
                     renderLinkedFolders();
                     populateOllamaModels(info.models, info.current_model);
@@ -1405,7 +2068,7 @@
                     document.getElementById('setting-vault-path').value = '/Users/emiliosevillaortego/Documents/Funes_Vault';
                 }
                 renderLinkedFolders();
-                populateOllamaModels(["qwen2.5:7b", "qwen2.5-coder:7b", "qwen2.5:14b", "llama3.2"], "qwen2.5:7b");
+                populateOllamaModels([], '');
             }
         }
 
@@ -3007,7 +3670,7 @@
             if (stats.quarantine !== undefined) document.getElementById('stat-quarantine').innerText = stats.quarantine;
             if (stats.notes !== undefined) document.getElementById('stat-notes').innerText = stats.notes;
             if (stats.ram !== undefined) document.getElementById('stat-ram').innerText = stats.ram;
-            if (stats.line !== undefined) document.getElementById('bottom-status-line').innerText = stats.line;
+            if (healthSnapshotReceived && stats.line !== undefined) document.getElementById('bottom-status-line').innerText = stats.line;
         }
 
         function saveSettings() {
@@ -3020,6 +3683,9 @@
                 ollama_url: ollamaUrl,
                 ram_safety_margin_pct: Number.parseFloat(ramMargin) / 100,
                 allow_non_loopback_ollama: document.getElementById('setting-allow-non-loopback-ollama').checked,
+                resource_profile: document.getElementById('setting-resource-profile').value,
+                audio_mode: document.getElementById('setting-audio-mode').value,
+                whisper_model_path: (document.getElementById('setting-whisper-model-path') || {}).value || null,
                 input_connected_folders: linkedInputFolders,
                 output_connected_folders: linkedOutputFolders
             };
@@ -3057,6 +3723,9 @@
                     }
                     if (state.offline_mode) {
                         applyOfflineModeState(state.offline_mode);
+                    }
+                    if (state.onboarding) {
+                        renderOnboarding(state.onboarding);
                     }
                 });
                 loadThemes();

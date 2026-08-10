@@ -16,22 +16,30 @@
    - `2_sucio/`: Copia de respaldo original para auditoría e integridad.
    - `3_limpio/`: Transcripción verbatim a Markdown plano (`.md`).
    - `4_salida/`: Notas atómicas estructuradas con metadatos e interconexión masiva (`[[WikiLinks]]`).
-   - `.funes/`: Cuarentena (`quarantine/`) y base de datos vectorial semántica ChromaDB.
+   - `.funes/`: Cuarentena (`quarantine/`) y estado local; la capa vectorial Chroma es opcional en runtime según la política efectiva. En `Eco estricto` no se construye, lee ni escribe Chroma.
 
 2. **Soporte Multiformato Extensivo**:
    - **Documentos y Tablas**: PDF, DOCX, DOC, XLSX, XLS, PPTX, CSV, JSON, HTML, MSG, TXT, MD.
    - **Formato Académico/Científico**: LaTeX (`.tex`), TeXmacs (`.tm`) preservando expresiones matemáticas `$math$`.
-   - **Audio**: Transcripción automática local de MP3, WAV, M4A con **Faster-Whisper**.
+   - **Audio**: Transcripción local opcional de MP3, WAV, M4A con **Faster-Whisper**; `Eco estricto` omite audio por defecto y el modo `tiny_cpu` requiere un modelo local indicado explícitamente.
    - **Imágenes**: OCR local para PNG, JPEG, TIFF vía **Tesseract**.
 
 3. **RAM Governor (IA Adaptativa Local)**:
    - Mantiene una holgura libre del 35% de la memoria RAM para prevenir congelamientos.
-   - Selecciona dinámicamente el modelo LLM óptimo vía Ollama según el catálogo medido:
+   - Selecciona dinámicamente el modelo LLM óptimo vía Ollama según el catálogo medido, pero solo entre modelos locales ya instalados; la política no descarga automáticamente el LLM elegido.
      - **RAM ~4 GB** (total &lt; 4,5 GB): `qwen2.5:0.5b` si cabe en holgura; si no, solo BM25 (sin Ollama).
      - **RAM 4 – 8 GB**: `qwen2.5:0.5b` / `qwen2.5:1.5b` (el más pequeño que quepa).
      - **RAM 8 – 16 GB**: `qwen2.5:3b`
      - **RAM 16 – 32 GB**: `qwen2.5:7b` / `qwen2.5:14b`
      - **RAM &gt; 32 GB**: `command-r:35b` (requiere descarga explícita; no se elige en hosts más pequeños).
+
+### Perfiles de ejecución: Auto y Eco estricto
+
+El perfil guardado (`Auto` o `Eco estricto`) no es por sí solo una promesa de capacidad: la consola muestra también la política efectiva derivada de la medición actual de recursos y del catálogo local de Ollama.
+
+- **Auto** mantiene el camino híbrido/vectorial y usa un modelo local exacto solo si está instalado y cabe en el presupuesto medido. Si no hay un modelo adecuado, informa la degradación y no descarga uno durante el arranque, health, ingesta o retrieval.
+- **Eco estricto** usa BM25 sobre el Markdown autorizado del Vault (`bm25_vault`), no inicializa ni consulta Chroma y desactiva las descargas de modelos. Audio queda en `skip` por defecto.
+- **Audio tiny CPU** solo se activa con un `whisper_model_path` local existente; no equivale a descargar automáticamente el modelo remoto `tiny`.
 
 4. **Bucle de Grafo Optimizado (`OptimizadoGraphLoop`)**:
    - Refina el grafo de conocimiento: re-evalúa notas, inserta enlaces `[[WikiLinks]]` cruzados y genera/actualiza el mapa de contenidos global **`4_salida/_Indice_MOC.md`**.
@@ -87,11 +95,23 @@ Funes distingue dos fases con requisitos de red distintos:
 | **Instalación** | `pip install`, descarga de modelos Ollama, binarios del sistema | Puede requerir Internet una vez; no forma parte del runtime diario |
 | **Inferencia en ejecución** | Peticiones HTTP a Ollama durante ETL, chat y refinamiento | Solo loopback (`http://localhost:11434`); URLs no loopback se rechazan salvo opt-in explícito |
 
+Las descargas de paquetes, binarios o modelos son acciones de instalación/configuración explícitas; no hay descargas de startup ni se arrancan servicios externos automáticamente. Auto mide lo que ya existe para seleccionar el LLM y Eco puede funcionar sin Ollama ni Chroma en su ruta BM25.
+
 En la consola, el indicador **Modo de red** muestra `Solo local` o `IA remota habilitada` según la URL de Ollama configurada. El texto del chat y los ajustes nunca afirman procesamiento 100% local cuando hay un endpoint externo activo.
 
 Para habilitar un Ollama remoto (p. ej. en Docker), marca **Permitir Ollama fuera de este equipo** en Ajustes o define `ALLOW_NON_LOOPBACK_OLLAMA=true` junto con `OLLAMA_URL`.
 
 La interfaz (`consola_preview.html`) usa tipografías del sistema y una política CSP estricta: no carga fuentes ni scripts desde CDNs en tiempo de ejecución.
+
+### Operación visible y demo offline
+
+- El panel **Health** realiza un snapshot de solo lectura y muestra estados medidos (`ok`, `missing`, `unreachable`, `blocked`, `optional` o `unknown`) con su instante de comprobación. No instala ni repara herramientas.
+- La **cola** muestra estado, etapa, revisión y razón durable. Cancelar es cooperativo en los límites de etapa; una petición pendiente se conserva, y un trabajo `skipped` puede reencolarse como un nuevo trabajo solo si la fuente sigue disponible.
+- **Aprobar y exportar** son dos resultados explícitos: la aprobación canónica puede quedar confirmada aunque falle la preparación de la exportación; la UI ofrece el reintento de exportación sin deshacer la aprobación.
+- **Crear Vault demo** es una acción explícita y offline. Usa recursos empaquetados, preflight y escrituras atómicas; es idempotente y bloquea colisiones sin sobrescribir documentos. No requiere servicios vivos ni red.
+- **AnythingLLM** es una integración externa de terceros y opt-in. No es una dependencia ni un prerrequisito del núcleo, y el camino por defecto no lo instala, configura, abre en navegador ni usa su base privada.
+
+Estas descripciones documentan contratos medidos; no implican que Ollama, Obsidian o AnythingLLM estén instalados o ejecutándose en una máquina concreta. El panel Health es la fuente de disponibilidad actual.
 
 ---
 

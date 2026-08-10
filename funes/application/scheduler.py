@@ -343,6 +343,16 @@ class ResourceScheduler:
         job blocked forever by counting its own orphaned lease against itself.
         """
         self.release_stale_for_job(job.job_id)
+        if job.cancel_requested_at:
+            decision = ScheduleDecision(
+                job=job,
+                task_class=task_class_for_job(job),
+                action=ScheduleAction.WAIT,
+                reason="cancellation_requested; waiting for the next safe boundary",
+            )
+            if persist:
+                self._persist(decision)
+            return decision
         snapshot = self.memory_probe()
         decision = self._evaluate_job(job, snapshot, reserved={}, reserved_docs=set())
         if persist:

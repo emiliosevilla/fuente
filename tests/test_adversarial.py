@@ -31,9 +31,10 @@ class TestAdversarial(unittest.TestCase):
 
     def _legacy_pipeline(self):
         if self.pipeline is None:
-            from tests.conftest import patch_abundant_ram
+            from tests.conftest import explicit_test_runtime_policy, patch_abundant_ram
 
             self.pipeline = ETLPipeline(self.config)
+            self.pipeline.set_runtime_policy(explicit_test_runtime_policy())
             patch_abundant_ram(self.pipeline.ram_governor)
         return self.pipeline
 

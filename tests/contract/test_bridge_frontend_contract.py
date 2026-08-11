@@ -43,6 +43,7 @@ VALID_ACTION_PAYLOADS: dict[str, dict] = {
     "step1_flush": {},
     "step2_transcribe": {},
     "step3_structure": {},
+    "reflow_links": {"issue": "Issue-A"},
     "reindex_notes": {},
     "stat_ram": {},
     "stat_input": {},

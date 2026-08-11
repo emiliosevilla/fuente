@@ -36,6 +36,7 @@ class FunesPyWebViewApi:
         "step1_flush": {},
         "step2_transcribe": {},
         "step3_structure": {},
+        "reflow_links": {},
         "reindex_notes": {},
         "stat_ram": {},
         "stat_input": {},
@@ -330,6 +331,28 @@ class FunesPyWebViewApi:
         if isinstance(issue, dict):
             return issue
         return self.backend.handle_action("run_optimized_cycle", {"target_issue": issue or None})
+
+    def reflow_links(self, scope_payload: object) -> dict[str, Any]:
+        """Run one validated, on-demand link reflow scope."""
+        parsed = self._payload(scope_payload)
+        if isinstance(parsed, dict) and "error" in parsed:
+            return parsed
+        assert isinstance(parsed, dict)
+        if "scope" in parsed:
+            if set(parsed) != {"scope"} or not isinstance(parsed["scope"], Mapping):
+                return self._error("invalid_payload", "scope must be an object")
+            parsed = dict(parsed["scope"])
+        allowed = {"document_id", "theme", "issue"}
+        if set(parsed) - allowed:
+            return self._error("invalid_payload", "Unsupported scope field")
+        if any(value is not None and not isinstance(value, str) for value in parsed.values()):
+            return self._error("invalid_payload", "Scope values must be strings")
+        document_id = parsed.get("document_id")
+        if document_id and (
+            "/" in document_id or "\\" in document_id or document_id.endswith(".md")
+        ):
+            return self._error("path_not_authorized", "Path is not authorized")
+        return self.backend.reflow_links(parsed)
 
     def get_pending_notes(self) -> dict[str, Any]:
         return self.backend.handle_action("get_pending_notes", {})
@@ -626,6 +649,22 @@ class FunesPyWebViewApi:
     def _validate_action_payload(
         cls, action: str, payload: dict[str, Any], schema: dict[str, type]
     ) -> ErrorResult | None:
+        if action == "reflow_links":
+            if "scope" in payload:
+                if set(payload) != {"scope"} or not isinstance(payload["scope"], Mapping):
+                    return cls._error("invalid_payload", "scope must be an object")
+                payload = dict(payload["scope"])
+            allowed = {"document_id", "theme", "issue"}
+            if set(payload) - allowed:
+                return cls._error("invalid_payload", "Unsupported scope field")
+            if any(value is not None and not isinstance(value, str) for value in payload.values()):
+                return cls._error("invalid_payload", "Scope values must be strings")
+            document_id = payload.get("document_id")
+            if document_id and (
+                "/" in document_id or "\\" in document_id or document_id.endswith(".md")
+            ):
+                return cls._error("path_not_authorized", "Path is not authorized")
+            return None
         extra_fields = set(payload) - set(schema)
         optional_export_fields = {"destination_path", "confirm_overwrite", "note_path", "document_id"}
         if action == "export_reader_note":

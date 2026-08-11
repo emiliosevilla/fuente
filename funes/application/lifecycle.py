@@ -203,7 +203,13 @@ class ApplicationLifecycle:
         else:
             self.pipeline.config = config
 
-    def refine_graph(self, target_issue: str | None = None) -> dict:
+    def refine_graph(
+        self,
+        target_issue: str | None = None,
+        *,
+        target_document_id: str | None = None,
+        output_dir: Path | None = None,
+    ) -> dict:
         """Refine the lifecycle-owned graph loop, or fail closed.
 
         Console actions must never create a second loop: the loop started (or
@@ -214,7 +220,12 @@ class ApplicationLifecycle:
                 "error": "graph_service_unavailable",
                 "message": "The lifecycle-owned graph service is not started",
             }
-        return self.graph_loop.refine_knowledge_graph(target_issue=target_issue)
+        kwargs = {"target_issue": target_issue}
+        if target_document_id is not None:
+            kwargs["target_document_id"] = target_document_id
+        if output_dir is not None:
+            kwargs["output_dir"] = output_dir
+        return self.graph_loop.refine_knowledge_graph(**kwargs)
 
     def _run_flush_once(self) -> dict:
         assert self.pipeline is not None

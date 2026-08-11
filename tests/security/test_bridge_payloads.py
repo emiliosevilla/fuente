@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 
+from funes.application.notes import MAX_BODY_MARKDOWN_CHARS
 from funes.control_console import FunesConsoleBackend
 from funes.core.vault import document_id_for_relative_path
 from funes.domain.frontmatter import serialize_frontmatter
@@ -49,6 +50,50 @@ def test_bridge_rejects_path_shaped_note_identifiers(temp_vault_path):
             "error": "path_not_authorized",
             "message": "Path is not authorized",
         }
+
+
+def test_editor_bridge_rejects_path_and_legacy_payloads_before_backend_access(
+    temp_vault_path,
+):
+    bridge = FunesPyWebViewApi(FunesConsoleBackend(temp_vault_path))
+    backend_calls: list[tuple] = []
+    bridge.backend.handle_action = lambda *args: backend_calls.append(args)
+    bridge.backend.get_notes_service = lambda: (_ for _ in ()).throw(
+        AssertionError("invalid editor payload reached NotesApplicationService")
+    )
+
+    assert bridge.get_note_editor("/tmp/outside.md") == {
+        "error": "path_not_authorized",
+        "message": "Path is not authorized",
+    }
+    assert bridge.update_note_body(
+        {"document_id": "opaque-note", "path": "4_salida/evil.md"}, 1, "# Body"
+    ) == {
+        "error": "invalid_payload",
+        "message": "document_id must be a string",
+    }
+    assert bridge.update_note_body("folder/note", True, "# Body") == {
+        "error": "path_not_authorized",
+        "message": "Path is not authorized",
+    }
+    assert backend_calls == []
+
+
+def test_editor_bridge_rejects_oversized_markdown_before_backend_access(temp_vault_path):
+    bridge = FunesPyWebViewApi(FunesConsoleBackend(temp_vault_path))
+    bridge.backend.get_notes_service = lambda: (_ for _ in ()).throw(
+        AssertionError("oversized editor payload reached NotesApplicationService")
+    )
+
+    assert bridge.update_note_body(
+        "opaque-note", 1, "x" * (MAX_BODY_MARKDOWN_CHARS + 1)
+    ) == {
+        "error": "invalid_payload",
+        "message": (
+            "body_markdown exceeds maximum length of "
+            f"{MAX_BODY_MARKDOWN_CHARS} characters"
+        ),
+    }
 
 
 def test_bridge_mutations_reject_absolute_paths_without_external_mutation(

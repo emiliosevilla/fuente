@@ -1,9 +1,13 @@
 """Deterministic, read-only fusion-candidate detection (Task 6)."""
 from __future__ import annotations
 
+import socket
+import urllib.request
 from pathlib import Path
+from unittest.mock import Mock
 
 import pytest
+import requests
 
 from funes.application.fusion import FusionApplicationService
 from funes.application.notes import NotesApplicationService
@@ -11,7 +15,10 @@ from funes.config import get_default_config
 from funes.core.vault import VaultManager
 from funes.domain.frontmatter import serialize_frontmatter
 from funes.domain.paths import document_id_for_relative_path
+from funes.graph_engine.atomic_generator import AtomicNoteGenerator
 from funes.infrastructure.sqlite_store import JobStore
+from funes.rag.chroma_store import ChromaStore
+from funes.rag.hybrid_search import BM25Okapi, HybridSearcher
 from funes.rag.vault_corpus import VaultCorpusProvider
 
 
@@ -131,6 +138,56 @@ def test_title_or_body_similarity_emits_bounded_candidates_and_excludes_unrelate
     assert all(unrelated not in candidate.document_ids for candidate in candidates)
 
 
+def test_unscoped_detection_does_not_pair_notes_from_different_issues(fusion_harness):
+    vault, service, _notes, _store = fusion_harness
+    issue_a = _write_note(
+        vault,
+        "4_salida/Issue-A/contract.md",
+        title="Contrato común",
+        issue="Issue-A",
+        body="# Contrato\n\nMismo texto para revisar.\n",
+    )
+    issue_b = _write_note(
+        vault,
+        "4_salida/Issue-B/contract.md",
+        title="Contrato común",
+        issue="Issue-B",
+        body="# Contrato\n\nMismo texto para revisar.\n",
+    )
+
+    candidates = service.find_candidates()
+
+    assert all(
+        tuple(sorted((issue_a, issue_b))) != candidate.document_ids
+        for candidate in candidates
+    )
+
+
+def test_two_empty_bodies_do_not_admit_unrelated_titles(fusion_harness):
+    vault, service, _notes, _store = fusion_harness
+    first = _write_note(
+        vault,
+        "4_salida/Issue-A/empty-alpha.md",
+        title="Alpha completamente distinto",
+        issue="Issue-A",
+        body="",
+    )
+    second = _write_note(
+        vault,
+        "4_salida/Issue-A/empty-beta.md",
+        title="Beta completamente distinto",
+        issue="Issue-A",
+        body="",
+    )
+
+    candidates = service.find_candidates()
+
+    assert all(
+        tuple(sorted((first, second))) != candidate.document_ids
+        for candidate in candidates
+    )
+
+
 def test_issue_scope_and_limit_are_enforced(fusion_harness):
     vault, service, _notes, _store = fusion_harness
     issue_a_ids = [
@@ -176,11 +233,32 @@ def test_detection_is_read_only_and_does_not_call_note_state_mutation(
         issue="Issue-A",
         body="# Contrato\n\nTexto.\n",
     )
+    document_id = document_id_for_relative_path("4_salida/Issue-A/alpha.md")
     before = {
         path.relative_to(vault.config.vault_path).as_posix(): path.read_bytes()
         for path in vault.config.vault_path.rglob("*.md")
         if path.is_file() and not path.is_symlink()
     }
+    before_identity = store.get_document_identity(document_id)
+    before_artifacts = store.list_index_artifacts(document_id)
+
+    forbidden = Mock(
+        side_effect=AssertionError("fusion detection invoked a forbidden effect")
+    )
+    monkeypatch.setattr(BM25Okapi, "index_documents", forbidden)
+    monkeypatch.setattr(HybridSearcher, "ensure_index", forbidden)
+    monkeypatch.setattr(ChromaStore, "add_chunks", forbidden)
+    monkeypatch.setattr(ChromaStore, "delete_chunks", forbidden)
+    monkeypatch.setattr(ChromaStore, "invalidate_bm25_cache", forbidden)
+    monkeypatch.setattr(AtomicNoteGenerator, "generate_atomic_note", forbidden)
+    monkeypatch.setattr(store, "add_index_artifact", forbidden)
+    monkeypatch.setattr(store, "delete_index_artifacts", forbidden)
+    monkeypatch.setattr(socket, "socket", forbidden)
+    monkeypatch.setattr(socket, "create_connection", forbidden)
+    monkeypatch.setattr(urllib.request, "urlopen", forbidden)
+    monkeypatch.setattr(requests, "get", forbidden)
+    monkeypatch.setattr(requests, "post", forbidden)
+    monkeypatch.setattr(Path, "unlink", forbidden)
 
     monkeypatch.setattr(
         notes,
@@ -201,3 +279,6 @@ def test_detection_is_read_only_and_does_not_call_note_state_mutation(
         if path.is_file() and not path.is_symlink()
     }
     assert after == before
+    assert store.get_document_identity(document_id) == before_identity
+    assert store.list_index_artifacts(document_id) == before_artifacts
+    assert forbidden.call_count == 0

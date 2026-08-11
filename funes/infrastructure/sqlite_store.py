@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import sqlite3
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Iterable, Optional
 
@@ -52,6 +52,10 @@ CLEARABLE_JOB_FIELDS: frozenset[str] = frozenset(
 
 def _timestamp() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def _timestamp_after(seconds: float) -> str:
+    return (datetime.now(timezone.utc) + timedelta(seconds=seconds)).isoformat()
 
 
 def _is_lock_contention(error: sqlite3.OperationalError) -> bool:
@@ -864,8 +868,11 @@ class JobStore:
                 """
                 INSERT INTO reflow_requests (
                     request_id, document_id, expected_revision, mode, status,
-                    created_at, updated_at, result_json, error_code, revision
-                ) VALUES (?, ?, ?, ?, 'pending', ?, ?, NULL, NULL, 1)
+                    created_at, updated_at, result_json, error_code, revision,
+                    claim_token, claim_epoch, lease_expires_at,
+                    candidate_document_id, candidate_path, candidate_content_hash
+                ) VALUES (?, ?, ?, ?, 'pending', ?, ?, NULL, NULL, 1,
+                          NULL, 0, NULL, NULL, NULL, NULL)
                 """,
                 (request_id, document_id, expected_revision, mode, now, now),
             )
@@ -894,22 +901,52 @@ class JobStore:
         ).fetchone()
         return dict(row) if row is not None else None
 
-    def claim_reflow_request(self, request_id: str) -> Optional[dict[str, Any]]:
-        """Claim a pending request exactly once with a state CAS."""
+    def claim_reflow_request(
+        self, request_id: str, *, lease_seconds: float = 30.0
+    ) -> Optional[dict[str, Any]]:
+        """Claim a pending request exactly once and return its fencing token."""
+        if not isinstance(lease_seconds, (int, float)) or lease_seconds < 0:
+            raise ValueError("lease_seconds must be non-negative")
         now = _timestamp()
+        lease_expires_at = _timestamp_after(float(lease_seconds))
+        claim_token = str(uuid.uuid4())
         try:
             cursor = self._connection.execute(
                 """
                 UPDATE reflow_requests
-                SET status = 'running', revision = revision + 1, updated_at = ?
+                SET status = 'running', claim_token = ?,
+                    claim_epoch = claim_epoch + 1, lease_expires_at = ?,
+                    revision = revision + 1, updated_at = ?
                 WHERE request_id = ? AND status = 'pending'
                 """,
-                (now, request_id),
+                (claim_token, lease_expires_at, now, request_id),
             )
         except sqlite3.OperationalError as error:
             if _is_lock_contention(error):
                 raise JobStoreBusyError(request_id) from error
             raise
+        if cursor.rowcount != 1:
+            return None
+        return self.get_reflow_request(request_id)
+
+    def heartbeat_reflow_request(
+        self,
+        request_id: str,
+        *,
+        claim_token: str,
+        lease_seconds: float = 30.0,
+    ) -> Optional[dict[str, Any]]:
+        """Renew a live claim only when its token still owns the request."""
+        if not isinstance(lease_seconds, (int, float)) or lease_seconds < 0:
+            raise ValueError("lease_seconds must be non-negative")
+        cursor = self._connection.execute(
+            """
+            UPDATE reflow_requests
+            SET lease_expires_at = ?, revision = revision + 1, updated_at = ?
+            WHERE request_id = ? AND status = 'running' AND claim_token = ?
+            """,
+            (_timestamp_after(float(lease_seconds)), _timestamp(), request_id, claim_token),
+        )
         if cursor.rowcount != 1:
             return None
         return self.get_reflow_request(request_id)
@@ -922,6 +959,7 @@ class JobStore:
                 """
                 UPDATE reflow_requests
                 SET status = 'cancelled', error_code = 'cancelled',
+                    claim_token = NULL, lease_expires_at = NULL,
                     revision = revision + 1, updated_at = ?
                 WHERE request_id = ? AND status IN ('pending', 'running')
                 """,
@@ -934,7 +972,7 @@ class JobStore:
         return self.get_reflow_request(request_id)
 
     def complete_reflow_request(
-        self, request_id: str, *, result_json: str
+        self, request_id: str, *, claim_token: str, result_json: str
     ) -> Optional[dict[str, Any]]:
         """Commit a result only for the worker that claimed the request."""
         now = _timestamp()
@@ -942,17 +980,23 @@ class JobStore:
             """
             UPDATE reflow_requests
             SET status = 'completed', result_json = ?, error_code = NULL,
+                claim_token = NULL, lease_expires_at = NULL,
                 revision = revision + 1, updated_at = ?
-            WHERE request_id = ? AND status = 'running'
+            WHERE request_id = ? AND status = 'running' AND claim_token = ?
             """,
-            (result_json, now, request_id),
+            (result_json, now, request_id, claim_token),
         )
         if cursor.rowcount != 1:
             return None
         return self.get_reflow_request(request_id)
 
     def fail_reflow_request(
-        self, request_id: str, *, error_code: str, result_json: Optional[str] = None
+        self,
+        request_id: str,
+        *,
+        claim_token: str,
+        error_code: str,
+        result_json: Optional[str] = None,
     ) -> Optional[dict[str, Any]]:
         """Persist a stable failure without changing the source note."""
         now = _timestamp()
@@ -960,10 +1004,11 @@ class JobStore:
             """
             UPDATE reflow_requests
             SET status = 'failed', result_json = ?, error_code = ?,
+                claim_token = NULL, lease_expires_at = NULL,
                 revision = revision + 1, updated_at = ?
-            WHERE request_id = ? AND status = 'running'
+            WHERE request_id = ? AND status = 'running' AND claim_token = ?
             """,
-            (result_json, error_code, now, request_id),
+            (result_json, error_code, now, request_id, claim_token),
         )
         if cursor.rowcount != 1:
             return None
@@ -975,10 +1020,13 @@ class JobStore:
         cursor = self._connection.execute(
             """
             UPDATE reflow_requests
-            SET status = 'pending', revision = revision + 1, updated_at = ?
+            SET status = 'pending', claim_token = NULL, lease_expires_at = NULL,
+                claim_epoch = claim_epoch + 1,
+                revision = revision + 1, updated_at = ?
             WHERE request_id = ? AND status = 'running'
+              AND (lease_expires_at IS NULL OR lease_expires_at <= ?)
             """,
-            (now, request_id),
+            (now, request_id, now),
         )
         if cursor.rowcount != 1:
             return self.get_reflow_request(request_id)
@@ -991,6 +1039,7 @@ class JobStore:
             """
             UPDATE reflow_requests
             SET status = 'pending', result_json = NULL, error_code = NULL,
+                claim_token = NULL, lease_expires_at = NULL,
                 revision = revision + 1, updated_at = ?
             WHERE request_id = ? AND status = 'failed'
             """,
@@ -998,6 +1047,37 @@ class JobStore:
         )
         if cursor.rowcount != 1:
             return self.get_reflow_request(request_id)
+        return self.get_reflow_request(request_id)
+
+    def record_reflow_candidate(
+        self,
+        request_id: str,
+        *,
+        claim_token: str,
+        candidate_document_id: str,
+        candidate_path: str,
+        candidate_content_hash: str,
+    ) -> Optional[dict[str, Any]]:
+        """Durably record an idempotent candidate before final completion."""
+        cursor = self._connection.execute(
+            """
+            UPDATE reflow_requests
+            SET candidate_document_id = ?, candidate_path = ?,
+                candidate_content_hash = ?, revision = revision + 1,
+                updated_at = ?
+            WHERE request_id = ? AND status = 'running' AND claim_token = ?
+            """,
+            (
+                candidate_document_id,
+                candidate_path,
+                candidate_content_hash,
+                _timestamp(),
+                request_id,
+                claim_token,
+            ),
+        )
+        if cursor.rowcount != 1:
+            return None
         return self.get_reflow_request(request_id)
 
     # -- row mapping ---------------------------------------------------------

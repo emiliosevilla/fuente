@@ -1,6 +1,7 @@
 """Durable, review-safe note reflow requests (Task 5)."""
 from __future__ import annotations
 
+import threading
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -12,6 +13,7 @@ from funes.application.reflow_jobs import ReflowJobService, ReflowRequestStore
 from funes.config import get_default_config
 from funes.core.vault import VaultManager
 from funes.domain.frontmatter import serialize_frontmatter
+from funes.domain.errors import PathAuthorizationError
 from funes.domain.paths import document_id_for_relative_path
 from funes.infrastructure.sqlite_store import JobStore
 
@@ -43,6 +45,23 @@ class _Generator:
         if self.error is not None:
             raise self.error
         return self.result
+
+
+class _BlockingGenerator(_Generator):
+    def __init__(self, result: str | None = None):
+        super().__init__(result=result)
+        self.started = threading.Event()
+        self.release = threading.Event()
+
+    def generate_atomic_note(self, clean_md_content: str, model_name: str, file_name: str) -> str:
+        self.calls.append((clean_md_content, model_name, file_name))
+        self.started.set()
+        assert self.release.wait(timeout=5), "test generator was not released"
+        return self.result
+
+
+class _SimulatedProcessLoss(BaseException):
+    pass
 
 
 @pytest.fixture
@@ -201,6 +220,10 @@ def test_recovery_is_explicit_and_rerun_is_idempotent(reflow_harness):
     assert blocked.error == "reflow_request_running"
     assert generator.calls == []
 
+    reflow_harness[5].job_store._connection.execute(
+        "UPDATE reflow_requests SET lease_expires_at = ? WHERE request_id = ?",
+        ("1970-01-01T00:00:00+00:00", request.request_id),
+    )
     recovered = reflow_harness[5].recover(request.request_id)
     assert recovered.status == "pending"
     completed = _job_service(reflow_harness, generator).run(request.request_id)
@@ -252,3 +275,122 @@ def test_stale_revision_is_rejected_before_generation(reflow_harness):
     assert result.error == "stale_revision"
     assert generator.calls == []
     assert note_path.read_bytes() == changed_bytes
+
+
+def test_live_worker_cannot_be_recovered_or_run_a_second_generator(reflow_harness, monkeypatch):
+    _vault, _note_path, document_id, _store, _notes, requests, _links = reflow_harness
+    request = requests.submit(document_id, expected_revision=1, mode="enrich")
+    generator = _BlockingGenerator()
+    old_service = _job_service(reflow_harness, generator)
+    new_service = _job_service(reflow_harness, _Generator())
+    durable_completions: list[str] = []
+    original_complete = requests.complete
+
+    def counted_complete(request_id, claim_token, result):
+        durable_completions.append(request_id)
+        return original_complete(request_id, claim_token, result)
+
+    monkeypatch.setattr(requests, "complete", counted_complete)
+    old_result: list[object] = []
+    worker = threading.Thread(
+        target=lambda: old_result.append(old_service.run(request.request_id)),
+        daemon=True,
+    )
+    worker.start()
+    assert generator.started.wait(timeout=5)
+
+    recovered = requests.recover(request.request_id)
+    assert recovered.status == "running"
+    second_result = new_service.run(request.request_id)
+    assert second_result.error == "reflow_request_running"
+    assert len(generator.calls) == 1
+
+    generator.release.set()
+    worker.join(timeout=5)
+    assert not worker.is_alive()
+    assert old_result[0].status == "completed"
+    assert durable_completions == [request.request_id]
+    assert requests.get(request.request_id).status == "completed"
+
+
+def test_crash_after_candidate_write_recovers_without_regenerating(reflow_harness, monkeypatch):
+    _vault, _note_path, document_id, _store, notes, requests, _links = reflow_harness
+    request = requests.submit(document_id, expected_revision=1, mode="enrich")
+    first_generator = _Generator(result=_note(title="First candidate", body="# First\n"))
+    service = _job_service(reflow_harness, first_generator)
+
+    def crash_before_completion(_request_id, _claim_token, _result):
+        raise _SimulatedProcessLoss("simulated process loss after candidate write")
+
+    monkeypatch.setattr(requests, "complete", crash_before_completion)
+    with pytest.raises(_SimulatedProcessLoss):
+        service.run(request.request_id)
+
+    review_dir = _vault.output_dir / "_Reflow_Review"
+    candidates_after_crash = sorted(review_dir.glob("*.md"))
+    assert len(candidates_after_crash) == 1
+    candidate_before_recovery = candidates_after_crash[0].read_bytes()
+    assert requests.get(request.request_id).status == "running"
+    monkeypatch.undo()
+
+    requests.job_store._connection.execute(
+        "UPDATE reflow_requests SET lease_expires_at = ? WHERE request_id = ?",
+        ("1970-01-01T00:00:00+00:00", request.request_id),
+    )
+    requests.recover(request.request_id)
+    second_generator = _Generator(result=_note(title="Different candidate", body="# Different\n"))
+    recovered_result = _job_service(reflow_harness, second_generator).run(request.request_id)
+
+    assert recovered_result.status == "completed"
+    assert second_generator.calls == []
+    assert candidates_after_crash[0].read_bytes() == candidate_before_recovery
+    assert notes.get_note(recovered_result.candidate_document_id).status == "pending_review"
+
+
+def test_store_without_authorizer_rejects_unknown_and_path_shaped_ids(reflow_harness):
+    _vault, _note_path, document_id, store, _notes, _requests, _links = reflow_harness
+    unauthorizing_store = ReflowRequestStore(store)
+
+    with pytest.raises(PathAuthorizationError):
+        unauthorizing_store.submit(document_id, expected_revision=1, mode="enrich")
+    with pytest.raises(PathAuthorizationError):
+        unauthorizing_store.submit(
+            "00000000-0000-0000-0000-000000000000",
+            expected_revision=1,
+            mode="enrich",
+        )
+    with pytest.raises(PathAuthorizationError):
+        unauthorizing_store.submit("4_salida/Original.md", expected_revision=1, mode="enrich")
+    assert store._connection.execute("SELECT COUNT(*) FROM reflow_requests").fetchone()[0] == 0
+
+
+def test_candidate_persistence_rechecks_canonical_source_cas(reflow_harness):
+    _vault, note_path, document_id, _store, notes, requests, _links = reflow_harness
+    request = requests.submit(document_id, expected_revision=1, mode="enrich")
+
+    class _MutatingGenerator(_Generator):
+        def generate_atomic_note(self, clean_md_content, model_name, file_name):
+            notes.update_note_body(document_id, expected_revision=1, body_markdown="# Concurrent edit\n")
+            return super().generate_atomic_note(clean_md_content, model_name, file_name)
+
+    result = _job_service(reflow_harness, _MutatingGenerator()).run(request.request_id)
+
+    assert result.error == "stale_revision"
+    assert note_path.read_text(encoding="utf-8").endswith("# Concurrent edit\n")
+    assert not (reflow_harness[0].output_dir / "_Reflow_Review").exists()
+
+
+def test_cancellation_before_candidate_persistence_skips_candidate(reflow_harness):
+    _vault, _note_path, document_id, _store, _notes, requests, _links = reflow_harness
+    request = requests.submit(document_id, expected_revision=1, mode="enrich")
+
+    class _CancellingGenerator(_Generator):
+        def generate_atomic_note(self, clean_md_content, model_name, file_name):
+            requests.cancel(request.request_id)
+            return super().generate_atomic_note(clean_md_content, model_name, file_name)
+
+    result = _job_service(reflow_harness, _CancellingGenerator()).run(request.request_id)
+
+    assert result.status == "cancelled"
+    assert requests.get(request.request_id).status == "cancelled"
+    assert not (reflow_harness[0].output_dir / "_Reflow_Review").exists()

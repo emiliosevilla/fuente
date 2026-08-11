@@ -3109,6 +3109,7 @@
             render();
         }
 
+        /* TASK3_READER_EDITOR_CONTROLLER_START */
         let currentSelectedNoteTitle = '';
         let currentSelectedNotePath = '';
         let currentSelectedDocumentId = '';
@@ -3123,6 +3124,8 @@
         let readerEditorProjection = null;
         let readerEditorConflictBody = '';
         let readerEditorState = { status: 'saved', dirty: false };
+        let readerEditorSession = 0;
+        let readerEditorSaveOperation = null;
 
         function readerEditorElement(id) {
             return document.getElementById(id);
@@ -3169,71 +3172,140 @@
         function readerProjectionToDocumentModel(projection) {
             const body = projection && projection.body ? projection.body : projection;
             const content = body && Array.isArray(body.content) ? body.content : [];
-            return content.map(function(block) {
-                const type = block && block.type;
-                if (type === 'heading') {
-                    return {
-                        type: 'heading',
-                        level: Number((block.attrs && block.attrs.level) || 3),
-                        text: projectionInlineText(block.content)
-                    };
-                }
-                if (type === 'code_block') {
-                    return { type: 'paragraph', text: projectionInlineText(block.content) };
-                }
-                if (type === 'raw_block') {
-                    return { type: 'paragraph', text: String((block.attrs && block.attrs.markdown) || '') };
-                }
-                if (type === 'bullet_list' || type === 'ordered_list') {
-                    const marker = type === 'ordered_list' ? '1. ' : '- ';
-                    return {
-                        type: 'paragraph',
-                        text: (block.content || []).map(function(item, index) {
-                            const itemText = projectionInlineText(
-                                item && item.content && item.content[0] && item.content[0].content
-                            );
-                            return (type === 'ordered_list' ? (index + 1) + '. ' : marker) + itemText;
-                        }).join('\n')
-                    };
-                }
-                return { type: 'paragraph', text: projectionInlineText(block && block.content) };
-            });
+            return content;
         }
 
-        function readerMarkdownToDocumentModel(markdown) {
+        function readerMarkdownToProjection(markdown) {
             const lines = String(markdown || '').split('\n');
             const blocks = [];
             let current = [];
+            let index = 0;
+
             function flush() {
                 if (current.length) {
-                    blocks.push({ type: 'paragraph', text: current.join('\n') });
+                    blocks.push(readerMarkdownBlock(current));
                     current = [];
                 }
             }
-            lines.forEach(function(line) {
+
+            while (index < lines.length) {
+                const line = lines[index];
+                const fence = line.match(/^(`{3,}|~{3,})(.*)$/);
+                if (fence) {
+                    flush();
+                    const fenceLines = [line];
+                    index += 1;
+                    while (index < lines.length) {
+                        fenceLines.push(lines[index]);
+                        if (lines[index].startsWith(fence[1])) {
+                            index += 1;
+                            break;
+                        }
+                        index += 1;
+                    }
+                    blocks.push(readerMarkdownBlock(fenceLines));
+                    continue;
+                }
                 if (!line.trim()) {
                     flush();
-                    return;
-                }
-                const heading = line.match(/^(#{1,6})\s+(.+)$/);
-                if (heading) {
-                    flush();
-                    blocks.push({ type: 'heading', level: heading[1].length, text: heading[2] });
-                    return;
+                    index += 1;
+                    continue;
                 }
                 current.push(line);
-            });
+                index += 1;
+            }
             flush();
-            return blocks;
+            return {
+                type: 'doc',
+                attrs: { trailing_newline: String(markdown || '').endsWith('\n') },
+                content: blocks
+            };
+        }
+
+        function readerMarkdownBlock(lines) {
+            const first = lines[0] || '';
+            const fence = first.match(/^(`{3,}|~{3,})(.*)$/);
+            if (fence) {
+                const bodyLines = lines.slice(1);
+                if (bodyLines.length && /^(`{3,}|~{3,})/.test(bodyLines[bodyLines.length - 1])) {
+                    bodyLines.pop();
+                }
+                return {
+                    type: 'code_block',
+                    attrs: { language: fence[2].trim() || null },
+                    content: [{ type: 'text', text: bodyLines.join('\n') }]
+                };
+            }
+            if (readerLooksLikeTable(lines)) {
+                return { type: 'raw_block', attrs: { markdown: lines.join('\n'), reason: 'table' } };
+            }
+            if (/^\$\$/.test(first.trim()) && /\$\$$/.test(lines[lines.length - 1].trim())) {
+                return { type: 'raw_block', attrs: { markdown: lines.join('\n'), reason: 'block_math' } };
+            }
+            const heading = first.match(/^(#{1,6})\s+(.+)$/);
+            if (heading && lines.length === 1) {
+                return {
+                    type: 'heading',
+                    attrs: { level: heading[1].length },
+                    content: readerMarkdownInline(heading[2])
+                };
+            }
+            if (lines.every(function(line) { return /^\s*[-*+]\s+/.test(line); })) {
+                return {
+                    type: 'bullet_list',
+                    content: lines.map(function(line) {
+                        return { type: 'list_item', content: [{ type: 'paragraph', content: readerMarkdownInline(line.replace(/^\s*[-*+]\s+/, '')) }] };
+                    })
+                };
+            }
+            if (lines.every(function(line) { return /^\s*\d+\.\s+/.test(line); })) {
+                return {
+                    type: 'ordered_list',
+                    content: lines.map(function(line) {
+                        return { type: 'list_item', content: [{ type: 'paragraph', content: readerMarkdownInline(line.replace(/^\s*\d+\.\s+/, '')) }] };
+                    })
+                };
+            }
+            if (lines.length > 1) {
+                return { type: 'raw_block', attrs: { markdown: lines.join('\n'), reason: 'multi_line_unsupported' } };
+            }
+            return { type: 'paragraph', content: readerMarkdownInline(first) };
+        }
+
+        function readerLooksLikeTable(lines) {
+            return lines.length > 1
+                && lines.every(function(line) { return /^\s*\|.+\|\s*$/.test(line); })
+                && lines.slice(1).some(function(line) { return /^\s*\|?[\s:-]+\|[\s|:-]*\|?\s*$/.test(line); });
+        }
+
+        function readerMarkdownInline(text) {
+            const tokens = [];
+            const pattern = /\[\[[^\]]+\]\]|\$[^$]+\$|\[([^\]]+)\]\(([^)]+)\)|\*\*([^*]+)\*\*|__([^_]+)__|\*([^*]+)\*|_([^_]+)_/g;
+            let cursor = 0;
+            let match;
+            while ((match = pattern.exec(text)) !== null) {
+                if (match.index > cursor) tokens.push({ type: 'text', text: text.slice(cursor, match.index) });
+                if (match[0].startsWith('[[') || match[0].startsWith('$')) {
+                    tokens.push({ type: 'raw_inline', attrs: { markdown: match[0], reason: 'raw_inline' } });
+                } else {
+                    tokens.push({
+                        type: 'text',
+                        text: match[1] || match[3] || match[4] || match[5] || match[6] || match[7] || match[0],
+                        marks: match[1] ? [{ type: 'link', attrs: { href: match[2] } }] : []
+                    });
+                }
+                cursor = match.index + match[0].length;
+            }
+            if (cursor < text.length) tokens.push({ type: 'text', text: text.slice(cursor) });
+            return tokens;
         }
 
         function createNoteContent(documentModel) {
             const noteContent = document.createElement('div');
             noteContent.className = 'note-content';
             (documentModel || []).forEach(function(block) {
-                const tag = block.type === 'heading' ? 'h' + Math.min(Math.max(block.level || 3, 1), 3) : 'p';
-                const node = document.createElement(tag);
                 if (block.children) {
+                    const node = document.createElement(block.type === 'heading' ? 'h' + Math.min(Math.max(block.level || 3, 1), 3) : 'p');
                     block.children.forEach(function(token) {
                         if (token.type === 'wikilink') {
                             const link = document.createElement('span');
@@ -3250,6 +3322,31 @@
                             node.appendChild(document.createTextNode(token.text));
                         }
                     });
+                    noteContent.appendChild(node);
+                    return;
+                }
+                if (block.type === 'code_block' || block.type === 'raw_block') {
+                    const pre = document.createElement('pre');
+                    pre.textContent = block.type === 'raw_block'
+                        ? String((block.attrs && block.attrs.markdown) || '')
+                        : projectionInlineText(block.content);
+                    noteContent.appendChild(pre);
+                    return;
+                }
+                if (block.type === 'bullet_list' || block.type === 'ordered_list') {
+                    const list = document.createElement(block.type === 'bullet_list' ? 'ul' : 'ol');
+                    (block.content || []).forEach(function(item) {
+                        const listItem = document.createElement('li');
+                        const paragraph = item && item.content && item.content[0];
+                        appendProjectionInline(listItem, paragraph && paragraph.content);
+                        list.appendChild(listItem);
+                    });
+                    noteContent.appendChild(list);
+                    return;
+                }
+                const node = document.createElement(block.type === 'heading' ? 'h' + Math.min(Math.max((block.attrs && block.attrs.level) || block.level || 3, 1), 3) : 'p');
+                if (block.content) {
+                    appendProjectionInline(node, block.content);
                 } else {
                     node.textContent = block.text || '';
                 }
@@ -3258,12 +3355,22 @@
             return noteContent;
         }
 
+        function appendProjectionInline(parent, tokens) {
+            (tokens || []).forEach(function(token) {
+                const text = token && token.type === 'text'
+                    ? String(token.text || '')
+                    : String((token && token.attrs && token.attrs.markdown) || (token && token.text) || '');
+                parent.appendChild(document.createTextNode(text));
+            });
+        }
+
         function renderReaderEditorPreview() {
             const preview = readerEditorElement('reader-markdown-preview');
             if (!preview) return;
-            const model = readerEditorBody === readerEditorOriginalBody
-                ? readerProjectionToDocumentModel(readerEditorProjection)
-                : readerMarkdownToDocumentModel(readerEditorBody);
+            const projection = readerEditorBody === readerEditorOriginalBody
+                ? readerEditorProjection
+                : readerMarkdownToProjection(readerEditorBody);
+            const model = readerProjectionToDocumentModel(projection);
             preview.replaceChildren(createNoteContent(model));
         }
 
@@ -3284,6 +3391,20 @@
             const conflict = readerEditorElement('reader-editor-conflict');
             if (conflict) conflict.classList.remove('is-hidden');
             setReaderEditorState('conflict', 'Conflicto: la nota cambió en el servidor');
+        }
+
+        function invalidateReaderEditorForNavigation(nextDocumentId) {
+            if (readerEditorDocumentId && readerEditorDocumentId !== nextDocumentId) {
+                readerEditorSession += 1;
+                readerEditorSaveOperation = null;
+            }
+        }
+
+        function readerEditorOperationIsCurrent(operation) {
+            return readerEditorSaveOperation === operation
+                && readerEditorSession === operation.sessionId
+                && currentSelectedDocumentId === operation.documentId
+                && readerEditorDocumentId === operation.documentId;
         }
 
         function keepReaderEditing() {
@@ -3330,7 +3451,10 @@
             const template = document.getElementById('reader-editor-template');
             if (!reader || !template) return false;
             const existing = readerEditorElement('reader-editor-panel');
-            if (!existing) reader.appendChild(template.content.cloneNode(true));
+            if (!existing) {
+                reader.replaceChildren();
+                reader.appendChild(template.content.cloneNode(true));
+            }
             wireReaderEditorControls();
             return Boolean(readerEditorElement('reader-editor-panel'));
         }
@@ -3338,6 +3462,8 @@
         function enterReaderEditMode() {
             const documentId = currentSelectedDocumentId;
             if (!documentId) return;
+            readerEditorSession += 1;
+            readerEditorSaveOperation = null;
             mountReaderEditor();
             readerEditorOriginalDocumentModel = currentSelectedNoteDocumentModel;
             readerEditorDocumentId = documentId;
@@ -3378,6 +3504,8 @@
         }
 
         function cancelReaderEdit() {
+            readerEditorSession += 1;
+            readerEditorSaveOperation = null;
             const documentModel = readerEditorProjection
                 ? readerProjectionToDocumentModel(readerEditorProjection)
                 : readerEditorOriginalDocumentModel;
@@ -3388,7 +3516,7 @@
         function saveReaderEdit() {
             const editor = readerEditorElement('reader-markdown-editor');
             const documentId = currentSelectedDocumentId;
-            if (!editor || !documentId || readerEditorDocumentId !== documentId || readerEditorRevision === null) return;
+            if (!editor || !documentId || readerEditorDocumentId !== documentId || readerEditorRevision === null || readerEditorSaveOperation) return;
             readerEditorBody = editor.value;
             readerEditorState.dirty = readerEditorBody !== readerEditorOriginalBody;
             if (!readerEditorState.dirty) {
@@ -3400,27 +3528,54 @@
                 return;
             }
             setReaderEditorState('loading', 'Guardando Markdown...');
-            window.pywebview.api.update_note_body(documentId, readerEditorRevision, readerEditorBody).then(function(result) {
+            const operation = Object.freeze({
+                sessionId: readerEditorSession,
+                documentId: documentId,
+                expectedRevision: readerEditorRevision,
+                body: readerEditorBody
+            });
+            readerEditorSaveOperation = operation;
+            window.pywebview.api.update_note_body(operation.documentId, operation.expectedRevision, operation.body).then(function(result) {
+                if (!readerEditorOperationIsCurrent(operation)) {
+                    if (readerEditorSaveOperation === operation) readerEditorSaveOperation = null;
+                    return;
+                }
                 if (result && result.error === 'note_revision_conflict') {
-                    readerEditorConflictBody = readerEditorBody;
+                    readerEditorSaveOperation = null;
+                    readerEditorConflictBody = readerEditorElement('reader-markdown-editor').value;
                     showReaderEditorConflict();
                     return;
                 }
                 if (!result || result.error || result.document_id !== documentId || typeof result.revision !== 'number' || typeof result.body_markdown !== 'string' || !result.projection) {
+                    readerEditorSaveOperation = null;
                     setReaderEditorState('error', (result && result.message) || 'No se pudo guardar la nota.');
                     return;
                 }
+                const currentEditor = readerEditorElement('reader-markdown-editor');
+                const newerDraft = currentEditor && currentEditor.value !== operation.body;
+                readerEditorSaveOperation = null;
                 readerEditorRevision = result.revision;
-                readerEditorBody = result.body_markdown;
+                readerEditorBody = newerDraft ? currentEditor.value : result.body_markdown;
                 readerEditorOriginalBody = result.body_markdown;
                 readerEditorProjection = result.projection;
-                readerEditorState = { status: 'saved', dirty: false };
-                setReaderEditorState('saved', 'Guardado');
-                loadNoteContent(readerEditorDocumentId, { skipHistory: true });
+                readerEditorState = { status: newerDraft ? 'dirty' : 'saved', dirty: newerDraft };
+                setReaderEditorState(newerDraft ? 'dirty' : 'saved', newerDraft ? 'Guardado; hay cambios posteriores' : 'Guardado');
+                if (newerDraft) {
+                    renderReaderEditorPreview();
+                    return;
+                }
+                loadNoteContent(operation.documentId, { skipHistory: true });
             }).catch(function(error) {
+                if (!readerEditorOperationIsCurrent(operation)) {
+                    if (readerEditorSaveOperation === operation) readerEditorSaveOperation = null;
+                    return;
+                }
+                readerEditorSaveOperation = null;
                 setReaderEditorState('error', 'No se pudo guardar la nota: ' + String(error));
             });
         }
+
+        /* TASK3_READER_EDITOR_CONTROLLER_END */
 
         function updateReaderBackButton() {
             const btn = document.getElementById('btn-reader-back');
@@ -3809,6 +3964,7 @@
 
         function loadNoteContent(documentId, options) {
             if (!documentId) return;
+            invalidateReaderEditorForNavigation(documentId);
             options = options || {};
             if (!options.skipHistory) {
                 pushReaderHistory(documentId);
@@ -3950,6 +4106,7 @@
 
             if (query.length > 0 && query !== lastSearchQuery) {
                 lastSearchQuery = query;
+                invalidateReaderEditorForNavigation('');
                 document.querySelectorAll('.reader-note-item, .reader-pinned-item').forEach(el => el.classList.remove('active'));
                 currentSelectedNotePath = '';
                 currentSelectedDocumentId = '';

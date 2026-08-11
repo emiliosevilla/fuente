@@ -208,6 +208,7 @@
                     <button class="btn-small" data-onclick-command="triggerAction('copy_reader_note', {}, this)">Copiar</button>
                     <button class="btn-small" data-onclick-command="triggerAction('export_reader_note', {}, this)">Exportar</button>
                     <button class="btn-small" data-onclick-command="triggerAction('open_obsidian', {}, this)">Abrir en Obsidian</button>
+                    <button class="btn-small" data-onclick-command="openFusionWorkflow()">Fusionar seleccionadas</button>
                     <button class="close-btn" data-onclick-command="closeModal('modal-reader')">&times;</button>
                 </div>
             </div>
@@ -262,6 +263,41 @@
                         Nodos: <b id="graph-nodes-count" class="console-text-003">0</b> | Enlaces: <b id="graph-links-count" class="console-text-004">0</b> • Haz clic en un nodo para leer la nota. Arrastra los nodos para mover el mapa.
                     </div>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL FUSIÓN REVISABLE: sólo document_id, preview read-only y confirmación explícita -->
+    <div class="modal-overlay" id="modal-fusion">
+        <div class="modal-container modal-wide">
+            <div class="modal-header">
+                <div class="modal-title">FUSIÓN REVISABLE — PREVIEW ANTES DE CREAR</div>
+                <button class="close-btn" data-onclick-command="closeModal('modal-fusion')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p>Selecciona una propuesta determinista. La previsualización no modifica ninguna fuente.</p>
+                <div id="fusion-candidate-list" role="list" aria-label="Candidatos de fusión"></div>
+                <div id="fusion-source-selection" aria-live="polite"></div>
+                <div class="metadata-field">
+                    <label for="fusion-title">Título de la nota pendiente</label>
+                    <input type="text" id="fusion-title" autocomplete="off">
+                </div>
+                <div class="metadata-field">
+                    <label for="fusion-issue">Cuestión destino</label>
+                    <input type="text" id="fusion-issue" value="_Sin_Cuestion" autocomplete="off">
+                </div>
+                <button class="btn-secondary" id="fusion-preview-button" data-onclick-command="previewSelectedFusion()" disabled>Previsualizar fusión</button>
+                <section id="fusion-preview-pane" aria-live="polite">
+                    <p>La previsualización aparecerá aquí.</p>
+                </section>
+                <label class="fusion-confirmation-label">
+                    <input type="checkbox" id="fusion-confirmation">
+                    Confirmo que he revisado las fuentes y quiero crear una nueva nota pendiente.
+                </label>
+                <div id="fusion-status" role="status" aria-live="polite"></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-primary" id="fusion-commit-button" data-onclick-command="commitSelectedFusion()" disabled>Fusionar y crear pendiente</button>
             </div>
         </div>
     </div>
@@ -815,6 +851,9 @@
                 'resetDefaultSettings()': resetDefaultSettings,
                 'saveSettings()': saveSettings,
                 'openApprovalInbox()': openApprovalInbox,
+                'openFusionWorkflow()': openFusionWorkflow,
+                'previewSelectedFusion()': previewSelectedFusion,
+                'commitSelectedFusion()': commitSelectedFusion,
                 'saveApprovalMetadata()': saveApprovalMetadata,
                 'approveSelectedNote()': approveSelectedNote,
                 'approveAndExportSelectedNote()': approveAndExportSelectedNote,
@@ -1495,6 +1534,170 @@
                 status: document.getElementById('metadata-status').value,
             };
         }
+
+        let fusionCandidates = [];
+        let fusionPreview = null;
+
+        function fusionStatus(message, isError) {
+            const status = document.getElementById('fusion-status');
+            if (status) {
+                status.textContent = message || '';
+                status.dataset.state = isError ? 'error' : 'ok';
+            }
+        }
+
+        function renderFusionCandidates(candidates) {
+            const list = document.getElementById('fusion-candidate-list');
+            if (!list) return;
+            list.replaceChildren();
+            fusionCandidates = Array.isArray(candidates) ? candidates : [];
+            if (!fusionCandidates.length) {
+                const empty = document.createElement('p');
+                empty.textContent = 'No hay candidatos deterministas disponibles.';
+                list.appendChild(empty);
+                return;
+            }
+            fusionCandidates.forEach(function(candidate, index) {
+                const item = document.createElement('div');
+                item.className = 'fusion-candidate-item';
+                item.setAttribute('role', 'listitem');
+                const label = document.createElement('label');
+                const checkbox = document.createElement('input');
+                checkbox.type = 'checkbox';
+                checkbox.dataset.fusionCandidateIndex = String(index);
+                checkbox.addEventListener('change', refreshFusionSelection);
+                const text = document.createElement('span');
+                text.textContent = 'Candidato ' + String(index + 1) + ': ' +
+                    (candidate.reasons || []).join(', ') + ' · ' +
+                    (candidate.document_ids || []).join(' · ');
+                label.append(checkbox, text);
+                item.appendChild(label);
+                list.appendChild(item);
+            });
+        }
+
+        function refreshFusionSelection() {
+            const selected = selectedFusionIds();
+            const selection = document.getElementById('fusion-source-selection');
+            const previewButton = document.getElementById('fusion-preview-button');
+            if (selection) selection.textContent = selected.length + ' fuente(s) seleccionada(s): ' + selected.join(', ');
+            if (previewButton) previewButton.disabled = selected.length < 2;
+            fusionPreview = null;
+            const commitButton = document.getElementById('fusion-commit-button');
+            if (commitButton) commitButton.disabled = true;
+        }
+
+        function selectedFusionIds() {
+            const ids = [];
+            document.querySelectorAll('[data-fusion-candidate-index]:checked').forEach(function(checkbox) {
+                const candidate = fusionCandidates[Number(checkbox.dataset.fusionCandidateIndex)];
+                (candidate && candidate.document_ids || []).forEach(function(documentId) {
+                    if (!ids.includes(documentId)) ids.push(documentId);
+                });
+            });
+            return ids;
+        }
+
+        function openFusionWorkflow() {
+            openModal('modal-fusion');
+            fusionStatus('Cargando candidatos deterministas...', false);
+            if (window.pywebview && window.pywebview.api) {
+                window.pywebview.api.get_fusion_candidates().then(function(result) {
+                    if (result && result.error) {
+                        fusionStatus(result.message || result.error, true);
+                        return;
+                    }
+                    renderFusionCandidates(result && result.candidates);
+                    fusionStatus('Selecciona al menos dos fuentes y revisa el preview.', false);
+                }).catch(function(error) {
+                    fusionStatus('No se pudieron cargar los candidatos: ' + String(error), true);
+                });
+            } else {
+                renderFusionCandidates([]);
+                fusionStatus('Vista previa local: el bridge no está conectado.', false);
+            }
+        }
+
+        function renderFusionPreview(preview) {
+            const pane = document.getElementById('fusion-preview-pane');
+            if (!pane) return;
+            pane.replaceChildren();
+            const heading = document.createElement('h3');
+            heading.textContent = preview.title + ' · ' + preview.target_issue;
+            pane.appendChild(heading);
+            const sourceHeading = document.createElement('h4');
+            sourceHeading.textContent = 'Fuentes y revisiones capturadas';
+            pane.appendChild(sourceHeading);
+            (preview.sources || []).forEach(function(source) {
+                const details = document.createElement('details');
+                const summary = document.createElement('summary');
+                summary.textContent = source.title + ' · ' + source.document_id + ' · revisión ' + source.revision;
+                details.appendChild(summary);
+                details.appendChild(createNoteContent(readerProjectionToDocumentModel(source.projection)));
+                pane.appendChild(details);
+            });
+            const mergedHeading = document.createElement('h4');
+            mergedHeading.textContent = 'Resultado propuesto';
+            pane.appendChild(mergedHeading);
+            pane.appendChild(createNoteContent(readerProjectionToDocumentModel(readerMarkdownToProjection(preview.body_markdown))));
+        }
+
+        function previewSelectedFusion() {
+            const ids = selectedFusionIds();
+            const title = document.getElementById('fusion-title').value.trim();
+            const issue = document.getElementById('fusion-issue').value.trim();
+            if (ids.length < 2 || !title || !issue) {
+                fusionStatus('Selecciona al menos dos fuentes e indica título y cuestión.', true);
+                return;
+            }
+            fusionStatus('Construyendo preview de sólo lectura...', false);
+            if (!(window.pywebview && window.pywebview.api)) return;
+            window.pywebview.api.preview_fusion(ids, title, issue).then(function(result) {
+                if (result && result.error) {
+                    fusionPreview = null;
+                    fusionStatus(result.message || result.error, true);
+                    return;
+                }
+                fusionPreview = result;
+                renderFusionPreview(result);
+                document.getElementById('fusion-confirmation').checked = false;
+                document.getElementById('fusion-commit-button').disabled = true;
+                fusionStatus('Preview listo. Marca la confirmación explícita para crear la nota pendiente.', false);
+            }).catch(function(error) {
+                fusionStatus('No se pudo construir el preview: ' + String(error), true);
+            });
+        }
+
+        function commitSelectedFusion() {
+            const confirmation = document.getElementById('fusion-confirmation');
+            if (!fusionPreview || !confirmation || !confirmation.checked) {
+                fusionStatus('Debes revisar el preview y confirmar la creación.', true);
+                return;
+            }
+            fusionStatus('Revalidando fuentes y creando nota pendiente...', false);
+            if (!(window.pywebview && window.pywebview.api)) return;
+            window.pywebview.api.commit_fusion(
+                fusionPreview.preview_id,
+                fusionPreview.source_revisions
+            ).then(function(result) {
+                if (result && result.error) {
+                    fusionStatus(result.message || 'Conflicto de revisión: vuelve a previsualizar.', true);
+                    return;
+                }
+                fusionStatus('Nota pendiente creada. Las fuentes originales siguen intactas.', false);
+                document.getElementById('fusion-commit-button').disabled = true;
+                if (typeof loadReaderNotes === 'function') loadReaderNotes();
+            }).catch(function(error) {
+                fusionStatus('No se pudo confirmar la fusión: ' + String(error), true);
+            });
+        }
+
+        document.addEventListener('change', function(event) {
+            if (event.target && event.target.id === 'fusion-confirmation') {
+                const button = document.getElementById('fusion-commit-button');
+                if (button) button.disabled = !fusionPreview || !event.target.checked;
+            }
+        });
 
         function openApprovalInbox() {
             bindApprovalDiagnosticPanel();

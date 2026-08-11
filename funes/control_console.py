@@ -38,6 +38,7 @@ from funes.application.export import (
     ExportFileExistsError,
     UnsupportedExportFormatError,
 )
+from funes.application.fusion import FusionApplicationService
 from funes.application.health import HealthService
 from funes.application.job_control import (
     JobControlService,
@@ -340,6 +341,7 @@ class FunesConsoleBackend:
         self._export_service: Optional[ExportApplicationService] = None
         self._review_export_service: Optional[ReviewExportApplicationService] = None
         self._reflow_service: Optional[ReflowApplicationService] = None
+        self._fusion_service: Optional[FusionApplicationService] = None
         self._job_store: Optional[JobStore] = None
         self._ingestion_service: Optional[IngestionApplicationService] = None
         self._ingestion_job_store: Optional[JobStore] = None
@@ -392,6 +394,7 @@ class FunesConsoleBackend:
         self._export_service = None
         self._review_export_service = None
         self._reflow_service = None
+        self._fusion_service = None
         self._job_store = None
         self._job_control_service = None
         # A test/offline attachment is an explicit alternate collaborator.
@@ -713,6 +716,54 @@ class FunesConsoleBackend:
                 self.get_export_service(),
             )
         return self._review_export_service
+
+    def get_fusion_service(self) -> FusionApplicationService:
+        """Return the cached preview-then-commit fusion coordinator."""
+        if self._fusion_service is None:
+            self._fusion_service = FusionApplicationService(
+                notes_service=self.get_notes_service(),
+            )
+        return self._fusion_service
+
+    def get_fusion_candidates(
+        self, *, issue: str | None = None, limit: int = 25
+    ) -> Dict[str, Any]:
+        candidates = self.get_fusion_service().find_candidates(issue=issue, limit=limit)
+        return {
+            "candidates": [
+                {
+                    "candidate_id": candidate.candidate_id,
+                    "document_ids": list(candidate.document_ids),
+                    "score": candidate.score,
+                    "reasons": list(candidate.reasons),
+                }
+                for candidate in candidates
+            ]
+        }
+
+    def preview_fusion(
+        self, document_ids: list[str], title: str, target_issue: str
+    ) -> Dict[str, Any]:
+        return self.get_fusion_service().preview(
+            document_ids,
+            title,
+            target_issue,
+        ).as_dict()
+
+    def commit_fusion(
+        self, preview_id: str, expected_revisions: dict[str, int]
+    ) -> Dict[str, Any]:
+        note = self.get_fusion_service().commit(preview_id, expected_revisions)
+        return {
+            "document_id": note.document_id,
+            "path": note.relative_path,
+            "title": note.title,
+            "status": note.status,
+            "revision": note.revision,
+            "frontmatter": dict(note.frontmatter),
+            "body_markdown": note.body_markdown,
+            "source_ids": list(note.source_ids),
+        }
 
     def approve_and_export(
         self,
@@ -1201,54 +1252,15 @@ class FunesConsoleBackend:
 
         elif action_name == "merge_notes":
             note_paths = payload.get("note_paths", [])
-            merged_title = payload.get("merged_title", "Nota_Fusionada")
-            target_issue = payload.get("target_issue", "_Sin_Cuestion")
-
-            if len(note_paths) < 2:
-                return {"error": "Se requieren al menos 2 notas para fusionar"}
-
-            contents = []
-            sources_set = set()
-            for np_str in note_paths:
-                try:
-                    p = self._path_resolver().resolve_note(np_str)
-                except PathAuthorizationError as error:
-                    return self._path_error(error)
-                if p.exists():
-                    txt = p.read_text(encoding="utf-8", errors="replace")
-                    contents.append(f"### Origen: {p.stem}\n{txt}\n")
-                    sources_set.add(p.name)
-
-            combined_body = "\n\n---\n\n".join(contents)
-            sources_fmt = json.dumps(sorted(list(sources_set)), ensure_ascii=False)
-            now_str = time.strftime("%Y-%m-%d %H:%M:%S")
-
-            merged_md = f"""---
-título: "{merged_title}"
-fecha: "{now_str}"
-autor: "Funes Merge Engine"
-estado: "aprobada"
-fuentes: {sources_fmt}
-historial:
-  - fecha: "{now_str}"
-    accion: "fusionada"
----
-
-# {merged_title}
-
-{combined_body}
-"""
-            try:
-                out_path = self.vault.save_atomic_note(
-                    title=merged_title,
-                    content=merged_md,
-                    issue_name=target_issue,
-                )
-            except PathAuthorizationError as error:
-                return self._path_error(error)
+            if isinstance(note_paths, list) and any(
+                isinstance(note_path, str)
+                and ("/" in note_path or "\\" in note_path or note_path.endswith(".md"))
+                for note_path in note_paths
+            ):
+                return self._path_error(PathAuthorizationError())
             return {
-                "log": f"Fusión completada. Nota resultante: '{out_path.name}' en Cuestión '{target_issue}'.",
-                "path": self._vault_relative_identity(out_path),
+                "error": "fusion_preview_required",
+                "message": "Use preview_fusion and commit_fusion with document IDs",
             }
 
         elif action_name == "move_note":

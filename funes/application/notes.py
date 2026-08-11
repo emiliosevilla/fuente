@@ -17,7 +17,7 @@ from funes.domain.errors import (
 from funes.domain.frontmatter import serialize_frontmatter
 from funes.domain.metadata_form import validate_metadata_fields, validate_metadata_save_fields
 from funes.domain.paths import AuthorizedPathResolver, document_id_for_relative_path
-from funes.infrastructure.atomic_files import atomic_write_text
+from funes.infrastructure.atomic_files import atomic_write_text, document_file_lock
 from funes.infrastructure.sqlite_store import JobStore
 from funes.domain.runtime_policy import RuntimePolicy
 from funes.rag.chroma_store import ChromaStore
@@ -27,6 +27,7 @@ from funes.ui.markdown_projection import project_note_document
 logger = logging.getLogger(__name__)
 
 IndexNotifier = Callable[[], None]
+MAX_BODY_MARKDOWN_CHARS = 1_000_000
 
 
 class NotesApplicationService:
@@ -115,6 +116,11 @@ class NotesApplicationService:
         document_id = self._resolve_opaque_document_id(document_id)
         if not isinstance(body_markdown, str):
             raise ValueError("body_markdown must be a string")
+        if len(body_markdown) > MAX_BODY_MARKDOWN_CHARS:
+            raise ValueError(
+                "body_markdown exceeds maximum length of "
+                f"{MAX_BODY_MARKDOWN_CHARS} characters"
+            )
         if (
             not isinstance(expected_revision, int)
             or isinstance(expected_revision, bool)
@@ -122,17 +128,27 @@ class NotesApplicationService:
         ):
             raise ValueError("expected_revision must be a positive integer")
 
-        note = self.get_note(document_id)
-        if note.revision != expected_revision:
-            raise NoteRevisionConflictError(document_id)
+        lock_directory = self.vault.config.vault_path / ".funes" / "note-editor-locks"
+        with document_file_lock(lock_directory, document_id):
+            note = self.get_note(document_id)
+            if note.revision != expected_revision:
+                raise NoteRevisionConflictError(document_id)
 
-        return self._persist_note(
-            note,
-            expected_revision=expected_revision,
-            metadata=dict(note.frontmatter),
-            body_markdown=body_markdown,
-            reindex=False,
-        )
+            path, _ = self._resolve_note_path(document_id)
+            current_markdown = path.read_text(encoding="utf-8", errors="replace")
+            current_hash = content_hash_for_markdown(current_markdown)
+            identity = self.job_store.get_document_identity(document_id)
+            if identity is None or identity.get("content_hash") != current_hash:
+                raise NoteRevisionConflictError(document_id)
+
+            return self._persist_note(
+                note,
+                expected_revision=expected_revision,
+                expected_content_hash=current_hash,
+                metadata=dict(note.frontmatter),
+                body_markdown=body_markdown,
+                reindex=False,
+            )
 
     def approve(
         self,
@@ -229,6 +245,7 @@ class NotesApplicationService:
         expected_revision: int,
         metadata: dict[str, Any],
         body_markdown: str | None = None,
+        expected_content_hash: str | None = None,
         reindex: bool,
     ) -> NoteDocument:
         allowed_issues = self.vault.get_issues_in_theme()
@@ -239,6 +256,11 @@ class NotesApplicationService:
         )
         path, relative = self._resolve_note_path(note.document_id)
         previous_markdown = path.read_text(encoding="utf-8")
+        if (
+            expected_content_hash is not None
+            and content_hash_for_markdown(previous_markdown) != expected_content_hash
+        ):
+            raise NoteRevisionConflictError(note.document_id)
         atomic_write_text(path, markdown)
 
         updated_identity = self.job_store.update_document_identity_cas(

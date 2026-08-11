@@ -59,9 +59,27 @@ def test_console_graph_actions_fail_closed_without_started_lifecycle(
     )
     backend = FunesConsoleBackend(tmp_path / "Vault")
 
-    for action in ("run_optimized_cycle", "reindex_notes", "step3_structure"):
+    for action in ("run_optimized_cycle", "reindex_notes", "step3_structure", "reflow_links"):
         result = backend.handle_action(action, {})
         assert result["error"] == "graph_service_unavailable"
+
+
+def test_reflow_action_does_not_start_a_loop_or_call_anythingllm(
+    tmp_path, monkeypatch
+):
+    monkeypatch.setattr(
+        "funes.control_console.OptimizadoGraphLoop",
+        lambda *_args, **_kwargs: pytest.fail("reflow must not construct a graph loop"),
+    )
+    monkeypatch.setattr(
+        "funes.control_console.is_anythingllm_installed",
+        lambda: pytest.fail("reflow must not inspect AnythingLLM"),
+    )
+    backend = FunesConsoleBackend(tmp_path / "Vault")
+
+    assert backend.handle_action("reflow_links", {})["error"] == (
+        "graph_service_unavailable"
+    )
 
 
 def test_console_graph_action_delegates_to_lifecycle_loop(tmp_path):

@@ -28,6 +28,23 @@ def test_reader_contains_plain_markdown_editor_preview_and_state_region():
     assert 'data-reader-editor-mode="preview"' in SOURCE
 
 
+def test_mount_replaces_normal_reader_surface_with_one_editor_surface():
+    body = _function_body("mountReaderEditor")
+    assert "reader.replaceChildren();" in body
+    assert body.index("reader.replaceChildren();") < body.index("reader.appendChild(template.content.cloneNode(true));")
+    assert 'id="reader-editor-panel"' in SOURCE
+
+
+def test_preview_uses_the_safe_projection_renderer_for_all_markdown_shapes():
+    assert "readerMarkdownToProjection" in SOURCE
+    assert "readerProjectionToDocumentModel" in SOURCE
+    assert "createNoteContent" in SOURCE
+    assert "readerMarkdownToDocumentModel" not in SOURCE
+    for node_type in ("code_block", "raw_block", "bullet_list", "ordered_list", "raw_inline"):
+        assert node_type in SOURCE
+    assert "textContent" in SOURCE
+
+
 def test_reader_editor_calls_only_typed_bridge_methods_with_opaque_id_and_revision():
     assert "window.pywebview.api.get_note_editor(currentSelectedDocumentId)" in SOURCE
     assert "window.pywebview.api.update_note_body(" in SOURCE
@@ -42,6 +59,19 @@ def test_reader_editor_reports_states_and_disables_noop_save():
         assert f"'{state}'" in SOURCE or f'"{state}"' in SOURCE
     assert re.search(r"saveButton\.disabled\s*=\s*!.*dirty", SOURCE)
     assert "readerEditorState.dirty" in SOURCE
+
+
+def test_save_captures_immutable_operation_and_discards_stale_responses():
+    body = _function_body("saveReaderEdit")
+    assert "readerEditorSaveOperation" in body
+    assert "Object.freeze" in body
+    assert "sessionId: readerEditorSession" in body
+    assert "expectedRevision: readerEditorRevision" in body
+    assert "body: readerEditorBody" in body
+    assert "readerEditorOperationIsCurrent(operation)" in body
+    assert "newerDraft" in body
+    assert "loadNoteContent(operation.documentId" in body
+    assert "invalidateReaderEditorForNavigation(documentId)" in SOURCE
 
 
 def test_cancel_is_local_and_does_not_call_the_backend():

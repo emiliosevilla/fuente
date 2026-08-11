@@ -147,6 +147,7 @@ class NotesApplicationService:
                 expected_content_hash=current_hash,
                 metadata=dict(note.frontmatter),
                 body_markdown=body_markdown,
+                lock_held=True,
                 reindex=False,
             )
 
@@ -246,8 +247,22 @@ class NotesApplicationService:
         metadata: dict[str, Any],
         body_markdown: str | None = None,
         expected_content_hash: str | None = None,
+        lock_held: bool = False,
         reindex: bool,
     ) -> NoteDocument:
+        if not lock_held:
+            lock_directory = self.vault.config.vault_path / ".funes" / "note-editor-locks"
+            with document_file_lock(lock_directory, note.document_id):
+                return self._persist_note(
+                    note,
+                    expected_revision=expected_revision,
+                    metadata=metadata,
+                    body_markdown=body_markdown,
+                    expected_content_hash=expected_content_hash,
+                    lock_held=True,
+                    reindex=reindex,
+                )
+
         allowed_issues = self.vault.get_issues_in_theme()
         validate_metadata_fields(metadata, allowed_issues=allowed_issues)
 

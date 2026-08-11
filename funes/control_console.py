@@ -1343,7 +1343,7 @@ historial:
                 ),
                 "result": result,
                 **result,
-                "refresh": bool(result.get("changed_notes")),
+                "refresh": bool(result.get("changed_markdown")),
             }
 
         # --- ACCIONES ANTERIORES DE CONSOLA ---

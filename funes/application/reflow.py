@@ -2,12 +2,53 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from typing import Any, Callable, Mapping
 
 from funes.domain.errors import PathAuthorizationError
 from funes.domain.paths import AuthorizedPathResolver
 from funes.graph_engine.linker import GraphLinker
+
+
+_REFLOW_CAPABILITY_TOKEN = object()
+
+
+@dataclass(frozen=True)
+class AuthorizedReflowTarget:
+    """Capability proving one resolver-owned output root for one graph pass."""
+
+    output_dir: Path
+    resolver: AuthorizedPathResolver
+    vault_root: Path
+    _token: object
+
+    @classmethod
+    def from_resolver(cls, resolver: AuthorizedPathResolver) -> "AuthorizedReflowTarget":
+        return cls(
+            output_dir=resolver.roots["output"],
+            resolver=resolver,
+            vault_root=resolver.roots["vault"],
+            _token=_REFLOW_CAPABILITY_TOKEN,
+        )
+
+    def is_valid_for(self, vault_root: Path) -> bool:
+        root = Path(vault_root).resolve()
+        output = Path(self.output_dir).resolve()
+        if self._token is not _REFLOW_CAPABILITY_TOKEN:
+            return False
+        if self.vault_root.resolve() != root:
+            return False
+        if self.resolver.roots["vault"] != root:
+            return False
+        if self.resolver.roots["output"] != output:
+            return False
+        try:
+            output.relative_to(root)
+        except ValueError:
+            return False
+        if not output.exists() or not output.is_dir():
+            return False
+        return not any(candidate.is_symlink() for candidate in output.rglob("*"))
 
 
 @dataclass(frozen=True)
@@ -26,6 +67,8 @@ class ReflowResult:
     status: str
     processed_notes: int
     changed_notes: int
+    changed_markdown: int
+    index_changed: bool
     orphans: list[str]
     scope: dict[str, str | None]
     error: str | None = None
@@ -65,18 +108,20 @@ class ReflowApplicationService:
         if scope.document_id is not None and scope.issue is not None:
             raise PathAuthorizationError()
 
-        output_dir, resolved_scope = self._resolve_scope(scope)
+        authorized_target, resolved_scope = self._resolve_scope(scope)
         if not getattr(self.lifecycle, "is_running", False):
             return ReflowResult(
                 status="error",
                 processed_notes=0,
                 changed_notes=0,
+                changed_markdown=0,
+                index_changed=False,
                 orphans=[],
                 scope=resolved_scope,
                 error="graph_service_unavailable",
             )
 
-        kwargs: dict[str, Any] = {"output_dir": output_dir}
+        kwargs: dict[str, Any] = {"authorized_scope": authorized_target}
         if scope.document_id is not None:
             kwargs["target_document_id"] = scope.document_id
         elif scope.issue is not None:
@@ -90,13 +135,16 @@ class ReflowApplicationService:
                 status="error",
                 processed_notes=0,
                 changed_notes=0,
+                changed_markdown=0,
+                index_changed=False,
                 orphans=[],
                 scope=resolved_scope,
                 error=str(raw_result["error"]),
             )
 
         changed_notes = int(raw_result.get("changed_notes", 0))
-        if changed_notes and self.index_notifier is not None:
+        changed_markdown = int(raw_result.get("changed_markdown", changed_notes))
+        if changed_markdown and self.index_notifier is not None:
             self.index_notifier()
 
         orphans = raw_result.get("orphans", [])
@@ -106,11 +154,15 @@ class ReflowApplicationService:
             status=str(raw_result.get("status", "success")),
             processed_notes=int(raw_result.get("processed_notes", 0)),
             changed_notes=changed_notes,
+            changed_markdown=changed_markdown,
+            index_changed=bool(raw_result.get("index_changed", False)),
             orphans=[str(item) for item in orphans],
             scope=resolved_scope,
         )
 
-    def _resolve_scope(self, scope: ReflowScope) -> tuple[Path, dict[str, str | None]]:
+    def _resolve_scope(
+        self, scope: ReflowScope
+    ) -> tuple[AuthorizedReflowTarget, dict[str, str | None]]:
         vault = self.vault
         theme_value = vault.active_theme if scope.theme is None else scope.theme
         theme = self._component(theme_value)
@@ -151,7 +203,7 @@ class ReflowApplicationService:
             derived_issue = relative.parts[0] if len(relative.parts) >= 2 else "General"
             issue = derived_issue
 
-        return output_dir, {
+        return AuthorizedReflowTarget.from_resolver(resolver), {
             "document_id": scope.document_id,
             "theme": theme,
             "issue": issue,
@@ -176,6 +228,7 @@ class ReflowApplicationService:
         path = Path(value)
         if (
             path.is_absolute()
+            or PureWindowsPath(value).drive
             or path.name != value
             or value in {".", ".."}
             or "/" in value

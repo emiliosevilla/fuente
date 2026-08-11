@@ -847,6 +847,159 @@ class JobStore:
         ).fetchone()
         return dict(row) if row is not None else None
 
+    # -- durable reflow requests -------------------------------------------
+
+    def create_reflow_request(
+        self,
+        *,
+        request_id: str,
+        document_id: str,
+        expected_revision: int,
+        mode: str,
+    ) -> dict[str, Any]:
+        """Insert one reflow request, returning the existing equivalent row."""
+        now = _timestamp()
+        try:
+            self._connection.execute(
+                """
+                INSERT INTO reflow_requests (
+                    request_id, document_id, expected_revision, mode, status,
+                    created_at, updated_at, result_json, error_code, revision
+                ) VALUES (?, ?, ?, ?, 'pending', ?, ?, NULL, NULL, 1)
+                """,
+                (request_id, document_id, expected_revision, mode, now, now),
+            )
+        except sqlite3.IntegrityError:
+            # The uniqueness key is the idempotency key. A UUID collision is
+            # vanishingly unlikely and is handled by the same lookup safely.
+            existing = self._connection.execute(
+                """
+                SELECT * FROM reflow_requests
+                WHERE document_id = ? AND expected_revision = ? AND mode = ?
+                """,
+                (document_id, expected_revision, mode),
+            ).fetchone()
+            if existing is None:
+                raise
+            return dict(existing)
+        row = self._connection.execute(
+            "SELECT * FROM reflow_requests WHERE request_id = ?", (request_id,)
+        ).fetchone()
+        assert row is not None
+        return dict(row)
+
+    def get_reflow_request(self, request_id: str) -> Optional[dict[str, Any]]:
+        row = self._connection.execute(
+            "SELECT * FROM reflow_requests WHERE request_id = ?", (request_id,)
+        ).fetchone()
+        return dict(row) if row is not None else None
+
+    def claim_reflow_request(self, request_id: str) -> Optional[dict[str, Any]]:
+        """Claim a pending request exactly once with a state CAS."""
+        now = _timestamp()
+        try:
+            cursor = self._connection.execute(
+                """
+                UPDATE reflow_requests
+                SET status = 'running', revision = revision + 1, updated_at = ?
+                WHERE request_id = ? AND status = 'pending'
+                """,
+                (now, request_id),
+            )
+        except sqlite3.OperationalError as error:
+            if _is_lock_contention(error):
+                raise JobStoreBusyError(request_id) from error
+            raise
+        if cursor.rowcount != 1:
+            return None
+        return self.get_reflow_request(request_id)
+
+    def cancel_reflow_request(self, request_id: str) -> Optional[dict[str, Any]]:
+        """Cancel a request before its result is persisted."""
+        now = _timestamp()
+        try:
+            self._connection.execute(
+                """
+                UPDATE reflow_requests
+                SET status = 'cancelled', error_code = 'cancelled',
+                    revision = revision + 1, updated_at = ?
+                WHERE request_id = ? AND status IN ('pending', 'running')
+                """,
+                (now, request_id),
+            )
+        except sqlite3.OperationalError as error:
+            if _is_lock_contention(error):
+                raise JobStoreBusyError(request_id) from error
+            raise
+        return self.get_reflow_request(request_id)
+
+    def complete_reflow_request(
+        self, request_id: str, *, result_json: str
+    ) -> Optional[dict[str, Any]]:
+        """Commit a result only for the worker that claimed the request."""
+        now = _timestamp()
+        cursor = self._connection.execute(
+            """
+            UPDATE reflow_requests
+            SET status = 'completed', result_json = ?, error_code = NULL,
+                revision = revision + 1, updated_at = ?
+            WHERE request_id = ? AND status = 'running'
+            """,
+            (result_json, now, request_id),
+        )
+        if cursor.rowcount != 1:
+            return None
+        return self.get_reflow_request(request_id)
+
+    def fail_reflow_request(
+        self, request_id: str, *, error_code: str, result_json: Optional[str] = None
+    ) -> Optional[dict[str, Any]]:
+        """Persist a stable failure without changing the source note."""
+        now = _timestamp()
+        cursor = self._connection.execute(
+            """
+            UPDATE reflow_requests
+            SET status = 'failed', result_json = ?, error_code = ?,
+                revision = revision + 1, updated_at = ?
+            WHERE request_id = ? AND status = 'running'
+            """,
+            (result_json, error_code, now, request_id),
+        )
+        if cursor.rowcount != 1:
+            return None
+        return self.get_reflow_request(request_id)
+
+    def recover_reflow_request(self, request_id: str) -> Optional[dict[str, Any]]:
+        """Explicitly make an interrupted running request retryable."""
+        now = _timestamp()
+        cursor = self._connection.execute(
+            """
+            UPDATE reflow_requests
+            SET status = 'pending', revision = revision + 1, updated_at = ?
+            WHERE request_id = ? AND status = 'running'
+            """,
+            (now, request_id),
+        )
+        if cursor.rowcount != 1:
+            return self.get_reflow_request(request_id)
+        return self.get_reflow_request(request_id)
+
+    def retry_reflow_request(self, request_id: str) -> Optional[dict[str, Any]]:
+        """Explicitly retry a failed request, clearing its prior result."""
+        now = _timestamp()
+        cursor = self._connection.execute(
+            """
+            UPDATE reflow_requests
+            SET status = 'pending', result_json = NULL, error_code = NULL,
+                revision = revision + 1, updated_at = ?
+            WHERE request_id = ? AND status = 'failed'
+            """,
+            (now, request_id),
+        )
+        if cursor.rowcount != 1:
+            return self.get_reflow_request(request_id)
+        return self.get_reflow_request(request_id)
+
     # -- row mapping ---------------------------------------------------------
 
     def _job_row(self, job_id: str) -> Optional[sqlite3.Row]:

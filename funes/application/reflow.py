@@ -72,11 +72,17 @@ class ReflowResult:
     orphans: list[str]
     scope: dict[str, str | None]
     error: str | None = None
+    request_id: str | None = None
+    candidate_document_id: str | None = None
+    candidate_path: str | None = None
 
     def as_dict(self) -> dict[str, Any]:
         result = asdict(self)
         if self.error is None:
             result.pop("error", None)
+        for optional_field in ("request_id", "candidate_document_id", "candidate_path"):
+            if result[optional_field] is None:
+                result.pop(optional_field)
         return result
 
 
@@ -158,6 +164,39 @@ class ReflowApplicationService:
             index_changed=bool(raw_result.get("index_changed", False)),
             orphans=[str(item) for item in orphans],
             scope=resolved_scope,
+        )
+
+    def prepare_link_candidate(
+        self, scope: ReflowScope, markdown: str | None = None
+    ) -> str:
+        """Return a scoped link rewrite without mutating the source note.
+
+        Durable reflow jobs use this pure preparation step so links and
+        generated enrichment can be reviewed as a new pending note. The
+        existing ``reflow_links`` method remains the explicit operator action
+        for in-place link maintenance.
+        """
+        if not isinstance(scope, ReflowScope):
+            raise TypeError("scope must be a ReflowScope")
+        if scope.document_id is None:
+            raise PathAuthorizationError()
+
+        authorized_target, _resolved_scope = self._resolve_scope(scope)
+        note_path = authorized_target.resolver.resolve_note_id(scope.document_id)
+        relative_path = note_path.resolve().relative_to(
+            authorized_target.output_dir.resolve()
+        ).as_posix()
+        source = (
+            note_path.read_text(encoding="utf-8") if markdown is None else markdown
+        )
+        linker = GraphLinker(
+            authorized_target.output_dir,
+            vault_root=authorized_target.vault_root,
+        )
+        return linker.auto_link_content(
+            source,
+            note_path.stem,
+            current_relative_path=relative_path,
         )
 
     def _resolve_scope(

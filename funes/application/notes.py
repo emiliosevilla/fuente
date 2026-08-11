@@ -22,6 +22,7 @@ from funes.infrastructure.sqlite_store import JobStore
 from funes.domain.runtime_policy import RuntimePolicy
 from funes.rag.chroma_store import ChromaStore
 from funes.rag.semantic_chunker import SemanticChunker
+from funes.ui.markdown_projection import project_note_document
 
 logger = logging.getLogger(__name__)
 
@@ -89,6 +90,48 @@ class NotesApplicationService:
             note.frontmatter,
             revision=int(identity["revision"]),
             content_hash=str(identity.get("content_hash") or note.content_hash),
+        )
+
+    def get_editor_document(self, document_id: str) -> dict[str, Any]:
+        """Return the revisioned Markdown body-editor contract for a note."""
+        document_id = self._resolve_opaque_document_id(document_id)
+        note = self.get_note(document_id)
+        projection = project_note_document(note)
+        return {
+            "document_id": note.document_id,
+            "revision": note.revision,
+            "frontmatter": dict(note.frontmatter),
+            "body_markdown": note.body_markdown,
+            "projection": projection,
+        }
+
+    def update_note_body(
+        self,
+        document_id: str,
+        expected_revision: int,
+        body_markdown: str,
+    ) -> NoteDocument:
+        """Replace only the canonical Markdown body under a revision CAS."""
+        document_id = self._resolve_opaque_document_id(document_id)
+        if not isinstance(body_markdown, str):
+            raise ValueError("body_markdown must be a string")
+        if (
+            not isinstance(expected_revision, int)
+            or isinstance(expected_revision, bool)
+            or expected_revision < 1
+        ):
+            raise ValueError("expected_revision must be a positive integer")
+
+        note = self.get_note(document_id)
+        if note.revision != expected_revision:
+            raise NoteRevisionConflictError(document_id)
+
+        return self._persist_note(
+            note,
+            expected_revision=expected_revision,
+            metadata=dict(note.frontmatter),
+            body_markdown=body_markdown,
+            reindex=False,
         )
 
     def approve(
@@ -185,12 +228,15 @@ class NotesApplicationService:
         *,
         expected_revision: int,
         metadata: dict[str, Any],
+        body_markdown: str | None = None,
         reindex: bool,
     ) -> NoteDocument:
         allowed_issues = self.vault.get_issues_in_theme()
         validate_metadata_fields(metadata, allowed_issues=allowed_issues)
 
-        markdown = serialize_frontmatter(metadata) + note.body_markdown
+        markdown = serialize_frontmatter(metadata) + (
+            note.body_markdown if body_markdown is None else body_markdown
+        )
         path, relative = self._resolve_note_path(note.document_id)
         previous_markdown = path.read_text(encoding="utf-8")
         atomic_write_text(path, markdown)
@@ -205,7 +251,12 @@ class NotesApplicationService:
             atomic_write_text(path, previous_markdown)
             raise NoteRevisionConflictError(note.document_id)
 
-        updated = note.with_metadata(
+        updated = NoteDocument.from_persisted(
+            document_id=note.document_id,
+            relative_path=relative,
+            markdown=markdown,
+            revision=int(updated_identity["revision"]),
+        ).with_metadata(
             metadata,
             revision=int(updated_identity["revision"]),
             content_hash=str(updated_identity["content_hash"]),
@@ -315,3 +366,12 @@ class NotesApplicationService:
             self.vault.config.vault_path.resolve()
         ).as_posix()
         return path, relative
+
+    def _resolve_opaque_document_id(self, document_id: str) -> str:
+        if (
+            not isinstance(document_id, str)
+            or not document_id.strip()
+            or self._looks_like_relative_path(document_id.strip())
+        ):
+            raise PathAuthorizationError()
+        return self.resolve_document_id(document_id)

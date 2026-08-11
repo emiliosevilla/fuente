@@ -35,13 +35,14 @@ _ITALIC_RE = re.compile(r"(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)|(?<!_)_(?!_)(.+?)(
 
 
 def project_note_document(note: NoteDocument) -> dict[str, Any]:
-    """Project a canonical note; frontmatter stays outside the editor body."""
+    """Project a canonical note as JSON data; never render user text as HTML."""
+    body_projection = markdown_to_projection(note.body_markdown)
     return {
         "editor_strategy": EDITOR_STRATEGY,
         "document_id": note.document_id,
         "revision": note.revision,
         "frontmatter": dict(note.frontmatter),
-        "body": markdown_to_projection(note.body_markdown),
+        "body": body_projection,
     }
 
 

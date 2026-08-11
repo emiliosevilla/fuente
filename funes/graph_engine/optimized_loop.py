@@ -4,7 +4,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Set
 
-from funes.domain.frontmatter import serialize_frontmatter
+from funes.domain.frontmatter import parse_frontmatter, serialize_frontmatter
+from funes.infrastructure.atomic_files import atomic_write_text
 from funes.graph_engine.linker import CANONICAL_MOC_FILENAME, GraphLinker, NoteLinkTarget
 
 logger = logging.getLogger(__name__)
@@ -77,12 +78,35 @@ class OptimizadoGraphLoop:
             grouped.setdefault(issue_name, []).append(note)
         return grouped
 
-    def refine_knowledge_graph(self, target_issue: str = None) -> dict:
+    def refine_knowledge_graph(
+        self,
+        target_issue: str = None,
+        *,
+        target_document_id: str | None = None,
+        output_dir: Path | None = None,
+    ) -> dict:
         """Serialize every refinement against theme retargeting and other calls."""
         with self._operation_lock:
-            return self._refine_knowledge_graph(target_issue=target_issue)
+            original_output_dir = self.output_dir
+            original_linker = self.linker
+            if output_dir is not None and Path(output_dir).resolve() != self.output_dir.resolve():
+                self.output_dir = Path(output_dir)
+                self.linker = GraphLinker(self.output_dir, vault_root=self.vault_root)
+            try:
+                refine_kwargs = {"target_issue": target_issue}
+                if target_document_id is not None:
+                    refine_kwargs["target_document_id"] = target_document_id
+                return self._refine_knowledge_graph(**refine_kwargs)
+            finally:
+                if output_dir is not None and Path(output_dir).resolve() != original_output_dir.resolve():
+                    self.output_dir = original_output_dir
+                    self.linker = original_linker
 
-    def _refine_knowledge_graph(self, target_issue: str = None) -> dict:
+    def _refine_knowledge_graph(
+        self,
+        target_issue: str = None,
+        target_document_id: str | None = None,
+    ) -> dict:
         """Re-link notes and rebuild the MOC from the full recursive output scope.
 
         When ``target_issue`` is set, only that issue's note bodies and master
@@ -90,20 +114,32 @@ class OptimizadoGraphLoop:
         output tree so unrelated issue entries survive a partial refresh.
         """
         if not self.output_dir.exists():
-            return {"status": "empty", "processed_notes": 0}
+            return {
+                "status": "empty",
+                "processed_notes": 0,
+                "changed_notes": 0,
+                "orphans": [],
+            }
 
         catalog = tuple(self.linker.enumerate_notes())
         all_notes = list(catalog)
         notes_by_issue = self._notes_by_issue(all_notes)
 
         processed_notes_count = 0
+        changed_notes_count = 0
         orphans: Set[str] = set()
         note_contents: Dict[str, str] = {}
         issue_summaries: Dict[str, List[str]] = {}
         catalog_notes: List[NoteLinkTarget] = []
 
         for issue_name, issue_notes in sorted(notes_by_issue.items()):
-            should_rewrite = target_issue is None or target_issue == issue_name
+            should_rewrite_issue = (
+                target_document_id is not None
+                and any(note.document_id == target_document_id for note in issue_notes)
+            ) or (
+                target_document_id is None
+                and (target_issue is None or target_issue == issue_name)
+            )
             issue_summaries[issue_name] = []
             rewritten_paths: List[Path] = []
 
@@ -114,6 +150,11 @@ class OptimizadoGraphLoop:
 
                 try:
                     content = note_path.read_text(encoding="utf-8")
+                    should_rewrite = (
+                        target_document_id == note.document_id
+                        if target_document_id is not None
+                        else should_rewrite_issue
+                    )
                     if should_rewrite:
                         updated_content = self.linker.auto_link_content(
                             content,
@@ -122,8 +163,9 @@ class OptimizadoGraphLoop:
                             note_catalog=catalog,
                         )
                         if updated_content != content:
-                            note_path.write_text(updated_content, encoding="utf-8")
+                            atomic_write_text(note_path, updated_content)
                             content = updated_content
+                            changed_notes_count += 1
                             logger.info(
                                 "Bucle Optimizado: Enlaces actualizados en '%s'",
                                 note.relative_path,
@@ -141,7 +183,7 @@ class OptimizadoGraphLoop:
                         e,
                     )
 
-            if should_rewrite:
+            if should_rewrite_issue:
                 issue_dir = (
                     self.output_dir / issue_name
                     if issue_name != "General"
@@ -159,11 +201,19 @@ class OptimizadoGraphLoop:
         return {
             "status": "success",
             "processed_notes": processed_notes_count,
+            "changed_notes": changed_notes_count,
+            "orphans": sorted(orphans),
             "issues_processed": len(
                 [
                     name
                     for name in issue_summaries
-                    if target_issue is None or name == target_issue
+                    if target_document_id is not None
+                    and any(
+                        note.document_id == target_document_id
+                        for note in notes_by_issue[name]
+                    )
+                    or target_document_id is None
+                    and (target_issue is None or name == target_issue)
                 ]
             ),
             "orphans_count": len(orphans),
@@ -181,7 +231,7 @@ class OptimizadoGraphLoop:
             return
 
         master_path = issue_dir / f"_Cuestion_{issue_name}.md"
-        now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        now_str = self._existing_generated_date(master_path)
         targets = link_targets or [n.stem for n in notes if not n.name.startswith("_")]
 
         lines = [
@@ -214,8 +264,7 @@ class OptimizadoGraphLoop:
         lines.append("---")
         lines.append("*Esta nota marco relaciona las notas atómicas de la Cuestión con el Tema General.*")
 
-        with open(master_path, "w", encoding="utf-8") as f:
-            f.write("\n".join(lines))
+        self._write_if_changed(master_path, "\n".join(lines))
 
     def _update_moc_index(
         self,
@@ -226,7 +275,7 @@ class OptimizadoGraphLoop:
     ) -> None:
         """Crea o actualiza el archivo canónico _Indice_MOC.md agrupando por Cuestiones."""
         moc_path = self.output_dir / CANONICAL_MOC_FILENAME
-        now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        now_str = self._existing_generated_date(moc_path)
 
         lines = [
             serialize_frontmatter({
@@ -275,7 +324,28 @@ class OptimizadoGraphLoop:
 
         lines.append("")
 
-        with open(moc_path, "w", encoding="utf-8") as f:
-            f.write("\n".join(lines))
+        self._write_if_changed(moc_path, "\n".join(lines))
 
         logger.info(f"Índice MOC actualizado con {len(notes)} notas en {now_str}.")
+
+    @staticmethod
+    def _existing_generated_date(path: Path) -> str:
+        """Keep generated Markdown byte-stable when its semantic inputs did not change."""
+        if path.exists():
+            try:
+                metadata, _ = parse_frontmatter(path.read_text(encoding="utf-8"))
+                existing = str(metadata.get("date") or "").strip()
+                if existing:
+                    return existing
+            except (OSError, UnicodeError, ValueError):
+                pass
+        return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    @staticmethod
+    def _write_if_changed(path: Path, content: str) -> None:
+        try:
+            if path.read_text(encoding="utf-8") == content:
+                return
+        except FileNotFoundError:
+            pass
+        atomic_write_text(path, content)

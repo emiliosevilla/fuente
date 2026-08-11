@@ -195,6 +195,78 @@ def test_two_independent_services_cannot_leave_disk_and_identity_inconsistent(
         store_two.close()
 
 
+def test_body_and_metadata_mutations_cannot_rollback_each_other(
+    temp_vault_manager, monkeypatch
+):
+    document_id, note_path = _write_pending_note(
+        temp_vault_manager,
+        body="# Original\n",
+        title="Nota_Editor_Operacion_Race",
+    )
+    service_one, store_one = _new_notes_service(temp_vault_manager)
+    service_two, store_two = _new_notes_service(temp_vault_manager)
+    start_barrier = threading.Barrier(2)
+    write_barrier = threading.Barrier(2)
+    successes = []
+    errors = []
+    real_atomic_write_text = notes_module.atomic_write_text
+
+    def synchronized_write(path, content):
+        try:
+            write_barrier.wait(timeout=1)
+        except threading.BrokenBarrierError:
+            pass
+        return real_atomic_write_text(path, content)
+
+    monkeypatch.setattr(notes_module, "atomic_write_text", synchronized_write)
+    try:
+        revision = service_one.get_note(document_id).revision
+        assert service_two.get_note(document_id).revision == revision
+
+        def update_body():
+            try:
+                start_barrier.wait(timeout=2)
+                successes.append(
+                    service_one.update_note_body(document_id, revision, "# Body writer\n")
+                )
+            except Exception as error:  # noqa: BLE001 - assert the domain race outcome below
+                errors.append(error)
+
+        def update_metadata():
+            try:
+                start_barrier.wait(timeout=2)
+                successes.append(
+                    service_two.update_metadata(
+                        document_id,
+                        expected_revision=revision,
+                        metadata_patch={"title": "Metadata writer"},
+                    )
+                )
+            except Exception as error:  # noqa: BLE001 - assert the domain race outcome below
+                errors.append(error)
+
+        threads = [threading.Thread(target=update_body), threading.Thread(target=update_metadata)]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join(timeout=5)
+
+        assert all(not thread.is_alive() for thread in threads)
+        assert len(successes) == 1
+        assert len(errors) == 1
+        assert isinstance(errors[0], NoteRevisionConflictError)
+
+        persisted = note_path.read_text(encoding="utf-8")
+        identity = store_one.get_document_identity(document_id)
+        assert identity is not None
+        assert identity["revision"] == revision + 1
+        assert identity["content_hash"] == content_hash_for_markdown(persisted)
+        assert persisted.endswith(("# Original\n", "# Body writer\n"))
+    finally:
+        store_one.close()
+        store_two.close()
+
+
 def test_direct_canonical_edit_is_rejected_instead_of_overwritten(
     notes_service, temp_vault_manager
 ):

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import threading
 
 import pytest
 
@@ -175,6 +176,97 @@ def test_commit_rolls_back_new_target_when_canonical_write_fails(fusion_harness,
     assert second_path.read_bytes() == original_bytes[second_id]
 
 
+def test_commit_rolls_back_target_file_and_identity_after_identity_creation_failure(
+    fusion_harness, monkeypatch
+):
+    vault, service, _notes, store = fusion_harness
+    (first_id, first_path), (second_id, second_path) = _two_sources(vault)
+    preview = service.preview([first_id, second_id], "Identity failure fusion", "Issue-A")
+    target = vault.atomic_note_path(preview.title, preview.target_issue)
+    target_id = document_id_for_relative_path(
+        target.resolve().relative_to(vault.config.vault_path.resolve()).as_posix()
+    )
+    original_bytes = {first_id: first_path.read_bytes(), second_id: second_path.read_bytes()}
+    real_ensure = store.ensure_document_identity
+
+    def create_identity_then_fail(**kwargs):
+        identity = real_ensure(**kwargs)
+        if kwargs["document_id"] == target_id:
+            raise OSError("simulated post-identity failure")
+        return identity
+
+    monkeypatch.setattr(store, "ensure_document_identity", create_identity_then_fail)
+
+    with pytest.raises(OSError, match="simulated post-identity failure"):
+        service.commit(preview.preview_id, preview.source_revisions)
+
+    assert not target.exists()
+    assert store.get_document_identity(target_id) is None
+    assert first_path.read_bytes() == original_bytes[first_id]
+    assert second_path.read_bytes() == original_bytes[second_id]
+
+
+def test_concurrent_commits_to_same_destination_leave_one_pending_note_intact(
+    fusion_harness, monkeypatch
+):
+    vault, _service, _notes, _store = fusion_harness
+    sources = [
+        _write_note(
+            vault,
+            f"4_salida/Issue-A/concurrent-{index}.md",
+            title=f"Concurrent {index}",
+            issue="Issue-A",
+            body=f"# Concurrent {index}\n\nSource {index}.\n",
+        )
+        for index in range(4)
+    ]
+    store_one = JobStore(vault.config.vault_path)
+    store_two = JobStore(vault.config.vault_path)
+    notes_one = NotesApplicationService(vault=vault, path_resolver=vault.path_resolver(), job_store=store_one)
+    notes_two = NotesApplicationService(vault=vault, path_resolver=vault.path_resolver(), job_store=store_two)
+    service_one = FusionApplicationService(notes_service=notes_one)
+    service_two = FusionApplicationService(notes_service=notes_two)
+    preview_one = service_one.preview(
+        [sources[0][0], sources[1][0]], "Concurrent destination", "Issue-A"
+    )
+    preview_two = service_two.preview(
+        [sources[2][0], sources[3][0]], "Concurrent destination", "Issue-A"
+    )
+    target = vault.atomic_note_path("Concurrent destination", "Issue-A")
+    results = []
+    errors = []
+
+    def commit(service, preview):
+        try:
+            results.append(service.commit(preview.preview_id, preview.source_revisions))
+        except Exception as error:  # noqa: BLE001 - assert one CAS winner below
+            errors.append(error)
+
+    threads = [
+        threading.Thread(target=commit, args=(service_one, preview_one)),
+        threading.Thread(target=commit, args=(service_two, preview_two)),
+    ]
+    try:
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join(timeout=5)
+
+        assert all(not thread.is_alive() for thread in threads)
+        assert len(results) == 1, errors
+        assert len(errors) == 1
+        assert target.exists()
+        target_id = document_id_for_relative_path(
+            target.resolve().relative_to(vault.config.vault_path.resolve()).as_posix()
+        )
+        winning_metadata, _body = parse_frontmatter(target.read_text(encoding="utf-8"))
+        assert winning_metadata["sources"] == list(results[0].source_ids)
+        assert store_one.get_document_identity(target_id) is not None
+    finally:
+        store_one.close()
+        store_two.close()
+
+
 def test_bridge_preview_and_commit_are_document_id_only(fusion_harness):
     vault, service, _notes, _store = fusion_harness
     (first_id, _first_path), (second_id, _second_path) = _two_sources(vault)
@@ -219,3 +311,21 @@ def test_fusion_ui_has_explicit_confirmation_and_safe_projection_contract():
         assert marker in source
     assert "fusion-preview-pane.innerHTML" not in source
     assert "fusion-source-selection.innerHTML" not in source
+
+    def function_body(name):
+        marker = f"function {name}"
+        start = source.index(marker)
+        end = source.find("\n        function ", start + len(marker))
+        return source[start:] if end == -1 else source[start:end]
+
+    open_body = function_body("openFusionWorkflow")
+    preview_body = function_body("previewSelectedFusion")
+    commit_body = function_body("commitSelectedFusion")
+    assert "fusionPreview = null" in open_body
+    assert "fusion-confirmation').checked = false" in open_body
+    assert "fusion-commit-button').disabled = true" in open_body
+    assert preview_body.index("fusionPreview = null") < preview_body.index("preview_fusion")
+    assert "fusion-confirmation').checked = false" in preview_body
+    assert "fusionPreview = null" in commit_body
+    assert "confirmation.checked = false" in commit_body
+    assert "fusion-commit-button').disabled = true" in commit_body

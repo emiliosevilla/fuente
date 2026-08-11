@@ -13,7 +13,7 @@ from funes.domain.documents import NoteDocument
 from funes.domain.errors import PathAuthorizationError
 from funes.domain.errors import NoteRevisionConflictError
 from funes.domain.frontmatter import serialize_frontmatter
-from funes.domain.paths import AuthorizedPathResolver
+from funes.domain.paths import AuthorizedPathResolver, document_id_for_relative_path
 from funes.infrastructure.atomic_files import document_file_lock
 from funes.ui.markdown_projection import markdown_to_projection
 from funes.rag.hybrid_search import tokenize
@@ -167,14 +167,32 @@ class FusionApplicationService:
         target_path = self.notes_service.vault.atomic_note_path(
             preview.title, preview.target_issue
         )
-        if target_path.exists():
-            raise ValueError("fusion target already exists")
-
-        lock_directory = self.notes_service.vault.config.vault_path / ".funes" / "note-editor-locks"
+        target_relative = target_path.resolve().relative_to(
+            self.notes_service.vault.config.vault_path.resolve()
+        ).as_posix()
+        target_document_id = document_id_for_relative_path(target_relative)
+        lock_directory = (
+            self.notes_service.vault.config.vault_path
+            / ".funes"
+            / "note-editor-locks"
+        )
         sorted_ids = tuple(sorted(preview.source_ids))
         first_source_id = sorted_ids[0]
-        try:
-            with ExitStack() as locks:
+        with ExitStack() as locks:
+            # Reserve the destination before checking either disk or SQLite.
+            # A second worker therefore observes the winner while holding the
+            # same lock and never compensates another worker's target.
+            locks.enter_context(document_file_lock(lock_directory, target_document_id))
+            target_before_bytes = (
+                target_path.read_bytes() if target_path.exists() else None
+            )
+            target_before_identity = self.notes_service.job_store.get_document_identity(
+                target_document_id
+            )
+            if target_before_bytes is not None or target_before_identity is not None:
+                raise ValueError("fusion target already exists")
+
+            try:
                 for document_id in sorted_ids[1:]:
                     locks.enter_context(document_file_lock(lock_directory, document_id))
 
@@ -187,25 +205,32 @@ class FusionApplicationService:
                 def write_guard() -> None:
                     self._assert_sources_current(preview)
 
-                candidate_relative = target_path.resolve().relative_to(
-                    self.notes_service.vault.config.vault_path.resolve()
-                ).as_posix()
                 result = self.notes_service.persist_pending_review_candidate(
                     first_source_id,
                     expected_revision=first_source.revision,
                     expected_content_hash=first_source.content_hash,
-                    candidate_relative_path=candidate_relative,
+                    candidate_relative_path=target_relative,
                     candidate_markdown=preview.canonical_markdown,
                     write_guard=write_guard,
                 )
-        except Exception:
-            if target_path.exists():
+            except Exception:
+                rollback_errors = []
                 try:
-                    if target_path.read_text(encoding="utf-8") == preview.canonical_markdown:
-                        target_path.unlink()
-                except OSError:
-                    pass
-            raise
+                    if target_before_bytes is None:
+                        target_path.unlink(missing_ok=True)
+                    else:
+                        target_path.write_bytes(target_before_bytes)
+                except Exception as rollback_error:
+                    rollback_errors.append(rollback_error)
+                try:
+                    self.notes_service.job_store.restore_document_identity(
+                        target_document_id, target_before_identity
+                    )
+                except Exception as rollback_error:
+                    rollback_errors.append(rollback_error)
+                if rollback_errors:
+                    raise RuntimeError("fusion target rollback failed") from rollback_errors[0]
+                raise
         self._previews.pop(preview_id, None)
         return result
 

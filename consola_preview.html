@@ -1599,6 +1599,9 @@
         }
 
         function openFusionWorkflow() {
+            fusionPreview = null;
+            document.getElementById('fusion-confirmation').checked = false;
+            document.getElementById('fusion-commit-button').disabled = true;
             openModal('modal-fusion');
             fusionStatus('Cargando candidatos deterministas...', false);
             if (window.pywebview && window.pywebview.api) {
@@ -1643,6 +1646,9 @@
         }
 
         function previewSelectedFusion() {
+            fusionPreview = null;
+            document.getElementById('fusion-confirmation').checked = false;
+            document.getElementById('fusion-commit-button').disabled = true;
             const ids = selectedFusionIds();
             const title = document.getElementById('fusion-title').value.trim();
             const issue = document.getElementById('fusion-issue').value.trim();
@@ -1655,6 +1661,8 @@
             window.pywebview.api.preview_fusion(ids, title, issue).then(function(result) {
                 if (result && result.error) {
                     fusionPreview = null;
+                    document.getElementById('fusion-confirmation').checked = false;
+                    document.getElementById('fusion-commit-button').disabled = true;
                     fusionStatus(result.message || result.error, true);
                     return;
                 }
@@ -1664,6 +1672,9 @@
                 document.getElementById('fusion-commit-button').disabled = true;
                 fusionStatus('Preview listo. Marca la confirmación explícita para crear la nota pendiente.', false);
             }).catch(function(error) {
+                fusionPreview = null;
+                document.getElementById('fusion-confirmation').checked = false;
+                document.getElementById('fusion-commit-button').disabled = true;
                 fusionStatus('No se pudo construir el preview: ' + String(error), true);
             });
         }
@@ -1681,13 +1692,21 @@
                 fusionPreview.source_revisions
             ).then(function(result) {
                 if (result && result.error) {
+                    fusionPreview = null;
+                    confirmation.checked = false;
+                    document.getElementById('fusion-commit-button').disabled = true;
                     fusionStatus(result.message || 'Conflicto de revisión: vuelve a previsualizar.', true);
                     return;
                 }
                 fusionStatus('Nota pendiente creada. Las fuentes originales siguen intactas.', false);
+                fusionPreview = null;
+                confirmation.checked = false;
                 document.getElementById('fusion-commit-button').disabled = true;
                 if (typeof loadReaderNotes === 'function') loadReaderNotes();
             }).catch(function(error) {
+                fusionPreview = null;
+                confirmation.checked = false;
+                document.getElementById('fusion-commit-button').disabled = true;
                 fusionStatus('No se pudo confirmar la fusión: ' + String(error), true);
             });
         }

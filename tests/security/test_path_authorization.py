@@ -7,6 +7,12 @@ from funes.config import VaultConfig
 from funes.control_console import FunesConsoleBackend
 from funes.core.vault import VaultManager
 from funes.domain.errors import PathAuthorizationError
+from funes.application.fusion import FusionApplicationService
+from funes.application.notes import NotesApplicationService
+from funes.domain.frontmatter import serialize_frontmatter
+from funes.domain.paths import document_id_for_relative_path
+from funes.infrastructure.sqlite_store import JobStore
+from funes.rag.vault_corpus import VaultCorpusProvider
 
 
 @pytest.mark.parametrize(
@@ -33,6 +39,56 @@ def test_rejects_symlink_outside_vault(path_resolver, temp_vault_path):
 
     with pytest.raises(PathAuthorizationError):
         path_resolver.resolve_note("4_salida/outside.md")
+
+
+def test_fusion_candidates_skip_symlinked_notes_outside_vault(
+    path_resolver, temp_vault_path
+):
+    inside = temp_vault_path / "4_salida" / "inside.md"
+    markdown = serialize_frontmatter(
+        {
+            "schema_version": 1,
+            "title": "Inside",
+            "date": "2026-08-11",
+            "author": "test",
+            "tags": [],
+            "issue": "Issue-A",
+            "status": "approved",
+            "sources": [],
+            "history": [],
+        }
+    ) + "# Same body\n"
+    inside.write_text(markdown, encoding="utf-8")
+    other = temp_vault_path / "4_salida" / "other.md"
+    other.write_text(markdown, encoding="utf-8")
+    external = temp_vault_path.parent / "outside-fusion.md"
+    external.write_bytes(inside.read_bytes())
+    link = temp_vault_path / "4_salida" / "outside-fusion.md"
+    link.symlink_to(external)
+    before = inside.read_bytes()
+    store = JobStore(temp_vault_path)
+    notes = NotesApplicationService(
+        vault=VaultManager(VaultConfig(vault_path=temp_vault_path)),
+        path_resolver=path_resolver,
+        job_store=store,
+    )
+    service = FusionApplicationService(
+        notes_service=notes,
+        corpus_provider=VaultCorpusProvider(
+            vault_root=temp_vault_path,
+            output_roots=[path_resolver.roots["output"]],
+            path_resolver=path_resolver,
+        ),
+    )
+    try:
+        candidates = service.find_candidates()
+    finally:
+        store.close()
+
+    linked_id = document_id_for_relative_path("4_salida/outside-fusion.md")
+    assert all(linked_id not in candidate.document_ids for candidate in candidates)
+    assert candidates
+    assert inside.read_bytes() == before
 
 
 @pytest.mark.parametrize(

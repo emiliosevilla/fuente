@@ -85,21 +85,30 @@ class FusionApplicationService:
         exact: list[FusionCandidate] = []
         similar: list[FusionCandidate] = []
         seen_pairs: set[tuple[str, str]] = set()
-        for index, left in enumerate(notes):
-            for right in notes[index + 1 :]:
-                if document_id is not None and document_id not in {
-                    left.document_id,
-                    right.document_id,
-                }:
-                    continue
-                pair = (left.document_id, right.document_id)
-                if left.content_hash == right.content_hash:
-                    exact.append(self._exact_candidate(pair))
-                    seen_pairs.add(pair)
-                    continue
-                candidate = self._similar_candidate(left, right)
-                if candidate is not None and pair not in seen_pairs:
-                    similar.append(candidate)
+        issue_partitions: dict[str, list[NoteDocument]] = {}
+        for note in notes:
+            resolved_issue = self._resolved_issue(note, corpus_metadata)
+            issue_partitions.setdefault(resolved_issue, []).append(note)
+
+        # An omitted issue means "all issues", but never permits a candidate
+        # pair to cross the issue boundary. An explicit issue has already
+        # filtered the notes above and retains the same pair semantics.
+        for partition in issue_partitions.values():
+            for index, left in enumerate(partition):
+                for right in partition[index + 1 :]:
+                    if document_id is not None and document_id not in {
+                        left.document_id,
+                        right.document_id,
+                    }:
+                        continue
+                    pair = (left.document_id, right.document_id)
+                    if left.content_hash == right.content_hash:
+                        exact.append(self._exact_candidate(pair))
+                        seen_pairs.add(pair)
+                        continue
+                    candidate = self._similar_candidate(left, right)
+                    if candidate is not None and pair not in seen_pairs:
+                        similar.append(candidate)
 
         exact.sort(key=lambda candidate: candidate.document_ids)
         similar.sort(
@@ -135,10 +144,17 @@ class FusionApplicationService:
     ) -> bool:
         metadata = corpus_metadata.get(note.document_id, {})
         note_theme = str(metadata.get("theme") or self._theme_for_note(note))
-        note_issue = str(note.frontmatter.get("issue") or metadata.get("issue") or "")
+        note_issue = self._resolved_issue(note, corpus_metadata)
         return (theme is None or note_theme == theme) and (
             issue is None or note_issue == issue
         )
+
+    @staticmethod
+    def _resolved_issue(
+        note: NoteDocument, corpus_metadata: dict[str, dict[str, Any]]
+    ) -> str:
+        metadata = corpus_metadata.get(note.document_id, {})
+        return str(note.frontmatter.get("issue") or metadata.get("issue") or "_Sin_Cuestion")
 
     def _theme_for_note(self, note: NoteDocument) -> str:
         output_root = self.path_resolver.roots["output"]
@@ -209,7 +225,7 @@ class FusionApplicationService:
         left_tokens = set(tokenize(left))
         right_tokens = set(tokenize(right))
         if not left_tokens and not right_tokens:
-            return 1.0
+            return 0.0
         union = left_tokens | right_tokens
         return len(left_tokens & right_tokens) / len(union)
 

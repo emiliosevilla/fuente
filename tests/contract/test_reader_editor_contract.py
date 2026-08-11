@@ -43,6 +43,10 @@ def test_preview_uses_the_safe_projection_renderer_for_all_markdown_shapes():
     for node_type in ("code_block", "raw_block", "bullet_list", "ordered_list", "raw_inline"):
         assert node_type in SOURCE
     assert "textContent" in SOURCE
+    assert "safeReaderHref" in SOURCE
+    assert "createElement('strong')" in SOURCE
+    assert "createElement('em')" in SOURCE
+    assert "setAttribute('href', href)" in SOURCE
 
 
 def test_reader_editor_calls_only_typed_bridge_methods_with_opaque_id_and_revision():
@@ -72,6 +76,13 @@ def test_save_captures_immutable_operation_and_discards_stale_responses():
     assert "newerDraft" in body
     assert "loadNoteContent(operation.documentId" in body
     assert "invalidateReaderEditorForNavigation(documentId)" in SOURCE
+
+
+def test_editor_load_captures_session_and_guards_success_and_error_callbacks():
+    body = _function_body("enterReaderEditMode")
+    assert "const editorSession = readerEditorSession" in body
+    assert "readerEditorSession !== editorSession" in body
+    assert "readerEditorSession === editorSession" in body
 
 
 def test_cancel_is_local_and_does_not_call_the_backend():

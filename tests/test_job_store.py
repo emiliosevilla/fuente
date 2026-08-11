@@ -483,7 +483,7 @@ def test_migrations_are_recorded_and_not_reapplied(tmp_path):
             row[0]
             for row in raw_connection.execute("SELECT version FROM schema_migrations")
         ]
-        assert versions == [1, 2, 3, 4]
+        assert versions == [1, 2, 3, 4, 5]
     finally:
         raw_connection.close()
 
@@ -496,7 +496,7 @@ def test_migrations_are_recorded_and_not_reapplied(tmp_path):
             for row in raw_connection.execute("SELECT version FROM schema_migrations")
         ]
         raw_connection.close()
-        assert versions == [1, 2, 3, 4]
+        assert versions == [1, 2, 3, 4, 5]
     finally:
         reopened.close()
 
@@ -519,6 +519,7 @@ def test_migration_003_preserves_legacy_rows_and_adds_nullable_fields(tmp_path):
             2,
             3,
             4,
+            5,
         }
         columns = {
             row[1]: row[3]
@@ -526,6 +527,17 @@ def test_migration_003_preserves_legacy_rows_and_adds_nullable_fields(tmp_path):
         }
         assert columns["cancel_requested_at"] == 0
         assert columns["cancel_reason"] == 0
+        reflow_columns = {
+            row[1] for row in store._connection.execute("PRAGMA table_info(reflow_requests)")
+        }
+        assert {
+            "claim_token",
+            "claim_epoch",
+            "lease_expires_at",
+            "candidate_document_id",
+            "candidate_path",
+            "candidate_content_hash",
+        } <= reflow_columns
         assert db_path.exists()
     finally:
         store.close()

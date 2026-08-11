@@ -8,7 +8,7 @@ from typing import Any, Callable, Optional
 
 from funes.application.ingestion import CHUNK_ARTIFACT_KIND
 from funes.core.vault import VaultManager
-from funes.domain.documents import NoteDocument, content_hash_for_markdown
+from funes.domain.documents import MarkdownDocument, NoteDocument, content_hash_for_markdown
 from funes.domain.errors import (
     InvalidNoteTransitionError,
     NoteRevisionConflictError,
@@ -150,6 +150,115 @@ class NotesApplicationService:
                 lock_held=True,
                 reindex=False,
             )
+
+    def persist_pending_review_candidate(
+        self,
+        source_document_id: str,
+        *,
+        expected_revision: int,
+        expected_content_hash: str,
+        candidate_relative_path: str,
+        candidate_markdown: str,
+        write_guard: Callable[[], None] | None = None,
+    ) -> NoteDocument:
+        """Persist one review candidate under the source note's canonical CAS.
+
+        The source is never written by this method.  Its revision and current
+        bytes are checked while holding the same per-document lock used by
+        normal note edits, then the candidate is created at most once.  An
+        existing candidate must be byte-identical to the requested result;
+        this makes recovery idempotent instead of allowing a second body to
+        replace a durable review artifact.
+        """
+        source_document_id = self._resolve_opaque_document_id(source_document_id)
+        if (
+            not isinstance(expected_revision, int)
+            or isinstance(expected_revision, bool)
+            or expected_revision < 1
+        ):
+            raise ValueError("expected_revision must be a positive integer")
+        if not isinstance(expected_content_hash, str) or not expected_content_hash:
+            raise ValueError("expected_content_hash is required")
+        if not isinstance(candidate_markdown, str):
+            raise ValueError("candidate_markdown must be a string")
+
+        candidate_document = MarkdownDocument.from_markdown(candidate_markdown)
+        candidate_metadata = dict(candidate_document.metadata)
+        candidate_metadata["status"] = "pending_review"
+        allowed_issues = self.vault.get_issues_in_theme()
+        validate_metadata_fields(candidate_metadata, allowed_issues=allowed_issues)
+        canonical_candidate = MarkdownDocument(
+            metadata=candidate_metadata,
+            body=candidate_document.body,
+        ).to_markdown()
+        candidate_hash = content_hash_for_markdown(canonical_candidate)
+
+        candidate_path = self.path_resolver.resolve_note(candidate_relative_path)
+        source_path, source_relative = self._resolve_note_path(source_document_id)
+        candidate_relative = candidate_path.resolve().relative_to(
+            self.vault.config.vault_path.resolve()
+        ).as_posix()
+        if candidate_path.resolve() == source_path.resolve():
+            raise PathAuthorizationError()
+
+        lock_directory = self.vault.config.vault_path / ".funes" / "note-editor-locks"
+        with document_file_lock(lock_directory, source_document_id):
+            source_note = self.get_note(source_document_id)
+            if source_note.revision != expected_revision:
+                raise NoteRevisionConflictError(source_document_id)
+            current_markdown = source_path.read_text(encoding="utf-8", errors="replace")
+            current_hash = content_hash_for_markdown(current_markdown)
+            source_identity = self.job_store.get_document_identity(source_document_id)
+            if (
+                source_identity is None
+                or source_identity.get("relative_path") != source_relative
+                or source_identity.get("content_hash") != current_hash
+                or current_hash != expected_content_hash
+            ):
+                raise NoteRevisionConflictError(source_document_id)
+
+            if write_guard is not None:
+                write_guard()
+
+            if candidate_path.exists():
+                existing_markdown = candidate_path.read_text(
+                    encoding="utf-8", errors="replace"
+                )
+                if existing_markdown != canonical_candidate:
+                    raise NoteRevisionConflictError(
+                        document_id_for_relative_path(candidate_relative)
+                    )
+            else:
+                atomic_write_text(candidate_path, canonical_candidate)
+
+            existing_identity = self.job_store.get_document_identity(
+                document_id_for_relative_path(candidate_relative)
+            )
+            candidate_id = document_id_for_relative_path(candidate_relative)
+            if existing_identity is None:
+                identity = self.job_store.ensure_document_identity(
+                    document_id=candidate_id,
+                    relative_path=candidate_relative,
+                    content_hash=candidate_hash,
+                )
+            else:
+                if (
+                    existing_identity.get("relative_path") != candidate_relative
+                    or existing_identity.get("content_hash") != candidate_hash
+                ):
+                    raise NoteRevisionConflictError(candidate_id)
+                identity = existing_identity
+
+        return NoteDocument.from_persisted(
+            document_id=candidate_id,
+            relative_path=candidate_relative,
+            markdown=canonical_candidate,
+            revision=int(identity["revision"]),
+        ).with_metadata(
+            candidate_metadata,
+            revision=int(identity["revision"]),
+            content_hash=candidate_hash,
+        )
 
     def approve(
         self,

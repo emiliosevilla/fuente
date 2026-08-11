@@ -3,19 +3,19 @@ from __future__ import annotations
 
 import json
 import re
+import threading
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any
+from typing import Any, Callable
 
 from funes.application.notes import NotesApplicationService
 from funes.application.reflow import ReflowApplicationService, ReflowResult, ReflowScope
-from funes.domain.documents import MarkdownDocument, NoteDocument, content_hash_for_markdown
+from funes.domain.documents import MarkdownDocument, NoteDocument
 from funes.domain.errors import NoteRevisionConflictError, PathAuthorizationError
 from funes.domain.frontmatter import FrontmatterError
-from funes.domain.paths import AuthorizedPathResolver, document_id_for_relative_path
-from funes.infrastructure.atomic_files import atomic_write_text, document_file_lock
+from funes.domain.paths import AuthorizedPathResolver
 from funes.infrastructure.sqlite_store import JobStore
 
 
@@ -25,6 +25,10 @@ TERMINAL_REFLOW_STATUSES = frozenset({"completed", "failed", "cancelled"})
 
 class ReflowRequestNotFoundError(KeyError):
     code = "reflow_request_not_found"
+
+
+class _LostClaim(RuntimeError):
+    pass
 
 
 @dataclass(frozen=True)
@@ -39,6 +43,12 @@ class ReflowRequest:
     result: dict[str, Any] | None
     error_code: str | None
     revision: int
+    claim_token: str | None
+    claim_epoch: int
+    lease_expires_at: str | None
+    candidate_document_id: str | None
+    candidate_path: str | None
+    candidate_content_hash: str | None
 
 
 class ReflowRequestStore:
@@ -49,10 +59,16 @@ class ReflowRequestStore:
         job_store: JobStore | str | Path,
         *,
         path_resolver: AuthorizedPathResolver | None = None,
+        document_authorizer: Callable[[str], Any] | None = None,
+        lease_seconds: float = 30.0,
     ) -> None:
         self._owns_store = not isinstance(job_store, JobStore)
         self.job_store = job_store if isinstance(job_store, JobStore) else JobStore(job_store)
         self.path_resolver = path_resolver
+        self.document_authorizer = document_authorizer
+        if not isinstance(lease_seconds, (int, float)) or lease_seconds < 0:
+            raise ValueError("lease_seconds must be non-negative")
+        self.lease_seconds = float(lease_seconds)
 
     def close(self) -> None:
         if self._owns_store:
@@ -65,6 +81,10 @@ class ReflowRequestStore:
         self._validate_mode(mode)
         if self.path_resolver is not None:
             self.path_resolver.resolve_note_id(document_id)
+        elif self.document_authorizer is not None:
+            self.document_authorizer(document_id)
+        else:
+            raise PathAuthorizationError()
         row = self.job_store.create_reflow_request(
             request_id=str(uuid.uuid4()),
             document_id=document_id,
@@ -98,20 +118,50 @@ class ReflowRequestStore:
         return self._from_row(row)
 
     def claim(self, request_id: str) -> ReflowRequest | None:
-        row = self.job_store.claim_reflow_request(request_id)
-        return self._from_row(row) if row is not None else None
-
-    def complete(self, request_id: str, result: ReflowResult) -> ReflowRequest | None:
-        row = self.job_store.complete_reflow_request(
-            request_id, result_json=json.dumps(result.as_dict(), sort_keys=True)
+        row = self.job_store.claim_reflow_request(
+            request_id, lease_seconds=self.lease_seconds
         )
         return self._from_row(row) if row is not None else None
 
-    def fail(self, request_id: str, result: ReflowResult) -> ReflowRequest | None:
+    def heartbeat(self, request_id: str, claim_token: str) -> ReflowRequest | None:
+        row = self.job_store.heartbeat_reflow_request(
+            request_id, claim_token=claim_token, lease_seconds=self.lease_seconds
+        )
+        return self._from_row(row) if row is not None else None
+
+    def complete(
+        self, request_id: str, claim_token: str, result: ReflowResult
+    ) -> ReflowRequest | None:
+        row = self.job_store.complete_reflow_request(
+            request_id,
+            claim_token=claim_token,
+            result_json=json.dumps(result.as_dict(), sort_keys=True),
+        )
+        return self._from_row(row) if row is not None else None
+
+    def fail(
+        self, request_id: str, claim_token: str, result: ReflowResult
+    ) -> ReflowRequest | None:
         row = self.job_store.fail_reflow_request(
             request_id,
+            claim_token=claim_token,
             error_code=result.error or "reflow_failed",
             result_json=json.dumps(result.as_dict(), sort_keys=True),
+        )
+        return self._from_row(row) if row is not None else None
+
+    def record_candidate(
+        self,
+        request_id: str,
+        claim_token: str,
+        candidate: NoteDocument,
+    ) -> ReflowRequest | None:
+        row = self.job_store.record_reflow_candidate(
+            request_id,
+            claim_token=claim_token,
+            candidate_document_id=candidate.document_id,
+            candidate_path=candidate.relative_path,
+            candidate_content_hash=candidate.content_hash,
         )
         return self._from_row(row) if row is not None else None
 
@@ -155,6 +205,12 @@ class ReflowRequestStore:
             result=result,
             error_code=row.get("error_code"),
             revision=int(row["revision"]),
+            claim_token=row.get("claim_token"),
+            claim_epoch=int(row.get("claim_epoch") or 0),
+            lease_expires_at=row.get("lease_expires_at"),
+            candidate_document_id=row.get("candidate_document_id"),
+            candidate_path=row.get("candidate_path"),
+            candidate_content_hash=row.get("candidate_content_hash"),
         )
 
 
@@ -180,9 +236,15 @@ class ReflowJobService:
         self.atomic_generator = atomic_generator or generator
         self.reflow_service = reflow_service
         self.model_name = model_name
+        if (
+            self.request_store.path_resolver is None
+            and self.request_store.document_authorizer is None
+        ):
+            self.request_store.document_authorizer = self.notes_service.get_note
 
     def submit(self, document_id: str, expected_revision: int, mode: str) -> ReflowRequest:
         """Authorize the note before placing its request in durable state."""
+        ReflowRequestStore._validate_document_id(document_id)
         self.notes_service.get_note(document_id)
         return self.request_store.submit(document_id, expected_revision, mode)
 
@@ -200,18 +262,37 @@ class ReflowJobService:
                 return self._result_from_request(current)
             return self._failure_result(current, "reflow_request_running")
 
+        claim_token = claimed.claim_token
+        if not claim_token:
+            return self._failure_result(claimed, "reflow_request_fenced")
+
         try:
-            self._ensure_not_cancelled(request_id)
+            self._ensure_claim_active(request_id, claim_token)
             note = self.notes_service.get_note(claimed.document_id)
             self._ensure_expected_revision(note, claimed.expected_revision)
-            candidate = self._candidate_for(claimed, note)
-            self._ensure_not_cancelled(request_id)
-            candidate = self._canonical_pending_review(candidate)
-            candidate_id, candidate_path = self._persist_candidate(
-                request=claimed,
-                note=note,
-                markdown=candidate,
+            candidate_relative_path = self._candidate_relative_path(note, request_id)
+            candidate_path = self.notes_service.path_resolver.resolve_note(
+                candidate_relative_path
             )
+            if candidate_path.exists():
+                existing = candidate_path.read_text(encoding="utf-8", errors="replace")
+                candidate = self._canonical_pending_review(existing)
+                if candidate != existing:
+                    raise FrontmatterError("existing candidate is not canonical")
+            else:
+                candidate = self._candidate_for(claimed, note, request_id, claim_token)
+                candidate = self._canonical_pending_review(candidate)
+
+            persisted = self.notes_service.persist_pending_review_candidate(
+                note.document_id,
+                expected_revision=claimed.expected_revision,
+                expected_content_hash=note.content_hash,
+                candidate_relative_path=candidate_relative_path,
+                candidate_markdown=candidate,
+                write_guard=lambda: self._ensure_claim_active(request_id, claim_token),
+            )
+            if self.request_store.record_candidate(request_id, claim_token, persisted) is None:
+                raise _LostClaim()
             result = ReflowResult(
                 status="completed",
                 processed_notes=1,
@@ -221,33 +302,54 @@ class ReflowJobService:
                 orphans=[],
                 scope={"document_id": note.document_id, "theme": None, "issue": None},
                 request_id=request_id,
-                candidate_document_id=candidate_id,
-                candidate_path=candidate_path,
+                candidate_document_id=persisted.document_id,
+                candidate_path=persisted.relative_path,
             )
-            completed = self.request_store.complete(request_id, result)
+            completed = self.request_store.complete(request_id, claim_token, result)
             return result if completed is not None else self._result_from_request(
                 self.request_store.get(request_id)
             )
         except _CancelledRequest:
             return self._result_from_request(self.request_store.get(request_id))
+        except _LostClaim:
+            current = self.request_store.get(request_id)
+            return (
+                self._result_from_request(current)
+                if current.status in TERMINAL_REFLOW_STATUSES
+                else self._failure_result(current, "reflow_request_fenced")
+            )
         except NoteRevisionConflictError:
-            return self._fail(request_id, "stale_revision")
+            return self._fail(request_id, claim_token, "stale_revision")
         except PathAuthorizationError:
-            return self._fail(request_id, "path_not_authorized")
+            return self._fail(request_id, claim_token, "path_not_authorized")
         except FrontmatterError:
-            return self._fail(request_id, "invalid_markdown")
+            return self._fail(request_id, claim_token, "invalid_markdown")
         except Exception as error:
-            return self._fail(request_id, getattr(error, "code", None) or "generation_failed")
+            return self._fail(
+                request_id,
+                claim_token,
+                getattr(error, "code", None) or "generation_failed",
+            )
 
-    def _candidate_for(self, request: ReflowRequest, note: NoteDocument) -> str:
+    def _candidate_for(
+        self,
+        request: ReflowRequest,
+        note: NoteDocument,
+        request_id: str,
+        claim_token: str,
+    ) -> str:
         if request.mode == "links":
             return self._link_candidate(note, note.to_markdown())
         if self.atomic_generator is None:
             raise RuntimeError("atomic_generator is required for enrichment")
-        generated = self.atomic_generator.generate_atomic_note(
-            clean_md_content=note.body_markdown,
-            model_name=self.model_name,
-            file_name=note.relative_path,
+        generated = self._generate_with_heartbeat(
+            request_id,
+            claim_token,
+            lambda: self.atomic_generator.generate_atomic_note(
+                clean_md_content=note.body_markdown,
+                model_name=self.model_name,
+                file_name=note.relative_path,
+            ),
         )
         candidate = MarkdownDocument.from_markdown(generated).to_markdown()
         if request.mode == "all":
@@ -273,51 +375,64 @@ class ReflowJobService:
         if note.revision != expected_revision:
             raise NoteRevisionConflictError(note.document_id)
 
-    def _persist_candidate(
-        self, *, request: ReflowRequest, note: NoteDocument, markdown: str
-    ) -> tuple[str, str]:
-        lock_directory = self.notes_service.vault.config.vault_path / ".funes" / "note-editor-locks"
-        with document_file_lock(lock_directory, note.document_id):
-            current = self.notes_service.get_note(note.document_id)
-            self._ensure_expected_revision(current, request.expected_revision)
-            source_path = self.notes_service.path_resolver.resolve_note_id(note.document_id)
-            source_bytes = source_path.read_bytes()
-            identity = self.request_store.job_store.get_document_identity(note.document_id)
-            if identity is None or identity.get("content_hash") != content_hash_for_markdown(
-                source_bytes.decode("utf-8", errors="replace")
-            ):
-                raise NoteRevisionConflictError(note.document_id)
+    def _candidate_relative_path(self, note: NoteDocument, request_id: str) -> str:
+        source_path = self.notes_service.path_resolver.resolve_note_id(note.document_id)
+        safe_stem = re.sub(r"[^A-Za-z0-9_-]+", "_", source_path.stem).strip("_") or "note"
+        candidate_path = source_path.parent / "_Reflow_Review" / (
+            f"_{safe_stem}_reflow_{request_id}.md"
+        )
+        return candidate_path.resolve().relative_to(
+            self.notes_service.vault.config.vault_path.resolve()
+        ).as_posix()
 
-            safe_stem = re.sub(r"[^A-Za-z0-9_-]+", "_", source_path.stem).strip("_") or "note"
-            candidate_path = source_path.parent / "_Reflow_Review" / (
-                f"_{safe_stem}_reflow_{request.request_id}.md"
-            )
-            vault_root = self.notes_service.vault.config.vault_path.resolve()
-            candidate_relative = candidate_path.relative_to(vault_root).as_posix()
-            candidate_path = self.notes_service.path_resolver.resolve_note(candidate_relative)
-            if candidate_path.exists():
-                if candidate_path.read_text(encoding="utf-8") != markdown:
-                    raise FileExistsError(candidate_path)
-            else:
-                atomic_write_text(candidate_path, markdown)
-
-            relative = candidate_path.resolve().relative_to(vault_root).as_posix()
-            candidate_id = document_id_for_relative_path(relative)
-            self.request_store.job_store.ensure_document_identity(
-                document_id=candidate_id,
-                relative_path=relative,
-                content_hash=content_hash_for_markdown(markdown),
-            )
-            return candidate_id, relative
-
-    def _ensure_not_cancelled(self, request_id: str) -> None:
-        if self.request_store.get(request_id).status == "cancelled":
+    def _ensure_claim_active(self, request_id: str, claim_token: str) -> None:
+        current = self.request_store.get(request_id)
+        if current.status == "cancelled":
             raise _CancelledRequest()
+        if current.status != "running" or current.claim_token != claim_token:
+            raise _LostClaim()
+        if self.request_store.heartbeat(request_id, claim_token) is None:
+            current = self.request_store.get(request_id)
+            if current.status == "cancelled":
+                raise _CancelledRequest()
+            raise _LostClaim()
 
-    def _fail(self, request_id: str, error_code: str) -> ReflowResult:
+    def _generate_with_heartbeat(
+        self, request_id: str, claim_token: str, operation: Callable[[], str]
+    ) -> str:
+        stop = threading.Event()
+        lost = threading.Event()
+        interval = max(self.request_store.lease_seconds / 3.0, 0.05)
+
+        def renew() -> None:
+            while not stop.wait(interval):
+                if self.request_store.heartbeat(request_id, claim_token) is None:
+                    lost.set()
+                    return
+
+        heartbeat = threading.Thread(target=renew, daemon=True)
+        heartbeat.start()
+        try:
+            generated = operation()
+        finally:
+            stop.set()
+            heartbeat.join(timeout=max(interval, 0.1) + 1.0)
+        if lost.is_set():
+            raise _LostClaim()
+        return generated
+
+    def _fail(self, request_id: str, claim_token: str, error_code: str) -> ReflowResult:
         request = self.request_store.get(request_id)
+        if request.status == "cancelled":
+            return self._result_from_request(request)
+        if request.status != "running" or request.claim_token != claim_token:
+            return (
+                self._result_from_request(request)
+                if request.status in TERMINAL_REFLOW_STATUSES
+                else self._failure_result(request, "reflow_request_fenced")
+            )
         result = self._failure_result(request, error_code)
-        failed = self.request_store.fail(request_id, result)
+        failed = self.request_store.fail(request_id, claim_token, result)
         return result if failed is not None else self._result_from_request(
             self.request_store.get(request_id)
         )

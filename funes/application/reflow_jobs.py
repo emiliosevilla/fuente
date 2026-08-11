@@ -12,10 +12,10 @@ from typing import Any, Callable
 
 from funes.application.notes import NotesApplicationService
 from funes.application.reflow import ReflowApplicationService, ReflowResult, ReflowScope
-from funes.domain.documents import MarkdownDocument, NoteDocument
+from funes.domain.documents import MarkdownDocument, NoteDocument, content_hash_for_markdown
 from funes.domain.errors import NoteRevisionConflictError, PathAuthorizationError
 from funes.domain.frontmatter import FrontmatterError
-from funes.domain.paths import AuthorizedPathResolver
+from funes.domain.paths import AuthorizedPathResolver, document_id_for_relative_path
 from funes.infrastructure.sqlite_store import JobStore
 
 
@@ -49,6 +49,7 @@ class ReflowRequest:
     candidate_document_id: str | None
     candidate_path: str | None
     candidate_content_hash: str | None
+    candidate_markdown: str | None
 
 
 class ReflowRequestStore:
@@ -165,6 +166,26 @@ class ReflowRequestStore:
         )
         return self._from_row(row) if row is not None else None
 
+    def reserve_candidate(
+        self,
+        request_id: str,
+        claim_token: str,
+        *,
+        candidate_document_id: str,
+        candidate_path: str,
+        candidate_content_hash: str,
+        candidate_markdown: str,
+    ) -> ReflowRequest | None:
+        row = self.job_store.reserve_reflow_candidate(
+            request_id,
+            claim_token=claim_token,
+            candidate_document_id=candidate_document_id,
+            candidate_path=candidate_path,
+            candidate_content_hash=candidate_content_hash,
+            candidate_markdown=candidate_markdown,
+        )
+        return self._from_row(row) if row is not None else None
+
     @staticmethod
     def _validate_document_id(document_id: str) -> None:
         if (
@@ -211,6 +232,7 @@ class ReflowRequestStore:
             candidate_document_id=row.get("candidate_document_id"),
             candidate_path=row.get("candidate_path"),
             candidate_content_hash=row.get("candidate_content_hash"),
+            candidate_markdown=row.get("candidate_markdown"),
         )
 
 
@@ -279,9 +301,33 @@ class ReflowJobService:
                 candidate = self._canonical_pending_review(existing)
                 if candidate != existing:
                     raise FrontmatterError("existing candidate is not canonical")
+                if (
+                    claimed.candidate_markdown is not None
+                    and candidate != claimed.candidate_markdown
+                ):
+                    raise FrontmatterError("existing candidate differs from reservation")
+            elif claimed.candidate_markdown is not None:
+                candidate = self._canonical_pending_review(claimed.candidate_markdown)
+                if candidate != claimed.candidate_markdown:
+                    raise FrontmatterError("reserved candidate is not canonical")
             else:
                 candidate = self._candidate_for(claimed, note, request_id, claim_token)
                 candidate = self._canonical_pending_review(candidate)
+
+            candidate_id = document_id_for_relative_path(candidate_relative_path)
+            candidate_hash = content_hash_for_markdown(candidate)
+
+            def reserve_candidate() -> None:
+                reserved = self.request_store.reserve_candidate(
+                    request_id,
+                    claim_token,
+                    candidate_document_id=candidate_id,
+                    candidate_path=candidate_relative_path,
+                    candidate_content_hash=candidate_hash,
+                    candidate_markdown=candidate,
+                )
+                if reserved is None:
+                    raise _LostClaim()
 
             persisted = self.notes_service.persist_pending_review_candidate(
                 note.document_id,
@@ -290,6 +336,7 @@ class ReflowJobService:
                 candidate_relative_path=candidate_relative_path,
                 candidate_markdown=candidate,
                 write_guard=lambda: self._ensure_claim_active(request_id, claim_token),
+                candidate_commit=reserve_candidate,
             )
             if self.request_store.record_candidate(request_id, claim_token, persisted) is None:
                 raise _LostClaim()

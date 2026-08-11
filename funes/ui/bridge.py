@@ -12,6 +12,7 @@ from funes.application.job_control import (
     validate_limit,
     validate_reason,
 )
+from funes.application.notes import MAX_BODY_MARKDOWN_CHARS
 from funes.domain.jobs import JobConflictError, JobNotFoundError
 from funes.domain.errors import (
     InvalidNoteTransitionError,
@@ -72,6 +73,29 @@ class FunesPyWebViewApi:
         value = value.strip()
         if required and not value:
             return cls._error("invalid_payload", f"{field} is required")
+        return value
+
+    @classmethod
+    def _editor_note_id(cls, value: object) -> str | ErrorResult:
+        """Validate an opaque editor ID without normalizing or resolving paths."""
+        if not isinstance(value, str):
+            return cls._error("invalid_payload", "document_id must be a string")
+        if not value.strip():
+            return cls._error("invalid_payload", "document_id is required")
+        if "/" in value or "\\" in value or value.strip().endswith(".md"):
+            return cls._error("path_not_authorized", "Path is not authorized")
+        return value
+
+    @classmethod
+    def _editor_body(cls, value: object) -> str | ErrorResult:
+        if not isinstance(value, str):
+            return cls._error("invalid_payload", "body_markdown must be a string")
+        if len(value) > MAX_BODY_MARKDOWN_CHARS:
+            return cls._error(
+                "invalid_payload",
+                "body_markdown exceeds maximum length of "
+                f"{MAX_BODY_MARKDOWN_CHARS} characters",
+            )
         return value
 
     def set_window(self, window: Any) -> None:
@@ -326,6 +350,43 @@ class FunesPyWebViewApi:
             "get_note_metadata",
             {"document_id": note, "diagnostic": include_diagnostic},
         )
+
+    def get_note_editor(self, note_id: object) -> dict[str, Any]:
+        """Return the canonical revisioned Markdown editor payload."""
+        document_id = self._editor_note_id(note_id)
+        if isinstance(document_id, dict):
+            return document_id
+        try:
+            return self.backend.get_notes_service().get_editor_document(document_id)
+        except PathAuthorizationError as error:
+            return {"error": error.code, "message": str(error)}
+        except (TypeError, ValueError) as error:
+            return self._error("invalid_payload", str(error))
+
+    def update_note_body(
+        self,
+        note_id: object,
+        expected_revision: object,
+        body_markdown: object,
+    ) -> dict[str, Any]:
+        """Replace only a note body through the revisioned service CAS."""
+        document_id = self._editor_note_id(note_id)
+        if isinstance(document_id, dict):
+            return document_id
+        revision_error = self._revision(expected_revision)
+        if revision_error is not None:
+            return revision_error
+        body = self._editor_body(body_markdown)
+        if isinstance(body, dict):
+            return body
+        notes = self.backend.get_notes_service()
+        try:
+            notes.update_note_body(document_id, expected_revision, body)
+            return notes.get_editor_document(document_id)
+        except (PathAuthorizationError, NoteRevisionConflictError) as error:
+            return {"error": error.code, "message": str(error)}
+        except (TypeError, ValueError) as error:
+            return self._error("invalid_payload", str(error))
 
     def validate_note_metadata(self, metadata: object) -> dict[str, Any]:
         parsed = self._payload(metadata)

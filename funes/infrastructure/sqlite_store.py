@@ -870,9 +870,10 @@ class JobStore:
                     request_id, document_id, expected_revision, mode, status,
                     created_at, updated_at, result_json, error_code, revision,
                     claim_token, claim_epoch, lease_expires_at,
-                    candidate_document_id, candidate_path, candidate_content_hash
+                    candidate_document_id, candidate_path, candidate_content_hash,
+                    candidate_markdown
                 ) VALUES (?, ?, ?, ?, 'pending', ?, ?, NULL, NULL, 1,
-                          NULL, 0, NULL, NULL, NULL, NULL)
+                          NULL, 0, NULL, NULL, NULL, NULL, NULL)
                 """,
                 (request_id, document_id, expected_revision, mode, now, now),
             )
@@ -961,7 +962,9 @@ class JobStore:
                 SET status = 'cancelled', error_code = 'cancelled',
                     claim_token = NULL, lease_expires_at = NULL,
                     revision = revision + 1, updated_at = ?
-                WHERE request_id = ? AND status IN ('pending', 'running')
+                WHERE request_id = ?
+                  AND status IN ('pending', 'running')
+                  AND candidate_document_id IS NULL
                 """,
                 (now, request_id),
             )
@@ -1074,6 +1077,57 @@ class JobStore:
                 _timestamp(),
                 request_id,
                 claim_token,
+            ),
+        )
+        if cursor.rowcount != 1:
+            return None
+        return self.get_reflow_request(request_id)
+
+    def reserve_reflow_candidate(
+        self,
+        request_id: str,
+        *,
+        claim_token: str,
+        candidate_document_id: str,
+        candidate_path: str,
+        candidate_content_hash: str,
+        candidate_markdown: str,
+    ) -> Optional[dict[str, Any]]:
+        """Reserve candidate bytes before filesystem persistence.
+
+        Cancellation can win only while no candidate reservation exists. Once
+        this token-fenced CAS succeeds, the exact candidate body is durable in
+        SQLite and a later crash can materialize it without regenerating.
+        """
+        cursor = self._connection.execute(
+            """
+            UPDATE reflow_requests
+            SET candidate_document_id = ?, candidate_path = ?,
+                candidate_content_hash = ?, candidate_markdown = ?,
+                revision = revision + 1, updated_at = ?
+            WHERE request_id = ? AND status = 'running' AND claim_token = ?
+              AND (
+                    candidate_document_id IS NULL
+                    OR (
+                        candidate_document_id = ?
+                        AND candidate_path = ?
+                        AND candidate_content_hash = ?
+                        AND (candidate_markdown IS NULL OR candidate_markdown = ?)
+                    )
+                  )
+            """,
+            (
+                candidate_document_id,
+                candidate_path,
+                candidate_content_hash,
+                candidate_markdown,
+                _timestamp(),
+                request_id,
+                claim_token,
+                candidate_document_id,
+                candidate_path,
+                candidate_content_hash,
+                candidate_markdown,
             ),
         )
         if cursor.rowcount != 1:

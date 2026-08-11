@@ -160,6 +160,7 @@ class NotesApplicationService:
         candidate_relative_path: str,
         candidate_markdown: str,
         write_guard: Callable[[], None] | None = None,
+        candidate_commit: Callable[[], None] | None = None,
     ) -> NoteDocument:
         """Persist one review candidate under the source note's canonical CAS.
 
@@ -220,7 +221,8 @@ class NotesApplicationService:
             if write_guard is not None:
                 write_guard()
 
-            if candidate_path.exists():
+            candidate_exists = candidate_path.exists()
+            if candidate_exists:
                 existing_markdown = candidate_path.read_text(
                     encoding="utf-8", errors="replace"
                 )
@@ -228,7 +230,11 @@ class NotesApplicationService:
                     raise NoteRevisionConflictError(
                         document_id_for_relative_path(candidate_relative)
                     )
+                if candidate_commit is not None:
+                    candidate_commit()
             else:
+                if candidate_commit is not None:
+                    candidate_commit()
                 atomic_write_text(candidate_path, canonical_candidate)
 
             existing_identity = self.job_store.get_document_identity(

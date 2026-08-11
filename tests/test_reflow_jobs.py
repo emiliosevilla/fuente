@@ -394,3 +394,34 @@ def test_cancellation_before_candidate_persistence_skips_candidate(reflow_harnes
     assert result.status == "cancelled"
     assert requests.get(request.request_id).status == "cancelled"
     assert not (reflow_harness[0].output_dir / "_Reflow_Review").exists()
+
+
+def test_cancellation_after_guard_before_candidate_write_skips_file_and_metadata(
+    reflow_harness, monkeypatch
+):
+    _vault, note_path, document_id, store, _notes, requests, _links = reflow_harness
+    original_source_bytes = note_path.read_bytes()
+    request = requests.submit(document_id, expected_revision=1, mode="enrich")
+
+    original_reserve_candidate = requests.reserve_candidate
+
+    def cancel_after_guard_before_write(request_id, claim_token, **candidate):
+        requests.cancel(request.request_id)
+        return original_reserve_candidate(request_id, claim_token, **candidate)
+
+    monkeypatch.setattr(requests, "reserve_candidate", cancel_after_guard_before_write)
+
+    result = _job_service(reflow_harness, _Generator()).run(request.request_id)
+
+    assert result.status == "cancelled"
+    durable = requests.get(request.request_id)
+    assert durable.status == "cancelled"
+    row = store._connection.execute(
+        "SELECT candidate_document_id, candidate_path, candidate_content_hash, "
+        "candidate_markdown "
+        "FROM reflow_requests WHERE request_id = ?",
+        (request.request_id,),
+    ).fetchone()
+    assert tuple(row) == (None, None, None, None)
+    assert not (reflow_harness[0].output_dir / "_Reflow_Review").exists()
+    assert note_path.read_bytes() == original_source_bytes

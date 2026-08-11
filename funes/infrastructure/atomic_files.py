@@ -1,11 +1,45 @@
 """Durable, replacement-based file persistence helpers."""
 
 import json
+import hashlib
 import os
 import stat
 import tempfile
+from contextlib import contextmanager
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterator
+
+if os.name == "nt":  # pragma: no cover - exercised on Windows hosts
+    import msvcrt
+else:  # pragma: no cover - exercised on POSIX hosts
+    import fcntl
+
+
+@contextmanager
+def document_file_lock(lock_directory: str | Path, document_id: str) -> Iterator[None]:
+    """Hold a cross-process exclusive lock for one Vault document."""
+    directory = Path(lock_directory)
+    directory.mkdir(parents=True, exist_ok=True)
+    lock_name = hashlib.sha256(document_id.encode("utf-8")).hexdigest() + ".lock"
+    lock_path = directory / lock_name
+
+    with lock_path.open("a+b") as lock_file:
+        lock_file.seek(0)
+        lock_file.write(b"\0")
+        lock_file.flush()
+        lock_file.seek(0)
+        if os.name == "nt":
+            msvcrt.locking(lock_file.fileno(), msvcrt.LK_LOCK, 1)
+        else:
+            fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            if os.name == "nt":
+                lock_file.seek(0)
+                msvcrt.locking(lock_file.fileno(), msvcrt.LK_UNLCK, 1)
+            else:
+                fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
 
 
 def atomic_write_text(path: str | Path, content: str) -> Path:

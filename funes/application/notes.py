@@ -14,7 +14,7 @@ from funes.domain.errors import (
     NoteRevisionConflictError,
     PathAuthorizationError,
 )
-from funes.domain.frontmatter import serialize_frontmatter
+from funes.domain.frontmatter import FrontmatterError, serialize_frontmatter
 from funes.domain.metadata_form import validate_metadata_fields, validate_metadata_save_fields
 from funes.domain.paths import AuthorizedPathResolver, document_id_for_relative_path
 from funes.infrastructure.atomic_files import atomic_write_text, document_file_lock
@@ -92,6 +92,74 @@ class NotesApplicationService:
             revision=int(identity["revision"]),
             content_hash=str(identity.get("content_hash") or note.content_hash),
         )
+
+    def enumerate_output_notes(self) -> list[NoteDocument]:
+        """Read authorized output notes without touching note-state storage.
+
+        ``get_note`` deliberately repairs/creates the SQLite document identity,
+        which is appropriate for normal note access but not for read-only
+        analysis.  Fusion detection uses this enumeration so candidate
+        inspection cannot change revisions, identities, indexes, or files.
+        """
+        output_root = self.path_resolver.roots["output"]
+        vault_root = self.vault.config.vault_path.resolve()
+        if not output_root.exists() or not output_root.is_dir():
+            return []
+
+        notes: list[NoteDocument] = []
+        for candidate in sorted(output_root.rglob("*"), key=lambda path: path.as_posix()):
+            if (
+                not candidate.is_file()
+                or candidate.suffix.lower() != ".md"
+                or candidate.is_symlink()
+                or self._has_symlink_component(candidate, output_root)
+            ):
+                continue
+            try:
+                relative = candidate.relative_to(vault_root).as_posix()
+            except ValueError:
+                continue
+            relative_parts = Path(relative).parts
+            if (
+                any(part.startswith(".") for part in relative_parts)
+                or candidate.name.startswith("_")
+            ):
+                continue
+            try:
+                authorized = self.path_resolver.resolve_note(relative)
+                if authorized != candidate:
+                    continue
+                markdown = candidate.read_text(encoding="utf-8")
+                notes.append(
+                    NoteDocument.from_persisted(
+                        document_id=document_id_for_relative_path(relative),
+                        relative_path=relative,
+                        markdown=markdown,
+                        revision=1,
+                    )
+                )
+            except (
+                FrontmatterError,
+                OSError,
+                PathAuthorizationError,
+                UnicodeError,
+                ValueError,
+            ):
+                logger.info("Skipping unreadable or invalid output note: %s", candidate)
+        return notes
+
+    @staticmethod
+    def _has_symlink_component(path: Path, root: Path) -> bool:
+        try:
+            relative = path.relative_to(root)
+        except ValueError:
+            return True
+        current = root
+        for part in relative.parts:
+            current = current / part
+            if current.is_symlink():
+                return True
+        return False
 
     def get_editor_document(self, document_id: str) -> dict[str, Any]:
         """Return the revisioned Markdown body-editor contract for a note."""

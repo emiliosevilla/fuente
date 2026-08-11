@@ -27,6 +27,7 @@ class FakeNode {
         this.tagName = tagName.toUpperCase();
         this.children = [];
         this.dataset = {};
+        this.attributes = {};
         this.classList = new FakeClassList();
         this.disabled = false;
         this.value = "";
@@ -58,6 +59,16 @@ class FakeNode {
 
     addEventListener() {}
     querySelector() { return null; }
+    setAttribute(name, value) { this.attributes[name] = String(value); }
+    getAttribute(name) { return this.attributes[name] ?? null; }
+    findAll(tagName) {
+        const matches = [];
+        for (const child of this.children) {
+            if (child.tagName === tagName.toUpperCase()) matches.push(child);
+            matches.push(...child.findAll(tagName));
+        }
+        return matches;
+    }
 }
 
 function makeHarness() {
@@ -70,6 +81,17 @@ function makeHarness() {
         "reader-markdown-preview",
         "reader-editor-conflict",
     ].forEach((id) => elements.set(id, new FakeNode("div")));
+    const reader = new FakeNode("div");
+    const template = new FakeNode("template");
+    template.content = {
+        cloneNode() {
+            const panel = new FakeNode("section");
+            elements.set("reader-editor-panel", panel);
+            return panel;
+        },
+    };
+    elements.set("reader-content", reader);
+    elements.set("reader-editor-template", template);
 
     const document = {
         getElementById(id) { return elements.get(id) || null; },
@@ -78,7 +100,11 @@ function makeHarness() {
         querySelectorAll() { return []; },
     };
     const reloads = [];
+    const getEditorResolvers = [];
     const window = { pywebview: { api: {} } };
+    window.pywebview.api.get_note_editor = (documentId) => new Promise((resolve) => {
+        getEditorResolvers.push({ documentId, resolve });
+    });
     const context = {
         document,
         window,
@@ -107,11 +133,13 @@ function makeHarness() {
                 readerEditorSaveOperation = null;
                 this.editor.value = body;
             },
-            markDirty(body) {
+            markDirty(body, revision = null) {
                 this.editor.value = body;
                 readerEditorBody = body;
+                if (revision !== null) readerEditorRevision = revision;
                 readerEditorState = { status: 'dirty', dirty: true };
             },
+            enter() { enterReaderEditMode(); },
             navigate(id) {
                 invalidateReaderEditorForNavigation(id);
                 currentSelectedDocumentId = id;
@@ -138,6 +166,7 @@ function makeHarness() {
         editor: elements.get("reader-markdown-editor"),
         test: window.__readerEditorTest,
         reloads,
+        getEditorResolvers,
     };
 }
 
@@ -149,6 +178,37 @@ function success(documentId, revision, body) {
         projection: { body: { type: "doc", content: [] } },
     };
 }
+
+function editorPayload(documentId, revision, body) {
+    return {
+        document_id: documentId,
+        revision,
+        body_markdown: body,
+        projection: { body: { type: "doc", content: [] } },
+    };
+}
+
+test("older A editor load cannot overwrite a newer A session after A to B to A", async () => {
+    const harness = makeHarness();
+    harness.test.setLoaded("opaque-a", 1, "# A original\n", { body: { type: "doc", content: [] } });
+    harness.test.enter();
+    harness.test.navigate("opaque-b");
+    harness.test.navigate("opaque-a");
+    harness.test.enter();
+    harness.test.markDirty("# New A draft\n", 17);
+
+    assert.deepEqual(Array.from(harness.getEditorResolvers, (item) => item.documentId), ["opaque-a", "opaque-a"]);
+    harness.getEditorResolvers[0].resolve(editorPayload("opaque-a", 2, "# Stale A response\n"));
+    await Promise.resolve();
+    await Promise.resolve();
+
+    const state = harness.test.state();
+    assert.equal(state.documentId, "opaque-a");
+    assert.equal(state.body, "# New A draft\n");
+    assert.equal(state.revision, 17);
+    assert.equal(state.dirty, true);
+    assert.equal(harness.reloads.length, 0);
+});
 
 test("save preserves text typed after the request began", async () => {
     const harness = makeHarness();
@@ -209,7 +269,7 @@ test("representative Markdown uses the projection and safe renderer path", () =>
         "| --- | --- |",
         "| raw | <img src=x> |",
         "",
-        "Línea \u003craw\u003e y $x$",
+        "Línea \u003craw\u003e y $x$ con **negrita**, *itálica*, [seguro](https://example.test/x?q=1) y [bloqueado](javascript:alert(1))",
         "",
     ].join("\n");
     const projection = harness.test.project(markdown);
@@ -222,5 +282,10 @@ test("representative Markdown uses the projection and safe renderer path", () =>
     assert.match(rendered.textContent, /\[\[Destino\]\]/);
     assert.match(rendered.textContent, /<script>alert\(1\)<\/script>/);
     assert.match(rendered.textContent, /<img src=x>/);
-    assert.match(rendered.textContent, /Línea <raw> y \$x\$/);
+    assert.match(rendered.textContent, /Línea <raw> y \$x\$ con negrita, itálica, seguro y bloqueado/);
+    assert.equal(rendered.findAll("STRONG").length, 2);
+    assert.equal(rendered.findAll("EM").length, 1);
+    const anchors = rendered.findAll("A");
+    assert.equal(anchors.length, 1);
+    assert.equal(anchors[0].getAttribute("href"), "https://example.test/x?q=1");
 });

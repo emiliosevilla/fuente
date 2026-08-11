@@ -3288,10 +3288,14 @@
                 if (match[0].startsWith('[[') || match[0].startsWith('$')) {
                     tokens.push({ type: 'raw_inline', attrs: { markdown: match[0], reason: 'raw_inline' } });
                 } else {
+                    const marks = [];
+                    if (match[1]) marks.push({ type: 'link', attrs: { href: match[2] } });
+                    else if (match[3] || match[4]) marks.push({ type: 'bold' });
+                    else if (match[5] || match[6]) marks.push({ type: 'italic' });
                     tokens.push({
                         type: 'text',
                         text: match[1] || match[3] || match[4] || match[5] || match[6] || match[7] || match[0],
-                        marks: match[1] ? [{ type: 'link', attrs: { href: match[2] } }] : []
+                        marks: marks
                     });
                 }
                 cursor = match.index + match[0].length;
@@ -3360,8 +3364,34 @@
                 const text = token && token.type === 'text'
                     ? String(token.text || '')
                     : String((token && token.attrs && token.attrs.markdown) || (token && token.text) || '');
-                parent.appendChild(document.createTextNode(text));
+                let node = document.createTextNode(text);
+                (token && token.marks || []).forEach(function(mark) {
+                    let wrapper = null;
+                    if (mark.type === 'bold') wrapper = document.createElement('strong');
+                    if (mark.type === 'italic') wrapper = document.createElement('em');
+                    if (mark.type === 'link') {
+                        const href = safeReaderHref(mark.attrs && mark.attrs.href);
+                        if (href) {
+                            wrapper = document.createElement('a');
+                            wrapper.setAttribute('href', href);
+                            wrapper.setAttribute('rel', 'noopener noreferrer');
+                            wrapper.setAttribute('target', '_blank');
+                        }
+                    }
+                    if (wrapper) {
+                        wrapper.appendChild(node);
+                        node = wrapper;
+                    }
+                });
+                parent.appendChild(node);
             });
+        }
+
+        function safeReaderHref(rawHref) {
+            const href = String(rawHref || '').trim();
+            if (/^(https?:|mailto:)/i.test(href)) return href;
+            if (/^#(?!#)/.test(href) || /^\.{0,2}\/(?!\/)/.test(href)) return href;
+            return '';
         }
 
         function renderReaderEditorPreview() {
@@ -3394,7 +3424,7 @@
         }
 
         function invalidateReaderEditorForNavigation(nextDocumentId) {
-            if (readerEditorDocumentId && readerEditorDocumentId !== nextDocumentId) {
+            if (readerEditorDocumentId && currentSelectedDocumentId !== nextDocumentId) {
                 readerEditorSession += 1;
                 readerEditorSaveOperation = null;
             }
@@ -3463,6 +3493,7 @@
             const documentId = currentSelectedDocumentId;
             if (!documentId) return;
             readerEditorSession += 1;
+            const editorSession = readerEditorSession;
             readerEditorSaveOperation = null;
             mountReaderEditor();
             readerEditorOriginalDocumentModel = currentSelectedNoteDocumentModel;
@@ -3480,7 +3511,7 @@
                 return;
             }
             window.pywebview.api.get_note_editor(currentSelectedDocumentId).then(function(editorDocument) {
-                if (currentSelectedDocumentId !== documentId) return;
+                if (currentSelectedDocumentId !== documentId || readerEditorSession !== editorSession) return;
                 if (!editorDocument || editorDocument.error || editorDocument.document_id !== documentId || typeof editorDocument.revision !== 'number' || typeof editorDocument.body_markdown !== 'string' || !editorDocument.projection) {
                     setReaderEditorState('error', (editorDocument && editorDocument.message) || 'No se pudo cargar el editor.');
                     return;
@@ -3497,7 +3528,7 @@
                 setReaderEditorState('saved', 'Sin cambios');
                 renderReaderEditorPreview();
             }).catch(function(error) {
-                if (currentSelectedDocumentId === documentId) {
+                if (currentSelectedDocumentId === documentId && readerEditorSession === editorSession) {
                     setReaderEditorState('error', 'No se pudo cargar el editor: ' + String(error));
                 }
             });

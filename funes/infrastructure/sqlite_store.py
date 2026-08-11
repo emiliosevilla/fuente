@@ -472,6 +472,38 @@ class JobStore:
         ).fetchone()
         return dict(row) if row is not None else None
 
+    def restore_document_identity(
+        self, document_id: str, identity: Optional[dict[str, Any]]
+    ) -> None:
+        """Compensate one document identity after a failed file transaction."""
+        if identity is None:
+            self._connection.execute(
+                "DELETE FROM document_identities WHERE document_id = ?",
+                (document_id,),
+            )
+            return
+        self._connection.execute(
+            """
+            INSERT INTO document_identities (
+                document_id, relative_path, content_hash, revision, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT(document_id) DO UPDATE SET
+                relative_path = excluded.relative_path,
+                content_hash = excluded.content_hash,
+                revision = excluded.revision,
+                created_at = excluded.created_at,
+                updated_at = excluded.updated_at
+            """,
+            (
+                document_id,
+                identity["relative_path"],
+                identity.get("content_hash"),
+                identity["revision"],
+                identity["created_at"],
+                identity["updated_at"],
+            ),
+        )
+
     def ensure_document_identity(
         self,
         *,

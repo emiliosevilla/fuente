@@ -1,8 +1,9 @@
 import json
+from unittest.mock import MagicMock
 
 import pytest
 
-from funes.core.folder_sync import FolderSyncManager
+from funes.core.folder_sync import FolderSyncManager, FolderSyncModal
 from funes.domain.sync import (
     ConnectedFolder,
     SyncManifestEntry,
@@ -42,6 +43,25 @@ def test_provider_labels_round_trip_and_disabled_connections_are_retained(tmp_pa
 
     assert manager.save_connections(connections)
     assert manager.load_connections() == connections
+
+
+def test_modal_save_preserves_provider_metadata_and_disabled_connections(tmp_path):
+    manager = FolderSyncManager(tmp_path)
+    connections = [
+        ConnectedFolder("network", "/mnt/team", "Team NAS", True),
+        ConnectedFolder("onedrive_mount", "/mnt/one", "OneDrive", False),
+    ]
+    assert manager.save_connections(connections)
+
+    modal = FolderSyncModal.__new__(FolderSyncModal)
+    modal.sync_manager = manager
+    modal.connections = connections
+    modal.destroy = MagicMock()
+
+    modal._save_and_close()
+
+    assert manager.load_connections() == connections
+    modal.destroy.assert_called_once_with()
 
 
 def test_disabled_connection_is_not_scanned(tmp_path):

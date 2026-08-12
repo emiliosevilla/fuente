@@ -172,19 +172,6 @@ class JobStore:
                 "INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)",
                 (version, _timestamp()),
             )
-        # Keep the existing versioned migration sequence stable for legacy
-        # vaults while ensuring the Task 1 system table exists idempotently.
-        self._connection.execute(
-            """
-            CREATE TABLE IF NOT EXISTS sync_manifest (
-                source_key TEXT PRIMARY KEY,
-                source_hash TEXT NOT NULL,
-                source_mtime_ns INTEGER NOT NULL CHECK (source_mtime_ns >= 0),
-                destination_relative TEXT NOT NULL,
-                status TEXT NOT NULL
-            )
-            """
-        )
 
     # -- jobs --------------------------------------------------------------
 

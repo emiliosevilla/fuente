@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import sqlite3
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Iterable, Optional
 
@@ -52,6 +52,10 @@ CLEARABLE_JOB_FIELDS: frozenset[str] = frozenset(
 
 def _timestamp() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def _timestamp_after(seconds: float) -> str:
+    return (datetime.now(timezone.utc) + timedelta(seconds=seconds)).isoformat()
 
 
 def _is_lock_contention(error: sqlite3.OperationalError) -> bool:
@@ -468,6 +472,38 @@ class JobStore:
         ).fetchone()
         return dict(row) if row is not None else None
 
+    def restore_document_identity(
+        self, document_id: str, identity: Optional[dict[str, Any]]
+    ) -> None:
+        """Compensate one document identity after a failed file transaction."""
+        if identity is None:
+            self._connection.execute(
+                "DELETE FROM document_identities WHERE document_id = ?",
+                (document_id,),
+            )
+            return
+        self._connection.execute(
+            """
+            INSERT INTO document_identities (
+                document_id, relative_path, content_hash, revision, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT(document_id) DO UPDATE SET
+                relative_path = excluded.relative_path,
+                content_hash = excluded.content_hash,
+                revision = excluded.revision,
+                created_at = excluded.created_at,
+                updated_at = excluded.updated_at
+            """,
+            (
+                document_id,
+                identity["relative_path"],
+                identity.get("content_hash"),
+                identity["revision"],
+                identity["created_at"],
+                identity["updated_at"],
+            ),
+        )
+
     def ensure_document_identity(
         self,
         *,
@@ -846,6 +882,289 @@ class JobStore:
             "SELECT * FROM document_locks WHERE document_id = ?", (document_id,)
         ).fetchone()
         return dict(row) if row is not None else None
+
+    # -- durable reflow requests -------------------------------------------
+
+    def create_reflow_request(
+        self,
+        *,
+        request_id: str,
+        document_id: str,
+        expected_revision: int,
+        mode: str,
+    ) -> dict[str, Any]:
+        """Insert one reflow request, returning the existing equivalent row."""
+        now = _timestamp()
+        try:
+            self._connection.execute(
+                """
+                INSERT INTO reflow_requests (
+                    request_id, document_id, expected_revision, mode, status,
+                    created_at, updated_at, result_json, error_code, revision,
+                    claim_token, claim_epoch, lease_expires_at,
+                    candidate_document_id, candidate_path, candidate_content_hash,
+                    candidate_markdown
+                ) VALUES (?, ?, ?, ?, 'pending', ?, ?, NULL, NULL, 1,
+                          NULL, 0, NULL, NULL, NULL, NULL, NULL)
+                """,
+                (request_id, document_id, expected_revision, mode, now, now),
+            )
+        except sqlite3.IntegrityError:
+            # The uniqueness key is the idempotency key. A UUID collision is
+            # vanishingly unlikely and is handled by the same lookup safely.
+            existing = self._connection.execute(
+                """
+                SELECT * FROM reflow_requests
+                WHERE document_id = ? AND expected_revision = ? AND mode = ?
+                """,
+                (document_id, expected_revision, mode),
+            ).fetchone()
+            if existing is None:
+                raise
+            return dict(existing)
+        row = self._connection.execute(
+            "SELECT * FROM reflow_requests WHERE request_id = ?", (request_id,)
+        ).fetchone()
+        assert row is not None
+        return dict(row)
+
+    def get_reflow_request(self, request_id: str) -> Optional[dict[str, Any]]:
+        row = self._connection.execute(
+            "SELECT * FROM reflow_requests WHERE request_id = ?", (request_id,)
+        ).fetchone()
+        return dict(row) if row is not None else None
+
+    def claim_reflow_request(
+        self, request_id: str, *, lease_seconds: float = 30.0
+    ) -> Optional[dict[str, Any]]:
+        """Claim a pending request exactly once and return its fencing token."""
+        if not isinstance(lease_seconds, (int, float)) or lease_seconds < 0:
+            raise ValueError("lease_seconds must be non-negative")
+        now = _timestamp()
+        lease_expires_at = _timestamp_after(float(lease_seconds))
+        claim_token = str(uuid.uuid4())
+        try:
+            cursor = self._connection.execute(
+                """
+                UPDATE reflow_requests
+                SET status = 'running', claim_token = ?,
+                    claim_epoch = claim_epoch + 1, lease_expires_at = ?,
+                    revision = revision + 1, updated_at = ?
+                WHERE request_id = ? AND status = 'pending'
+                """,
+                (claim_token, lease_expires_at, now, request_id),
+            )
+        except sqlite3.OperationalError as error:
+            if _is_lock_contention(error):
+                raise JobStoreBusyError(request_id) from error
+            raise
+        if cursor.rowcount != 1:
+            return None
+        return self.get_reflow_request(request_id)
+
+    def heartbeat_reflow_request(
+        self,
+        request_id: str,
+        *,
+        claim_token: str,
+        lease_seconds: float = 30.0,
+    ) -> Optional[dict[str, Any]]:
+        """Renew a live claim only when its token still owns the request."""
+        if not isinstance(lease_seconds, (int, float)) or lease_seconds < 0:
+            raise ValueError("lease_seconds must be non-negative")
+        cursor = self._connection.execute(
+            """
+            UPDATE reflow_requests
+            SET lease_expires_at = ?, revision = revision + 1, updated_at = ?
+            WHERE request_id = ? AND status = 'running' AND claim_token = ?
+            """,
+            (_timestamp_after(float(lease_seconds)), _timestamp(), request_id, claim_token),
+        )
+        if cursor.rowcount != 1:
+            return None
+        return self.get_reflow_request(request_id)
+
+    def cancel_reflow_request(self, request_id: str) -> Optional[dict[str, Any]]:
+        """Cancel a request before its result is persisted."""
+        now = _timestamp()
+        try:
+            self._connection.execute(
+                """
+                UPDATE reflow_requests
+                SET status = 'cancelled', error_code = 'cancelled',
+                    claim_token = NULL, lease_expires_at = NULL,
+                    revision = revision + 1, updated_at = ?
+                WHERE request_id = ?
+                  AND status IN ('pending', 'running')
+                  AND candidate_document_id IS NULL
+                """,
+                (now, request_id),
+            )
+        except sqlite3.OperationalError as error:
+            if _is_lock_contention(error):
+                raise JobStoreBusyError(request_id) from error
+            raise
+        return self.get_reflow_request(request_id)
+
+    def complete_reflow_request(
+        self, request_id: str, *, claim_token: str, result_json: str
+    ) -> Optional[dict[str, Any]]:
+        """Commit a result only for the worker that claimed the request."""
+        now = _timestamp()
+        cursor = self._connection.execute(
+            """
+            UPDATE reflow_requests
+            SET status = 'completed', result_json = ?, error_code = NULL,
+                claim_token = NULL, lease_expires_at = NULL,
+                revision = revision + 1, updated_at = ?
+            WHERE request_id = ? AND status = 'running' AND claim_token = ?
+            """,
+            (result_json, now, request_id, claim_token),
+        )
+        if cursor.rowcount != 1:
+            return None
+        return self.get_reflow_request(request_id)
+
+    def fail_reflow_request(
+        self,
+        request_id: str,
+        *,
+        claim_token: str,
+        error_code: str,
+        result_json: Optional[str] = None,
+    ) -> Optional[dict[str, Any]]:
+        """Persist a stable failure without changing the source note."""
+        now = _timestamp()
+        cursor = self._connection.execute(
+            """
+            UPDATE reflow_requests
+            SET status = 'failed', result_json = ?, error_code = ?,
+                claim_token = NULL, lease_expires_at = NULL,
+                revision = revision + 1, updated_at = ?
+            WHERE request_id = ? AND status = 'running' AND claim_token = ?
+            """,
+            (result_json, error_code, now, request_id, claim_token),
+        )
+        if cursor.rowcount != 1:
+            return None
+        return self.get_reflow_request(request_id)
+
+    def recover_reflow_request(self, request_id: str) -> Optional[dict[str, Any]]:
+        """Explicitly make an interrupted running request retryable."""
+        now = _timestamp()
+        cursor = self._connection.execute(
+            """
+            UPDATE reflow_requests
+            SET status = 'pending', claim_token = NULL, lease_expires_at = NULL,
+                claim_epoch = claim_epoch + 1,
+                revision = revision + 1, updated_at = ?
+            WHERE request_id = ? AND status = 'running'
+              AND (lease_expires_at IS NULL OR lease_expires_at <= ?)
+            """,
+            (now, request_id, now),
+        )
+        if cursor.rowcount != 1:
+            return self.get_reflow_request(request_id)
+        return self.get_reflow_request(request_id)
+
+    def retry_reflow_request(self, request_id: str) -> Optional[dict[str, Any]]:
+        """Explicitly retry a failed request, clearing its prior result."""
+        now = _timestamp()
+        cursor = self._connection.execute(
+            """
+            UPDATE reflow_requests
+            SET status = 'pending', result_json = NULL, error_code = NULL,
+                claim_token = NULL, lease_expires_at = NULL,
+                revision = revision + 1, updated_at = ?
+            WHERE request_id = ? AND status = 'failed'
+            """,
+            (now, request_id),
+        )
+        if cursor.rowcount != 1:
+            return self.get_reflow_request(request_id)
+        return self.get_reflow_request(request_id)
+
+    def record_reflow_candidate(
+        self,
+        request_id: str,
+        *,
+        claim_token: str,
+        candidate_document_id: str,
+        candidate_path: str,
+        candidate_content_hash: str,
+    ) -> Optional[dict[str, Any]]:
+        """Durably record an idempotent candidate before final completion."""
+        cursor = self._connection.execute(
+            """
+            UPDATE reflow_requests
+            SET candidate_document_id = ?, candidate_path = ?,
+                candidate_content_hash = ?, revision = revision + 1,
+                updated_at = ?
+            WHERE request_id = ? AND status = 'running' AND claim_token = ?
+            """,
+            (
+                candidate_document_id,
+                candidate_path,
+                candidate_content_hash,
+                _timestamp(),
+                request_id,
+                claim_token,
+            ),
+        )
+        if cursor.rowcount != 1:
+            return None
+        return self.get_reflow_request(request_id)
+
+    def reserve_reflow_candidate(
+        self,
+        request_id: str,
+        *,
+        claim_token: str,
+        candidate_document_id: str,
+        candidate_path: str,
+        candidate_content_hash: str,
+        candidate_markdown: str,
+    ) -> Optional[dict[str, Any]]:
+        """Reserve candidate bytes before filesystem persistence.
+
+        Cancellation can win only while no candidate reservation exists. Once
+        this token-fenced CAS succeeds, the exact candidate body is durable in
+        SQLite and a later crash can materialize it without regenerating.
+        """
+        cursor = self._connection.execute(
+            """
+            UPDATE reflow_requests
+            SET candidate_document_id = ?, candidate_path = ?,
+                candidate_content_hash = ?, candidate_markdown = ?,
+                revision = revision + 1, updated_at = ?
+            WHERE request_id = ? AND status = 'running' AND claim_token = ?
+              AND (
+                    candidate_document_id IS NULL
+                    OR (
+                        candidate_document_id = ?
+                        AND candidate_path = ?
+                        AND candidate_content_hash = ?
+                        AND (candidate_markdown IS NULL OR candidate_markdown = ?)
+                    )
+                  )
+            """,
+            (
+                candidate_document_id,
+                candidate_path,
+                candidate_content_hash,
+                candidate_markdown,
+                _timestamp(),
+                request_id,
+                claim_token,
+                candidate_document_id,
+                candidate_path,
+                candidate_content_hash,
+                candidate_markdown,
+            ),
+        )
+        if cursor.rowcount != 1:
+            return None
+        return self.get_reflow_request(request_id)
 
     # -- row mapping ---------------------------------------------------------
 

@@ -47,6 +47,28 @@ Exit code `0` means **READY**; any failure prints `BLOCKED` and returns non-zero
 
 Vault migration rollback details live in [`migration-guide.md`](migration-guide.md). Application rollback is in [`rollback-plan.md`](rollback-plan.md).
 
+## Editorial workflow evidence
+
+Tasks 1–7 are documented and verified separately from the existing metadata editor. The commands below are manual editorial evidence, not release-gate check IDs registered in `scripts/release_gate.py`. Run the documentation contract first, then the focused editorial matrix, the full suite, and finally this fail-closed gate:
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -p no:cacheprovider tests/test_readme_honesty_wave1.py tests/test_release_gate.py -q
+PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -p no:cacheprovider tests/contract/test_note_editor_contract.py tests/contract/test_bridge_note_editor_contract.py tests/contract/test_bridge_frontend_contract.py tests/contract/test_reader_editor_contract.py tests/test_reflow_service.py tests/test_reflow_jobs.py tests/test_fusion_candidates.py tests/test_fusion_flow.py tests/test_html_safety_contract.py tests/security/test_path_authorization.py -q
+PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -p no:cacheprovider tests -q
+PYTHONDONTWRITEBYTECODE=1 python3 scripts/release_gate.py
+```
+
+| Editorial behaviour | Evidence files |
+|---|---|
+| Canonical Markdown/YAML editing with revision CAS | `tests/contract/test_note_editor_contract.py`, `tests/contract/test_bridge_note_editor_contract.py`, `tests/contract/test_reader_editor_contract.py` |
+| Durable, recoverable reflow and enrichment jobs | `tests/test_reflow_service.py`, `tests/test_reflow_jobs.py` |
+| Scoped link reflow and authorized paths | `tests/test_reflow_service.py`, `tests/security/test_path_authorization.py` |
+| Deterministic fusion candidates | `tests/test_fusion_candidates.py` |
+| Preview-then-commit fusion with source preservation | `tests/test_fusion_flow.py` |
+| Safe bridge/UI contracts and Markdown sinks | `tests/contract/test_bridge_frontend_contract.py`, `tests/test_html_safety_contract.py` |
+
+TipTap, native Graph API/OAuth sync, LightRAG production integration, and cloud credentials are outside this plan. LightRAG remains an optional external comparison only; the default runtime and gate remain local-first. A ChromaDB deprecation warning is external dependency telemetry, not a release-gate finding.
+
 ## Timeouts
 
 Each pytest suite uses a 600s default timeout (`--pytest-timeout`). CI runners on slow hosts may need a higher value.

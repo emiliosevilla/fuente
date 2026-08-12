@@ -19,11 +19,14 @@ from funes.installer_contract import (
     resolve_vault_path,
     run_installation,
     save_receipt,
+    step_save_cloud_folders,
     step_install_anythingllm,
     step_install_model,
     wait_for_ollama_ready,
 )
 from funes.core.anythingllm_config import launch_anythingllm
+from funes.core.folder_sync import FolderSyncManager
+from funes.domain.sync import ConnectedFolder
 
 
 @pytest.fixture
@@ -249,6 +252,40 @@ def test_run_installation_second_run_no_duplicate_cloud_folders(tmp_path):
     config_file = vault / ".funes_connected_folders.json"
     data = json.loads(config_file.read_text(encoding="utf-8"))
     assert len(data["folders"]) == 2
+
+
+def test_installer_preserves_existing_provider_records_when_adding_folders(tmp_path):
+    vault = tmp_path / "Funes"
+    vault.mkdir()
+    existing_root = tmp_path / "team-share"
+    disabled_root = tmp_path / "one-drive"
+    incoming_root = tmp_path / "incoming"
+    existing_root.mkdir()
+    disabled_root.mkdir()
+    incoming_root.mkdir()
+
+    manager = FolderSyncManager(vault)
+    existing = [
+        ConnectedFolder("network", str(existing_root), "Team NAS", True),
+        ConnectedFolder("onedrive_mount", str(disabled_root), "OneDrive", False),
+    ]
+    assert manager.save_connections(existing)
+
+    ctx = InstallationContext(
+        base_dir=tmp_path,
+        vault_path=vault,
+        cloud_folders=[incoming_root],
+        confirm=lambda _t, _m: False,
+        log=lambda _m: None,
+    )
+
+    result = step_save_cloud_folders(ctx)
+
+    assert result.success
+    assert manager.load_connections() == [
+        *existing,
+        ConnectedFolder("local", str(incoming_root.resolve()), "incoming", True),
+    ]
 
 
 def test_failed_steps_visible_and_actionable():

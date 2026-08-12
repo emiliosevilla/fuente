@@ -18,6 +18,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Sequence
 
+from funes.domain.sync import ConnectedFolder, SyncProvider
+
 logger = logging.getLogger(__name__)
 
 RECEIPT_FILENAME = ".funes_install_receipt.json"
@@ -225,6 +227,33 @@ def merge_folder_lists(
     return merged
 
 
+def merge_connected_folder_lists(
+    existing: Sequence[ConnectedFolder],
+    incoming: Sequence[Path | str],
+) -> List[ConnectedFolder]:
+    """Add new local paths without rewriting existing provider records."""
+    merged = list(existing)
+    seen = {
+        str(Path(connection.root).expanduser().resolve())
+        for connection in existing
+    }
+    for item in incoming:
+        path = Path(item).expanduser().resolve()
+        key = str(path)
+        if key in seen:
+            continue
+        seen.add(key)
+        merged.append(
+            ConnectedFolder(
+                provider=SyncProvider.LOCAL.value,
+                root=key,
+                display_name=path.name or key,
+                enabled=True,
+            )
+        )
+    return merged
+
+
 def model_is_installed(governor: Any, model_name: str) -> bool:
     if not governor.check_ollama_status():
         return False
@@ -258,9 +287,10 @@ def step_save_cloud_folders(ctx: InstallationContext) -> InstallStepResult:
         from funes.core.folder_sync import FolderSyncManager
 
         sync_mgr = FolderSyncManager(ctx.vault_path)
-        existing = sync_mgr.load_connected_folders()
-        merged = merge_folder_lists(existing, ctx.cloud_folders)
-        sync_mgr.save_connected_folders(merged)
+        existing = sync_mgr.load_connections()
+        merged = merge_connected_folder_lists(existing, ctx.cloud_folders)
+        if not sync_mgr.save_connections(merged):
+            raise RuntimeError("Could not save connected cloud folders")
         return InstallStepResult(
             name="cloud_folders",
             success=True,

@@ -228,7 +228,7 @@ class FolderSyncModal(tk.Toplevel):
         self.transient(parent)
         self.grab_set()
 
-        self.folders: List[Path] = self.sync_manager.load_connected_folders()
+        self.connections: List[ConnectedFolder] = self.sync_manager.load_connections()
         self._setup_ui()
 
     def _setup_ui(self):
@@ -341,11 +341,21 @@ class FolderSyncModal(tk.Toplevel):
     def _auto_detect_cloud(self):
         detected = FolderSyncManager.detect_cloud_folders()
         added_count = 0
-        existing_resolved = [f.resolve() for f in self.folders]
+        existing_resolved = {
+            Path(connection.root).expanduser().resolve()
+            for connection in self.connections
+        }
 
         for folder in detected:
             if folder.resolve() not in existing_resolved:
-                self.folders.append(folder)
+                self.connections.append(
+                    ConnectedFolder(
+                        provider=SyncProvider.LOCAL.value,
+                        root=str(folder.resolve()),
+                        display_name=folder.name or str(folder),
+                        enabled=True,
+                    )
+                )
                 added_count += 1
 
         self._refresh_listbox()
@@ -367,25 +377,40 @@ class FolderSyncModal(tk.Toplevel):
 
     def _refresh_listbox(self):
         self.listbox.delete(0, tk.END)
-        for folder in self.folders:
-            self.listbox.insert(tk.END, str(folder))
+        for connection in self.connections:
+            state = "" if connection.enabled else " [deshabilitada]"
+            self.listbox.insert(
+                tk.END,
+                f"{connection.display_name} [{connection.provider}]{state} — {connection.root}",
+            )
 
     def _add_folder(self):
         selected = filedialog.askdirectory(title="Selecciona una carpeta externa para vincular a Funes")
         if selected:
             path = Path(selected).resolve()
-            if path not in self.folders:
-                self.folders.append(path)
+            existing_resolved = {
+                Path(connection.root).expanduser().resolve()
+                for connection in self.connections
+            }
+            if path not in existing_resolved:
+                self.connections.append(
+                    ConnectedFolder(
+                        provider=SyncProvider.LOCAL.value,
+                        root=str(path),
+                        display_name=path.name or str(path),
+                        enabled=True,
+                    )
+                )
                 self._refresh_listbox()
 
     def _remove_folder(self):
         try:
             sel_idx = self.listbox.curselection()[0]
-            del self.folders[sel_idx]
+            del self.connections[sel_idx]
             self._refresh_listbox()
         except IndexError:
             messagebox.showwarning("Selección", "Por favor selecciona una carpeta de la lista para eliminar.")
 
     def _save_and_close(self):
-        self.sync_manager.save_connected_folders(self.folders)
+        self.sync_manager.save_connections(self.connections)
         self.destroy()

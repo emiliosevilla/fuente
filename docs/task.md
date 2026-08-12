@@ -141,6 +141,31 @@ Estas propuestas constaban como trabajo futuro antes de Wave 2. Las superficies 
 - SaaS sync, cuentas, telemetría comercial.
 - Reescritura visual masiva de la consola sin contratos detrás.
 
+### Editorial workflow — Task 8 (cierre documental, 2026-08-12)
+
+Tasks 1–7 dejan disponible el flujo editorial siguiente, sobre la fuente canónica Markdown + YAML y sin cambiar los ledgers históricos:
+
+| Superficie | Comportamiento entregado | Evidencia focalizada |
+|---|---|---|
+| Editor de fuente | Edición Markdown con frontmatter separado, `document_id` opaco y CAS de revisión; los conflictos preservan los bytes existentes. | `tests/contract/test_note_editor_contract.py`, `tests/contract/test_bridge_note_editor_contract.py`, `tests/contract/test_reader_editor_contract.py` |
+| Reflow | Reflow de enlaces explícito y acotado por documento/tema/cuestion; enriquecimiento y reflow son jobs durables, recuperables y revisables. | `tests/test_reflow_service.py`, `tests/test_reflow_jobs.py` |
+| Candidatos | Detección determinista, limitada al alcance autorizado, sin mutación automática. | `tests/test_fusion_candidates.py`, `tests/security/test_path_authorization.py` |
+| Fusión | Preview-then-commit con IDs/revisiones de fuentes, resultado `pending_review`, referencias de origen y fuentes originales preservadas. | `tests/test_fusion_flow.py` |
+| Bridge/UI | Allowlist, validación tipada, estados de conflicto/error y sinks DOM seguros para Markdown no confiable. | `tests/contract/test_bridge_frontend_contract.py`, `tests/test_html_safety_contract.py` |
+
+Comandos de evidencia:
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -p no:cacheprovider tests/test_readme_honesty_wave1.py tests/test_release_gate.py -q
+PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -p no:cacheprovider tests/contract/test_note_editor_contract.py tests/contract/test_bridge_note_editor_contract.py tests/contract/test_bridge_frontend_contract.py tests/contract/test_reader_editor_contract.py tests/test_reflow_service.py tests/test_reflow_jobs.py tests/test_fusion_candidates.py tests/test_fusion_flow.py tests/test_html_safety_contract.py tests/security/test_path_authorization.py -q
+PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -p no:cacheprovider tests -q
+PYTHONDONTWRITEBYTECODE=1 python3 scripts/release_gate.py
+```
+
+El warning de deprecación de ChromaDB observado por la suite se clasifica como telemetría externa de la dependencia; no es evidencia de una integración de LightRAG ni cambia la política local-first. La corrección de compatibilidad está presente en el checkpoint pre-documentación medido `39def79` de `sdd-2026-08-11-improvements`; la documentación se escribe después de ese checkpoint y su commit lo creará el controller tras el checkpoint humano, por lo que no se afirma aquí un hash futuro.
+
+TipTap, native Graph API/OAuth, la integración de LightRAG en producción y las credenciales cloud permanecen fuera de alcance.
+
 ---
 
 ## Cómo trabajar esto

@@ -87,6 +87,20 @@ def test_merge_connected_folder_lists_preserves_provider_metadata(tmp_path):
     assert merged == [existing, detected]
 
 
+def test_merge_connected_folder_lists_canonicalizes_existing_root_and_metadata(tmp_path):
+    root = tmp_path / "existing"
+    noncanonical_root = tmp_path / "nested" / ".." / "existing"
+    existing = ConnectedFolder("network", str(noncanonical_root), "Team NAS", False)
+
+    merged = merge_connected_folder_lists([existing], [])
+
+    assert merged == [ConnectedFolder("network", str(root.resolve()), "Team NAS", False)]
+    assert merged[0].root == str(root.resolve())
+    assert merged[0].provider == "network"
+    assert merged[0].display_name == "Team NAS"
+    assert merged[0].enabled is False
+
+
 def test_merge_connected_folder_lists_mixes_manual_and_detected_without_duplicates(tmp_path):
     manual_root = tmp_path / "manual"
     detected_root = tmp_path / "detected"

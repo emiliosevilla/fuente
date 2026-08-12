@@ -261,7 +261,7 @@ def merge_connected_folder_lists(
         if key in seen:
             continue
         seen.add(key)
-        merged.append(item if isinstance(item, ConnectedFolder) else as_connection(item))
+        merged.append(as_connection(item))
 
     for item in incoming:
         connection = as_connection(item)

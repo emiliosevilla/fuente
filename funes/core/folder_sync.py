@@ -1,6 +1,7 @@
 import hashlib
 import json
 import logging
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Iterable, List
@@ -736,29 +737,72 @@ class FolderSyncManager:
         return conflict, update
 
     @staticmethod
-    def detect_cloud_folders() -> List[Path]:
-        found: List[Path] = []
-        home = Path.home()
+    def detect_cloud_folders(
+        *,
+        home: Path | str | None = None,
+        platform: str | None = None,
+    ) -> List[ConnectedFolder]:
+        """Detect explicit, already-mounted OneDrive/SharePoint roots locally.
 
-        cloud_storage = home / "Library" / "CloudStorage"
-        if cloud_storage.exists() and cloud_storage.is_dir():
+        This is deliberately limited to local directory markers.  It does not
+        inspect credentials, contact a provider, or infer that a folder is
+        authenticated merely because it lives below ``CloudStorage``.
+        ``home`` and ``platform`` are keyword-only test seams; the no-argument
+        call keeps using the current user's environment.
+        """
+        home_path = Path.home() if home is None else Path(home).expanduser()
+        platform_name = sys.platform if platform is None else platform
+        detected: dict[Path, ConnectedFolder] = {}
+
+        def provider_for(path: Path) -> SyncProvider | None:
+            name = path.name.casefold()
+            if name.startswith("sharepoint"):
+                return SyncProvider.SHAREPOINT_MOUNT
+            if name.startswith("onedrive"):
+                return SyncProvider.ONEDRIVE_MOUNT
+            return None
+
+        def add_candidate(path: Path) -> None:
+            if path.name.startswith(".") or path.is_symlink() or not path.is_dir():
+                return
+            provider = provider_for(path)
+            if provider is None:
+                return
             try:
-                for item in cloud_storage.iterdir():
-                    if item.is_dir() and not item.name.startswith("."):
-                        found.append(item.resolve())
-            except Exception as e:
-                logger.error(f"Error escaneando CloudStorage en macOS: {e}")
+                canonical = path.resolve(strict=True)
+            except OSError as error:
+                logger.debug("No se puede resolver raíz cloud %s: %s", path, error)
+                return
+            detected.setdefault(
+                canonical,
+                ConnectedFolder(
+                    provider=provider.value,
+                    root=str(canonical),
+                    display_name=canonical.name,
+                    enabled=True,
+                ),
+            )
 
-        potential_patterns = ["OneDrive*", "SharePoint*"]
-        for pattern in potential_patterns:
+        def scan_direct_children(root: Path) -> None:
+            if root.name.startswith(".") or root.is_symlink() or not root.is_dir():
+                return
             try:
-                for p in home.glob(pattern):
-                    if p.is_dir() and not p.name.startswith(".") and p.resolve() not in [f.resolve() for f in found]:
-                        found.append(p.resolve())
-            except Exception as e:
-                logger.error(f"Error escaneando patrones {pattern} en home: {e}")
+                for candidate in root.iterdir():
+                    add_candidate(candidate)
+            except OSError as error:
+                logger.debug("No se puede escanear raíz cloud %s: %s", root, error)
 
-        return found
+        if platform_name.casefold() == "darwin":
+            scan_direct_children(home_path / "Library" / "CloudStorage")
+
+        # OneDrive and SharePoint user roots are local directories in both
+        # supported layouts; unrelated directories under the home are ignored.
+        scan_direct_children(home_path)
+
+        return sorted(
+            detected.values(),
+            key=lambda connection: (connection.root.casefold(), connection.root),
+        )
 
 
 class FolderSyncModal(tk.Toplevel):
@@ -893,15 +937,9 @@ class FolderSyncModal(tk.Toplevel):
         }
 
         for folder in detected:
-            if folder.resolve() not in existing_resolved:
-                self.connections.append(
-                    ConnectedFolder(
-                        provider=SyncProvider.LOCAL.value,
-                        root=str(folder.resolve()),
-                        display_name=folder.name or str(folder),
-                        enabled=True,
-                    )
-                )
+            folder_root = Path(folder.root).expanduser().resolve()
+            if folder_root not in existing_resolved:
+                self.connections.append(folder)
                 added_count += 1
 
         self._refresh_listbox()

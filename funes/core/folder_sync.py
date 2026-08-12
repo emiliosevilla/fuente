@@ -138,19 +138,58 @@ class SyncReport:
 class FolderSyncManager:
     """Administra la lista de carpetas compartidas/externas vinculadas a 1_entrada."""
 
-    def __init__(self, vault_root: Path, active_theme: str = "General"):
+    def __init__(
+        self,
+        vault_root: Path,
+        active_theme: str = "General",
+        *,
+        active_theme_dir: Path | str | None = None,
+    ):
         self.vault_root = Path(vault_root).resolve()
         self.config_file = self.vault_root / ".funes_connected_folders.json"
         self.active_theme = "General"
-        self.set_active_theme(active_theme)
+        self.active_theme_dir = self.vault_root
+        self.set_active_theme(active_theme, active_theme_dir=active_theme_dir)
         self.last_diagnostics: list[SyncDiagnostic] = []
         self._extractor_registry = None
 
-    def set_active_theme(self, active_theme: str) -> None:
-        """Update the trusted theme context used to authorize sync targets."""
+    def _default_active_theme_dir(self, active_theme: str) -> Path:
+        """Infer the legacy root only for callers without VaultManager context."""
+        if active_theme == "General":
+            general_dir = self.vault_root / "General"
+            return general_dir if general_dir.exists() else self.vault_root
+        return self.vault_root / active_theme
+
+    def _canonical_active_theme_dir(self, active_theme_dir: Path | str) -> Path:
+        """Store one canonical vault root supplied by the trusted vault owner."""
+        resolved = SourcePathAuthorizer(self.vault_root).resolve(active_theme_dir)
+        relative = resolved.relative_to(self.vault_root)
+        if len(relative.parts) > 1 or (
+            relative.parts
+            and (
+                relative.parts[0].startswith(".")
+                or relative.parts[0]
+                in {"1_entrada", "2_sucio", "3_limpio", "4_salida"}
+            )
+        ):
+            raise PathAuthorizationError()
+        return resolved
+
+    def set_active_theme(
+        self,
+        active_theme: str,
+        active_theme_dir: Path | str | None = None,
+    ) -> None:
+        """Update the trusted theme name and its canonical filesystem root."""
         if not isinstance(active_theme, str) or not active_theme.strip():
             raise ValueError("active_theme must be a non-empty string")
+        theme_dir = (
+            self._default_active_theme_dir(active_theme)
+            if active_theme_dir is None
+            else active_theme_dir
+        )
         self.active_theme = active_theme
+        self.active_theme_dir = self._canonical_active_theme_dir(theme_dir)
 
     @property
     def extractor_registry(self):
@@ -168,23 +207,10 @@ class FolderSyncManager:
         """Authorize one direct ``1_entrada``/``2_sucio`` theme root."""
         candidate = Path(path).expanduser()
         resolved = SourcePathAuthorizer(self.vault_root).resolve(candidate)
-        try:
-            relative = resolved.relative_to(self.vault_root)
-        except ValueError as error:
-            raise PathAuthorizationError() from error
-
-        parts = relative.parts
-        if parts == (expected_root_name,):
-            return resolved
-        if (
-            len(parts) == 2
-            and parts[1] == expected_root_name
-            and not parts[0].startswith(".")
-            and parts[0]
-            not in {"1_entrada", "2_sucio", "3_limpio", "4_salida"}
-        ):
-            return resolved
-        raise PathAuthorizationError()
+        expected = (self.active_theme_dir / expected_root_name).resolve(strict=False)
+        if resolved != expected:
+            raise PathAuthorizationError()
+        return resolved
 
     def _authorized_destination_pair(
         self, input_dir: Path, dirty_dir: Path
@@ -192,28 +218,14 @@ class FolderSyncManager:
         """Authorize the matching active-theme input and dirty roots.
 
         The current API receives roots rather than a ``VaultManager``.  The
-        strict compatible contract is therefore either the legacy General
-        pair directly below the vault or one matching pair directly below a
-        single theme directory.
+        manager therefore stores the exact canonical active-theme directory
+        supplied by the trusted vault owner and accepts only its two roots.
         """
         authorized_input = self._authorized_destination(input_dir, "1_entrada")
         authorized_dirty = self._authorized_destination(dirty_dir, "2_sucio")
-        input_relative = authorized_input.relative_to(self.vault_root)
-        dirty_relative = authorized_dirty.relative_to(self.vault_root)
-
-        if input_relative.parts == ("1_entrada",):
-            matching = (
-                self.active_theme == "General"
-                and dirty_relative.parts == ("2_sucio",)
-            )
-        else:
-            matching = (
-                len(input_relative.parts) == 2
-                and len(dirty_relative.parts) == 2
-                and input_relative.parts[0] == dirty_relative.parts[0]
-                and input_relative.parts[0] == self.active_theme
-            )
-        if not matching:
+        expected_input = (self.active_theme_dir / "1_entrada").resolve(strict=False)
+        expected_dirty = (self.active_theme_dir / "2_sucio").resolve(strict=False)
+        if authorized_input != expected_input or authorized_dirty != expected_dirty:
             raise PathAuthorizationError()
         return authorized_input, authorized_dirty
 

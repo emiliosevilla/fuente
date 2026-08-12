@@ -6,7 +6,9 @@ from pathlib import Path
 
 import pytest
 
+from funes.config import get_default_config
 from funes.core.folder_sync import FolderSyncManager, SyncReport
+from funes.core.vault import VaultManager
 from funes.domain.errors import PathAuthorizationError
 from funes.domain.sync import ConnectedFolder
 
@@ -156,6 +158,62 @@ def test_sync_to_input_enforces_manager_active_theme_context(tmp_path):
         manager.sync_to_input(
             vault / "TemaB" / "1_entrada", vault / "TemaB" / "2_sucio"
         )
+
+
+def test_general_legacy_root_is_rejected_when_general_theme_directory_exists(tmp_path):
+    vault_path = tmp_path / "vault"
+    (vault_path / "General").mkdir(parents=True)
+    legacy_input = vault_path / "1_entrada"
+    legacy_dirty = vault_path / "2_sucio"
+    legacy_input.mkdir()
+    legacy_dirty.mkdir()
+
+    vault = VaultManager(get_default_config(vault_path).vault)
+    assert vault.current_theme_dir == (vault_path / "General").resolve()
+
+    source = tmp_path / "provider"
+    source.mkdir()
+    (source / "general.md").write_text("must stay in General", encoding="utf-8")
+    manager = FolderSyncManager(
+        vault_path,
+        active_theme=vault.active_theme,
+        active_theme_dir=vault.current_theme_dir,
+    )
+    assert manager.save_connections(
+        [ConnectedFolder("local", str(source), "Provider", True)]
+    )
+
+    with pytest.raises(PathAuthorizationError):
+        manager.sync_to_input(legacy_input, legacy_dirty)
+
+    assert not (legacy_input / "general.md").exists()
+    assert not (vault.input_dir / "general.md").exists()
+
+
+def test_general_legacy_root_is_accepted_when_general_theme_directory_is_absent(tmp_path):
+    vault_path = tmp_path / "vault"
+    vault = VaultManager(get_default_config(vault_path).vault)
+    assert not (vault_path / "General").exists()
+    assert vault.current_theme_dir == vault_path.resolve()
+
+    source = tmp_path / "provider"
+    source.mkdir()
+    (source / "general.md").write_text("legacy General root", encoding="utf-8")
+    manager = FolderSyncManager(
+        vault_path,
+        active_theme=vault.active_theme,
+        active_theme_dir=vault.current_theme_dir,
+    )
+    assert manager.save_connections(
+        [ConnectedFolder("local", str(source), "Provider", True)]
+    )
+
+    report = manager.sync_to_input(vault.input_dir, vault.dirty_dir)
+
+    assert report.copied == 1
+    assert (vault_path / "1_entrada" / "general.md").read_text(encoding="utf-8") == (
+        "legacy General root"
+    )
 
 
 def test_unreadable_file_is_diagnostic_and_does_not_abort_scan(tmp_path, monkeypatch):

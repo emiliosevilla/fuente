@@ -138,11 +138,19 @@ class SyncReport:
 class FolderSyncManager:
     """Administra la lista de carpetas compartidas/externas vinculadas a 1_entrada."""
 
-    def __init__(self, vault_root: Path):
+    def __init__(self, vault_root: Path, active_theme: str = "General"):
         self.vault_root = Path(vault_root).resolve()
         self.config_file = self.vault_root / ".funes_connected_folders.json"
+        self.active_theme = "General"
+        self.set_active_theme(active_theme)
         self.last_diagnostics: list[SyncDiagnostic] = []
         self._extractor_registry = None
+
+    def set_active_theme(self, active_theme: str) -> None:
+        """Update the trusted theme context used to authorize sync targets."""
+        if not isinstance(active_theme, str) or not active_theme.strip():
+            raise ValueError("active_theme must be a non-empty string")
+        self.active_theme = active_theme
 
     @property
     def extractor_registry(self):
@@ -194,12 +202,16 @@ class FolderSyncManager:
         dirty_relative = authorized_dirty.relative_to(self.vault_root)
 
         if input_relative.parts == ("1_entrada",):
-            matching = dirty_relative.parts == ("2_sucio",)
+            matching = (
+                self.active_theme == "General"
+                and dirty_relative.parts == ("2_sucio",)
+            )
         else:
             matching = (
                 len(input_relative.parts) == 2
                 and len(dirty_relative.parts) == 2
                 and input_relative.parts[0] == dirty_relative.parts[0]
+                and input_relative.parts[0] == self.active_theme
             )
         if not matching:
             raise PathAuthorizationError()

@@ -69,7 +69,7 @@ def test_sync_to_input_orders_source_files_by_provider_and_path(tmp_path):
     vault = tmp_path / "vault"
     active_input = vault / "Tema" / "1_entrada"
     active_dirty = vault / "Tema" / "2_sucio"
-    manager = FolderSyncManager(vault)
+    manager = FolderSyncManager(vault, active_theme="Tema")
     connections = [
         ConnectedFolder("network", str(network_root), "Network", True),
         ConnectedFolder("local", str(local_root), "Local", True),
@@ -108,7 +108,7 @@ def test_sync_to_input_rejects_nested_destination_symlink_without_outside_write(
     source.mkdir(parents=True)
     (source / "leak.md").write_text("must stay inside", encoding="utf-8")
 
-    manager = FolderSyncManager(vault)
+    manager = FolderSyncManager(vault, active_theme="Tema")
     assert manager.save_connections(
         [ConnectedFolder("local", str(source.parent), "Provider", True)]
     )
@@ -141,6 +141,21 @@ def test_sync_to_input_rejects_non_active_theme_destination_pair(
         manager.sync_to_input(vault / input_dir, vault / dirty_dir)
 
     assert not vault.exists()
+
+
+def test_sync_to_input_enforces_manager_active_theme_context(tmp_path):
+    vault = tmp_path / "vault"
+    manager = FolderSyncManager(vault, active_theme="TemaA")
+
+    assert manager.active_theme == "TemaA"
+    assert manager.sync_to_input(
+        vault / "TemaA" / "1_entrada", vault / "TemaA" / "2_sucio"
+    ) == 0
+
+    with pytest.raises(PathAuthorizationError):
+        manager.sync_to_input(
+            vault / "TemaB" / "1_entrada", vault / "TemaB" / "2_sucio"
+        )
 
 
 def test_unreadable_file_is_diagnostic_and_does_not_abort_scan(tmp_path, monkeypatch):
@@ -196,7 +211,7 @@ def test_sync_to_input_returns_report_and_preserves_active_theme_scope(tmp_path)
     sample = source / "nested" / "sample.md"
     sample.write_text("from provider", encoding="utf-8")
 
-    manager = FolderSyncManager(vault)
+    manager = FolderSyncManager(vault, active_theme="Tema")
     assert manager.save_connections([ConnectedFolder("local", str(source), "Source", True)])
 
     report = manager.sync_to_input(active_theme, active_dirty)

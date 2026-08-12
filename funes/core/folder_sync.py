@@ -1,6 +1,7 @@
 import hashlib
 import json
 import logging
+import os
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -747,15 +748,33 @@ class FolderSyncManager:
         This is deliberately limited to local directory markers.  It does not
         inspect credentials, contact a provider, or infer that a folder is
         authenticated merely because it lives below ``CloudStorage``.  The
-        ``SharePoint-*`` marker is accepted only in ``CloudStorage``; under the
-        user home, SharePoint roots must match the documented tenant/library
-        layout and only the library directory is returned.
+        explicit ``SharePoint-*`` marker is accepted only below macOS
+        ``Library/CloudStorage``.  Windows tenant/library layouts are
+        intentionally not inferred; users can select those roots manually.
         ``home`` and ``platform`` are keyword-only test seams; the no-argument
         call keeps using the current user's environment.
         """
         home_path = Path.home() if home is None else Path(home).expanduser()
         platform_name = sys.platform if platform is None else platform
         detected: dict[Path, ConnectedFolder] = {}
+
+        def has_symlink_component(path: Path, boundary: Path) -> bool:
+            """Reject a path if any component from ``boundary`` is a symlink."""
+            boundary_absolute = Path(os.path.abspath(boundary))
+            path_absolute = Path(os.path.abspath(path))
+            try:
+                relative = path_absolute.relative_to(boundary_absolute)
+            except ValueError:
+                return True
+
+            current = boundary_absolute
+            if current.is_symlink():
+                return True
+            for component in relative.parts:
+                current /= component
+                if current.is_symlink():
+                    return True
+            return False
 
         def provider_for(
             path: Path, *, allow_sharepoint_marker: bool = False
@@ -767,16 +786,22 @@ class FolderSyncManager:
                 return SyncProvider.ONEDRIVE_MOUNT
             return None
 
-        def is_local_directory(path: Path) -> bool:
-            return not path.name.startswith(".") and not path.is_symlink() and path.is_dir()
+        def is_local_directory(path: Path, boundary: Path) -> bool:
+            return (
+                not path.name.startswith(".")
+                and not path.is_symlink()
+                and not has_symlink_component(path, boundary)
+                and path.is_dir()
+            )
 
         def add_candidate(
             path: Path,
+            boundary: Path,
             *,
             allow_sharepoint_marker: bool = False,
             provider: SyncProvider | None = None,
         ) -> None:
-            if not is_local_directory(path):
+            if not is_local_directory(path, boundary):
                 return
             candidate_provider = provider or provider_for(
                 path, allow_sharepoint_marker=allow_sharepoint_marker
@@ -798,8 +823,8 @@ class FolderSyncManager:
                 ),
             )
 
-        def direct_children(root: Path) -> list[Path]:
-            if not is_local_directory(root):
+        def direct_children(root: Path, boundary: Path) -> list[Path]:
+            if not is_local_directory(root, boundary):
                 return []
             try:
                 return list(root.iterdir())
@@ -808,41 +833,28 @@ class FolderSyncManager:
                 return []
 
         def scan_direct_children(
-            root: Path, *, allow_sharepoint_marker: bool = False
+            root: Path,
+            boundary: Path,
+            *,
+            allow_sharepoint_marker: bool = False,
         ) -> None:
-            for candidate in direct_children(root):
+            for candidate in direct_children(root, boundary):
                 add_candidate(
-                    candidate, allow_sharepoint_marker=allow_sharepoint_marker
+                    candidate,
+                    boundary,
+                    allow_sharepoint_marker=allow_sharepoint_marker,
                 )
-
-        def is_sharepoint_library(path: Path) -> bool:
-            if not is_local_directory(path):
-                return False
-            site_name, separator, library_name = path.name.partition(" - ")
-            return bool(separator and site_name.strip() and library_name.strip())
-
-        def scan_sharepoint_home_layout(root: Path) -> None:
-            for tenant in direct_children(root):
-                if not is_local_directory(tenant):
-                    continue
-                # A SharePoint-* name under home is not an authoritative
-                # marker; it is accepted only when it lives in CloudStorage.
-                if tenant.name.casefold().startswith(("onedrive", "sharepoint")):
-                    continue
-                for library in direct_children(tenant):
-                    if is_sharepoint_library(library):
-                        add_candidate(library, provider=SyncProvider.SHAREPOINT_MOUNT)
 
         if platform_name.casefold() == "darwin":
             scan_direct_children(
                 home_path / "Library" / "CloudStorage",
+                home_path,
                 allow_sharepoint_marker=True,
             )
 
-        # OneDrive has an explicit user-root marker; SharePoint's home layout
-        # is identified by its direct ``Tenant/Site - Library`` children.
-        scan_direct_children(home_path)
-        scan_sharepoint_home_layout(home_path)
+        # OneDrive has an explicit user-root marker.  SharePoint roots outside
+        # macOS CloudStorage remain a manual-selection fallback.
+        scan_direct_children(home_path, home_path)
 
         return sorted(
             detected.values(),

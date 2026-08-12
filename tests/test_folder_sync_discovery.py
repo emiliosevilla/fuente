@@ -72,33 +72,50 @@ def test_detects_explicit_user_roots_on_windows_and_macos(tmp_path, platform):
     assert detected == [_connection(SyncProvider.ONEDRIVE_MOUNT, onedrive)]
 
 
-def test_detects_sharepoint_library_from_real_home_layout(tmp_path):
+def test_does_not_auto_detect_ambiguous_windows_tenant_library_layout(tmp_path):
+    """Windows layouts stay manual because names alone are not authoritative."""
     home = tmp_path / "home"
-    tenant = home / "Contoso"
-    library = tenant / "Marketing - Documents"
-    second_library = tenant / "Sales - Shared Documents"
-    hidden_library = tenant / ".Hidden - Documents"
-    non_library = tenant / "Random"
+    contoso_library = home / "Contoso" / "Marketing - Documents"
+    notes_archive = home / "Projects" / "Notes - Archive"
     home.mkdir()
-    library.mkdir(parents=True)
-    second_library.mkdir()
-    hidden_library.mkdir()
-    non_library.mkdir()
-    _make_symlink(tenant / "Linked - Documents", library)
+    contoso_library.mkdir(parents=True)
+    notes_archive.mkdir(parents=True)
 
     detected = FolderSyncManager.detect_cloud_folders(home=home, platform="win32")
 
-    assert detected == [
-        _connection(SyncProvider.SHAREPOINT_MOUNT, library),
-        _connection(SyncProvider.SHAREPOINT_MOUNT, second_library),
-    ]
-    assert all(folder.root != str(tenant.resolve()) for folder in detected)
+    # Tenant/site and archive-shaped names are ambiguous; manual folder
+    # selection is the supported fallback for these Windows layouts.
+    assert detected == []
 
 
 def test_ignores_ambiguous_home_tenant_without_library_shape(tmp_path):
     home = tmp_path / "home"
     ambiguous = home / "Contoso" / "Random"
     ambiguous.mkdir(parents=True)
+
+    detected = FolderSyncManager.detect_cloud_folders(home=home, platform="win32")
+
+    assert detected == []
+
+
+def test_rejects_symlinked_parent_of_macos_cloudstorage(tmp_path):
+    home = tmp_path / "home"
+    external = tmp_path / "external"
+    home.mkdir()
+    (external / "CloudStorage" / "SharePoint - Fabrikam").mkdir(parents=True)
+    _make_symlink(home / "Library", external)
+
+    detected = FolderSyncManager.detect_cloud_folders(home=home, platform="darwin")
+
+    assert detected == []
+
+
+def test_rejects_symlinked_home_boundary_for_user_roots(tmp_path):
+    real_home = tmp_path / "real-home"
+    real_home.mkdir()
+    (real_home / "OneDrive-Personal").mkdir()
+    home = tmp_path / "home"
+    _make_symlink(home, real_home)
 
     detected = FolderSyncManager.detect_cloud_folders(home=home, platform="win32")
 

@@ -4,6 +4,8 @@ from __future__ import annotations
 import threading
 
 from funes.domain.jobs import CLAIMED_STATUS, JobConflictError
+from funes.domain.sync import ConnectedFolder
+from funes.core.folder_sync import FolderSyncManager
 from funes.infrastructure.sqlite_store import JobStore
 
 from tests.integration.conftest import (
@@ -126,3 +128,26 @@ def test_concurrent_claim_of_one_job_only_one_worker_processes(temp_vault_path):
     finally:
         worker_a_store.close()
         worker_b_store.close()
+
+
+def test_folder_sync_reuses_durable_manifest_after_manager_reopen(tmp_path):
+    vault = tmp_path / "vault"
+    source = tmp_path / "provider"
+    source.mkdir()
+    (source / "durable.md").write_text("durable", encoding="utf-8")
+    connection = ConnectedFolder("local", str(source), "Provider", True)
+
+    first_manager = FolderSyncManager(vault, active_theme="Tema")
+    assert first_manager.save_connections([connection])
+    first = first_manager.sync_to_input(
+        vault / "Tema" / "1_entrada", vault / "Tema" / "2_sucio"
+    )
+
+    reopened_manager = FolderSyncManager(vault, active_theme="Tema")
+    second = reopened_manager.sync_to_input(
+        vault / "Tema" / "1_entrada", vault / "Tema" / "2_sucio"
+    )
+
+    assert first.copied == 1
+    assert (second.copied, second.unchanged, second.manifest_updates) == (0, 1, 0)
+    assert second.conflicts == []

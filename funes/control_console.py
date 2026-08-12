@@ -38,6 +38,7 @@ from funes.application.export import (
     ExportFileExistsError,
     UnsupportedExportFormatError,
 )
+from funes.application.fusion import FusionApplicationService
 from funes.application.health import HealthService
 from funes.application.job_control import (
     JobControlService,
@@ -53,6 +54,7 @@ from funes.application.notes import NotesApplicationService
 from funes.application.onboarding import OnboardingService
 from funes.application.review_export import ReviewExportApplicationService
 from funes.application.retrieval import RetrievalApplicationService
+from funes.application.reflow import ReflowApplicationService, ReflowScope
 from funes.application.settings import SettingsService, SettingsValidationError
 from funes.config import (
     get_default_config,
@@ -338,6 +340,8 @@ class FunesConsoleBackend:
         self._notes_service: Optional[NotesApplicationService] = None
         self._export_service: Optional[ExportApplicationService] = None
         self._review_export_service: Optional[ReviewExportApplicationService] = None
+        self._reflow_service: Optional[ReflowApplicationService] = None
+        self._fusion_service: Optional[FusionApplicationService] = None
         self._job_store: Optional[JobStore] = None
         self._ingestion_service: Optional[IngestionApplicationService] = None
         self._ingestion_job_store: Optional[JobStore] = None
@@ -389,6 +393,8 @@ class FunesConsoleBackend:
         self._notes_service = None
         self._export_service = None
         self._review_export_service = None
+        self._reflow_service = None
+        self._fusion_service = None
         self._job_store = None
         self._job_control_service = None
         # A test/offline attachment is an explicit alternate collaborator.
@@ -413,6 +419,51 @@ class FunesConsoleBackend:
                 "message": "The lifecycle-owned graph service is not started",
             }
         return self.lifecycle.refine_graph(target_issue=target_issue)
+
+    def reflow_links(self, scope_payload: object) -> Dict[str, Any]:
+        """Run one explicit link reflow through the lifecycle-owned graph loop."""
+        if isinstance(scope_payload, ReflowScope):
+            scope = scope_payload
+        elif isinstance(scope_payload, Mapping):
+            allowed = {"document_id", "theme", "issue"}
+            if set(scope_payload) - allowed:
+                return {"error": "invalid_payload", "message": "Unsupported scope field"}
+            values = {
+                key: scope_payload.get(key)
+                for key in allowed
+                if key in scope_payload
+            }
+            if any(value is not None and not isinstance(value, str) for value in values.values()):
+                return {"error": "invalid_payload", "message": "Scope values must be strings"}
+            scope = ReflowScope(
+                document_id=values.get("document_id"),
+                theme=values.get("theme"),
+                issue=values.get("issue"),
+            )
+        else:
+            return {"error": "invalid_payload", "message": "Scope must be an object"}
+
+        if self.lifecycle is None or not self.lifecycle.is_running:
+            return {
+                "error": "graph_service_unavailable",
+                "message": "The lifecycle-owned graph service is not started",
+            }
+        service = self._reflow_service or ReflowApplicationService(
+            lifecycle=self.lifecycle,
+            path_resolver=self._path_resolver(),
+            index_notifier=self.notify_index_changed,
+        )
+        self._reflow_service = service
+        try:
+            result = service.reflow_links(scope)
+        except PathAuthorizationError as error:
+            return self._path_error(error)
+        except (TypeError, ValueError) as error:
+            return {"error": "invalid_payload", "message": str(error)}
+        payload = result.as_dict()
+        if result.error:
+            return {"error": result.error, "message": result.error}
+        return payload
 
     def _apply_settings_config(self, config: AppConfig) -> None:
         """Refresh settings consumers after their durable config has been written."""
@@ -665,6 +716,54 @@ class FunesConsoleBackend:
                 self.get_export_service(),
             )
         return self._review_export_service
+
+    def get_fusion_service(self) -> FusionApplicationService:
+        """Return the cached preview-then-commit fusion coordinator."""
+        if self._fusion_service is None:
+            self._fusion_service = FusionApplicationService(
+                notes_service=self.get_notes_service(),
+            )
+        return self._fusion_service
+
+    def get_fusion_candidates(
+        self, *, issue: str | None = None, limit: int = 25
+    ) -> Dict[str, Any]:
+        candidates = self.get_fusion_service().find_candidates(issue=issue, limit=limit)
+        return {
+            "candidates": [
+                {
+                    "candidate_id": candidate.candidate_id,
+                    "document_ids": list(candidate.document_ids),
+                    "score": candidate.score,
+                    "reasons": list(candidate.reasons),
+                }
+                for candidate in candidates
+            ]
+        }
+
+    def preview_fusion(
+        self, document_ids: list[str], title: str, target_issue: str
+    ) -> Dict[str, Any]:
+        return self.get_fusion_service().preview(
+            document_ids,
+            title,
+            target_issue,
+        ).as_dict()
+
+    def commit_fusion(
+        self, preview_id: str, expected_revisions: dict[str, int]
+    ) -> Dict[str, Any]:
+        note = self.get_fusion_service().commit(preview_id, expected_revisions)
+        return {
+            "document_id": note.document_id,
+            "path": note.relative_path,
+            "title": note.title,
+            "status": note.status,
+            "revision": note.revision,
+            "frontmatter": dict(note.frontmatter),
+            "body_markdown": note.body_markdown,
+            "source_ids": list(note.source_ids),
+        }
 
     def approve_and_export(
         self,
@@ -1153,54 +1252,15 @@ class FunesConsoleBackend:
 
         elif action_name == "merge_notes":
             note_paths = payload.get("note_paths", [])
-            merged_title = payload.get("merged_title", "Nota_Fusionada")
-            target_issue = payload.get("target_issue", "_Sin_Cuestion")
-
-            if len(note_paths) < 2:
-                return {"error": "Se requieren al menos 2 notas para fusionar"}
-
-            contents = []
-            sources_set = set()
-            for np_str in note_paths:
-                try:
-                    p = self._path_resolver().resolve_note(np_str)
-                except PathAuthorizationError as error:
-                    return self._path_error(error)
-                if p.exists():
-                    txt = p.read_text(encoding="utf-8", errors="replace")
-                    contents.append(f"### Origen: {p.stem}\n{txt}\n")
-                    sources_set.add(p.name)
-
-            combined_body = "\n\n---\n\n".join(contents)
-            sources_fmt = json.dumps(sorted(list(sources_set)), ensure_ascii=False)
-            now_str = time.strftime("%Y-%m-%d %H:%M:%S")
-
-            merged_md = f"""---
-título: "{merged_title}"
-fecha: "{now_str}"
-autor: "Funes Merge Engine"
-estado: "aprobada"
-fuentes: {sources_fmt}
-historial:
-  - fecha: "{now_str}"
-    accion: "fusionada"
----
-
-# {merged_title}
-
-{combined_body}
-"""
-            try:
-                out_path = self.vault.save_atomic_note(
-                    title=merged_title,
-                    content=merged_md,
-                    issue_name=target_issue,
-                )
-            except PathAuthorizationError as error:
-                return self._path_error(error)
+            if isinstance(note_paths, list) and any(
+                isinstance(note_path, str)
+                and ("/" in note_path or "\\" in note_path or note_path.endswith(".md"))
+                for note_path in note_paths
+            ):
+                return self._path_error(PathAuthorizationError())
             return {
-                "log": f"Fusión completada. Nota resultante: '{out_path.name}' en Cuestión '{target_issue}'.",
-                "path": self._vault_relative_identity(out_path),
+                "error": "fusion_preview_required",
+                "message": "Use preview_fusion and commit_fusion with document IDs",
             }
 
         elif action_name == "move_note":
@@ -1282,6 +1342,21 @@ historial:
                 return {"log": msg, "result": res, "refresh": True, "stats": self.get_stats_dict()}
             except Exception as e:
                 return {"error": f"Error ejecutando ciclo optimizado: {e}"}
+
+        elif action_name == "reflow_links":
+            result = self.reflow_links(payload.get("scope", payload))
+            if "error" in result:
+                return result
+            return {
+                "log": (
+                    "Reflow de enlaces completado. "
+                    f"Notas procesadas: {result.get('processed_notes', 0)}; "
+                    f"notas cambiadas: {result.get('changed_notes', 0)}."
+                ),
+                "result": result,
+                **result,
+                "refresh": bool(result.get("changed_markdown")),
+            }
 
         # --- ACCIONES ANTERIORES DE CONSOLA ---
         elif action_name == "flush_sources":

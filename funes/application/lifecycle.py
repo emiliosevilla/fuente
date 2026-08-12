@@ -13,6 +13,7 @@ import logging
 from pathlib import Path
 from typing import Callable, Optional
 
+from funes.application.reflow import AuthorizedReflowTarget
 from funes.config import AppConfig
 from funes.domain.runtime_policy import RuntimePolicy
 from funes.graph_engine.optimized_loop import OptimizadoGraphLoop
@@ -166,7 +167,7 @@ class ApplicationLifecycle:
         FolderMonitor already re-reads ``pipeline.vault.input_dir`` each poll,
         so sharing/updating the pipeline vault is enough for ingestion. The
         graph loop caches ``output_dir`` at construction, so it is retargeted
-        here via ``set_output_dir``.
+        here via the graph loop's private ``_set_output_dir`` method.
         """
         if self.pipeline is None:
             raise RuntimeError(
@@ -174,7 +175,12 @@ class ApplicationLifecycle:
             )
         theme_dir = self.pipeline.set_active_theme(theme_name)
         if self.graph_loop is not None:
-            self.graph_loop.set_output_dir(self.pipeline.vault.output_dir)
+            retarget = getattr(self.graph_loop, "_set_output_dir", None)
+            if not callable(retarget):
+                # Compatibility for test doubles; the production loop keeps
+                # retargeting private so raw paths cannot enter refine_graph.
+                retarget = self.graph_loop.set_output_dir
+            retarget(self.pipeline.vault.output_dir)
         logger.info(
             "ApplicationLifecycle tema activo: %s (output=%s)",
             self.pipeline.vault.active_theme,
@@ -203,7 +209,13 @@ class ApplicationLifecycle:
         else:
             self.pipeline.config = config
 
-    def refine_graph(self, target_issue: str | None = None) -> dict:
+    def refine_graph(
+        self,
+        target_issue: str | None = None,
+        *,
+        target_document_id: str | None = None,
+        authorized_scope: AuthorizedReflowTarget | None = None,
+    ) -> dict:
         """Refine the lifecycle-owned graph loop, or fail closed.
 
         Console actions must never create a second loop: the loop started (or
@@ -214,7 +226,18 @@ class ApplicationLifecycle:
                 "error": "graph_service_unavailable",
                 "message": "The lifecycle-owned graph service is not started",
             }
-        return self.graph_loop.refine_knowledge_graph(target_issue=target_issue)
+        kwargs = {"target_issue": target_issue}
+        if target_document_id is not None:
+            kwargs["target_document_id"] = target_document_id
+        if authorized_scope is not None:
+            vault_root = self.pipeline.vault.config.vault_path
+            if not isinstance(authorized_scope, AuthorizedReflowTarget) or not authorized_scope.is_valid_for(vault_root):
+                return {
+                    "error": "path_not_authorized",
+                    "message": "Path is not authorized",
+                }
+            kwargs["authorized_scope"] = authorized_scope
+        return self.graph_loop.refine_knowledge_graph(**kwargs)
 
     def _run_flush_once(self) -> dict:
         assert self.pipeline is not None

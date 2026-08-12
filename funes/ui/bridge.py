@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path, PureWindowsPath
 from typing import TYPE_CHECKING, Any, Mapping, Optional
 
 from funes.application.job_control import (
@@ -12,6 +13,7 @@ from funes.application.job_control import (
     validate_limit,
     validate_reason,
 )
+from funes.application.notes import MAX_BODY_MARKDOWN_CHARS
 from funes.domain.jobs import JobConflictError, JobNotFoundError
 from funes.domain.errors import (
     InvalidNoteTransitionError,
@@ -35,6 +37,7 @@ class FunesPyWebViewApi:
         "step1_flush": {},
         "step2_transcribe": {},
         "step3_structure": {},
+        "reflow_links": {},
         "reindex_notes": {},
         "stat_ram": {},
         "stat_input": {},
@@ -73,6 +76,62 @@ class FunesPyWebViewApi:
         if required and not value:
             return cls._error("invalid_payload", f"{field} is required")
         return value
+
+    @classmethod
+    def _editor_note_id(cls, value: object) -> str | ErrorResult:
+        """Validate an opaque editor ID without normalizing or resolving paths."""
+        if not isinstance(value, str):
+            return cls._error("invalid_payload", "document_id must be a string")
+        if not value.strip():
+            return cls._error("invalid_payload", "document_id is required")
+        if "/" in value or "\\" in value or value.strip().endswith(".md"):
+            return cls._error("path_not_authorized", "Path is not authorized")
+        return value
+
+    @classmethod
+    def _editor_body(cls, value: object) -> str | ErrorResult:
+        if not isinstance(value, str):
+            return cls._error("invalid_payload", "body_markdown must be a string")
+        if len(value) > MAX_BODY_MARKDOWN_CHARS:
+            return cls._error(
+                "invalid_payload",
+                "body_markdown exceeds maximum length of "
+                f"{MAX_BODY_MARKDOWN_CHARS} characters",
+            )
+        return value
+
+    @classmethod
+    def _validate_reflow_scope_payload(
+        cls, payload: dict[str, Any]
+    ) -> ErrorResult | None:
+        scope_payload = payload
+        if "scope" in payload:
+            if set(payload) != {"scope"} or not isinstance(payload["scope"], Mapping):
+                return cls._error("invalid_payload", "scope must be an object")
+            scope_payload = dict(payload["scope"])
+        allowed = {"document_id", "theme", "issue"}
+        if set(scope_payload) - allowed:
+            return cls._error("invalid_payload", "Unsupported scope field")
+        for field, value in scope_payload.items():
+            if value is None:
+                continue
+            if not isinstance(value, str):
+                return cls._error("invalid_payload", "Scope values must be strings")
+            if not value.strip():
+                return cls._error("invalid_payload", f"{field} cannot be empty")
+            path = Path(value)
+            if (
+                path.is_absolute()
+                or PureWindowsPath(value).drive
+                or path.name != value
+                or value in {".", ".."}
+                or "/" in value
+                or "\\" in value
+                or "\x00" in value
+                or (field == "document_id" and value.endswith(".md"))
+            ):
+                return cls._error("path_not_authorized", "Path is not authorized")
+        return None
 
     def set_window(self, window: Any) -> None:
         self._window = window
@@ -307,6 +366,19 @@ class FunesPyWebViewApi:
             return issue
         return self.backend.handle_action("run_optimized_cycle", {"target_issue": issue or None})
 
+    def reflow_links(self, scope_payload: object) -> dict[str, Any]:
+        """Run one validated, on-demand link reflow scope."""
+        parsed = self._payload(scope_payload)
+        if isinstance(parsed, dict) and "error" in parsed:
+            return parsed
+        assert isinstance(parsed, dict)
+        validation_error = self._validate_reflow_scope_payload(parsed)
+        if validation_error is not None:
+            return validation_error
+        if "scope" in parsed:
+            parsed = dict(parsed["scope"])
+        return self.backend.reflow_links(parsed)
+
     def get_pending_notes(self) -> dict[str, Any]:
         return self.backend.handle_action("get_pending_notes", {})
 
@@ -326,6 +398,119 @@ class FunesPyWebViewApi:
             "get_note_metadata",
             {"document_id": note, "diagnostic": include_diagnostic},
         )
+
+    def get_note_editor(self, note_id: object) -> dict[str, Any]:
+        """Return the canonical revisioned Markdown editor payload."""
+        document_id = self._editor_note_id(note_id)
+        if isinstance(document_id, dict):
+            return document_id
+        try:
+            return self.backend.get_notes_service().get_editor_document(document_id)
+        except PathAuthorizationError as error:
+            return {"error": error.code, "message": str(error)}
+        except (TypeError, ValueError) as error:
+            return self._error("invalid_payload", str(error))
+
+    def get_fusion_candidates(self, issue: object = None, limit: object = 25) -> dict[str, Any]:
+        """Return deterministic fusion candidates for the guided reader flow."""
+        normalized_issue = None
+        if issue is not None:
+            normalized_issue = self._text(issue, "issue")
+            if isinstance(normalized_issue, dict):
+                return normalized_issue
+        if isinstance(limit, bool) or not isinstance(limit, int) or limit < 0:
+            return self._error("invalid_payload", "limit must be a non-negative integer")
+        try:
+            return self.backend.get_fusion_candidates(
+                issue=normalized_issue,
+                limit=limit,
+            )
+        except PathAuthorizationError as error:
+            return {"error": error.code, "message": str(error)}
+        except (TypeError, ValueError) as error:
+            return self._error("invalid_payload", str(error))
+
+    def preview_fusion(
+        self, document_ids: object, title: object, target_issue: object
+    ) -> dict[str, Any] | ErrorResult:
+        """Build a read-only fusion preview from opaque source IDs."""
+        if not isinstance(document_ids, list):
+            return self._error("invalid_payload", "document_ids must be a list")
+        if len(document_ids) < 2:
+            return self._error("invalid_payload", "document_ids must contain at least two IDs")
+        normalized_ids: list[str] = []
+        for document_id in document_ids:
+            normalized = self._editor_note_id(document_id)
+            if isinstance(normalized, dict):
+                return normalized
+            normalized_ids.append(normalized)
+        normalized_title = self._text(title, "title")
+        normalized_issue = self._text(target_issue, "target_issue")
+        if isinstance(normalized_title, dict):
+            return normalized_title
+        if isinstance(normalized_issue, dict):
+            return normalized_issue
+        try:
+            return self.backend.preview_fusion(
+                normalized_ids,
+                normalized_title,
+                normalized_issue,
+            )
+        except (PathAuthorizationError, NoteRevisionConflictError) as error:
+            return {"error": error.code, "message": str(error)}
+        except (TypeError, ValueError) as error:
+            return self._error("invalid_payload", str(error))
+
+    def commit_fusion(
+        self, preview_id: object, expected_revisions: object
+    ) -> dict[str, Any] | ErrorResult:
+        """Commit a preview only with the exact source revision map it recorded."""
+        normalized_preview_id = self._text(preview_id, "preview_id")
+        if isinstance(normalized_preview_id, dict):
+            return normalized_preview_id
+        if not isinstance(expected_revisions, Mapping):
+            return self._error("invalid_payload", "expected_revisions must be an object")
+        revisions = dict(expected_revisions)
+        if not all(isinstance(key, str) for key in revisions):
+            return self._error("invalid_payload", "source revision keys must be strings")
+        for document_id, revision in revisions.items():
+            normalized_id = self._editor_note_id(document_id)
+            if isinstance(normalized_id, dict):
+                return normalized_id
+            revision_error = self._revision(revision)
+            if revision_error is not None:
+                return revision_error
+        try:
+            return self.backend.commit_fusion(normalized_preview_id, revisions)
+        except (PathAuthorizationError, NoteRevisionConflictError) as error:
+            return {"error": error.code, "message": str(error)}
+        except (TypeError, ValueError) as error:
+            return self._error("invalid_payload", str(error))
+
+    def update_note_body(
+        self,
+        note_id: object,
+        expected_revision: object,
+        body_markdown: object,
+    ) -> dict[str, Any]:
+        """Replace only a note body through the revisioned service CAS."""
+        document_id = self._editor_note_id(note_id)
+        if isinstance(document_id, dict):
+            return document_id
+        revision_error = self._revision(expected_revision)
+        if revision_error is not None:
+            return revision_error
+        body = self._editor_body(body_markdown)
+        if isinstance(body, dict):
+            return body
+        notes = self.backend.get_notes_service()
+        try:
+            notes.update_note_body(document_id, expected_revision, body)
+            return notes.get_editor_document(document_id)
+        except (PathAuthorizationError, NoteRevisionConflictError) as error:
+            return {"error": error.code, "message": str(error)}
+        except (TypeError, ValueError) as error:
+            return self._error("invalid_payload", str(error))
 
     def validate_note_metadata(self, metadata: object) -> dict[str, Any]:
         parsed = self._payload(metadata)
@@ -445,6 +630,11 @@ class FunesPyWebViewApi:
             return self._error("invalid_payload", "note_ids must contain at least two IDs")
         if not all(isinstance(note_id, str) and note_id.strip() for note_id in note_ids):
             return self._error("invalid_payload", "note_ids must contain strings")
+        if any(
+            "/" in note_id or "\\" in note_id or note_id.strip().endswith(".md")
+            for note_id in note_ids
+        ):
+            return self._error("path_not_authorized", "Path is not authorized")
         merged_title = self._text(title, "title")
         issue = self._text(issue_id, "issue_id")
         if isinstance(merged_title, dict):
@@ -565,6 +755,8 @@ class FunesPyWebViewApi:
     def _validate_action_payload(
         cls, action: str, payload: dict[str, Any], schema: dict[str, type]
     ) -> ErrorResult | None:
+        if action == "reflow_links":
+            return cls._validate_reflow_scope_payload(payload)
         extra_fields = set(payload) - set(schema)
         optional_export_fields = {"destination_path", "confirm_overwrite", "note_path", "document_id"}
         if action == "export_reader_note":

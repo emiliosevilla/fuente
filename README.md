@@ -117,6 +117,18 @@ Estas descripciones documentan contratos medidos; no implican que Ollama, Obsidi
 
 ## 📄 Plantilla de Nota Atómica Generada (`4_salida`)
 
+## Flujo editorial sobre la fuente canónica
+
+El flujo editorial de Tasks 1–7 conserva **Markdown con frontmatter YAML como única fuente de verdad**. El editor de notas es un editor de Markdown plano con previsualización: el editor de metadatos existente sigue siendo una superficie separada para los campos de frontmatter, y ni el DOM renderizado ni la proyección de la UI sustituyen al archivo canónico.
+
+- **Edición con CAS:** la UI y el bridge usan un `document_id` opaco, una revisión esperada y un contrato compare-and-swap (CAS) tipado. Una edición concurrente o una entrada no autorizada falla sin sobrescribir el Markdown existente.
+- **Reflow durable:** el reflow de enlaces es una acción explícita y acotada por documento, tema o cuestión. El enriquecimiento y el reflow se registran como jobs durables y recuperables; los resultados se escriben como `pending_review` mediante escritura atómica y CAS, dejando intacta la nota aprobada cuando hay un fallo o conflicto.
+- **Candidatos de fusión (candidate detection):** la detección es determinista, limitada al alcance autorizado y de solo lectura. Compara coincidencias exactas y similitud de título/cuerpo para producir candidatos reproducibles; no fusiona ni elimina notas automáticamente.
+- **Fusión source-preserving:** la fusión es `preview-then-commit`. La previsualización conserva los IDs y revisiones de todas las fuentes; el commit vuelve a validarlos, crea una nota canónica `pending_review` con sus referencias y mantiene las notas originales sin cambios.
+- **Contratos bridge/UI seguros:** los métodos están allowlisted y validan tipos, IDs y revisiones antes de llegar al backend. La UI usa sinks seguros para Markdown no confiable y muestra estados de guardado, conflicto y error sin aceptar rutas suministradas por el navegador.
+
+Este plan no incluye —quedan **fuera de alcance**— **TipTap**, sincronización mediante **native Graph API/OAuth**, integración de **LightRAG en producción** ni credenciales cloud. LightRAG puede existir como comparación opt-in externa, pero no es una dependencia ni participa en el runtime o release gate local-first. El flujo entregado sigue siendo local y offline-capable.
+
 Cada archivo procesado genera una nota atómica estandarizada:
 
 ```markdown
@@ -187,7 +199,7 @@ Usa `PYTHONDONTWRITEBYTECODE=1` para no generar bytecode rastreado (`*.pyc`, `__
 PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -q
 ```
 
-La suite actual contiene **733 tests collected**: **732 passed** y **1 skipped**, con un warning externo de deprecación de ChromaDB. La medición se obtuvo con `PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -p no:cacheprovider tests -q`.
+El conteo de la suite no se fija en este README porque cambia con cada contrato añadido. Mídelo con `PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -p no:cacheprovider tests -q`; el resultado del cierre editorial y cualquier warning externo quedan registrados en [`docs/task.md`](docs/task.md).
 
 ### Release gate (pre-publicación)
 

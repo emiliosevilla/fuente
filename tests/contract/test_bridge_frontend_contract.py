@@ -43,6 +43,7 @@ VALID_ACTION_PAYLOADS: dict[str, dict] = {
     "step1_flush": {},
     "step2_transcribe": {},
     "step3_structure": {},
+    "reflow_links": {"issue": "Issue-A"},
     "reindex_notes": {},
     "stat_ram": {},
     "stat_input": {},
@@ -61,12 +62,31 @@ VALID_ACTION_PAYLOADS: dict[str, dict] = {
     "reset_default_settings": {},
 }
 
+EDITOR_BRIDGE_METHODS = {"get_note_editor", "update_note_body"}
+
 
 def test_every_frontend_direct_bridge_call_is_exposed():
     called = _frontend_direct_calls()
     exposed = _bridge_public_methods()
     assert called, "consola_preview.html must call at least one bridge method"
     assert called <= exposed, called - exposed
+
+
+def test_revisioned_editor_methods_are_in_the_typed_bridge_allowlist():
+    assert EDITOR_BRIDGE_METHODS <= _bridge_public_methods()
+
+
+def test_revisioned_editor_methods_have_no_path_parameters():
+    assert tuple(inspect.signature(FunesPyWebViewApi.get_note_editor).parameters) == (
+        "self",
+        "note_id",
+    )
+    assert tuple(inspect.signature(FunesPyWebViewApi.update_note_body).parameters) == (
+        "self",
+        "note_id",
+        "expected_revision",
+        "body_markdown",
+    )
 
 
 def test_frontend_bridge_calls_use_the_typed_api_inventory():

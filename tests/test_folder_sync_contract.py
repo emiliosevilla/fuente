@@ -73,10 +73,10 @@ def test_disabled_connection_is_not_scanned(tmp_path):
         [ConnectedFolder("local", str(source), "Disabled", enabled=False)]
     )
 
-    copied = manager.sync_to_input(tmp_path / "active-theme" / "1_entrada", tmp_path / "active-theme" / "2_sucio")
+    copied = manager.sync_to_input(tmp_path / "1_entrada", tmp_path / "2_sucio")
 
     assert copied == 0
-    assert not (tmp_path / "active-theme" / "1_entrada" / "should-not-copy.md").exists()
+    assert not (tmp_path / "1_entrada" / "should-not-copy.md").exists()
 
 
 def test_malformed_connection_has_stable_diagnostic(tmp_path):

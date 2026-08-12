@@ -156,12 +156,54 @@ class FolderSyncManager:
     def _diagnostic(path: Path | str, message: str, code: str = "sync_diagnostic") -> SyncDiagnostic:
         return SyncDiagnostic(path=str(path), message=message, code=code)
 
-    def _authorized_destination(self, path: Path) -> Path:
+    def _authorized_destination(self, path: Path, expected_root_name: str) -> Path:
+        """Authorize one direct ``1_entrada``/``2_sucio`` theme root."""
         candidate = Path(path).expanduser()
+        resolved = SourcePathAuthorizer(self.vault_root).resolve(candidate)
         try:
-            return SourcePathAuthorizer(self.vault_root).resolve(candidate)
-        except PathAuthorizationError:
-            raise
+            relative = resolved.relative_to(self.vault_root)
+        except ValueError as error:
+            raise PathAuthorizationError() from error
+
+        parts = relative.parts
+        if parts == (expected_root_name,):
+            return resolved
+        if (
+            len(parts) == 2
+            and parts[1] == expected_root_name
+            and not parts[0].startswith(".")
+            and parts[0]
+            not in {"1_entrada", "2_sucio", "3_limpio", "4_salida"}
+        ):
+            return resolved
+        raise PathAuthorizationError()
+
+    def _authorized_destination_pair(
+        self, input_dir: Path, dirty_dir: Path
+    ) -> tuple[Path, Path]:
+        """Authorize the matching active-theme input and dirty roots.
+
+        The current API receives roots rather than a ``VaultManager``.  The
+        strict compatible contract is therefore either the legacy General
+        pair directly below the vault or one matching pair directly below a
+        single theme directory.
+        """
+        authorized_input = self._authorized_destination(input_dir, "1_entrada")
+        authorized_dirty = self._authorized_destination(dirty_dir, "2_sucio")
+        input_relative = authorized_input.relative_to(self.vault_root)
+        dirty_relative = authorized_dirty.relative_to(self.vault_root)
+
+        if input_relative.parts == ("1_entrada",):
+            matching = dirty_relative.parts == ("2_sucio",)
+        else:
+            matching = (
+                len(input_relative.parts) == 2
+                and len(dirty_relative.parts) == 2
+                and input_relative.parts[0] == dirty_relative.parts[0]
+            )
+        if not matching:
+            raise PathAuthorizationError()
+        return authorized_input, authorized_dirty
 
     def _is_supported(self, path: Path) -> bool:
         return any(
@@ -348,9 +390,10 @@ class FolderSyncManager:
         (typically ``VaultManager.input_dir`` / ``VaultManager.dirty_dir``).
         Never hardcode the General vault-root ``2_sucio``.
         """
+        input_dir, dirty_dir = self._authorized_destination_pair(
+            Path(input_dir), Path(dirty_dir)
+        )
         connected = self.load_connections()
-        input_dir = self._authorized_destination(Path(input_dir))
-        dirty_dir = self._authorized_destination(Path(dirty_dir))
         sources: list[SourceFile] = []
         diagnostics: list[SyncDiagnostic] = []
 
@@ -362,11 +405,30 @@ class FolderSyncManager:
         sources.sort(key=lambda item: (item.provider, item.source_relative_path, str(item.absolute_source_path)))
         copied_count = 0
         skipped_count = 0
+        destination_authorizer = SourcePathAuthorizer(self.vault_root)
 
         for source in sources:
             destination_relative = Path(source.source_relative_path)
-            dest = input_dir / destination_relative
-            dirty_file = dirty_dir / destination_relative
+            requested_dest = input_dir / destination_relative
+            requested_dirty_file = dirty_dir / destination_relative
+            try:
+                # Authorize both final paths before any existence check/stat or
+                # parent creation. This rejects an existing symlink component
+                # in either destination tree before it can redirect a write.
+                dest = destination_authorizer.resolve(requested_dest)
+                dirty_file = destination_authorizer.resolve(requested_dirty_file)
+            except (OSError, PathAuthorizationError) as error:
+                skipped_count += 1
+                diagnostics.append(
+                    self._diagnostic(
+                        requested_dest,
+                        f"destination rejected: {error}",
+                        "destination_rejected",
+                    )
+                )
+                logger.error("Destino rechazado durante sync: %s", requested_dest)
+                continue
+
             try:
                 dirty_mtime_ns = dirty_file.stat().st_mtime_ns if dirty_file.exists() else None
                 dest_mtime_ns = dest.stat().st_mtime_ns if dest.exists() else None

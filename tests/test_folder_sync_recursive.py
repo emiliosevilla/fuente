@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 
 from funes.core.folder_sync import FolderSyncManager, SyncReport
+from funes.domain.errors import PathAuthorizationError
 from funes.domain.sync import ConnectedFolder
 
 
@@ -57,7 +58,7 @@ def test_scan_connection_is_recursive_authorized_and_deterministic(tmp_path):
     assert manager.last_diagnostics == []
 
 
-def test_scan_order_is_provider_then_relative_path(tmp_path):
+def test_sync_to_input_orders_source_files_by_provider_and_path(tmp_path):
     network_root = tmp_path / "network"
     local_root = tmp_path / "local"
     for root in (network_root, local_root):
@@ -65,22 +66,81 @@ def test_scan_order_is_provider_then_relative_path(tmp_path):
         (root / "a.md").write_text(root.name, encoding="utf-8")
         (root / "z" / "b.md").write_text(root.name, encoding="utf-8")
 
-    manager = FolderSyncManager(tmp_path / "vault")
+    vault = tmp_path / "vault"
+    active_input = vault / "Tema" / "1_entrada"
+    active_dirty = vault / "Tema" / "2_sucio"
+    manager = FolderSyncManager(vault)
     connections = [
         ConnectedFolder("network", str(network_root), "Network", True),
         ConnectedFolder("local", str(local_root), "Local", True),
     ]
-    sources = []
-    for connection in connections:
-        sources.extend(manager.scan_connection(connection))
-    sources.sort(key=lambda item: (item.provider, item.source_relative_path))
+    assert manager.save_connections(connections)
 
-    assert [(item.provider, item.source_relative_path) for item in sources] == [
+    report = manager.sync_to_input(active_input, active_dirty)
+
+    assert [(item.provider, item.source_relative_path) for item in report.source_files] == [
         ("local", "a.md"),
         ("local", "z/b.md"),
         ("network", "a.md"),
         ("network", "z/b.md"),
     ]
+
+
+@pytest.mark.parametrize("destination_root", ["input", "dirty"])
+def test_sync_to_input_rejects_nested_destination_symlink_without_outside_write(
+    tmp_path, destination_root
+):
+    vault = tmp_path / "vault"
+    active_input = vault / "Tema" / "1_entrada"
+    active_dirty = vault / "Tema" / "2_sucio"
+    active_input.mkdir(parents=True)
+    active_dirty.mkdir(parents=True)
+
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    symlink_parent = active_input if destination_root == "input" else active_dirty
+    try:
+        (symlink_parent / "nested").symlink_to(outside, target_is_directory=True)
+    except (OSError, NotImplementedError) as error:
+        pytest.skip(f"symlinks are unavailable in this environment: {error}")
+
+    source = tmp_path / "provider" / "nested"
+    source.mkdir(parents=True)
+    (source / "leak.md").write_text("must stay inside", encoding="utf-8")
+
+    manager = FolderSyncManager(vault)
+    assert manager.save_connections(
+        [ConnectedFolder("local", str(source.parent), "Provider", True)]
+    )
+
+    report = manager.sync_to_input(active_input, active_dirty)
+
+    assert report.copied == 0
+    assert report.scanned == 1
+    assert report.skipped == 1
+    assert any(d.code == "destination_rejected" for d in report.diagnostics)
+    assert not (outside / "leak.md").exists()
+
+
+@pytest.mark.parametrize(
+    ("input_dir", "dirty_dir"),
+    [
+        ("4_salida", "2_sucio"),
+        ("4_salida/1_entrada", "4_salida/2_sucio"),
+        ("TemaA/1_entrada", "TemaB/2_sucio"),
+        ("Tema/1_entrada", "Tema/3_limpio"),
+    ],
+)
+def test_sync_to_input_rejects_non_active_theme_destination_pair(
+    tmp_path, input_dir, dirty_dir
+):
+    vault = tmp_path / "vault"
+    manager = FolderSyncManager(vault)
+
+    with pytest.raises(PathAuthorizationError):
+        manager.sync_to_input(vault / input_dir, vault / dirty_dir)
+
+    assert not vault.exists()
 
 
 def test_unreadable_file_is_diagnostic_and_does_not_abort_scan(tmp_path, monkeypatch):

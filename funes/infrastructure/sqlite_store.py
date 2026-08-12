@@ -35,6 +35,7 @@ from funes.domain.jobs import (
     JobStoreBusyError,
     StageEvent,
 )
+from funes.domain.sync import SyncManifestEntry
 
 MIGRATIONS_DIR = Path(__file__).resolve().parent / "migrations"
 
@@ -110,6 +111,48 @@ class JobStore:
     def __exit__(self, *exc_info: object) -> None:
         self.close()
 
+    # -- inbound sync manifest -------------------------------------------
+
+    def upsert_sync_manifest_entry(self, entry: SyncManifestEntry) -> SyncManifestEntry:
+        """Atomically insert or replace one durable inbound manifest entry."""
+        if not isinstance(entry, SyncManifestEntry):
+            raise TypeError("entry must be a SyncManifestEntry")
+        self._connection.execute(
+            """
+            INSERT INTO sync_manifest (
+                source_key, source_hash, source_mtime_ns,
+                destination_relative, status
+            ) VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(source_key) DO UPDATE SET
+                source_hash = excluded.source_hash,
+                source_mtime_ns = excluded.source_mtime_ns,
+                destination_relative = excluded.destination_relative,
+                status = excluded.status
+            """,
+            (
+                entry.source_key,
+                entry.source_hash,
+                entry.source_mtime_ns,
+                entry.destination_relative,
+                entry.status,
+            ),
+        )
+        stored = self.get_sync_manifest_entry(entry.source_key)
+        assert stored is not None
+        return stored
+
+    def get_sync_manifest_entry(self, source_key: str) -> SyncManifestEntry | None:
+        row = self._connection.execute(
+            "SELECT * FROM sync_manifest WHERE source_key = ?", (source_key,)
+        ).fetchone()
+        return SyncManifestEntry.from_row(row) if row is not None else None
+
+    def list_sync_manifest_entries(self) -> list[SyncManifestEntry]:
+        rows = self._connection.execute(
+            "SELECT * FROM sync_manifest ORDER BY source_key ASC"
+        ).fetchall()
+        return [SyncManifestEntry.from_row(row) for row in rows]
+
     # -- migrations ------------------------------------------------------
 
     def _run_migrations(self) -> None:
@@ -129,6 +172,19 @@ class JobStore:
                 "INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)",
                 (version, _timestamp()),
             )
+        # Keep the existing versioned migration sequence stable for legacy
+        # vaults while ensuring the Task 1 system table exists idempotently.
+        self._connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS sync_manifest (
+                source_key TEXT PRIMARY KEY,
+                source_hash TEXT NOT NULL,
+                source_mtime_ns INTEGER NOT NULL CHECK (source_mtime_ns >= 0),
+                destination_relative TEXT NOT NULL,
+                status TEXT NOT NULL
+            )
+            """
+        )
 
     # -- jobs --------------------------------------------------------------
 

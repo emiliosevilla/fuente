@@ -2,9 +2,16 @@ import shutil
 import json
 import logging
 from pathlib import Path
-from typing import List
+from typing import Iterable, List
 import tkinter as tk
 from tkinter import filedialog, messagebox
+
+from funes.domain.sync import (
+    ConnectedFolder,
+    SyncProvider,
+    SyncRecordValidationError,
+)
+from funes.infrastructure.atomic_files import atomic_write_json
 
 logger = logging.getLogger(__name__)
 
@@ -31,26 +38,97 @@ class FolderSyncManager:
     """Administra la lista de carpetas compartidas/externas vinculadas a 1_entrada."""
 
     def __init__(self, vault_root: Path):
-        self.vault_root = vault_root
-        self.config_file = vault_root / ".funes_connected_folders.json"
+        self.vault_root = Path(vault_root).resolve()
+        self.config_file = self.vault_root / ".funes_connected_folders.json"
 
-    def load_connected_folders(self) -> List[Path]:
+    @staticmethod
+    def _legacy_connection(root: object) -> ConnectedFolder:
+        if not isinstance(root, str) or not root.strip():
+            raise SyncRecordValidationError(
+                "legacy folder root must be a non-empty string"
+            )
+        path = Path(root).expanduser().resolve()
+        return ConnectedFolder(
+            provider=SyncProvider.LOCAL.value,
+            root=str(path),
+            display_name=path.name or str(path),
+            enabled=True,
+        )
+
+    def load_connections(self) -> list[ConnectedFolder]:
+        """Load provider-aware records while accepting the legacy path list."""
         if not self.config_file.exists():
             return []
         try:
-            with open(self.config_file, "r", encoding="utf-8") as f:
-                data = json.load(f)
-                return [Path(p).resolve() for p in data.get("folders", []) if Path(p).exists()]
+            with self.config_file.open("r", encoding="utf-8") as file:
+                data = json.load(file)
+        except (OSError, json.JSONDecodeError) as error:
+            raise SyncRecordValidationError(f"cannot read configuration: {error}") from error
+
+        if not isinstance(data, dict) or not isinstance(data.get("folders"), list):
+            raise SyncRecordValidationError("folders must be a list")
+
+        connections: list[ConnectedFolder] = []
+        for index, record in enumerate(data["folders"]):
+            try:
+                connection = (
+                    self._legacy_connection(record)
+                    if isinstance(record, str)
+                    else ConnectedFolder.from_dict(record)
+                )
+            except SyncRecordValidationError as error:
+                raise SyncRecordValidationError(f"folders[{index}]: {error}") from error
+            connections.append(connection)
+        return connections
+
+    def save_connections(self, connections: Iterable[ConnectedFolder]) -> bool:
+        """Atomically persist provider-aware connections."""
+        try:
+            records = list(connections)
+            if not all(isinstance(connection, ConnectedFolder) for connection in records):
+                raise SyncRecordValidationError(
+                    "connections must contain ConnectedFolder records"
+                )
+            atomic_write_json(
+                self.config_file,
+                {"folders": [connection.to_dict() for connection in records]},
+            )
+            return True
+        except Exception as error:
+            logger.error("Error guardando conexiones vinculadas: %s", error)
+            return False
+
+    def load_connected_folders(self) -> List[Path]:
+        try:
+            return [
+                Path(connection.root).expanduser().resolve()
+                for connection in self.load_connections()
+                if connection.enabled and Path(connection.root).exists()
+            ]
         except Exception as e:
             logger.error(f"Error cargando carpetas vinculadas: {e}")
             return []
 
-    def save_connected_folders(self, folder_paths: List[Path]) -> bool:
+    def save_connected_folders(
+        self, folder_paths: Iterable[Path | str | ConnectedFolder]
+    ) -> bool:
+        """Compatibility save for existing local-folder callers."""
         try:
-            data = {"folders": [str(p.resolve()) for p in folder_paths]}
-            with open(self.config_file, "w", encoding="utf-8") as f:
-                json.dump(data, f, indent=2, ensure_ascii=False)
-            return True
+            connections = []
+            for folder in folder_paths:
+                if isinstance(folder, ConnectedFolder):
+                    connections.append(folder)
+                    continue
+                path = Path(folder).expanduser().resolve()
+                connections.append(
+                    ConnectedFolder(
+                        provider=SyncProvider.LOCAL.value,
+                        root=str(path),
+                        display_name=path.name or str(path),
+                        enabled=True,
+                    )
+                )
+            return self.save_connections(connections)
         except Exception as e:
             logger.error(f"Error guardando carpetas vinculadas: {e}")
             return False
@@ -69,15 +147,18 @@ class FolderSyncManager:
         (typically ``VaultManager.input_dir`` / ``VaultManager.dirty_dir``).
         Never hardcode the General vault-root ``2_sucio``.
         """
-        connected = self.load_connected_folders()
+        connected = self.load_connections()
         copied_count = 0
         input_dir = Path(input_dir)
         dirty_dir = Path(dirty_dir)
         input_dir.mkdir(parents=True, exist_ok=True)
         dirty_dir.mkdir(parents=True, exist_ok=True)
 
-        for folder in connected:
-            if not folder.exists():
+        for connection in connected:
+            if not connection.enabled:
+                continue
+            folder = Path(connection.root).expanduser().resolve()
+            if not folder.exists() or not folder.is_dir():
                 continue
             try:
                 for file_path in folder.glob("*"):

@@ -322,7 +322,9 @@ class FunesConsoleBackend:
             path_resolver=self.vault.path_resolver(),
         )
         self.sync_manager = FolderSyncManager(
-            self.vault_path, active_theme=self.vault.active_theme
+            self.vault_path,
+            active_theme=self.vault.active_theme,
+            active_theme_dir=self.vault.current_theme_dir,
         )
         self.quarantine_service = self.vault.quarantine_service
         self.ram_governor = RAMGovernor(
@@ -384,7 +386,9 @@ class FunesConsoleBackend:
             )
         self.lifecycle = lifecycle
         self.vault = lifecycle.pipeline.vault
-        self.sync_manager.set_active_theme(self.vault.active_theme)
+        self.sync_manager.set_active_theme(
+            self.vault.active_theme, self.vault.current_theme_dir
+        )
         self.runtime_policy = getattr(
             lifecycle.pipeline, "runtime_policy", self.runtime_policy
         )
@@ -412,7 +416,9 @@ class FunesConsoleBackend:
             self.lifecycle.set_active_theme(theme_name)
         else:
             self.vault.set_active_theme(theme_name)
-        self.sync_manager.set_active_theme(self.vault.active_theme)
+        self.sync_manager.set_active_theme(
+            self.vault.active_theme, self.vault.current_theme_dir
+        )
         return self.vault.active_theme
 
     def _refine_graph(self, target_issue: Optional[str] = None) -> dict:
@@ -492,7 +498,9 @@ class FunesConsoleBackend:
         if vault_changed:
             self.vault = VaultManager(config.vault)
             self.sync_manager = FolderSyncManager(
-                self.vault_path, active_theme=self.vault.active_theme
+                self.vault_path,
+                active_theme=self.vault.active_theme,
+                active_theme_dir=self.vault.current_theme_dir,
             )
             self.quarantine_service = self.vault.quarantine_service
             self._chroma_store = None

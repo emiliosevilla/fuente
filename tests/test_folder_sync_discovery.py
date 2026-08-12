@@ -61,18 +61,48 @@ def test_detects_explicit_user_roots_on_windows_and_macos(tmp_path, platform):
     home = tmp_path / "home"
     home.mkdir()
     onedrive = home / "OneDrive - Fabrikam"
-    sharepoint = home / "SharePoint - Team"
+    arbitrary_sharepoint_marker = home / "SharePoint - Team"
     unrelated = home / "Documents"
     onedrive.mkdir()
-    sharepoint.mkdir()
+    arbitrary_sharepoint_marker.mkdir()
     unrelated.mkdir()
 
     detected = FolderSyncManager.detect_cloud_folders(home=home, platform=platform)
 
+    assert detected == [_connection(SyncProvider.ONEDRIVE_MOUNT, onedrive)]
+
+
+def test_detects_sharepoint_library_from_real_home_layout(tmp_path):
+    home = tmp_path / "home"
+    tenant = home / "Contoso"
+    library = tenant / "Marketing - Documents"
+    second_library = tenant / "Sales - Shared Documents"
+    hidden_library = tenant / ".Hidden - Documents"
+    non_library = tenant / "Random"
+    home.mkdir()
+    library.mkdir(parents=True)
+    second_library.mkdir()
+    hidden_library.mkdir()
+    non_library.mkdir()
+    _make_symlink(tenant / "Linked - Documents", library)
+
+    detected = FolderSyncManager.detect_cloud_folders(home=home, platform="win32")
+
     assert detected == [
-        _connection(SyncProvider.ONEDRIVE_MOUNT, onedrive),
-        _connection(SyncProvider.SHAREPOINT_MOUNT, sharepoint),
+        _connection(SyncProvider.SHAREPOINT_MOUNT, library),
+        _connection(SyncProvider.SHAREPOINT_MOUNT, second_library),
     ]
+    assert all(folder.root != str(tenant.resolve()) for folder in detected)
+
+
+def test_ignores_ambiguous_home_tenant_without_library_shape(tmp_path):
+    home = tmp_path / "home"
+    ambiguous = home / "Contoso" / "Random"
+    ambiguous.mkdir(parents=True)
+
+    detected = FolderSyncManager.detect_cloud_folders(home=home, platform="win32")
+
+    assert detected == []
 
 
 def test_deduplicates_equivalent_canonical_paths_and_orders_deterministically(
@@ -142,14 +172,13 @@ def test_no_argument_api_uses_real_platform_and_home_without_path_regression(
 ):
     home = tmp_path / "home"
     home.mkdir()
-    (home / "SharePoint - Team").mkdir()
+    onedrive = home / "OneDrive-Personal"
+    onedrive.mkdir()
     monkeypatch.setattr(Path, "home", classmethod(lambda cls: home))
     monkeypatch.setattr(folder_sync_module.sys, "platform", sys.platform)
 
     detected = FolderSyncManager.detect_cloud_folders()
 
     assert isinstance(detected, list)
-    assert detected == [
-        _connection(SyncProvider.SHAREPOINT_MOUNT, home / "SharePoint - Team")
-    ]
+    assert detected == [_connection(SyncProvider.ONEDRIVE_MOUNT, onedrive)]
     assert all(isinstance(folder, ConnectedFolder) for folder in detected)

@@ -58,6 +58,82 @@ def test_changed_source_updates_input_without_creating_dirty_duplicate(tmp_path)
     assert list(dirty_dir.rglob("*")) == [dirty_file]
 
 
+def test_replacing_same_provider_root_never_overwrites_existing_input_or_dirty(
+    tmp_path,
+):
+    first_source = tmp_path / "first"
+    replacement_source = tmp_path / "replacement"
+    first_source.mkdir()
+    replacement_source.mkdir()
+    (first_source / "same.md").write_text("from first", encoding="utf-8")
+    (replacement_source / "same.md").write_text("from replacement", encoding="utf-8")
+    manager, input_dir, dirty_dir = _manager(
+        tmp_path, _connection(first_source, "local")
+    )
+
+    first = manager.sync_to_input(input_dir, dirty_dir)
+    dirty_file = dirty_dir / "same.md"
+    dirty_file.parent.mkdir(parents=True)
+    dirty_file.write_text("dirty artifact", encoding="utf-8")
+    assert first.copied == 1
+
+    assert manager.save_connections([_connection(replacement_source, "local")])
+    report = manager.sync_to_input(input_dir, dirty_dir)
+
+    assert report.copied == 0
+    assert len(report.conflicts) == 1
+    assert report.conflicts[0].source_key != FolderSyncManager._source_key(
+        first.source_files[0]
+    )
+    assert (input_dir / "same.md").read_text(encoding="utf-8") == "from first"
+    assert dirty_file.read_text(encoding="utf-8") == "dirty artifact"
+
+
+def test_manifest_ownership_requires_the_current_active_theme_destination(tmp_path):
+    source = tmp_path / "provider"
+    source.mkdir()
+    source_file = source / "note.md"
+    source_file.write_text("new provider content", encoding="utf-8")
+    manager = FolderSyncManager(tmp_path / "vault", active_theme="TemaA")
+    assert manager.save_connections([_connection(source)])
+
+    first = manager.sync_to_input(
+        tmp_path / "vault" / "TemaA" / "1_entrada",
+        tmp_path / "vault" / "TemaA" / "2_sucio",
+    )
+    assert first.copied == 1
+
+    theme_b_input = tmp_path / "vault" / "TemaB" / "1_entrada"
+    theme_b_dirty = tmp_path / "vault" / "TemaB" / "2_sucio"
+    theme_b_input.mkdir(parents=True)
+    theme_b_dirty.mkdir(parents=True)
+    (theme_b_input / "note.md").write_text(
+        "occupied by another source", encoding="utf-8"
+    )
+    (theme_b_dirty / "note.md").write_text("dirty artifact", encoding="utf-8")
+    source_file.write_text("changed provider content", encoding="utf-8")
+    manager.set_active_theme("TemaB")
+
+    report = manager.sync_to_input(theme_b_input, theme_b_dirty)
+
+    assert report.copied == 0
+    assert len(report.conflicts) == 1
+    assert (theme_b_input / "note.md").read_text(encoding="utf-8") == (
+        "occupied by another source"
+    )
+    assert (theme_b_dirty / "note.md").read_text(encoding="utf-8") == "dirty artifact"
+
+
+def test_sync_report_legacy_integer_skipped_is_normalized_to_diagnostics():
+    report = SyncReport(skipped=1)
+
+    assert isinstance(report.skipped, list)
+    assert len(report.skipped) == 1
+    assert report.skipped_count == 1
+    assert report.skipped[0].code == "legacy_skipped_count"
+    assert report.skipped == 1
+
+
 def test_different_content_same_destination_is_reported_without_overwrite(tmp_path):
     first_source = tmp_path / "first"
     second_source = tmp_path / "second"

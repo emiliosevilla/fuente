@@ -49,6 +49,7 @@ class SourceFile:
     sha256: str
     mtime_ns: int
     allowed_extension: str
+    source_root_identity: str = ""
 
     @property
     def relative_path(self) -> str:
@@ -81,6 +82,12 @@ class SourceFile:
     @property
     def extension(self) -> str:
         return self.allowed_extension
+
+    @property
+    def source_identity(self) -> str:
+        """Return the canonical, non-secret identity of the provider root."""
+        root = self.source_root_identity or self.absolute_source_path.parent
+        return str(Path(root).expanduser().resolve(strict=False))
 
 
 @dataclass(frozen=True)
@@ -120,6 +127,18 @@ class _SkippedDiagnostics(list[SyncDiagnostic]):
             return len(self) == other
         return super().__eq__(other)
 
+    @classmethod
+    def from_legacy_count(cls, count: int) -> "_SkippedDiagnostics":
+        """Represent an old integer count without losing the list contract."""
+        return cls(
+            SyncDiagnostic(
+                path="<legacy>",
+                message="legacy skipped count without diagnostic details",
+                code="legacy_skipped_count",
+            )
+            for _ in range(count)
+        )
+
 
 class _ReconciliationConflict(Exception):
     def __init__(self, conflict: SyncConflict, manifest_update: int) -> None:
@@ -139,18 +158,25 @@ class SyncReport:
     copied: int = 0
     unchanged: int = 0
     conflicts: list[SyncConflict] = field(default_factory=list)
-    skipped: list[SyncDiagnostic] = field(default_factory=list)
+    skipped: list[SyncDiagnostic] | int = field(default_factory=list)
     manifest_updates: int = 0
     scanned: int = 0
     diagnostics: list[SyncDiagnostic] = field(default_factory=list)
     source_files: tuple[SourceFile, ...] = ()
 
     def __post_init__(self) -> None:
-        skips = (
-            self.skipped
-            if isinstance(self.skipped, _SkippedDiagnostics)
-            else _SkippedDiagnostics(self.skipped)
-        )
+        if isinstance(self.skipped, bool):
+            raise TypeError("skipped must be a diagnostic list or integer count")
+        if isinstance(self.skipped, int):
+            if self.skipped < 0:
+                raise ValueError("skipped count must be non-negative")
+            skips = _SkippedDiagnostics.from_legacy_count(self.skipped)
+        else:
+            skips = (
+                self.skipped
+                if isinstance(self.skipped, _SkippedDiagnostics)
+                else _SkippedDiagnostics(self.skipped)
+            )
         diagnostics = self.diagnostics
         if not diagnostics and skips:
             diagnostics = skips
@@ -355,6 +381,7 @@ class FolderSyncManager:
                             sha256=self._sha256(authorized),
                             mtime_ns=stat.st_mtime_ns,
                             allowed_extension=authorized.suffix.lower(),
+                            source_root_identity=str(root),
                         )
                     )
                 except (PathAuthorizationError, ValueError):
@@ -491,7 +518,14 @@ class FolderSyncManager:
             sources.extend(files)
             diagnostics.extend(self.last_diagnostics)
 
-        sources.sort(key=lambda item: (item.provider, item.source_relative_path, str(item.absolute_source_path)))
+        sources.sort(
+            key=lambda item: (
+                item.provider,
+                item.source_relative_path,
+                item.source_identity,
+                str(item.absolute_source_path),
+            )
+        )
         copied_count = 0
         unchanged_count = 0
         conflicts: list[SyncConflict] = []
@@ -592,8 +626,8 @@ class FolderSyncManager:
 
     @staticmethod
     def _source_key(source: SourceFile) -> str:
-        """Build the T1 manifest key from provider identity and source path."""
-        return f"{source.provider}:{source.source_relative_path}"
+        """Build a stable T1 key from provider, canonical root, and path."""
+        return f"{source.provider}:{source.source_identity}:{source.source_relative_path}"
 
     @staticmethod
     def _file_hash(path: Path) -> str | None:
@@ -621,7 +655,11 @@ class FolderSyncManager:
         manifest = store.get_sync_manifest_entry(source_key)
         input_hash = self._file_hash(dest)
         dirty_hash = self._file_hash(dirty_file)
-        owns_destination = manifest is not None and manifest.source_key == source_key
+        owns_destination = bool(
+            manifest is not None
+            and manifest.source_key == source_key
+            and manifest.destination_relative == vault_destination
+        )
 
         if input_hash == source.sha256:
             status = "unchanged"

@@ -11,6 +11,7 @@ from funes.application.fusion import FusionApplicationService
 from funes.application.notes import NotesApplicationService
 from funes.domain.frontmatter import serialize_frontmatter
 from funes.domain.paths import document_id_for_relative_path
+from funes.domain.paths import SourcePathAuthorizer
 from funes.infrastructure.sqlite_store import JobStore
 from funes.rag.vault_corpus import VaultCorpusProvider
 
@@ -39,6 +40,33 @@ def test_rejects_symlink_outside_vault(path_resolver, temp_vault_path):
 
     with pytest.raises(PathAuthorizationError):
         path_resolver.resolve_note("4_salida/outside.md")
+
+
+def test_source_path_authorizer_rejects_outside_paths_and_symlink_components(tmp_path):
+    root = tmp_path / "provider"
+    (root / "nested").mkdir(parents=True)
+    inside = root / "nested" / "inside.md"
+    inside.write_text("inside", encoding="utf-8")
+    outside = tmp_path / "outside.md"
+    outside.write_text("outside", encoding="utf-8")
+
+    try:
+        symlink_file = root / "linked.md"
+        symlink_file.symlink_to(outside)
+        symlink_dir = root / "linked-dir"
+        symlink_dir.symlink_to(root / "nested", target_is_directory=True)
+    except (OSError, NotImplementedError) as error:
+        pytest.skip(f"symlinks are unavailable in this environment: {error}")
+
+    authorizer = SourcePathAuthorizer(root)
+
+    assert authorizer.resolve(inside) == inside.resolve()
+    with pytest.raises(PathAuthorizationError):
+        authorizer.resolve(outside)
+    with pytest.raises(PathAuthorizationError):
+        authorizer.resolve(symlink_file)
+    with pytest.raises(PathAuthorizationError):
+        authorizer.resolve(symlink_dir / "inside.md")
 
 
 def test_fusion_candidates_skip_symlinked_notes_outside_vault(

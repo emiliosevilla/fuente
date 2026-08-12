@@ -140,7 +140,7 @@ def test_connected_folder_sync_stays_in_active_theme(temp_vault_path, tmp_path):
     sample = external / "from_sharepoint.txt"
     sample.write_text("documento externo del Tema", encoding="utf-8")
 
-    sync = FolderSyncManager(temp_vault_path)
+    sync = FolderSyncManager(temp_vault_path, active_theme=vault.active_theme)
     assert sync.save_connected_folders([external])
 
     copied = sync.sync_to_input(vault.input_dir, vault.dirty_dir)
@@ -252,6 +252,7 @@ def test_console_set_theme_shares_lifecycle_vault_and_retargets_services(temp_va
         root.mkdir(parents=True, exist_ok=True)
 
     backend = FunesConsoleBackend(temp_vault_path)
+    assert backend.sync_manager.active_theme_dir == temp_vault_path.resolve()
     lifecycle = ApplicationLifecycle(
         backend.config,
         mode="continuous",
@@ -265,12 +266,17 @@ def test_console_set_theme_shares_lifecycle_vault_and_retargets_services(temp_va
         backend.attach_lifecycle(lifecycle)
 
         assert backend.vault is lifecycle.pipeline.vault
+        assert backend.sync_manager.active_theme_dir == temp_vault_path.resolve()
 
         # Seed Theme via console create, then switch away and back via set_theme.
         created = backend.handle_action("create_theme", {"theme_name": THEME})
         assert "error" not in created
         assert backend.vault.active_theme == THEME
         assert lifecycle.pipeline.vault.active_theme == THEME
+        assert backend.sync_manager.active_theme == THEME
+        assert backend.sync_manager.active_theme_dir == (
+            temp_vault_path / THEME
+        ).resolve()
         assert lifecycle.monitor.pipeline.vault.input_dir == (
             temp_vault_path / THEME / "1_entrada"
         )
@@ -280,6 +286,8 @@ def test_console_set_theme_shares_lifecycle_vault_and_retargets_services(temp_va
 
         backend.handle_action("set_theme", {"theme_name": "General"})
         assert lifecycle.pipeline.vault.active_theme == "General"
+        assert backend.sync_manager.active_theme == "General"
+        assert backend.sync_manager.active_theme_dir == temp_vault_path.resolve()
         assert lifecycle.monitor.pipeline.vault.input_dir == temp_vault_path / "1_entrada"
         assert lifecycle.graph_loop.output_dir.resolve() == (
             temp_vault_path / "4_salida"
@@ -292,6 +300,25 @@ def test_console_set_theme_shares_lifecycle_vault_and_retargets_services(temp_va
         assert lifecycle.graph_loop.output_dir.resolve() == (
             temp_vault_path / THEME / "4_salida"
         ).resolve()
+        assert backend.sync_manager.active_theme == THEME
+        assert backend.sync_manager.active_theme_dir == (
+            temp_vault_path / THEME
+        ).resolve()
         assert backend.vault is lifecycle.pipeline.vault
     finally:
         lifecycle.stop()
+
+
+def test_console_vault_change_rebinds_sync_manager_to_new_current_theme_dir(
+    temp_vault_path, tmp_path
+):
+    backend = FunesConsoleBackend(temp_vault_path)
+    new_vault = tmp_path / "new-vault"
+
+    result = backend.save_settings({"vault_path": str(new_vault)})
+
+    assert "error" not in result
+    assert backend.vault_path == new_vault.resolve()
+    assert backend.sync_manager.vault_root == new_vault.resolve()
+    assert backend.sync_manager.active_theme_dir == backend.vault.current_theme_dir
+    assert backend.sync_manager.active_theme_dir == new_vault.resolve()

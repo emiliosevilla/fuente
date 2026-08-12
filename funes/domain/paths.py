@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import uuid
 from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Literal
@@ -15,6 +16,62 @@ RootName = Literal["vault", "output", "input", "dirty", "clean", "quarantine"]
 def document_id_for_relative_path(relative_path: str) -> str:
     """Opaque, stable document id derived from a Vault-relative path."""
     return str(uuid.uuid5(uuid.NAMESPACE_URL, f"funes:vault:{relative_path}"))
+
+
+class SourcePathAuthorizer:
+    """Authorize reads below one configured provider root.
+
+    The configured root is retained lexically so symlink components can be
+    rejected before a resolved path is returned.  This authorizer is for
+    provider-side reads only; it never creates, deletes, or modifies paths.
+    """
+
+    def __init__(self, root: Path | str) -> None:
+        configured = Path(root).expanduser()
+        configured = Path(os.path.abspath(configured))
+        self._configured_root = configured
+        self.root = configured.resolve(strict=False)
+
+    @property
+    def configured_root(self) -> Path:
+        return self._configured_root
+
+    def resolve(self, candidate: Path | str) -> Path:
+        """Return a resolved candidate only when it is a real child of root."""
+        candidate_path = Path(candidate).expanduser()
+        lexical = (
+            candidate_path
+            if candidate_path.is_absolute()
+            else self._configured_root / candidate_path
+        )
+        if not candidate_path.is_absolute() and any(
+            part in {"", ".", ".."} for part in candidate_path.parts
+        ):
+            raise PathAuthorizationError()
+
+        try:
+            lexical_relative = lexical.relative_to(self._configured_root)
+        except ValueError:
+            lexical_relative = None
+        if lexical_relative is not None:
+            current = self._configured_root
+            for part in lexical_relative.parts:
+                current = current / part
+                if current.is_symlink():
+                    raise PathAuthorizationError()
+
+        resolved = lexical.resolve(strict=False)
+        try:
+            relative = resolved.relative_to(self.root)
+        except ValueError as error:
+            raise PathAuthorizationError() from error
+
+        current = self.root
+        for part in relative.parts:
+            current = current / part
+            if current.is_symlink():
+                raise PathAuthorizationError()
+        return resolved
 
 
 class AuthorizedPathResolver:

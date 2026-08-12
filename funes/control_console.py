@@ -321,7 +321,9 @@ class FunesConsoleBackend:
             self.vault_path,
             path_resolver=self.vault.path_resolver(),
         )
-        self.sync_manager = FolderSyncManager(self.vault_path)
+        self.sync_manager = FolderSyncManager(
+            self.vault_path, active_theme=self.vault.active_theme
+        )
         self.quarantine_service = self.vault.quarantine_service
         self.ram_governor = RAMGovernor(
             ollama_url=self.config.ollama_url,
@@ -382,6 +384,7 @@ class FunesConsoleBackend:
             )
         self.lifecycle = lifecycle
         self.vault = lifecycle.pipeline.vault
+        self.sync_manager.set_active_theme(self.vault.active_theme)
         self.runtime_policy = getattr(
             lifecycle.pipeline, "runtime_policy", self.runtime_policy
         )
@@ -409,6 +412,7 @@ class FunesConsoleBackend:
             self.lifecycle.set_active_theme(theme_name)
         else:
             self.vault.set_active_theme(theme_name)
+        self.sync_manager.set_active_theme(self.vault.active_theme)
         return self.vault.active_theme
 
     def _refine_graph(self, target_issue: Optional[str] = None) -> dict:
@@ -487,7 +491,9 @@ class FunesConsoleBackend:
             self.lifecycle.set_config(config)
         if vault_changed:
             self.vault = VaultManager(config.vault)
-            self.sync_manager = FolderSyncManager(self.vault_path)
+            self.sync_manager = FolderSyncManager(
+                self.vault_path, active_theme=self.vault.active_theme
+            )
             self.quarantine_service = self.vault.quarantine_service
             self._chroma_store = None
             self._retrieval_service = None

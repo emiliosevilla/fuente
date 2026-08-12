@@ -1,11 +1,15 @@
-import shutil
+import hashlib
 import json
 import logging
+import shutil
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Iterable, List
 import tkinter as tk
 from tkinter import filedialog, messagebox
 
+from funes.domain.errors import PathAuthorizationError
+from funes.domain.paths import SourcePathAuthorizer
 from funes.domain.sync import (
     ConnectedFolder,
     SyncProvider,
@@ -34,12 +38,209 @@ THEME = {
 FONT_TYPEWRITER = "Courier"
 
 
+@dataclass(frozen=True)
+class SourceFile:
+    """One authorized, supported file found below a provider root."""
+
+    provider: str
+    source_relative_path: str
+    absolute_source_path: Path
+    sha256: str
+    mtime_ns: int
+    allowed_extension: str
+
+    @property
+    def relative_path(self) -> str:
+        return self.source_relative_path
+
+    @property
+    def source_path(self) -> Path:
+        return self.absolute_source_path
+
+    @property
+    def absolute_path(self) -> Path:
+        return self.absolute_source_path
+
+    @property
+    def source_hash(self) -> str:
+        return self.sha256
+
+    @property
+    def content_hash(self) -> str:
+        return self.sha256
+
+    @property
+    def source_mtime_ns(self) -> int:
+        return self.mtime_ns
+
+    @property
+    def mtime(self) -> int:
+        return self.mtime_ns
+
+    @property
+    def extension(self) -> str:
+        return self.allowed_extension
+
+
+@dataclass(frozen=True)
+class SyncDiagnostic:
+    """Non-fatal scanner or copy diagnostic."""
+
+    path: str
+    message: str
+    code: str = "sync_diagnostic"
+
+
+@dataclass(frozen=True, eq=False)
+class SyncReport:
+    """Result of one inbound scan/copy pass.
+
+    ``__eq__``/``__str__`` retain the old integer-facing contract used by the
+    console while callers migrate to the structured report.
+    """
+
+    copied: int = 0
+    scanned: int = 0
+    skipped: int = 0
+    diagnostics: list[SyncDiagnostic] = field(default_factory=list)
+    source_files: tuple[SourceFile, ...] = ()
+
+    @property
+    def copied_count(self) -> int:
+        return self.copied
+
+    def __int__(self) -> int:
+        return self.copied
+
+    def __str__(self) -> str:
+        return str(self.copied)
+
+    def __eq__(self, other: object) -> bool:
+        if isinstance(other, int):
+            return self.copied == other
+        if not isinstance(other, SyncReport):
+            return NotImplemented
+        return (
+            self.copied,
+            self.scanned,
+            self.skipped,
+            self.diagnostics,
+            self.source_files,
+        ) == (
+            other.copied,
+            other.scanned,
+            other.skipped,
+            other.diagnostics,
+            other.source_files,
+        )
+
+
 class FolderSyncManager:
     """Administra la lista de carpetas compartidas/externas vinculadas a 1_entrada."""
 
     def __init__(self, vault_root: Path):
         self.vault_root = Path(vault_root).resolve()
         self.config_file = self.vault_root / ".funes_connected_folders.json"
+        self.last_diagnostics: list[SyncDiagnostic] = []
+        self._extractor_registry = None
+
+    @property
+    def extractor_registry(self):
+        if self._extractor_registry is None:
+            from funes.extractors.registry import ExtractorRegistry
+
+            self._extractor_registry = ExtractorRegistry()
+        return self._extractor_registry
+
+    @staticmethod
+    def _diagnostic(path: Path | str, message: str, code: str = "sync_diagnostic") -> SyncDiagnostic:
+        return SyncDiagnostic(path=str(path), message=message, code=code)
+
+    def _authorized_destination(self, path: Path) -> Path:
+        candidate = Path(path).expanduser()
+        try:
+            return SourcePathAuthorizer(self.vault_root).resolve(candidate)
+        except PathAuthorizationError:
+            raise
+
+    def _is_supported(self, path: Path) -> bool:
+        return any(
+            extractor.can_handle(path)
+            for extractor in self.extractor_registry.extractors
+        )
+
+    @staticmethod
+    def _sha256(path: Path) -> str:
+        digest = hashlib.sha256()
+        with path.open("rb") as source:
+            for chunk in iter(lambda: source.read(1024 * 1024), b""):
+                digest.update(chunk)
+        return digest.hexdigest()
+
+    def scan_connection(self, connection: ConnectedFolder) -> list[SourceFile]:
+        """Recursively list supported, real files below one provider root."""
+        self.last_diagnostics = []
+        if not isinstance(connection, ConnectedFolder):
+            raise TypeError("connection must be a ConnectedFolder")
+        if not connection.enabled:
+            return []
+
+        authorizer = SourcePathAuthorizer(connection.root)
+        root = authorizer.root
+        if authorizer.configured_root.is_symlink():
+            self.last_diagnostics.append(
+                self._diagnostic(root, "configured provider root is a symlink", "symlink_root")
+            )
+            return []
+        try:
+            if not root.exists() or not root.is_dir():
+                self.last_diagnostics.append(
+                    self._diagnostic(root, "provider root is missing or not a directory", "invalid_root")
+                )
+                return []
+            root.stat()
+        except OSError as error:
+            self.last_diagnostics.append(self._diagnostic(root, str(error), "unreadable_root"))
+            return []
+
+        found: list[SourceFile] = []
+        try:
+            candidates = root.rglob("*")
+            for candidate in candidates:
+                try:
+                    relative = candidate.relative_to(root)
+                    if any(part.startswith(".") for part in relative.parts):
+                        continue
+                    if candidate.is_symlink():
+                        continue
+                    authorized = authorizer.resolve(candidate)
+                    if not authorized.is_file() or not self._is_supported(authorized):
+                        continue
+                    stat = authorized.stat()
+                    found.append(
+                        SourceFile(
+                            provider=connection.provider,
+                            source_relative_path=relative.as_posix(),
+                            absolute_source_path=authorized,
+                            sha256=self._sha256(authorized),
+                            mtime_ns=stat.st_mtime_ns,
+                            allowed_extension=authorized.suffix.lower(),
+                        )
+                    )
+                except (PathAuthorizationError, ValueError):
+                    # A disappearing, unreadable, or unauthorized candidate
+                    # must not make other provider files disappear from a run.
+                    continue
+                except OSError as error:
+                    self.last_diagnostics.append(
+                        self._diagnostic(candidate, str(error), "unreadable_file")
+                    )
+                    continue
+        except OSError as error:
+            self.last_diagnostics.append(self._diagnostic(root, str(error), "unreadable_root"))
+
+        found.sort(key=lambda item: item.source_relative_path)
+        return found
 
     @staticmethod
     def _legacy_connection(root: object) -> ConnectedFolder:
@@ -133,7 +334,7 @@ class FolderSyncManager:
             logger.error(f"Error guardando carpetas vinculadas: {e}")
             return False
 
-    def sync_to_input(self, input_dir: Path, dirty_dir: Path) -> int:
+    def sync_to_input(self, input_dir: Path, dirty_dir: Path) -> SyncReport:
         """
         Recopila hacia el 1_entrada del Tema activo todo archivo de las carpetas
         vinculadas que:
@@ -148,46 +349,54 @@ class FolderSyncManager:
         Never hardcode the General vault-root ``2_sucio``.
         """
         connected = self.load_connections()
-        copied_count = 0
-        input_dir = Path(input_dir)
-        dirty_dir = Path(dirty_dir)
-        input_dir.mkdir(parents=True, exist_ok=True)
-        dirty_dir.mkdir(parents=True, exist_ok=True)
+        input_dir = self._authorized_destination(Path(input_dir))
+        dirty_dir = self._authorized_destination(Path(dirty_dir))
+        sources: list[SourceFile] = []
+        diagnostics: list[SyncDiagnostic] = []
 
         for connection in connected:
-            if not connection.enabled:
-                continue
-            folder = Path(connection.root).expanduser().resolve()
-            if not folder.exists() or not folder.is_dir():
-                continue
+            files = self.scan_connection(connection)
+            sources.extend(files)
+            diagnostics.extend(self.last_diagnostics)
+
+        sources.sort(key=lambda item: (item.provider, item.source_relative_path, str(item.absolute_source_path)))
+        copied_count = 0
+        skipped_count = 0
+
+        for source in sources:
+            destination_relative = Path(source.source_relative_path)
+            dest = input_dir / destination_relative
+            dirty_file = dirty_dir / destination_relative
             try:
-                for file_path in folder.glob("*"):
-                    if file_path.is_file() and not file_path.name.startswith("."):
-                        dest = input_dir / file_path.name
-                        dirty_file = dirty_dir / file_path.name
+                dirty_mtime_ns = dirty_file.stat().st_mtime_ns if dirty_file.exists() else None
+                dest_mtime_ns = dest.stat().st_mtime_ns if dest.exists() else None
+                if dirty_mtime_ns is None:
+                    should_copy = dest_mtime_ns is None or source.mtime_ns > dest_mtime_ns + 1_000_000
+                else:
+                    should_copy = source.mtime_ns > dirty_mtime_ns + 1_000_000
 
-                        should_copy = False
+                if not should_copy:
+                    skipped_count += 1
+                    continue
 
-                        # Caso 1: No ha pasado anteriormente por 2_sucio
-                        if not dirty_file.exists():
-                            if not dest.exists():
-                                should_copy = True
-                            else:
-                                if file_path.stat().st_mtime > dest.stat().st_mtime + 0.001:
-                                    should_copy = True
-                        else:
-                            # Caso 2: Sí ha pasado por 2_sucio, pero la versión en origen es más reciente que en 2_sucio
-                            if file_path.stat().st_mtime > dirty_file.stat().st_mtime + 0.001:
-                                should_copy = True
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                dirty_file.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(source.absolute_source_path, dest)
+                copied_count += 1
+                logger.info("Recopilado archivo hacia 1_entrada: %s", source.source_relative_path)
+            except (OSError, PathAuthorizationError) as error:
+                skipped_count += 1
+                diagnostics.append(self._diagnostic(source.absolute_source_path, str(error), "copy_failed"))
+                logger.error("Error sincronizando desde %s: %s", source.absolute_source_path, error)
 
-                        if should_copy:
-                            shutil.copy2(file_path, dest)
-                            copied_count += 1
-                            logger.info(f"Recopilado archivo hacia 1_entrada: {file_path.name}")
-            except Exception as e:
-                logger.error(f"Error sincronizando desde {folder}: {e}")
-
-        return copied_count
+        self.last_diagnostics = diagnostics
+        return SyncReport(
+            copied=copied_count,
+            scanned=len(sources),
+            skipped=skipped_count,
+            diagnostics=diagnostics,
+            source_files=tuple(sources),
+        )
 
     @staticmethod
     def detect_cloud_folders() -> List[Path]:

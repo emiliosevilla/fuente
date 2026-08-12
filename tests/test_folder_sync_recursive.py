@@ -1,0 +1,150 @@
+from __future__ import annotations
+
+import hashlib
+import os
+from pathlib import Path
+
+import pytest
+
+from funes.core.folder_sync import FolderSyncManager, SyncReport
+from funes.domain.sync import ConnectedFolder
+
+
+def _symlink_or_skip(link: Path, target: Path, *, directory: bool = False) -> None:
+    try:
+        link.symlink_to(target, target_is_directory=directory)
+    except (OSError, NotImplementedError) as error:
+        pytest.skip(f"symlinks are unavailable in this environment: {error}")
+
+
+def test_scan_connection_is_recursive_authorized_and_deterministic(tmp_path):
+    source = tmp_path / "provider-root"
+    (source / "nested" / "deep").mkdir(parents=True)
+    (source / "docs").mkdir()
+    (source / "audio").mkdir()
+    (source / ".hidden-dir").mkdir()
+
+    markdown = source / "nested" / "deep" / "note.md"
+    markdown.write_text("# nested\n", encoding="utf-8")
+    (source / "docs" / "report.pdf").write_bytes(b"pdf")
+    (source / "docs" / "contract.docx").write_bytes(b"docx")
+    (source / "audio" / "meeting.mp3").write_bytes(b"audio")
+    (source / "unsupported.bin").write_bytes(b"ignore")
+    (source / ".hidden.md").write_text("hidden", encoding="utf-8")
+    (source / ".hidden-dir" / "secret.md").write_text("hidden", encoding="utf-8")
+
+    outside = tmp_path / "outside.md"
+    outside.write_text("outside", encoding="utf-8")
+    _symlink_or_skip(source / "link.md", outside)
+    _symlink_or_skip(source / "linked-dir", source / "nested", directory=True)
+
+    manager = FolderSyncManager(tmp_path / "vault")
+    connection = ConnectedFolder("network", str(source), "Team", True)
+
+    files = manager.scan_connection(connection)
+
+    assert [item.source_relative_path for item in files] == [
+        "audio/meeting.mp3",
+        "docs/contract.docx",
+        "docs/report.pdf",
+        "nested/deep/note.md",
+    ]
+    assert all(item.provider == "network" for item in files)
+    assert all(item.absolute_source_path == (source / item.source_relative_path).resolve() for item in files)
+    assert all(item.allowed_extension == Path(item.source_relative_path).suffix.lower() for item in files)
+    assert files[-1].sha256 == hashlib.sha256(markdown.read_bytes()).hexdigest()
+    assert files[-1].mtime_ns == markdown.stat().st_mtime_ns
+    assert manager.last_diagnostics == []
+
+
+def test_scan_order_is_provider_then_relative_path(tmp_path):
+    network_root = tmp_path / "network"
+    local_root = tmp_path / "local"
+    for root in (network_root, local_root):
+        (root / "z").mkdir(parents=True)
+        (root / "a.md").write_text(root.name, encoding="utf-8")
+        (root / "z" / "b.md").write_text(root.name, encoding="utf-8")
+
+    manager = FolderSyncManager(tmp_path / "vault")
+    connections = [
+        ConnectedFolder("network", str(network_root), "Network", True),
+        ConnectedFolder("local", str(local_root), "Local", True),
+    ]
+    sources = []
+    for connection in connections:
+        sources.extend(manager.scan_connection(connection))
+    sources.sort(key=lambda item: (item.provider, item.source_relative_path))
+
+    assert [(item.provider, item.source_relative_path) for item in sources] == [
+        ("local", "a.md"),
+        ("local", "z/b.md"),
+        ("network", "a.md"),
+        ("network", "z/b.md"),
+    ]
+
+
+def test_unreadable_file_is_diagnostic_and_does_not_abort_scan(tmp_path, monkeypatch):
+    source = tmp_path / "provider"
+    source.mkdir()
+    unreadable = source / "a.md"
+    readable = source / "b.md"
+    unreadable.write_text("a", encoding="utf-8")
+    readable.write_text("b", encoding="utf-8")
+
+    original_hash = FolderSyncManager._sha256
+
+    def fail_one(path):
+        if path == unreadable.resolve():
+            raise PermissionError("file permission denied")
+        return original_hash(path)
+
+    monkeypatch.setattr(FolderSyncManager, "_sha256", staticmethod(fail_one))
+    manager = FolderSyncManager(tmp_path / "vault")
+
+    files = manager.scan_connection(ConnectedFolder("local", str(source), "Source", True))
+
+    assert [item.source_relative_path for item in files] == ["b.md"]
+    assert len(manager.last_diagnostics) == 1
+    assert manager.last_diagnostics[0].code == "unreadable_file"
+    assert "file permission denied" in manager.last_diagnostics[0].message
+
+
+def test_scan_connection_reports_unreadable_root_without_mutation(tmp_path, monkeypatch):
+    source = tmp_path / "unreadable"
+    source.mkdir()
+    manager = FolderSyncManager(tmp_path / "vault")
+    connection = ConnectedFolder("local", str(source), "Unreadable", True)
+
+    def fail_rglob(_self, _pattern):
+        raise PermissionError("permission denied")
+
+    monkeypatch.setattr(Path, "rglob", fail_rglob)
+
+    assert manager.scan_connection(connection) == []
+    assert manager.last_diagnostics
+    assert "permission denied" in manager.last_diagnostics[0].message
+    assert not (tmp_path / "vault").exists()
+
+
+def test_sync_to_input_returns_report_and_preserves_active_theme_scope(tmp_path):
+    vault = tmp_path / "vault"
+    active_theme = vault / "Tema" / "1_entrada"
+    active_dirty = vault / "Tema" / "2_sucio"
+    general_input = vault / "1_entrada"
+    source = tmp_path / "source"
+    (source / "nested").mkdir(parents=True)
+    sample = source / "nested" / "sample.md"
+    sample.write_text("from provider", encoding="utf-8")
+
+    manager = FolderSyncManager(vault)
+    assert manager.save_connections([ConnectedFolder("local", str(source), "Source", True)])
+
+    report = manager.sync_to_input(active_theme, active_dirty)
+
+    assert isinstance(report, SyncReport)
+    assert report.copied == 1
+    assert report.scanned == 1
+    assert report.diagnostics == []
+    assert (active_theme / "nested" / "sample.md").read_text(encoding="utf-8") == "from provider"
+    assert not general_input.exists()
+    assert sample.read_text(encoding="utf-8") == "from provider"

@@ -1,8 +1,10 @@
 import hashlib
 import json
 import logging
-import shutil
+import os
+import sys
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterable, List
 import tkinter as tk
@@ -12,10 +14,12 @@ from funes.domain.errors import PathAuthorizationError
 from funes.domain.paths import SourcePathAuthorizer
 from funes.domain.sync import (
     ConnectedFolder,
+    SyncManifestEntry,
     SyncProvider,
     SyncRecordValidationError,
 )
-from funes.infrastructure.atomic_files import atomic_write_json
+from funes.infrastructure.atomic_files import atomic_copy, atomic_write_json
+from funes.infrastructure.sqlite_store import JobStore
 
 logger = logging.getLogger(__name__)
 
@@ -48,6 +52,7 @@ class SourceFile:
     sha256: str
     mtime_ns: int
     allowed_extension: str
+    source_root_identity: str = ""
 
     @property
     def relative_path(self) -> str:
@@ -81,6 +86,12 @@ class SourceFile:
     def extension(self) -> str:
         return self.allowed_extension
 
+    @property
+    def source_identity(self) -> str:
+        """Return the canonical, non-secret identity of the provider root."""
+        root = self.source_root_identity or self.absolute_source_path.parent
+        return str(Path(root).expanduser().resolve(strict=False))
+
 
 @dataclass(frozen=True)
 class SyncDiagnostic:
@@ -89,6 +100,54 @@ class SyncDiagnostic:
     path: str
     message: str
     code: str = "sync_diagnostic"
+
+
+@dataclass(frozen=True)
+class SyncConflict:
+    """A source that cannot claim an occupied destination safely."""
+
+    source_key: str
+    source_relative_path: str
+    destination_relative: str
+    source_hash: str
+    existing_hash: str | None
+    reason: str = "same_destination_different_content"
+
+    @property
+    def destination_path(self) -> str:
+        return self.destination_relative
+
+    @property
+    def path(self) -> str:
+        return self.source_relative_path
+
+
+class _SkippedDiagnostics(list[SyncDiagnostic]):
+    """List-shaped skips with equality compatibility for old integer callers."""
+
+    def __eq__(self, other: object) -> bool:
+        if isinstance(other, int):
+            return len(self) == other
+        return super().__eq__(other)
+
+    @classmethod
+    def from_legacy_count(cls, count: int) -> "_SkippedDiagnostics":
+        """Represent an old integer count without losing the list contract."""
+        return cls(
+            SyncDiagnostic(
+                path="<legacy>",
+                message="legacy skipped count without diagnostic details",
+                code="legacy_skipped_count",
+            )
+            for _ in range(count)
+        )
+
+
+class _ReconciliationConflict(Exception):
+    def __init__(self, conflict: SyncConflict, manifest_update: int) -> None:
+        super().__init__(conflict.reason)
+        self.conflict = conflict
+        self.manifest_update = manifest_update
 
 
 @dataclass(frozen=True, eq=False)
@@ -100,14 +159,42 @@ class SyncReport:
     """
 
     copied: int = 0
+    unchanged: int = 0
+    conflicts: list[SyncConflict] = field(default_factory=list)
+    skipped: list[SyncDiagnostic] | int = field(default_factory=list)
+    manifest_updates: int = 0
     scanned: int = 0
-    skipped: int = 0
     diagnostics: list[SyncDiagnostic] = field(default_factory=list)
     source_files: tuple[SourceFile, ...] = ()
+
+    def __post_init__(self) -> None:
+        if isinstance(self.skipped, bool):
+            raise TypeError("skipped must be a diagnostic list or integer count")
+        if isinstance(self.skipped, int):
+            if self.skipped < 0:
+                raise ValueError("skipped count must be non-negative")
+            skips = _SkippedDiagnostics.from_legacy_count(self.skipped)
+        else:
+            skips = (
+                self.skipped
+                if isinstance(self.skipped, _SkippedDiagnostics)
+                else _SkippedDiagnostics(self.skipped)
+            )
+        diagnostics = self.diagnostics
+        if not diagnostics and skips:
+            diagnostics = skips
+        elif diagnostics and not skips:
+            skips = _SkippedDiagnostics(diagnostics)
+        object.__setattr__(self, "skipped", skips)
+        object.__setattr__(self, "diagnostics", diagnostics)
 
     @property
     def copied_count(self) -> int:
         return self.copied
+
+    @property
+    def skipped_count(self) -> int:
+        return len(self.skipped)
 
     def __int__(self) -> int:
         return self.copied
@@ -122,14 +209,20 @@ class SyncReport:
             return NotImplemented
         return (
             self.copied,
+            self.unchanged,
+            self.conflicts,
             self.scanned,
             self.skipped,
+            self.manifest_updates,
             self.diagnostics,
             self.source_files,
         ) == (
             other.copied,
+            other.unchanged,
+            other.conflicts,
             other.scanned,
             other.skipped,
+            other.manifest_updates,
             other.diagnostics,
             other.source_files,
         )
@@ -151,6 +244,8 @@ class FolderSyncManager:
         self.active_theme_dir = self.vault_root
         self.set_active_theme(active_theme, active_theme_dir=active_theme_dir)
         self.last_diagnostics: list[SyncDiagnostic] = []
+        self._last_report: SyncReport | None = None
+        self._last_run_at: str | None = None
         self._extractor_registry = None
 
     def _default_active_theme_dir(self, active_theme: str) -> Path:
@@ -291,6 +386,7 @@ class FolderSyncManager:
                             sha256=self._sha256(authorized),
                             mtime_ns=stat.st_mtime_ns,
                             allowed_extension=authorized.suffix.lower(),
+                            source_root_identity=str(root),
                         )
                     )
                 except (PathAuthorizationError, ValueError):
@@ -400,15 +496,81 @@ class FolderSyncManager:
             logger.error(f"Error guardando carpetas vinculadas: {e}")
             return False
 
-    def sync_to_input(self, input_dir: Path, dirty_dir: Path) -> SyncReport:
+    def get_sync_sources(self) -> list[dict[str, object]]:
+        """Return a browser-safe source inventory without exposing roots."""
+        return [
+            {
+                "id": connection.connection_id,
+                "provider": connection.provider,
+                "display_name": connection.display_name,
+                "enabled": connection.enabled,
+            }
+            for connection in self.load_connections()
+        ]
+
+    @staticmethod
+    def _safe_diagnostic(diagnostic: SyncDiagnostic) -> dict[str, str]:
+        """Project diagnostics without leaking absolute provider or vault paths."""
+        return {
+            "code": diagnostic.code,
+            "path": Path(diagnostic.path).name or "<source>",
+            "message": diagnostic.code,
+        }
+
+    @classmethod
+    def public_sync_report(cls, report: SyncReport | None) -> dict[str, object]:
+        """Project one report for the UI without exposing filesystem identities."""
+        if report is None:
+            return {
+                "copied": 0,
+                "unchanged": 0,
+                "scanned": 0,
+                "manifest_updates": 0,
+                "conflicts": [],
+                "diagnostics": [],
+            }
+        return {
+            "copied": getattr(report, "copied", 0),
+            "unchanged": getattr(report, "unchanged", 0),
+            "scanned": getattr(report, "scanned", 0),
+            "manifest_updates": getattr(report, "manifest_updates", 0),
+            "conflicts": [
+                {
+                    "source_relative_path": conflict.source_relative_path,
+                    "destination_relative": conflict.destination_relative,
+                    "reason": conflict.reason,
+                }
+                for conflict in getattr(report, "conflicts", [])
+            ],
+            "diagnostics": [
+                cls._safe_diagnostic(item)
+                for item in getattr(report, "diagnostics", [])
+            ],
+        }
+
+    def get_last_sync_status(self) -> dict[str, object]:
+        report = self._last_report
+        return {
+            "last_run_at": self._last_run_at,
+            "report": None if report is None else self.public_sync_report(report),
+        }
+
+    def sync_to_input(
+        self,
+        input_dir: Path,
+        dirty_dir: Path,
+        *,
+        connection_ids: list[str] | None = None,
+    ) -> SyncReport:
         """
-        Recopila hacia el 1_entrada del Tema activo todo archivo de las carpetas
-        vinculadas que:
-        1. No haya pasado anteriormente por el flujo de Funes (no existe en el
-           2_sucio del Tema ni en 1_entrada).
-        2. O que sí haya pasado por 2_sucio (o esté en 1_entrada), pero la fecha
-           de modificación (mtime) en la carpeta fuente de origen sea más reciente
-           que la del archivo llevado en su día a 2_sucio/1_entrada.
+        Reconcile provider files into the exact active-theme ``1_entrada``.
+
+        The durable ``JobStore.sync_manifest`` is the only provenance store.
+        Hashes, rather than mtimes, decide whether a source is unchanged.  A
+        source already represented by the manifest may replace its own input
+        file when its content changes, but this method never writes a dirty
+        artifact.  A different source may not overwrite an occupied input or
+        dirty path.
 
         Both ``input_dir`` and ``dirty_dir`` must be the active Theme roots
         (typically ``VaultManager.input_dir`` / ``VaultManager.dirty_dir``).
@@ -418,6 +580,17 @@ class FolderSyncManager:
             Path(input_dir), Path(dirty_dir)
         )
         connected = self.load_connections()
+        if connection_ids:
+            requested_ids = set(connection_ids)
+            known_ids = {connection.connection_id for connection in connected}
+            unknown_ids = requested_ids - known_ids
+            if unknown_ids:
+                raise ValueError("unknown sync connection ID")
+            connected = [
+                connection
+                for connection in connected
+                if connection.connection_id in requested_ids
+            ]
         sources: list[SourceFile] = []
         diagnostics: list[SyncDiagnostic] = []
 
@@ -426,11 +599,22 @@ class FolderSyncManager:
             sources.extend(files)
             diagnostics.extend(self.last_diagnostics)
 
-        sources.sort(key=lambda item: (item.provider, item.source_relative_path, str(item.absolute_source_path)))
+        sources.sort(
+            key=lambda item: (
+                item.provider,
+                item.source_relative_path,
+                item.source_identity,
+                str(item.absolute_source_path),
+            )
+        )
         copied_count = 0
-        skipped_count = 0
+        unchanged_count = 0
+        conflicts: list[SyncConflict] = []
+        skipped: list[SyncDiagnostic] = diagnostics[:]
+        manifest_updates = 0
         destination_authorizer = SourcePathAuthorizer(self.vault_root)
 
+        candidates: list[tuple[SourceFile, Path, Path, str]] = []
         for source in sources:
             destination_relative = Path(source.source_relative_path)
             requested_dest = input_dir / destination_relative
@@ -441,73 +625,323 @@ class FolderSyncManager:
                 # in either destination tree before it can redirect a write.
                 dest = destination_authorizer.resolve(requested_dest)
                 dirty_file = destination_authorizer.resolve(requested_dirty_file)
-            except (OSError, PathAuthorizationError) as error:
-                skipped_count += 1
-                diagnostics.append(
-                    self._diagnostic(
-                        requested_dest,
-                        f"destination rejected: {error}",
-                        "destination_rejected",
-                    )
+                vault_destination = dest.relative_to(self.vault_root).as_posix()
+            except (OSError, PathAuthorizationError, ValueError) as error:
+                diagnostic = self._diagnostic(
+                    requested_dest,
+                    f"destination rejected: {error}",
+                    "destination_rejected",
                 )
+                skipped.append(diagnostic)
                 logger.error("Destino rechazado durante sync: %s", requested_dest)
                 continue
+            candidates.append((source, dest, dirty_file, vault_destination))
 
-            try:
-                dirty_mtime_ns = dirty_file.stat().st_mtime_ns if dirty_file.exists() else None
-                dest_mtime_ns = dest.stat().st_mtime_ns if dest.exists() else None
-                if dirty_mtime_ns is None:
-                    should_copy = dest_mtime_ns is None or source.mtime_ns > dest_mtime_ns + 1_000_000
-                else:
-                    should_copy = source.mtime_ns > dirty_mtime_ns + 1_000_000
+        with JobStore(self.vault_root) as manifest_store:
+            destination_groups: dict[str, list[tuple[SourceFile, Path, Path, str]]] = {}
+            for candidate in candidates:
+                destination_groups.setdefault(candidate[0].source_relative_path, []).append(candidate)
 
-                if not should_copy:
-                    skipped_count += 1
-                    continue
+            for group in destination_groups.values():
+                winner_hash = group[0][0].sha256
+                for source, dest, dirty_file, vault_destination in group:
+                    if source.sha256 != winner_hash:
+                        conflict, update = self._record_conflict(
+                            manifest_store,
+                            source,
+                            dest,
+                            dirty_file,
+                            vault_destination,
+                        )
+                        conflicts.append(conflict)
+                        manifest_updates += update
+                        continue
 
-                dest.parent.mkdir(parents=True, exist_ok=True)
-                dirty_file.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copy2(source.absolute_source_path, dest)
-                copied_count += 1
-                logger.info("Recopilado archivo hacia 1_entrada: %s", source.source_relative_path)
-            except (OSError, PathAuthorizationError) as error:
-                skipped_count += 1
-                diagnostics.append(self._diagnostic(source.absolute_source_path, str(error), "copy_failed"))
-                logger.error("Error sincronizando desde %s: %s", source.absolute_source_path, error)
+                    try:
+                        outcome, update = self._reconcile_source(
+                            manifest_store,
+                            source,
+                            dest,
+                            dirty_file,
+                            vault_destination,
+                        )
+                    except _ReconciliationConflict as error:
+                        conflicts.append(error.conflict)
+                        manifest_updates += error.manifest_update
+                        continue
+                    except (OSError, PathAuthorizationError, SyncRecordValidationError) as error:
+                        diagnostic = self._diagnostic(
+                            source.absolute_source_path,
+                            str(error),
+                            "copy_failed",
+                        )
+                        skipped.append(diagnostic)
+                        logger.error(
+                            "Error sincronizando desde %s: %s",
+                            source.absolute_source_path,
+                            error,
+                        )
+                        continue
 
-        self.last_diagnostics = diagnostics
-        return SyncReport(
+                    manifest_updates += update
+                    if outcome == "copied":
+                        copied_count += 1
+                        logger.info(
+                            "Recopilado archivo hacia 1_entrada: %s",
+                            source.source_relative_path,
+                        )
+                    else:
+                        unchanged_count += 1
+
+        self.last_diagnostics = skipped
+        report = SyncReport(
             copied=copied_count,
+            unchanged=unchanged_count,
+            conflicts=conflicts,
+            skipped=skipped,
+            manifest_updates=manifest_updates,
             scanned=len(sources),
-            skipped=skipped_count,
-            diagnostics=diagnostics,
+            diagnostics=skipped,
             source_files=tuple(sources),
         )
+        self._last_report = report
+        self._last_run_at = datetime.now(timezone.utc).isoformat()
+        return report
 
     @staticmethod
-    def detect_cloud_folders() -> List[Path]:
-        found: List[Path] = []
-        home = Path.home()
+    def _source_key(source: SourceFile) -> str:
+        """Build a stable T1 key from provider, canonical root, and path."""
+        return f"{source.provider}:{source.source_identity}:{source.source_relative_path}"
 
-        cloud_storage = home / "Library" / "CloudStorage"
-        if cloud_storage.exists() and cloud_storage.is_dir():
+    @staticmethod
+    def _file_hash(path: Path) -> str | None:
+        if not path.exists() or not path.is_file():
+            return None
+        return FolderSyncManager._sha256(path)
+
+    @staticmethod
+    def _manifest_update(store: JobStore, entry: SyncManifestEntry) -> int:
+        previous = store.get_sync_manifest_entry(entry.source_key)
+        if previous == entry:
+            return 0
+        store.upsert_sync_manifest_entry(entry)
+        return 1
+
+    def _reconcile_source(
+        self,
+        store: JobStore,
+        source: SourceFile,
+        dest: Path,
+        dirty_file: Path,
+        vault_destination: str,
+    ) -> tuple[str, int]:
+        source_key = self._source_key(source)
+        manifest = store.get_sync_manifest_entry(source_key)
+        input_hash = self._file_hash(dest)
+        dirty_hash = self._file_hash(dirty_file)
+        owns_destination = bool(
+            manifest is not None
+            and manifest.source_key == source_key
+            and manifest.destination_relative == vault_destination
+        )
+
+        if input_hash == source.sha256:
+            status = "unchanged"
+            if (
+                manifest is not None
+                and manifest.source_hash == source.sha256
+                and manifest.source_mtime_ns == source.mtime_ns
+                and manifest.destination_relative == vault_destination
+                and manifest.status in {"copied", "unchanged"}
+            ):
+                return status, 0
+            return status, self._manifest_update(
+                store,
+                SyncManifestEntry(
+                    source_key,
+                    source.sha256,
+                    source.mtime_ns,
+                    vault_destination,
+                    status,
+                ),
+            )
+
+        if input_hash is not None and not owns_destination:
+            conflict, update = self._record_conflict(
+                store, source, dest, dirty_file, vault_destination
+            )
+            raise _ReconciliationConflict(conflict, update)
+
+        if input_hash is None and dirty_hash not in (None, source.sha256) and not owns_destination:
+            conflict, update = self._record_conflict(
+                store, source, dest, dirty_file, vault_destination
+            )
+            raise _ReconciliationConflict(conflict, update)
+
+        atomic_copy(source.absolute_source_path, dest)
+        status = "copied"
+        return status, self._manifest_update(
+            store,
+            SyncManifestEntry(
+                source_key,
+                source.sha256,
+                source.mtime_ns,
+                vault_destination,
+                status,
+            ),
+        )
+
+    def _record_conflict(
+        self,
+        store: JobStore,
+        source: SourceFile,
+        dest: Path,
+        dirty_file: Path,
+        vault_destination: str,
+    ) -> tuple[SyncConflict, int]:
+        existing_hash = self._file_hash(dest) or self._file_hash(dirty_file)
+        conflict = SyncConflict(
+            source_key=self._source_key(source),
+            source_relative_path=source.source_relative_path,
+            destination_relative=source.source_relative_path,
+            source_hash=source.sha256,
+            existing_hash=existing_hash,
+        )
+        update = self._manifest_update(
+            store,
+            SyncManifestEntry(
+                conflict.source_key,
+                source.sha256,
+                source.mtime_ns,
+                vault_destination,
+                "conflict",
+            ),
+        )
+        return conflict, update
+
+    @staticmethod
+    def detect_cloud_folders(
+        *,
+        home: Path | str | None = None,
+        platform: str | None = None,
+    ) -> List[ConnectedFolder]:
+        """Detect explicit, already-mounted OneDrive/SharePoint roots locally.
+
+        This is deliberately limited to local directory markers.  It does not
+        inspect credentials, contact a provider, or infer that a folder is
+        authenticated merely because it lives below ``CloudStorage``.  The
+        explicit ``SharePoint-*`` marker is accepted only below macOS
+        ``Library/CloudStorage``.  Windows tenant/library layouts are
+        intentionally not inferred; users can select those roots manually.
+        ``home`` and ``platform`` are keyword-only test seams; the no-argument
+        call keeps using the current user's environment.
+        """
+        home_path = Path.home() if home is None else Path(home).expanduser()
+        platform_name = sys.platform if platform is None else platform
+        detected: dict[Path, ConnectedFolder] = {}
+
+        def has_symlink_component(path: Path, boundary: Path) -> bool:
+            """Reject a path if any component from ``boundary`` is a symlink."""
+            boundary_absolute = Path(os.path.abspath(boundary))
+            path_absolute = Path(os.path.abspath(path))
             try:
-                for item in cloud_storage.iterdir():
-                    if item.is_dir() and not item.name.startswith("."):
-                        found.append(item.resolve())
-            except Exception as e:
-                logger.error(f"Error escaneando CloudStorage en macOS: {e}")
+                relative = path_absolute.relative_to(boundary_absolute)
+            except ValueError:
+                return True
 
-        potential_patterns = ["OneDrive*", "SharePoint*"]
-        for pattern in potential_patterns:
+            current = boundary_absolute
+            if current.is_symlink():
+                return True
+            for component in relative.parts:
+                current /= component
+                if current.is_symlink():
+                    return True
+            return False
+
+        def provider_for(
+            path: Path, *, allow_sharepoint_marker: bool = False
+        ) -> SyncProvider | None:
+            name = path.name.casefold()
+            if allow_sharepoint_marker and name.startswith("sharepoint"):
+                return SyncProvider.SHAREPOINT_MOUNT
+            if name.startswith("onedrive"):
+                return SyncProvider.ONEDRIVE_MOUNT
+            return None
+
+        def is_local_directory(path: Path, boundary: Path) -> bool:
+            return (
+                not path.name.startswith(".")
+                and not path.is_symlink()
+                and not has_symlink_component(path, boundary)
+                and path.is_dir()
+            )
+
+        def add_candidate(
+            path: Path,
+            boundary: Path,
+            *,
+            allow_sharepoint_marker: bool = False,
+            provider: SyncProvider | None = None,
+        ) -> None:
+            if not is_local_directory(path, boundary):
+                return
+            candidate_provider = provider or provider_for(
+                path, allow_sharepoint_marker=allow_sharepoint_marker
+            )
+            if candidate_provider is None:
+                return
             try:
-                for p in home.glob(pattern):
-                    if p.is_dir() and not p.name.startswith(".") and p.resolve() not in [f.resolve() for f in found]:
-                        found.append(p.resolve())
-            except Exception as e:
-                logger.error(f"Error escaneando patrones {pattern} en home: {e}")
+                canonical = path.resolve(strict=True)
+            except OSError as error:
+                logger.debug("No se puede resolver raíz cloud %s: %s", path, error)
+                return
+            detected.setdefault(
+                canonical,
+                ConnectedFolder(
+                    provider=candidate_provider.value,
+                    root=str(canonical),
+                    display_name=canonical.name,
+                    enabled=True,
+                ),
+            )
 
-        return found
+        def direct_children(root: Path, boundary: Path) -> list[Path]:
+            if not is_local_directory(root, boundary):
+                return []
+            try:
+                return list(root.iterdir())
+            except OSError as error:
+                logger.debug("No se puede escanear raíz cloud %s: %s", root, error)
+                return []
+
+        def scan_direct_children(
+            root: Path,
+            boundary: Path,
+            *,
+            allow_sharepoint_marker: bool = False,
+        ) -> None:
+            for candidate in direct_children(root, boundary):
+                add_candidate(
+                    candidate,
+                    boundary,
+                    allow_sharepoint_marker=allow_sharepoint_marker,
+                )
+
+        if platform_name.casefold() == "darwin":
+            scan_direct_children(
+                home_path / "Library" / "CloudStorage",
+                home_path,
+                allow_sharepoint_marker=True,
+            )
+
+        # OneDrive has an explicit user-root marker.  SharePoint roots outside
+        # macOS CloudStorage remain a manual-selection fallback.
+        scan_direct_children(home_path, home_path)
+
+        return sorted(
+            detected.values(),
+            key=lambda connection: (connection.root.casefold(), connection.root),
+        )
 
 
 class FolderSyncModal(tk.Toplevel):
@@ -642,15 +1076,9 @@ class FolderSyncModal(tk.Toplevel):
         }
 
         for folder in detected:
-            if folder.resolve() not in existing_resolved:
-                self.connections.append(
-                    ConnectedFolder(
-                        provider=SyncProvider.LOCAL.value,
-                        root=str(folder.resolve()),
-                        display_name=folder.name or str(folder),
-                        enabled=True,
-                    )
-                )
+            folder_root = Path(folder.root).expanduser().resolve()
+            if folder_root not in existing_resolved:
+                self.connections.append(folder)
                 added_count += 1
 
         self._refresh_listbox()

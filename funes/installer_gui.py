@@ -11,13 +11,14 @@ if str(base_dir) not in sys.path:
     sys.path.insert(0, str(base_dir))
 
 from funes.core.folder_sync import FolderSyncManager
+from funes.domain.sync import ConnectedFolder, SyncProvider
 from funes.installer_contract import (
     InstallationContext,
     detect_prerequisites,
     failed_steps,
     installation_succeeded,
     load_receipt,
-    merge_folder_lists,
+    merge_connected_folder_lists,
     resolve_vault_path,
     run_installation,
 )
@@ -54,7 +55,7 @@ class FunesInstallerWizard(tk.Tk):
         self.ollama_status_var = tk.StringVar(value="Comprobando...")
         self.anythingllm_status_var = tk.StringVar(value="Opcional, no configurado")
 
-        self.cloud_folders = []
+        self.cloud_folders: list[ConnectedFolder] = []
         self.anythingllm_opt_in_var = tk.BooleanVar(value=False)
         self.run_first_flush_var = tk.BooleanVar(value=True)
 
@@ -532,14 +533,17 @@ class FunesInstallerWizard(tk.Tk):
     def _refresh_cloud_listbox(self):
         if hasattr(self, "cloud_listbox"):
             self.cloud_listbox.delete(0, tk.END)
-            for f in self.cloud_folders:
-                self.cloud_listbox.insert(tk.END, str(f))
+            for folder in self.cloud_folders:
+                self.cloud_listbox.insert(
+                    tk.END,
+                    f"{folder.display_name} [{folder.provider}] — {folder.root}",
+                )
 
     def _on_detect_cloud_installer(self, silent=False):
         try:
             detected = FolderSyncManager.detect_cloud_folders()
             before = len(self.cloud_folders)
-            self.cloud_folders = merge_folder_lists(self.cloud_folders, detected)
+            self.cloud_folders = merge_connected_folder_lists(self.cloud_folders, detected)
             added = len(self.cloud_folders) - before
             self._refresh_cloud_listbox()
             if not silent:
@@ -555,8 +559,17 @@ class FunesInstallerWizard(tk.Tk):
         sel = filedialog.askdirectory(title="Selecciona la carpeta de SharePoint o OneDrive")
         if sel:
             p = Path(sel).resolve()
-            if p not in self.cloud_folders:
-                self.cloud_folders.append(p)
+            manual = ConnectedFolder(
+                provider=SyncProvider.LOCAL.value,
+                root=str(p),
+                display_name=p.name or str(p),
+                enabled=True,
+            )
+            before = len(self.cloud_folders)
+            self.cloud_folders = merge_connected_folder_lists(
+                self.cloud_folders, [manual]
+            )
+            if len(self.cloud_folders) != before:
                 self._refresh_cloud_listbox()
 
     def _on_remove_cloud_folder_installer(self):

@@ -46,6 +46,14 @@ python -c "import webview; from faster_whisper import WhisperModel; import pytes
 | `test` | pytest | `tests/` | CI and local test runs |
 | `all` | webview + audio + ocr + office | Desktop installer / full stack | `pip install -e ".[all]"` |
 
+### Mounted provider sync boundary
+
+| Capability | Additional package/network dependency | Runtime boundary |
+|------------|---------------------------------------|------------------|
+| OneDrive/SharePoint mounted-folder intake | None | Reads an already-mounted local directory; no OAuth, Graph API, provider SDK, credentials, or implicit network access |
+
+The provider client remains responsible for authentication and mounting. Funes receives a native folder selection, stores provider-aware metadata plus an opaque connection ID, and copies files one way into the active theme's `1_entrada`.
+
 Linux-only: core includes `pysqlite3-binary` when `platform_system == "Linux"` for ChromaDB on SQLite &lt; 3.35.
 
 ### Runtime profiles and resource policy

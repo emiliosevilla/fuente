@@ -63,7 +63,7 @@ class InstallStepResult:
 class InstallationContext:
     base_dir: Path
     vault_path: Path
-    cloud_folders: List[Path] = field(default_factory=list)
+    cloud_folders: List[Path | str | ConnectedFolder] = field(default_factory=list)
     confirm: Optional[ConfirmCallback] = None
     log: Optional[LogCallback] = None
     on_step_start: Optional[StepStartCallback] = None
@@ -228,29 +228,47 @@ def merge_folder_lists(
 
 
 def merge_connected_folder_lists(
-    existing: Sequence[ConnectedFolder],
-    incoming: Sequence[Path | str],
+    existing: Sequence[Path | str | ConnectedFolder],
+    incoming: Sequence[Path | str | ConnectedFolder],
 ) -> List[ConnectedFolder]:
-    """Add new local paths without rewriting existing provider records."""
-    merged = list(existing)
-    seen = {
-        str(Path(connection.root).expanduser().resolve())
-        for connection in existing
-    }
-    for item in incoming:
+    """Merge path compatibility inputs without losing provider metadata."""
+
+    def canonical_root(item: Path | str | ConnectedFolder) -> str:
+        raw_root = item.root if isinstance(item, ConnectedFolder) else item
+        return str(Path(raw_root).expanduser().resolve())
+
+    def as_connection(item: Path | str | ConnectedFolder) -> ConnectedFolder:
+        if isinstance(item, ConnectedFolder):
+            return ConnectedFolder(
+                provider=item.provider,
+                root=canonical_root(item),
+                display_name=item.display_name,
+                enabled=item.enabled,
+            )
         path = Path(item).expanduser().resolve()
-        key = str(path)
+        root = str(path)
+        return ConnectedFolder(
+            provider=SyncProvider.LOCAL.value,
+            root=root,
+            display_name=path.name or root,
+            enabled=True,
+        )
+
+    merged: List[ConnectedFolder] = []
+    seen: set[str] = set()
+    for item in existing:
+        key = canonical_root(item)
         if key in seen:
             continue
         seen.add(key)
-        merged.append(
-            ConnectedFolder(
-                provider=SyncProvider.LOCAL.value,
-                root=key,
-                display_name=path.name or key,
-                enabled=True,
-            )
-        )
+        merged.append(as_connection(item))
+
+    for item in incoming:
+        connection = as_connection(item)
+        if connection.root in seen:
+            continue
+        seen.add(connection.root)
+        merged.append(connection)
     return merged
 
 
@@ -511,7 +529,12 @@ def build_receipt(
         "funes_version": funes_version,
         "model": model_name,
         "prerequisites": asdict(prerequisites),
-        "cloud_folders": [str(p) for p in ctx.cloud_folders],
+        "cloud_folders": [
+            item.root
+            if isinstance(item, ConnectedFolder)
+            else str(Path(item).expanduser().resolve())
+            for item in ctx.cloud_folders
+        ],
         "steps": [step.to_dict() for step in steps],
         "success": all(step.success for step in steps),
     }

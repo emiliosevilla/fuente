@@ -195,7 +195,14 @@ class VaultManager:
             if self._is_excluded_from_note_lists(candidate):
                 continue
             relative = self._vault_relative_identity(candidate)
-            results.append((document_id_for_relative_path(relative), relative))
+            note_id = None
+            try:
+                note_id = MarkdownDocument.from_markdown(
+                    candidate.read_text(encoding="utf-8")
+                ).note_id
+            except (FrontmatterError, OSError, UnicodeError):
+                pass
+            results.append((note_id or document_id_for_relative_path(relative), relative))
         return results
 
     # --- GESTIÓN DE TEMAS ---

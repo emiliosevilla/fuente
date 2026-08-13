@@ -161,3 +161,8 @@ def test_gate_script_help():
     )
     assert proc.returncode == 0
     assert "--skip-pytest" in proc.stdout
+
+
+def test_sync_contract_is_registered_in_release_gate(gate_module):
+    suite_ids = {suite_id for suite_id, _args in gate_module.PYTEST_SUITES}
+    assert "sync" in suite_ids

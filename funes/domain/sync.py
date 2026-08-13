@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import hashlib
 from dataclasses import dataclass
 from enum import Enum
+from pathlib import Path
 from pathlib import PurePath
 
 
@@ -64,6 +66,13 @@ class ConnectedFolder:
         object.__setattr__(self, "provider", provider)
         object.__setattr__(self, "root", root)
         object.__setattr__(self, "display_name", display_name)
+
+    @property
+    def connection_id(self) -> str:
+        """Return a stable opaque identifier without exposing the source root."""
+        canonical_root = str(Path(self.root).expanduser().resolve(strict=False))
+        material = f"funes-sync:{self.provider}:{canonical_root}".encode("utf-8")
+        return f"sync_{hashlib.sha256(material).hexdigest()[:24]}"
 
     @classmethod
     def from_dict(cls, value: object) -> "ConnectedFolder":

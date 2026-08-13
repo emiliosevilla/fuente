@@ -3,6 +3,7 @@
 import json
 import hashlib
 import os
+import shutil
 import stat
 import tempfile
 from contextlib import contextmanager
@@ -89,3 +90,63 @@ def atomic_write_json(path: str | Path, data: Any, **dump_kwargs: Any) -> Path:
     options = {"indent": 2, "ensure_ascii": False}
     options.update(dump_kwargs)
     return atomic_write_text(path, json.dumps(data, **options))
+
+
+def atomic_copy(source: str | Path, path: str | Path) -> Path:
+    """Copy one file through a same-directory temporary and atomic replace.
+
+    The provider file is opened read-only.  The temporary lives beside the
+    destination so ``os.replace`` cannot cross filesystems, and a failed or
+    interrupted copy removes that temporary without exposing a partial final
+    file.
+    """
+    source_path = Path(source)
+    target = Path(path)
+    target.parent.mkdir(parents=True, exist_ok=True)
+
+    try:
+        existing_mode = stat.S_IMODE(target.stat().st_mode)
+    except FileNotFoundError:
+        existing_mode = None
+
+    temp_path: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="wb",
+            dir=target.parent,
+            prefix=f".{target.name}.",
+            suffix=".tmp",
+            delete=False,
+        ) as temporary_file:
+            temp_path = Path(temporary_file.name)
+            with source_path.open("rb") as source_file:
+                shutil.copyfileobj(source_file, temporary_file, length=1024 * 1024)
+            temporary_file.flush()
+            os.fsync(temporary_file.fileno())
+
+        if existing_mode is not None:
+            try:
+                os.chmod(temp_path, existing_mode)
+            except OSError:
+                pass
+
+        os.replace(temp_path, target)
+        try:
+            directory_fd = os.open(target.parent, os.O_RDONLY)
+        except OSError:
+            directory_fd = None
+        if directory_fd is not None:
+            try:
+                os.fsync(directory_fd)
+            except OSError:
+                pass
+            finally:
+                os.close(directory_fd)
+        return target
+    except BaseException:
+        if temp_path is not None:
+            try:
+                temp_path.unlink(missing_ok=True)
+            except OSError:
+                pass
+        raise

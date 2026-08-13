@@ -1,8 +1,8 @@
 # Funes — Tablero de estado (task.md)
 
-> **Checkout medido:** `dev` / `main` / `origin` = `5ec6c17` (2026-08-11)
+> **Checkout medido:** `dev` / `origin/dev` = `3e927d7` (2026-08-13); 14 archivos con cambios locales sin commitear.
 > **Estado:** hardening, Wave 1, residual hardening y Wave 2 completados; los ledgers SDD conservan el detalle histórico y la evidencia por tarea.
-> **Ledgers:** [Wave 1](../.superpowers/sdd/2026-08-09-funes-productization-wave/progress.md), [residual hardening](../.superpowers/sdd/2026-08-10-funes-residual-hardening/progress.md), [Wave 2](../.superpowers/sdd/2026-08-10-funes-productization-wave-2/progress.md)
+> **Ledgers:** [Wave 1](../.superpowers/sdd/2026-08-09-funes-productization-wave/progress.md), [residual hardening](../.superpowers/sdd/2026-08-10-funes-residual-hardening/progress.md), [Wave 2](../.superpowers/sdd/2026-08-10-funes-productization-wave-2/progress.md), [fuentes montadas](../.superpowers/sdd/2026-08-13-funes-cloud-folder-sync/progress.md)
 > **Gate:** `PYTHONDONTWRITEBYTECODE=1 python3 scripts/release_gate.py`
 
 ---
@@ -97,13 +97,13 @@ Ver [`docs/security-residual-findings.md`](security-residual-findings.md) (SEC-0
 - [x] AnythingLLM website fallback — SEC-004 resuelto; fallback sin navegador y política offline cubiertos.
 - [x] DOCX contract body-deep; dual ETLPipeline console vs lifecycle — exportación y ciclo ETL cubiertos por sus contratos focalizados.
 
-### Verificación residual y gate final (2026-08-10 → 2026-08-11)
+### Verificación residual y gate final — histórico (2026-08-10 → 2026-08-11)
 
 - Matriz residual enfocada: **167 passed**, con un warning externo de deprecación de Chroma.
 - `PYTHONDONTWRITEBYTECODE=1 python3 -m pytest --collect-only -q`: **585 collected**.
 - La suite actual mide **733 collected**, **732 passed** y **1 skipped**, con un warning externo de deprecación de ChromaDB.
 - Los fallos globales de `RAMGovernor` quedaron resueltos alineando los tests legacy con la decisión explícita `bm25_only` y bloqueando el bypass del instalador.
-- El checkpoint actual está limpio y `scripts/release_gate.py` devuelve `RESULT: READY`; el warning de ChromaDB procede de telemetría de una dependencia externa.
+- El checkpoint de entonces estaba limpio y `scripts/release_gate.py` devolvía `RESULT: READY`; el warning de ChromaDB procedía de telemetría de una dependencia externa. La medición posterior de fuentes montadas está en **Cierre actual**.
 
 ### Wave 2 — productización (Task 11, 2026-08-10)
 
@@ -166,6 +166,28 @@ El warning de deprecación de ChromaDB observado por la suite se clasifica como 
 
 TipTap, native Graph API/OAuth, la integración de LightRAG en producción y las credenciales cloud permanecen fuera de alcance.
 
+### Cierre actual — fuentes montadas y evidencia de release (2026-08-13)
+
+El trabajo pendiente de Funes queda ordenado así:
+
+1. **Duplicados locales:** resueltos de forma reversible conservando los cuatro ficheros fuera del checkout para revisión de procedencia; el loader de migraciones ya no ve dos versiones `007`.
+2. **Task 5:** contrato de fuentes montadas cableado entre dominio, sincronizador, backend, bridge y consola. La UI usa selección nativa, confirmación, IDs opacos, estado de proveedor y reporte de copias/sin cambios/conflictos/avisos.
+3. **Task 6:** README, matriz de dependencias, task log y release gate documentan el límite unidireccional OneDrive/SharePoint montado y registran la suite `sync`.
+4. **Evidencia final:** ejecutar la suite focalizada, la suite completa y `scripts/release_gate.py`; solo un `RESULT: READY` medido cierra el release gate. La publicación Git queda fuera de la actuación del agente.
+
+La sincronización no implementa OAuth, Graph API, credenciales ni escritura de vuelta al proveedor. El cliente oficial debe montar primero la carpeta; Funes solo lee esa entrada y la copia al `1_entrada` del tema activo.
+
+### Medición actual del checkout (2026-08-13)
+
+- **Duplicados locales:** resueltos de forma reversible; los cuatro ficheros se conservan fuera del checkout en `/private/tmp/funes-untracked-review-20260813/` para una decisión posterior de procedencia. No bloquean el loader ni el gate.
+- **Task 5:** completada en dominio, sincronizador, backend, bridge y consola; la suite focalizada de fuentes/UI pasó.
+- **Task 6:** completada en README, matriz, task log y release gate; los documentos describen correctamente la entrada montada y unidireccional.
+- **Evidencia focalizada:** **68 passed**.
+- **Release gate completo:** todas las suites funcionales pasan: unit `732 passed, 1 skipped`, integration `19 passed`, security `35 passed`, contract `106 passed, 1 warning`, offline `7 passed`, installer `21 passed`, headless `10 passed`, migration `19 passed`, sync `52 passed` y release gate `13 passed`.
+- **Bloqueo real:** falla únicamente `source_tree_clean` porque permanecen 14 cambios locales; resultado medido: `RESULT: BLOCKED (1)`.
+
+Queda una sola acción de cierre: revisar/publicar manualmente esos cambios locales y repetir `PYTHONDONTWRITEBYTECODE=1 python3 scripts/release_gate.py`. El agente no hace commits ni publica Git.
+
 ---
 
 ## Cómo trabajar esto
@@ -178,4 +200,4 @@ TipTap, native Graph API/OAuth, la integración de LightRAG en producción y las
 
 ## Definition of Done del producto (sigue vigente)
 
-La DoD histórica del hardening quedó satisfecha. Wave 1 cerró el **hueco UI/contrato** de cuarentena e ingesta manual y endureció el **camino &lt;8 GB**. Wave 2 añadió política Eco, operación visible, aprobación/exportación y demo offline sin romper el core local-first; el gate final está en `READY`.
+La DoD histórica del hardening quedó satisfecha. Wave 1 cerró el **hueco UI/contrato** de cuarentena e ingesta manual y endureció el **camino &lt;8 GB**. Wave 2 añadió política Eco, operación visible, aprobación/exportación y demo offline sin romper el core local-first. En el checkout actual, la funcionalidad pasa y el gate queda bloqueado únicamente por `source_tree_clean`.

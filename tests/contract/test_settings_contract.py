@@ -30,9 +30,7 @@ def _configured_model_test_policy() -> RuntimePolicy:
 def test_bridge_save_settings_persists_canonical_keys(temp_vault_path, tmp_path):
     backend = FunesConsoleBackend(temp_vault_path)
     bridge = FunesPyWebViewApi(backend)
-    input_folder = tmp_path / "input"
     output_folder = tmp_path / "output"
-    input_folder.mkdir()
     output_folder.mkdir()
     payload = {
         "custom_model_override": "qwen2.5:14b",
@@ -42,7 +40,6 @@ def test_bridge_save_settings_persists_canonical_keys(temp_vault_path, tmp_path)
         "resource_profile": "auto",
         "audio_mode": "skip",
         "whisper_model_path": None,
-        "input_connected_folders": [str(input_folder)],
         "output_connected_folders": [str(output_folder)],
     }
 
@@ -59,9 +56,6 @@ def test_bridge_save_settings_persists_canonical_keys(temp_vault_path, tmp_path)
     assert reloaded.whisper_model_path is None
     assert "ollama_model" not in persisted
     assert "ram_margin_pct" not in persisted
-    assert json.loads(
-        (temp_vault_path / ".funes_connected_folders.json").read_text(encoding="utf-8")
-    ) == {"folders": [str(input_folder.resolve())]}
 
 
 def test_bridge_accepts_runtime_policy_settings(temp_vault_path, tmp_path):

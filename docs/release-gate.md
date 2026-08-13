@@ -37,6 +37,7 @@ Exit code `0` means **READY**; any failure prints `BLOCKED` and returns non-zero
 | Installer tests pass | `installer` | `pytest tests/test_installer_contract.py` |
 | Headless documented + tested | `headless` | `pytest tests/test_headless_entrypoint.py` + `docs/headless-operation.md` |
 | Migration tooling | `migration` | `pytest tests/test_vault_migration.py` + `docs/migration-guide.md` |
+| Mounted-source sync contracts | `sync` | `pytest` folder sync, recursive/reconciliation/discovery, UI bridge, and idempotency matrices |
 | Gate self-tests | `release_gate` | `pytest tests/test_release_gate.py` |
 | Source tree clean after tests | `source_tree_clean` | `git status --porcelain` ignoring `__pycache__`, `*.pyc`, `funes.egg-info`, `.pytest_cache` |
 | No open P0/P1 security findings | `security_residuals` | `docs/security-residual-findings.md` has no open P0/P1 rows |
@@ -48,6 +49,18 @@ Exit code `0` means **READY**; any failure prints `BLOCKED` and returns non-zero
 Vault migration rollback details live in [`migration-guide.md`](migration-guide.md). Application rollback is in [`rollback-plan.md`](rollback-plan.md).
 
 ## Editorial workflow evidence
+
+## Mounted-source sync evidence
+
+Task 5 is considered evidenced only when the dedicated `sync` gate suite passes. It verifies the provider-aware records, recursive intake, manifest reconciliation, conflict handling, theme isolation, native-selection/UI projection, and pipeline idempotency. The browser submits opaque connection IDs; it does not submit inbound filesystem paths.
+
+Focused command:
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -p no:cacheprovider tests/test_folder_sync.py tests/test_folder_sync_contract.py tests/test_folder_sync_recursive.py tests/test_folder_sync_reconciliation.py tests/test_folder_sync_discovery.py tests/test_folder_sync_ui_contract.py tests/integration/test_pipeline_idempotency.py -q
+```
+
+The `sync` check is part of the normal `scripts/release_gate.py` run and is skipped by `--skip-pytest`.
 
 Tasks 1–7 are documented and verified separately from the existing metadata editor. The commands below are manual editorial evidence, not release-gate check IDs registered in `scripts/release_gate.py`. Run the documentation contract first, then the focused editorial matrix, the full suite, and finally this fail-closed gate:
 

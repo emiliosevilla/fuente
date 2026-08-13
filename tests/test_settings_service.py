@@ -184,7 +184,6 @@ def test_typed_bridge_uses_canonical_settings_payload_and_backend_service(
         "ram_safety_margin_pct": 0.30,
         "ollama_url": "http://localhost:11434",
         "allow_non_loopback_ollama": False,
-        "input_connected_folders": [],
         "output_connected_folders": [],
     }
 

@@ -1,7 +1,7 @@
 # Funes — Tablero de estado (task.md)
 
-> **Checkout medido:** `dev` / `origin/dev` = `8518299` (2026-08-14); 25 entradas locales modificadas o no registradas.
-> **Estado:** el histórico hardening/Wave 1/Wave 2/fuentes montadas sigue completado; la nueva base editorial está implementada y pendiente de revisión/Git humano. La suite completa pasa, pero el gate actual queda bloqueado por `source_tree_clean`.
+> **Checkout medido:** `dev` / `origin/dev` = `8518299` (2026-08-14); árbol limpio.
+> **Estado:** hardening, Wave 1, Wave 2, fuentes montadas, base editorial y reorganización física de `Vault_Funes/4_salida` completados. El gate actual está en `READY`.
 > **Histórico SDD:** completado y trasladado a `/private/tmp/funes-sdd-archive-20260813/`; este `task.md` conserva el estado vigente y el backlog no bloqueante.
 > **Gate:** `PYTHONDONTWRITEBYTECODE=1 python3 scripts/release_gate.py`
 
@@ -193,18 +193,21 @@ mover físicamente notas:
 - graph, listados, lector y corpus RAG que usan `note_id` v2, dejando la ruta
   como metadato.
 
-**Evidencia medida:** suite completa `915 passed, 1 skipped, 1 warning`.
+**Evidencia medida:** suite completa `921 passed, 1 warning`; el gate segmentado ha
+devuelto `RESULT: READY`.
 El warning procede de telemetría de ChromaDB. El gate se ejecutó y devolvió
-`RESULT: BLOCKED (1 check)`: unit 755, integration 19, security 35, contract
-106, offline 7, installer 21, headless 10, migration 21, sync 52,
-release_gate 13, security_residuals/required_docs/readme_honesty/sample_vault
-en verde; falló únicamente `source_tree_clean`. `git diff --check` pasa. No se
-afirma `RESULT: READY` mientras existan las 25 entradas locales; commit,
-push y merge quedan fuera de la autorización del agente.
+`unit 761`, `integration 19`, `security 35`, `contract 106`, `offline 7`,
+`installer 21`, `headless 10`, `migration 21`, `sync 52`, `release_gate 13`,
+`security_residuals`, `required_docs`, `readme_honesty`, `sample_vault` y
+`source_tree_clean` en verde. El warning es la telemetría/deprecación externa de
+ChromaDB. `git diff --check` pasa. Commit, push y merge siguen fuera de la
+autorización del agente.
 
-**Siguiente paso:** revisión humana de los cambios y ejecución del gate en un
-checkout limpio. La reorganización física de `4_salida` fue autorizada y
-ejecutada sobre `Vault_Funes` el 2026-08-14.
+**Posición actual del plan:** la reorganización física fue autorizada y
+ejecutada sobre `Vault_Funes` el 2026-08-14. No queda trabajo funcional bloqueante
+en este ciclo. Queda como trabajo editorial humano revisar las 14 notas de
+`Fuentes/Sin_clasificar` y decidir si alguna debe pasar a `Conceptos`, `Temas`,
+`Cuestiones` o a un subtipo concreto de `Fuentes`.
 
 El flujo aprobado queda disponible en `scripts/migrate_vault.py`:
 

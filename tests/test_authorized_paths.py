@@ -4,11 +4,13 @@ import pytest
 
 from funes.domain.errors import PathAuthorizationError
 from funes.domain.frontmatter import serialize_frontmatter
+from funes.domain.note_catalog import NoteCatalog
 from funes.domain.paths import AuthorizedPathResolver, document_id_for_relative_path
 from funes.control_console import FunesConsoleBackend
 from funes.core.vault import VaultManager
 from funes.config import VaultConfig
 from funes.graph_engine.linker import GraphLinker
+from funes.infrastructure.sqlite_store import JobStore
 
 
 @pytest.fixture
@@ -33,6 +35,60 @@ def test_resolves_valid_nested_output_note(resolver, temp_vault_path):
     resolved = resolver.resolve_note("4_salida/Cuestion/nota.md")
 
     assert resolved == note.resolve()
+
+
+def test_resolver_uses_canonical_catalog_id_and_legacy_alias_after_move(
+    temp_vault_path,
+):
+    old_relative = "4_salida/Tema/a.md"
+    new_relative = "4_salida/Tema/b.md"
+    old_note = temp_vault_path / old_relative
+    new_note = temp_vault_path / new_relative
+    old_note.parent.mkdir(parents=True)
+    old_note.write_text("---\nschema_version: 2\nnote_id: 4ca13d5c-4d78-4f37-8c3c-d1dc530a4dc9\nnote_type: source\nsource_kind: meeting\n---\n# A\n", encoding="utf-8")
+    new_note.write_text(old_note.read_text(encoding="utf-8"), encoding="utf-8")
+    old_note.unlink()
+
+    store = JobStore(temp_vault_path)
+    try:
+        store.register_note(
+            note_id="4ca13d5c-4d78-4f37-8c3c-d1dc530a4dc9",
+            relative_path=new_relative,
+            content_hash="hash-b",
+            note_type="source",
+            source_kind="meeting",
+            theme="Tema",
+            issue="cuestion-a",
+            status="approved",
+        )
+        store.add_note_alias(
+            alias_id=document_id_for_relative_path(old_relative),
+            note_id="4ca13d5c-4d78-4f37-8c3c-d1dc530a4dc9",
+            kind="legacy_route",
+        )
+        roots = {
+            "output": temp_vault_path / "4_salida",
+            "input": temp_vault_path / "1_entrada",
+            "dirty": temp_vault_path / "2_sucio",
+            "clean": temp_vault_path / "3_limpio",
+            "quarantine": temp_vault_path / ".funes" / "quarantine",
+        }
+        resolver = AuthorizedPathResolver(
+            vault_root=temp_vault_path,
+            catalog=NoteCatalog(store, vault_root=temp_vault_path),
+            **roots,
+        )
+
+        assert resolver.resolve_note_id("4ca13d5c-4d78-4f37-8c3c-d1dc530a4dc9") == new_note.resolve()
+        legacy_id = document_id_for_relative_path(old_relative)
+        assert resolver.resolve_note_id(legacy_id) == new_note.resolve()
+        assert resolver.canonical_note_id(legacy_id) == "4ca13d5c-4d78-4f37-8c3c-d1dc530a4dc9"
+        with pytest.raises(PathAuthorizationError):
+            resolver.resolve_note_id("4_salida/Tema/b.md")
+        with pytest.raises(PathAuthorizationError):
+            resolver.resolve_note_id(document_id_for_relative_path("4_salida/Tema/missing.md"))
+    finally:
+        store.close()
 
 
 def test_path_qualified_wikilink_disambiguates_duplicate_basenames(resolver, temp_vault_path):

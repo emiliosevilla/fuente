@@ -85,9 +85,14 @@ class FunesReaderModal(tk.Toplevel):
         if initial_note is not None:
             try:
                 relative = self.backend._vault_relative_identity(Path(initial_note))
-                from funes.domain.paths import document_id_for_relative_path
-
-                initial_id = document_id_for_relative_path(relative)
+                initial_id = next(
+                    (
+                        item["document_id"]
+                        for item in self.backend.get_notes_list()
+                        if item.get("path") == relative
+                    ),
+                    None,
+                )
             except Exception:
                 initial_id = None
 

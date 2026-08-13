@@ -27,6 +27,24 @@ class MarkdownDocument:
     def to_markdown(self) -> str:
         return serialize_frontmatter(self.metadata) + self.body
 
+    @property
+    def note_id(self) -> str | None:
+        """Persistent v2 identity, absent from legacy v1 notes."""
+        value = self.metadata.get("note_id")
+        return value if isinstance(value, str) else None
+
+    @property
+    def note_type(self) -> str | None:
+        """Typed v2 note classification, absent from legacy v1 notes."""
+        value = self.metadata.get("note_type")
+        return value if isinstance(value, str) else None
+
+    @property
+    def source_kind(self) -> str | None:
+        """Typed source classification, present only for v2 source notes."""
+        value = self.metadata.get("source_kind")
+        return value if isinstance(value, str) else None
+
 
 @dataclass(frozen=True)
 class NoteDocument:
@@ -79,3 +97,21 @@ class NoteDocument:
 
     def to_markdown(self) -> str:
         return serialize_frontmatter(self.frontmatter) + self.body_markdown
+
+    @property
+    def note_id(self) -> str | None:
+        """Persistent v2 identity, absent from legacy v1 notes."""
+        value = self.frontmatter.get("note_id")
+        return value if isinstance(value, str) else None
+
+    @property
+    def note_type(self) -> str | None:
+        """Typed v2 note classification, absent from legacy v1 notes."""
+        value = self.frontmatter.get("note_type")
+        return value if isinstance(value, str) else None
+
+    @property
+    def source_kind(self) -> str | None:
+        """Typed source classification, present only for v2 source notes."""
+        value = self.frontmatter.get("source_kind")
+        return value if isinstance(value, str) else None

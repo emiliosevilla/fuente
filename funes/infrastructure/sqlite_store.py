@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import sqlite3
 import uuid
+import json
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Iterable, Optional
@@ -35,6 +36,7 @@ from funes.domain.jobs import (
     JobStoreBusyError,
     StageEvent,
 )
+from funes.domain.note_catalog import IdentityCollisionError
 from funes.domain.sync import SyncManifestEntry
 
 MIGRATIONS_DIR = Path(__file__).resolve().parent / "migrations"
@@ -484,6 +486,230 @@ class JobStore:
         )
 
     # -- document identities -----------------------------------------------
+
+    # -- canonical note catalog --------------------------------------------
+
+    def register_note(
+        self,
+        *,
+        note_id: str,
+        relative_path: str,
+        content_hash: str,
+        note_type: str,
+        source_kind: Optional[str],
+        theme: str,
+        issue: str,
+        status: str,
+    ) -> dict[str, Any]:
+        now = _timestamp()
+        try:
+            self._connection.execute(
+                """
+                INSERT INTO note_catalog (
+                    note_id, relative_path, revision, content_hash, note_type,
+                    source_kind, theme, issue, status, created_at, updated_at
+                ) VALUES (?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    note_id,
+                    relative_path,
+                    content_hash,
+                    note_type,
+                    source_kind,
+                    theme,
+                    issue,
+                    status,
+                    now,
+                    now,
+                ),
+            )
+        except sqlite3.IntegrityError as error:
+            raise IdentityCollisionError(
+                f"note identity or route already registered: {note_id!r}, {relative_path!r}"
+            ) from error
+        stored = self.get_note(note_id)
+        assert stored is not None
+        return stored
+
+    def get_note(self, note_id: str) -> Optional[dict[str, Any]]:
+        row = self._connection.execute(
+            """
+            SELECT catalog.*
+            FROM note_catalog AS catalog
+            LEFT JOIN note_tombstones AS tombstone ON tombstone.note_id = catalog.note_id
+            WHERE catalog.note_id = ? AND tombstone.note_id IS NULL
+            """,
+            (note_id,),
+        ).fetchone()
+        return dict(row) if row is not None else None
+
+    def get_note_by_path(self, relative_path: str) -> Optional[dict[str, Any]]:
+        row = self._connection.execute(
+            """
+            SELECT catalog.*
+            FROM note_catalog AS catalog
+            LEFT JOIN note_tombstones AS tombstone ON tombstone.note_id = catalog.note_id
+            WHERE catalog.relative_path = ? AND tombstone.note_id IS NULL
+            """,
+            (relative_path,),
+        ).fetchone()
+        return dict(row) if row is not None else None
+
+    def list_notes(self) -> list[dict[str, Any]]:
+        rows = self._connection.execute(
+            """
+            SELECT catalog.*
+            FROM note_catalog AS catalog
+            LEFT JOIN note_tombstones AS tombstone ON tombstone.note_id = catalog.note_id
+            WHERE tombstone.note_id IS NULL
+            ORDER BY catalog.relative_path ASC
+            """
+        ).fetchall()
+        return [dict(row) for row in rows]
+
+    def add_note_alias(self, *, alias_id: str, note_id: str, kind: str) -> dict[str, Any]:
+        try:
+            self._connection.execute(
+                """
+                INSERT INTO note_aliases (alias_id, note_id, kind, created_at)
+                VALUES (?, ?, ?, ?)
+                """,
+                (alias_id, note_id, kind, _timestamp()),
+            )
+        except sqlite3.IntegrityError as error:
+            raise IdentityCollisionError(f"note alias already registered: {alias_id!r}") from error
+        row = self._connection.execute(
+            "SELECT * FROM note_aliases WHERE alias_id = ?", (alias_id,)
+        ).fetchone()
+        assert row is not None
+        return dict(row)
+
+    def resolve_note_alias(self, alias_id: str) -> Optional[dict[str, Any]]:
+        row = self._connection.execute(
+            """
+            SELECT catalog.*
+            FROM note_aliases AS alias
+            JOIN note_catalog AS catalog ON catalog.note_id = alias.note_id
+            LEFT JOIN note_tombstones AS tombstone ON tombstone.note_id = catalog.note_id
+            WHERE alias.alias_id = ? AND tombstone.note_id IS NULL
+            """,
+            (alias_id,),
+        ).fetchone()
+        return dict(row) if row is not None else None
+
+    def update_note_cas(
+        self,
+        *,
+        note_id: str,
+        expected_revision: int,
+        expected_content_hash: str,
+        relative_path: str,
+        content_hash: str,
+    ) -> Optional[dict[str, Any]]:
+        try:
+            cursor = self._connection.execute(
+                """
+                UPDATE note_catalog
+                SET relative_path = ?, content_hash = ?, revision = revision + 1, updated_at = ?
+                WHERE note_id = ? AND revision = ? AND content_hash = ?
+                  AND NOT EXISTS (
+                      SELECT 1 FROM note_tombstones WHERE note_tombstones.note_id = note_catalog.note_id
+                  )
+                """,
+                (
+                    relative_path,
+                    content_hash,
+                    _timestamp(),
+                    note_id,
+                    expected_revision,
+                    expected_content_hash,
+                ),
+            )
+        except sqlite3.IntegrityError as error:
+            raise IdentityCollisionError(f"note route already registered: {relative_path!r}") from error
+        if cursor.rowcount == 0:
+            return None
+        return self.get_note(note_id)
+
+    def tombstone_note(
+        self, *, note_id: str, reason: str, last_relative_path: str
+    ) -> dict[str, Any]:
+        try:
+            cursor = self._connection.execute(
+                """
+                INSERT INTO note_tombstones (note_id, last_relative_path, archived_at, reason)
+                SELECT ?, ?, ?, ?
+                WHERE EXISTS (
+                    SELECT 1 FROM note_catalog
+                    WHERE note_id = ?
+                )
+                AND NOT EXISTS (
+                    SELECT 1 FROM note_tombstones WHERE note_id = ?
+                )
+                """,
+                (
+                    note_id,
+                    last_relative_path,
+                    _timestamp(),
+                    reason,
+                    note_id,
+                    note_id,
+                ),
+            )
+        except sqlite3.IntegrityError as error:
+            raise IdentityCollisionError(f"note already tombstoned: {note_id!r}") from error
+        if cursor.rowcount == 0:
+            raise KeyError(f"unknown or already tombstoned note: {note_id}")
+        return self.get_note_tombstone(note_id)  # type: ignore[return-value]
+
+    def get_note_tombstone(self, note_id: str) -> Optional[dict[str, Any]]:
+        row = self._connection.execute(
+            "SELECT * FROM note_tombstones WHERE note_id = ?", (note_id,)
+        ).fetchone()
+        return dict(row) if row is not None else None
+
+    def record_note_operation(
+        self,
+        *,
+        operation_id: str,
+        note_id: str,
+        phase: str,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        try:
+            self._connection.execute(
+                """
+                INSERT INTO note_operations (
+                    operation_id, note_id, phase, payload_json, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (operation_id, note_id, phase, json.dumps(payload, sort_keys=True), _timestamp(), _timestamp()),
+            )
+        except sqlite3.IntegrityError as error:
+            raise IdentityCollisionError(f"note operation already registered: {operation_id!r}") from error
+        row = self._connection.execute(
+            "SELECT * FROM note_operations WHERE operation_id = ?", (operation_id,)
+        ).fetchone()
+        assert row is not None
+        return dict(row)
+
+    def update_note_operation_phase(
+        self, *, operation_id: str, expected_phase: str, phase: str
+    ) -> Optional[dict[str, Any]]:
+        cursor = self._connection.execute(
+            """
+            UPDATE note_operations
+            SET phase = ?, updated_at = ?
+            WHERE operation_id = ? AND phase = ?
+            """,
+            (phase, _timestamp(), operation_id, expected_phase),
+        )
+        if cursor.rowcount == 0:
+            return None
+        row = self._connection.execute(
+            "SELECT * FROM note_operations WHERE operation_id = ?", (operation_id,)
+        ).fetchone()
+        return dict(row) if row is not None else None
 
     def upsert_document_identity(
         self,

@@ -83,6 +83,7 @@ from funes.domain.quarantine import QuarantineService
 from funes.domain.runtime_policy import resolve_runtime_policy
 from funes.infrastructure.atomic_files import atomic_write_json, atomic_write_text
 from funes.infrastructure.sqlite_store import JobStore
+from funes.domain.note_catalog import NoteCatalog
 from funes.rag.chroma_store import ChromaStore
 from funes.rag.vault_corpus import VaultCorpusProvider
 from funes.ui.bridge import FunesPyWebViewApi
@@ -319,6 +320,7 @@ class FunesConsoleBackend:
         self.config = get_default_config(self.vault_path)
         self.runtime_policy = resolve_runtime_policy(self.config, budget=None)
         self.vault = VaultManager(self.config.vault)
+        self._job_store: Optional[JobStore] = JobStore(self.vault.config.vault_path)
         self.onboarding_service = OnboardingService(
             self.vault_path,
             path_resolver=self.vault.path_resolver(),
@@ -348,7 +350,6 @@ class FunesConsoleBackend:
         self._review_export_service: Optional[ReviewExportApplicationService] = None
         self._reflow_service: Optional[ReflowApplicationService] = None
         self._fusion_service: Optional[FusionApplicationService] = None
-        self._job_store: Optional[JobStore] = None
         self._ingestion_service: Optional[IngestionApplicationService] = None
         self._ingestion_job_store: Optional[JobStore] = None
         self._job_control_service: Optional[JobControlService] = None
@@ -936,6 +937,8 @@ class FunesConsoleBackend:
         return response
 
     def _path_resolver(self) -> AuthorizedPathResolver:
+        if self._job_store is None:
+            self._job_store = JobStore(self.vault.config.vault_path)
         return AuthorizedPathResolver(
             vault_root=self.vault.config.vault_path,
             output=self.vault.output_dir,
@@ -943,6 +946,7 @@ class FunesConsoleBackend:
             dirty=self.vault.dirty_dir,
             clean=self.vault.clean_dir,
             quarantine=self.vault.quarantine_dir,
+            catalog=NoteCatalog(self._job_store, vault_root=self.vault.config.vault_path),
         )
 
     @staticmethod
@@ -958,6 +962,18 @@ class FunesConsoleBackend:
             return path.resolve().relative_to(self.vault.config.vault_path.resolve()).as_posix()
         except ValueError as error:
             raise PathAuthorizationError() from error
+
+    def _note_id_for_path(self, path: Path) -> str:
+        """Return frontmatter identity, with route UUID only for legacy notes."""
+        relative = self._vault_relative_identity(path)
+        try:
+            metadata, _body = parse_frontmatter(path.read_text(encoding="utf-8"))
+            note_id = metadata.get("note_id")
+            if isinstance(note_id, str) and note_id:
+                return note_id
+        except (FrontmatterError, OSError, UnicodeError):
+            pass
+        return document_id_for_relative_path(relative)
 
     def get_initial_state_dict(self) -> Dict[str, Any]:
         stats = self.get_stats_dict()
@@ -1226,7 +1242,7 @@ class FunesConsoleBackend:
                             rel_path = str(md_file.relative_to(self.vault.current_theme_dir)) if self.vault.current_theme_dir in md_file.parents else md_file.name
                             issue = md_file.parent.name if md_file.parent != out_dir else "_Sin_Cuestion"
                             vault_relative = self._vault_relative_identity(md_file)
-                            document_id = document_id_for_relative_path(vault_relative)
+                            document_id = self._note_id_for_path(md_file)
                             note = self.get_notes_service().get_note(document_id)
                             pending.append({
                                 "title": md_file.stem,
@@ -1872,7 +1888,7 @@ class FunesConsoleBackend:
             else:
                 return ctx
             relative = self._vault_relative_identity(note_file)
-            ctx["document_id"] = document_id_for_relative_path(relative)
+            ctx["document_id"] = self._note_id_for_path(note_file)
             ctx["note_path"] = relative
         except PathAuthorizationError as error:
             return self._path_error(error)
@@ -1998,9 +2014,7 @@ class FunesConsoleBackend:
             )
             try:
                 resolved_note = resolver.resolve_wikilink_target(note_name)
-                document_id = document_id_for_relative_path(
-                    self._vault_relative_identity(resolved_note)
-                )
+                document_id = self._note_id_for_path(resolved_note)
                 return {
                     "type": "wikilink",
                     "text": clean_display,

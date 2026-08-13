@@ -17,6 +17,7 @@ import logging.handlers
 import subprocess
 import threading
 import webbrowser
+import secrets
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Mapping, Optional, Dict, Any, List
@@ -92,6 +93,7 @@ from funes.core.anythingllm_config import (
     configure_anythingllm_integration
 )
 from funes.core.folder_sync import FolderSyncManager, FolderSyncModal
+from funes.domain.sync import ConnectedFolder, SyncProvider
 from funes.watcher.watcher import ETLPipeline
 from funes.graph_engine.linker import CANONICAL_MOC_FILENAME, GraphLinker
 from funes.graph_engine.optimized_loop import OptimizadoGraphLoop
@@ -352,6 +354,7 @@ class FunesConsoleBackend:
         self._job_control_service: Optional[JobControlService] = None
         self._ollama_models_measured = False
         self._live_settings_apply = False
+        self._pending_sync_selections: dict[str, ConnectedFolder] = {}
 
     def attach_ingestion_service(
         self,
@@ -1028,6 +1031,135 @@ class FunesConsoleBackend:
             "line": line_val
         }
 
+    def get_sync_sources(self) -> Dict[str, Any]:
+        """Return the provider inventory and the latest safe sync projection."""
+        status = self.sync_manager.get_last_sync_status()
+        return {
+            "active_theme": self.vault.active_theme,
+            "sources": self.sync_manager.get_sync_sources(),
+            "last_run_at": status["last_run_at"],
+            "report": status["report"],
+        }
+
+    def select_sync_folder(self, title: str = "Vincular carpeta de sincronización") -> Dict[str, Any]:
+        """Select a source natively and return only a confirmation token."""
+        selected = self.select_folder(title)
+        if not selected:
+            return {"status": "cancelled"}
+        candidate = Path(selected).expanduser()
+        try:
+            if candidate.is_symlink() or not candidate.is_dir():
+                return {"error": "invalid_sync_source", "message": "Selected folder is not a directory"}
+            resolved = candidate.resolve(strict=True)
+        except (OSError, RuntimeError):
+            return {"error": "invalid_sync_source", "message": "Selected folder is not available"}
+
+        provider = SyncProvider.LOCAL.value
+        display_name = resolved.name or "Local folder"
+        try:
+            detected = FolderSyncManager.detect_cloud_folders()
+        except Exception:
+            detected = []
+        for connection in detected:
+            if Path(connection.root).resolve(strict=False) == resolved:
+                provider = connection.provider
+                display_name = connection.display_name
+                break
+
+        selection_id = f"sel_{secrets.token_urlsafe(18)}"
+        self._pending_sync_selections[selection_id] = ConnectedFolder(
+            provider=provider,
+            root=str(resolved),
+            display_name=display_name,
+            enabled=True,
+        )
+        return {
+            "status": "pending_confirmation",
+            "selection_id": selection_id,
+            "provider": provider,
+            "display_name": display_name,
+        }
+
+    def confirm_sync_source(self, selection_id: str) -> Dict[str, Any]:
+        """Persist one natively selected source after explicit confirmation."""
+        connection = self._pending_sync_selections.pop(selection_id, None)
+        if connection is None:
+            return {"error": "sync_selection_not_found", "message": "Sync selection is no longer available"}
+        current = self.sync_manager.load_connections()
+        replaced = False
+        updated: list[ConnectedFolder] = []
+        for existing in current:
+            if existing.connection_id == connection.connection_id:
+                updated.append(connection)
+                replaced = True
+            else:
+                updated.append(existing)
+        if not replaced:
+            updated.append(connection)
+        if not self.sync_manager.save_connections(updated):
+            return {"error": "sync_source_save_failed", "message": "Could not save sync source"}
+        return {"status": "saved", **self.get_sync_sources()}
+
+    def remove_sync_source(self, connection_id: str) -> Dict[str, Any]:
+        """Remove one source by opaque ID; the browser never supplies its root."""
+        current = self.sync_manager.load_connections()
+        remaining = [item for item in current if item.connection_id != connection_id]
+        if len(remaining) == len(current):
+            return {"error": "sync_source_not_found", "message": "Sync source was not found"}
+        if not self.sync_manager.save_connections(remaining):
+            return {"error": "sync_source_save_failed", "message": "Could not save sync sources"}
+        return {"status": "removed", **self.get_sync_sources()}
+
+    def set_sync_source_enabled(self, connection_id: str, enabled: bool) -> Dict[str, Any]:
+        """Change only the enabled flag for one existing source."""
+        current = self.sync_manager.load_connections()
+        updated: list[ConnectedFolder] = []
+        found = False
+        for existing in current:
+            if existing.connection_id == connection_id:
+                updated.append(
+                    ConnectedFolder(
+                        provider=existing.provider,
+                        root=existing.root,
+                        display_name=existing.display_name,
+                        enabled=enabled,
+                    )
+                )
+                found = True
+            else:
+                updated.append(existing)
+        if not found:
+            return {"error": "sync_source_not_found", "message": "Sync source was not found"}
+        if not self.sync_manager.save_connections(updated):
+            return {"error": "sync_source_save_failed", "message": "Could not save sync sources"}
+        return {"status": "updated", **self.get_sync_sources()}
+
+    def sync_sources(self, connection_ids: list[str]) -> Dict[str, Any]:
+        """Run the inbound sync using only trusted, persisted connection IDs."""
+        try:
+            report = self.sync_manager.sync_to_input(
+                self.vault.input_dir,
+                self.vault.dirty_dir,
+                connection_ids=connection_ids or None,
+            )
+        except ValueError as error:
+            return {"error": "sync_source_not_found", "message": str(error)}
+        except PathAuthorizationError as error:
+            return self._path_error(error)
+        except Exception:
+            logger.exception("Error sincronizando fuentes desde la UI")
+            return {"error": "sync_failed", "message": "Sync failed"}
+        public_report = FolderSyncManager.public_sync_report(report)
+        last_run_at = self.sync_manager.get_last_sync_status()["last_run_at"]
+        return {
+            "status": "completed",
+            "active_theme": self.vault.active_theme,
+            "last_run_at": last_run_at,
+            **public_report,
+            "refresh": True,
+            "stats": self.get_stats_dict(),
+        }
+
     def handle_action(self, action_name: str, payload: dict) -> Dict[str, Any]:
         if action_name == "install_demo_vault":
             return self.install_demo_vault()
@@ -1686,7 +1818,6 @@ class FunesConsoleBackend:
         return models
 
     def get_settings_info(self) -> Dict[str, Any]:
-        connected_input = [str(p) for p in self.sync_manager.load_connected_folders()]
         out_config_file = self.vault_path / ".funes_output_connected_folders.json"
         connected_output = []
         if out_config_file.exists():
@@ -1698,7 +1829,6 @@ class FunesConsoleBackend:
 
         return {
             "vault_path": str(self.vault_path),
-            "input_connected_folders": connected_input,
             "output_connected_folders": connected_output,
             "models": self.get_ollama_models(),
             "models_measured": self._ollama_models_measured,

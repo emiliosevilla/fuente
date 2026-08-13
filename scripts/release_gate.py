@@ -92,6 +92,20 @@ PYTEST_SUITES: tuple[tuple[str, list[str]], ...] = (
     ("installer", ["tests/test_installer_contract.py", "-q", "--tb=line"]),
     ("headless", ["tests/test_headless_entrypoint.py", "-q", "--tb=line"]),
     ("migration", ["tests/test_vault_migration.py", "-q", "--tb=line"]),
+    (
+        "sync",
+        [
+            "tests/test_folder_sync.py",
+            "tests/test_folder_sync_contract.py",
+            "tests/test_folder_sync_recursive.py",
+            "tests/test_folder_sync_reconciliation.py",
+            "tests/test_folder_sync_discovery.py",
+            "tests/test_folder_sync_ui_contract.py",
+            "tests/integration/test_pipeline_idempotency.py",
+            "-q",
+            "--tb=line",
+        ],
+    ),
     ("release_gate", ["tests/test_release_gate.py", "-q", "--tb=line"]),
 )
 

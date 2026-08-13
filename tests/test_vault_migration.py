@@ -9,7 +9,10 @@ from pathlib import Path
 import pytest
 
 from funes.domain.frontmatter import parse_frontmatter, serialize_frontmatter
+from funes.domain.note_catalog import NoteCatalog
+from funes.domain.paths import document_id_for_relative_path
 from funes.graph_engine.linker import CANONICAL_MOC_FILENAME
+from funes.infrastructure.sqlite_store import JobStore
 from funes.infrastructure.vault_migration import MigrationBlockedError, VaultMigrator
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -92,6 +95,51 @@ def test_dry_run_makes_no_changes(vault_tree: Path):
     assert note.read_text(encoding="utf-8") == before
     migration_manifests = list((vault_tree / ".funes" / "migrations").rglob("manifest.json"))
     assert not migration_manifests
+
+
+def test_identity_backfill_writes_stable_id_without_moving_and_is_idempotent(vault_tree: Path):
+    note = _write_note(vault_tree, "4_salida/_Sin_Cuestion/legacy.md", LEGACY_NOTE)
+    original_path = note.relative_to(vault_tree).as_posix()
+    migrator = VaultMigrator(vault_tree)
+
+    dry_run = migrator.identity_backfill(dry_run=True)
+
+    assert dry_run.status == "dry_run"
+    assert dry_run.entries
+    assert note.relative_to(vault_tree).as_posix() == original_path
+    assert "note_id:" not in note.read_text(encoding="utf-8")
+
+    manifest = migrator.identity_backfill()
+    metadata, body = parse_frontmatter(note.read_text(encoding="utf-8"))
+    expected_id = document_id_for_relative_path(original_path)
+    assert metadata["schema_version"] == 2
+    assert metadata["note_id"] == expected_id
+    assert metadata["note_type"] == "source"
+    assert metadata["source_kind"] == "unclassified"
+    assert body == "# Cuerpo legacy\n"
+    assert note.relative_to(vault_tree).as_posix() == original_path
+
+    with JobStore(vault_tree) as store:
+        catalog = NoteCatalog(store, vault_root=vault_tree)
+        assert catalog.resolve(expected_id)["relative_path"] == original_path
+
+    resumed = migrator.identity_backfill(manifest_path=migrator._manifest_file(manifest))
+    assert resumed.status == "completed"
+    assert len(resumed.entries) == len(manifest.entries)
+
+
+def test_identity_backfill_rollback_refuses_human_edit(vault_tree: Path):
+    note = _write_note(vault_tree, "4_salida/_Sin_Cuestion/legacy.md", LEGACY_NOTE)
+    migrator = VaultMigrator(vault_tree)
+    manifest = migrator.identity_backfill()
+    manifest_path = migrator._manifest_file(manifest)
+    note.write_text(note.read_text(encoding="utf-8") + "\nEdición humana.\n", encoding="utf-8")
+
+    rolled, restored = migrator.rollback(manifest_path)
+
+    assert restored == 0
+    assert rolled.entries[0].skipped_reason == "rollback_conflict"
+    assert "Edición humana" in note.read_text(encoding="utf-8")
 
 
 def test_scan_reports_findings(vault_tree: Path):

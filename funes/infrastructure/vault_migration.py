@@ -20,11 +20,13 @@ from funes.domain.frontmatter import (
     FrontmatterError,
     _STATUS_MIGRATIONS,
     _split_frontmatter,
+    serialize_frontmatter,
 )
 from funes.domain.jobs import CURRENT_PIPELINE_VERSION
-from funes.domain.paths import AuthorizedPathResolver
+from funes.domain.paths import AuthorizedPathResolver, document_id_for_relative_path
 from funes.graph_engine.optimized_loop import OptimizadoGraphLoop
 from funes.infrastructure.atomic_files import atomic_write_json, atomic_write_text
+from funes.infrastructure.sqlite_store import JobStore
 from funes.rag.index_records import ChunkIdentity, materialize_chunks, obsolete_chunk_ids
 from funes.rag.semantic_chunker import SemanticChunker
 
@@ -92,6 +94,10 @@ class ManifestEntry:
     action: str = "migrate_frontmatter"
     applied: bool = False
     skipped_reason: str = ""
+    note_id: str = ""
+    pre_content_hash: str = ""
+    post_content_hash: str = ""
+    legacy_aliases: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -306,6 +312,104 @@ class VaultMigrator:
     def dry_run(self) -> MigrationScanReport:
         return self.scan()
 
+    def identity_backfill(
+        self,
+        manifest_path: Optional[str | Path] = None,
+        *,
+        dry_run: bool = False,
+        force: bool = False,
+    ) -> MigrationManifest:
+        """Backfill stable IDs in place without moving Markdown files."""
+        scan = self.scan()
+        if not force:
+            blocking = self._blocking_findings(scan)
+            if blocking:
+                raise MigrationBlockedError(blocking)
+
+        if manifest_path is not None:
+            manifest = self._read_manifest(manifest_path)
+            self._validate_manifest_vault(manifest)
+            if manifest.status == "completed":
+                return manifest
+        else:
+            manifest = self._load_or_create_identity_manifest(scan)
+        if dry_run:
+            manifest.status = "dry_run"
+            return manifest
+
+        backup_root = self.vault_path / manifest.backup_dir
+        backup_root.mkdir(parents=True, exist_ok=True)
+        self._persist_manifest(manifest, manifest_path)
+        with JobStore(self.vault_path) as store:
+            for entry in manifest.entries:
+                if entry.applied:
+                    continue
+                try:
+                    note_path = self._resolver_for_theme(entry.theme).resolve(
+                        entry.vault_relative_path, root_name="vault"
+                    )
+                    original = note_path.read_text(encoding="utf-8")
+                    document = MarkdownDocument.from_markdown(original)
+                except (OSError, FrontmatterError, PathAuthorizationError) as error:
+                    entry.skipped_reason = f"unavailable:{error}"
+                    self._persist_manifest(manifest, manifest_path)
+                    continue
+
+                entry.pre_content_hash = content_hash_for_markdown(original)
+                metadata = dict(document.metadata)
+                note_id = str(
+                    metadata.get("note_id")
+                    or document_id_for_relative_path(entry.vault_relative_path)
+                )
+                entry.note_id = note_id
+                if metadata.get("schema_version") != 2:
+                    metadata.update(
+                        {
+                            "schema_version": 2,
+                            "note_id": note_id,
+                            "note_type": "source",
+                            "source_kind": "unclassified",
+                            "theme": entry.theme,
+                        }
+                    )
+                    migrated = serialize_frontmatter(metadata) + document.body
+                    backup_file = backup_root / entry.backup_name
+                    if not backup_file.exists():
+                        atomic_write_text(backup_file, original)
+                    atomic_write_text(note_path, migrated)
+                else:
+                    migrated = original
+
+                entry.post_content_hash = content_hash_for_markdown(migrated)
+                if store.get_note(note_id) is None:
+                    store.register_note(
+                        note_id=note_id,
+                        relative_path=entry.vault_relative_path,
+                        content_hash=entry.post_content_hash,
+                        note_type=str(metadata["note_type"]),
+                        source_kind=metadata.get("source_kind"),
+                        theme=str(metadata.get("theme") or entry.theme),
+                        issue=str(metadata.get("issue") or "_Sin_Cuestion"),
+                        status=str(metadata.get("status") or "pending_review"),
+                    )
+                for source_id in metadata.get("sources", []):
+                    if not isinstance(source_id, str) or not source_id.strip():
+                        continue
+                    if store.resolve_note_alias(source_id) is None:
+                        store.add_note_alias(
+                            alias_id=source_id,
+                            note_id=note_id,
+                            kind="legacy_ingestion",
+                        )
+                        entry.legacy_aliases.append(source_id)
+                entry.applied = True
+                entry.skipped_reason = "already_backfilled" if migrated == original else ""
+                self._persist_manifest(manifest, manifest_path)
+
+        manifest.status = "completed"
+        self._persist_manifest(manifest, manifest_path)
+        return manifest
+
     def apply(
         self,
         manifest_path: Optional[str | Path] = None,
@@ -399,6 +503,20 @@ class VaultMigrator:
                     entry.vault_relative_path,
                 )
                 continue
+            if entry.post_content_hash:
+                try:
+                    current_hash = content_hash_for_markdown(
+                        target.read_text(encoding="utf-8")
+                    )
+                except OSError:
+                    current_hash = ""
+                if current_hash != entry.post_content_hash:
+                    entry.skipped_reason = "rollback_conflict"
+                    logger.warning(
+                        "Skipping rollback after human edit for %s",
+                        entry.vault_relative_path,
+                    )
+                    continue
             target.parent.mkdir(parents=True, exist_ok=True)
             atomic_write_text(target, backup_file.read_text(encoding="utf-8"))
             entry.applied = False
@@ -530,6 +648,47 @@ class VaultMigrator:
                 )
             )
 
+        return MigrationManifest(
+            schema_version=MANIFEST_SCHEMA_VERSION,
+            migration_id=migration_id,
+            vault_path=str(self.vault_path),
+            created_at=_utc_now(),
+            status="in_progress",
+            backup_dir=backup_dir,
+            entries=entries,
+            themes_processed=list(scan.themes),
+            scan_summary=scan.summary(),
+        )
+
+    def _load_or_create_identity_manifest(
+        self, scan: MigrationScanReport
+    ) -> MigrationManifest:
+        migration_id = _migration_id_now()
+        backup_dir = (
+            Path(self.config.vault.system_dir_name)
+            / MIGRATIONS_DIR_NAME
+            / f"identity-{migration_id}"
+            / "backups"
+        ).as_posix()
+        entries: list[ManifestEntry] = []
+        for theme, path, relative in _iter_theme_output_notes(self.vault):
+            if self._is_unsafe_path(path, relative, theme):
+                continue
+            try:
+                document = MarkdownDocument.from_markdown(path.read_text(encoding="utf-8"))
+            except (OSError, FrontmatterError):
+                continue
+            metadata = document.metadata
+            if metadata.get("schema_version") == 2:
+                continue
+            entries.append(
+                ManifestEntry(
+                    vault_relative_path=relative,
+                    theme=theme,
+                    backup_name=_backup_name_for(relative),
+                    action="identity_backfill",
+                )
+            )
         return MigrationManifest(
             schema_version=MANIFEST_SCHEMA_VERSION,
             migration_id=migration_id,

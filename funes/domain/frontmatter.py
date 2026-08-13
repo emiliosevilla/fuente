@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from uuid import UUID
 
 import yaml
 
@@ -10,8 +11,13 @@ class FrontmatterError(ValueError):
     """Raised when a Markdown document has invalid frontmatter."""
 
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
+LEGACY_SCHEMA_VERSION = 1
 ALLOWED_STATUSES = frozenset({"pending_review", "approved", "rejected", "draft", "archived"})
+NOTE_TYPES = frozenset({"source", "concept", "topic", "question", "result"})
+SOURCE_KINDS = frozenset(
+    {"call", "meeting", "email", "working_document", "official_document", "unclassified"}
+)
 _KEY_MIGRATIONS = {
     "título": "title",
     "fecha": "date",
@@ -26,7 +32,6 @@ _STATUS_MIGRATIONS = {
     "aprobada": "approved",
 }
 _DEFAULTS = {
-    "schema_version": SCHEMA_VERSION,
     "title": "",
     "date": "",
     "author": "",
@@ -110,7 +115,7 @@ def _split_frontmatter(markdown: str) -> tuple[str, str]:
     raise FrontmatterError("Frontmatter closing delimiter is missing")
 
 
-def _migrate(metadata: dict) -> dict:
+def _migrate(metadata: dict, *, default_schema_version: int = LEGACY_SCHEMA_VERSION) -> dict:
     migrated = dict(metadata)
     for legacy_key, canonical_key in _KEY_MIGRATIONS.items():
         if legacy_key in migrated:
@@ -124,12 +129,21 @@ def _migrate(metadata: dict) -> dict:
     )
     for key, value in _DEFAULTS.items():
         migrated.setdefault(key, value.copy() if isinstance(value, list) else value)
+    migrated.setdefault("schema_version", default_schema_version)
     return migrated
 
 
 def _validate(metadata: dict) -> None:
-    if metadata.get("schema_version") != SCHEMA_VERSION:
-        raise FrontmatterError(f"Unsupported schema_version: {metadata.get('schema_version')!r}")
+    schema_version = metadata.get("schema_version")
+    if schema_version == LEGACY_SCHEMA_VERSION:
+        _validate_v1(metadata)
+    elif schema_version == SCHEMA_VERSION:
+        _validate_v2(metadata)
+    else:
+        raise FrontmatterError(f"Unsupported schema_version: {schema_version!r}")
+
+
+def _validate_v1(metadata: dict) -> None:
     for field in _STRING_FIELDS:
         if not isinstance(metadata[field], str):
             raise FrontmatterError(f"{field} must be a string")
@@ -138,3 +152,23 @@ def _validate(metadata: dict) -> None:
             raise FrontmatterError(f"{field} must be a list")
     if metadata["status"] not in ALLOWED_STATUSES:
         raise FrontmatterError(f"Invalid status: {metadata['status']!r}")
+
+
+def _validate_v2(metadata: dict) -> None:
+    _validate_v1(metadata)
+    try:
+        UUID(metadata["note_id"])
+    except (KeyError, ValueError, TypeError) as error:
+        raise FrontmatterError("note_id must be a UUID") from error
+
+    note_type = metadata.get("note_type")
+    if not isinstance(note_type, str) or note_type not in NOTE_TYPES:
+        raise FrontmatterError(f"Invalid note_type: {note_type!r}")
+
+    has_source_kind = "source_kind" in metadata
+    if note_type == "source":
+        source_kind = metadata.get("source_kind")
+        if not isinstance(source_kind, str) or source_kind not in SOURCE_KINDS:
+            raise FrontmatterError(f"Invalid source_kind: {source_kind!r}")
+    elif has_source_kind:
+        raise FrontmatterError("source_kind is only valid for source notes")

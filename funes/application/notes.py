@@ -69,8 +69,7 @@ class NotesApplicationService:
                 self.vault.config.vault_path.resolve()
             ).as_posix()
             return document_id_for_relative_path(relative)
-        self.path_resolver.resolve_note_id(cleaned)
-        return cleaned
+        return self.path_resolver.canonical_note_id(cleaned)
 
     def get_note(self, document_id: str) -> NoteDocument:
         document_id = self.resolve_document_id(document_id)
@@ -132,7 +131,10 @@ class NotesApplicationService:
                 markdown = candidate.read_text(encoding="utf-8")
                 notes.append(
                     NoteDocument.from_persisted(
-                        document_id=document_id_for_relative_path(relative),
+                        document_id=(
+                            MarkdownDocument.from_markdown(markdown).note_id
+                            or document_id_for_relative_path(relative)
+                        ),
                         relative_path=relative,
                         markdown=markdown,
                         revision=1,

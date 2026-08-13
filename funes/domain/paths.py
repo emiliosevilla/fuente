@@ -4,13 +4,22 @@ from __future__ import annotations
 
 import os
 import uuid
+import logging
 from pathlib import Path, PurePosixPath, PureWindowsPath
-from typing import Literal
+from typing import Any, Literal, Protocol
 
 from funes.domain.errors import PathAuthorizationError
+from funes.domain.frontmatter import FrontmatterError, parse_frontmatter
 
 
 RootName = Literal["vault", "output", "input", "dirty", "clean", "quarantine"]
+logger = logging.getLogger(__name__)
+
+
+class NoteCatalogProtocol(Protocol):
+    def resolve(self, note_id: str) -> dict[str, Any] | None: ...
+
+    def resolve_alias(self, alias_id: str) -> dict[str, Any] | None: ...
 
 
 def document_id_for_relative_path(relative_path: str) -> str:
@@ -85,6 +94,7 @@ class AuthorizedPathResolver:
         dirty: Path,
         clean: Path,
         quarantine: Path,
+        catalog: NoteCatalogProtocol | None = None,
     ) -> None:
         vault = Path(vault_root).resolve()
         self.roots = {
@@ -101,6 +111,7 @@ class AuthorizedPathResolver:
             if name != "vault"
         ):
             raise PathAuthorizationError()
+        self.catalog = catalog
 
     def resolve_note(self, relative_path: str) -> Path:
         """Resolve a Markdown note below the output directory."""
@@ -114,6 +125,46 @@ class AuthorizedPathResolver:
             # Clients must load by opaque id, never by path-shaped strings.
             raise PathAuthorizationError()
 
+        if self.catalog is not None:
+            record = self.catalog.resolve(document_id) or self.catalog.resolve_alias(document_id)
+            if record is None:
+                output = self.roots["output"]
+                for candidate in output.rglob("*.md") if output.exists() else []:
+                    try:
+                        relative = self._vault_relative_identity(candidate)
+                    except PathAuthorizationError:
+                        continue
+                    if document_id_for_relative_path(relative) != document_id:
+                        continue
+                    try:
+                        metadata, _body = parse_frontmatter(
+                            candidate.read_text(encoding="utf-8")
+                        )
+                    except (FrontmatterError, OSError, UnicodeError):
+                        logger.warning(
+                            "Using unregistered legacy route identity for %s",
+                            relative,
+                        )
+                        return self.resolve_note(relative)
+                    if metadata.get("schema_version") == 1:
+                        logger.warning(
+                            "Using unregistered schema-v1 route identity for %s",
+                            relative,
+                        )
+                        return self.resolve_note(relative)
+                raise PathAuthorizationError()
+            relative_path = record.get("relative_path")
+            if not isinstance(relative_path, str) or not relative_path:
+                raise PathAuthorizationError()
+            path = self.resolve_note(relative_path)
+            if not path.is_file():
+                raise PathAuthorizationError()
+            return path
+
+        logger.warning(
+            "Resolving route-derived legacy document id without a note catalog; "
+            "identity backfill is pending"
+        )
         output = self.roots["output"]
         if not output.exists():
             raise PathAuthorizationError()
@@ -129,6 +180,22 @@ class AuthorizedPathResolver:
                 continue
             return self.resolve_note(relative)
         raise PathAuthorizationError()
+
+    def canonical_note_id(self, identifier: str) -> str:
+        """Translate a canonical or legacy opaque identifier to ``note_id``."""
+        if not isinstance(identifier, str) or not identifier.strip():
+            raise PathAuthorizationError()
+        if self.catalog is not None:
+            record = self.catalog.resolve(identifier) or self.catalog.resolve_alias(identifier)
+            if record is None:
+                self.resolve_note_id(identifier)
+                return identifier
+            if not isinstance(record.get("note_id"), str):
+                raise PathAuthorizationError()
+            self.resolve_note_id(identifier)
+            return record["note_id"]
+        self.resolve_note_id(identifier)
+        return identifier
 
     def resolve_unique_note_basename(self, filename: str) -> Path:
         """Resolve one unique Markdown note basename below the output root."""

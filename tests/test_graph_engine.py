@@ -98,6 +98,30 @@ También mencionamos `Redes Neuronales en código inline`.
         self.assertIn('ia = "Inteligencia Artificial"', result)
         self.assertIn('`Redes Neuronales en código inline`', result)
 
+    def test_v2_graph_identity_survives_route_change(self):
+        note_id = "4ca13d5c-4d78-4f37-8c3c-d1dc530a4dc9"
+        metadata = {
+            "schema_version": 2,
+            "note_id": note_id,
+            "note_type": "concept",
+            "title": "Concepto estable",
+            "theme": "Tema",
+            "issue": "Cuestion",
+            "status": "approved",
+        }
+        old_path = self.output_dir / "Cuestion" / "antigua.md"
+        old_path.parent.mkdir()
+        old_path.write_text(serialize_frontmatter(metadata) + "# Nota\n", encoding="utf-8")
+        first = GraphLinker(self.output_dir).enumerate_notes()
+        assert first[0].document_id == note_id
+
+        new_path = self.output_dir / "Cuestion" / "nueva.md"
+        old_path.rename(new_path)
+        second = GraphLinker(self.output_dir).enumerate_notes()
+
+        assert second[0].document_id == note_id
+        assert second[0].relative_path == "Cuestion/nueva.md"
+
     # ------------------------------------------------------------------
     # 3. OptimizadoGraphLoop
     # ------------------------------------------------------------------

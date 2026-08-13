@@ -11,6 +11,10 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
+from funes.infrastructure.taxonomy_migration import (  # noqa: E402
+    TaxonomyBlockedError,
+    TaxonomyMigrator,
+)
 from funes.infrastructure.vault_migration import MigrationBlockedError, VaultMigrator  # noqa: E402
 
 
@@ -35,6 +39,33 @@ def _build_parser() -> argparse.ArgumentParser:
         metavar="MANIFEST",
         type=Path,
         help="Restore pre-migration content from a migration manifest",
+    )
+    mode.add_argument(
+        "--taxonomy-dry-run",
+        action="store_true",
+        help="Plan the approved physical 4_salida taxonomy without moving files",
+    )
+    mode.add_argument(
+        "--taxonomy-apply",
+        action="store_true",
+        help="Apply or resume the physical 4_salida taxonomy migration",
+    )
+    mode.add_argument(
+        "--taxonomy-normalize",
+        action="store_true",
+        help="Add reversible schema-v2 identity metadata before taxonomy movement",
+    )
+    mode.add_argument(
+        "--taxonomy-rollback",
+        metavar="MANIFEST",
+        type=Path,
+        help="Rollback a physical 4_salida taxonomy migration",
+    )
+    mode.add_argument(
+        "--taxonomy-normalize-rollback",
+        metavar="MANIFEST",
+        type=Path,
+        help="Rollback legacy-note normalization",
     )
     parser.add_argument(
         "--manifest",
@@ -67,6 +98,61 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     migrator = VaultMigrator(vault_path)
+
+    taxonomy = TaxonomyMigrator(vault_path)
+    if args.taxonomy_dry_run:
+        manifest = taxonomy.plan()
+        print(json.dumps(manifest.to_dict(), indent=2, ensure_ascii=False))
+        return 1 if manifest.status == "blocked" else 0
+    if args.taxonomy_normalize_rollback:
+        try:
+            manifest = taxonomy.rollback_normalization(
+                args.taxonomy_normalize_rollback.resolve()
+            )
+        except ValueError as error:
+            print(str(error), file=sys.stderr)
+            return 1
+        print(json.dumps(manifest.to_dict(), indent=2, ensure_ascii=False))
+        return 0
+    if args.taxonomy_normalize:
+        try:
+            manifest = taxonomy.normalize_legacy_notes(
+                args.manifest.resolve() if args.manifest else None
+            )
+        except TaxonomyBlockedError as error:
+            print(str(error), file=sys.stderr)
+            return 1
+        print(json.dumps(manifest.to_dict(), indent=2, ensure_ascii=False))
+        return 0
+    if args.taxonomy_rollback:
+        try:
+            manifest = taxonomy.rollback(args.taxonomy_rollback.resolve())
+        except ValueError as error:
+            print(str(error), file=sys.stderr)
+            return 1
+        print(json.dumps(manifest.to_dict(), indent=2, ensure_ascii=False))
+        return 0
+    if args.taxonomy_apply:
+        try:
+            manifest = taxonomy.apply(
+                args.manifest.resolve() if args.manifest else None
+            )
+        except TaxonomyBlockedError as error:
+            print(str(error), file=sys.stderr)
+            print(
+                json.dumps(
+                    {
+                        "status": "blocked",
+                        "blocking_findings": [finding.kind for finding in error.findings],
+                    },
+                    indent=2,
+                    ensure_ascii=False,
+                ),
+                file=sys.stderr,
+            )
+            return 1
+        print(json.dumps(manifest.to_dict(), indent=2, ensure_ascii=False))
+        return 0
 
     if args.dry_run:
         report = migrator.dry_run()

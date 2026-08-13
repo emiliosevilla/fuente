@@ -1,8 +1,8 @@
 # Funes — Tablero de estado (task.md)
 
-> **Checkout medido:** `dev` / `origin/dev` = `3e927d7` (2026-08-13); 14 archivos con cambios locales sin commitear.
-> **Estado:** hardening, Wave 1, residual hardening y Wave 2 completados; los ledgers SDD conservan el detalle histórico y la evidencia por tarea.
-> **Ledgers:** [Wave 1](../.superpowers/sdd/2026-08-09-funes-productization-wave/progress.md), [residual hardening](../.superpowers/sdd/2026-08-10-funes-residual-hardening/progress.md), [Wave 2](../.superpowers/sdd/2026-08-10-funes-productization-wave-2/progress.md), [fuentes montadas](../.superpowers/sdd/2026-08-13-funes-cloud-folder-sync/progress.md)
+> **Checkout medido:** `dev` / `origin/dev` = `8518299` (2026-08-14); 25 entradas locales modificadas o no registradas.
+> **Estado:** el histórico hardening/Wave 1/Wave 2/fuentes montadas sigue completado; la nueva base editorial está implementada y pendiente de revisión/Git humano. La suite completa pasa, pero el gate actual queda bloqueado por `source_tree_clean`.
+> **Histórico SDD:** completado y trasladado a `/private/tmp/funes-sdd-archive-20260813/`; este `task.md` conserva el estado vigente y el backlog no bloqueante.
 > **Gate:** `PYTHONDONTWRITEBYTECODE=1 python3 scripts/release_gate.py`
 
 ---
@@ -166,33 +166,88 @@ El warning de deprecación de ChromaDB observado por la suite se clasifica como 
 
 TipTap, native Graph API/OAuth, la integración de LightRAG en producción y las credenciales cloud permanecen fuera de alcance.
 
-### Cierre actual — fuentes montadas y evidencia de release (2026-08-13)
+### Cierre final — fuentes montadas y evidencia de release (2026-08-13)
 
-El trabajo pendiente de Funes queda ordenado así:
+El cierre de Funes queda documentado así:
 
-1. **Duplicados locales:** resueltos de forma reversible conservando los cuatro ficheros fuera del checkout para revisión de procedencia; el loader de migraciones ya no ve dos versiones `007`.
-2. **Task 5:** contrato de fuentes montadas cableado entre dominio, sincronizador, backend, bridge y consola. La UI usa selección nativa, confirmación, IDs opacos, estado de proveedor y reporte de copias/sin cambios/conflictos/avisos.
-3. **Task 6:** README, matriz de dependencias, task log y release gate documentan el límite unidireccional OneDrive/SharePoint montado y registran la suite `sync`.
-4. **Evidencia final:** ejecutar la suite focalizada, la suite completa y `scripts/release_gate.py`; solo un `RESULT: READY` medido cierra el release gate. La publicación Git queda fuera de la actuación del agente.
+1. **Duplicados locales:** resueltos de forma reversible; los cuatro ficheros permanecen fuera del checkout para una decisión posterior de procedencia y no bloquean el producto.
+2. **Task 5:** completada; el contrato de fuentes montadas está cableado entre dominio, sincronizador, backend, bridge y consola.
+3. **Task 6:** completada; README, matriz, task log y release gate documentan el límite unidireccional OneDrive/SharePoint montado.
+4. **Evidencia final:** completada; el último gate del árbol limpio devolvió `RESULT: READY`.
 
 La sincronización no implementa OAuth, Graph API, credenciales ni escritura de vuelta al proveedor. El cliente oficial debe montar primero la carpeta; Funes solo lee esa entrada y la copia al `1_entrada` del tema activo.
 
-### Medición actual del checkout (2026-08-13)
+### Base editorial estable — implementación medida (2026-08-14)
+
+Se ha implementado el primer bloque de la nueva arquitectura editorial, sin
+mover físicamente notas:
+
+- frontmatter v2 con `note_id` persistente, clasificación cerrada y
+  compatibilidad de lectura v1;
+- catálogo SQLite reconstruible con aliases, tombstones, CAS y journal de
+  operaciones;
+- backfill explícito v1→v2 que conserva rutas, registra aliases de ingesta y
+  rechaza rollback tras una edición humana;
+- resolver de rutas que traduce aliases a `note_id` y mantiene fallback legado
+  acotado;
+- graph, listados, lector y corpus RAG que usan `note_id` v2, dejando la ruta
+  como metadato.
+
+**Evidencia medida:** suite completa `915 passed, 1 skipped, 1 warning`.
+El warning procede de telemetría de ChromaDB. El gate se ejecutó y devolvió
+`RESULT: BLOCKED (1 check)`: unit 755, integration 19, security 35, contract
+106, offline 7, installer 21, headless 10, migration 21, sync 52,
+release_gate 13, security_residuals/required_docs/readme_honesty/sample_vault
+en verde; falló únicamente `source_tree_clean`. `git diff --check` pasa. No se
+afirma `RESULT: READY` mientras existan las 25 entradas locales; commit,
+push y merge quedan fuera de la autorización del agente.
+
+**Siguiente paso:** revisión humana de los cambios y ejecución del gate en un
+checkout limpio. La reorganización física de `4_salida` fue autorizada y
+ejecutada sobre `Vault_Funes` el 2026-08-14.
+
+El flujo aprobado queda disponible en `scripts/migrate_vault.py`:
+
+- `--taxonomy-dry-run` genera el manifiesto sin mover notas.
+- `--taxonomy-apply` aplica solo destinos derivados de frontmatter v2, bloquea
+  colisiones y cambios humanos, y conserva fases reanudables.
+- `--taxonomy-rollback MANIFEST` revierte movimientos que no hayan sido editados.
+
+Evidencia de ejecución:
+
+- Normalización reversible: `Vault_Funes/.funes/migrations/normalize-20260813T225124Z/manifest.json` — 14 notas llevadas a schema v2 con `source/unclassified`, sin alterar sus cuerpos.
+- Reorganización física: `Vault_Funes/.funes/migrations/taxonomy-20260813T225141Z/manifest.json` — 14 movimientos completados, sin colisiones.
+- `00_MOC_Funes.md` se conservó fuera de la taxonomía de notas.
+- No se detectaron wikilinks con rutas de carpeta que requirieran reescritura.
+- Las 14 notas quedaron en `4_salida/Fuentes/Sin_clasificar`; su clasificación editorial fina queda pendiente de revisión humana.
+
+### Medición final del checkout (2026-08-13)
 
 - **Duplicados locales:** resueltos de forma reversible; los cuatro ficheros se conservan fuera del checkout en `/private/tmp/funes-untracked-review-20260813/` para una decisión posterior de procedencia. No bloquean el loader ni el gate.
 - **Task 5:** completada en dominio, sincronizador, backend, bridge y consola; la suite focalizada de fuentes/UI pasó.
 - **Task 6:** completada en README, matriz, task log y release gate; los documentos describen correctamente la entrada montada y unidireccional.
 - **Evidencia focalizada:** **68 passed**.
 - **Release gate completo:** todas las suites funcionales pasan: unit `732 passed, 1 skipped`, integration `19 passed`, security `35 passed`, contract `106 passed, 1 warning`, offline `7 passed`, installer `21 passed`, headless `10 passed`, migration `19 passed`, sync `52 passed` y release gate `13 passed`.
-- **Bloqueo real:** falla únicamente `source_tree_clean` porque permanecen 14 cambios locales; resultado medido: `RESULT: BLOCKED (1)`.
+- **Última medición limpia:** todas las comprobaciones pasaron, incluido `source_tree_clean`; resultado: `RESULT: READY`.
 
-Queda una sola acción de cierre: revisar/publicar manualmente esos cambios locales y repetir `PYTHONDONTWRITEBYTECODE=1 python3 scripts/release_gate.py`. El agente no hace commits ni publica Git.
+No queda ninguna acción funcional pendiente en este ciclo. La publicación del código está reflejada en `8518299`; queda publicar este cambio documental de `task.md` cuando corresponda.
+
+### Observaciones no bloqueantes trasladadas desde los SDD
+
+Estas observaciones quedan como backlog de calidad/cobertura. No reabren tareas ni bloquean el release `READY`:
+
+- **Wave 1 — contratos y limpieza:** reforzar el contrato HTML débil; retirar `get_default_config` sin uso; añadir `.catch` a `restore`; eliminar ruido de `egg-info`; limpiar el docstring obsoleto de `list_active_items`; retirar `tmp_path` sin uso.
+- **Wave 1 — cobertura de cuarentena/ingesta:** añadir una regresión negativa para restaurar `failed_for_review`; revisar la etiqueta `[PENDIENTE]`; cubrir el camino de lifecycle; alinear el filtro de archivos temporales; cubrir la inferencia de `vault_root` en layouts tematizados; revisar el desajuste de `viable_models`; medir la nominación Eco; cubrir directamente el modal nativo; hacer que `readme_honesty` invoque su test específico; decidir el comportamiento del `Tk QuarantineModal` para `failed_for_review`.
+- **Wave 1 — APIs heredadas:** migrar `approve_note` y `merge_notes` fuera de claves de ruta cuando corresponda; mantener la nota de packaging de `step2` como responsabilidad compartida de `control_console`.
+- **Wave 2 — rendimiento/cobertura:** evitar el N+1 de razones del scheduler en páginas de cola; añadir una regresión que observe las transiciones Auto → Eco y Eco → Auto; cubrir explícitamente la rama `settings_rollback_failed`.
+
+Los aparcados históricos de SEC-002, RAMGovernor, el test binario adversarial y `source_tree_clean` se resolvieron posteriormente; no se copian como pendientes activos.
 
 ---
 
 ## Cómo trabajar esto
 
-1. Wave 1, residual hardening y Wave 2 quedan como histórico detallado en sus ledgers SDD.
+1. El histórico SDD completado se retiró del checkout; este documento conserva sus observaciones no bloqueantes.
 2. TipTap, LLM cloud por defecto, SaaS sync, telemetría comercial y rediseño visual sin contrato siguen fuera de alcance.
 3. Cualquier cambio posterior debe conservar el gate fail-closed y actualizar esta fuente de verdad junto con su evidencia.
 
@@ -200,4 +255,4 @@ Queda una sola acción de cierre: revisar/publicar manualmente esos cambios loca
 
 ## Definition of Done del producto (sigue vigente)
 
-La DoD histórica del hardening quedó satisfecha. Wave 1 cerró el **hueco UI/contrato** de cuarentena e ingesta manual y endureció el **camino &lt;8 GB**. Wave 2 añadió política Eco, operación visible, aprobación/exportación y demo offline sin romper el core local-first. En el checkout actual, la funcionalidad pasa y el gate queda bloqueado únicamente por `source_tree_clean`.
+La DoD histórica del hardening quedó satisfecha. Wave 1 cerró el **hueco UI/contrato** de cuarentena e ingesta manual y endureció el **camino &lt;8 GB**. Wave 2 añadió política Eco, operación visible, aprobación/exportación y demo offline sin romper el core local-first. Las fuentes montadas completan el último alcance operativo y el checkout actual devuelve `READY`.

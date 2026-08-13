@@ -101,7 +101,7 @@ class VaultCorpusProvider:
             return []
 
         relative_path = path.relative_to(self.vault_root).as_posix()
-        document_id = document_id_for_relative_path(relative_path)
+        document_id = str(metadata.get("note_id") or document_id_for_relative_path(relative_path))
         theme = self._theme_for_root(output_root)
         issue = str(metadata.get("issue") or path.parent.name or "_Sin_Cuestion")
         return [

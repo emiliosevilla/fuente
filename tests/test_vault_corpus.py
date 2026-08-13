@@ -93,6 +93,34 @@ def test_corpus_loads_only_authorized_markdown_and_preserves_identity(tmp_path):
     ]
 
 
+def test_corpus_uses_v2_note_id_when_route_changes(tmp_path):
+    output = tmp_path / "4_salida"
+    note = output / "Tema" / "antigua.md"
+    note.parent.mkdir(parents=True)
+    note_id = "4ca13d5c-4d78-4f37-8c3c-d1dc530a4dc9"
+    note.write_text(
+        serialize_frontmatter(
+            {
+                "schema_version": 2,
+                "note_id": note_id,
+                "note_type": "concept",
+                "title": "Concepto estable",
+                "theme": "Tema",
+                "issue": "Tema",
+                "status": "approved",
+            }
+        )
+        + "# Contenido estable\n",
+        encoding="utf-8",
+    )
+    note.rename(output / "Tema" / "nueva.md")
+
+    chunks = VaultCorpusProvider(vault_root=tmp_path).load()
+
+    assert chunks
+    assert {chunk["metadata"]["document_id"] for chunk in chunks} == {note_id}
+
+
 def test_eco_strict_policy_is_not_needed_to_load_corpus_but_is_explicit(tmp_path):
     config = AppConfig(vault=VaultConfig(vault_path=tmp_path), resource_profile="eco_strict")
     policy = resolve_runtime_policy(config, budget=None)

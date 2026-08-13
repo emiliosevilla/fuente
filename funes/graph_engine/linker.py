@@ -65,12 +65,12 @@ class GraphLinker:
         if not self.output_dir.exists():
             return []
 
-        discovered: list[tuple[str, Path]] = []
+        discovered: list[tuple[str, Path, str | None]] = []
         for file_path in sorted(self.output_dir.rglob("*.md")):
             if not file_path.is_file() or self._is_excluded(file_path):
                 continue
             try:
-                MarkdownDocument.from_markdown(file_path.read_text(encoding="utf-8"))
+                document = MarkdownDocument.from_markdown(file_path.read_text(encoding="utf-8"))
             except (OSError, UnicodeError, ValueError):
                 logger.warning(
                     "Skipping invalid note during title discovery: %s",
@@ -78,14 +78,14 @@ class GraphLinker:
                 )
                 continue
             relative = file_path.resolve().relative_to(self.output_dir.resolve()).as_posix()
-            discovered.append((relative, file_path))
+            discovered.append((relative, file_path, document.note_id))
 
         stem_counts: dict[str, int] = {}
-        for _, path in discovered:
+        for _, path, _note_id in discovered:
             stem_counts[path.stem] = stem_counts.get(path.stem, 0) + 1
 
         notes: list[NoteLinkTarget] = []
-        for relative, path in discovered:
+        for relative, path, note_id in discovered:
             stem = path.stem
             if stem_counts[stem] > 1:
                 link_target = relative[: -len(".md")] if relative.endswith(".md") else relative
@@ -93,9 +93,8 @@ class GraphLinker:
                 link_target = stem
             notes.append(
                 NoteLinkTarget(
-                    document_id=document_id_for_relative_path(
-                        self._vault_relative_path(relative)
-                    ),
+                    document_id=note_id
+                    or document_id_for_relative_path(self._vault_relative_path(relative)),
                     relative_path=relative,
                     stem=stem,
                     link_target=link_target,

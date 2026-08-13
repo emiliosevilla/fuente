@@ -111,6 +111,15 @@ La interfaz (`consola_preview.html`) usa tipografías del sistema y una polític
 - **Crear Vault demo** es una acción explícita y offline. Usa recursos empaquetados, preflight y escrituras atómicas; es idempotente y bloquea colisiones sin sobrescribir documentos. No requiere servicios vivos ni red.
 - **AnythingLLM** es una integración externa de terceros y opt-in. No es una dependencia ni un prerrequisito del núcleo, y el camino por defecto no lo instala, configura, abre en navegador ni usa su base privada.
 
+### Fuentes montadas de OneDrive/SharePoint
+
+Funes puede leer una carpeta que el cliente oficial de OneDrive o SharePoint ya haya montado en el sistema de archivos. La vinculación se hace desde el selector nativo de la consola y la interfaz guarda un identificador opaco de conexión, no una ruta suministrada por el navegador.
+
+- La sincronización es unidireccional: fuente montada → `1_entrada` del tema activo. Funes no escribe en la carpeta del proveedor.
+- El recorrido es recursivo, omite elementos ocultos y enlaces simbólicos, conserva un manifiesto local para idempotencia y muestra conflictos/avisos medidos.
+- No hay OAuth, Graph API, credenciales cloud, SDK del proveedor ni conexión de red implícita. Si el cliente no monta la carpeta, Funes no la inventa ni afirma que esté disponible.
+- La matriz de pruebas y el release gate cubren el contrato de fuentes, la reconciliación, el aislamiento por tema y la proyección segura de la UI.
+
 Estas descripciones documentan contratos medidos; no implican que Ollama, Obsidian o AnythingLLM estén instalados o ejecutándose en una máquina concreta. El panel Health es la fuente de disponibilidad actual.
 
 ---

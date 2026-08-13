@@ -4,6 +4,7 @@ import logging
 import os
 import sys
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterable, List
 import tkinter as tk
@@ -243,6 +244,8 @@ class FolderSyncManager:
         self.active_theme_dir = self.vault_root
         self.set_active_theme(active_theme, active_theme_dir=active_theme_dir)
         self.last_diagnostics: list[SyncDiagnostic] = []
+        self._last_report: SyncReport | None = None
+        self._last_run_at: str | None = None
         self._extractor_registry = None
 
     def _default_active_theme_dir(self, active_theme: str) -> Path:
@@ -493,7 +496,72 @@ class FolderSyncManager:
             logger.error(f"Error guardando carpetas vinculadas: {e}")
             return False
 
-    def sync_to_input(self, input_dir: Path, dirty_dir: Path) -> SyncReport:
+    def get_sync_sources(self) -> list[dict[str, object]]:
+        """Return a browser-safe source inventory without exposing roots."""
+        return [
+            {
+                "id": connection.connection_id,
+                "provider": connection.provider,
+                "display_name": connection.display_name,
+                "enabled": connection.enabled,
+            }
+            for connection in self.load_connections()
+        ]
+
+    @staticmethod
+    def _safe_diagnostic(diagnostic: SyncDiagnostic) -> dict[str, str]:
+        """Project diagnostics without leaking absolute provider or vault paths."""
+        return {
+            "code": diagnostic.code,
+            "path": Path(diagnostic.path).name or "<source>",
+            "message": diagnostic.code,
+        }
+
+    @classmethod
+    def public_sync_report(cls, report: SyncReport | None) -> dict[str, object]:
+        """Project one report for the UI without exposing filesystem identities."""
+        if report is None:
+            return {
+                "copied": 0,
+                "unchanged": 0,
+                "scanned": 0,
+                "manifest_updates": 0,
+                "conflicts": [],
+                "diagnostics": [],
+            }
+        return {
+            "copied": getattr(report, "copied", 0),
+            "unchanged": getattr(report, "unchanged", 0),
+            "scanned": getattr(report, "scanned", 0),
+            "manifest_updates": getattr(report, "manifest_updates", 0),
+            "conflicts": [
+                {
+                    "source_relative_path": conflict.source_relative_path,
+                    "destination_relative": conflict.destination_relative,
+                    "reason": conflict.reason,
+                }
+                for conflict in getattr(report, "conflicts", [])
+            ],
+            "diagnostics": [
+                cls._safe_diagnostic(item)
+                for item in getattr(report, "diagnostics", [])
+            ],
+        }
+
+    def get_last_sync_status(self) -> dict[str, object]:
+        report = self._last_report
+        return {
+            "last_run_at": self._last_run_at,
+            "report": None if report is None else self.public_sync_report(report),
+        }
+
+    def sync_to_input(
+        self,
+        input_dir: Path,
+        dirty_dir: Path,
+        *,
+        connection_ids: list[str] | None = None,
+    ) -> SyncReport:
         """
         Reconcile provider files into the exact active-theme ``1_entrada``.
 
@@ -512,6 +580,17 @@ class FolderSyncManager:
             Path(input_dir), Path(dirty_dir)
         )
         connected = self.load_connections()
+        if connection_ids:
+            requested_ids = set(connection_ids)
+            known_ids = {connection.connection_id for connection in connected}
+            unknown_ids = requested_ids - known_ids
+            if unknown_ids:
+                raise ValueError("unknown sync connection ID")
+            connected = [
+                connection
+                for connection in connected
+                if connection.connection_id in requested_ids
+            ]
         sources: list[SourceFile] = []
         diagnostics: list[SyncDiagnostic] = []
 
@@ -615,7 +694,7 @@ class FolderSyncManager:
                         unchanged_count += 1
 
         self.last_diagnostics = skipped
-        return SyncReport(
+        report = SyncReport(
             copied=copied_count,
             unchanged=unchanged_count,
             conflicts=conflicts,
@@ -625,6 +704,9 @@ class FolderSyncManager:
             diagnostics=skipped,
             source_files=tuple(sources),
         )
+        self._last_report = report
+        self._last_run_at = datetime.now(timezone.utc).isoformat()
+        return report
 
     @staticmethod
     def _source_key(source: SourceFile) -> str:

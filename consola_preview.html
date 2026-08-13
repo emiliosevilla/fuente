@@ -73,7 +73,7 @@
                 <button class="btn-primary" id="btn-run-optimized" data-onclick-command="triggerOptimizedCycle()">
                     <span id="optimized-spinner" class="is-hidden">⚙️</span> Nuevo Flujo de Trabajo
                 </button>
-                <button class="btn-secondary" data-onclick-command="triggerAction('flush_sources')">
+                <button class="btn-secondary" data-onclick-command="syncAllSources()">
                     Actualizar Fuentes
                 </button>
                 <button class="btn-secondary" data-onclick-command="openApprovalInbox()">
@@ -510,6 +510,7 @@
                         <div id="linked-input-folders-list" class="console-layout-042">
                             <div class="console-text-017">No hay carpetas de ingesta vinculadas.</div>
                         </div>
+                        <div id="sync-status-summary" class="console-text-017">Sin sincronización ejecutada en esta sesión.</div>
                     </div>
 
                     <!-- CONEXIONES DE SALIDA (4_SALIDA) -->
@@ -848,6 +849,7 @@
                 'browseVaultFolder()': browseVaultFolder,
                 'addLinkedInputFolder()': addLinkedInputFolder,
                 'addLinkedOutputFolder()': addLinkedOutputFolder,
+                'syncAllSources()': syncAllSources,
                 'resetDefaultSettings()': resetDefaultSettings,
                 'saveSettings()': saveSettings,
                 'openApprovalInbox()': openApprovalInbox,
@@ -2033,9 +2035,9 @@
                         document.getElementById('stat-input-direct-count').innerText = state.stats.input || '0';
                     }
                 });
-                window.pywebview.api.get_settings_info().then(function(info) {
-                    if (info && info.input_connected_folders) {
-                        document.getElementById('stat-input-sources-count').innerText = info.input_connected_folders.length;
+                window.pywebview.api.get_sync_sources().then(function(info) {
+                    if (info && Array.isArray(info.sources)) {
+                        document.getElementById('stat-input-sources-count').innerText = info.sources.length;
                     }
                 });
             } else {
@@ -2140,7 +2142,7 @@
             }
         }
 
-        let linkedInputFolders = [];
+        let linkedInputSources = [];
         let linkedOutputFolders = [];
 
         function pickBrowserFolder(callback) {
@@ -2200,32 +2202,45 @@
         function addLinkedInputFolder() {
             log('Abriendo selector nativo del Finder para Fuentes de Ingesta...');
             if (window.pywebview && window.pywebview.api) {
-                window.pywebview.api.select_folder("Vincular Carpeta de Ingesta (1_entrada)").then(function(folder) {
-                    if (folder && !linkedInputFolders.includes(folder)) {
-                        linkedInputFolders.push(folder);
-                        renderLinkedFolders();
-                        log('Carpeta de ingesta vinculada: ' + folder);
-                    } else if (!folder) {
+                window.pywebview.api.select_sync_folder("Vincular Carpeta de Ingesta (1_entrada)").then(function(selection) {
+                    if (!selection || selection.status === 'cancelled') {
                         log('Selección de ingesta cancelada.');
+                        return;
                     }
+                    if (selection.error) {
+                        log('Error en selector de ingesta: ' + selection.message);
+                        return;
+                    }
+                    const label = (selection.display_name || 'carpeta') + ' [' + (selection.provider || 'local') + ']';
+                    if (!confirm('¿Vincular ' + label + '? Funes leerá esta carpeta y copiará hacia el tema activo.')) return;
+                    return window.pywebview.api.confirm_sync_source({ selection_id: selection.selection_id });
+                }).then(function(result) {
+                    if (!result) return;
+                    if (result.error) {
+                        log('Error guardando fuente de ingesta: ' + result.message);
+                        return;
+                    }
+                    updateSyncSources(result);
+                    log('Fuente de ingesta vinculada.');
                 }).catch(function(err) {
                     log('Error en selector de ingesta: ' + err);
                 });
             } else {
-                pickBrowserFolder(function(folder) {
-                    if (folder && !linkedInputFolders.includes(folder)) {
-                        linkedInputFolders.push(folder);
-                        renderLinkedFolders();
-                        log('Carpeta de ingesta vinculada: ' + folder);
-                    }
-                });
+                log('La vinculación de fuentes requiere el selector nativo de Funes.');
             }
         }
 
         function removeLinkedInputFolder(idx) {
-            const removed = linkedInputFolders.splice(idx, 1);
-            renderLinkedFolders();
-            log('Carpeta de ingesta desvinculada: ' + removed);
+            const source = linkedInputSources[idx];
+            if (!source || !window.pywebview || !window.pywebview.api) return;
+            window.pywebview.api.remove_sync_source(source.id).then(function(result) {
+                if (result && result.error) {
+                    log('Error desvinculando fuente: ' + result.message);
+                    return;
+                }
+                updateSyncSources(result);
+                log('Fuente de ingesta desvinculada.');
+            });
         }
 
         function addLinkedOutputFolder() {
@@ -2288,15 +2303,85 @@
                 });
             }
 
-            renderFolderList(inputEl, linkedInputFolders, 'No hay carpetas de ingesta vinculadas.', removeLinkedInputFolder);
+            if (inputEl) {
+                inputEl.replaceChildren();
+                if (linkedInputSources.length === 0) {
+                    const empty = document.createElement('div');
+                    empty.classList.add('console-text-017');
+                    empty.textContent = 'No hay fuentes de ingesta vinculadas.';
+                    inputEl.appendChild(empty);
+                } else {
+                    linkedInputSources.forEach(function(source, index) {
+                        const item = document.createElement('div');
+                        item.classList.add('console-layout-067');
+                        const label = document.createElement('span');
+                        label.textContent = (source.display_name || 'Fuente') + ' [' + (source.provider || 'local') + ']' + (source.enabled ? '' : ' — desactivada');
+                        const remove = document.createElement('button');
+                        remove.type = 'button';
+                        remove.classList.add('console-text-031');
+                        remove.textContent = '×';
+                        remove.addEventListener('click', function() { removeLinkedInputFolder(index); });
+                        item.append(label, remove);
+                        inputEl.appendChild(item);
+                    });
+                }
+            }
             renderFolderList(outputEl, linkedOutputFolders, 'No hay carpetas de destino vinculadas.', removeLinkedOutputFolder);
+        }
+
+        function renderSyncStatus(result) {
+            const statusEl = document.getElementById('sync-status-summary');
+            if (!statusEl || !result) return;
+            if (result.error) {
+                statusEl.textContent = 'Error de sincronización: ' + (result.message || result.error);
+                return;
+            }
+            const copied = Number(result.copied || 0);
+            const unchanged = Number(result.unchanged || 0);
+            const conflicts = Array.isArray(result.conflicts) ? result.conflicts : [];
+            const diagnostics = Array.isArray(result.diagnostics) ? result.diagnostics : [];
+            statusEl.textContent = result.last_run_at
+                ? 'Última sincronización: ' + copied + ' nuevos, ' + unchanged + ' sin cambios, ' + conflicts.length + ' conflictos, ' + diagnostics.length + ' avisos.'
+                : 'Sin sincronización ejecutada en esta sesión.';
+        }
+
+        function updateSyncSources(result) {
+            if (!result) return;
+            if (Array.isArray(result.sources)) linkedInputSources = result.sources;
+            renderLinkedFolders();
+            renderSyncStatus(result.report ? Object.assign({}, result.report, { last_run_at: result.last_run_at }) : result);
+        }
+
+        function syncAllSources() {
+            if (!(window.pywebview && window.pywebview.api)) {
+                log('La sincronización requiere la consola nativa de Funes.');
+                return;
+            }
+            updateStepBadge('badge-step1');
+            log('Sincronizando fuentes vinculadas hacia el tema activo...');
+            window.pywebview.api.sync_sources({ connection_ids: [] }).then(function(result) {
+                updateSyncSources(result);
+                if (result && result.error) {
+                    log('Error sincronizando fuentes: ' + result.message);
+                    return;
+                }
+                updateDashboardStats(result.stats);
+                log('Sincronización completada: ' + Number(result.copied || 0) + ' archivos nuevos; ' + Number((result.conflicts || []).length) + ' conflictos.');
+            }).catch(function(err) {
+                log('Error sincronizando fuentes: ' + err);
+            });
         }
 
         function loadSettingsData() {
             if (window.pywebview && window.pywebview.api) {
-                window.pywebview.api.get_settings_info().then(function(info) {
+                Promise.all([
+                    window.pywebview.api.get_settings_info(),
+                    window.pywebview.api.get_sync_sources()
+                ]).then(function(results) {
+                    const info = results[0];
+                    const syncState = results[1];
                     if (info.vault_path) { document.getElementById('setting-vault-path').value = info.vault_path; }
-                    if (info.input_connected_folders) { linkedInputFolders = info.input_connected_folders; }
+                    if (syncState && Array.isArray(syncState.sources)) { linkedInputSources = syncState.sources; }
                     if (info.output_connected_folders) { linkedOutputFolders = info.output_connected_folders; }
                     if (info.ollama_url) { document.getElementById('setting-ollama-url').value = info.ollama_url; }
                     if (info.ram_margin) { document.getElementById('setting-ram-margin').value = info.ram_margin; }
@@ -2308,6 +2393,7 @@
                     }
                     if (info.offline_mode) { applyOfflineModeState(info.offline_mode); }
                     renderLinkedFolders();
+                    updateSyncSources(syncState);
                     populateOllamaModels(info.models, info.current_model);
                 });
             } else {
@@ -2315,6 +2401,7 @@
                     document.getElementById('setting-vault-path').value = '/Users/emiliosevillaortego/Documents/Funes_Vault';
                 }
                 renderLinkedFolders();
+                renderSyncStatus(null);
                 populateOllamaModels([], '');
             }
         }
@@ -4408,7 +4495,6 @@
                 resource_profile: document.getElementById('setting-resource-profile').value,
                 audio_mode: document.getElementById('setting-audio-mode').value,
                 whisper_model_path: (document.getElementById('setting-whisper-model-path') || {}).value || null,
-                input_connected_folders: linkedInputFolders,
                 output_connected_folders: linkedOutputFolders
             };
             if (window.pywebview && window.pywebview.api) {

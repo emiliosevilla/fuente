@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path, PureWindowsPath
 from typing import TYPE_CHECKING, Any, Mapping, Optional
 
@@ -145,6 +146,77 @@ class FunesPyWebViewApi:
     def get_health(self) -> dict[str, Any]:
         """Return a current read-only health snapshot for the first-run UI."""
         return self.backend.get_health()
+
+    @staticmethod
+    def _sync_connection_id(value: object) -> str | ErrorResult:
+        if not isinstance(value, str) or not re.fullmatch(r"sync_[0-9a-f]{24}", value):
+            return FunesPyWebViewApi._error(
+                "invalid_payload", "connection_id must be an opaque sync ID"
+            )
+        return value
+
+    def get_sync_sources(self) -> dict[str, Any]:
+        return self.backend.get_sync_sources()
+
+    def select_sync_folder(self, title: object = "Vincular carpeta de sincronización") -> dict[str, Any] | ErrorResult:
+        valid_title = self._text(title, "title", required=False)
+        if isinstance(valid_title, dict):
+            return valid_title
+        if len(valid_title) > 120:
+            return self._error("invalid_payload", "title is too long")
+        return self.backend.select_sync_folder(valid_title or "Vincular carpeta de sincronización")
+
+    def confirm_sync_source(self, payload: object) -> dict[str, Any] | ErrorResult:
+        parsed = self._payload(payload)
+        if isinstance(parsed, dict) and "error" in parsed:
+            return parsed
+        assert isinstance(parsed, dict)
+        if set(parsed) != {"selection_id"} or not isinstance(parsed["selection_id"], str):
+            return self._error("invalid_payload", "selection_id is required")
+        if "/" in parsed["selection_id"] or "\\" in parsed["selection_id"]:
+            return self._error("invalid_payload", "selection_id must be opaque")
+        return self.backend.confirm_sync_source(parsed["selection_id"])
+
+    def sync_sources(self, payload: object) -> dict[str, Any] | ErrorResult:
+        parsed = self._payload(payload)
+        if isinstance(parsed, dict) and "error" in parsed:
+            return parsed
+        assert isinstance(parsed, dict)
+        if set(parsed) - {"connection_ids"}:
+            return self._error("invalid_payload", "Unsupported sync field")
+        connection_ids = parsed.get("connection_ids")
+        if not isinstance(connection_ids, list):
+            return self._error("invalid_payload", "connection_ids must be a list")
+        normalized: list[str] = []
+        for connection_id in connection_ids:
+            valid_id = self._sync_connection_id(connection_id)
+            if isinstance(valid_id, dict):
+                return self._error(
+                    "invalid_payload",
+                    "connection_ids must contain opaque connection IDs",
+                )
+            normalized.append(valid_id)
+        return self.backend.sync_sources(normalized)
+
+    def remove_sync_source(self, connection_id: object) -> dict[str, Any] | ErrorResult:
+        valid_id = self._sync_connection_id(connection_id)
+        if isinstance(valid_id, dict):
+            return valid_id
+        return self.backend.remove_sync_source(valid_id)
+
+    def set_sync_source_enabled(self, payload: object) -> dict[str, Any] | ErrorResult:
+        parsed = self._payload(payload)
+        if isinstance(parsed, dict) and "error" in parsed:
+            return parsed
+        assert isinstance(parsed, dict)
+        if set(parsed) != {"connection_id", "enabled"}:
+            return self._error("invalid_payload", "Unsupported sync field")
+        valid_id = self._sync_connection_id(parsed["connection_id"])
+        if isinstance(valid_id, dict):
+            return valid_id
+        if not isinstance(parsed["enabled"], bool):
+            return self._error("invalid_payload", "enabled must be a boolean")
+        return self.backend.set_sync_source_enabled(valid_id, parsed["enabled"])
 
     def get_onboarding(self) -> dict[str, Any]:
         """Return onboarding state without causing an automatic installation."""
@@ -295,9 +367,13 @@ class FunesPyWebViewApi:
             "resource_profile",
             "audio_mode",
             "whisper_model_path",
-            "input_connected_folders",
             "output_connected_folders",
         }
+        if "input_connected_folders" in parsed:
+            return self._error(
+                "invalid_payload",
+                "input_connected_folders is managed by the sync API",
+            )
         if set(parsed) - allowed:
             return self._error("invalid_payload", "Unsupported settings field")
         string_fields = {
@@ -327,11 +403,13 @@ class FunesPyWebViewApi:
             return self._error(
                 "invalid_payload", "allow_non_loopback_ollama must be a boolean"
             )
-        for field in {"input_connected_folders", "output_connected_folders"} & set(parsed):
-            if not isinstance(parsed[field], list) or not all(
-                isinstance(folder, str) for folder in parsed[field]
-            ):
-                return self._error("invalid_payload", f"{field} must be a list of strings")
+        if "output_connected_folders" in parsed and (
+            not isinstance(parsed["output_connected_folders"], list)
+            or not all(isinstance(folder, str) for folder in parsed["output_connected_folders"])
+        ):
+            return self._error(
+                "invalid_payload", "output_connected_folders must be a list of strings"
+            )
         return self.backend.save_settings(parsed)
 
     def select_folder(self, title: object = "Seleccionar Carpeta") -> str | ErrorResult:

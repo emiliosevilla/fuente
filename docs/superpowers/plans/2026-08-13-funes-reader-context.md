@@ -1,5 +1,9 @@
 # Funes Reader Context — Implementation Plan
 
+> **Suspendido para implementación nueva (2026-08-14):** el lector posterior
+> debe exponer `origins` y usar los tokens visuales Fuente basados en Nord.
+> Seguir primero el [plan de Fuente](2026-08-14-fuente-canonical-record-rename-and-nord.md).
+
 > **For the implementer:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
 **Goal:** evolve the local reader into the three-pane context used by the target Obsidian workflow: note at left, validated properties at right-top and a bounded local graph at right-bottom.

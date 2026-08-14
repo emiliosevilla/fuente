@@ -1,5 +1,11 @@
 # Funes Editorial Library — Design Specification
 
+> **Dirección reemplazada para cambios futuros (2026-08-14):** el registro
+> canónico pasa a ser el Markdown aprobado de `3_limpio`; `Fuentes` pasa a
+> `Sumarios`; y Funes se convertirá en Fuente. Esta especificación conserva el
+> diseño v2 como antecedente técnico. Aplicar en adelante
+> [`2026-08-14-fuente-canonical-record-and-terminology.md`](2026-08-14-fuente-canonical-record-and-terminology.md).
+
 **Goal:** evolve Funes from a route-oriented local ETL into a safe editorial
 library for Obsidian. The Markdown Vault remains portable and authoritative;
 SQLite, graph and RAG are reconstructible derived indexes. The result must

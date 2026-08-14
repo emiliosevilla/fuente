@@ -91,6 +91,9 @@ class TestRAG(unittest.TestCase):
                     call(include=["documents", "metadatas"]),
                 ],
             )
+            mock_chromadb.PersistentClient.assert_called_once_with(path=str(self.chroma_dir))
+            mock_chromadb.HttpClient.assert_not_called()
+            mock_chromadb.CloudClient.assert_not_called()
 
     def test_sqlite_patch_logic(self):
         # Probar que el parche de SQLite no falla ni lanza excepciones imprevistas

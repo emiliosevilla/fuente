@@ -1,5 +1,10 @@
 # Funes Editorial Compilation — Implementation Plan
 
+> **Suspendido para implementación nueva (2026-08-14):** los candidatos solo
+> podrán partir de revisiones aprobadas de `3_limpio`; la colección objetivo es
+> `Sumarios`, no `Fuentes`. Seguir el [plan de Fuente](2026-08-14-fuente-canonical-record-rename-and-nord.md)
+> antes de retomar estas tareas.
+
 > **For the implementer:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
 **Goal:** create trusted, specialized editorial candidates from Funes' existing pipeline using registered folder policies and typed templates, while keeping imported content and LLM output untrusted.

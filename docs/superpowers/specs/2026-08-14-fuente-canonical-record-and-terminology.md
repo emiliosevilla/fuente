@@ -26,6 +26,11 @@ historia técnica anterior se conserva como referencia de migración.
 5. La consola adoptará el lenguaje visual de la paleta Nord: Polar Night para
    estructura, Snow Storm para lectura, Frost para acciones y Aurora para
    estados semánticos. La aplicación no se presentará como producto Nord.
+6. `qwen3.5:0.8b` será el candidato predeterminado del perfil Auto
+   ultra-ligero, destinado a equipos con menos de 8 GB de RAM, cuando supere
+   el benchmark local definido en este documento. Usará una ventana de contexto
+   de 4.096 tokens y concurrencia uno. `Eco estricto` conserva su significado:
+   BM25 sin LLM. No se descarga ningún modelo automáticamente.
 
 ## 2. Autoridad, aprobación y trazabilidad
 
@@ -170,7 +175,26 @@ El lector conserva el diseño de tres zonas: nota a la izquierda; propiedades a
 la derecha arriba; grafo local a la derecha abajo. En pantallas estrechas, las
 tres zonas se apilan o se presentan como pestañas sin ocultar información.
 
-## 7. Condiciones de aceptación
+## 7. Política de IA ultra-ligera
+
+`qwen3.5:0.8b` queda designado como primera elección del nivel Auto
+ultra-ligero, condicionado al benchmark. El catálogo mantendrá
+`qwen2.5:0.5b` como alternativa de compatibilidad y BM25 como degradación si
+no cabe ningún LLM en la holgura medida.
+
+La selección requiere a la vez: memoria disponible medida, margen de seguridad
+del 35 %, modelo exacto instalado localmente, contexto limitado a 4.096 tokens
+y una única generación concurrente. Si falla cualquiera de estas condiciones,
+Fuente no lo descarga ni lo fuerza: elige la alternativa que quepa o BM25.
+
+El benchmark se ejecutará con el mismo conjunto de documentos aprobados de
+`3_limpio` para `qwen3.5:0.8b` y `qwen2.5:0.5b`. Medirá memoria, latencia y
+calidad de la salida en español. Una salida es válida solo si supera la
+validación estructural, conserva las referencias a los orígenes y no inventa
+afirmaciones que no aparezcan en ellos. La promoción exige mantener la holgura
+configurada y no empeorar esos resultados frente a la alternativa actual.
+
+## 8. Condiciones de aceptación
 
 - Ningún sumario se genera, actualiza, indexa como vigente ni exporta si alguno
   de sus orígenes no corresponde a una revisión aprobada de `3_limpio`.
@@ -186,4 +210,6 @@ tres zonas se apilan o se presentan como pestañas sin ocultar información.
   migración y la documentación histórica.
 - La consola usa los tokens Fuente derivados de Nord de forma consistente y
   conserva sus contratos de seguridad y accesibilidad.
-
+- `qwen3.5:0.8b` no se convierte en selección efectiva hasta que el benchmark
+  local confirme memoria, latencia y calidad bajo `num_ctx=4096`; antes de ese
+  momento conserva el estado de candidato predeterminado en el plan.

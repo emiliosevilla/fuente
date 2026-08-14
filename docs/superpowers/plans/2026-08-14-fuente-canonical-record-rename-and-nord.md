@@ -15,6 +15,33 @@ verificables; aplicar un sistema visual propio basado en la paleta Nord.
 que la validación de aprobación de `3_limpio` y la lectura compatible estén
 medidas. Cada fase termina con pruebas y un punto de revisión humana.
 
+## Fase 0A — Benchmark de `qwen3.5:0.8b` para RAM ultra-ligera
+
+`qwen3.5:0.8b` es el candidato predeterminado para Auto en equipos con menos
+de 8 GB de RAM, pero no se activa como selección efectiva hasta que complete
+esta fase. `Eco estricto` permanece deliberadamente en BM25 sin LLM.
+
+1. Añadir el modelo al catálogo con una estimación de memoria conservadora,
+   `num_ctx=4096` y concurrencia uno. La selección automática debe exigir que
+   el nombre exacto esté instalado; nunca puede provocar una descarga.
+2. Mantener `qwen2.5:0.5b` como alternativa de compatibilidad y BM25 como
+   degradación cuando ningún modelo satisfaga la holgura de RAM medida.
+3. Ejecutar el benchmark, en el equipo de menos de 8 GB, con una muestra fija
+   de documentos aprobados de `3_limpio`. Comparar `qwen3.5:0.8b` con
+   `qwen2.5:0.5b` usando los mismos prompts y límites de salida.
+4. Medir para cada ejecución: memoria disponible antes, durante y después;
+   latencia; longitud de salida; errores; validación estructural; y fidelidad
+   al origen. La fidelidad se revisa contra los documentos aprobados, no contra
+   el sumario generado.
+5. Promoverlo a la selección efectiva solo si conserva el margen de seguridad
+   configurado del 35 %, no fuerza descarga ni intercambio de memoria evitable,
+   y no empeora la validación ni la fidelidad respecto de `qwen2.5:0.5b`.
+
+**Pruebas de salida:** selección solo de modelo instalado; contexto de 4.096
+tokens y concurrencia uno; rechazo o BM25 con memoria insuficiente; resultados
+reproducibles del benchmark; salida que conserva estructura y orígenes. La
+promoción final requiere revisión humana de la evidencia medida.
+
 ## Fase 0 — Inventario y protección de la migración
 
 1. Medir todas las apariciones de `Funes`, `funes`, `.funes`, `Fuentes`,
@@ -167,4 +194,3 @@ sin perder paneles; comprobación humana visual en el launcher nativo.
 aprobados de `3_limpio` sostienen cualquier afirmación; `Sumarios` y demás
 notas son derivados rastreables; el nombre no se mezcla con la procedencia; y
 la interfaz usa un sistema visual consistente y accesible.
-

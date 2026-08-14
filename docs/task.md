@@ -9,6 +9,14 @@
 
 ## Objetivo, intención y restricciones (norte del producto)
 
+> **Dirección aprobada para el siguiente ciclo (2026-08-14):** antes de nuevos
+> cambios editoriales, prevalece la especificación
+> [`Fuente — registro canónico, terminología y sistema visual`](superpowers/specs/2026-08-14-fuente-canonical-record-and-terminology.md)
+> y su [plan de migración](superpowers/plans/2026-08-14-fuente-canonical-record-rename-and-nord.md).
+> `3_limpio` será el único registro canónico y requerirá aprobación humana por
+> revisión; `4_salida/Sumarios` será derivado. La conversión Funes → Fuente y
+> la adopción visual Nord están planificadas, no ejecutadas aún.
+
 | Eje | Definición operativa |
 |-----|----------------------|
 | **Objetivo** | ETL local → Vault Obsidian: notas atómicas, hiperconectadas, revisables, buscables y exportables, sin ceder el conocimiento a la nube. |

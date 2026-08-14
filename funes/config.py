@@ -2,6 +2,7 @@ import ipaddress
 import json
 import logging
 import os
+import re
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Optional
@@ -15,6 +16,27 @@ DEFAULT_OLLAMA_URL = "http://localhost:11434"
 DEFAULT_ISSUE = "_Sin_Cuestion"
 VALID_RESOURCE_PROFILES = ("auto", "eco_strict")
 VALID_AUDIO_MODES = ("auto", "skip", "tiny_cpu")
+LOCAL_OLLAMA_MODEL_NAME = re.compile(
+    r"^[A-Za-z0-9][A-Za-z0-9._-]*(?::[A-Za-z0-9][A-Za-z0-9._-]*)?$"
+)
+
+
+def validate_local_ollama_model_name(value: str) -> str:
+    """Return a safe local Ollama model identifier.
+
+    Funes delegates inference only to models already registered in Ollama. A
+    repository reference, URL, or model-loader option is not a model identifier
+    and is rejected at the settings boundary.
+    """
+    if not isinstance(value, str):
+        raise ValueError("custom_model_override must be a local Ollama model name")
+    candidate = value.strip()
+    if not candidate or not LOCAL_OLLAMA_MODEL_NAME.fullmatch(candidate):
+        raise ValueError(
+            "custom_model_override must be a local Ollama model name, not a URL, "
+            "repository reference, or loader option"
+        )
+    return candidate
 
 
 def is_loopback_ollama_url(url: str) -> bool:
@@ -216,6 +238,16 @@ class AppConfig:
             if isinstance(raw_whisper_path, str) and raw_whisper_path.strip()
             else None
         )
+        raw_model = data.get("custom_model_override", data.get("ollama_model"))
+        custom_model_override = None
+        if raw_model is not None:
+            try:
+                custom_model_override = validate_local_ollama_model_name(raw_model)
+            except ValueError:
+                logger.warning(
+                    "Ignoring unsafe custom_model_override from configuration: %r",
+                    raw_model,
+                )
         try:
             validate_ollama_url(ollama_url, allow_non_loopback)
         except ValueError:
@@ -233,9 +265,7 @@ class AppConfig:
         return cls(
             vault=vault_cfg,
             ollama_url=ollama_url,
-            custom_model_override=data.get(
-                "custom_model_override", data.get("ollama_model")
-            ),
+            custom_model_override=custom_model_override,
             ram_safety_margin_pct=margin,
             allow_non_loopback_ollama=allow_non_loopback,
             optimized_loop_interval_sec=int(data.get("optimized_loop_interval_sec", 300)),

@@ -94,6 +94,24 @@ def test_settings_service_rejects_non_loopback_ollama_without_explicit_opt_in(
     assert load_config(temp_vault_path).allow_non_loopback_ollama is True
 
 
+@pytest.mark.parametrize(
+    "unsafe_model_reference",
+    [
+        "https://models.example.invalid/team/model",
+        "team/model",
+        "hf.co/team/model",
+        '{"trust_remote_code": true}',
+    ],
+)
+def test_settings_service_rejects_model_repositories_and_loader_options(
+    temp_vault_path, unsafe_model_reference
+):
+    with pytest.raises(SettingsValidationError, match="local Ollama model name"):
+        SettingsService(load_config(temp_vault_path)).apply(
+            custom_model_override=unsafe_model_reference
+        )
+
+
 def test_settings_service_notifies_active_consumers_after_persisting(temp_vault_path):
     applied = []
     service = SettingsService(load_config(temp_vault_path), on_applied=applied.append)

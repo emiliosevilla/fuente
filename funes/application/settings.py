@@ -11,6 +11,7 @@ from funes.config import (
     VALID_AUDIO_MODES,
     VALID_RESOURCE_PROFILES,
     save_config,
+    validate_local_ollama_model_name,
     validate_ollama_url,
 )
 from funes.infrastructure.atomic_files import atomic_write_json
@@ -152,7 +153,18 @@ class SettingsService:
 
         selected_model = self.config.custom_model_override
         if custom_model_override is not None:
-            selected_model = custom_model_override.strip() or None
+            if not isinstance(custom_model_override, str):
+                raise SettingsValidationError(
+                    "custom_model_override must be a local Ollama model name"
+                )
+            raw_model = custom_model_override.strip()
+            if not raw_model:
+                selected_model = None
+            else:
+                try:
+                    selected_model = validate_local_ollama_model_name(raw_model)
+                except ValueError as error:
+                    raise SettingsValidationError(str(error)) from error
 
         selected_profile = _validated_choice(
             self.config.resource_profile

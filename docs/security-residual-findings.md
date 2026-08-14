@@ -2,7 +2,7 @@
 
 Open **P0** and **P1** findings with status **open** block release. The release gate parses the Severity and Status columns and fails only when severity is P0 or P1 **and** status is exactly `open`. Parked, resolved, and deferred rows do not block even if severity is P1.
 
-All items below are **P2 or lower** historical residuals. They remain listed for auditability, with the resolution evidence that closed them; no P0/P1 item is open.
+All items below are **P2 or lower** residuals. They remain listed for auditability with either resolution evidence or the documented controls that limit an accepted exception; no P0/P1 item is open.
 
 | ID | Severity | Area | Status | Rationale |
 |----|----------|------|--------|-----------|
@@ -17,6 +17,7 @@ All items below are **P2 or lower** historical residuals. They remain listed for
 | SEC-009 | P2 | ETL | resolved | Lifecycle-owned step-2 and graph-action regressions passed in `tests/test_console_step2_ingestion.py` and `tests/test_console_graph_lifecycle.py` |
 | SEC-010 | P2 | Contracts | resolved | `GraphLinker` emits vault-relative `document_id` via `document_id_for_relative_path` (W1-5); DOCX contract ZIP-magic check unchanged |
 | SEC-011 | P2 | Migration | resolved | Rollback flag-combination regressions passed in `tests/test_vault_migration.py`; operator documentation remains aligned |
+| SEC-012 | P2 | ChromaDB / CVE-2026-45829 | accepted with controls | `chromadb==1.5.9` is affected upstream and has no patch, but Funes uses only embedded `PersistentClient`, exposes no Chroma HTTP API, and rejects model repository, URL, and loader-option values at the settings boundary. Controls and closure criteria: [`docs/security-exceptions.md`](security-exceptions.md). |
 
 ## Verification
 

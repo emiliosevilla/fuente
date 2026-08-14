@@ -74,6 +74,16 @@ class TestConfigPersistenceAndSettings(unittest.TestCase):
 
         self.assertEqual(config.resource_profile, "auto")
 
+    def test_config_ignores_unsafe_custom_model_reference(self):
+        config = AppConfig.from_dict(
+            {
+                "vault_path": str(self.vault_path),
+                "custom_model_override": "https://models.example.invalid/team/model",
+            }
+        )
+
+        self.assertIsNone(config.custom_model_override)
+
     def test_ram_governor_viable_models_filtering(self):
         gov = RAMGovernor(safety_margin_pct=0.35)
         ram_info = gov.get_system_ram_info()

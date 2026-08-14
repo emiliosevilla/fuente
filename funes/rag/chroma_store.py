@@ -32,7 +32,12 @@ def _patch_sqlite_for_chroma() -> None:
 
 
 class ChromaStore:
-    """Administrador de la base de datos vectorial ChromaDB persistente en .funes/chroma."""
+    """Administrador de ChromaDB embebido y persistente en ``.funes/chroma``.
+
+    Security boundary: Funes creates only ``PersistentClient`` instances. It
+    never starts or connects to Chroma's network API, and no user setting can
+    supply a host, port, model repository, or model-loader option here.
+    """
 
     def __init__(self, persist_directory: Path):
         self.persist_directory = persist_directory

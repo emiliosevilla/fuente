@@ -1,5 +1,10 @@
 # Funes Editorial Foundation — Implementation Plan
 
+> **Suspendido para implementación nueva (2026-08-14):** sus tareas v2 se
+> mantienen como antecedente. Antes de continuar, aplicar el orden y la
+> terminología del [plan de Fuente](2026-08-14-fuente-canonical-record-rename-and-nord.md),
+> que fija `3_limpio` aprobado como registro canónico.
+
 > **For the implementer:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
 **Goal:** establish a persistent Markdown-backed `note_id` and a recoverable note catalog so Funes can later reorganize `4_salida` without breaking readers, jobs, graph or RAG.

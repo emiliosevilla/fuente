@@ -1,5 +1,9 @@
 # Funes Editorial Workflow Implementation Plan
 
+> **Estado: completado e histórico (2026-08-12).** Editor Markdown, reflow,
+> fusión y exportación quedaron entregados. El siguiente ciclo añade la
+> aprobación canónica de `3_limpio`; consultar [`docs/planning-index.md`](../../planning-index.md).
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Complete the human-facing editorial workflow over the canonical Markdown vault: edit a note inside the reader, request durable reflow/enrichment, detect fusion candidates, and merge only after explicit review.
@@ -421,4 +425,3 @@
 | A merge silently loses provenance | High | Preview stores source IDs/revisions and commit writes source references into frontmatter. |
 | Scope filtering rewrites unrelated issues | Medium | Resolve every scope through `AuthorizedPathResolver` and test themed recursive layouts. |
 | LLM failure leaves half-written output | High | Generate and validate in memory, then use one atomic write; durable request status records failure. |
-

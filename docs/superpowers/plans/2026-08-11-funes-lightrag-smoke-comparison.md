@@ -1,5 +1,9 @@
 # Funes LightRAG Comparative Smoke Test Plan
 
+> **Estado: aparcado; evaluación opcional, no producto (2026-08-14).**
+> LightRAG no pertenece al runtime ni al gate actual. Solo retomar con una
+> decisión explícita de evaluación; consultar [`docs/planning-index.md`](../../planning-index.md).
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Add an opt-in, reproducible comparison between Funes' current Chroma/BM25 retrieval and an externally running LightRAG server without changing Funes' production dependencies or default runtime.
@@ -348,4 +352,3 @@
 | A failed external server is mistaken for a poor score | High | Use explicit `unavailable`/`failed` states and never convert them to zero metrics. |
 | Evaluation leaks into production dependencies | High | No pyproject/installer change; isolation tests and release-gate import checks. |
 | Graph-RAG appears better on too few queries | Medium | Require repeated runs and a fixed multi-category gold set before a product decision. |
-

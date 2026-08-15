@@ -1,229 +1,233 @@
-<p align="center">
-  <img src="assets/fuente_icon.png" alt="Fuente Icon" width="128" />
-  <h1 align="center">Fuente</h1>
-</p>
+# Fuente
 
-<p align="center">
-  <b>Fuente "el memorioso"</b> es un sistema inteligente de ETL (Extracción, Transformación y Carga) e Ingesta de Conocimiento diseñado para procesar flujos diarios de archivos multiformato desestructurados y volcarlos automáticamente en tu <b>Vault de Obsidian</b> como notas atómicas hiperconectadas (<code>[[WikiLinks]]</code>). Desarrollado para la gestión inteligente, local y privada del conocimiento personal y/o profesional.
-</p>
+Fuente es una aplicación local-first para convertir archivos desordenados en
+documentos Markdown revisables dentro de un Vault de Obsidian. Mantiene el
+Markdown canónico como fuente de verdad, exige aprobación humana antes de
+publicar derivados y ofrece consola de escritorio, ejecución sin interfaz,
+búsqueda local y exportación controlada.
 
----
+El proyecto funciona sin servicios cloud obligatorios. Ollama, Chroma,
+Tesseract, FFmpeg y los convertidores opcionales se usan sólo cuando están
+instalados y la política de ejecución los permite.
 
-## 🚀 Características Principales
+## Qué hace
 
-1. **Flujo ETL de 4 Etapas**:
-   - `1_entrada/`: Carpeta de ingesta continua de archivos volcados en bruto.
-   - `2_sucio/`: Copia de respaldo original para auditoría e integridad.
-   - `3_limpio/`: Transcripción verbatim a Markdown plano (`.md`).
-   - `4_salida/`: Notas atómicas estructuradas con metadatos e interconexión masiva (`[[WikiLinks]]`).
-   - `.fuente/`: Cuarentena (`quarantine/`) y estado local; la capa vectorial Chroma es opcional en runtime según la política efectiva. En `Eco estricto` no se construye, lee ni escribe Chroma.
+- Ingresa archivos desde `1_entrada/`, conserva una copia de auditoría en
+  `2_sucio/` y genera la transcripción Markdown en `3_limpio/`.
+- Trata `3_limpio/` como registro canónico. Cada documento tiene identidad,
+  revisión y hash para ligar la aprobación a unos bytes concretos.
+- Genera resultados derivados en `4_salida/` sólo después de superar las
+  comprobaciones de aprobación y revisión editorial.
+- Mantiene el estado de jobs, configuración, cuarentena y catálogos en
+  `.fuente/`, fuera del contenido editorial.
+- Construye enlaces `[[WikiLinks]]`, catálogos y el índice MOC cuando el ciclo
+  de vida de la aplicación o una pasada explícita lo solicita.
+- Permite buscar con BM25 y, en el perfil adecuado, combinarlo con un índice
+  vectorial local y un modelo Ollama local.
+- Expone la misma lógica mediante consola de escritorio, `--flush` puntual y
+  `--headless` continuo para Docker, NAS o CI.
 
-2. **Soporte Multiformato Extensivo**:
-   - **Documentos y Tablas**: PDF, DOCX, DOC, XLSX, XLS, PPTX, CSV, JSON, HTML, MSG, TXT, MD.
-   - **Formato Académico/Científico**: LaTeX (`.tex`), TeXmacs (`.tm`) preservando expresiones matemáticas `$math$`.
-   - **Audio**: Transcripción local opcional de MP3, WAV, M4A con **Faster-Whisper**; `Eco estricto` omite audio por defecto y el modo `tiny_cpu` requiere un modelo local indicado explícitamente.
-   - **Imágenes**: OCR local para PNG, JPEG, TIFF vía **Tesseract**.
+## Flujo del Vault
 
-3. **RAM Governor (IA Adaptativa Local)**:
-   - Mantiene una holgura libre del 35% de la memoria RAM para prevenir congelamientos.
-   - Selecciona dinámicamente el modelo LLM óptimo vía Ollama según el catálogo medido, pero solo entre modelos locales ya instalados; la política no descarga automáticamente el LLM elegido.
-     - **RAM ~4 GB** (total &lt; 4,5 GB): `qwen2.5:0.5b` si cabe en holgura; si no, solo BM25 (sin Ollama).
-     - **RAM 4 – 8 GB**: `qwen2.5:0.5b` / `qwen2.5:1.5b` (el más pequeño que quepa).
-     - **RAM 8 – 16 GB**: `qwen2.5:3b`
-     - **RAM 16 – 32 GB**: `qwen2.5:7b` / `qwen2.5:14b`
-     - **RAM &gt; 32 GB**: `command-r:35b` (requiere descarga explícita; no se elige en hosts más pequeños).
+```text
+1_entrada  →  2_sucio  →  3_limpio  →  aprobación  →  4_salida
+   entrada      auditoría      canónico       humana       derivados
+```
 
-### Perfiles de ejecución: Auto y Eco estricto
+La aprobación no se deduce por estar en una carpeta. Se valida con el
+`document_id`, la revisión y el hash del Markdown. Si el documento cambia, la
+aprobación anterior deja de ser válida.
 
-El perfil guardado (`Auto` o `Eco estricto`) no es por sí solo una promesa de capacidad: la consola muestra también la política efectiva derivada de la medición actual de recursos y del catálogo local de Ollama.
+La salida derivada puede quedar en `pending_review`. No se indexa, exporta ni
+se muestra como resultado publicado mientras no cumpla el contrato editorial.
+Las proyecciones de la interfaz no sustituyen los archivos Markdown.
 
-- **Auto** mantiene el camino híbrido/vectorial y usa un modelo local exacto solo si está instalado y cabe en el presupuesto medido. Si no hay un modelo adecuado, informa la degradación y no descarga uno durante el arranque, health, ingesta o retrieval.
-- **Eco estricto** usa BM25 sobre el Markdown autorizado del Vault (`bm25_vault`), no inicializa ni consulta Chroma y desactiva las descargas de modelos. Audio queda en `skip` por defecto.
-- **Audio tiny CPU** solo se activa con un `whisper_model_path` local existente; no equivale a descargar automáticamente el modelo remoto `tiny`.
+## Funcionalidades principales
 
-4. **Bucle de Grafo Optimizado (`OptimizadoGraphLoop`)**:
-   - Refina el grafo de conocimiento: re-evalúa notas, inserta enlaces `[[WikiLinks]]` cruzados y genera/actualiza el mapa de contenidos global **`4_salida/_Indice_MOC.md`**.
-   - **Hilo de fondo** solo cuando `ApplicationLifecycle` arranca en modo `continuous` (consola GUI abierta) o `headless` (`fuente --headless`); al cerrar la consola o detener el worker, el hilo se detiene de forma acotada.
-   - **Pasadas bajo demanda**: Paso 3 de la consola (`step3_structure`), modo `--flush` (un pase opcional sin hilo persistente) y acciones manuales de tema/grafo en la consola.
-   - Sin lifecycle activo no hay servicio siempre encendido: la ingesta puntual o `--flush` pueden ejecutar un refine sin implicar un bucle autónomo permanente.
+### Ingesta y extracción
 
-5. **Tolerancia a Fallos y Alta Disponibilidad**:
-   - **Filtro de Archivos Temporales**: Ignora automáticamente archivos temporales de Office (`~$*`), descargas en curso (`.crdownload`, `.part`), y archivos bloqueados (`.tmp`, `.lock`).
-   - **Reintentos en Red**: Resistencia ante micro-cortes en unidades de red compartidas (`SMB/NFS`).
-   - **Compatibilidad SQLite**: Auto-parche para versiones heredadas de SQLite mediante `pysqlite3`.
-   - **Aislamiento de Cuarentena**: Archivos defectuosos se trasladan a `.fuente/quarantine/` sin detener el flujo de ingesta.
+El pipeline detecta archivos estables, filtra temporales y procesa, según las
+dependencias instaladas:
 
----
+- PDF, DOCX/DOC, XLSX/XLS, PPTX, CSV, JSON, HTML, MSG, TXT y Markdown.
+- TeX y TeXmacs.
+- Audio local MP3, WAV y M4A mediante Faster-Whisper opcional.
+- OCR local para PNG, JPEG y TIFF mediante Tesseract opcional.
 
-## 📦 Instalación y Uso Rápido
+Los errores de procesamiento pasan a la cuarentena sin detener todo el flujo.
+Los jobs son durables, reanudables y tienen estados y razones explícitos.
 
-Puedes iniciar Fuente de forma inmediata usando los scripts oficiales preconfigurados:
+### Edición y revisión editorial
 
-- **Windows**: Haz doble clic en `instalar_fuente.bat`
-- **macOS**: Haz doble clic en `instalar_fuente.command`
+- Editor de Markdown con proyección segura para la interfaz.
+- Edición compare-and-swap (CAS) para no sobrescribir cambios concurrentes.
+- Ledger de aprobaciones ligado a identidad, revisión y hash.
+- Reflow de enlaces y enriquecimiento como jobs explícitos y recuperables.
+- Detección determinista de candidatos de fusión.
+- Fusión `preview-then-commit` que conserva las notas de origen.
+- Exportación separada de la aprobación y con comprobación de publicación.
 
-Estos scripts instalarán el entorno virtual, crearán los accesos directos de escritorio (`Fuente.lnk` / `Fuente.command`) y lanzarán la aplicación.
+### Búsqueda, RAG y recursos
 
-### Instalación manual por conjuntos de funcionalidades
+- BM25 sobre el Markdown autorizado del Vault.
+- Búsqueda híbrida con Chroma local cuando el perfil lo permite.
+- Chunk IDs deterministas y reconciliación del índice.
+- Ollama por loopback (`http://localhost:11434`) como ruta predeterminada.
+- RAM Governor que mide memoria, catálogo local y presupuesto antes de elegir
+  un modelo.
+- Perfil `Eco estricto`, que usa BM25, no inicializa Chroma y omite audio por
+  defecto.
+- `qwen3.5:0.8b` permanece como candidato hasta disponer de un benchmark real
+  sobre documentos canónicos aprobados.
 
-El núcleo ETL/RAG se instala con:
+### Consola y operación
+
+- Consola central con Health, configuración, cola de jobs, revisión,
+  búsqueda, lector, editor, exportación y acciones de grafo.
+- Bridge tipado entre la interfaz y el backend.
+- Selección nativa de Vault y de carpetas montadas.
+- Modo continuo con interfaz gráfica.
+- Modo `--headless` sin Tkinter ni PyWebView.
+- Modo `--flush` para una pasada determinista sin hilos persistentes.
+- Vault demo instalable de forma explícita, offline, idempotente y segura ante
+  colisiones.
+
+### Bucle de Grafo
+
+`OptimizadoGraphLoop` refina enlaces, catálogos y el índice MOC bajo el control
+de `ApplicationLifecycle`. En modo `continuous` de la consola y en modo
+`headless` puede ejecutarse como servicio mientras el ciclo de vida está
+activo; no es un proceso permanente independiente. También puede ejecutarse
+de forma puntual desde el paso 3 de la consola (`step3_structure`) o con
+`--flush`, sin dejar un hilo persistente.
+
+### Flujo editorial
+
+El flujo editorial usa Markdown con `frontmatter` como fuente canónica y
+protege las ediciones mediante `compare-and-swap` (CAS). El `reflow` y el
+enriquecimiento son jobs `durable` y recuperables; la detección de `candidate`
+es determinista; la `fusion` usa `preview-then-commit` y es
+`source-preserving`. Quedan **fuera de alcance: TipTap, native Graph API/OAuth,
+LightRAG en producción y credenciales cloud**.
+
+### Carpetas montadas
+
+Fuente puede leer una carpeta que OneDrive o SharePoint ya haya montado en el
+sistema de archivos. La sincronización es unidireccional hacia
+`1_entrada/`. No implementa OAuth, Graph API, credenciales cloud ni escritura
+de vuelta al proveedor. La carpeta debe estar montada por el cliente oficial.
+
+## Módulos del paquete
+
+| Módulo | Responsabilidad |
+|---|---|
+| `fuente/main.py` | Entrada CLI, GUI, `--flush` y `--headless`. |
+| `fuente/application/` | Casos de uso: ingesta, jobs, aprobación, edición, reflow, fusión, búsqueda, exportación y ciclo de vida. |
+| `fuente/domain/` | Contratos de documentos, frontmatter, identidades, paths autorizados, aprobaciones, jobs, orígenes y sincronización. |
+| `fuente/core/` | Gestión del Vault, sincronización de carpetas y comprobaciones de aplicaciones. |
+| `fuente/watcher/` | Monitor de archivos y pipeline ETL reanudable. |
+| `fuente/extractors/` | Extractores nativos y adaptadores opcionales de Office, audio, OCR y TeX. |
+| `fuente/graph_engine/` | Generación de notas derivadas, enlaces, catálogos y MOC. |
+| `fuente/rag/` | Chroma, BM25, chunking, corpus autorizado e índices deterministas. |
+| `fuente/ram_governor/` | Medición de recursos, presupuestos y selección de política/modelo. |
+| `fuente/infrastructure/` | Escrituras atómicas, SQLite, migraciones y manifiestos reversibles. |
+| `fuente/ui/` | Bridge PyWebView, proyecciones Markdown e historial del lector. |
+| `scripts/` | Migración de Vault, benchmark y release gate. |
+
+## Instalación
+
+Requisitos base: Python 3.10 o superior. Obsidian es el destino editorial;
+Ollama es opcional y sólo se necesita para las funciones de inferencia local.
+
+### Instalación editable
 
 ```bash
 pip install -e .
 ```
 
-Las capacidades opcionales se activan con *extras* de `pyproject.toml`:
+Extras disponibles:
 
-| Extra | Comando | Habilita |
-|-------|---------|----------|
-| Consola PyWebView | `pip install -e ".[webview]"` | Interfaz web nativa (fallback Tkinter si falta) |
-| Audio | `pip install -e ".[audio]"` | Transcripción local con faster-whisper |
-| OCR | `pip install -e ".[ocr]"` | OCR de imágenes vía pytesseract + Pillow |
-| Office avanzado | `pip install -e ".[office]"` | MarkItDown y Docling como convertidores prioritarios |
-| Escritorio completo | `pip install -e ".[all]"` | webview + audio + ocr + office |
-| Desarrollo / empaquetado | `pip install -e ".[dev]"` | PyInstaller para `fuente.spec` |
-| Pruebas | `pip install -e ".[test]"` | pytest |
+| Extra | Comando | Funcionalidad |
+|---|---|---|
+| `webview` | `pip install -e ".[webview]"` | Consola PyWebView; existe fallback nativo. |
+| `audio` | `pip install -e ".[audio]"` | Faster-Whisper local. |
+| `ocr` | `pip install -e ".[ocr]"` | Pillow, pytesseract y OCR de imágenes. |
+| `office` | `pip install -e ".[office]"` | MarkItDown y Docling como convertidores opcionales. |
+| `all` | `pip install -e ".[all]"` | Todos los extras de usuario. |
+| `dev` | `pip install -e ".[dev]"` | PyInstaller para empaquetado. |
+| `test` | `pip install -e ".[test]"` | Pytest. |
 
-**Binarios de sistema** (Tesseract, FFmpeg, Ollama, Obsidian) no los instala pip. Consulta la matriz completa de dependencias, versiones registradas y comprobaciones de entorno en [`docs/dependency-matrix.md`](docs/dependency-matrix.md).
+Los binarios de sistema no los instala pip. Consulta
+[`docs/dependency-matrix.md`](docs/dependency-matrix.md) para Tesseract,
+FFmpeg, Ollama y las comprobaciones de entorno.
 
-### Modo offline, instalación e inferencia
+### Instaladores
 
-Fuente distingue dos fases con requisitos de red distintos:
+- macOS: `instalar_fuente.command`
+- Windows: `instalar_fuente.bat`
 
-| Fase | Qué implica red | Comportamiento por defecto |
-|------|-----------------|----------------------------|
-| **Instalación** | `pip install`, descarga de modelos Ollama, binarios del sistema | Puede requerir Internet una vez; no forma parte del runtime diario |
-| **Inferencia en ejecución** | Peticiones HTTP a Ollama durante ETL, chat y refinamiento | Solo loopback (`http://localhost:11434`); URLs no loopback se rechazan salvo opt-in explícito |
+Los instaladores preparan el entorno, comprueban requisitos y crean los
+accesos directos correspondientes. No descargan modelos de Ollama durante el
+arranque normal.
 
-Las descargas de paquetes, binarios o modelos son acciones de instalación/configuración explícitas; no hay descargas de startup ni se arrancan servicios externos automáticamente. Auto mide lo que ya existe para seleccionar el LLM y Eco puede funcionar sin Ollama ni Chroma en su ruta BM25.
+## Uso
 
-En la consola, el indicador **Modo de red** muestra `Solo local` o `IA remota habilitada` según la URL de Ollama configurada. El texto del chat y los ajustes nunca afirman procesamiento 100% local cuando hay un endpoint externo activo.
+Después de instalar el paquete:
 
-Para habilitar un Ollama remoto (p. ej. en Docker), marca **Permitir Ollama fuera de este equipo** en Ajustes o define `ALLOW_NON_LOOPBACK_OLLAMA=true` junto con `OLLAMA_URL`.
+```bash
+# Consola de escritorio
+fuente --vault /ruta/al/Vault
 
-La interfaz (`consola_preview.html`) usa tipografías del sistema y una política CSP estricta: no carga fuentes ni scripts desde CDNs en tiempo de ejecución.
+# Una pasada determinista sin hilos persistentes
+fuente --flush --vault /ruta/al/Vault
 
-### Operación visible y demo offline
-
-- El panel **Health** realiza un snapshot de solo lectura y muestra estados medidos (`ok`, `missing`, `unreachable`, `blocked`, `optional` o `unknown`) con su instante de comprobación. No instala ni repara herramientas.
-- La **cola** muestra estado, etapa, revisión y razón durable. Cancelar es cooperativo en los límites de etapa; una petición pendiente se conserva, y un trabajo `skipped` puede reencolarse como un nuevo trabajo solo si la fuente sigue disponible.
-- **Aprobar y exportar** son dos resultados explícitos: la aprobación canónica puede quedar confirmada aunque falle la preparación de la exportación; la UI ofrece el reintento de exportación sin deshacer la aprobación.
-- **Crear Vault demo** es una acción explícita y offline. Usa recursos empaquetados, preflight y escrituras atómicas; es idempotente y bloquea colisiones sin sobrescribir documentos. No requiere servicios vivos ni red.
-- **AnythingLLM** es una integración externa de terceros y opt-in. No es una dependencia ni un prerrequisito del núcleo, y el camino por defecto no lo instala, configura, abre en navegador ni usa su base privada.
-
-### Fuentes montadas de OneDrive/SharePoint
-
-Fuente puede leer una carpeta que el cliente oficial de OneDrive o SharePoint ya haya montado en el sistema de archivos. La vinculación se hace desde el selector nativo de la consola y la interfaz guarda un identificador opaco de conexión, no una ruta suministrada por el navegador.
-
-- La sincronización es unidireccional: fuente montada → `1_entrada` del tema activo. Fuente no escribe en la carpeta del proveedor.
-- El recorrido es recursivo, omite elementos ocultos y enlaces simbólicos, conserva un manifiesto local para idempotencia y muestra conflictos/avisos medidos.
-- No hay OAuth, Graph API, credenciales cloud, SDK del proveedor ni conexión de red implícita. Si el cliente no monta la carpeta, Fuente no la inventa ni afirma que esté disponible.
-- La matriz de pruebas y el release gate cubren el contrato de fuentes, la reconciliación, el aislamiento por tema y la proyección segura de la UI.
-
-Estas descripciones documentan contratos medidos; no implican que Ollama, Obsidian o AnythingLLM estén instalados o ejecutándose en una máquina concreta. El panel Health es la fuente de disponibilidad actual.
-
----
-
-## 📄 Plantilla de Nota Atómica Generada (`4_salida`)
-
-## Flujo editorial sobre la fuente canónica
-
-El flujo editorial de Tasks 1–7 conserva **Markdown con frontmatter YAML como única fuente de verdad**. El editor de notas es un editor de Markdown plano con previsualización: el editor de metadatos existente sigue siendo una superficie separada para los campos de frontmatter, y ni el DOM renderizado ni la proyección de la UI sustituyen al archivo canónico.
-
-- **Edición con CAS:** la UI y el bridge usan un `document_id` opaco, una revisión esperada y un contrato compare-and-swap (CAS) tipado. Una edición concurrente o una entrada no autorizada falla sin sobrescribir el Markdown existente.
-- **Reflow durable:** el reflow de enlaces es una acción explícita y acotada por documento, tema o cuestión. El enriquecimiento y el reflow se registran como jobs durables y recuperables; los resultados se escriben como `pending_review` mediante escritura atómica y CAS, dejando intacta la nota aprobada cuando hay un fallo o conflicto.
-- **Candidatos de fusión (candidate detection):** la detección es determinista, limitada al alcance autorizado y de solo lectura. Compara coincidencias exactas y similitud de título/cuerpo para producir candidatos reproducibles; no fusiona ni elimina notas automáticamente.
-- **Fusión source-preserving:** la fusión es `preview-then-commit`. La previsualización conserva los IDs y revisiones de todas las fuentes; el commit vuelve a validarlos, crea una nota canónica `pending_review` con sus referencias y mantiene las notas originales sin cambios.
-- **Contratos bridge/UI seguros:** los métodos están allowlisted y validan tipos, IDs y revisiones antes de llegar al backend. La UI usa sinks seguros para Markdown no confiable y muestra estados de guardado, conflicto y error sin aceptar rutas suministradas por el navegador.
-
-Este plan no incluye —quedan **fuera de alcance**— **TipTap**, sincronización mediante **native Graph API/OAuth**, integración de **LightRAG en producción** ni credenciales cloud. LightRAG puede existir como comparación opt-in externa, pero no es una dependencia ni participa en el runtime o release gate local-first. El flujo entregado sigue siendo local y offline-capable.
-
-Cada archivo procesado genera una nota atómica estandarizada:
-
-```markdown
----
-título: "Título de la Nota"
-fecha: "AAAA-MM-DD"
-autor: "Autor"
-claves: [tema1, tema2]
-fuentes: [md_sucio_1, md_sucio_2]
----
-
-# Título de la Nota
-
-## Resumen Ejecutivo
-- **¿Qué?**: Explicación concreta
-- **¿Cuándo?**: Contexto temporal
-- **¿Quién?**: Entidades o personas
-- **¿Cómo?**: Proceso aplicado
-
-## Problema
-...
-## Contexto
-...
-## Objetivo
-...
-## Método
-...
-## Ejemplos
-...
-## Desarrollo
-...
-## Resultado
-...
-
-## Referencias Cruzadas
-
-### Reuniones
-- [[Reunión_...]]
-
-### Emails
-- [[Email_...]]
-
-### Conversaciones
-- [[Conversación_...]]
-
-### Normativa
-- [[Normativa_...]]
-
-### Otras Notas Atómicas
-- [[Nota_...]]
+# Servicios continuos sin interfaz gráfica
+fuente --headless --vault /ruta/al/Vault
 ```
 
----
+Si no se indica Vault, la aplicación usa `~/Documents/Fuente_Vault`. En Linux,
+la consola gráfica necesita `DISPLAY` o `WAYLAND_DISPLAY`; en servidores,
+Docker y CI se debe usar `--headless` o `--flush`.
 
-## 🧪 Pruebas
+## Política de red y privacidad
 
-Instala las dependencias de test (pytest) si aún no están disponibles:
+- La ejecución predeterminada de Ollama es loopback.
+- Una URL no local requiere opt-in explícito mediante configuración y
+  `ALLOW_NON_LOOPBACK_OLLAMA=true`.
+- No hay descargas automáticas de modelos, credenciales cloud ni servicios
+  externos obligatorios durante el runtime.
+- AnythingLLM es una integración externa opcional, no una dependencia del
+  núcleo ni un paso automático de instalación.
+- La consola usa una política CSP estricta y no carga scripts ni fuentes desde
+  CDNs en tiempo de ejecución.
+
+## Pruebas y release gate
+
+Instala las dependencias de test y ejecuta la suite:
 
 ```bash
 pip install -e ".[test]"
+PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -p no:cacheprovider tests -q
 ```
 
-Usa `PYTHONDONTWRITEBYTECODE=1` para no generar bytecode rastreado (`*.pyc`, `__pycache__`).
-
-### Suite pytest
-
-```bash
-PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -q
-```
-
-El conteo de la suite no se fija en este README porque cambia con cada contrato añadido. Mídelo con `PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -p no:cacheprovider tests -q`; el resultado del cierre editorial y cualquier warning externo quedan registrados en [`docs/task.md`](docs/task.md).
-
-### Release gate (pre-publicación)
-
-Antes de etiquetar o publicar una build, ejecuta el gate fail-closed:
+El gate fail-closed comprueba tests, documentación, seguridad residual,
+sincronización de carpetas, limpieza del árbol y un smoke offline completo:
 
 ```bash
 PYTHONDONTWRITEBYTECODE=1 python3 scripts/release_gate.py
 ```
 
-Documentación del checklist y mapeo de condiciones: [`docs/release-gate.md`](docs/release-gate.md). El gate ejecuta pytest, comprueba que el árbol git permanece limpio (ignorando `__pycache__`, `fuente.egg-info` y `.pytest_cache`), valida hallazgos de seguridad residuales y ejecuta un smoke offline de Vault (migración → ingesta ETL → revisión → búsqueda → exportación → rollback).
+`RESULT: READY` significa que el conjunto de comprobaciones del gate pasó.
+Consulta [`docs/release-gate.md`](docs/release-gate.md) para el mapa de
+condiciones, [`docs/headless-operation.md`](docs/headless-operation.md) para
+Docker/NAS/CI y [`docs/migration-guide.md`](docs/migration-guide.md) para
+migraciones del Vault.
 
-Tras ejecutar pruebas desde un checkpoint limpio, `git status --short` debe permanecer vacío salvo ruido de caché ignorado por el gate.
+## Límites actuales
 
----
+Fuente no pretende ser un servicio cloud, un cliente de Graph API, un editor
+WYSIWYG ni una integración de LightRAG en producción. La fuente de verdad es
+el Markdown aprobado; la base SQLite, el grafo, los índices RAG y la interfaz
+son capas derivadas y reconstruibles.
 
-## 🛠️ Nota del autor
-
-Desarrollado por Emilio Sevilla Ortego. No se permite su distribución sin permiso del autor.
+Desarrollado por Emilio Sevilla Ortego.

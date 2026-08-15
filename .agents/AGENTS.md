@@ -33,6 +33,8 @@ En cada iteración, tanto la Entrevista como la Autocrítica evalúan obligatori
 
 ---
 
-### 🛡️ Regla Estricta de Control de Publicación Git
-- **PROHIBICIÓN DE EJECUCIÓN PROACTIVA**: El agente NUNCA debe ejecutar `./scripts/git_ship.sh`, `git commit` o el workflow `/git` por iniciativa propia tras completar un plan, tarea o conjunto de pruebas.
-- **SOLO BAJO PETICIÓN EXPLÍCITA**: La publicación Git únicamente se ejecutará cuando el usuario introduzca expresamente el comando `/git`.
+### 🛡️ Autorización Git global del propietario (2026-08-15)
+- El propietario autoriza operaciones Git normales de lectura y escritura, incluidos `git add`, `commit`, `push` no forzado, `pull`, ramas, `merge`, PRs y publicación ordinaria.
+- No exigir `/git` como permiso adicional para esas operaciones. El workflow `/git` y `./scripts/git_ship.sh` son atajos para una cascada concreta de publicación.
+- Se mantienen los bloqueos automáticos globales para `reset --hard`, `clean -f`, `push --force`, refspecs forzados, `filter-branch`, `filter-repo`, rebase interactivo, `branch -D` y `git rm` sin `--cached`.
+- Antes de una operación destructiva, medir el repositorio y el objetivo exacto y comunicar la consecuencia.

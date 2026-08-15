@@ -1,7 +1,7 @@
 # Fuente — Tablero de estado (task.md)
 
 > **Índice de planificación:** [`docs/planning-index.md`](planning-index.md) separa el plan vigente, los planes cerrados y la evidencia histórica.
-> **Checkout medido (2026-08-15):** `dev`/`origin/dev` = `b144840`; `main`/`origin/main` = `b7b39cd`; árbol limpio.
+> **Checkout medido (2026-08-15):** `dev`/`origin/dev`/`main`/`origin/main` = `373c294`; el checkout tiene cambios documentales locales en revisión.
 > **Estado del producto:** hardening, Wave 1, Wave 2, fuentes montadas, base editorial, renombrado del producto a Fuente y sistema visual Nord están implementados; quedan checkpoints humanos del Vault y de la interfaz.
 > **Última evidencia de release medida:** suite completa `1094 passed, 1 skipped, 1 warning`; `scripts/release_gate.py` devuelve `RESULT: READY`.
 > **Siguiente ciclo vigente:** cerrar los checkpoints humanos de las Tareas 1–10, actualizar el ledger SDD y ejecutar el benchmark real de `qwen3.5:0.8b` cuando existan documentos canónicos aprobados.
@@ -34,6 +34,17 @@
   histórico aún necesita reflejar este cierre.
 - La Tarea 10 tiene gate verde (`RESULT: READY`), pero el cierre formal requiere
   registrar la evidencia actual y completar la comprobación humana de Vault/UI.
+
+### Revalidación actual del Vault — 2026-08-15
+
+- El Vault medido es `/Users/emiliosevillaortego/Documents/Funes_Vault`.
+- `3_limpio/` contiene **3 Markdown**, todos con `schema_version: 3` y
+  `status: pending_review`; no hay todavía una nota canónica aprobada.
+- `4_salida/` contiene únicamente `_Indice_MOC.md`; no existe
+  `4_salida/Fuentes/Sin_clasificar/` ni hay 14 notas actuales allí.
+- La cifra de 14 notas corresponde a la migración histórica del 2026-08-14,
+  no al estado actual del Vault. El benchmark real sigue bloqueado porque no
+  hay casos canónicos aprobados.
 
 | Eje | Definición operativa |
 |-----|----------------------|
@@ -226,14 +237,13 @@ El warning procede de telemetría de ChromaDB. El gate se ejecutó y devolvió
 `installer 21`, `headless 10`, `migration 21`, `sync 52`, `release_gate 13`,
 `security_residuals`, `required_docs`, `readme_honesty`, `sample_vault` y
 `source_tree_clean` en verde. El warning es la telemetría/deprecación externa de
-ChromaDB. `git diff --check` pasa. Commit, push y merge siguen fuera de la
-autorización del agente.
+ChromaDB. `git diff --check` pasa. La publicación Git no forma parte de esta
+evidencia histórica.
 
-**Posición actual del plan:** la reorganización física fue autorizada y
-ejecutada sobre `Vault_Funes` el 2026-08-14. No queda trabajo funcional bloqueante
-en este ciclo. Queda como trabajo editorial humano revisar las 14 notas de
-`Fuentes/Sin_clasificar` y decidir si alguna debe pasar a `Conceptos`, `Temas`,
-`Cuestiones` o a un subtipo concreto de `Fuentes`.
+**Registro histórico de la reorganización (2026-08-14):** la reorganización
+física fue autorizada y ejecutada sobre `Vault_Funes`. La cifra de 14 notas y
+su clasificación en `Fuentes/Sin_clasificar` pertenece a esa medición histórica
+y no describe el Vault actual; la revalidación vigente está arriba.
 
 El flujo aprobado queda disponible en `scripts/migrate_vault.py`:
 
@@ -248,7 +258,9 @@ Evidencia de ejecución:
 - Reorganización física: `Vault_Funes/.funes/migrations/taxonomy-20260813T225141Z/manifest.json` — 14 movimientos completados, sin colisiones.
 - `00_MOC_Funes.md` se conservó fuera de la taxonomía de notas.
 - No se detectaron wikilinks con rutas de carpeta que requirieran reescritura.
-- Las 14 notas quedaron en `4_salida/Fuentes/Sin_clasificar`; su clasificación editorial fina queda pendiente de revisión humana.
+- En aquella medición histórica, las 14 notas quedaron en
+  `4_salida/Fuentes/Sin_clasificar`; su clasificación editorial fina no debe
+  tratarse como inventario actual.
 
 ### Medición final del checkout (2026-08-13)
 

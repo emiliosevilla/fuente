@@ -1,11 +1,11 @@
 ---
 name: git
-description: Ejecuta la receta determinista de publicación Git de 5 pasos (add, commit, push dev, merge main, push main, checkout dev) exclusivamente cuando el usuario ejecute el comando /git.
+description: Ejecuta la receta determinista de publicación Git de Fuente cuando el usuario pida la cascada completa o invoque /git; las operaciones Git normales no requieren este workflow.
 ---
 
 # Git - Workflow Determinista de Publicación (`/git`)
 
-Esta habilidad automatiza de forma 100% confiable y sin desviaciones la receta oficial de 6 pasos de publicación Git en el proyecto Funes (con soporte para repositorios estándar y Git Worktrees):
+Esta habilidad automatiza de forma repetible la receta oficial de 6 pasos de publicación Git en Fuente (con soporte para repositorios estándar y Git Worktrees):
 
 1. `git checkout <WORK_BRANCH>` (Asegura estar en la rama de trabajo `dev` o del Worktree activo)
 2. `git add .`
@@ -18,7 +18,7 @@ Esta habilidad automatiza de forma 100% confiable y sin desviaciones la receta o
 
 ## 🚀 Instrucciones de Ejecución
 
-Esta secuencia de operaciones se dispara **invariablemente** cuando el usuario ejecute el comando `/git` (o `/git "mensaje de commit"`):
+Esta secuencia se usa cuando el usuario ejecuta `/git`, pide la cascada completa o autoriza explícitamente esa receta concreta:
 
 1. **Determinar mensaje de commit**:
    - Si el usuario proporciona un mensaje junto al comando (ej. `/git "feat: actualización de componentes"`), utiliza ese mensaje.

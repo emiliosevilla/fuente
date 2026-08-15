@@ -6,16 +6,16 @@ from pathlib import Path
 
 import pytest
 
-from funes.application.notes import MAX_BODY_MARKDOWN_CHARS
-from funes.control_console import FunesConsoleBackend
-from funes.core.vault import document_id_for_relative_path
-from funes.domain.frontmatter import serialize_frontmatter
-from funes.extractors.extended_formats import ExtendedFormatsExtractor
-from funes.ui.bridge import FunesPyWebViewApi
+from fuente.application.notes import MAX_BODY_MARKDOWN_CHARS
+from fuente.control_console import FuenteConsoleBackend
+from fuente.core.vault import document_id_for_relative_path
+from fuente.domain.frontmatter import serialize_frontmatter
+from fuente.extractors.extended_formats import ExtendedFormatsExtractor
+from fuente.ui.bridge import FuentePyWebViewApi
 
 
 def test_backend_unknown_action_fails_closed(temp_vault_path):
-    backend = FunesConsoleBackend(temp_vault_path)
+    backend = FuenteConsoleBackend(temp_vault_path)
 
     assert backend.handle_action("not_registered", {}) == {
         "error": "action_not_allowed",
@@ -24,7 +24,7 @@ def test_backend_unknown_action_fails_closed(temp_vault_path):
 
 
 def test_bridge_rejects_unknown_actions_and_malformed_payloads(temp_vault_path):
-    bridge = FunesPyWebViewApi(FunesConsoleBackend(temp_vault_path))
+    bridge = FuentePyWebViewApi(FuenteConsoleBackend(temp_vault_path))
 
     assert bridge.trigger_action("not-an-action", {}) == {
         "error": "unknown_action",
@@ -37,7 +37,7 @@ def test_bridge_rejects_unknown_actions_and_malformed_payloads(temp_vault_path):
 
 
 def test_bridge_rejects_path_shaped_note_identifiers(temp_vault_path):
-    bridge = FunesPyWebViewApi(FunesConsoleBackend(temp_vault_path))
+    bridge = FuentePyWebViewApi(FuenteConsoleBackend(temp_vault_path))
 
     for method, args in (
         ("get_note_content", ("4_salida/evil.md",)),
@@ -55,7 +55,7 @@ def test_bridge_rejects_path_shaped_note_identifiers(temp_vault_path):
 def test_editor_bridge_rejects_path_and_legacy_payloads_before_backend_access(
     temp_vault_path,
 ):
-    bridge = FunesPyWebViewApi(FunesConsoleBackend(temp_vault_path))
+    bridge = FuentePyWebViewApi(FuenteConsoleBackend(temp_vault_path))
     backend_calls: list[tuple] = []
     bridge.backend.handle_action = lambda *args: backend_calls.append(args)
     bridge.backend.get_notes_service = lambda: (_ for _ in ()).throw(
@@ -80,7 +80,7 @@ def test_editor_bridge_rejects_path_and_legacy_payloads_before_backend_access(
 
 
 def test_editor_bridge_rejects_oversized_markdown_before_backend_access(temp_vault_path):
-    bridge = FunesPyWebViewApi(FunesConsoleBackend(temp_vault_path))
+    bridge = FuentePyWebViewApi(FuenteConsoleBackend(temp_vault_path))
     bridge.backend.get_notes_service = lambda: (_ for _ in ()).throw(
         AssertionError("oversized editor payload reached NotesApplicationService")
     )
@@ -99,7 +99,7 @@ def test_editor_bridge_rejects_oversized_markdown_before_backend_access(temp_vau
 def test_bridge_mutations_reject_absolute_paths_without_external_mutation(
     temp_vault_path, external_note_path
 ):
-    bridge = FunesPyWebViewApi(FunesConsoleBackend(temp_vault_path))
+    bridge = FuentePyWebViewApi(FuenteConsoleBackend(temp_vault_path))
     absolute = str(external_note_path)
 
     assert bridge.save_draft(absolute, "changed") == {
@@ -116,7 +116,7 @@ def test_bridge_mutations_reject_absolute_paths_without_external_mutation(
 def test_bridge_restore_rejects_traversal_quarantine_id_without_mutation(
     temp_vault_path, external_note_path
 ):
-    bridge = FunesPyWebViewApi(FunesConsoleBackend(temp_vault_path))
+    bridge = FuentePyWebViewApi(FuenteConsoleBackend(temp_vault_path))
     backend = bridge.backend
     source = backend.vault.output_dir / "nota.md"
     source.write_text("content", encoding="utf-8")
@@ -135,7 +135,7 @@ def test_bridge_restore_rejects_traversal_quarantine_id_without_mutation(
 
 
 def test_bridge_open_obsidian_rejects_non_obsidian_uris(temp_vault_path):
-    bridge = FunesPyWebViewApi(FunesConsoleBackend(temp_vault_path))
+    bridge = FuentePyWebViewApi(FuenteConsoleBackend(temp_vault_path))
 
     result = bridge.trigger_action(
         "open_obsidian",

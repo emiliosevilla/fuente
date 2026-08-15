@@ -25,15 +25,15 @@ def gate_module():
 
 
 def test_is_ignored_git_path_skips_bytecode_noise(gate_module):
-    assert gate_module.is_ignored_git_path("funes.egg-info/PKG-INFO")
+    assert gate_module.is_ignored_git_path("fuente.egg-info/PKG-INFO")
     assert gate_module.is_ignored_git_path("tests/__pycache__/test_a.cpython-314.pyc")
     assert gate_module.is_ignored_git_path(".pytest_cache/v/cache/nodeids")
     assert not gate_module.is_ignored_git_path("consola_preview.html")
 
 
 def test_check_source_tree_clean_passes_when_only_ignored_paths(gate_module, tmp_path):
-    (tmp_path / "funes.egg-info").mkdir()
-    (tmp_path / "funes.egg-info" / "PKG-INFO").write_text("x", encoding="utf-8")
+    (tmp_path / "fuente.egg-info").mkdir()
+    (tmp_path / "fuente.egg-info" / "PKG-INFO").write_text("x", encoding="utf-8")
 
     with patch.object(
         gate_module.subprocess,
@@ -41,7 +41,7 @@ def test_check_source_tree_clean_passes_when_only_ignored_paths(gate_module, tmp
         return_value=subprocess.CompletedProcess(
             args=[],
             returncode=0,
-            stdout=" M funes.egg-info/PKG-INFO\n",
+            stdout=" M fuente.egg-info/PKG-INFO\n",
             stderr="",
         ),
     ):

@@ -7,18 +7,18 @@ from inspect import signature
 
 import pytest
 
-from funes.application.lifecycle import ApplicationLifecycle
-from funes.application.reflow import (
+from fuente.application.lifecycle import ApplicationLifecycle
+from fuente.application.reflow import (
     AuthorizedReflowTarget,
     ReflowApplicationService,
     ReflowScope,
 )
-from funes.config import get_default_config
-from funes.core.vault import VaultManager
-from funes.domain.errors import PathAuthorizationError
-from funes.domain.frontmatter import serialize_frontmatter
-from funes.domain.paths import document_id_for_relative_path
-from funes.graph_engine.optimized_loop import OptimizadoGraphLoop
+from fuente.config import get_default_config
+from fuente.core.vault import VaultManager
+from fuente.domain.errors import PathAuthorizationError
+from fuente.domain.frontmatter import serialize_frontmatter
+from fuente.domain.paths import document_id_for_relative_path
+from fuente.graph_engine.optimized_loop import OptimizadoGraphLoop
 
 
 def _note(title: str, body: str, issue: str) -> str:
@@ -27,7 +27,7 @@ def _note(title: str, body: str, issue: str) -> str:
             "schema_version": 1,
             "title": title,
             "date": "2026-08-11",
-            "author": "Funes",
+            "author": "Fuente",
             "tags": [],
             "issue": issue,
             "status": "approved",
@@ -45,6 +45,7 @@ class _Lifecycle:
             vault.output_dir,
             interval_sec=3600,
             vault_root=vault.config.vault_path,
+            eligibility_guard=lambda _target: None,
         )
         self.calls: list[dict] = []
 
@@ -258,10 +259,10 @@ def test_reflow_rejects_path_shaped_ids_and_symlink_aliases(temp_vault_path):
 
 
 def test_bridge_exposes_reflow_links_as_typed_on_demand_action(temp_vault_path):
-    from funes.control_console import FunesConsoleBackend
-    from funes.ui.bridge import FunesPyWebViewApi
+    from fuente.control_console import FuenteConsoleBackend
+    from fuente.ui.bridge import FuentePyWebViewApi
 
-    backend = FunesConsoleBackend(temp_vault_path)
+    backend = FuenteConsoleBackend(temp_vault_path)
     calls: list[ReflowScope] = []
     backend.reflow_links = lambda scope_payload: calls.append(scope_payload) or {
         "status": "success",
@@ -270,7 +271,7 @@ def test_bridge_exposes_reflow_links_as_typed_on_demand_action(temp_vault_path):
         "orphans": [],
         "scope": {"document_id": None, "theme": "General", "issue": "Issue-A"},
     }
-    bridge = FunesPyWebViewApi(backend)
+    bridge = FuentePyWebViewApi(backend)
 
     result = bridge.reflow_links({"issue": "Issue-A"})
     assert result["scope"]["issue"] == "Issue-A"
@@ -286,15 +287,15 @@ def test_bridge_exposes_reflow_links_as_typed_on_demand_action(temp_vault_path):
 def test_bridge_rejects_path_shaped_scope_values_before_backend(
     temp_vault_path, field, value
 ):
-    from funes.control_console import FunesConsoleBackend
-    from funes.ui.bridge import FunesPyWebViewApi
+    from fuente.control_console import FuenteConsoleBackend
+    from fuente.ui.bridge import FuentePyWebViewApi
 
-    backend = FunesConsoleBackend(temp_vault_path)
+    backend = FuenteConsoleBackend(temp_vault_path)
     backend.reflow_links = lambda _payload: pytest.fail("invalid scope reached backend")
     backend.handle_action = lambda _action, _payload: pytest.fail(
         "invalid scope reached backend action"
     )
-    bridge = FunesPyWebViewApi(backend)
+    bridge = FuentePyWebViewApi(backend)
 
     assert bridge.reflow_links({field: value}) == {
         "error": "path_not_authorized",

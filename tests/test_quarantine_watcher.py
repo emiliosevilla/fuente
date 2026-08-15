@@ -2,11 +2,11 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from funes.config import get_default_config
-from funes.domain.quarantine import InvalidModelOutputError
-from funes.graph_engine.atomic_generator import AtomicNoteGenerator
-from funes.watcher.watcher import ETLPipeline
-from tests.conftest import explicit_test_runtime_policy, patch_abundant_ram
+from fuente.config import get_default_config
+from fuente.domain.quarantine import InvalidModelOutputError
+from fuente.graph_engine.atomic_generator import AtomicNoteGenerator
+from fuente.watcher.watcher import ETLPipeline
+from tests.conftest import approve_saved_clean_job, explicit_test_runtime_policy, patch_abundant_ram
 
 
 def test_watcher_quarantines_exhausted_io_with_actual_attempt_count(tmp_path):
@@ -18,8 +18,8 @@ def test_watcher_quarantines_exhausted_io_with_actual_attempt_count(tmp_path):
     source.write_text("input", encoding="utf-8")
     pipeline.vault.copy_to_dirty = Mock(side_effect=OSError("network unavailable"))
 
-    with patch("funes.watcher.watcher.wait_until_file_stable", return_value=True), patch(
-        "funes.watcher.watcher.time.sleep"
+    with patch("fuente.watcher.watcher.wait_until_file_stable", return_value=True), patch(
+        "fuente.watcher.watcher.time.sleep"
     ):
         assert pipeline.process_file(source) is False
 
@@ -39,7 +39,7 @@ def test_watcher_retries_corrupt_content_before_quarantining(tmp_path):
     pipeline.vault.copy_to_dirty = Mock(return_value=source)
     pipeline.extractors.extract = Mock(side_effect=ValueError("corrupt document"))
 
-    with patch("funes.watcher.watcher.wait_until_file_stable", return_value=True):
+    with patch("fuente.watcher.watcher.wait_until_file_stable", return_value=True):
         assert pipeline.process_file(source) is False
 
     item = pipeline.vault.quarantine_service.list_items()[0]
@@ -72,8 +72,13 @@ def test_watcher_preserves_source_when_model_output_is_invalid(tmp_path):
         side_effect=InvalidModelOutputError("invalid schema")
     )
 
-    with patch("funes.watcher.watcher.wait_until_file_stable", return_value=True):
+    with patch("fuente.watcher.watcher.wait_until_file_stable", return_value=True):
         assert pipeline.process_file(source) is False
+
+    waiting = list(pipeline.job_store.list_jobs())[0]
+    approve_saved_clean_job(pipeline.ingestion, pipeline.vault, waiting)
+    failed = pipeline.ingestion.resume(waiting.job_id)
+    assert failed.stage == "failed"
 
     assert source.exists()
     failure = pipeline.vault.quarantine_service.list_items()[0]

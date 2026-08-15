@@ -6,8 +6,8 @@ import re
 
 import pytest
 
-from funes.control_console import FunesConsoleBackend
-from funes.ui.bridge import FunesPyWebViewApi
+from fuente.control_console import FuenteConsoleBackend
+from fuente.ui.bridge import FuentePyWebViewApi
 
 from tests.contract.conftest import CONSOLA_HTML
 
@@ -22,7 +22,7 @@ TRIGGER_ACTION_PATTERN = re.compile(
 def _bridge_public_methods() -> set[str]:
     return {
         name
-        for name, member in inspect.getmembers(FunesPyWebViewApi, inspect.isfunction)
+        for name, member in inspect.getmembers(FuentePyWebViewApi, inspect.isfunction)
         if not name.startswith("_")
     }
 
@@ -56,13 +56,19 @@ VALID_ACTION_PAYLOADS: dict[str, dict] = {
     },
     "open_obsidian": {
         "note_path": "4_salida/nota.md",
-        "obsidian_uri": "obsidian://open?vault=funes&file=nota",
+        "obsidian_uri": "obsidian://open?vault=fuente&file=nota",
     },
     "open_anything_desktop": {},
     "reset_default_settings": {},
 }
 
 EDITOR_BRIDGE_METHODS = {"get_note_editor", "update_note_body"}
+ORIGIN_REF = {
+    "note_id": "4ca13d5c-4d78-4f37-8c3c-d1dc530a4dc9",
+    "revision": 2,
+    "content_hash": "a" * 64,
+    "path": "Tema/3_limpio/origen.md",
+}
 
 
 def test_every_frontend_direct_bridge_call_is_exposed():
@@ -77,11 +83,11 @@ def test_revisioned_editor_methods_are_in_the_typed_bridge_allowlist():
 
 
 def test_revisioned_editor_methods_have_no_path_parameters():
-    assert tuple(inspect.signature(FunesPyWebViewApi.get_note_editor).parameters) == (
+    assert tuple(inspect.signature(FuentePyWebViewApi.get_note_editor).parameters) == (
         "self",
         "note_id",
     )
-    assert tuple(inspect.signature(FunesPyWebViewApi.update_note_body).parameters) == (
+    assert tuple(inspect.signature(FuentePyWebViewApi.update_note_body).parameters) == (
         "self",
         "note_id",
         "expected_revision",
@@ -98,13 +104,13 @@ def test_frontend_bridge_calls_use_the_typed_api_inventory():
 
 def test_every_frontend_trigger_action_has_typed_schema():
     frontend_actions = _frontend_trigger_actions()
-    schemas = set(FunesPyWebViewApi._ACTION_SCHEMAS)
+    schemas = set(FuentePyWebViewApi._ACTION_SCHEMAS)
     assert frontend_actions, "consola_preview.html must call triggerAction at least once"
     assert frontend_actions <= schemas, frontend_actions - schemas
 
 
 def test_every_registered_action_has_valid_fixture_payload():
-    schemas = set(FunesPyWebViewApi._ACTION_SCHEMAS)
+    schemas = set(FuentePyWebViewApi._ACTION_SCHEMAS)
     assert set(VALID_ACTION_PAYLOADS) == schemas
 
 
@@ -120,9 +126,9 @@ def test_onboarding_actions_are_available_only_for_pending_state():
     assert "openOnboardingFromHelp()" in source
 
 
-@pytest.mark.parametrize("action", sorted(FunesPyWebViewApi._ACTION_SCHEMAS))
+@pytest.mark.parametrize("action", sorted(FuentePyWebViewApi._ACTION_SCHEMAS))
 def test_typed_actions_accept_valid_payloads(action, temp_vault_path):
-    bridge = FunesPyWebViewApi(FunesConsoleBackend(temp_vault_path))
+    bridge = FuentePyWebViewApi(FuenteConsoleBackend(temp_vault_path))
     calls: list[tuple[str, dict]] = []
     bridge.backend.handle_action = lambda name, payload: calls.append((name, payload)) or {
         "status": "handled"
@@ -172,7 +178,7 @@ def test_typed_actions_accept_valid_payloads(action, temp_vault_path):
 def test_typed_actions_reject_malformed_payloads(
     action, bad_payload, message, temp_vault_path
 ):
-    bridge = FunesPyWebViewApi(FunesConsoleBackend(temp_vault_path))
+    bridge = FuentePyWebViewApi(FuenteConsoleBackend(temp_vault_path))
     backend_calls: list[tuple[str, dict]] = []
     bridge.backend.handle_action = lambda name, payload: backend_calls.append(
         (name, payload)
@@ -186,7 +192,7 @@ def test_typed_actions_reject_malformed_payloads(
 
 
 def test_unknown_trigger_action_is_fail_closed(temp_vault_path):
-    bridge = FunesPyWebViewApi(FunesConsoleBackend(temp_vault_path))
+    bridge = FuentePyWebViewApi(FuenteConsoleBackend(temp_vault_path))
     assert bridge.trigger_action("not-an-action", {}) == {
         "error": "unknown_action",
         "message": "Action is not authorized",
@@ -194,7 +200,7 @@ def test_unknown_trigger_action_is_fail_closed(temp_vault_path):
 
 
 def test_health_is_exposed_as_a_read_only_bridge_method(temp_vault_path):
-    bridge = FunesPyWebViewApi(FunesConsoleBackend(temp_vault_path))
+    bridge = FuentePyWebViewApi(FuenteConsoleBackend(temp_vault_path))
     bridge.backend.get_health = lambda: {"checked_at": "test", "vault": {"status": "missing"}}
 
     assert bridge.get_health() == {
@@ -204,7 +210,7 @@ def test_health_is_exposed_as_a_read_only_bridge_method(temp_vault_path):
 
 
 def test_approve_and_export_bridge_contract_has_no_destination_path_parameter():
-    parameters = inspect.signature(FunesPyWebViewApi.approve_and_export).parameters
+    parameters = inspect.signature(FuentePyWebViewApi.approve_and_export).parameters
 
     assert tuple(parameters) == (
         "self",
@@ -233,6 +239,16 @@ def test_approval_ui_wires_typed_approve_export_and_retry_without_second_approva
     assert "window.pywebview.api.export_note(" in source
 
 
+def test_approval_ui_distinguishes_clean_and_derived_manual_approval():
+    source = CONSOLA_HTML.read_text(encoding="utf-8")
+
+    assert 'id="approval-reviewer"' in source
+    assert "approval_scope" in source
+    assert "window.pywebview.api.approve_clean(" in source
+    assert "window.pywebview.api.approve_note(" in source
+    assert "approvalSelectedScope === 'clean'" in source
+
+
 def test_approval_export_ui_consumes_prepared_payload_by_format():
     source = CONSOLA_HTML.read_text(encoding="utf-8")
 
@@ -242,3 +258,152 @@ def test_approval_export_ui_consumes_prepared_payload_by_format():
     assert "format === 'markdown'" in source
     assert "format === 'docx'" in source
     assert "format === 'pdf'" in source
+
+
+def test_fuente_v3_frontend_uses_origins_summaries_and_input_providers():
+    source = CONSOLA_HTML.read_text(encoding="utf-8")
+
+    assert 'id="metadata-origins"' in source
+    assert 'id="metadata-sources"' not in source
+    assert "Orígenes" in source
+    assert "Sumarios" in source
+    assert "Entradas vinculadas a 1_entrada" in source
+    assert "window.pywebview.api.get_sync_inputs()" in source
+    assert "window.pywebview.api.sync_inputs(" in source
+
+
+def test_bridge_reads_v2_metadata_as_a_pending_v3_projection(temp_vault_path):
+    bridge = FuentePyWebViewApi(FuenteConsoleBackend(temp_vault_path))
+    bridge.backend.handle_action = lambda *_args: {
+        "metadata": {
+            "schema_version": 2,
+            "note_type": "source",
+            "source_kind": "meeting",
+            "sources": ["legacy-origin-id"],
+        },
+        "revision": 1,
+    }
+
+    result = bridge.get_note_metadata("opaque-note")
+
+    assert result["metadata"] == {
+        "schema_version": 3,
+        "note_type": "summary",
+        "origin_kind": "meeting",
+        "origins": [],
+        "legacy_origin_ids": ["legacy-origin-id"],
+        "migration_status": "pending_origins",
+    }
+
+
+def test_bridge_normalizes_complete_v2_metadata_before_a_write(temp_vault_path):
+    bridge = FuentePyWebViewApi(FuenteConsoleBackend(temp_vault_path))
+    calls: list[tuple[str, dict]] = []
+    bridge.backend.handle_action = lambda name, payload: calls.append((name, payload)) or {
+        "status": "saved"
+    }
+
+    result = bridge.update_note_metadata(
+        "opaque-note",
+        {"source_kind": "meeting", "sources": [ORIGIN_REF]},
+        1,
+    )
+
+    assert result == {"status": "saved"}
+    assert calls == [
+        (
+            "update_note_metadata",
+            {
+                "document_id": "opaque-note",
+                "metadata": {
+                    "origin_kind": "meeting",
+                    "origins": [ORIGIN_REF],
+                },
+                "expected_revision": 1,
+            },
+        )
+    ]
+
+
+def test_bridge_rejects_incomplete_v2_metadata_before_a_write(temp_vault_path):
+    bridge = FuentePyWebViewApi(FuenteConsoleBackend(temp_vault_path))
+    bridge.backend.handle_action = lambda *_args: (_ for _ in ()).throw(
+        AssertionError("incomplete legacy metadata reached the backend")
+    )
+
+    result = bridge.update_note_metadata(
+        "opaque-note",
+        {"source_kind": "meeting", "sources": ["legacy-origin-id"]},
+        1,
+    )
+
+    assert result == {
+        "error": "legacy_origins_unmigrated",
+        "message": "Legacy origins require complete OriginRef identity",
+    }
+
+
+def test_bridge_exposes_input_sync_api_and_keeps_v2_read_aliases():
+    methods = _bridge_public_methods()
+
+    assert {
+        "get_sync_inputs",
+        "confirm_sync_input",
+        "sync_inputs",
+        "remove_sync_input",
+        "set_sync_input_enabled",
+    } <= methods
+    assert {
+        "get_sync_sources",
+        "confirm_sync_source",
+        "sync_sources",
+        "remove_sync_source",
+        "set_sync_source_enabled",
+    } <= methods
+
+
+def test_bridge_input_sync_api_forwards_only_opaque_ids(temp_vault_path):
+    bridge = FuentePyWebViewApi(FuenteConsoleBackend(temp_vault_path))
+    calls: list[list[str]] = []
+    bridge.backend.sync_inputs = lambda connection_ids: calls.append(connection_ids) or {
+        "status": "completed",
+        "inputs": [],
+    }
+
+    rejected = bridge.sync_inputs({"connection_ids": ["/tmp/provider"]})
+    accepted = bridge.sync_inputs(
+        {"connection_ids": ["sync_0123456789abcdef01234567"]}
+    )
+
+    assert rejected == {
+        "error": "invalid_payload",
+        "message": "connection_ids must contain opaque connection IDs",
+    }
+    assert accepted == {"status": "completed", "inputs": []}
+    assert calls == [["sync_0123456789abcdef01234567"]]
+
+
+def test_backend_input_projection_uses_provider_and_never_exposes_roots(
+    temp_vault_path,
+):
+    backend = FuenteConsoleBackend(temp_vault_path)
+    provider_root = temp_vault_path / "mounted-provider"
+    provider_root.mkdir()
+    from fuente.domain.sync import ConnectedFolder
+
+    assert backend.sync_manager.save_connections(
+        [ConnectedFolder("network", str(provider_root), "Equipo", True)]
+    )
+
+    result = backend.get_sync_inputs()
+
+    assert set(result) == {"active_theme", "inputs", "last_run_at", "report"}
+    assert result["inputs"] == [
+        {
+            "id": backend.sync_manager.load_connections()[0].connection_id,
+            "provider": "network",
+            "display_name": "Equipo",
+            "enabled": True,
+        }
+    ]
+    assert str(provider_root) not in repr(result)

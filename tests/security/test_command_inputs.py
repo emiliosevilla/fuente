@@ -8,11 +8,11 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from funes.application.settings import SettingsService, SettingsValidationError
-from funes.config import load_config, validate_ollama_url
-from funes.control_console import FunesConsoleBackend
-from funes.core import app_checker
-from funes.ui.bridge import FunesPyWebViewApi
+from fuente.application.settings import SettingsService, SettingsValidationError
+from fuente.config import load_config, validate_ollama_url
+from fuente.control_console import FuenteConsoleBackend
+from fuente.core import app_checker
+from fuente.ui.bridge import FuentePyWebViewApi
 
 from tests.security.conftest import MALICIOUS_APPLESCRIPT_INPUT
 
@@ -23,9 +23,9 @@ def test_macos_folder_dialog_passes_title_as_osascript_argv_data():
     result = MagicMock(returncode=0, stdout="/tmp/chosen\n")
 
     with patch.object(sys, "platform", "darwin"), patch(
-        "funes.control_console.subprocess.run", return_value=result
+        "fuente.control_console.subprocess.run", return_value=result
     ) as run:
-        folder = FunesConsoleBackend.select_folder(object(), MALICIOUS_APPLESCRIPT_INPUT)
+        folder = FuenteConsoleBackend.select_folder(object(), MALICIOUS_APPLESCRIPT_INPUT)
 
     assert folder == "/tmp/chosen"
     command = run.call_args.args[0]
@@ -38,8 +38,8 @@ def test_macos_folder_dialog_passes_title_as_osascript_argv_data():
 
 def test_macos_app_close_passes_name_as_osascript_argv_data():
     with patch.object(sys, "platform", "darwin"), patch(
-        "funes.core.app_checker.subprocess.run"
-    ) as run, patch("funes.core.app_checker.time.sleep"):
+        "fuente.core.app_checker.subprocess.run"
+    ) as run, patch("fuente.core.app_checker.time.sleep"):
         app_checker.close_user_apps([MALICIOUS_APPLESCRIPT_INPUT])
 
     command = run.call_args.args[0]
@@ -52,7 +52,7 @@ def test_macos_app_close_passes_name_as_osascript_argv_data():
 
 def test_production_code_does_not_enable_shell_execution():
     violations = []
-    for source_path in (REPOSITORY_ROOT / "funes").rglob("*.py"):
+    for source_path in (REPOSITORY_ROOT / "fuente").rglob("*.py"):
         tree = ast.parse(source_path.read_text(encoding="utf-8"), filename=str(source_path))
         for call in ast.walk(tree):
             if isinstance(call, ast.Call) and any(
@@ -77,7 +77,7 @@ def test_non_loopback_ollama_endpoint_rejected_without_opt_in(temp_vault_path):
 
 
 def test_bridge_rejects_non_loopback_settings_without_opt_in(temp_vault_path):
-    bridge = FunesPyWebViewApi(FunesConsoleBackend(temp_vault_path))
+    bridge = FuentePyWebViewApi(FuenteConsoleBackend(temp_vault_path))
 
     result = bridge.save_settings(
         {

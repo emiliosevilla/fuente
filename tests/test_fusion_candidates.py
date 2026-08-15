@@ -9,17 +9,17 @@ from unittest.mock import Mock
 import pytest
 import requests
 
-from funes.application.fusion import FusionApplicationService
-from funes.application.notes import NotesApplicationService
-from funes.config import get_default_config
-from funes.core.vault import VaultManager
-from funes.domain.frontmatter import serialize_frontmatter
-from funes.domain.paths import document_id_for_relative_path
-from funes.graph_engine.atomic_generator import AtomicNoteGenerator
-from funes.infrastructure.sqlite_store import JobStore
-from funes.rag.chroma_store import ChromaStore
-from funes.rag.hybrid_search import BM25Okapi, HybridSearcher
-from funes.rag.vault_corpus import VaultCorpusProvider
+from fuente.application.fusion import FusionApplicationService
+from fuente.application.notes import NotesApplicationService
+from fuente.config import get_default_config
+from fuente.core.vault import VaultManager
+from fuente.domain.frontmatter import serialize_frontmatter
+from fuente.domain.paths import document_id_for_relative_path
+from fuente.graph_engine.atomic_generator import AtomicNoteGenerator
+from fuente.infrastructure.sqlite_store import JobStore
+from fuente.rag.chroma_store import ChromaStore
+from fuente.rag.hybrid_search import BM25Okapi, HybridSearcher
+from fuente.rag.vault_corpus import VaultCorpusProvider
 
 
 def _markdown(*, title: str, issue: str, body: str) -> str:

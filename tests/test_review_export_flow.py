@@ -6,17 +6,27 @@ from types import SimpleNamespace
 
 import pytest
 
-from funes.application.export import ExportPayload, ExportProjectionError
-from funes.application.review_export import (
+from fuente.application.export import ExportPayload, ExportProjectionError
+from fuente.application.review_export import (
     ReviewExportApplicationService,
 )
-from funes.domain.errors import NoteRevisionConflictError
-from funes.domain.metadata_form import MetadataValidationError
+from fuente.domain.errors import CanonicalEligibilityError, NoteRevisionConflictError
+from fuente.domain.metadata_form import MetadataValidationError
 
 
 @dataclass
 class FakeNotesService:
     note: SimpleNamespace
+    eligibility_error: Exception | None = None
+
+    def get_note(self, document_id):
+        assert document_id == self.note.document_id
+        return self.note
+
+    def require_eligible_origins(self, note):
+        assert note is self.note
+        if self.eligibility_error is not None:
+            raise self.eligibility_error
 
     def approve(self, document_id, expected_revision, *, metadata_patch=None):
         if expected_revision != self.note.revision:
@@ -115,5 +125,23 @@ def test_validation_failure_prevents_export_and_is_not_partial_success():
             "doc-id", 1, "markdown", metadata_patch={"invalid": True}
         )
 
+    assert notes.note.status == "pending_review"
+    assert exporter.calls == []
+
+
+def test_unapproved_origin_blocks_approval_write_and_export_projection():
+    notes = FakeNotesService(
+        _note(),
+        eligibility_error=CanonicalEligibilityError("origin_not_approved"),
+    )
+    exporter = FakeExportService(payload=_payload())
+    service = ReviewExportApplicationService(notes, exporter)
+
+    result = service.approve_and_prepare_export("doc-id", 1, "markdown")
+
+    assert result.approval_status == "blocked"
+    assert result.approved_revision is None
+    assert result.export_status == "blocked"
+    assert result.error_code == "origin_not_approved"
     assert notes.note.status == "pending_review"
     assert exporter.calls == []

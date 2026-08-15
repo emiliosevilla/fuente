@@ -2,12 +2,12 @@ import json
 
 import pytest
 
-from funes.application.settings import SettingsService, SettingsValidationError
-from funes.config import get_config_file_path, load_config
-from funes.control_console import FunesConsoleBackend
-from funes.domain.runtime_policy import AudioMode, ExecutionProfile, RuntimePolicy
-from funes.ui.bridge import FunesPyWebViewApi
-from funes.watcher.watcher import ETLPipeline
+from fuente.application.settings import SettingsService, SettingsValidationError
+from fuente.config import get_config_file_path, load_config
+from fuente.control_console import FuenteConsoleBackend
+from fuente.domain.runtime_policy import AudioMode, ExecutionProfile, RuntimePolicy
+from fuente.ui.bridge import FuentePyWebViewApi
+from fuente.watcher.watcher import ETLPipeline
 
 
 def _configured_model_test_policy() -> RuntimePolicy:
@@ -50,10 +50,10 @@ def test_settings_service_persists_canonical_settings_and_connected_folders(
     assert "ollama_model" not in persisted
     assert "ram_margin_pct" not in persisted
     assert json.loads(
-        (temp_vault_path / ".funes_connected_folders.json").read_text(encoding="utf-8")
+        (temp_vault_path / ".fuente_connected_folders.json").read_text(encoding="utf-8")
     ) == {"folders": [str(input_folder.resolve())]}
     assert json.loads(
-        (temp_vault_path / ".funes_output_connected_folders.json").read_text(
+        (temp_vault_path / ".fuente_output_connected_folders.json").read_text(
             encoding="utf-8"
         )
     ) == {"folders": [str(output_folder.resolve())]}
@@ -193,8 +193,8 @@ def test_settings_service_rejects_non_string_runtime_policy_values(
 def test_typed_bridge_uses_canonical_settings_payload_and_backend_service(
     temp_vault_path,
 ):
-    backend = FunesConsoleBackend(temp_vault_path)
-    bridge = FunesPyWebViewApi(backend)
+    backend = FuenteConsoleBackend(temp_vault_path)
+    bridge = FuentePyWebViewApi(backend)
     calls = []
     backend.save_settings = lambda settings: calls.append(settings) or {"status": "saved"}
     payload = {
@@ -252,7 +252,7 @@ def test_settings_service_persists_and_reloads_a_new_vault_path(
 def test_saved_model_and_url_drive_generation_and_chat_requests(
     temp_vault_path, monkeypatch
 ):
-    backend = FunesConsoleBackend(temp_vault_path)
+    backend = FuenteConsoleBackend(temp_vault_path)
     configured_url = "http://127.0.0.1:18080"
     assert "error" not in backend.save_settings(
         {
@@ -271,7 +271,7 @@ def test_saved_model_and_url_drive_generation_and_chat_requests(
         status_code = 500
 
     monkeypatch.setattr(
-        "funes.graph_engine.atomic_generator.requests.post",
+        "fuente.graph_engine.atomic_generator.requests.post",
         lambda url, json, timeout: generation_calls.append((url, json, timeout))
         or GenerationResponse(),
     )

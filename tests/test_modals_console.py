@@ -1,5 +1,5 @@
 """
-Pruebas de Integración y Regresión para los Modales Papiro y Tarjetas de la Consola Funes.
+Pruebas de Integración y Regresión para los Modales Papiro y Tarjetas de la Consola Fuente.
 """
 
 import unittest
@@ -7,12 +7,12 @@ import tempfile
 import shutil
 from pathlib import Path
 
-from funes.reader_modal import FunesReaderModal
-from funes.chat_modal import FunesChatModal
-from funes.category_modal import FunesCategoryModal
+from fuente.reader_modal import FuenteReaderModal
+from fuente.chat_modal import FuenteChatModal
+from fuente.category_modal import FuenteCategoryModal
 
 
-class TestFunesModals(unittest.TestCase):
+class TestFuenteModals(unittest.TestCase):
 
     def setUp(self):
         self.tmp_dir = Path(tempfile.mkdtemp())

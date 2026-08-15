@@ -23,15 +23,15 @@ def test_quarantine_list_shows_review_status_without_restore():
 
 
 def test_bridge_get_quarantine_returns_items(tmp_path):
-    from funes.config import get_default_config
-    from funes.control_console import FunesConsoleBackend
-    from funes.domain.quarantine import QuarantineService
+    from fuente.config import get_default_config
+    from fuente.control_console import FuenteConsoleBackend
+    from fuente.domain.quarantine import QuarantineService
 
     vault_root = tmp_path / "Vault"
-    for name in ("1_entrada", "2_sucio", "3_limpio", "4_salida", ".funes"):
+    for name in ("1_entrada", "2_sucio", "3_limpio", "4_salida", ".fuente"):
         (vault_root / name).mkdir(parents=True)
     get_default_config(vault_root)
-    backend = FunesConsoleBackend(vault_root)
+    backend = FuenteConsoleBackend(vault_root)
     bad = vault_root / "1_entrada" / "roto.pdf"
     bad.write_bytes(b"%PDF-broken")
     QuarantineService(vault_root).quarantine(
@@ -84,7 +84,7 @@ class _RecordingWidgetFactory:
 
 
 def test_quarantine_item_view_has_status_specific_actions():
-    from funes.control_console import quarantine_item_view
+    from fuente.control_console import quarantine_item_view
 
     quarantined = quarantine_item_view({"status": "quarantined"})
     failed_for_review = quarantine_item_view({"status": "failed_for_review"})
@@ -97,7 +97,7 @@ def test_quarantine_item_view_has_status_specific_actions():
 def test_quarantine_setup_renders_restore_only_for_quarantined_without_tk_root():
     from types import SimpleNamespace
 
-    from funes.control_console import QuarantineModal
+    from fuente.control_console import QuarantineModal
 
     factory = _RecordingWidgetFactory()
     modal = SimpleNamespace(

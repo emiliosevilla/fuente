@@ -6,11 +6,11 @@ from pathlib import Path
 from typing import Any, Optional
 from unittest import mock
 
-from funes.application.ingestion import (
+from fuente.application.ingestion import (
     IngestionApplicationService,
     document_id_for_source,
 )
-from funes.application.scheduler import (
+from fuente.application.scheduler import (
     ScheduleAction,
     TaskClass,
     classify_source_path,
@@ -19,16 +19,16 @@ from funes.application.scheduler import (
     task_class_for_job,
     ResourceScheduler,
 )
-from funes.config import get_default_config
-from funes.core.vault import VaultManager
-from funes.domain.frontmatter import serialize_frontmatter
-from funes.domain.jobs import JobRecord
-from funes.domain.runtime_policy import ExecutionProfile, RuntimePolicy
-from funes.extractors.registry import ExtractorRegistry
-from funes.graph_engine.linker import GraphLinker
-from funes.infrastructure.sqlite_store import JobStore
-from funes.rag.semantic_chunker import SemanticChunker
-from funes.ram_governor.budget import (
+from fuente.config import get_default_config
+from fuente.core.vault import VaultManager
+from fuente.domain.frontmatter import serialize_frontmatter
+from fuente.domain.jobs import JobRecord
+from fuente.domain.runtime_policy import ExecutionProfile, RuntimePolicy
+from fuente.extractors.registry import ExtractorRegistry
+from fuente.graph_engine.linker import GraphLinker
+from fuente.infrastructure.sqlite_store import JobStore
+from fuente.rag.semantic_chunker import SemanticChunker
+from fuente.ram_governor.budget import (
     ResourceKind,
     evaluate_resource,
     measured_snapshot,
@@ -63,7 +63,7 @@ class _FakeGenerator:
                 "schema_version": 1,
                 "title": stem,
                 "date": "",
-                "author": "Funes",
+                "author": "Fuente",
                 "tags": [],
                 "issue": "_Sin_Cuestion",
                 "status": "pending_review",
@@ -255,7 +255,7 @@ def test_llm_one_per_endpoint_model_unless_capacity_permits(tmp_path):
 
         # Abundant headroom may permit 2 for a small eco model.
         rich = measured_snapshot(total_gb=64.0, available_gb=48.0, safety_margin_pct=0.35)
-        from funes.ram_governor.budget import BudgetDecision, MeasurementStatus
+        from fuente.ram_governor.budget import BudgetDecision, MeasurementStatus
 
         eco_decision = BudgetDecision(
             allowed=True,
@@ -448,17 +448,12 @@ def test_process_pending_respects_budget_and_stays_resumable(tmp_path):
     source = vault.input_dir / "note.txt"
     source.write_text("contenido", encoding="utf-8")
     job = service.submit("1_entrada/note.txt")
-    # Park at embedding stage under unmeasured memory.
-    dirty = vault.copy_to_dirty(source)
-    clean = vault.save_clean_md("note.txt", "contenido", {"original_file": "note.txt"})
-    job = store.update_job(
-        job.job_id,
-        expected_revision=job.revision,
-        stage="saved_clean",
-        dirty_artifact=service.vault_relative_identity(dirty),
-        clean_artifact=service.vault_relative_identity(clean),
-        status="pending",
-    )
+    # Produce the canonical record through the real path, then park at its
+    # approval boundary before exercising the scheduler.
+    job = service.resume(job.job_id)
+    assert job.stage == "saved_clean"
+    from tests.conftest import approve_saved_clean_job
+    approve_saved_clean_job(service, vault, job)
 
     service.process_pending(limit=1)
     reloaded = store.get_job(job.job_id)
@@ -507,16 +502,10 @@ def test_orphaned_own_lease_does_not_block_resume(tmp_path):
     source = vault.input_dir / "resume_me.txt"
     source.write_text("hola", encoding="utf-8")
     job = service.submit("1_entrada/resume_me.txt")
-    dirty = vault.copy_to_dirty(source)
-    clean = vault.save_clean_md("resume_me.txt", "hola", {"original_file": "resume_me.txt"})
-    job = store.update_job(
-        job.job_id,
-        expected_revision=job.revision,
-        stage="saved_clean",
-        dirty_artifact=service.vault_relative_identity(dirty),
-        clean_artifact=service.vault_relative_identity(clean),
-        status="pending",
-    )
+    job = service.resume(job.job_id)
+    assert job.stage == "saved_clean"
+    from tests.conftest import approve_saved_clean_job
+    approve_saved_clean_job(service, vault, job)
 
     # Simulate crash: lease acquired, never released (concurrency_limit=1).
     store.acquire_resource_lease(

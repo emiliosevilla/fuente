@@ -1,9 +1,9 @@
 """Theme/Cuestión scope and approval contract matrix (Task 8.3)."""
 from __future__ import annotations
 
-from funes.domain.frontmatter import parse_frontmatter
+from fuente.domain.frontmatter import parse_frontmatter
 
-from tests.contract.conftest import write_note_under_theme
+from tests.contract.conftest import approved_clean_origin, write_note_under_theme
 
 THEME = "Derecho_Civil"
 ISSUE = "Contratos"
@@ -15,12 +15,19 @@ def _seed_themed_issue_note(bridge_backend):
     assert "error" not in bridge.create_theme(THEME)
     created = backend.handle_action("create_issue", {"issue_name": ISSUE})
     assert "error" not in created
+    origin = approved_clean_origin(
+        backend.vault,
+        backend.get_notes_service().job_store,
+        filename="origen-scope.md",
+    )
     document_id, note_path = write_note_under_theme(
         backend.vault,
         theme=THEME,
         issue=ISSUE,
         title=NOTE_TITLE,
         body="# Obligaciones\n\nContenido del Tema.\n",
+        origins=[origin],
+        store=backend.get_notes_service().job_store,
     )
     return bridge, backend, document_id, note_path
 
@@ -47,13 +54,14 @@ def test_nested_theme_and_issue_surface_in_bridge_subsystems(bridge_backend):
     )
     assert pending["issue"] == ISSUE
     assert pending["revision"] >= 1
+    assert pending["approval_scope"] == "output"
 
     metadata = bridge.get_note_metadata(document_id)
     assert metadata["metadata"]["issue"] == ISSUE
 
     graph = bridge.get_graph_data()
     node_ids = {node["document_id"] for node in graph["nodes"]}
-    assert document_id in node_ids
+    assert document_id not in node_ids
 
 
 def test_general_theme_hides_nested_theme_notes(bridge_backend):

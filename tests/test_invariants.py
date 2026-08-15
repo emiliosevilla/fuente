@@ -1,10 +1,10 @@
 import unittest
 import tempfile
 import os
-from funes.ram_governor.governor import RAMGovernor, OS_WHITELIST
-from funes.rag.semantic_chunker import SemanticChunker
-from funes.rag.hybrid_search import BM25Okapi
-from funes.graph_engine.atomic_generator import AtomicNode, GraphEdge
+from fuente.ram_governor.governor import RAMGovernor, OS_WHITELIST
+from fuente.rag.semantic_chunker import SemanticChunker
+from fuente.rag.hybrid_search import BM25Okapi
+from fuente.graph_engine.atomic_generator import AtomicNode, GraphEdge
 
 
 class TestSystemInvariants(unittest.TestCase):
@@ -44,7 +44,7 @@ class TestSystemInvariants(unittest.TestCase):
         docs = [
             {
                 "id": f"synthetic_doc_{i}",
-                "content": f"Documento sintético {i} de la prueba de carga masiva de Funes con palabras clave como RAG, graff, memory y python."
+                "content": f"Documento sintético {i} de la prueba de carga masiva de Fuente con palabras clave como RAG, graff, memory y python."
             }
             for i in range(1000)
         ]

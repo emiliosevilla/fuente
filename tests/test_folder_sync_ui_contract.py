@@ -2,10 +2,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from funes.control_console import FunesConsoleBackend
-from funes.core.folder_sync import FolderSyncManager
-from funes.domain.sync import ConnectedFolder
-from funes.ui.bridge import FunesPyWebViewApi
+from fuente.control_console import FuenteConsoleBackend
+from fuente.core.folder_sync import FolderSyncManager
+from fuente.domain.sync import ConnectedFolder
+from fuente.ui.bridge import FuentePyWebViewApi
 
 
 def test_connection_views_are_opaque_and_preserve_provider_metadata(tmp_path):
@@ -28,7 +28,7 @@ def test_connection_views_are_opaque_and_preserve_provider_metadata(tmp_path):
 def test_bridge_sync_sources_rejects_paths_and_unknown_fields_before_backend(
     temp_vault_path,
 ):
-    bridge = FunesPyWebViewApi(FunesConsoleBackend(temp_vault_path))
+    bridge = FuentePyWebViewApi(FuenteConsoleBackend(temp_vault_path))
 
     assert bridge.sync_sources({"connection_ids": ["/tmp/provider"]}) == {
         "error": "invalid_payload",
@@ -45,11 +45,11 @@ def test_bridge_get_sync_sources_returns_backend_projection_without_paths(
 ):
     source = temp_vault_path / "provider"
     source.mkdir()
-    backend = FunesConsoleBackend(temp_vault_path)
+    backend = FuenteConsoleBackend(temp_vault_path)
     assert backend.sync_manager.save_connections(
         [ConnectedFolder("network", str(source), "Team NAS", False)]
     )
-    bridge = FunesPyWebViewApi(backend)
+    bridge = FuentePyWebViewApi(backend)
 
     result = bridge.get_sync_sources()
 
@@ -72,7 +72,7 @@ def test_backend_sync_sources_uses_selected_connection_ids_without_browser_paths
     second = temp_vault_path / "second"
     first.mkdir()
     second.mkdir()
-    backend = FunesConsoleBackend(temp_vault_path)
+    backend = FuenteConsoleBackend(temp_vault_path)
     connections = [
         ConnectedFolder("local", str(first), "First", True),
         ConnectedFolder("network", str(second), "Second", True),
@@ -102,7 +102,7 @@ def test_backend_sync_sources_uses_selected_connection_ids_without_browser_paths
 def test_bridge_save_settings_does_not_accept_browser_supplied_input_paths(
     temp_vault_path,
 ):
-    bridge = FunesPyWebViewApi(FunesConsoleBackend(temp_vault_path))
+    bridge = FuentePyWebViewApi(FuenteConsoleBackend(temp_vault_path))
 
     result = bridge.save_settings({"input_connected_folders": ["/tmp/provider"]})
 

@@ -2,15 +2,15 @@ from pathlib import Path
 
 import pytest
 
-from funes.domain.errors import PathAuthorizationError
-from funes.domain.frontmatter import serialize_frontmatter
-from funes.domain.note_catalog import NoteCatalog
-from funes.domain.paths import AuthorizedPathResolver, document_id_for_relative_path
-from funes.control_console import FunesConsoleBackend
-from funes.core.vault import VaultManager
-from funes.config import VaultConfig
-from funes.graph_engine.linker import GraphLinker
-from funes.infrastructure.sqlite_store import JobStore
+from fuente.domain.errors import PathAuthorizationError
+from fuente.domain.frontmatter import parse_frontmatter, serialize_frontmatter
+from fuente.domain.note_catalog import NoteCatalog
+from fuente.domain.paths import AuthorizedPathResolver, document_id_for_relative_path
+from fuente.control_console import FuenteConsoleBackend
+from fuente.core.vault import VaultManager
+from fuente.config import VaultConfig
+from fuente.graph_engine.linker import GraphLinker
+from fuente.infrastructure.sqlite_store import JobStore
 
 
 @pytest.fixture
@@ -20,7 +20,7 @@ def resolver(temp_vault_path):
         "input": temp_vault_path / "1_entrada",
         "dirty": temp_vault_path / "2_sucio",
         "clean": temp_vault_path / "3_limpio",
-        "quarantine": temp_vault_path / ".funes" / "quarantine",
+        "quarantine": temp_vault_path / ".fuente" / "quarantine",
     }
     for root in roots.values():
         root.mkdir(parents=True)
@@ -56,7 +56,7 @@ def test_resolver_uses_canonical_catalog_id_and_legacy_alias_after_move(
             relative_path=new_relative,
             content_hash="hash-b",
             note_type="source",
-            source_kind="meeting",
+            origin_kind="meeting",
             theme="Tema",
             issue="cuestion-a",
             status="approved",
@@ -71,7 +71,7 @@ def test_resolver_uses_canonical_catalog_id_and_legacy_alias_after_move(
             "input": temp_vault_path / "1_entrada",
             "dirty": temp_vault_path / "2_sucio",
             "clean": temp_vault_path / "3_limpio",
-            "quarantine": temp_vault_path / ".funes" / "quarantine",
+            "quarantine": temp_vault_path / ".fuente" / "quarantine",
         }
         resolver = AuthorizedPathResolver(
             vault_root=temp_vault_path,
@@ -149,7 +149,7 @@ def test_rejects_symlink_to_external_file(resolver, temp_vault_path):
 
 def test_resolves_quarantine_basename_only(resolver, temp_vault_path):
     filename = "20260807_120000_nota.md"
-    quarantined = temp_vault_path / ".funes" / "quarantine" / filename
+    quarantined = temp_vault_path / ".fuente" / "quarantine" / filename
     quarantined.write_text("# Nota", encoding="utf-8")
 
     assert resolver.resolve_quarantine(filename) == quarantined.resolve()
@@ -162,7 +162,7 @@ def test_rejects_non_basename_quarantine_identifier(resolver, quarantine_id):
 
 
 def test_note_handlers_accept_vault_relative_note_identity(temp_vault_path):
-    backend = FunesConsoleBackend(temp_vault_path)
+    backend = FuenteConsoleBackend(temp_vault_path)
     note = backend.vault.output_dir / "Cuestion" / "nota.md"
     note.parent.mkdir()
     note.write_text("original", encoding="utf-8")
@@ -177,7 +177,7 @@ def test_note_handlers_accept_vault_relative_note_identity(temp_vault_path):
 
 
 def test_note_handlers_reject_absolute_paths_without_mutation(temp_vault_path):
-    backend = FunesConsoleBackend(temp_vault_path)
+    backend = FuenteConsoleBackend(temp_vault_path)
     external = temp_vault_path.parent / "outside.md"
     external.write_text("secret", encoding="utf-8")
 
@@ -194,7 +194,7 @@ def test_note_handlers_reject_absolute_paths_without_mutation(temp_vault_path):
 
 
 def test_note_content_rejects_absolute_path(temp_vault_path):
-    backend = FunesConsoleBackend(temp_vault_path)
+    backend = FuenteConsoleBackend(temp_vault_path)
     external = temp_vault_path.parent / "outside.md"
     external.write_text("secret", encoding="utf-8")
 
@@ -218,7 +218,7 @@ def test_restore_rejects_absolute_quarantine_identifier_without_mutation(temp_va
 
 
 def test_save_note_creation_rejects_escaping_issue_symlink(temp_vault_path):
-    backend = FunesConsoleBackend(temp_vault_path)
+    backend = FuenteConsoleBackend(temp_vault_path)
     external_dir = temp_vault_path.parent / "external_notes"
     external_dir.mkdir()
     (backend.vault.output_dir / "Escaping").symlink_to(external_dir, target_is_directory=True)
@@ -235,8 +235,54 @@ def test_save_note_creation_rejects_escaping_issue_symlink(temp_vault_path):
     assert not (external_dir / "nota.md").exists()
 
 
+def _new_v3_summary() -> str:
+    return serialize_frontmatter(
+        {
+            "schema_version": 3,
+            "note_id": "4ca13d5c-4d78-4f37-8c3c-d1dc530a4dc9",
+            "note_type": "summary",
+            "origin_kind": "meeting",
+            "origins": [
+                {
+                    "note_id": "89a2f4fb-1d7b-4aa1-9793-119970502a00",
+                    "revision": 1,
+                    "content_hash": "a" * 64,
+                    "path": "3_limpio/origen.md",
+                }
+            ],
+        }
+    ) + "# Sumario\n"
+
+
+def test_save_note_creation_without_origin_rejects_before_writing(temp_vault_path):
+    backend = FuenteConsoleBackend(temp_vault_path)
+
+    result = backend.handle_action(
+        "save_note", {"title": "sin origen", "content": "texto"}
+    )
+
+    assert result["error"] == "origin_required"
+    assert list(backend.vault.output_dir.rglob("*.md")) == []
+
+
+def test_save_note_creation_preserves_complete_v3_origins(temp_vault_path):
+    backend = FuenteConsoleBackend(temp_vault_path)
+    content = _new_v3_summary()
+
+    result = backend.handle_action(
+        "save_note", {"title": "sumario", "content": content}
+    )
+
+    assert result["status"] == "created"
+    path = temp_vault_path / result["path"]
+    metadata, _body = parse_frontmatter(path.read_text(encoding="utf-8"))
+    assert metadata["schema_version"] == 3
+    assert metadata["origins"] == parse_frontmatter(content)[0]["origins"]
+    assert "sources" not in metadata
+
+
 def test_merge_notes_rejects_escaping_issue_symlink(temp_vault_path):
-    backend = FunesConsoleBackend(temp_vault_path)
+    backend = FuenteConsoleBackend(temp_vault_path)
     first = backend.vault.output_dir / "primera.md"
     second = backend.vault.output_dir / "segunda.md"
     first.write_text("first", encoding="utf-8")
@@ -262,7 +308,7 @@ def test_merge_notes_rejects_escaping_issue_symlink(temp_vault_path):
 
 
 def test_move_rejects_escaping_destination_symlink_with_stable_error(temp_vault_path):
-    backend = FunesConsoleBackend(temp_vault_path)
+    backend = FuenteConsoleBackend(temp_vault_path)
     source = backend.vault.output_dir / "nota.md"
     source.write_text("content", encoding="utf-8")
     external_dir = temp_vault_path.parent / "external_notes"
@@ -300,9 +346,9 @@ def test_restore_rejects_escaping_destination_symlink_with_stable_error(temp_vau
 
 
 def test_wikilink_callback_uses_unique_vault_relative_note_path(temp_vault_path):
-    from funes.core.vault import document_id_for_relative_path
+    from fuente.core.vault import document_id_for_relative_path
 
-    backend = FunesConsoleBackend(temp_vault_path)
+    backend = FuenteConsoleBackend(temp_vault_path)
     source = backend.vault.output_dir / "source.md"
     target = backend.vault.output_dir / "Topic" / "nested.md"
     target.parent.mkdir()
@@ -330,9 +376,9 @@ def test_wikilink_callback_uses_unique_vault_relative_note_path(temp_vault_path)
 
 
 def test_wikilink_rejects_ambiguous_basename(temp_vault_path):
-    from funes.core.vault import document_id_for_relative_path
+    from fuente.core.vault import document_id_for_relative_path
 
-    backend = FunesConsoleBackend(temp_vault_path)
+    backend = FuenteConsoleBackend(temp_vault_path)
     source = backend.vault.output_dir / "source.md"
     source.write_text("[[duplicada]]", encoding="utf-8")
     for issue in ("A", "B"):
@@ -353,7 +399,7 @@ def test_wikilink_rejects_ambiguous_basename(temp_vault_path):
 
 
 def test_wikilink_callback_resolves_graph_qualified_target_end_to_end(temp_vault_path):
-    backend = FunesConsoleBackend(temp_vault_path)
+    backend = FuenteConsoleBackend(temp_vault_path)
     output = backend.vault.output_dir
     contratos = output / "Contratos" / "Obligaciones.md"
     historia = output / "Historia" / "Obligaciones.md"

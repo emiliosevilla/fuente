@@ -4,10 +4,10 @@ import tempfile
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-from funes.extractors.tex_tm import TeXAndTeXmacsExtractor
-from funes.extractors.audio import AudioExtractor
-from funes.extractors.ocr_image import ImageOCRExtractor
-from funes.extractors.office_pdf import TextAndOfficeExtractor
+from fuente.extractors.tex_tm import TeXAndTeXmacsExtractor
+from fuente.extractors.audio import AudioExtractor
+from fuente.extractors.ocr_image import ImageOCRExtractor
+from fuente.extractors.office_pdf import TextAndOfficeExtractor
 
 
 class TestExtractors(unittest.TestCase):
@@ -163,7 +163,7 @@ Fin del documento.
     # 5. ExtendedFormatsExtractor (.ipynb, .epub, .eml)
     # ------------------------------------------------------------------
     def test_ipynb_extraction_with_base64_filtering(self):
-        from funes.extractors.extended_formats import ExtendedFormatsExtractor
+        from fuente.extractors.extended_formats import ExtendedFormatsExtractor
 
         ipynb_file = self.temp_path / "analisis.ipynb"
         notebook_data = {
@@ -174,9 +174,9 @@ Fin del documento.
                 },
                 {
                     "cell_type": "code",
-                    "source": ["import pandas as pd\n", "print('Hola Funes')"],
+                    "source": ["import pandas as pd\n", "print('Hola Fuente')"],
                     "outputs": [
-                        {"output_type": "stream", "text": ["Hola Funes\n"]},
+                        {"output_type": "stream", "text": ["Hola Fuente\n"]},
                         {"output_type": "execute_result", "data": {"text/plain": ["data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="]}}
                     ]
                 }
@@ -191,12 +191,12 @@ Fin del documento.
         self.assertIn("# Cuaderno Jupyter", extracted)
         self.assertIn("Análisis de Datos", extracted)
         self.assertIn("import pandas as pd", extracted)
-        self.assertIn("Hola Funes", extracted)
+        self.assertIn("Hola Fuente", extracted)
         self.assertNotIn("data:image/png;base64", extracted)
 
     def test_epub_extraction(self):
         import zipfile
-        from funes.extractors.extended_formats import ExtendedFormatsExtractor
+        from fuente.extractors.extended_formats import ExtendedFormatsExtractor
 
         epub_file = self.temp_path / "libro.epub"
         with zipfile.ZipFile(epub_file, "w") as z:
@@ -213,7 +213,7 @@ Fin del documento.
     def test_eml_extraction(self):
         import email
         from email.message import EmailMessage
-        from funes.extractors.extended_formats import ExtendedFormatsExtractor
+        from fuente.extractors.extended_formats import ExtendedFormatsExtractor
 
         eml_file = self.temp_path / "mensaje.eml"
         msg = EmailMessage()

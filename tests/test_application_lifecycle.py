@@ -9,12 +9,12 @@ import time
 
 import pytest
 
-from funes.application.lifecycle import ApplicationLifecycle
-from funes.config import get_default_config
-from funes.core.vault import VaultManager
-from funes.domain.runtime_policy import resolve_runtime_policy
-from funes.graph_engine.optimized_loop import OptimizadoGraphLoop
-from funes.watcher.watcher import FolderMonitor
+from fuente.application.lifecycle import ApplicationLifecycle
+from fuente.config import get_default_config
+from fuente.core.vault import VaultManager
+from fuente.domain.runtime_policy import resolve_runtime_policy
+from fuente.graph_engine.optimized_loop import OptimizadoGraphLoop
+from fuente.watcher.watcher import FolderMonitor
 
 
 class FakePipeline:
@@ -410,14 +410,14 @@ def test_invalid_mode_raises():
 
 
 def test_headless_cli_path_never_imports_control_console(monkeypatch, tmp_path):
-    """funes.main.run_headless must never trigger a UI import (Tkinter/PyWebView
-    live behind funes.control_console), so it stays safe for Docker/CI."""
-    for mod_name in ("funes.control_console", "funes.main"):
+    """fuente.main.run_headless must never trigger a UI import (Tkinter/PyWebView
+    live behind fuente.control_console), so it stays safe for Docker/CI."""
+    for mod_name in ("fuente.control_console", "fuente.main"):
         sys.modules.pop(mod_name, None)
 
-    import funes.main as main_module
+    import fuente.main as main_module
 
-    assert "funes.control_console" not in sys.modules
+    assert "fuente.control_console" not in sys.modules
 
     calls = {"start": 0, "stop": 0, "mode": None}
 
@@ -436,15 +436,15 @@ def test_headless_cli_path_never_imports_control_console(monkeypatch, tmp_path):
     main_module.run_headless(tmp_path / "vault", wait_for_shutdown=lambda: None)
 
     assert calls == {"start": 1, "stop": 1, "mode": "headless"}
-    assert "funes.control_console" not in sys.modules
+    assert "fuente.control_console" not in sys.modules
 
 
 def test_run_headless_calls_stop_when_start_fails(monkeypatch, tmp_path):
     """start() must sit inside try/finally so a failed start still stop()s."""
-    for mod_name in ("funes.control_console", "funes.main"):
+    for mod_name in ("fuente.control_console", "fuente.main"):
         sys.modules.pop(mod_name, None)
 
-    import funes.main as main_module
+    import fuente.main as main_module
 
     calls = {"start": 0, "stop": 0}
 
@@ -468,14 +468,14 @@ def test_run_headless_calls_stop_when_start_fails(monkeypatch, tmp_path):
 
 
 def test_flush_cli_path_never_imports_control_console(monkeypatch, tmp_path):
-    for mod_name in ("funes.control_console", "funes.main"):
+    for mod_name in ("fuente.control_console", "fuente.main"):
         sys.modules.pop(mod_name, None)
 
-    import funes.main as main_module
+    import fuente.main as main_module
 
-    assert "funes.control_console" not in sys.modules
+    assert "fuente.control_console" not in sys.modules
 
     result = main_module.run_flush(tmp_path / "vault")
 
     assert result["files_found"] == 0
-    assert "funes.control_console" not in sys.modules
+    assert "fuente.control_console" not in sys.modules

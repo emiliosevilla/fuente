@@ -17,16 +17,20 @@ historia técnica anterior se conserva como referencia de migración.
    por una persona antes de que el flujo cree o actualice contenido derivado.
    Mientras no haya aprobación, el documento sigue siendo editable pero no es
    elegible para el paso siguiente.
-3. El producto, paquete, configuración, documentación, interfaz y repositorio
+3. Cada documento Markdown de `4_salida` requiere una segunda aprobación
+   humana, independiente de la canónica, antes de considerarse publicado,
+   exportable o disponible como resultado editorial. Esta aprobación no puede
+   crear ni sustituir la aprobación de sus orígenes en `3_limpio`.
+4. El producto, paquete, configuración, documentación, interfaz y repositorio
    pasarán de **Funes** a **Fuente** mediante una migración planificada. No se
    debe hacer un cambio parcial de nombre.
-4. En el dominio editorial, un **origen** es la referencia verificable al
+5. En el dominio editorial, un **origen** es la referencia verificable al
    documento aprobado de `3_limpio` que sostiene una afirmación. Un **sumario**
    es una nota derivada preparada a partir de uno o varios de esos documentos.
-5. La consola adoptará el lenguaje visual de la paleta Nord: Polar Night para
+6. La consola adoptará el lenguaje visual de la paleta Nord: Polar Night para
    estructura, Snow Storm para lectura, Frost para acciones y Aurora para
    estados semánticos. La aplicación no se presentará como producto Nord.
-6. `qwen3.5:0.8b` será el candidato predeterminado del perfil Auto
+7. `qwen3.5:0.8b` será el candidato predeterminado del perfil Auto
    ultra-ligero, destinado a equipos con menos de 8 GB de RAM, cuando supere
    el benchmark local definido en este documento. Usará una ventana de contexto
    de 4.096 tokens y concurrencia uno. `Eco estricto` conserva su significado:
@@ -37,8 +41,8 @@ historia técnica anterior se conserva como referencia de migración.
 El flujo canónico queda así:
 
 ```text
-1_entrada → 2_sucio → 3_limpio (edición humana) → aprobación humana
-         → generación de sumario candidato → revisión humana → 4_salida
+1_entrada → 2_sucio → 3_limpio (edición humana) → aprobación canónica
+         → generación de sumario candidato → 4_salida → aprobación editorial
 ```
 
 `3_limpio` contiene el texto preparado para IA y para edición humana. Cada
@@ -58,7 +62,8 @@ Los índices pueden incluir sumarios para mejorar la navegación, pero no pueden
 convertirse en autoridad: al responder o citar, deben conservar el vínculo con
 los orígenes aprobados. Si el origen se edita, sus sumarios quedan marcados
 como desactualizados y no se actualizan sin una nueva aprobación de esa
-revisión.
+revisión. Un sumario sin su propia aprobación editorial permanece fuera de las
+salidas publicables aunque sus orígenes sigan siendo válidos.
 
 ## 3. Vocabulario canónico
 
@@ -97,6 +102,12 @@ notas `concept`, `topic`, `question` y `result` también usarán `origins` cuand
 formulen afirmaciones sobre documentos, pero no llevarán `origin_kind` salvo
 que sean sumarios. La implementación deberá confirmar esta distinción con una
 migración de datos antes de eliminar los campos v2.
+
+Las notas editoriales normales de `4_salida` requieren una segunda aprobación
+humana. Quedan fuera de esa bandeja las proyecciones MOC generadas por el
+sistema (`_Indice_MOC.md` y `_Cuestion_*.md`): reciben aprobación automática y
+su contenido sólo puede incluir notas normales de `4_salida` que ya estén
+aprobadas.
 
 ## 4. Estructura objetivo del Vault
 
@@ -198,6 +209,11 @@ configurada y no empeorar esos resultados frente a la alternativa actual.
 
 - Ningún sumario se genera, actualiza, indexa como vigente ni exporta si alguno
   de sus orígenes no corresponde a una revisión aprobada de `3_limpio`.
+- Todo Markdown en `3_limpio` requiere aprobación humana explícita ligada a su
+  revisión y hash exactos antes de poder producir derivados. Todo Markdown en
+  `4_salida` requiere además una aprobación humana propia antes de considerarse
+  publicado, exportable o disponible como resultado editorial. La aprobación de
+  `4_salida` nunca sustituye la aprobación canónica de `3_limpio`.
 - Cambiar un documento aprobado invalida esa aprobación y marca los derivados
   afectados como desactualizados.
 - Desde un sumario, una persona puede abrir el origen exacto y saber qué

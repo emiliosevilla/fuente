@@ -4,20 +4,21 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from funes.application.ingestion import IngestionApplicationService
-from funes.config import get_default_config
-from funes.domain.frontmatter import parse_frontmatter, serialize_frontmatter
-from funes.core.vault import VaultManager
-from funes.extractors.registry import ExtractorRegistry
-from funes.extractors.office_pdf import TextAndOfficeExtractor
-from funes.extractors.tex_tm import TeXAndTeXmacsExtractor
-from funes.graph_engine.linker import GraphLinker
-from funes.infrastructure.sqlite_store import JobStore
-from funes.ram_governor.governor import RAMGovernor
-from funes.rag.chroma_store import ChromaStore
-from funes.rag.semantic_chunker import SemanticChunker
-from funes.watcher.watcher import ETLPipeline, wait_until_file_stable
+from fuente.application.ingestion import IngestionApplicationService
+from fuente.config import get_default_config
+from fuente.domain.frontmatter import parse_frontmatter, serialize_frontmatter
+from fuente.core.vault import VaultManager
+from fuente.extractors.registry import ExtractorRegistry
+from fuente.extractors.office_pdf import TextAndOfficeExtractor
+from fuente.extractors.tex_tm import TeXAndTeXmacsExtractor
+from fuente.graph_engine.linker import GraphLinker
+from fuente.infrastructure.sqlite_store import JobStore
+from fuente.ram_governor.governor import RAMGovernor
+from fuente.rag.chroma_store import ChromaStore
+from fuente.rag.semantic_chunker import SemanticChunker
+from fuente.watcher.watcher import ETLPipeline, wait_until_file_stable
 from tests.integration.conftest import FakeChroma, FakeGenerator, FakeGovernor
+from tests.conftest import save_v3_summary_note
 
 
 class TestAdversarial(unittest.TestCase):
@@ -64,7 +65,11 @@ class TestAdversarial(unittest.TestCase):
             self.assertNotIn("\x00", sanitized)
             self.assertTrue(len(sanitized) > 0)
 
-            saved = self.vault.save_atomic_note(sanitized, f"Contenido para {sanitized}")
+            _document_id, saved = save_v3_summary_note(
+                self.vault,
+                title=sanitized,
+                body=f"Contenido para {sanitized}",
+            )
             self.assertTrue(saved.exists())
 
     def test_adversarial_latex_equations_and_urls(self):
@@ -123,7 +128,17 @@ E = mc^2
             self.assertEqual(submitted.status, "pending")
             self.assertTrue(junk_file.exists())
 
-            completed = service.resume(submitted.job_id)
+            waiting = service.resume(submitted.job_id)
+            self.assertEqual(waiting.stage, "saved_clean")
+            self.assertEqual(waiting.error_code, "awaiting_clean_approval")
+            clean_metadata, _clean_body = parse_frontmatter(
+                (self.vault_path / waiting.clean_artifact).read_text(encoding="utf-8")
+            )
+            approval = service.approval_service.request_approval(clean_metadata["note_id"])
+            service.approval_service.approve_clean(
+                approval.note_id, approval.revision, "pytest"
+            )
+            completed = service.resume(waiting.job_id)
             self.assertEqual(completed.stage, "completed")
             self.assertEqual(completed.status, "completed")
             self.assertFalse(junk_file.exists())
@@ -133,10 +148,11 @@ E = mc^2
             note_metadata, note_body = parse_frontmatter(
                 output_notes[0].read_text(encoding="utf-8")
             )
-            self.assertEqual(note_metadata["schema_version"], 1)
+            self.assertEqual(note_metadata["schema_version"], 3)
+            self.assertEqual(note_metadata["note_type"], "summary")
+            self.assertNotIn("sources", note_metadata)
             self.assertEqual(note_metadata["title"], "basura_random")
             self.assertEqual(note_metadata["status"], "pending_review")
-            self.assertEqual(note_metadata["sources"], ["basura_random.bin"])
             self.assertTrue(note_body.startswith("# basura_random\n\n"))
         finally:
             job_store.close()
@@ -228,12 +244,12 @@ Esta es una Nota normal.
         self.assertNotIn("h[[Http]]s", linked)
         self.assertNotIn("f[[File]]://", linked)
 
-    @patch("funes.watcher.watcher.AtomicNoteGenerator.generate_atomic_note")
+    @patch("fuente.watcher.watcher.AtomicNoteGenerator.generate_atomic_note")
     def test_adversarial_concurrent_batch_ingestion(self, mock_gen):
         """Prueba volcado simultáneo de 20 archivos en 1_entrada."""
         mock_gen.side_effect = lambda clean_md_content, model_name, file_name: (
             serialize_frontmatter({
-                "schema_version": 1, "title": file_name, "date": "", "author": "Funes",
+                "schema_version": 1, "title": file_name, "date": "", "author": "Fuente",
                 "tags": [], "issue": "_Sin_Cuestion", "status": "pending_review",
                 "sources": [file_name], "history": [],
             }) + f"# {file_name}\n\n{clean_md_content}"
@@ -243,10 +259,27 @@ Esta es una Nota normal.
             with open(p, "w", encoding="utf-8") as f:
                 f.write(f"# Documento {i}\n\nContenido de prueba masivo número {i}.")
 
+        pipeline = self._legacy_pipeline()
         for i in range(20):
             p = self.config.vault.input_dir / f"archivo_masivo_{i:02d}.txt"
-            res = self._legacy_pipeline().process_file(p)
-            self.assertTrue(res)
+            self.assertFalse(pipeline.process_file(p))
+
+        for i in range(20):
+            p = self.config.vault.input_dir / f"archivo_masivo_{i:02d}.txt"
+            job = pipeline.ingestion.submit(pipeline.ingestion.vault_relative_identity(p))
+            clean_metadata, _clean_body = parse_frontmatter(
+                (self.vault_path / job.clean_artifact).read_text(encoding="utf-8")
+            )
+            approval = pipeline.ingestion.approval_service.request_approval(
+                clean_metadata["note_id"]
+            )
+            pipeline.ingestion.approval_service.approve_clean(
+                approval.note_id, approval.revision, "pytest"
+            )
+
+        for i in range(20):
+            p = self.config.vault.input_dir / f"archivo_masivo_{i:02d}.txt"
+            self.assertTrue(pipeline.process_file(p))
 
         out_count = len(list(self.config.vault.output_dir.glob("archivo_masivo_*.md")))
         self.assertEqual(out_count, 20)

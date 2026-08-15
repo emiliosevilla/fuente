@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "demo_version": "1.0.0",
+  "theme": "General",
+  "issue": "Demo",
+  "notes": [
+    {
+      "source_resource": "notes/Introduccion.md",
+      "destination": "4_salida/Demo/Introduccion.md",
+      "sha256": "aaa2f021878edb005253fae1d9b331e4da19a1adc9acc8bdbeb8b0c136e572d7",
+      "expected_wikilinks": ["Arquitectura_Local", "Flujo_Revision"],
+      "expected_initial_review_status": "pending_review"
+    },
+    {
+      "source_resource": "notes/Arquitectura_Local.md",
+      "destination": "4_salida/Demo/Arquitectura_Local.md",
+      "sha256": "885de60d5bbdf7ace7bbeacc5b38dcfb1dbb1164f49704caf489a81407754f7c",
+      "expected_wikilinks": ["Introduccion"],
+      "expected_initial_review_status": "approved"
+    },
+    {
+      "source_resource": "notes/Flujo_Revision.md",
+      "destination": "4_salida/Demo/Flujo_Revision.md",
+      "sha256": "5b979f52bc5a77a81589d2b50031063126b8bc877d16443cb7f9418add37289c",
+      "expected_wikilinks": ["Introduccion"],
+      "expected_initial_review_status": "approved"
+    }
+  ]
+}

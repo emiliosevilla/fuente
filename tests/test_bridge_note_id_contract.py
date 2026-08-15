@@ -6,10 +6,10 @@ from pathlib import Path
 
 import pytest
 
-from funes.control_console import FunesConsoleBackend
-from funes.core.vault import document_id_for_relative_path
-from funes.domain.frontmatter import serialize_frontmatter
-from funes.ui.bridge import FunesPyWebViewApi
+from fuente.control_console import FuenteConsoleBackend
+from fuente.core.vault import document_id_for_relative_path
+from fuente.domain.frontmatter import serialize_frontmatter
+from fuente.ui.bridge import FuentePyWebViewApi
 
 THEME = "Academia"
 ISSUE = "Contratos"
@@ -21,7 +21,7 @@ def _approved_markdown(*, title: str, issue: str, body: str) -> str:
         {
             "title": title,
             "date": "2026-08-09",
-            "author": "Funes",
+            "author": "Fuente",
             "tags": [],
             "issue": issue,
             "status": "approved",
@@ -33,7 +33,7 @@ def _approved_markdown(*, title: str, issue: str, body: str) -> str:
 
 @pytest.fixture
 def bridge_with_themed_note(temp_vault_path):
-    backend = FunesConsoleBackend(temp_vault_path)
+    backend = FuenteConsoleBackend(temp_vault_path)
     backend.vault.create_theme(THEME)
     issue_dir = backend.vault.create_issue_in_theme(ISSUE)
     note_path = issue_dir / f"{TITLE}.md"
@@ -44,7 +44,7 @@ def bridge_with_themed_note(temp_vault_path):
     vault_relative = backend._vault_relative_identity(note_path)
     document_id = document_id_for_relative_path(vault_relative)
     rel_path = note_path.relative_to(backend.vault.output_dir).as_posix()
-    bridge = FunesPyWebViewApi(backend)
+    bridge = FuentePyWebViewApi(backend)
     return bridge, document_id, rel_path, backend.vault.output_dir
 
 

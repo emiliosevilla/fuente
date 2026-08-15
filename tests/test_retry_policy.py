@@ -6,8 +6,8 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from funes.config import get_default_config
-from funes.domain.jobs import (
+from fuente.config import get_default_config
+from fuente.domain.jobs import (
     CORRUPT_OR_UNSUPPORTED_MAX_ATTEMPTS,
     TRANSIENT_IO_MAX_ATTEMPTS,
     ErrorClass,
@@ -17,8 +17,8 @@ from funes.domain.jobs import (
     evaluate_failure,
     max_attempts_for_error_class,
 )
-from funes.domain.quarantine import InvalidModelOutputError, QuarantineService
-from funes.watcher.watcher import ETLPipeline
+from fuente.domain.quarantine import InvalidModelOutputError, QuarantineService
+from fuente.watcher.watcher import ETLPipeline
 from tests.conftest import patch_abundant_ram
 
 
@@ -119,7 +119,7 @@ def test_ingestion_persists_each_content_attempt_then_quarantines(tmp_path):
     pipeline.vault.copy_to_dirty = Mock(return_value=source)
     pipeline.extractors.extract = Mock(side_effect=ValueError("corrupt document"))
 
-    with patch("funes.watcher.watcher.wait_until_file_stable", return_value=True):
+    with patch("fuente.watcher.watcher.wait_until_file_stable", return_value=True):
         assert pipeline.process_file(source) is False
 
     jobs = pipeline.job_store.list_jobs()
@@ -155,7 +155,7 @@ def test_permanent_extractor_error_does_not_loop(tmp_path):
     pipeline.vault.copy_to_dirty = Mock(return_value=source)
     pipeline.extractors.extract = Mock(side_effect=RuntimeError("unexpected parser crash"))
 
-    with patch("funes.watcher.watcher.wait_until_file_stable", return_value=True):
+    with patch("fuente.watcher.watcher.wait_until_file_stable", return_value=True):
         assert pipeline.process_file(source) is False
 
     assert pipeline.extractors.extract.call_count == 1
@@ -175,8 +175,8 @@ def test_transient_io_exhausted_keeps_distinct_error_code(tmp_path):
     source.write_text("input", encoding="utf-8")
     pipeline.vault.copy_to_dirty = Mock(side_effect=OSError("network unavailable"))
 
-    with patch("funes.watcher.watcher.wait_until_file_stable", return_value=True), patch(
-        "funes.watcher.watcher.time.sleep"
+    with patch("fuente.watcher.watcher.wait_until_file_stable", return_value=True), patch(
+        "fuente.watcher.watcher.time.sleep"
     ):
         assert pipeline.process_file(source) is False
 

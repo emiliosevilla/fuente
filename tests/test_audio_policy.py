@@ -7,8 +7,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from funes.domain.runtime_policy import AudioMode, ExecutionProfile, RuntimePolicy
-from funes.extractors.audio import AudioExtractor, AudioModelUnavailableError
+from fuente.domain.runtime_policy import AudioMode, ExecutionProfile, RuntimePolicy
+from fuente.extractors.audio import AudioExtractor, AudioModelUnavailableError
 
 
 def _policy(*, audio_mode: AudioMode, whisper_model_path: Path | None = None):

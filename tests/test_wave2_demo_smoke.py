@@ -9,16 +9,20 @@ from pathlib import Path
 import pytest
 from docx import Document
 
-from funes.application.export import ExportApplicationService
-from funes.application.notes import NotesApplicationService
-from funes.application.onboarding import OnboardingService
-from funes.application.retrieval import MODE_BM25_VAULT
-from funes.config import AppConfig, VaultConfig
-from funes.core.vault import VaultManager
-from funes.domain.runtime_policy import resolve_runtime_policy
-from funes.infrastructure.sqlite_store import JobStore
-from funes.rag.vault_corpus import VaultCorpusProvider
-from funes.application.retrieval import RetrievalApplicationService
+from fuente.application.export import ExportApplicationService
+from fuente.application.notes import NotesApplicationService
+from fuente.application.onboarding import OnboardingService
+from fuente.application.retrieval import MODE_BM25_VAULT
+from fuente.config import AppConfig, VaultConfig
+from fuente.core.vault import VaultManager
+from fuente.domain.runtime_policy import resolve_runtime_policy
+from fuente.domain.frontmatter import parse_frontmatter, serialize_frontmatter
+from fuente.domain.documents import content_hash_for_markdown
+from fuente.domain.paths import document_id_for_relative_path
+from fuente.infrastructure.sqlite_store import JobStore
+from fuente.rag.vault_corpus import VaultCorpusProvider
+from fuente.application.retrieval import RetrievalApplicationService
+from tests.conftest import approved_clean_origin
 
 
 @pytest.fixture
@@ -66,35 +70,40 @@ def test_wave2_demo_smoke_runs_real_offline_flow_and_is_idempotent(
 
     vault = VaultManager(config.vault)
     resolver = vault.path_resolver()
-    corpus = VaultCorpusProvider(
-        vault_path,
-        output_roots=(vault_path / "4_salida",),
-        path_resolver=resolver,
-    )
-
-    # Corpus and retrieval are real implementations; Eco receives no Chroma store.
-    chunks = corpus.load()
-    assert {
-        str(chunk["metadata"]["relative_path"])
-        for chunk in chunks
-    } == {
-        "4_salida/Demo/Introduccion.md",
-        "4_salida/Demo/Arquitectura_Local.md",
-        "4_salida/Demo/Flujo_Revision.md",
-    }
-    retrieval = RetrievalApplicationService(
-        chroma_store=None,
-        corpus_provider=corpus,
-        runtime_policy=policy,
-    )
-    context = retrieval.build_context("servicios externos", "all_notes", limit=5)
-    assert context["has_context"] is True
-    assert context["mode"] == MODE_BM25_VAULT
-    assert context["degraded"] is True
-    assert "servicios externos" in context["text"]
-
     store = JobStore(vault_path)
     try:
+        origin = approved_clean_origin(vault, store, filename="origen-demo.md")
+        for note_path in sorted((vault_path / "4_salida" / "Demo").glob("*.md")):
+            legacy_metadata, body = parse_frontmatter(note_path.read_text(encoding="utf-8"))
+            relative = note_path.relative_to(vault_path).as_posix()
+            note_path.write_text(
+                serialize_frontmatter(
+                    {
+                        "schema_version": 3,
+                        "note_id": document_id_for_relative_path(relative),
+                        "note_type": "concept",
+                        "title": legacy_metadata["title"],
+                        "date": legacy_metadata["date"],
+                        "author": "Fuente",
+                        "tags": legacy_metadata["tags"],
+                        "issue": legacy_metadata["issue"],
+                        "status": legacy_metadata["status"],
+                        "origins": [origin],
+                        "history": legacy_metadata["history"],
+                    }
+                ) + body,
+                encoding="utf-8",
+            )
+            store.register_note(
+                note_id=document_id_for_relative_path(relative),
+                relative_path=relative,
+                content_hash=content_hash_for_markdown(note_path.read_text(encoding="utf-8")),
+                note_type="concept",
+                origin_kind=None,
+                theme="General",
+                issue="Demo",
+                status=legacy_metadata["status"],
+            )
         notes = NotesApplicationService(
             vault=vault,
             path_resolver=resolver,
@@ -102,6 +111,37 @@ def test_wave2_demo_smoke_runs_real_offline_flow_and_is_idempotent(
             chroma_store=None,
             runtime_policy=policy,
         )
+        corpus = VaultCorpusProvider(
+            vault_path,
+            output_roots=(vault_path / "4_salida",),
+            path_resolver=resolver,
+            eligibility_guard=notes.require_eligible_origins,
+        )
+
+        # Corpus and retrieval are real implementations; Eco receives no Chroma store.
+        chunks = corpus.load()
+        assert {
+            str(chunk["metadata"]["relative_path"])
+            for chunk in chunks
+        } == {
+            "4_salida/Demo/Arquitectura_Local.md",
+            "4_salida/Demo/Flujo_Revision.md",
+        }
+        retrieval = RetrievalApplicationService(
+            chroma_store=None,
+            corpus_provider=corpus,
+            runtime_policy=policy,
+            eligibility_guard=lambda hit: (
+                (note := notes.get_note(str((hit.get("metadata") or {})["document_id"]))).status
+                == "approved"
+                and not notes.require_eligible_origins(note)
+            ),
+        )
+        context = retrieval.build_context("servicio vivo", "all_notes", limit=5)
+        assert context["has_context"] is True
+        assert context["mode"] == MODE_BM25_VAULT
+        assert context["degraded"] is True
+        assert "servicio" in context["text"]
         exporter = ExportApplicationService(
             notes_service=notes,
             path_resolver=resolver,

@@ -1,7 +1,8 @@
 # Fuente — Plan de migración canónica, nombre y sistema Nord
 
-**Estado:** plan de ejecución posterior. Este documento no autoriza por sí
-solo cambios de código, Vault, GitHub ni Git.
+**Estado:** hoja de ruta vigente. El SDD detallado de ejecución es
+[`2026-08-14-fuente-execution-sdd.md`](2026-08-14-fuente-execution-sdd.md).
+Este documento no autoriza por sí solo cambios de código, Vault, GitHub ni Git.
 
 **Especificación rectora:**
 [`2026-08-14-fuente-canonical-record-and-terminology.md`](../specs/2026-08-14-fuente-canonical-record-and-terminology.md).

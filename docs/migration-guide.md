@@ -1,6 +1,28 @@
 # Vault migration guide
 
-This guide describes how to migrate an existing Funes Vault to **frontmatter schema version 1** using `scripts/migrate_vault.py`.
+This guide describes how to migrate an existing Fuente Vault to **frontmatter schema version 1** and prepare the Fuente migration using `scripts/migrate_vault.py`.
+
+## Fuente precondition inventory
+
+Before any Fuente migration, create the immutable, read-only inventory. It records
+the Markdown notes under `3_limpio` and `4_salida`, their identity, revision and
+content hash, plus blocking findings. It never treats a folder name or a status
+value as human approval: until the approval ledger exists, every `approved` value
+is `false`.
+
+```bash
+python3 scripts/migrate_vault.py --fuente-inventory \
+  --vault /path/to/Vault --output /path/to/inventory.json
+```
+
+The command writes the JSON atomically and does not modify
+Markdown, SQLite or Obsidian metadata. Exit code `1` means that the inventory
+contains a blocking finding; resolve those findings and regenerate it before
+continuing. The scanner rejects symlinks, invalid frontmatter, duplicate
+`note_id` values, Markdown in an unknown route, and paths outside the Vault.
+The technical pipeline roots `1_entrada` and `2_sucio` are outside this
+inventory by design. Generated files whose names start with `_` or `00_MOC` are
+treated as projections rather than migration notes.
 
 ## When to migrate
 
@@ -8,11 +30,51 @@ Migrate when notes still use legacy Spanish YAML keys (`título`, `estado`, `cla
 
 ## Prerequisites
 
-- A backup of the Vault (the tool also writes per-file backups under `.funes/migrations/<id>/backups/`).
-- Python environment with the `funes` package installed (same as the main app).
+- A backup of the Vault (the tool also writes per-file backups under `.fuente/migrations/<id>/backups/`).
+- Python environment with the `fuente` package installed (same as the main app).
 - No running ingestion jobs modifying the same notes (stop the watcher/headless worker first).
 
 ## Commands
+
+### Fuente v3: plan and move Sumarios
+
+The physical move from the prior `4_salida/Fuentes/` taxonomy to
+`4_salida/Sumarios/` is separate from frontmatter migration. It only accepts
+schema-v3 `summary` notes with a valid `origin_kind` and complete `origins`.
+Every referenced `3_limpio` note must still have a current human approval for
+the exact `note_id`, revision and content hash. `3_limpio` is never scanned as
+a move candidate and is never rewritten by this command.
+
+First create and review a dry-run manifest. Without `--manifest`, dry-run does
+not write Markdown, SQLite or a manifest file.
+
+```bash
+python3 scripts/migrate_vault.py --sumarios-dry-run --vault /path/to/Vault \
+  --manifest /path/to/Vault/.fuente/migrations/sumarios-plan.json
+```
+
+After a person has reviewed all entries and blocking findings, record that
+decision explicitly. This does not move any note.
+
+```bash
+python3 scripts/migrate_vault.py --sumarios-approve --vault /path/to/Vault \
+  --manifest /path/to/Vault/.fuente/migrations/sumarios-plan.json \
+  --reviewer "nombre de la persona responsable"
+```
+
+Only then can the same Vault-bound manifest be applied:
+
+```bash
+python3 scripts/migrate_vault.py --sumarios-apply --vault /path/to/Vault \
+  --manifest /path/to/Vault/.fuente/migrations/sumarios-plan.json
+```
+
+The destination is `4_salida/Sumarios/<tipo>/nombre.md`: `meeting` goes to
+`Reuniones`, `call` to `Llamadas`, `email` to `Correos`, `working_document` to
+`Documentos_Trabajo`, `official_document` to `Documentos_Oficiales`, and
+`unclassified` to `Sin_clasificar`. Apply verifies the source hash and catalog
+CAS before each rename, preserves the note identity and approval rows, and
+rewrites only exact Markdown wikilinks whose target is one of the moved routes.
 
 ### 1. Dry run (recommended first)
 
@@ -58,7 +120,7 @@ rollback may restore files without rebuilding either derived artifact, rebuild
 only one of them, or rebuild both.
 
 ```bash
-python scripts/migrate_vault.py /path/to/Vault --rollback .funes/migrations/<id>/manifest.json
+python scripts/migrate_vault.py /path/to/Vault --rollback .fuente/migrations/<id>/manifest.json
 ```
 
 ## Manifest layout
@@ -66,7 +128,7 @@ python scripts/migrate_vault.py /path/to/Vault --rollback .funes/migrations/<id>
 Each run creates:
 
 ```
-.funes/migrations/<migration_id>/
+.fuente/migrations/<migration_id>/
   manifest.json
   backups/
     <vault-relative-path>__<hash>.bak
@@ -96,12 +158,16 @@ Each run creates:
 
 ## Troubleshooting
 
-- **Chroma errors** — re-run with `--skip-index`, fix Chroma under `.funes/chroma`, then re-apply or run ingestion reconciliation separately.
+- **Chroma errors** — re-run with `--skip-index`, fix Chroma under `.fuente/chroma`, then re-apply or run ingestion reconciliation separately.
 - **Duplicate stems** — rename or merge conflicting notes; migration does not rename files.
 - **Rollback after manual edits** — rollback restores only manifest-backed files; manual changes after apply may be overwritten.
+- **Sumarios rollback after manual edits** — a moved file whose content hash
+  changed is deliberately left where it is and the manifest records
+  `content_changed_after_apply`. Recover that file manually from Obsidian or a
+  backup instead of forcing the automated rollback.
 
 ## Related contracts
 
-- Frontmatter schema: `funes/domain/frontmatter.py`
-- Authorized paths: `funes/domain/paths.py`
-- Atomic writes: `funes/infrastructure/atomic_files.py`
+- Frontmatter schema: `fuente/domain/frontmatter.py`
+- Authorized paths: `fuente/domain/paths.py`
+- Atomic writes: `fuente/infrastructure/atomic_files.py`

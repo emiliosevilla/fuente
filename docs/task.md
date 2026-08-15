@@ -1,8 +1,10 @@
 # Funes — Tablero de estado (task.md)
 
-> **Checkout medido:** `dev` / `origin/dev` = `8518299` (2026-08-14); árbol limpio.
-> **Estado:** hardening, Wave 1, Wave 2, fuentes montadas, base editorial y reorganización física de `Vault_Funes/4_salida` completados. El gate actual está en `READY`.
-> **Histórico SDD:** completado y trasladado a `/private/tmp/funes-sdd-archive-20260813/`; este `task.md` conserva el estado vigente y el backlog no bloqueante.
+> **Índice de planificación:** [`docs/planning-index.md`](planning-index.md) separa el plan vigente, los planes cerrados y la evidencia histórica.
+> **Estado del producto cerrado:** hardening, Wave 1, Wave 2, fuentes montadas, base editorial y reorganización física de `Vault_Funes/4_salida` están completados.
+> **Última evidencia de release registrada:** `READY`. No debe tratarse como medición actual hasta repetir el gate en el checkout que se vaya a publicar.
+> **Siguiente ciclo vigente:** Fuente. La especificación rectora y el SDD de ejecución están enlazados en el índice; la aprobación manual diferenciada de `3_limpio` y `4_salida` ya tiene contrato y cobertura focal, mientras que el renombre, Nord y los checkpoints humanos finales siguen pendientes.
+> **Histórico SDD:** la [evidencia versionada de la base v2](history/2026-08-13-editorial-foundation-evidence.md) resume el trabajo cerrado; `.superpowers/sdd/` conserva informes locales ignorados por Git. Ninguno contiene trabajo pendiente.
 > **Gate:** `PYTHONDONTWRITEBYTECODE=1 python3 scripts/release_gate.py`
 
 ---
@@ -14,7 +16,8 @@
 > [`Fuente — registro canónico, terminología y sistema visual`](superpowers/specs/2026-08-14-fuente-canonical-record-and-terminology.md)
 > y su [plan de migración](superpowers/plans/2026-08-14-fuente-canonical-record-rename-and-nord.md).
 > `3_limpio` será el único registro canónico y requerirá aprobación humana por
-> revisión; `4_salida/Sumarios` será derivado. La conversión Funes → Fuente y
+> revisión; `4_salida/Sumarios` será derivado y requerirá una segunda aprobación
+> editorial independiente antes de publicarse o exportarse. La conversión Funes → Fuente y
 > la adopción visual Nord están planificadas, no ejecutadas aún.
 
 | Eje | Definición operativa |
@@ -158,7 +161,7 @@ Tasks 1–7 dejan disponible el flujo editorial siguiente, sobre la fuente canó
 | Editor de fuente | Edición Markdown con frontmatter separado, `document_id` opaco y CAS de revisión; los conflictos preservan los bytes existentes. | `tests/contract/test_note_editor_contract.py`, `tests/contract/test_bridge_note_editor_contract.py`, `tests/contract/test_reader_editor_contract.py` |
 | Reflow | Reflow de enlaces explícito y acotado por documento/tema/cuestion; enriquecimiento y reflow son jobs durables, recuperables y revisables. | `tests/test_reflow_service.py`, `tests/test_reflow_jobs.py` |
 | Candidatos | Detección determinista, limitada al alcance autorizado, sin mutación automática. | `tests/test_fusion_candidates.py`, `tests/security/test_path_authorization.py` |
-| Fusión | Preview-then-commit con IDs/revisiones de fuentes, resultado `pending_review`, referencias de origen y fuentes originales preservadas. | `tests/test_fusion_flow.py` |
+| Fusión | Preview-then-commit con IDs/revisiones de fuentes, resultado `pending_review`, referencias de origen y fuentes originales preservadas. Las proyecciones MOC del sistema se aprueban automáticamente y sólo indexan salidas ya aprobadas. | `tests/test_fusion_flow.py` |
 | Bridge/UI | Allowlist, validación tipada, estados de conflicto/error y sinks DOM seguros para Markdown no confiable. | `tests/contract/test_bridge_frontend_contract.py`, `tests/test_html_safety_contract.py` |
 
 Comandos de evidencia:

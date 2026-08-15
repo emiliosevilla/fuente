@@ -1,34 +1,55 @@
 ---
 name: git
-description: Ejecuta la receta determinista de publicación Git de Fuente cuando el usuario pida la cascada completa o invoque /git; las operaciones Git normales no requieren este workflow.
+description: Ejecuta la receta determinista de publicación Git de Fuente cuando el usuario pida la cascada completa o invoque /git; publica la rama de trabajo, crea un PR hacia main, fusiona desde GitHub y vuelve a la rama de trabajo.
 ---
 
-# Git - Workflow Determinista de Publicación (`/git`)
+# Git - Workflow determinista de publicación mediante PR (`/git`)
 
-Esta habilidad automatiza de forma repetible la receta oficial de 6 pasos de publicación Git en Fuente (con soporte para repositorios estándar y Git Worktrees):
+Esta skill automatiza la publicación de Fuente sin hacer merges locales directos:
 
-1. `git checkout <WORK_BRANCH>` (Asegura estar en la rama de trabajo `dev` o del Worktree activo)
-2. `git add .`
-3. `git commit -m "<mensaje>"`
-4. `git push origin <WORK_BRANCH>`
-5. `git checkout main && git merge <WORK_BRANCH> && git push origin main`
-6. `git checkout <WORK_BRANCH>`
+1. Asegurar la rama de trabajo activa (`dev` o el worktree activo).
+2. Añadir y commitear los cambios.
+3. Hacer push de la rama de trabajo.
+4. Crear o reutilizar un PR de la rama de trabajo hacia `main`.
+5. Fusionar el PR desde GitHub.
+6. Actualizar localmente `main` por fast-forward y volver a la rama de trabajo.
 
----
+## Uso
 
-## 🚀 Instrucciones de Ejecución
+Ejecutar el script determinista:
 
-Esta secuencia se usa cuando el usuario ejecuta `/git`, pide la cascada completa o autoriza explícitamente esa receta concreta:
+```bash
+./scripts/git_ship.sh
+./scripts/git_ship.sh "feat: actualización de componentes"
+```
 
-1. **Determinar mensaje de commit**:
-   - Si el usuario proporciona un mensaje junto al comando (ej. `/git "feat: actualización de componentes"`), utiliza ese mensaje.
-   - Si el usuario ejecuta simplemente `/git`, omite el parámetro para que el script auto-genere el mensaje por fecha y hora: `"sesión YYYY-MM-DD HH:MM:SS"`.
+Sin mensaje explícito se genera `sesión YYYY-MM-DD HH:MM:SS`.
 
-2. **Ejecutar el script determinista**:
-   Ejecuta el script de publicación mediante `run_command`:
-   ```bash
-   ./scripts/git_ship.sh "mensaje de commit opcional"
-   ```
+El merge normal respeta las protecciones de GitHub. Si el PR queda bloqueado por
+revisión o checks, el script conserva el PR abierto, vuelve a la rama de trabajo
+y termina con error mostrando su URL. Solo cuando el usuario autorice
+expresamente el bypass administrativo se puede usar:
 
-3. **Confirmación**:
-   Confirma al usuario el resultado de la receta de 6 pasos.
+```bash
+./scripts/git_ship.sh --admin
+./scripts/git_ship.sh "docs: publicar reglas" --admin
+```
+
+`--admin` sigue fusionando mediante el PR; únicamente permite saltarse requisitos
+de protección que GitHub haya marcado como bloqueantes.
+
+## Reglas obligatorias
+
+- No ejecutar `git merge` directo entre ramas.
+- No hacer push directo a `main`.
+- Crear el PR con `gh pr create` y fusionarlo con `gh pr merge`.
+- No borrar la rama `dev` después del merge.
+- Si el merge no puede completarse, dejar el PR abierto y comunicar el bloqueo.
+- Derivar el repositorio desde `origin`; no hardcodear propietario ni nombre.
+
+## Confirmación
+
+Al terminar, informar commit, rama de trabajo, URL/número del PR, commit de
+merge, hashes de `dev` y `main`, estado del árbol y cualquier requisito que haya
+bloqueado el PR. No afirmar que la publicación terminó si GitHub no confirma el
+merge.

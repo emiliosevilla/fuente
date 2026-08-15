@@ -1,6 +1,6 @@
 # Release gate
 
-Funes ships a **fail-closed release gate** that must pass before tagging or publishing a build. The gate encodes the completed hardening, residual-security, and productization checks.
+Fuente ships a **fail-closed release gate** that must pass before tagging or publishing a build. The gate encodes the completed hardening, residual-security, and productization checks.
 
 ## Run the gate
 
@@ -39,7 +39,7 @@ Exit code `0` means **READY**; any failure prints `BLOCKED` and returns non-zero
 | Migration tooling | `migration` | `pytest tests/test_vault_migration.py` + `docs/migration-guide.md` |
 | Mounted-source sync contracts | `sync` | `pytest` folder sync, recursive/reconciliation/discovery, UI bridge, and idempotency matrices |
 | Gate self-tests | `release_gate` | `pytest tests/test_release_gate.py` |
-| Source tree clean after tests | `source_tree_clean` | `git status --porcelain` ignoring `__pycache__`, `*.pyc`, `funes.egg-info`, `.pytest_cache` |
+| Source tree clean after tests | `source_tree_clean` | `git status --porcelain` ignoring `__pycache__`, `*.pyc`, `fuente.egg-info`, `.pytest_cache` |
 | No open P0/P1 security findings | `security_residuals` | `docs/security-residual-findings.md` has no open P0/P1 rows |
 | Operator docs present | `required_docs` | `rollback-plan.md`, `security-residual-findings.md`, `headless-operation.md`, `migration-guide.md` |
 | README matches measured behaviour | `readme_honesty` | No stale checkpoint 0.1 test counts; references this gate |

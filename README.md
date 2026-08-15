@@ -230,4 +230,6 @@ WYSIWYG ni una integración de LightRAG en producción. La fuente de verdad es
 el Markdown aprobado; la base SQLite, el grafo, los índices RAG y la interfaz
 son capas derivadas y reconstruibles.
 
-Desarrollado por Emilio Sevilla Ortego.
+## Autor
+
+Emilio Sevilla Ortego.

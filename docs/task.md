@@ -1,9 +1,10 @@
-# Funes — Tablero de estado (task.md)
+# Fuente — Tablero de estado (task.md)
 
 > **Índice de planificación:** [`docs/planning-index.md`](planning-index.md) separa el plan vigente, los planes cerrados y la evidencia histórica.
-> **Estado del producto cerrado:** hardening, Wave 1, Wave 2, fuentes montadas, base editorial y reorganización física de `Vault_Funes/4_salida` están completados.
-> **Última evidencia de release registrada:** `READY`. No debe tratarse como medición actual hasta repetir el gate en el checkout que se vaya a publicar.
-> **Siguiente ciclo vigente:** Fuente. La especificación rectora y el SDD de ejecución están enlazados en el índice; la aprobación manual diferenciada de `3_limpio` y `4_salida` ya tiene contrato y cobertura focal, mientras que el renombre, Nord y los checkpoints humanos finales siguen pendientes.
+> **Checkout medido (2026-08-15):** `dev`/`origin/dev` = `b144840`; `main`/`origin/main` = `b7b39cd`; árbol limpio.
+> **Estado del producto:** hardening, Wave 1, Wave 2, fuentes montadas, base editorial, renombrado del producto a Fuente y sistema visual Nord están implementados; quedan checkpoints humanos del Vault y de la interfaz.
+> **Última evidencia de release medida:** suite completa `1094 passed, 1 skipped, 1 warning`; `scripts/release_gate.py` devuelve `RESULT: READY`.
+> **Siguiente ciclo vigente:** cerrar los checkpoints humanos de las Tareas 1–10, actualizar el ledger SDD y ejecutar el benchmark real de `qwen3.5:0.8b` cuando existan documentos canónicos aprobados.
 > **Histórico SDD:** la [evidencia versionada de la base v2](history/2026-08-13-editorial-foundation-evidence.md) resume el trabajo cerrado; `.superpowers/sdd/` conserva informes locales ignorados por Git. Ninguno contiene trabajo pendiente.
 > **Gate:** `PYTHONDONTWRITEBYTECODE=1 python3 scripts/release_gate.py`
 
@@ -17,8 +18,22 @@
 > y su [plan de migración](superpowers/plans/2026-08-14-fuente-canonical-record-rename-and-nord.md).
 > `3_limpio` será el único registro canónico y requerirá aprobación humana por
 > revisión; `4_salida/Sumarios` será derivado y requerirá una segunda aprobación
-> editorial independiente antes de publicarse o exportarse. La conversión Funes → Fuente y
-> la adopción visual Nord están planificadas, no ejecutadas aún.
+> editorial independiente antes de publicarse o exportarse. La conversión del
+> repositorio, paquete, remoto y carpeta local de Funes a Fuente ya está hecha;
+> el Vault conserva su nombre físico hasta una decisión específica.
+
+### Estado medido actual — SDD Fuente (2026-08-15)
+
+- Tareas 1–7 y 9 tienen implementación y cobertura automatizada; las Tareas 6,
+  7 y 9 constan como aprobadas por Sol en el ledger. Las Tareas 1–5 conservan
+  checkpoints humanos y dictamen final de Sol pendientes.
+- La Tarea 2 mantiene `qwen3.5:0.8b` como candidato; el benchmark real sigue
+  bloqueado hasta disponer de casos aprobados en `3_limpio`.
+- La Tarea 8 está implementada técnicamente: paquete, entry point, instaladores,
+  estado `.fuente`, remoto GitHub y carpeta local ya usan Fuente. El ledger
+  histórico aún necesita reflejar este cierre.
+- La Tarea 10 tiene gate verde (`RESULT: READY`), pero el cierre formal requiere
+  registrar la evidencia actual y completar la comprobación humana de Vault/UI.
 
 | Eje | Definición operativa |
 |-----|----------------------|
@@ -244,7 +259,7 @@ Evidencia de ejecución:
 - **Release gate completo:** todas las suites funcionales pasan: unit `732 passed, 1 skipped`, integration `19 passed`, security `35 passed`, contract `106 passed, 1 warning`, offline `7 passed`, installer `21 passed`, headless `10 passed`, migration `19 passed`, sync `52 passed` y release gate `13 passed`.
 - **Última medición limpia:** todas las comprobaciones pasaron, incluido `source_tree_clean`; resultado: `RESULT: READY`.
 
-No queda ninguna acción funcional pendiente en este ciclo. La publicación del código está reflejada en `8518299`; queda publicar este cambio documental de `task.md` cuando corresponda.
+No queda un bloqueo funcional de código en este ciclo. Quedan el benchmark real condicionado a documentos aprobados, los checkpoints humanos del Vault/UI y la actualización del ledger SDD. La medición actual del checkout es `1094 passed, 1 skipped` y `RESULT: READY`.
 
 ### Observaciones no bloqueantes trasladadas desde los SDD
 

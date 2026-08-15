@@ -3,9 +3,9 @@ import unittest
 import tempfile
 from pathlib import Path
 
-from funes.config import get_default_config
-from funes.domain.frontmatter import serialize_frontmatter
-from funes.watcher.watcher import ETLPipeline
+from fuente.config import get_default_config
+from fuente.domain.frontmatter import serialize_frontmatter
+from fuente.watcher.watcher import ETLPipeline
 
 
 from unittest.mock import patch
@@ -25,13 +25,15 @@ class TestIntegration(unittest.TestCase):
     def tearDown(self):
         self.temp_dir.cleanup()
 
-    @patch("funes.watcher.watcher.AtomicNoteGenerator.generate_atomic_note")
+    @patch("fuente.watcher.watcher.AtomicNoteGenerator.generate_atomic_note")
     def test_end_to_end_etl_pipeline(self, mock_gen):
+        from tests.conftest import approve_saved_clean_job
+
         # Configurar mock para devolver notas con referencias a títulos existentes
         def mock_generate(clean_md_content, model_name, file_name):
             stem = file_name.rsplit(".", 1)[0]
             return serialize_frontmatter({
-                "schema_version": 1, "title": stem, "date": "", "author": "Funes",
+                "schema_version": 1, "title": stem, "date": "", "author": "Fuente",
                 "tags": [], "issue": "_Sin_Cuestion", "status": "pending_review",
                 "sources": [file_name], "history": [],
             }) + f"# {stem}\n\n{clean_md_content}"
@@ -48,8 +50,12 @@ class TestIntegration(unittest.TestCase):
             f.write("# Proyecto Alpha Estrategia\n\nAnalizamos el Informe Financiero 2026 para coordinar el plan.")
 
         # 2. Procesar primer archivo
-        res1 = self.pipeline.process_file(file1)
-        self.assertTrue(res1)
+        self.assertFalse(self.pipeline.process_file(file1))
+        first_waiting = list(self.pipeline.job_store.list_jobs())[0]
+        approve_saved_clean_job(self.pipeline.ingestion, self.pipeline.vault, first_waiting)
+        self.assertEqual(
+            self.pipeline.ingestion.resume(first_waiting.job_id).stage, "completed"
+        )
 
         # Verificar que el archivo fue movido a 2_sucio, limpio en 3_limpio y creado en 4_salida
         dirty_files = list(self.config.vault.dirty_dir.glob("Informe_Financiero_2026*"))
@@ -62,15 +68,22 @@ class TestIntegration(unittest.TestCase):
         self.assertEqual(len(output_files), 1)
 
         # 3. Procesar segundo archivo (que debería hacer WikiLink hacia el primero)
-        res2 = self.pipeline.process_file(file2)
-        self.assertTrue(res2)
+        self.assertFalse(self.pipeline.process_file(file2))
+        second_waiting = max(
+            self.pipeline.job_store.list_jobs(), key=lambda job: job.created_at
+        )
+        approve_saved_clean_job(self.pipeline.ingestion, self.pipeline.vault, second_waiting)
+        self.assertEqual(
+            self.pipeline.ingestion.resume(second_waiting.job_id).stage, "completed"
+        )
 
         output_file2 = self.config.vault.output_dir / "Proyecto_Alpha_Estrategia.md"
         with open(output_file2, "r", encoding="utf-8") as f:
             content2 = f.read()
 
-        # Debe contener el enlace WikiLink [[Informe_Financiero_2026...]]
-        self.assertIn("[[Informe_Financiero_2026", content2)
+        # La salida recién generada sigue pendiente de aprobación editorial;
+        # por tanto todavía no entra en el grafo ni recibe WikiLinks.
+        self.assertNotIn("[[Informe_Financiero_2026", content2)
 
 
 if __name__ == "__main__":

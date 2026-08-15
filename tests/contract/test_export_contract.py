@@ -9,17 +9,17 @@ import json
 from docx import Document
 import pytest
 
-from funes.application.export import ExportApplicationService
-from funes.application.notes import NotesApplicationService
-from funes.control_console import FunesConsoleBackend
-from funes.domain.errors import NoteRevisionConflictError
-from funes.domain.frontmatter import parse_frontmatter
-from funes.domain.metadata_form import MetadataValidationError
-from funes.domain.paths import AuthorizedPathResolver
-from funes.infrastructure.sqlite_store import JobStore
-from funes.ui.bridge import FunesPyWebViewApi
+from fuente.application.export import ExportApplicationService
+from fuente.application.notes import NotesApplicationService
+from fuente.control_console import FuenteConsoleBackend
+from fuente.domain.errors import NoteRevisionConflictError
+from fuente.domain.frontmatter import parse_frontmatter
+from fuente.domain.metadata_form import MetadataValidationError
+from fuente.domain.paths import AuthorizedPathResolver
+from fuente.infrastructure.sqlite_store import JobStore
+from fuente.ui.bridge import FuentePyWebViewApi
 
-from tests.contract.conftest import CONSOLA_HTML, write_note_under_theme
+from tests.contract.conftest import CONSOLA_HTML, approved_clean_origin, write_note_under_theme
 
 THEME = "Derecho_Civil"
 ISSUE = "Contratos"
@@ -55,22 +55,56 @@ def export_stack(temp_vault_manager):
 def _prepare_approved_note(vault_manager) -> str:
     vault_manager.create_theme(THEME)
     vault_manager.create_issue_in_theme(ISSUE)
-    document_id, _ = write_note_under_theme(
-        vault_manager,
-        theme=THEME,
-        issue=ISSUE,
-        title="Nota_Export",
-        body="# Cuerpo\n\nTexto canónico.\n",
-        status="approved",
-    )
+    store = JobStore(vault_manager.config.vault_path)
+    try:
+        origin = approved_clean_origin(
+            vault_manager,
+            store,
+            filename="origen-export-contract.md",
+        )
+        document_id, _ = write_note_under_theme(
+            vault_manager,
+            theme=THEME,
+            issue=ISSUE,
+            title="Nota_Export",
+            body="# Cuerpo\n\nTexto canónico.\n",
+            status="approved",
+            origins=[origin],
+            store=store,
+        )
+    finally:
+        store.close()
+    return document_id
+
+
+def _write_approved_themed_note(vault_manager, *, title: str, body: str) -> str:
+    store = JobStore(vault_manager.config.vault_path)
+    try:
+        origin = approved_clean_origin(
+            vault_manager,
+            store,
+            filename=f"origen-{title.lower()}.md",
+        )
+        document_id, _ = write_note_under_theme(
+            vault_manager,
+            theme=THEME,
+            issue=ISSUE,
+            title=title,
+            body=body,
+            status="approved",
+            origins=[origin],
+            store=store,
+        )
+    finally:
+        store.close()
     return document_id
 
 
 def test_bridge_export_matches_canonical_note_document(temp_vault_manager):
     document_id = _prepare_approved_note(temp_vault_manager)
-    backend = FunesConsoleBackend(temp_vault_manager.config.vault_path)
+    backend = FuenteConsoleBackend(temp_vault_manager.config.vault_path)
     backend.vault = temp_vault_manager
-    bridge = FunesPyWebViewApi(backend)
+    bridge = FuentePyWebViewApi(backend)
     canonical = backend.get_notes_service().get_note(document_id).to_markdown()
 
     result = bridge.export_note(document_id, "markdown")
@@ -87,13 +121,10 @@ def test_export_service_and_bridge_agree_on_markdown(temp_vault_manager):
     vault_manager = temp_vault_manager
     vault_manager.create_theme(THEME)
     vault_manager.create_issue_in_theme(ISSUE)
-    document_id, _ = write_note_under_theme(
+    document_id = _write_approved_themed_note(
         vault_manager,
-        theme=THEME,
-        issue=ISSUE,
         title="Nota_Acuerdo",
         body="# Acuerdo\n\nContenido idéntico.\n",
-        status="approved",
     )
     resolver = AuthorizedPathResolver(
         vault_root=vault_manager.config.vault_path,
@@ -116,9 +147,9 @@ def test_export_service_and_bridge_agree_on_markdown(temp_vault_manager):
     )
     try:
         service_payload = export_service.prepare_download(document_id, "markdown")
-        backend = FunesConsoleBackend(vault_manager.config.vault_path)
+        backend = FuenteConsoleBackend(vault_manager.config.vault_path)
         backend.vault = vault_manager
-        bridge_payload = FunesPyWebViewApi(backend).export_note(document_id, "markdown")
+        bridge_payload = FuentePyWebViewApi(backend).export_note(document_id, "markdown")
         note = notes.get_note(document_id)
         assert service_payload.content == note.to_markdown()
         assert bridge_payload["content"] == service_payload.content
@@ -128,9 +159,9 @@ def test_export_service_and_bridge_agree_on_markdown(temp_vault_manager):
 
 def test_bridge_docx_export_round_trips_real_docx(temp_vault_manager):
     document_id = _prepare_approved_note(temp_vault_manager)
-    backend = FunesConsoleBackend(temp_vault_manager.config.vault_path)
+    backend = FuenteConsoleBackend(temp_vault_manager.config.vault_path)
     backend.vault = temp_vault_manager
-    result = FunesPyWebViewApi(backend).export_note(document_id, "docx")
+    result = FuentePyWebViewApi(backend).export_note(document_id, "docx")
 
     assert "error" not in result
     assert result["filename"].endswith(".docx")
@@ -175,18 +206,15 @@ def test_bridge_docx_keeps_code_and_unsupported_markdown_literal(temp_vault_mana
         "> bloque literal\n\n"
         "#### Nivel cuatro literal\n"
     )
-    document_id, _ = write_note_under_theme(
+    document_id = _write_approved_themed_note(
         temp_vault_manager,
-        theme=THEME,
-        issue=ISSUE,
         title="Nota_7B",
         body=body,
-        status="approved",
     )
 
-    backend = FunesConsoleBackend(temp_vault_manager.config.vault_path)
+    backend = FuenteConsoleBackend(temp_vault_manager.config.vault_path)
     backend.vault = temp_vault_manager
-    result = FunesPyWebViewApi(backend).export_note(document_id, "docx")
+    result = FuentePyWebViewApi(backend).export_note(document_id, "docx")
     assert "error" not in result
 
     document = Document(io.BytesIO(base64.b64decode(result["content_base64"])))
@@ -212,15 +240,22 @@ def test_backend_approve_and_export_returns_review_result_without_destination_pa
 ):
     temp_vault_manager.create_theme(THEME)
     temp_vault_manager.create_issue_in_theme(ISSUE)
+    backend = FuenteConsoleBackend(temp_vault_manager.config.vault_path)
+    backend.vault = temp_vault_manager
+    origin = approved_clean_origin(
+        temp_vault_manager,
+        backend.get_notes_service().job_store,
+        filename="origen-export.md",
+    )
     document_id, _ = write_note_under_theme(
         temp_vault_manager,
         theme=THEME,
         issue=ISSUE,
         title="Nota_9B",
         body="# Cuerpo 9B\n",
+        origins=[origin],
+        store=backend.get_notes_service().job_store,
     )
-    backend = FunesConsoleBackend(temp_vault_manager.config.vault_path)
-    backend.vault = temp_vault_manager
     revision = backend.get_notes_service().get_note(document_id).revision
 
     result = backend.approve_and_export(
@@ -242,7 +277,7 @@ def test_backend_approve_and_export_returns_review_result_without_destination_pa
 def test_bridge_approve_and_export_normalizes_typed_metadata_before_backend(
     temp_vault_path,
 ):
-    bridge = FunesPyWebViewApi(FunesConsoleBackend(temp_vault_path))
+    bridge = FuentePyWebViewApi(FuenteConsoleBackend(temp_vault_path))
     calls = []
     bridge.backend.approve_and_export = (
         lambda document_id, expected_revision, export_format, metadata_patch=None: (
@@ -295,7 +330,7 @@ def test_bridge_approve_and_export_normalizes_typed_metadata_before_backend(
 def test_bridge_approve_and_export_rejects_invalid_boundary_inputs(
     arguments, expected, temp_vault_path
 ):
-    bridge = FunesPyWebViewApi(FunesConsoleBackend(temp_vault_path))
+    bridge = FuentePyWebViewApi(FuenteConsoleBackend(temp_vault_path))
     backend_calls = []
     bridge.backend.approve_and_export = lambda *args, **kwargs: backend_calls.append(
         (args, kwargs)
@@ -308,7 +343,7 @@ def test_bridge_approve_and_export_rejects_invalid_boundary_inputs(
 def test_bridge_approve_and_export_maps_metadata_validation_to_stable_error(
     temp_vault_path,
 ):
-    bridge = FunesPyWebViewApi(FunesConsoleBackend(temp_vault_path))
+    bridge = FuentePyWebViewApi(FuenteConsoleBackend(temp_vault_path))
     result = bridge.approve_and_export(
         "doc-id", 1, "markdown", metadata_patch={"tags": ["bad:\nstatus: approved"]}
     )
@@ -320,7 +355,7 @@ def test_bridge_approve_and_export_maps_metadata_validation_to_stable_error(
 def test_bridge_approve_and_export_maps_revision_conflict_to_stable_error(
     temp_vault_path,
 ):
-    bridge = FunesPyWebViewApi(FunesConsoleBackend(temp_vault_path))
+    bridge = FuentePyWebViewApi(FuenteConsoleBackend(temp_vault_path))
 
     def conflict(*args, **kwargs):
         raise NoteRevisionConflictError("doc-id")

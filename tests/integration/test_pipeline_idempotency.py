@@ -3,10 +3,10 @@ from __future__ import annotations
 
 import threading
 
-from funes.domain.jobs import CLAIMED_STATUS, JobConflictError
-from funes.domain.sync import ConnectedFolder
-from funes.core.folder_sync import FolderSyncManager
-from funes.infrastructure.sqlite_store import JobStore
+from fuente.domain.jobs import CLAIMED_STATUS, JobConflictError
+from fuente.domain.sync import ConnectedFolder
+from fuente.core.folder_sync import FolderSyncManager
+from fuente.infrastructure.sqlite_store import JobStore
 
 from tests.integration.conftest import (
     MODIFIED_SOURCE_TEXT,
@@ -16,6 +16,7 @@ from tests.integration.conftest import (
     attach_service,
     assert_job_history_explains_recovery,
     assert_single_note,
+    approve_waiting_clean,
     build_harness,
     resume_to_completion,
 )
@@ -103,7 +104,11 @@ def test_concurrent_claim_of_one_job_only_one_worker_processes(temp_vault_path):
         start_barrier.wait()
         try:
             claimed = store.claim_job(job.job_id, expected_revision=job.revision)
-            results[name] = service.resume(claimed.job_id, respect_scheduler=False)
+            resumed = service.resume(claimed.job_id, respect_scheduler=False)
+            if resumed.stage == "saved_clean":
+                approve_waiting_clean(shared, resumed, service=service)
+                resumed = service.resume(claimed.job_id, respect_scheduler=False)
+            results[name] = resumed
         except JobConflictError as error:
             results[name] = error
 

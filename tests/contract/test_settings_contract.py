@@ -6,11 +6,11 @@ from types import SimpleNamespace
 
 import pytest
 
-from funes.config import get_config_file_path, load_config
-from funes.control_console import FunesConsoleBackend
-from funes.domain.runtime_policy import AudioMode, ExecutionProfile, RuntimePolicy
-from funes.ui.bridge import FunesPyWebViewApi
-from funes.watcher.watcher import ETLPipeline
+from fuente.config import get_config_file_path, load_config
+from fuente.control_console import FuenteConsoleBackend
+from fuente.domain.runtime_policy import AudioMode, ExecutionProfile, RuntimePolicy
+from fuente.ui.bridge import FuentePyWebViewApi
+from fuente.watcher.watcher import ETLPipeline
 
 
 def _configured_model_test_policy() -> RuntimePolicy:
@@ -28,8 +28,8 @@ def _configured_model_test_policy() -> RuntimePolicy:
 
 
 def test_bridge_save_settings_persists_canonical_keys(temp_vault_path, tmp_path):
-    backend = FunesConsoleBackend(temp_vault_path)
-    bridge = FunesPyWebViewApi(backend)
+    backend = FuenteConsoleBackend(temp_vault_path)
+    bridge = FuentePyWebViewApi(backend)
     output_folder = tmp_path / "output"
     output_folder.mkdir()
     payload = {
@@ -59,8 +59,8 @@ def test_bridge_save_settings_persists_canonical_keys(temp_vault_path, tmp_path)
 
 
 def test_bridge_accepts_runtime_policy_settings(temp_vault_path, tmp_path):
-    backend = FunesConsoleBackend(temp_vault_path)
-    bridge = FunesPyWebViewApi(backend)
+    backend = FuenteConsoleBackend(temp_vault_path)
+    bridge = FuentePyWebViewApi(backend)
     whisper_path = tmp_path / "whisper"
     whisper_path.mkdir()
     calls = []
@@ -86,7 +86,7 @@ def test_bridge_accepts_runtime_policy_settings(temp_vault_path, tmp_path):
 def test_bridge_rejects_malformed_runtime_policy_settings(
     temp_vault_path, field, value, message
 ):
-    bridge = FunesPyWebViewApi(FunesConsoleBackend(temp_vault_path))
+    bridge = FuentePyWebViewApi(FuenteConsoleBackend(temp_vault_path))
     backend_calls = []
     bridge.backend.save_settings = lambda settings: backend_calls.append(settings)
 
@@ -97,7 +97,7 @@ def test_bridge_rejects_malformed_runtime_policy_settings(
 
 
 def test_backend_rejects_live_vault_change_before_persistence(temp_vault_path, tmp_path):
-    backend = FunesConsoleBackend(temp_vault_path)
+    backend = FuenteConsoleBackend(temp_vault_path)
     backend.lifecycle = type(
         "RunningLifecycle",
         (),
@@ -110,7 +110,7 @@ def test_backend_rejects_live_vault_change_before_persistence(temp_vault_path, t
 
     assert result == {
         "error": "vault_change_requires_restart",
-        "message": "Changing the Vault path requires restarting Funes.",
+        "message": "Changing the Vault path requires restarting Fuente.",
     }
     assert apply_calls == []
 
@@ -118,7 +118,7 @@ def test_backend_rejects_live_vault_change_before_persistence(temp_vault_path, t
 def test_live_settings_failure_restores_config_policy_and_pipeline_state(
     temp_vault_path, monkeypatch
 ):
-    backend = FunesConsoleBackend(temp_vault_path)
+    backend = FuenteConsoleBackend(temp_vault_path)
     previous_config = backend.config
     previous_policy = backend.runtime_policy
     lifecycle_calls = []
@@ -165,8 +165,8 @@ def test_live_settings_failure_restores_config_policy_and_pipeline_state(
 
 
 def test_bridge_get_settings_info_reflects_persisted_values(temp_vault_path):
-    backend = FunesConsoleBackend(temp_vault_path)
-    bridge = FunesPyWebViewApi(backend)
+    backend = FuenteConsoleBackend(temp_vault_path)
+    bridge = FuentePyWebViewApi(backend)
     bridge.save_settings(
         {
             "custom_model_override": "llama3.2",
@@ -184,7 +184,7 @@ def test_bridge_get_settings_info_reflects_persisted_values(temp_vault_path):
 
 
 def test_bridge_rejects_unsupported_settings_fields(temp_vault_path):
-    bridge = FunesPyWebViewApi(FunesConsoleBackend(temp_vault_path))
+    bridge = FuentePyWebViewApi(FuenteConsoleBackend(temp_vault_path))
     result = bridge.save_settings({"ollama_model": "legacy-key"})
     assert result == {
         "error": "invalid_payload",
@@ -193,15 +193,15 @@ def test_bridge_rejects_unsupported_settings_fields(temp_vault_path):
 
 
 def test_bridge_rejects_non_loopback_without_opt_in(temp_vault_path):
-    bridge = FunesPyWebViewApi(FunesConsoleBackend(temp_vault_path))
+    bridge = FuentePyWebViewApi(FuenteConsoleBackend(temp_vault_path))
     result = bridge.save_settings({"ollama_url": "http://192.168.1.99:11434"})
     assert result["error"] == "invalid_settings"
     assert "loopback" in result["message"].lower()
 
 
 def test_saved_model_and_url_apply_to_generation_and_chat(temp_vault_path, monkeypatch):
-    backend = FunesConsoleBackend(temp_vault_path)
-    bridge = FunesPyWebViewApi(backend)
+    backend = FuenteConsoleBackend(temp_vault_path)
+    bridge = FuentePyWebViewApi(backend)
     configured_url = "http://127.0.0.1:18080"
     assert "error" not in bridge.save_settings(
         {
@@ -220,7 +220,7 @@ def test_saved_model_and_url_apply_to_generation_and_chat(temp_vault_path, monke
         status_code = 500
 
     monkeypatch.setattr(
-        "funes.graph_engine.atomic_generator.requests.post",
+        "fuente.graph_engine.atomic_generator.requests.post",
         lambda url, json, timeout: generation_calls.append((url, json, timeout))
         or GenerationResponse(),
     )

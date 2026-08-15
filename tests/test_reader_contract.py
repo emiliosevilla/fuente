@@ -4,12 +4,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from funes.control_console import FunesConsoleBackend
-from funes.core.vault import document_id_for_relative_path
-from funes.domain.frontmatter import serialize_frontmatter
-from funes.reader_modal import FunesReaderModal
-from funes.ui.bridge import FunesPyWebViewApi
-from funes.ui.reader_history import pop_reader_history, push_reader_history
+from fuente.control_console import FuenteConsoleBackend
+from fuente.core.vault import document_id_for_relative_path
+from fuente.domain.frontmatter import serialize_frontmatter
+from fuente.reader_modal import FuenteReaderModal
+from fuente.ui.bridge import FuentePyWebViewApi
+from fuente.ui.reader_history import pop_reader_history, push_reader_history
 
 
 THEME = "Academia"
@@ -37,8 +37,8 @@ def _write_note(path: Path, title: str, issue: str, body: str) -> None:
     )
 
 
-def _seed_nested_vault(temp_vault_path: Path) -> FunesConsoleBackend:
-    backend = FunesConsoleBackend(temp_vault_path)
+def _seed_nested_vault(temp_vault_path: Path) -> FuenteConsoleBackend:
+    backend = FuenteConsoleBackend(temp_vault_path)
     backend.vault.create_theme(THEME)
     issue_a = backend.vault.create_issue_in_theme(ISSUE_A)
     issue_b = backend.vault.create_issue_in_theme(ISSUE_B)
@@ -96,7 +96,7 @@ def test_get_notes_list_returns_metadata_and_opaque_document_ids(temp_vault_path
 
 def test_bridge_and_native_reader_share_the_same_note_set(temp_vault_path):
     backend = _seed_nested_vault(temp_vault_path)
-    bridge = FunesPyWebViewApi(backend)
+    bridge = FuentePyWebViewApi(backend)
 
     bridge_notes = bridge.get_notes_list()
     backend_notes = backend.get_notes_list()
@@ -112,7 +112,7 @@ def test_bridge_and_native_reader_share_the_same_note_set(temp_vault_path):
 
 def test_load_note_by_document_id_supports_nested_navigation_and_history(temp_vault_path):
     backend = _seed_nested_vault(temp_vault_path)
-    bridge = FunesPyWebViewApi(backend)
+    bridge = FuentePyWebViewApi(backend)
     notes = {n["title"]: n for n in bridge.get_notes_list() if not n.get("is_moc")}
 
     pagos = bridge.get_note_content(notes["Pagos"]["document_id"])
@@ -172,7 +172,7 @@ def test_webview_reader_exposes_back_control_that_pops_history():
 
 def test_missing_or_unauthorized_note_ids_return_controlled_errors(temp_vault_path):
     backend = _seed_nested_vault(temp_vault_path)
-    bridge = FunesPyWebViewApi(backend)
+    bridge = FuentePyWebViewApi(backend)
 
     missing = bridge.get_note_content("00000000-0000-4000-8000-000000000000")
     assert missing["error"] == "path_not_authorized"
@@ -193,7 +193,7 @@ def test_missing_or_unauthorized_note_ids_return_controlled_errors(temp_vault_pa
 
 def test_open_file_natively_only_allows_authorized_artifacts(temp_vault_path, monkeypatch):
     backend = _seed_nested_vault(temp_vault_path)
-    bridge = FunesPyWebViewApi(backend)
+    bridge = FuentePyWebViewApi(backend)
 
     sample = backend.vault.input_dir / "fuente.txt"
     sample.write_text("hola", encoding="utf-8")
@@ -201,7 +201,7 @@ def test_open_file_natively_only_allows_authorized_artifacts(temp_vault_path, mo
 
     launches = []
     monkeypatch.setattr(
-        "funes.control_console.subprocess.Popen",
+        "fuente.control_console.subprocess.Popen",
         lambda *a, **k: launches.append(a) or type("P", (), {"pid": 1})(),
     )
 
@@ -259,9 +259,9 @@ def test_native_reader_modal_loads_via_backend_document_ids(temp_vault_path, mon
         def configure(self, *_a, **_k):
             return None
 
-    monkeypatch.setattr("funes.reader_modal.tk.Toplevel.__init__", lambda self, *a, **k: None)
-    monkeypatch.setattr(FunesReaderModal, "_setup_ui", lambda self: None)
-    modal = FunesReaderModal.__new__(FunesReaderModal)
+    monkeypatch.setattr("fuente.reader_modal.tk.Toplevel.__init__", lambda self, *a, **k: None)
+    monkeypatch.setattr(FuenteReaderModal, "_setup_ui", lambda self: None)
+    modal = FuenteReaderModal.__new__(FuenteReaderModal)
     modal.backend = backend
     modal.output_dir = backend.vault.output_dir
     modal.history = []
@@ -295,11 +295,11 @@ def test_native_reader_modal_loads_via_backend_document_ids(temp_vault_path, mon
     # Controlled missing-note path (unresolvable id).
     warnings = []
     monkeypatch.setattr(
-        "funes.reader_modal.messagebox.showwarning",
+        "fuente.reader_modal.messagebox.showwarning",
         lambda *a, **k: warnings.append(a),
     )
     monkeypatch.setattr(
-        "funes.reader_modal.messagebox.showerror",
+        "fuente.reader_modal.messagebox.showerror",
         lambda *a, **k: warnings.append(a),
     )
     modal.load_note("00000000-0000-4000-8000-000000000000")

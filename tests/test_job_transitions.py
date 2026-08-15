@@ -5,7 +5,7 @@ import dataclasses
 
 import pytest
 
-from funes.domain.jobs import (
+from fuente.domain.jobs import (
     JOB_STATUSES,
     PIPELINE_STAGES,
     PIPELINE_TRANSITIONS,

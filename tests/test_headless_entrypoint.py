@@ -8,19 +8,19 @@ from pathlib import Path
 
 import pytest
 
-from funes.config import DEFAULT_OLLAMA_URL, load_config
+from fuente.config import DEFAULT_OLLAMA_URL, load_config
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
 
 def test_headless_cli_path_never_imports_control_console(monkeypatch, tmp_path):
     """--headless must not pull in Tkinter/PyWebView via control_console."""
-    for mod_name in ("funes.control_console", "funes.main"):
+    for mod_name in ("fuente.control_console", "fuente.main"):
         sys.modules.pop(mod_name, None)
 
-    import funes.main as main_module
+    import fuente.main as main_module
 
-    assert "funes.control_console" not in sys.modules
+    assert "fuente.control_console" not in sys.modules
 
     calls = {"start": 0, "stop": 0, "mode": None}
 
@@ -38,11 +38,11 @@ def test_headless_cli_path_never_imports_control_console(monkeypatch, tmp_path):
     main_module.run_headless(tmp_path / "vault", wait_for_shutdown=lambda: None)
 
     assert calls == {"start": 1, "stop": 1, "mode": "headless"}
-    assert "funes.control_console" not in sys.modules
+    assert "fuente.control_console" not in sys.modules
 
 
 def test_gui_mode_exits_when_no_display(monkeypatch, tmp_path, capsys):
-    import funes.main as main_module
+    import fuente.main as main_module
 
     monkeypatch.setattr(main_module, "has_graphical_display", lambda: False)
 
@@ -52,7 +52,7 @@ def test_gui_mode_exits_when_no_display(monkeypatch, tmp_path, capsys):
     assert exc.value.code == 1
     captured = capsys.readouterr()
     assert "--headless" in captured.err
-    assert "funes.control_console" not in sys.modules
+    assert "fuente.control_console" not in sys.modules
 
 
 def test_load_config_applies_validated_ollama_url_from_env(
@@ -99,7 +99,7 @@ def test_docker_compose_sets_ollama_url_and_non_loopback_opt_in():
 
 def test_main_headless_argv(monkeypatch, tmp_path):
     """main() routes --headless to run_headless without opening the GUI."""
-    import funes.main as main_module
+    import fuente.main as main_module
 
     calls = []
 
@@ -116,7 +116,7 @@ def test_main_headless_argv(monkeypatch, tmp_path):
     monkeypatch.setattr(
         sys,
         "argv",
-        ["funes", "--headless", "--vault", str(tmp_path / "vault")],
+        ["fuente", "--headless", "--vault", str(tmp_path / "vault")],
     )
 
     main_module.main()
@@ -126,9 +126,9 @@ def test_main_headless_argv(monkeypatch, tmp_path):
 
 
 def test_headless_subprocess_help():
-    """Smoke: funes --help advertises --headless (no GUI imports)."""
+    """Smoke: fuente --help advertises --headless (no GUI imports)."""
     result = subprocess.run(
-        [sys.executable, "-m", "funes.main", "--help"],
+        [sys.executable, "-m", "fuente.main", "--help"],
         cwd=REPO_ROOT,
         capture_output=True,
         text=True,
@@ -144,7 +144,7 @@ def test_run_headless_stops_lifecycle_on_sigterm(monkeypatch, tmp_path):
     import threading
     import time
 
-    import funes.main as main_module
+    import fuente.main as main_module
 
     handlers: dict[int, object] = {}
 

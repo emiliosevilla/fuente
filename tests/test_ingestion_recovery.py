@@ -18,22 +18,23 @@ from typing import Any, Optional
 
 import pytest
 
-from funes.application.ingestion import (
+from fuente.application.ingestion import (
     CHUNK_ARTIFACT_KIND,
     NOTE_ARTIFACT_KIND,
     IngestionApplicationService,
     JobNotResumableError,
     document_id_for_source,
 )
-from funes.application.job_control import JobControlService
-from funes.config import get_default_config
-from funes.core.vault import VaultManager
-from funes.domain.frontmatter import serialize_frontmatter
-from funes.domain.runtime_policy import AudioMode, ExecutionProfile, RuntimePolicy
-from funes.extractors.registry import ExtractorRegistry
-from funes.graph_engine.linker import GraphLinker
-from funes.infrastructure.sqlite_store import JobStore
-from funes.rag.semantic_chunker import SemanticChunker
+from fuente.application.job_control import JobControlService
+from fuente.config import get_default_config
+from fuente.core.vault import VaultManager
+from fuente.domain.errors import NoteRevisionConflictError
+from fuente.domain.frontmatter import parse_frontmatter, serialize_frontmatter
+from fuente.domain.runtime_policy import AudioMode, ExecutionProfile, RuntimePolicy
+from fuente.extractors.registry import ExtractorRegistry
+from fuente.graph_engine.linker import GraphLinker
+from fuente.infrastructure.sqlite_store import JobStore
+from fuente.rag.semantic_chunker import SemanticChunker
 
 SOURCE_NAME = "informe_trimestral.txt"
 SOURCE_IDENTITY = f"1_entrada/{SOURCE_NAME}"
@@ -120,7 +121,7 @@ class _FakeGenerator:
                 "schema_version": 1,
                 "title": stem,
                 "date": "",
-                "author": "Funes",
+                "author": "Fuente",
                 "tags": [],
                 "issue": "_Sin_Cuestion",
                 "status": "pending_review",
@@ -179,7 +180,7 @@ class _FakeGovernor:
         self.ensured: list[str] = []
 
     def measure_memory(self):
-        from funes.ram_governor.budget import measured_snapshot
+        from fuente.ram_governor.budget import measured_snapshot
 
         return measured_snapshot(
             total_gb=32.0, available_gb=24.0, safety_margin_pct=0.35
@@ -275,7 +276,116 @@ def harness(temp_vault_path):
 
 def _ingest(harness: _Harness):
     job = harness.service.submit(SOURCE_IDENTITY)
-    return harness.service.resume(job.job_id)
+    waiting = harness.service.resume(job.job_id)
+    _approve_waiting_clean(harness, waiting)
+    return harness.service.resume(waiting.job_id)
+
+
+def _approval_request(harness: _Harness, job):
+    assert job.stage == "saved_clean"
+    assert job.clean_artifact is not None
+    clean_metadata, _body = parse_frontmatter(
+        (harness.vault.config.vault_path / job.clean_artifact).read_text(encoding="utf-8")
+    )
+    return harness.service.approval_service.request_approval(clean_metadata["note_id"])
+
+
+def _approve_waiting_clean(harness: _Harness, job):
+    request = _approval_request(harness, job)
+    return harness.service.approval_service.approve_clean(
+        request.note_id, request.revision, "pytest"
+    )
+
+
+def _resume_after_clean_approval(harness: _Harness, job_id: str):
+    resumed = harness.service.resume(job_id)
+    # A retry over unchanged canonical Markdown may legitimately reuse the
+    # already-approved exact note_id/revision/content_hash triple.  Approve
+    # only when this attempt actually reaches the durable review boundary.
+    if resumed.stage == "saved_clean":
+        _approve_waiting_clean(harness, resumed)
+        return harness.service.resume(job_id)
+    return resumed
+
+
+def _restart_service(harness: _Harness) -> IngestionApplicationService:
+    """Create a fresh application service over the same durable JobStore."""
+    service = harness.service
+    return IngestionApplicationService(
+        config=service.config,
+        vault=harness.vault,
+        job_store=harness.store,
+        extractors=service.extractors,
+        chunker=service.chunker,
+        chroma=harness.chroma,
+        atomic_generator=harness.generator,
+        linker=service.linker,
+        runtime_policy=service.runtime_policy,
+        ram_governor=service.ram_governor,
+        scheduler=service.scheduler,
+        copy_to_dirty=service._copy_to_dirty,
+        stabilize=service._stabilize,
+    )
+
+
+def test_clean_markdown_waits_for_exact_approval_before_any_derivative(harness):
+    submitted = harness.service.submit(SOURCE_IDENTITY)
+    waiting = harness.service.resume(submitted.job_id)
+
+    assert waiting.stage == "saved_clean"
+    assert waiting.status == "pending"
+    assert waiting.error_code == "awaiting_clean_approval"
+    assert harness.chroma.added == []
+    assert harness.generator.calls == []
+    assert harness.service.process_pending(limit=5) == []
+
+    request = _approval_request(harness, waiting)
+    wrong_hash = "0" * 64 if request.content_hash != "0" * 64 else "f" * 64
+    with pytest.raises(NoteRevisionConflictError):
+        harness.service.approval_service.ledger.approve(
+            request.note_id, request.revision, wrong_hash, "pytest"
+        )
+    with pytest.raises(NoteRevisionConflictError):
+        harness.service.approval_service.ledger.approve(
+            request.note_id, request.revision + 1, request.content_hash, "pytest"
+        )
+
+    still_waiting = harness.service.resume(waiting.job_id)
+    assert still_waiting.stage == "saved_clean"
+    assert still_waiting.error_code == "awaiting_clean_approval"
+    assert harness.chroma.added == []
+    assert harness.generator.calls == []
+
+    _approve_waiting_clean(harness, still_waiting)
+    completed = harness.service.resume(still_waiting.job_id)
+    assert completed.stage == "completed"
+    assert harness.generator.calls == [SOURCE_NAME]
+    metadata, _body = parse_frontmatter(harness.notes()[0].read_text(encoding="utf-8"))
+    assert metadata["schema_version"] == 3
+    assert "sources" not in metadata
+    assert metadata["origins"] == [
+        {
+            "note_id": request.note_id,
+            "revision": request.revision,
+            "content_hash": request.content_hash,
+            "path": still_waiting.clean_artifact,
+        }
+    ]
+
+
+def test_clean_approval_wait_survives_service_restart(harness):
+    waiting = harness.service.resume(harness.service.submit(SOURCE_IDENTITY).job_id)
+    restarted = _restart_service(harness)
+
+    still_waiting = restarted.resume(waiting.job_id)
+    assert still_waiting.stage == "saved_clean"
+    assert still_waiting.status == "pending"
+    assert still_waiting.error_code == "awaiting_clean_approval"
+    assert harness.chroma.added == []
+    assert harness.generator.calls == []
+
+    _approve_waiting_clean(harness, still_waiting)
+    assert restarted.resume(still_waiting.job_id).stage == "completed"
 
 
 def test_ingesting_a_source_completes_and_records_its_identities(harness):
@@ -303,7 +413,7 @@ def test_ingestion_passes_output_relative_path_to_linker(harness):
 
 
 def test_ingestion_resolves_target_before_single_atomic_note_write(harness, monkeypatch):
-    from funes.application import ingestion as ingestion_module
+    from fuente.application import ingestion as ingestion_module
 
     events: list[tuple[str, Path]] = []
     original_resolve = harness.vault.atomic_note_path
@@ -352,7 +462,7 @@ def test_forced_reprocessing_rewrites_the_note_it_already_owns(harness):
 
     forced = harness.service.submit(SOURCE_IDENTITY, force_reprocess=True)
     assert forced.job_id != first.job_id
-    completed = harness.service.resume(forced.job_id)
+    completed = _resume_after_clean_approval(harness, forced.job_id)
 
     assert completed.stage == "completed"
     assert harness.generator.calls == [SOURCE_NAME, SOURCE_NAME]
@@ -369,6 +479,8 @@ def test_failure_after_chroma_insertion_is_reconciled_on_resume(temp_vault_path)
     )
     try:
         job = harness.service.submit(SOURCE_IDENTITY)
+        waiting = harness.service.resume(job.job_id)
+        _approve_waiting_clean(harness, waiting)
         with pytest.raises(KeyboardInterrupt):
             harness.service.resume(job.job_id)
 
@@ -410,13 +522,26 @@ def test_the_source_is_only_deleted_once_the_job_completes(temp_vault_path, cras
     harness = _build_harness(temp_vault_path, crash_stage=crash_stage)
     try:
         job = harness.service.submit(SOURCE_IDENTITY)
-        with pytest.raises(KeyboardInterrupt):
+        try:
+            waiting = harness.service.resume(job.job_id)
+        except KeyboardInterrupt:
+            waiting = harness.store.get_job(job.job_id)
+        else:
+            assert waiting.stage == "saved_clean"
+
+        if waiting.stage == "saved_clean":
+            _approve_waiting_clean(harness, waiting)
+        try:
             harness.service.resume(job.job_id)
+        except KeyboardInterrupt:
+            pass
 
         interrupted = harness.store.get_job(job.job_id)
         assert interrupted.stage != "completed"
         assert harness.source_path.exists()
 
+        if interrupted.stage == "saved_clean":
+            _approve_waiting_clean(harness, interrupted)
         resumed = harness.service.resume(job.job_id)
 
         assert resumed.stage == "completed"
@@ -434,7 +559,7 @@ def test_stage_failure_quarantines_the_source_and_discards_partial_artifacts(
     harness = _build_harness(temp_vault_path, generator=_ExplodingGenerator())
     try:
         job = harness.service.submit(SOURCE_IDENTITY)
-        failed = harness.service.resume(job.job_id)
+        failed = _resume_after_clean_approval(harness, job.job_id)
 
         assert failed.stage == "quarantined"
         assert failed.status == "quarantined"
@@ -473,7 +598,7 @@ def test_failed_dirty_compensation_preserves_dirty_artifact_identity(
     monkeypatch.setattr(Path, "unlink", fail_dirty_unlink)
     try:
         job = harness.service.submit(SOURCE_IDENTITY)
-        failed = harness.service.resume(job.job_id)
+        failed = _resume_after_clean_approval(harness, job.job_id)
 
         assert failed.stage == "quarantined"
         assert failed.dirty_artifact.startswith("2_sucio/")
@@ -494,7 +619,7 @@ def test_failed_index_compensation_preserves_index_identity(
     monkeypatch.setattr(harness.service, "_run_index_note", fail_note_index)
     try:
         job = harness.service.submit(SOURCE_IDENTITY)
-        failed = harness.service.resume(job.job_id)
+        failed = _resume_after_clean_approval(harness, job.job_id)
 
         assert failed.stage == "quarantined"
         assert failed.note_document_id is not None
@@ -507,7 +632,7 @@ def test_invalid_generated_markdown_never_reaches_the_vault(temp_vault_path):
     harness = _build_harness(temp_vault_path, generator=_BrokenGenerator())
     try:
         job = harness.service.submit(SOURCE_IDENTITY)
-        failed = harness.service.resume(job.job_id)
+        failed = _resume_after_clean_approval(harness, job.job_id)
 
         assert failed.stage == "failed"
         assert failed.error_code == "invalid_model_output"
@@ -523,13 +648,15 @@ def test_invalid_generated_markdown_never_reaches_the_vault(temp_vault_path):
 def test_a_retried_source_reuses_the_note_path_of_its_failed_predecessor(temp_vault_path):
     harness = _build_harness(temp_vault_path, generator=_BrokenGenerator())
     try:
-        failed = harness.service.resume(harness.service.submit(SOURCE_IDENTITY).job_id)
+        failed = _resume_after_clean_approval(
+            harness, harness.service.submit(SOURCE_IDENTITY).job_id
+        )
         assert failed.stage == "failed"
 
         harness.service.atomic_generator = _FakeGenerator()
         retried = harness.service.submit(SOURCE_IDENTITY)
         assert retried.job_id != failed.job_id
-        completed = harness.service.resume(retried.job_id)
+        completed = _resume_after_clean_approval(harness, retried.job_id)
 
         assert completed.stage == "completed"
         assert len(harness.notes()) == 1
@@ -546,12 +673,17 @@ def test_process_pending_resumes_submitted_jobs_oldest_first(harness):
 
     processed = harness.service.process_pending(limit=1)
     assert [job.job_id for job in processed] == [first.job_id]
-    assert processed[0].stage == "completed"
+    assert processed[0].stage == "saved_clean"
+    second_processed = harness.service.process_pending(limit=5)
+    assert [job.job_id for job in second_processed] == [second.job_id]
+    assert second_processed[0].stage == "saved_clean"
 
-    remaining = harness.service.process_pending(limit=5)
-    assert [job.job_id for job in remaining] == [second.job_id]
-    assert remaining[0].stage == "completed"
-    assert harness.service.process_pending(limit=5) == []
+    _approve_waiting_clean(harness, processed[0])
+    _approve_waiting_clean(harness, second_processed[0])
+
+    completed = harness.service.process_pending(limit=5)
+    assert {job.job_id for job in completed} == {first.job_id, second.job_id}
+    assert all(job.stage == "completed" for job in completed)
     assert len(harness.notes()) == 2
 
 

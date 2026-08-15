@@ -7,18 +7,18 @@ from typing import Any, Optional
 
 import pytest
 
-from funes.application.ingestion import (
+from fuente.application.ingestion import (
     CHUNK_ARTIFACT_KIND,
     IngestionApplicationService,
     document_id_for_source,
 )
-from funes.config import get_default_config
-from funes.core.vault import VaultManager
-from funes.domain.frontmatter import serialize_frontmatter
-from funes.extractors.registry import ExtractorRegistry
-from funes.graph_engine.linker import GraphLinker
-from funes.infrastructure.sqlite_store import JobStore
-from funes.rag.semantic_chunker import SemanticChunker
+from fuente.config import get_default_config
+from fuente.core.vault import VaultManager
+from fuente.domain.frontmatter import parse_frontmatter, serialize_frontmatter
+from fuente.extractors.registry import ExtractorRegistry
+from fuente.graph_engine.linker import GraphLinker
+from fuente.infrastructure.sqlite_store import JobStore
+from fuente.rag.semantic_chunker import SemanticChunker
 
 SOURCE_NAME = "informe_trimestral.txt"
 SOURCE_IDENTITY = f"1_entrada/{SOURCE_NAME}"
@@ -114,7 +114,7 @@ class FakeGenerator:
                 "schema_version": 1,
                 "title": stem,
                 "date": "",
-                "author": "Funes",
+                "author": "Fuente",
                 "tags": [],
                 "issue": "_Sin_Cuestion",
                 "status": "pending_review",
@@ -146,7 +146,7 @@ class ScriptedChunker:
 
 class FakeGovernor:
     def measure_memory(self):
-        from funes.ram_governor.budget import measured_snapshot
+        from fuente.ram_governor.budget import measured_snapshot
 
         return measured_snapshot(
             total_gb=32.0, available_gb=24.0, safety_margin_pct=0.35
@@ -287,12 +287,37 @@ def submit_and_interrupt(harness: PipelineHarness) -> str:
     """Submit a source and run until `KeyboardInterrupt` leaves a durable stage."""
     job = harness.service.submit(SOURCE_IDENTITY)
     with pytest.raises(KeyboardInterrupt):
-        harness.service.resume(job.job_id)
+        waiting = harness.service.resume(job.job_id)
+        if waiting.stage == "saved_clean":
+            approve_waiting_clean(harness, waiting)
+            harness.service.resume(job.job_id)
     return job.job_id
 
 
+def approve_waiting_clean(
+    harness: PipelineHarness,
+    job,
+    *,
+    service: IngestionApplicationService | None = None,
+):
+    """Record the exact canonical approval required to leave `3_limpio`."""
+    assert job.stage == "saved_clean"
+    assert job.clean_artifact is not None
+    active_service = service or harness.service
+    clean_path = harness.vault.config.vault_path / job.clean_artifact
+    metadata, _body = parse_frontmatter(clean_path.read_text(encoding="utf-8"))
+    request = active_service.approval_service.request_approval(metadata["note_id"])
+    return active_service.approval_service.approve_clean(
+        request.note_id, request.revision, "pytest"
+    )
+
+
 def resume_to_completion(harness: PipelineHarness, job_id: str):
-    return harness.service.resume(job_id)
+    resumed = harness.service.resume(job_id)
+    if resumed.stage == "saved_clean":
+        approve_waiting_clean(harness, resumed)
+        return harness.service.resume(job_id)
+    return resumed
 
 
 def assert_single_note(harness: PipelineHarness) -> Path:

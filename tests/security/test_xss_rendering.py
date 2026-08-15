@@ -5,15 +5,16 @@ import html
 
 import pytest
 
-from funes.application.chat import ChatApplicationService, FakeChatProvider
-from funes.application.retrieval import MODE_NONE, RetrievalApplicationService
-from funes.control_console import FunesConsoleBackend
-from funes.core.vault import document_id_for_relative_path
-from funes.domain.documents import NoteDocument
-from funes.domain.frontmatter import serialize_frontmatter
-from funes.domain.metadata_form import MetadataValidationError, validate_metadata_fields
-from funes.ui.bridge import FunesPyWebViewApi
-from funes.ui.markdown_projection import project_note_document
+from fuente.application.chat import ChatApplicationService, FakeChatProvider
+from fuente.application.retrieval import MODE_NONE, RetrievalApplicationService
+from fuente.control_console import FuenteConsoleBackend
+from fuente.core.vault import document_id_for_relative_path
+from fuente.domain.documents import NoteDocument
+from fuente.domain.frontmatter import serialize_frontmatter
+from fuente.domain.metadata_form import MetadataValidationError, validate_metadata_fields
+from fuente.ui.bridge import FuentePyWebViewApi
+from fuente.ui.markdown_projection import project_note_document
+from tests.conftest import save_v3_summary_note
 
 from tests.security.conftest import assert_html_fails_closed
 
@@ -30,28 +31,14 @@ HOSTILE_ISSUE = "../<script>alert('issue')</script>"
 
 
 def _write_note(backend, *, title: str, body: str, issue: str = "_Sin_Cuestion") -> str:
-    note_path = backend.vault.save_atomic_note(
+    document_id, _note_path = save_v3_summary_note(
+        backend.vault,
         title=title,
-        content=serialize_frontmatter(
-            {
-                "schema_version": 1,
-                "title": title,
-                "date": "2026-08-09",
-                "author": "Funes",
-                "tags": ["segura"],
-                "issue": issue,
-                "status": "pending_review",
-                "sources": [],
-                "history": [],
-            }
-        )
-        + body,
+        body=body,
         issue_name=issue,
+        tags=["segura"],
     )
-    relative = note_path.resolve().relative_to(
-        backend.vault.config.vault_path.resolve()
-    ).as_posix()
-    return document_id_for_relative_path(relative)
+    return document_id
 
 
 def test_hostile_markdown_projection_is_data_not_executable_html():
@@ -63,7 +50,7 @@ def test_hostile_markdown_projection_is_data_not_executable_html():
                 "schema_version": 1,
                 "title": "Hostile",
                 "date": "2026-08-11",
-                "author": "Funes",
+                "author": "Fuente",
                 "tags": [],
                 "issue": "_Sin_Cuestion",
                 "status": "pending_review",
@@ -84,7 +71,7 @@ def test_hostile_markdown_projection_is_data_not_executable_html():
 
 
 def test_note_body_html_and_js_fail_closed_in_rendered_html(temp_vault_path):
-    backend = FunesConsoleBackend(temp_vault_path)
+    backend = FuenteConsoleBackend(temp_vault_path)
     document_id = _write_note(backend, title="hostile_body", body=HOSTILE_MARKDOWN)
 
     result = backend.get_note_content_html(document_id)
@@ -97,10 +84,10 @@ def test_note_body_html_and_js_fail_closed_in_rendered_html(temp_vault_path):
 
 
 def test_hostile_title_never_becomes_executable_html(temp_vault_path):
-    backend = FunesConsoleBackend(temp_vault_path)
+    backend = FuenteConsoleBackend(temp_vault_path)
     document_id = _write_note(backend, title=HOSTILE_TITLE, body="# Cuerpo\n")
     result = backend.get_note_content_html(document_id)
-    bridge = FunesPyWebViewApi(backend)
+    bridge = FuentePyWebViewApi(backend)
     metadata = bridge.get_note_metadata(document_id)
 
     assert_html_fails_closed(result["html"])
@@ -111,7 +98,7 @@ def test_hostile_title_never_becomes_executable_html(temp_vault_path):
 
 
 def test_hostile_tags_are_rejected_before_commit(temp_vault_path):
-    backend = FunesConsoleBackend(temp_vault_path)
+    backend = FuenteConsoleBackend(temp_vault_path)
     issues = backend.vault.get_issues_in_theme()
 
     with pytest.raises(MetadataValidationError) as error:
@@ -121,7 +108,7 @@ def test_hostile_tags_are_rejected_before_commit(temp_vault_path):
 
 
 def test_hostile_issue_path_traversal_is_rejected(temp_vault_path):
-    backend = FunesConsoleBackend(temp_vault_path)
+    backend = FuenteConsoleBackend(temp_vault_path)
     issues = backend.vault.get_issues_in_theme()
 
     with pytest.raises(MetadataValidationError) as error:
@@ -131,7 +118,7 @@ def test_hostile_issue_path_traversal_is_rejected(temp_vault_path):
 
 
 def test_javascript_and_data_urls_in_note_body_stay_escaped(temp_vault_path):
-    backend = FunesConsoleBackend(temp_vault_path)
+    backend = FuenteConsoleBackend(temp_vault_path)
     document_id = _write_note(
         backend,
         title="urls",

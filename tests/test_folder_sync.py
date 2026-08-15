@@ -1,7 +1,7 @@
 import tempfile
 import unittest
 from pathlib import Path
-from funes.core.folder_sync import FolderSyncManager
+from fuente.core.folder_sync import FolderSyncManager
 
 
 class TestFolderSync(unittest.TestCase):

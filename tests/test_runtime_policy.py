@@ -5,14 +5,14 @@ from pathlib import Path
 
 import pytest
 
-from funes.config import AppConfig, VaultConfig
-from funes.domain.runtime_policy import (
+from fuente.config import AppConfig, VaultConfig
+from fuente.domain.runtime_policy import (
     AudioMode,
     ExecutionProfile,
     RuntimePolicy,
     resolve_runtime_policy,
 )
-from funes.ram_governor.budget import BudgetDecision, ResourceKind
+from fuente.ram_governor.budget import BudgetDecision, ResourceKind
 
 
 @pytest.fixture

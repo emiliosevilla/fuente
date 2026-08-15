@@ -4,8 +4,8 @@ import json
 
 import pytest
 
-from funes.domain.note_catalog import IdentityCollisionError, NoteCatalog
-from funes.infrastructure.sqlite_store import JobStore
+from fuente.domain.note_catalog import IdentityCollisionError, NoteCatalog
+from fuente.infrastructure.sqlite_store import JobStore
 
 
 NOTE_ID = "4ca13d5c-4d78-4f37-8c3c-d1dc530a4dc9"
@@ -25,9 +25,10 @@ def register_note(store: JobStore, *, note_id: str = NOTE_ID, relative_path: str
     return store.register_note(
         note_id=note_id,
         relative_path=relative_path,
+        revision=1,
         content_hash="hash-a",
         note_type="source",
-        source_kind="meeting",
+        origin_kind="meeting",
         theme="Tema",
         issue="cuestion-a",
         status="approved",
@@ -193,15 +194,16 @@ def test_note_catalog_can_explicitly_rebuild_after_state_db_loss(tmp_path):
     first.register_note(
         note_id=NOTE_ID,
         relative_path=PATH,
+        revision=1,
         content_hash="hash-a",
         note_type="source",
-        source_kind="meeting",
+        origin_kind="meeting",
         theme="Tema",
         issue="cuestion-a",
         status="approved",
     )
     first.close()
-    (vault_root / ".funes" / "state.db").unlink()
+    (vault_root / ".fuente" / "state.db").unlink()
 
     rebuilt_store = JobStore(vault_root)
     try:
@@ -210,3 +212,47 @@ def test_note_catalog_can_explicitly_rebuild_after_state_db_loss(tmp_path):
         assert rebuilt_store.get_note(NOTE_ID)["relative_path"] == PATH
     finally:
         rebuilt_store.close()
+
+
+def test_note_catalog_rebuilds_v3_summary_with_origin_vocabulary(tmp_path):
+    vault_root = tmp_path / "vault"
+    note_path = vault_root / "Tema" / "4_salida" / "Fuentes" / "a.md"
+    note_path.parent.mkdir(parents=True)
+    note_path.write_text(
+        "---\n"
+        "schema_version: 3\n"
+        f"note_id: {NOTE_ID}\n"
+        "note_type: summary\n"
+        "origin_kind: meeting\n"
+        "origins:\n"
+        f"  - note_id: {OTHER_NOTE_ID}\n"
+        "    revision: 2\n"
+        f"    content_hash: {'a' * 64}\n"
+        "    path: Tema/3_limpio/origen.md\n"
+        "theme: Tema\n"
+        "issue: cuestion-a\n"
+        "status: approved\n"
+        "revision: 4\n"
+        "---\n"
+        "# Sumario\n",
+        encoding="utf-8",
+    )
+
+    with JobStore(vault_root) as rebuilt_store:
+        report = NoteCatalog(rebuilt_store, vault_root=vault_root).rebuild_from_markdown()
+        row = rebuilt_store.get_note(NOTE_ID)
+
+    assert report.valid_registrations == [NOTE_ID]
+    assert row["note_type"] == "summary"
+    assert row["origin_kind"] == "meeting"
+    assert row["revision"] == 4
+    assert "source_kind" not in row
+
+
+def test_note_catalog_sqlite_schema_uses_origin_kind_only(store):
+    columns = {
+        row[1] for row in store._connection.execute("PRAGMA table_info(note_catalog)")
+    }
+
+    assert "origin_kind" in columns
+    assert "source_kind" not in columns

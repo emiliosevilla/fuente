@@ -1,11 +1,11 @@
 version: '3.8'
 
 services:
-  funes:
+  fuente:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: funes_knowledge_base
+    container_name: fuente_knowledge_base
     restart: unless-stopped
     volumes:
       # Montar la carpeta local del Vault de Obsidian dentro del contenedor
@@ -18,9 +18,9 @@ services:
 
   ollama:
     # Ollama starts empty — pull at least one model before first useful ingest:
-    #   docker exec -it funes_ollama_service ollama pull qwen2.5:7b
+    #   docker exec -it fuente_ollama_service ollama pull qwen2.5:7b
     image: ollama/ollama:latest
-    container_name: funes_ollama_service
+    container_name: fuente_ollama_service
     restart: unless-stopped
     ports:
       - "11434:11434"

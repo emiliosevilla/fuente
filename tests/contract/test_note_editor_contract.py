@@ -6,41 +6,23 @@ from pathlib import Path
 
 import pytest
 
-import funes.application.notes as notes_module
-from funes.application.notes import MAX_BODY_MARKDOWN_CHARS, NotesApplicationService
-from funes.domain.documents import content_hash_for_markdown
-from funes.domain.errors import NoteRevisionConflictError, PathAuthorizationError
-from funes.domain.frontmatter import parse_frontmatter, serialize_frontmatter
-from funes.domain.paths import AuthorizedPathResolver, document_id_for_relative_path
-from funes.infrastructure.sqlite_store import JobStore
-from funes.ui.markdown_projection import note_body_from_projection
-
-
-def _pending_markdown(*, body: str, title: str) -> str:
-    return serialize_frontmatter(
-        {
-            "schema_version": 1,
-            "title": title,
-            "date": "2026-08-11",
-            "author": "Funes",
-            "tags": [],
-            "issue": "_Sin_Cuestion",
-            "status": "pending_review",
-            "sources": [],
-            "history": [],
-        }
-    ) + body
+import fuente.application.notes as notes_module
+from fuente.application.notes import MAX_BODY_MARKDOWN_CHARS, NotesApplicationService
+from fuente.domain.documents import content_hash_for_markdown
+from fuente.domain.errors import NoteRevisionConflictError, PathAuthorizationError
+from fuente.domain.frontmatter import parse_frontmatter, serialize_frontmatter
+from fuente.domain.paths import AuthorizedPathResolver, document_id_for_relative_path
+from fuente.infrastructure.sqlite_store import JobStore
+from fuente.ui.markdown_projection import note_body_from_projection
+from tests.conftest import save_v3_summary_note
 
 
 def _write_pending_note(vault_manager, *, body: str, title: str) -> tuple[str, Path]:
-    note_path = vault_manager.save_atomic_note(
+    return save_v3_summary_note(
+        vault_manager,
         title=title,
-        content=_pending_markdown(body=body, title=title),
+        body=body,
     )
-    relative = note_path.resolve().relative_to(
-        vault_manager.config.vault_path.resolve()
-    ).as_posix()
-    return document_id_for_relative_path(relative), note_path
 
 
 def _new_notes_service(temp_vault_manager):
@@ -185,10 +167,10 @@ def test_two_independent_services_cannot_leave_disk_and_identity_inconsistent(
         assert isinstance(errors[0], NoteRevisionConflictError)
 
         persisted = note_path.read_text(encoding="utf-8")
-        identity = store_one.get_document_identity(document_id)
-        assert identity is not None
-        assert identity["revision"] == revision + 1
-        assert identity["content_hash"] == content_hash_for_markdown(persisted)
+        catalog_note = store_one.get_note(document_id)
+        assert catalog_note is not None
+        assert catalog_note["revision"] == revision + 1
+        assert catalog_note["content_hash"] == content_hash_for_markdown(persisted)
         assert persisted.endswith(tuple(successful_bodies))
     finally:
         store_one.close()
@@ -257,10 +239,10 @@ def test_body_and_metadata_mutations_cannot_rollback_each_other(
         assert isinstance(errors[0], NoteRevisionConflictError)
 
         persisted = note_path.read_text(encoding="utf-8")
-        identity = store_one.get_document_identity(document_id)
-        assert identity is not None
-        assert identity["revision"] == revision + 1
-        assert identity["content_hash"] == content_hash_for_markdown(persisted)
+        catalog_note = store_one.get_note(document_id)
+        assert catalog_note is not None
+        assert catalog_note["revision"] == revision + 1
+        assert catalog_note["content_hash"] == content_hash_for_markdown(persisted)
         assert persisted.endswith(("# Original\n", "# Body writer\n"))
     finally:
         store_one.close()
@@ -284,9 +266,9 @@ def test_direct_canonical_edit_is_rejected_instead_of_overwritten(
         notes_service.update_note_body(document_id, editor["revision"], "# UI edit\n")
 
     assert note_path.read_text(encoding="utf-8") == direct_edit
-    identity = notes_service.job_store.get_document_identity(document_id)
-    assert identity is not None
-    assert identity["content_hash"] != content_hash_for_markdown(direct_edit)
+    catalog_note = notes_service.job_store.get_note(document_id)
+    assert catalog_note is not None
+    assert catalog_note["content_hash"] != content_hash_for_markdown(direct_edit)
 
 
 def test_oversized_body_is_rejected_before_any_write(

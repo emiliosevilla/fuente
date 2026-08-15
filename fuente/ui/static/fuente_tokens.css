@@ -1,0 +1,13 @@
+/* Fuente visual tokens — Nord-inspired, semantic and local. */
+:root {
+    --fuente-polar-0: #2E3440;
+    --fuente-polar-1: #3B4252;
+    --fuente-polar-2: #434C5E;
+    --fuente-snow-2: #ECEFF4;
+    --fuente-snow-0: #D8DEE9;
+    --fuente-frost-2: #81A1C1;
+    --fuente-frost-1: #88C0D0;
+    --fuente-success: #A3BE8C;
+    --fuente-warning: #EBCB8B;
+    --fuente-danger: #BF616A;
+}

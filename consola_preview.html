@@ -3,10 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; base-uri 'none'; connect-src 'self'; font-src 'self'; img-src 'self' data:; object-src 'none'; script-src 'self' 'nonce-funes-console'; style-src 'self'">
-    <title>Funes Control Console — Estética Papiro (Vista Previa Definitiva)</title>
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; base-uri 'none'; connect-src 'self'; font-src 'self'; img-src 'self' data:; object-src 'none'; script-src 'self' 'nonce-fuente-console'; style-src 'self'">
+    <title>Fuente Control Console — Estética Papiro (Vista Previa Definitiva)</title>
     <!-- Font stack remains local and is defined in console.css: 'Courier New', Courier, monospace. -->
-    <link rel="stylesheet" href="funes/ui/static/console.css">
+    <link rel="stylesheet" data-fuente-tokens="true" href="fuente/ui/static/fuente_tokens.css">
+    <link rel="stylesheet" href="fuente/ui/static/console.css">
 </head>
 <body>
 
@@ -24,7 +25,7 @@
             </div>
         </div>
 
-        <!-- STATUS STRIP (ESTADO DE FUNES EN CABECERA) -->
+        <!-- STATUS STRIP (ESTADO DE FUENTE EN CABECERA) -->
         <div class="status-strip">
             <div class="status-item">
                 <span class="status-label">● MODO DE RED:</span>
@@ -73,8 +74,8 @@
                 <button class="btn-primary" id="btn-run-optimized" data-onclick-command="triggerOptimizedCycle()">
                     <span id="optimized-spinner" class="is-hidden">⚙️</span> Nuevo Flujo de Trabajo
                 </button>
-                <button class="btn-secondary" data-onclick-command="syncAllSources()">
-                    Actualizar Fuentes
+                <button class="btn-secondary" data-onclick-command="syncAllInputs()">
+                    Actualizar entradas
                 </button>
                 <button class="btn-secondary" data-onclick-command="openApprovalInbox()">
                     Bandeja de Aprobación
@@ -167,7 +168,7 @@
                     <div class="node-card" data-onclick-command="openModal('modal-reader')">
                         <div class="node-tag">── PASO 4 ──</div>
                         <div class="node-name">Consulta de Notas Finales</div>
-                        <div class="node-desc">Funes el memorioso (Lector) y Funes el conversador (Chat)</div>
+                        <div class="node-desc">Fuente el memorioso (Lector) y Fuente el conversador (Chat)</div>
                     </div>
                 </div>
             </div>
@@ -183,22 +184,22 @@
                 </div>
             </div>
             <div class="log-console" id="log-console">
-                <div><span class="log-time">[00:00:00]</span> The Funes Gazette — Imprenta y registro iniciados correctamente.</div>
+                <div><span class="log-time">[00:00:00]</span> The Fuente Gazette — Imprenta y registro iniciados correctamente.</div>
             </div>
         </div>
 
         <!-- LÍNEA DE ESTADO MINIMALISTA INFERIOR -->
         <div class="bottom-status-bar">
             <span id="bottom-status-line">Estado: No medido • Vault: No medido • RAM: No medido</span>
-            <span class="console-text-002">'Funes' es una creación de Emilio Sevilla Ortego (funes_2026.1)</span>
+            <span class="console-text-002">'Fuente' es una creación de Emilio Sevilla Ortego (fuente_2026.1)</span>
         </div>
     </div>
 
-    <!-- MODAL LECTOR (FUNES EL MEMORIOSO) -->
+    <!-- MODAL LECTOR (FUENTE EL MEMORIOSO) -->
     <div class="modal-overlay" id="modal-reader">
         <div class="modal-container">
             <div class="modal-header">
-                <div class="modal-title">FUNES EL MEMORIOSO — LECTOR DE NOTAS</div>
+                <div class="modal-title">FUENTE EL MEMORIOSO — LECTOR DE NOTAS</div>
                 <div class="console-layout-005">
                     <button class="btn-small" id="btn-reader-back" data-onclick-command="goBackReaderNote()" disabled title="Volver a la nota anterior">◄ Atrás</button>
                     <button class="btn-small btn-toggle active" id="btn-reader-mode-list" data-onclick-command="switchReaderView('list')">Vista Notas</button>
@@ -213,24 +214,42 @@
                 </div>
             </div>
             <div class="modal-body">
-                <div class="reader-dual-pane reader-view" id="reader-view-list">
-                    <div class="reader-sidebar">
-                        <div class="reader-search-wrapper">
-                            <span class="reader-search-icon">🔍</span>
-                            <input type="text" class="reader-search-input" id="reader-search" placeholder="Buscar notas..." data-oninput-command="filterReaderNotes()">
+                <div class="reader-context-grid">
+                    <section class="reader-context-content" data-reader-region="content" aria-label="Contenido de la nota">
+                        <div class="reader-dual-pane reader-view" id="reader-view-list">
+                            <div class="reader-sidebar">
+                                <div class="reader-search-wrapper">
+                                    <span class="reader-search-icon">🔍</span>
+                                    <input type="text" class="reader-search-input" id="reader-search" placeholder="Buscar notas..." data-oninput-command="filterReaderNotes()">
+                                </div>
+                                <div class="reader-pinned-container" id="reader-pinned-moc"></div>
+                                <div class="reader-sidebar-divider">ÍNDICE DE NOTAS</div>
+                                <div class="reader-note-list-scroll">
+                                    <ul class="reader-note-list" id="reader-note-list">
+                                        <li class="reader-note-item active">Cargando notas...</li>
+                                    </ul>
+                                </div>
+                            </div>
+                            <div class="reader-view-pane" id="reader-content">
+                                <h2 class="console-layout-007">Selecciona una nota</h2>
+                                <p class="console-layout-008">Explora el mapa de conocimiento generado en 4_salida.</p>
+                            </div>
                         </div>
-                        <div class="reader-pinned-container" id="reader-pinned-moc"></div>
-                        <div class="reader-sidebar-divider">ÍNDICE DE NOTAS</div>
-                        <div class="reader-note-list-scroll">
-                            <ul class="reader-note-list" id="reader-note-list">
-                                <li class="reader-note-item active">Cargando notas...</li>
-                            </ul>
+                    </section>
+                    <aside class="reader-properties-pane" data-reader-region="properties" aria-label="Propiedades de la nota">
+                        <div class="reader-properties-visual">
+                            <h2>Propiedades</h2>
+                            <div id="reader-properties" role="list" aria-live="polite"></div>
                         </div>
-                    </div>
-                    <div class="reader-view-pane" id="reader-content">
-                        <h2 class="console-layout-007">Selecciona una nota</h2>
-                        <p class="console-layout-008">Explora el mapa de conocimiento generado en 4_salida.</p>
-                    </div>
+                    </aside>
+                    <section class="reader-relations-pane" data-reader-region="relations" aria-label="Relaciones locales de la nota">
+                        <div class="reader-graph-container console-layout-009" id="reader-view-graph">
+                            <canvas id="obsidian-graph-canvas" class="graph-canvas console-layout-010"></canvas>
+                            <div class="console-layout-011">
+                                Nodos: <b id="graph-nodes-count" class="console-text-003">0</b> | Enlaces: <b id="graph-links-count" class="console-text-004">0</b> • Haz clic en un nodo para leer la nota. Arrastra los nodos para mover el mapa.
+                            </div>
+                        </div>
+                    </section>
                 </div>
                 <template id="reader-editor-template">
                     <section class="reader-editor-panel" id="reader-editor-panel" aria-label="Editor Markdown">
@@ -257,12 +276,6 @@
                         </div>
                     </section>
                 </template>
-                <div class="reader-graph-container reader-view console-layout-009 is-hidden" id="reader-view-graph">
-                    <canvas id="obsidian-graph-canvas" class="graph-canvas console-layout-010"></canvas>
-                    <div class="console-layout-011">
-                        Nodos: <b id="graph-nodes-count" class="console-text-003">0</b> | Enlaces: <b id="graph-links-count" class="console-text-004">0</b> • Haz clic en un nodo para leer la nota. Arrastra los nodos para mover el mapa.
-                    </div>
-                </div>
             </div>
         </div>
     </div>
@@ -275,7 +288,7 @@
                 <button class="close-btn" data-onclick-command="closeModal('modal-fusion')">&times;</button>
             </div>
             <div class="modal-body">
-                <p>Selecciona una propuesta determinista. La previsualización no modifica ninguna fuente.</p>
+                <p>Selecciona una propuesta determinista. La previsualización no modifica ningún origen.</p>
                 <div id="fusion-candidate-list" role="list" aria-label="Candidatos de fusión"></div>
                 <div id="fusion-source-selection" aria-live="polite"></div>
                 <div class="metadata-field">
@@ -292,7 +305,7 @@
                 </section>
                 <label class="fusion-confirmation-label">
                     <input type="checkbox" id="fusion-confirmation">
-                    Confirmo que he revisado las fuentes y quiero crear una nueva nota pendiente.
+                    Confirmo que he revisado los orígenes y quiero crear una nueva nota pendiente.
                 </label>
                 <div id="fusion-status" role="status" aria-live="polite"></div>
             </div>
@@ -311,7 +324,7 @@
             </div>
             <div class="modal-body console-layout-015">
                 <p class="console-layout-016">
-                    Ingresa el título del Tema para Funes. Se creará una bóveda Obsidian aislada con su correspondiente estructura de carpetas (1_entrada, 2_sucio, 3_limpio, 4_salida).
+                    Ingresa el título del Tema para Fuente. Se creará una bóveda Obsidian aislada con su correspondiente estructura de carpetas (1_entrada, 2_sucio, 3_limpio, 4_salida).
                 </p>
                 <div class="console-layout-017">
                     <label class="console-text-006">Título del Tema:</label>
@@ -354,11 +367,11 @@
         </div>
     </div>
 
-    <!-- MODAL CHAT (FUNES EL CONVERSADOR) -->
+    <!-- MODAL CHAT (FUENTE EL CONVERSADOR) -->
     <div class="modal-overlay" id="modal-chat">
         <div class="modal-container console-layout-025">
             <div class="modal-header">
-                <div class="modal-title">FUNES EL CONVERSADOR — CHAT INTEGRADO</div>
+                <div class="modal-title">FUENTE EL CONVERSADOR — CHAT INTEGRADO</div>
                 <div>
                     <button class="btn-small" data-onclick-command="clearChatHistory()">Limpiar Historial</button>
                     <div id="anythingllm-optional-panel" hidden aria-hidden="true">
@@ -376,7 +389,7 @@
                 <div class="chat-container-box">
                     <div class="chat-messages-scroll" id="chat-messages">
                         <div class="chat-bubble ai" id="chat-welcome-bubble">
-                            <strong>Funes IA:</strong> <span id="chat-welcome-text">Hola. Puedo responder preguntas sobre los documentos procesados en tu Vault usando Ollama en este equipo.</span>
+                            <strong>Fuente IA:</strong> <span id="chat-welcome-text">Hola. Puedo responder preguntas sobre los documentos procesados en tu Vault usando Ollama en este equipo.</span>
                         </div>
                     </div>
                     <div class="chat-input-bar">
@@ -417,7 +430,7 @@
                     <div class="console-text-012">Desglose de la Carpeta de Ingesta:</div>
                     <ul class="console-layout-029">
                         <li>Archivos locales directos en 1_entrada: <b id="stat-input-direct-count" class="console-text-003">0</b></li>
-                        <li>Fuentes externas vinculadas: <b id="stat-input-sources-count" class="console-text-003">0</b></li>
+                        <li>Entradas externas vinculadas: <b id="stat-input-providers-count" class="console-text-003">0</b></li>
                     </ul>
                 </div>
             </div>
@@ -438,7 +451,7 @@
                 <div class="console-layout-028">
                     <div class="console-text-012">Resumen de Notas e Interconexiones:</div>
                     <ul class="console-layout-029">
-                        <li>Notas inteligentes en 4_salida: <b id="stat-notes-total-count" class="console-text-003">0</b></li>
+                        <li>Sumarios y notas en 4_salida: <b id="stat-notes-total-count" class="console-text-003">0</b></li>
                         <li>Hiperenlaces cruzados ([[nota]]): <b id="stat-notes-links-count" class="console-text-004">0</b></li>
                         <li>Base de datos vectorial: <b class="console-text-013">ChromaDB Activo</b></li>
                     </ul>
@@ -478,7 +491,7 @@
     <div class="modal-overlay" id="modal-settings">
         <div class="modal-container">
             <div class="modal-header">
-                <div class="modal-title">AJUSTES AVANZADOS Y CONFIGURACIÓN FUNES</div>
+                <div class="modal-title">AJUSTES AVANZADOS Y CONFIGURACIÓN FUENTE</div>
                 <button class="close-btn" data-onclick-command="closeModal('modal-settings')">&times;</button>
             </div>
             <div class="modal-body">
@@ -492,18 +505,18 @@
                 <div class="tab-panel console-layout-033" id="tab-panel-routes">
                     <!-- BÓVEDA PRINCIPAL -->
                     <div>
-                        <label class="console-layout-034">Ruta Principal de la Memoria de Funes:</label>
+                        <label class="console-layout-034">Ruta Principal de la Memoria de Fuente:</label>
                         <div class="console-layout-035">
                             <input type="text" id="setting-vault-path" value="" readonly class="console-layout-036">
                             <button class="btn-secondary console-layout-037" data-onclick-command="browseVaultFolder()">Explorar...</button>
                         </div>
-                        <span class="console-layout-038">Las carpetas 1_entrada, 2_sucio, 3_limpio y 4_salida están estructuradas automáticamente por Funes en esta bóveda.</span>
+                        <span class="console-layout-038">Las carpetas 1_entrada, 2_sucio, 3_limpio y 4_salida están estructuradas automáticamente por Fuente en esta bóveda.</span>
                     </div>
 
                     <!-- CONEXIONES DE INGESTA (1_ENTRADA) -->
                     <div class="console-layout-039">
                         <div class="console-layout-040">
-                            <label class="console-text-016">Fuentes Vinculadas a 1_entrada (Ingesta):</label>
+                            <label class="console-text-016">Entradas vinculadas a 1_entrada (Ingesta):</label>
                             <button class="btn-small" data-onclick-command="addLinkedInputFolder()">+ Vincular Carpeta de Ingesta</button>
                         </div>
                         <span class="console-layout-041">Archivos volcados en estas carpetas locales/compartidas serán recopilados hacia 1_entrada:</span>
@@ -577,7 +590,7 @@
                     <div>
                         <label class="console-layout-034">Encabezado Metadatos YAML:</label>
                         <select id="setting-yaml-header" class="console-layout-044">
-                            <option value="standard">Standard Funes (Completo con Tags e Interenlaces)</option>
+                            <option value="standard">Standard Fuente (Completo con Tags e Interenlaces)</option>
                             <option value="strict">Obsidian Strict (Estándar Obsidian Core)</option>
                             <option value="minimal">Minimalista (Sólo Titular y Fecha)</option>
                         </select>
@@ -619,7 +632,7 @@
 
     <!-- MODAL BANDEJA DE APROBACIÓN
          Editor strategy (Task 6.3): TipTap excluded from packaged app — no vendored
-         JS bundle. Body round-trip uses funes/ui/markdown_projection.py; approval
+         JS bundle. Body round-trip uses fuente/ui/markdown_projection.py; approval
          persists NoteDocument (frontmatter + body_markdown), not editor DOM state. -->
     <div class="modal-overlay console-layer-002" id="modal-approval">
         <div class="modal-container">
@@ -653,10 +666,10 @@
                         <input type="date" id="metadata-date">
                         <span class="metadata-field-error" id="metadata-error-date"></span>
                     </div>
-                    <div class="metadata-field is-hidden" id="metadata-field-sources">
-                        <label for="metadata-sources">Fuentes (una por línea)</label>
-                        <textarea id="metadata-sources" rows="3" placeholder="Fuente 1&#10;Fuente 2"></textarea>
-                        <span class="metadata-field-error" id="metadata-error-sources"></span>
+                    <div class="metadata-field is-hidden" id="metadata-field-origins">
+                        <label for="metadata-origins">Orígenes canónicos</label>
+                        <textarea id="metadata-origins" rows="3" readonly placeholder="Sin orígenes"></textarea>
+                        <span class="metadata-field-error" id="metadata-error-origins"></span>
                     </div>
                     <div class="metadata-field is-hidden" id="metadata-field-status">
                         <label for="metadata-status">Estado</label>
@@ -666,6 +679,11 @@
                             <option value="archived">Archivada</option>
                         </select>
                         <span class="metadata-field-error" id="metadata-error-status"></span>
+                    </div>
+                    <div class="metadata-field is-hidden" id="approval-reviewer-field">
+                        <label for="approval-reviewer">Revisado por</label>
+                        <input type="text" id="approval-reviewer" autocomplete="name" maxlength="80" placeholder="Nombre del revisor">
+                        <span class="metadata-field-error" id="approval-reviewer-error"></span>
                     </div>
                     <details class="metadata-diagnostic is-hidden" id="metadata-diagnostic-panel">
                         <summary class="console-text-023">Vista diagnóstica — frontmatter YAML (solo lectura)</summary>
@@ -743,7 +761,7 @@
                 <button class="close-btn" data-onclick-command="hideOnboardingPanel()">&times;</button>
             </div>
             <div class="modal-body">
-                <p>Un ejemplo local y pequeño para conocer el flujo de Funes. No descarga modelos ni activa servicios externos.</p>
+                <p>Un ejemplo local y pequeño para conocer el flujo de Fuente. No descarga modelos ni activa servicios externos.</p>
                 <div id="onboarding-status" role="status" aria-live="polite"></div>
                 <div id="onboarding-collisions" class="is-hidden" role="alert"></div>
             </div>
@@ -758,7 +776,7 @@
     <div class="modal-overlay" id="modal-help">
         <div class="modal-container console-layout-025">
             <div class="modal-header">
-                <div class="modal-title">GUÍA RÁPIDA DE USO — SISTEMA FUNES</div>
+                <div class="modal-title">GUÍA RÁPIDA DE USO — SISTEMA FUENTE</div>
                 <button class="close-btn" data-onclick-command="closeModal('modal-help')">&times;</button>
             </div>
             <div class="modal-body console-layout-051">
@@ -766,7 +784,7 @@
                 <div class="console-layout-052">
                     <h4 class="console-layout-053">1. Organización en Temas y Cuestiones</h4>
                     <p class="console-layout-054">
-                        Funes te permite ordenar tu conocimiento en bloques independientes y asuntos específicos:
+                        Fuente te permite ordenar tu conocimiento en bloques independientes y asuntos específicos:
                     </p>
                     <ul class="console-layout-055">
                         <li><b>Temas:</b> Grandes bloques de conocimiento independientes elegibles en el menú <code>TEMA</code> de la cabecera. Cada Tema trabaja con su propia bóveda de notas (<code>1_entrada</code>, <code>2_sucio</code>, <code>3_limpio</code>, <code>4_salida</code>).</li>
@@ -790,12 +808,12 @@
                 <div class="console-layout-052">
                     <h4 class="console-layout-053">3. Edición, Fusión y Gestión de Notas</h4>
                     <p class="console-layout-054">
-                        Control total sobre tus notas desde el Lector de Funes:
+                        Control total sobre tus notas desde el Lector de Fuente:
                     </p>
                     <ul class="console-layout-055">
                         <li><b>Aprobación:</b> Revisa las notas generadas diferenciando entre notas pendientes de revisión y notas aprobadas.</li>
                         <li><b>Edición Guiada:</b> Modifica cómodamente el título, etiquetas, resumen ejecutivo y contenido de tus notas.</li>
-                        <li><b>Fusión de Notas:</b> Combina varias notas seleccionadas en una sola sin perder fuentes ni referencias.</li>
+                        <li><b>Fusión de Notas:</b> Combina varias notas seleccionadas en una sola sin perder orígenes ni referencias.</li>
                         <li><b>Papelera de Cuarentena:</b> Al eliminar una nota, esta se traslada a la carpeta de seguridad de Cuarentena, pudiendo <b>Restaurarla en 1 clic</b> cuando lo desees.</li>
                     </ul>
                 </div>
@@ -814,12 +832,12 @@
                 </div>
             </div>
             <div class="modal-footer">
-                <span class="console-text-002">Funes v2026.1 • Formateo Universal de Notas, Estructuración y Síntesis</span>
+                <span class="console-text-002">Fuente v2026.1 • Formateo Universal de Notas, Estructuración y Síntesis</span>
             </div>
         </div>
     </div>
 
-    <script nonce="funes-console">
+    <script nonce="fuente-console">
         function runStaticCommand(command, element, event) {
             if (command.startsWith("if(event.key==='Enter')")) {
                 if (event.key !== 'Enter') return;
@@ -849,7 +867,7 @@
                 'browseVaultFolder()': browseVaultFolder,
                 'addLinkedInputFolder()': addLinkedInputFolder,
                 'addLinkedOutputFolder()': addLinkedOutputFolder,
-                'syncAllSources()': syncAllSources,
+                'syncAllInputs()': syncAllInputs,
                 'resetDefaultSettings()': resetDefaultSettings,
                 'saveSettings()': saveSettings,
                 'openApprovalInbox()': openApprovalInbox,
@@ -1077,9 +1095,13 @@
 
         let approvalSelectedNoteId = null;
         let approvalSelectedRevision = null;
+        let approvalSelectedScope = null;
+        let approvalSelectedOrigins = [];
+        let approvalSelectedOriginKind = null;
+        let approvalLegacyOriginIds = [];
         let failedApprovalExportDocumentId = null;
         let failedApprovalExportFormat = null;
-        const metadataFieldIds = ['title', 'tags', 'issue', 'date', 'sources', 'status'];
+        const metadataFieldIds = ['title', 'tags', 'issue', 'date', 'origins', 'status'];
 
         function bindApprovalDiagnosticPanel() {
             const panel = document.getElementById('metadata-diagnostic-panel');
@@ -1274,7 +1296,7 @@
                 const row = document.createElement('article');
                 row.classList.add('graph-section');
                 appendQueueField(row, 'Trabajo', job.job_id);
-                appendQueueField(row, 'Fuente', job.source_relative_path);
+                appendQueueField(row, 'Entrada', job.source_relative_path);
                 appendQueueField(row, 'Etapa', job.stage);
                 appendQueueField(row, 'Estado', job.status);
                 appendQueueField(row, 'Razón durable', job.reason || job.cancel_reason || job.error_message);
@@ -1501,7 +1523,24 @@
             diagnosticPanel.classList.toggle('is-visible', visible);
             document.getElementById('btn-save-metadata').disabled = !visible;
             document.getElementById('btn-approve-note').disabled = !visible;
-            document.getElementById('btn-approve-export').disabled = !visible;
+            document.getElementById('btn-approve-export').disabled = !visible || approvalSelectedScope === 'clean';
+            setApprovalScope(approvalSelectedScope);
+        }
+
+        function setApprovalScope(scope) {
+            approvalSelectedScope = scope || null;
+            const reviewerField = document.getElementById('approval-reviewer-field');
+            const reviewerInput = document.getElementById('approval-reviewer');
+            const reviewerError = document.getElementById('approval-reviewer-error');
+            const isClean = approvalSelectedScope === 'clean';
+            if (reviewerField) reviewerField.classList.toggle('is-hidden', !isClean);
+            if (reviewerField) reviewerField.classList.toggle('is-visible', isClean);
+            if (reviewerInput && !isClean) reviewerInput.value = '';
+            if (reviewerError) reviewerError.textContent = '';
+            const exportButton = document.getElementById('btn-approve-export');
+            if (exportButton) exportButton.disabled = !approvalSelectedNoteId || approvalSelectedScope !== 'output';
+            if (exportButton && isClean) exportButton.title = 'La nota canónica se aprueba antes de generar sumarios; no se exporta desde aquí.';
+            if (exportButton && !isClean) exportButton.removeAttribute('title');
         }
 
         function populateIssueOptions(issues, selectedIssue) {
@@ -1520,21 +1559,41 @@
             document.getElementById('metadata-title').value = metadata.title || '';
             document.getElementById('metadata-tags').value = (metadata.tags || []).join(', ');
             document.getElementById('metadata-date').value = metadata.date || '';
-            document.getElementById('metadata-sources').value = (metadata.sources || []).join('\n');
+            approvalSelectedOrigins = Array.isArray(metadata.origins) ? metadata.origins.slice() : [];
+            approvalSelectedOriginKind = metadata.origin_kind || null;
+            approvalLegacyOriginIds = Array.isArray(metadata.legacy_origin_ids) ? metadata.legacy_origin_ids.slice() : [];
+            const originLines = approvalSelectedOrigins.map(function(origin) {
+                const path = origin && origin.path ? origin.path : '<origen>';
+                const revision = origin && origin.revision ? origin.revision : '?';
+                const hash = origin && origin.content_hash ? origin.content_hash.slice(0, 12) : '?';
+                return path + ' · rev. ' + revision + ' · ' + hash;
+            });
+            if (approvalLegacyOriginIds.length) {
+                originLines.push('Migración pendiente: faltan identidades OriginRef completas.');
+            }
+            document.getElementById('metadata-origins').value = originLines.join('\n');
             document.getElementById('metadata-status').value = metadata.status || 'pending_review';
             populateIssueOptions(window.approvalIssueOptions || ['_Sin_Cuestion'], metadata.issue || '_Sin_Cuestion');
+            const blocked = metadata.migration_status === 'pending_origins' || approvalLegacyOriginIds.length > 0;
+            document.getElementById('btn-save-metadata').disabled = blocked;
+            document.getElementById('btn-approve-note').disabled = blocked;
+            document.getElementById('btn-approve-export').disabled = blocked;
+            setApprovalScope(approvalSelectedScope);
             clearMetadataFieldErrors();
         }
 
         function collectMetadataFormValues() {
-            return {
+            const metadata = {
                 title: document.getElementById('metadata-title').value,
                 tags: document.getElementById('metadata-tags').value,
                 issue: document.getElementById('metadata-issue').value,
                 date: document.getElementById('metadata-date').value,
-                sources: document.getElementById('metadata-sources').value,
+                origins: approvalSelectedOrigins.slice(),
                 status: document.getElementById('metadata-status').value,
             };
+            if (approvalSelectedOriginKind) metadata.origin_kind = approvalSelectedOriginKind;
+            if (approvalLegacyOriginIds.length) metadata.legacy_origin_ids = approvalLegacyOriginIds.slice();
+            return metadata;
         }
 
         let fusionCandidates = [];
@@ -1582,7 +1641,7 @@
             const selected = selectedFusionIds();
             const selection = document.getElementById('fusion-source-selection');
             const previewButton = document.getElementById('fusion-preview-button');
-            if (selection) selection.textContent = selected.length + ' fuente(s) seleccionada(s): ' + selected.join(', ');
+            if (selection) selection.textContent = selected.length + ' origen(es) seleccionado(s): ' + selected.join(', ');
             if (previewButton) previewButton.disabled = selected.length < 2;
             fusionPreview = null;
             const commitButton = document.getElementById('fusion-commit-button');
@@ -1613,7 +1672,7 @@
                         return;
                     }
                     renderFusionCandidates(result && result.candidates);
-                    fusionStatus('Selecciona al menos dos fuentes y revisa el preview.', false);
+                    fusionStatus('Selecciona al menos dos orígenes y revisa el preview.', false);
                 }).catch(function(error) {
                     fusionStatus('No se pudieron cargar los candidatos: ' + String(error), true);
                 });
@@ -1631,7 +1690,7 @@
             heading.textContent = preview.title + ' · ' + preview.target_issue;
             pane.appendChild(heading);
             const sourceHeading = document.createElement('h4');
-            sourceHeading.textContent = 'Fuentes y revisiones capturadas';
+            sourceHeading.textContent = 'Orígenes y sumarios capturados';
             pane.appendChild(sourceHeading);
             (preview.sources || []).forEach(function(source) {
                 const details = document.createElement('details');
@@ -1655,7 +1714,7 @@
             const title = document.getElementById('fusion-title').value.trim();
             const issue = document.getElementById('fusion-issue').value.trim();
             if (ids.length < 2 || !title || !issue) {
-                fusionStatus('Selecciona al menos dos fuentes e indica título y cuestión.', true);
+                fusionStatus('Selecciona al menos dos orígenes e indica título y cuestión.', true);
                 return;
             }
             fusionStatus('Construyendo preview de sólo lectura...', false);
@@ -1687,7 +1746,7 @@
                 fusionStatus('Debes revisar el preview y confirmar la creación.', true);
                 return;
             }
-            fusionStatus('Revalidando fuentes y creando nota pendiente...', false);
+            fusionStatus('Revalidando orígenes y creando nota pendiente...', false);
             if (!(window.pywebview && window.pywebview.api)) return;
             window.pywebview.api.commit_fusion(
                 fusionPreview.preview_id,
@@ -1700,7 +1759,7 @@
                     fusionStatus(result.message || 'Conflicto de revisión: vuelve a previsualizar.', true);
                     return;
                 }
-                fusionStatus('Nota pendiente creada. Las fuentes originales siguen intactas.', false);
+                fusionStatus('Nota pendiente creada. Los documentos de origen siguen intactos.', false);
                 fusionPreview = null;
                 confirmation.checked = false;
                 document.getElementById('fusion-commit-button').disabled = true;
@@ -1737,6 +1796,7 @@
             const listEl = document.getElementById('approval-pending-list');
             approvalSelectedNoteId = null;
             approvalSelectedRevision = null;
+            setApprovalScope(null);
             if (!preserveRetry) {
                 failedApprovalExportDocumentId = null;
                 failedApprovalExportFormat = null;
@@ -1769,16 +1829,20 @@
                     item.className = 'approval-pending-item';
                     item.textContent = note.title || note.filename || note.document_id;
                     item.addEventListener('click', function() {
-                        selectApprovalNote(note.document_id, note.revision, item);
+                        selectApprovalNote(note.document_id, note.revision, item, note.approval_scope);
                     });
                     listEl.appendChild(item);
                 });
+            }).catch(function() {
+                setTextMessage(listEl, 'No se pudieron cargar las notas pendientes. Revisa la consola y vuelve a intentarlo.', 'console-layout-048');
+                document.getElementById('approval-form-status').textContent = 'La bandeja no está disponible.';
             });
         }
 
-        function selectApprovalNote(documentId, revision, itemEl) {
+        function selectApprovalNote(documentId, revision, itemEl, approvalScope) {
             approvalSelectedNoteId = documentId;
             approvalSelectedRevision = revision;
+            setApprovalScope(approvalScope);
             document.querySelectorAll('.approval-pending-item').forEach(function(el) {
                 el.classList.remove('active');
             });
@@ -1827,11 +1891,27 @@
             if (!approvalSelectedNoteId || approvalSelectedRevision === null) return;
             const metadata = collectMetadataFormValues();
             document.getElementById('approval-form-status').textContent = 'Aprobando...';
-            window.pywebview.api.approve_note(
-                approvalSelectedNoteId,
-                approvalSelectedRevision,
-                metadata
-            ).then(function(res) {
+            let approvalRequest;
+            if (approvalSelectedScope === 'clean') {
+                const reviewer = document.getElementById('approval-reviewer').value.trim();
+                if (!reviewer) {
+                    document.getElementById('approval-reviewer-error').textContent = 'Indica quién aprueba esta revisión.';
+                    document.getElementById('approval-form-status').textContent = 'Falta el revisor';
+                    return;
+                }
+                approvalRequest = window.pywebview.api.approve_clean(
+                    approvalSelectedNoteId,
+                    approvalSelectedRevision,
+                    reviewer
+                );
+            } else {
+                approvalRequest = window.pywebview.api.approve_note(
+                    approvalSelectedNoteId,
+                    approvalSelectedRevision,
+                    metadata
+                );
+            }
+            approvalRequest.then(function(res) {
                 if (res && res.field_errors) {
                     showMetadataFieldErrors(res.field_errors);
                     document.getElementById('approval-form-status').textContent = res.message || 'No se puede aprobar con metadatos inválidos';
@@ -2035,14 +2115,14 @@
                         document.getElementById('stat-input-direct-count').innerText = state.stats.input || '0';
                     }
                 });
-                window.pywebview.api.get_sync_sources().then(function(info) {
-                    if (info && Array.isArray(info.sources)) {
-                        document.getElementById('stat-input-sources-count').innerText = info.sources.length;
+                window.pywebview.api.get_sync_inputs().then(function(info) {
+                    if (info && Array.isArray(info.inputs)) {
+                        document.getElementById('stat-input-providers-count').innerText = info.inputs.length;
                     }
                 });
             } else {
                 document.getElementById('stat-input-direct-count').innerText = '0';
-                document.getElementById('stat-input-sources-count').innerText = '0';
+                document.getElementById('stat-input-providers-count').innerText = '0';
             }
         }
 
@@ -2142,7 +2222,7 @@
             }
         }
 
-        let linkedInputSources = [];
+        let linkedInputs = [];
         let linkedOutputFolders = [];
 
         function pickBrowserFolder(callback) {
@@ -2179,10 +2259,10 @@
         function browseVaultFolder() {
             log('Abriendo selector nativo del Finder de macOS para la Bóveda...');
             if (window.pywebview && window.pywebview.api) {
-                window.pywebview.api.select_folder("Seleccionar Carpeta de la Memoria de Funes").then(function(folder) {
+                window.pywebview.api.select_folder("Seleccionar Carpeta de la Memoria de Fuente").then(function(folder) {
                     if (folder) {
                         document.getElementById('setting-vault-path').value = folder;
-                        log('Ruta de la Memoria de Funes actualizada: ' + folder);
+                        log('Ruta de la Memoria de Fuente actualizada: ' + folder);
                     } else {
                         log('Selección de Bóveda cancelada.');
                     }
@@ -2193,16 +2273,16 @@
                 pickBrowserFolder(function(folder) {
                     if (folder) {
                         document.getElementById('setting-vault-path').value = folder;
-                        log('Ruta de la Memoria de Funes seleccionada: ' + folder);
+                        log('Ruta de la Memoria de Fuente seleccionada: ' + folder);
                     }
                 });
             }
         }
 
         function addLinkedInputFolder() {
-            log('Abriendo selector nativo del Finder para Fuentes de Ingesta...');
+            log('Abriendo selector nativo del Finder para entradas de ingesta...');
             if (window.pywebview && window.pywebview.api) {
-                window.pywebview.api.select_sync_folder("Vincular Carpeta de Ingesta (1_entrada)").then(function(selection) {
+                window.pywebview.api.select_sync_input_folder("Vincular entrada de ingesta (1_entrada)").then(function(selection) {
                     if (!selection || selection.status === 'cancelled') {
                         log('Selección de ingesta cancelada.');
                         return;
@@ -2212,34 +2292,34 @@
                         return;
                     }
                     const label = (selection.display_name || 'carpeta') + ' [' + (selection.provider || 'local') + ']';
-                    if (!confirm('¿Vincular ' + label + '? Funes leerá esta carpeta y copiará hacia el tema activo.')) return;
-                    return window.pywebview.api.confirm_sync_source({ selection_id: selection.selection_id });
+                    if (!confirm('¿Vincular ' + label + '? Fuente leerá esta carpeta y copiará hacia el tema activo.')) return;
+                    return window.pywebview.api.confirm_sync_input({ selection_id: selection.selection_id });
                 }).then(function(result) {
                     if (!result) return;
                     if (result.error) {
-                        log('Error guardando fuente de ingesta: ' + result.message);
+                        log('Error guardando entrada de ingesta: ' + result.message);
                         return;
                     }
-                    updateSyncSources(result);
-                    log('Fuente de ingesta vinculada.');
+                    updateSyncInputs(result);
+                    log('Entrada de ingesta vinculada.');
                 }).catch(function(err) {
                     log('Error en selector de ingesta: ' + err);
                 });
             } else {
-                log('La vinculación de fuentes requiere el selector nativo de Funes.');
+                log('La vinculación de entradas requiere el selector nativo de Fuente.');
             }
         }
 
         function removeLinkedInputFolder(idx) {
-            const source = linkedInputSources[idx];
-            if (!source || !window.pywebview || !window.pywebview.api) return;
-            window.pywebview.api.remove_sync_source(source.id).then(function(result) {
+            const input = linkedInputs[idx];
+            if (!input || !window.pywebview || !window.pywebview.api) return;
+            window.pywebview.api.remove_sync_input(input.id).then(function(result) {
                 if (result && result.error) {
-                    log('Error desvinculando fuente: ' + result.message);
+                    log('Error desvinculando entrada: ' + result.message);
                     return;
                 }
-                updateSyncSources(result);
-                log('Fuente de ingesta desvinculada.');
+                updateSyncInputs(result);
+                log('Entrada de ingesta desvinculada.');
             });
         }
 
@@ -2305,17 +2385,17 @@
 
             if (inputEl) {
                 inputEl.replaceChildren();
-                if (linkedInputSources.length === 0) {
+                if (linkedInputs.length === 0) {
                     const empty = document.createElement('div');
                     empty.classList.add('console-text-017');
-                    empty.textContent = 'No hay fuentes de ingesta vinculadas.';
+                    empty.textContent = 'No hay entradas de ingesta vinculadas.';
                     inputEl.appendChild(empty);
                 } else {
-                    linkedInputSources.forEach(function(source, index) {
+                    linkedInputs.forEach(function(input, index) {
                         const item = document.createElement('div');
                         item.classList.add('console-layout-067');
                         const label = document.createElement('span');
-                        label.textContent = (source.display_name || 'Fuente') + ' [' + (source.provider || 'local') + ']' + (source.enabled ? '' : ' — desactivada');
+                        label.textContent = (input.display_name || 'Entrada') + ' [' + (input.provider || 'local') + ']' + (input.enabled ? '' : ' — desactivada');
                         const remove = document.createElement('button');
                         remove.type = 'button';
                         remove.classList.add('console-text-031');
@@ -2345,30 +2425,30 @@
                 : 'Sin sincronización ejecutada en esta sesión.';
         }
 
-        function updateSyncSources(result) {
+        function updateSyncInputs(result) {
             if (!result) return;
-            if (Array.isArray(result.sources)) linkedInputSources = result.sources;
+            if (Array.isArray(result.inputs)) linkedInputs = result.inputs;
             renderLinkedFolders();
             renderSyncStatus(result.report ? Object.assign({}, result.report, { last_run_at: result.last_run_at }) : result);
         }
 
-        function syncAllSources() {
+        function syncAllInputs() {
             if (!(window.pywebview && window.pywebview.api)) {
-                log('La sincronización requiere la consola nativa de Funes.');
+                log('La sincronización requiere la consola nativa de Fuente.');
                 return;
             }
             updateStepBadge('badge-step1');
-            log('Sincronizando fuentes vinculadas hacia el tema activo...');
-            window.pywebview.api.sync_sources({ connection_ids: [] }).then(function(result) {
-                updateSyncSources(result);
+            log('Sincronizando entradas vinculadas hacia el tema activo...');
+            window.pywebview.api.sync_inputs({ connection_ids: [] }).then(function(result) {
+                updateSyncInputs(result);
                 if (result && result.error) {
-                    log('Error sincronizando fuentes: ' + result.message);
+                    log('Error sincronizando entradas: ' + result.message);
                     return;
                 }
                 updateDashboardStats(result.stats);
                 log('Sincronización completada: ' + Number(result.copied || 0) + ' archivos nuevos; ' + Number((result.conflicts || []).length) + ' conflictos.');
             }).catch(function(err) {
-                log('Error sincronizando fuentes: ' + err);
+                log('Error sincronizando entradas: ' + err);
             });
         }
 
@@ -2376,12 +2456,12 @@
             if (window.pywebview && window.pywebview.api) {
                 Promise.all([
                     window.pywebview.api.get_settings_info(),
-                    window.pywebview.api.get_sync_sources()
+                    window.pywebview.api.get_sync_inputs()
                 ]).then(function(results) {
                     const info = results[0];
                     const syncState = results[1];
                     if (info.vault_path) { document.getElementById('setting-vault-path').value = info.vault_path; }
-                    if (syncState && Array.isArray(syncState.sources)) { linkedInputSources = syncState.sources; }
+                    if (syncState && Array.isArray(syncState.inputs)) { linkedInputs = syncState.inputs; }
                     if (info.output_connected_folders) { linkedOutputFolders = info.output_connected_folders; }
                     if (info.ollama_url) { document.getElementById('setting-ollama-url').value = info.ollama_url; }
                     if (info.ram_margin) { document.getElementById('setting-ram-margin').value = info.ram_margin; }
@@ -2393,12 +2473,12 @@
                     }
                     if (info.offline_mode) { applyOfflineModeState(info.offline_mode); }
                     renderLinkedFolders();
-                    updateSyncSources(syncState);
+                    updateSyncInputs(syncState);
                     populateOllamaModels(info.models, info.current_model);
                 });
             } else {
                 if (!document.getElementById('setting-vault-path').value || !document.getElementById('setting-vault-path').value.startsWith('/')) {
-                    document.getElementById('setting-vault-path').value = '/Users/emiliosevillaortego/Documents/Funes_Vault';
+                    document.getElementById('setting-vault-path').value = '/Users/emiliosevillaortego/Documents/Fuente_Vault';
                 }
                 renderLinkedFolders();
                 renderSyncStatus(null);
@@ -2523,7 +2603,7 @@
         }
 
         function getFullNotePath(notePath) {
-            const defaultBase = "/Users/emiliosevillaortego/Documents/Programación/funes/Vault_Funes/4_salida/";
+            const defaultBase = "/Users/emiliosevillaortego/Documents/Programación/fuente/Vault_Fuente/4_salida/";
             if (!notePath) return defaultBase + "_Indice_MOC.md";
             if (notePath.startsWith("/")) return notePath;
             return defaultBase + (notePath.endsWith(".md") ? notePath : notePath + ".md");
@@ -2568,7 +2648,7 @@
             }
             closePrintWindowOnError(printWindow);
             exportInFlight = false;
-            reportExportError('La exportación determinista requiere la consola Funes (PyWebView).');
+            reportExportError('La exportación determinista requiere la consola Fuente (PyWebView).');
         }
 
         function reportExportError(message, error) {
@@ -2583,7 +2663,7 @@
                 reportExportError((res && (res.message || res.error)) || 'No se pudo exportar la nota.');
                 return false;
             }
-            const title = currentSelectedNoteTitle || 'nota_funes';
+            const title = currentSelectedNoteTitle || 'nota_fuente';
             try {
                 if (format === 'pdf') {
                     if (res.mode !== 'user_assisted_print' || typeof res.print_html !== 'string' || !res.print_html) {
@@ -2938,7 +3018,7 @@
 
         function openCurrentNoteInObsidian(btnEl) {
             const noteFile = currentSelectedNotePath ? (currentSelectedNotePath.endsWith('.md') ? currentSelectedNotePath : currentSelectedNotePath + '.md') : '_Indice_MOC.md';
-            const obsidianUri = 'obsidian://open?vault=Vault_Funes&file=4_salida%2F' + encodeURIComponent(noteFile);
+            const obsidianUri = 'obsidian://open?vault=Vault_Fuente&file=4_salida%2F' + encodeURIComponent(noteFile);
             const title = currentSelectedNoteTitle || noteFile;
 
             showButtonFeedback(btnEl, '✓ Abriendo...');
@@ -2954,7 +3034,7 @@
         function triggerAction(actionName, payload, btnEl) {
             let logTitle = actionName;
             if (actionName === 'flush_sources' || actionName === 'step1_flush') {
-                logTitle = 'recopilación de fuentes hacia la carpeta de ingesta de Funes';
+                logTitle = 'recopilación de entradas hacia la carpeta de ingesta de Fuente';
                 updateStepBadge('badge-step1');
             } else if (actionName === 'step2_transcribe') {
                 logTitle = 'procesado de datos desestructurados.';
@@ -3030,7 +3110,7 @@
             if (labels.length) {
                 const sourceText = document.createElement('div');
                 sourceText.classList.add('console-layout-070');
-                sourceText.textContent = 'Fuentes: ' + labels.join(', ');
+                sourceText.textContent = 'Orígenes: ' + labels.join(', ');
                 bubble.appendChild(sourceText);
             }
             container.appendChild(bubble);
@@ -3057,27 +3137,27 @@
             if (window.pywebview && window.pywebview.api) {
                 window.pywebview.api.send_chat_message(msg, contextPayload).then(function(reply) {
                     if (!reply || typeof reply !== 'object') {
-                        appendChatBubble(chatScroll, 'ai', 'Funes IA:', String(reply || ''), [], {
+                        appendChatBubble(chatScroll, 'ai', 'Fuente IA:', String(reply || ''), [], {
                             error: { code: 'invalid_reply', message: 'Respuesta de chat inválida' },
                             retrieval_mode: 'none'
                         });
                         return;
                     }
                     if (reply.error && !reply.text && !reply.answer) {
-                        appendChatBubble(chatScroll, 'ai', 'Funes IA:', reply.message || 'Error de autorización o de chat.', [], {
+                        appendChatBubble(chatScroll, 'ai', 'Fuente IA:', reply.message || 'Error de autorización o de chat.', [], {
                             error: { code: reply.error, message: reply.message || String(reply.error) },
                             retrieval_mode: 'none'
                         });
                         return;
                     }
                     const answer = reply.text || reply.answer || '';
-                    appendChatBubble(chatScroll, 'ai', 'Funes IA:', answer, reply.sources, {
+                    appendChatBubble(chatScroll, 'ai', 'Fuente IA:', answer, reply.sources, {
                         error: (reply.error && typeof reply.error === 'object') ? reply.error : null,
                         retrieval_mode: reply.retrieval_mode || 'none',
                         source_labels: reply.source_labels || []
                     });
                 }).catch(function(err) {
-                    appendChatBubble(chatScroll, 'ai', 'Funes IA:', 'No se pudo completar la consulta con Ollama.', [], {
+                    appendChatBubble(chatScroll, 'ai', 'Fuente IA:', 'No se pudo completar la consulta con Ollama.', [], {
                         error: { code: 'ollama_unavailable', message: String(err || 'bridge failure') },
                         retrieval_mode: 'none'
                     });
@@ -3087,7 +3167,7 @@
                     appendChatBubble(
                         chatScroll,
                         'ai',
-                        'Funes IA:',
+                        'Fuente IA:',
                         'Vista previa offline: el chat real requiere el bridge PyWebView y Ollama local.',
                         [],
                         {
@@ -3156,8 +3236,8 @@
                         { id: "Vectorización_ChromaDB", label: "Vectorización_ChromaDB" },
                         { id: "Extractores_ETL", label: "Extractores_ETL" },
                         { id: "Obsidian_Vault", label: "Obsidian_Vault" },
-                        { id: "Ingesta_Fuentes", label: "Ingesta_Fuentes" },
-                        { id: "Funes_Gazette", label: "Funes_Gazette" }
+                        { id: "Ingesta_Fuentes", label: "Ingesta de entradas" },
+                        { id: "Fuente_Gazette", label: "Fuente_Gazette" }
                     ],
                     links: [
                         { source: "OptimizedLoop", target: "Notas_Inteligentes" },
@@ -3165,7 +3245,7 @@
                         { source: "Extractores_ETL", target: "OptimizedLoop" },
                         { source: "Notas_Inteligentes", target: "Obsidian_Vault" },
                         { source: "Ingesta_Fuentes", target: "Extractores_ETL" },
-                        { source: "Funes_Gazette", target: "Obsidian_Vault" }
+                        { source: "Fuente_Gazette", target: "Obsidian_Vault" }
                     ]
                 };
                 initObsidianGraphCanvas(demoData);
@@ -3194,7 +3274,8 @@
 
             if (nodes.length === 0) {
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
-                ctx.fillStyle = '#5E564B';
+                ctx.fillStyle = getComputedStyle(document.documentElement)
+                    .getPropertyValue('--fuente-snow-0').trim() || '#888';
                 ctx.font = '14px "JetBrains Mono", Courier, monospace';
                 ctx.fillText('No hay notas en 4_salida para construir el gráfico', width / 2 - 160, height / 2);
                 return;
@@ -3423,6 +3504,7 @@
         let currentSelectedNotePath = '';
         let currentSelectedDocumentId = '';
         let currentSelectedNoteDocumentModel = [];
+        let readerNotes = [];
         let pinnedMocDocumentId = '';
         let readerNoteHistory = [];
         let readerEditorDocumentId = '';
@@ -3816,7 +3898,7 @@
             setReaderEditorMode('edit');
             setReaderEditorState('loading', 'Cargando Markdown...');
             if (!(window.pywebview && window.pywebview.api && window.pywebview.api.get_note_editor)) {
-                setReaderEditorState('error', 'El editor requiere la conexión nativa de Funes.');
+                setReaderEditorState('error', 'El editor requiere la conexión nativa de Fuente.');
                 return;
             }
             window.pywebview.api.get_note_editor(currentSelectedDocumentId).then(function(editorDocument) {
@@ -3864,7 +3946,7 @@
                 return;
             }
             if (!(window.pywebview && window.pywebview.api && window.pywebview.api.update_note_body)) {
-                setReaderEditorState('error', 'El editor requiere la conexión nativa de Funes.');
+                setReaderEditorState('error', 'El editor requiere la conexión nativa de Fuente.');
                 return;
             }
             setReaderEditorState('loading', 'Guardando Markdown...');
@@ -4005,7 +4087,7 @@
                     appendChatBubble(
                         scrollBox,
                         'ai',
-                        'Funes IA:',
+                        'Fuente IA:',
                         'Hilo de conversación iniciado. Contexto fijado exclusivamente en la nota "' + noteName + '". ¿Qué deseas consultar sobre este documento?'
                     );
                 }
@@ -4018,7 +4100,7 @@
                     appendChatBubble(
                         scrollBox,
                         'ai',
-                        'Funes IA:',
+                        'Fuente IA:',
                         'Hilo de conversación iniciado. Contexto fijado en todas las notas de la Bóveda (4_salida). Puedo responder preguntas relacionando cualquier documento procesado.'
                     );
                 }
@@ -4062,6 +4144,35 @@
             currentSelectedNoteDocumentModel = documentModel || [];
             reader.replaceChildren(createNoteActionBar(title));
             reader.appendChild(createNoteContent(documentModel));
+            renderReaderProperties(currentSelectedDocumentId);
+            loadObsidianGraphView();
+        }
+
+        function renderReaderProperties(documentId) {
+            const panel = document.getElementById('reader-properties');
+            if (!panel) return;
+            panel.replaceChildren();
+            const note = readerNotes.find(function(item) {
+                return item && item.document_id === documentId;
+            });
+            const values = [
+                ['Título', (note && note.title) || currentSelectedNoteTitle || 'Sin título'],
+                ['Ruta', (note && note.path) || currentSelectedNotePath || 'No disponible'],
+                ['Tema', (note && note.theme) || 'General'],
+                ['Cuestión', (note && note.issue) || '_Sin_Cuestion'],
+                ['Estado', (note && note.status) || 'pending_review']
+            ];
+            values.forEach(function(pair) {
+                const item = document.createElement('div');
+                item.className = 'reader-property';
+                item.setAttribute('role', 'listitem');
+                const label = document.createElement('strong');
+                label.textContent = pair[0];
+                const value = document.createElement('span');
+                value.textContent = pair[1];
+                item.append(label, value);
+                panel.appendChild(item);
+            });
         }
 
         function createMockNoteContent(note) {
@@ -4084,8 +4195,8 @@
                 path: "_Indice_MOC.md",
             },
             {
-                title: "Arquitectura General de Funes",
-                path: "Nota_Arquitectura_Funes.md",
+                title: "Arquitectura General de Fuente",
+                path: "Nota_Arquitectura_Fuente.md",
             },
             {
                 title: "Pipeline ETL de Ingesta y Procesamiento",
@@ -4150,7 +4261,7 @@
                 const demoData = {
                     nodes: [
                         { id: "_Indice_MOC", label: "Índice MOC", path: "_Indice_MOC.md" },
-                        { id: "Nota_Arquitectura_Funes", label: "Arquitectura General", path: "Nota_Arquitectura_Funes.md" },
+                        { id: "Nota_Arquitectura_Fuente", label: "Arquitectura General", path: "Nota_Arquitectura_Fuente.md" },
                         { id: "Nota_ETL_Pipeline_Ingesta", label: "Pipeline ETL Ingesta", path: "Nota_ETL_Pipeline_Ingesta.md" },
                         { id: "Nota_Motor_IA_Local", label: "Motor IA Local", path: "Nota_Motor_IA_Local.md" },
                         { id: "Nota_Base_Datos_Vectorial", label: "Base Vectorial ChromaDB", path: "Nota_Base_Datos_Vectorial.md" },
@@ -4166,7 +4277,7 @@
                         { id: "Nota_Manual_Usuario_Avanzado", label: "Manual de Usuario", path: "Nota_Manual_Usuario_Avanzado.md" }
                     ],
                     links: [
-                        { source: "_Indice_MOC", target: "Nota_Arquitectura_Funes" },
+                        { source: "_Indice_MOC", target: "Nota_Arquitectura_Fuente" },
                         { source: "_Indice_MOC", target: "Nota_ETL_Pipeline_Ingesta" },
                         { source: "_Indice_MOC", target: "Nota_Motor_IA_Local" },
                         { source: "_Indice_MOC", target: "Nota_Base_Datos_Vectorial" },
@@ -4180,9 +4291,9 @@
                         { source: "_Indice_MOC", target: "Nota_Telemetria_y_Logs" },
                         { source: "_Indice_MOC", target: "Nota_Seguridad_y_Privacidad" },
                         { source: "_Indice_MOC", target: "Nota_Manual_Usuario_Avanzado" },
-                        { source: "Nota_Arquitectura_Funes", target: "Nota_ETL_Pipeline_Ingesta" },
-                        { source: "Nota_Arquitectura_Funes", target: "Nota_Motor_IA_Local" },
-                        { source: "Nota_Arquitectura_Funes", target: "Nota_Base_Datos_Vectorial" },
+                        { source: "Nota_Arquitectura_Fuente", target: "Nota_ETL_Pipeline_Ingesta" },
+                        { source: "Nota_Arquitectura_Fuente", target: "Nota_Motor_IA_Local" },
+                        { source: "Nota_Arquitectura_Fuente", target: "Nota_Base_Datos_Vectorial" },
                         { source: "Nota_ETL_Pipeline_Ingesta", target: "Nota_Gestor_Cuarentena" },
                         { source: "Nota_Motor_IA_Local", target: "Nota_Optimizacion_RAM" },
                         { source: "Nota_Base_Datos_Vectorial", target: "Nota_AnythingLLM_Conexion" },
@@ -4224,6 +4335,7 @@
         }
 
         function renderNoteList(notes) {
+            readerNotes = Array.isArray(notes) ? notes.slice() : [];
             const pinnedContainer = document.getElementById('reader-pinned-moc');
             const ul = document.getElementById('reader-note-list');
             if (ul) ul.replaceChildren();
@@ -4352,6 +4464,8 @@
                     const reader = document.getElementById('reader-content');
                     reader.replaceChildren(createNoteActionBar(found.title));
                     reader.appendChild(createMockNoteContent(found));
+                    renderReaderProperties(currentSelectedDocumentId);
+                    loadObsidianGraphView();
                 } else {
                     currentSelectedNoteTitle = displayTitle;
                     currentSelectedNotePath = '';
@@ -4374,10 +4488,10 @@
                 });
             } else {
                 const mockFiles = [
-                    { name: 'transcripcion_reunion_inicial_2026.txt', path: '/Users/emiliosevillaortego/Documents/Programación/funes/Vault_Funes/2_sucio/transcripcion_reunion_inicial_2026.txt', folder: '2_sucio' },
-                    { name: 'esquema_base_datos_vectorial.txt', path: '/Users/emiliosevillaortego/Documents/Programación/funes/Vault_Funes/2_sucio/esquema_base_datos_vectorial.txt', folder: '2_sucio' },
-                    { name: 'transcripcion_reunion_inicial_2026_limpio.txt', path: '/Users/emiliosevillaortego/Documents/Programación/funes/Vault_Funes/3_limpio/transcripcion_reunion_inicial_2026_limpio.txt', folder: '3_limpio' },
-                    { name: 'esquema_base_datos_vectorial_limpio.txt', path: '/Users/emiliosevillaortego/Documents/Programación/funes/Vault_Funes/3_limpio/esquema_base_datos_vectorial_limpio.txt', folder: '3_limpio' }
+                    { name: 'transcripcion_reunion_inicial_2026.txt', path: '/Users/emiliosevillaortego/Documents/Programación/fuente/Vault_Fuente/2_sucio/transcripcion_reunion_inicial_2026.txt', folder: '2_sucio' },
+                    { name: 'esquema_base_datos_vectorial.txt', path: '/Users/emiliosevillaortego/Documents/Programación/fuente/Vault_Fuente/2_sucio/esquema_base_datos_vectorial.txt', folder: '2_sucio' },
+                    { name: 'transcripcion_reunion_inicial_2026_limpio.txt', path: '/Users/emiliosevillaortego/Documents/Programación/fuente/Vault_Fuente/3_limpio/transcripcion_reunion_inicial_2026_limpio.txt', folder: '3_limpio' },
+                    { name: 'esquema_base_datos_vectorial_limpio.txt', path: '/Users/emiliosevillaortego/Documents/Programación/fuente/Vault_Fuente/3_limpio/esquema_base_datos_vectorial_limpio.txt', folder: '3_limpio' }
                 ];
                 renderCategoryFiles(mockFiles);
             }
@@ -4515,14 +4629,14 @@
         }
 
         function resetDefaultSettings() {
-            if (confirm('¿Deseas restaurar todos los ajustes a la configuración por defecto del sistema Funes?')) {
+            if (confirm('¿Deseas restaurar todos los ajustes a la configuración por defecto del sistema Fuente?')) {
                 triggerAction('reset_default_settings');
                 setTimeout(loadSettingsData, 200);
             }
         }
 
         window.addEventListener('pywebviewready', function() {
-            log('Conexión nativa PyWebView establecida con la Consola Funes');
+            log('Conexión nativa PyWebView establecida con la Consola Fuente');
             if (window.pywebview && window.pywebview.api) {
                 window.pywebview.api.get_initial_state().then(function(state) {
                     updateDashboardStats(state.stats);

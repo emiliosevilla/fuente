@@ -5,14 +5,14 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from funes.config import VaultConfig, AppConfig, save_config, load_config, DEFAULT_ATOMIC_NOTE_TEMPLATE
-from funes.ram_governor.governor import RAMGovernor
+from fuente.config import VaultConfig, AppConfig, save_config, load_config, DEFAULT_ATOMIC_NOTE_TEMPLATE
+from fuente.ram_governor.governor import RAMGovernor
 
 
 class TestConfigPersistenceAndSettings(unittest.TestCase):
 
     def setUp(self):
-        self.test_dir = Path(tempfile.mkdtemp(prefix="funes_config_test_"))
+        self.test_dir = Path(tempfile.mkdtemp(prefix="fuente_config_test_"))
         self.vault_path = self.test_dir / "Test_Vault"
         self.vault_path.mkdir(parents=True, exist_ok=True)
 
@@ -43,7 +43,7 @@ class TestConfigPersistenceAndSettings(unittest.TestCase):
 
         saved_file = save_config(cfg)
         self.assertTrue(saved_file.exists())
-        self.assertEqual(saved_file, self.vault_path.resolve() / ".funes" / "config.json")
+        self.assertEqual(saved_file, self.vault_path.resolve() / ".fuente" / "config.json")
 
         loaded = load_config(self.vault_path)
         self.assertEqual(loaded.vault.input_dir_name, "0_inbox")

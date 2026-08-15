@@ -2,7 +2,7 @@
 set -e
 
 # ==============================================================================
-# Script de Publicación Determinista para Funes (git-ship) - Receta de 6 Pasos
+# Script de Publicación Determinista para Fuente (git-ship) - Receta de 6 Pasos
 # 1. git checkout <WORK_BRANCH>
 # 2. git add .
 # 3. git commit -m "$COMMIT_MSG"
@@ -35,7 +35,7 @@ cleanup() {
 trap cleanup EXIT
 
 echo "======================================================="
-echo "   FUNES - WORKFLOW DETERMINISTA DE PUBLICACIÓN (/git)"
+echo "   FUENTE - WORKFLOW DETERMINISTA DE PUBLICACIÓN (/git)"
 echo "======================================================="
 
 # 1. Checkout inicial explícito a la rama de trabajo (dev / worktree)

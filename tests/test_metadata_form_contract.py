@@ -7,44 +7,76 @@ from pathlib import Path
 
 import pytest
 
-from funes.application.notes import NotesApplicationService
-from funes.control_console import FunesConsoleBackend
-from funes.domain.errors import NoteRevisionConflictError
-from funes.domain.frontmatter import parse_frontmatter, serialize_frontmatter
-from funes.domain.metadata_form import (
+from fuente.application.notes import NotesApplicationService
+from fuente.control_console import FuenteConsoleBackend
+from fuente.domain.documents import content_hash_for_markdown
+from fuente.domain.errors import NoteRevisionConflictError
+from fuente.domain.frontmatter import parse_frontmatter, serialize_frontmatter
+from fuente.domain.metadata_form import (
     MetadataValidationError,
+    metadata_form_snapshot,
     validate_metadata_fields,
     validate_metadata_save_fields,
 )
-from funes.domain.paths import AuthorizedPathResolver, document_id_for_relative_path
-from funes.infrastructure.sqlite_store import JobStore
-from funes.ui.bridge import FunesPyWebViewApi
+from fuente.domain.origins import LegacyOriginsMigrationRequiredError
+from fuente.domain.paths import AuthorizedPathResolver, document_id_for_relative_path
+from fuente.infrastructure.sqlite_store import JobStore
+from fuente.ui.bridge import FuentePyWebViewApi
 
 WEBVIEW_CALL_PATTERN = re.compile(r"window\.pywebview\.api\.([A-Za-z_]\w*)\(")
+ORIGIN_REF = {
+    "note_id": "4ca13d5c-4d78-4f37-8c3c-d1dc530a4dc9",
+    "revision": 2,
+    "content_hash": "a" * 64,
+    "path": "Tema/3_limpio/origen.md",
+}
 
 
-def _pending_markdown(*, body: str, title: str = "Nota_Metadata") -> str:
+def _pending_markdown(
+    *, body: str, title: str = "Nota_Metadata", note_id: str
+) -> str:
     return serialize_frontmatter(
         {
-            "schema_version": 1,
+            "schema_version": 3,
+            "note_id": note_id,
+            "note_type": "summary",
             "title": title,
             "date": "2026-08-08",
-            "author": "Funes",
+            "author": "Fuente",
             "tags": ["segura"],
             "issue": "_Sin_Cuestion",
             "status": "pending_review",
-            "sources": ["fuente-a"],
+            "origin_kind": "meeting",
+            "origins": [ORIGIN_REF],
             "history": [],
         }
     ) + body
 
 
 def _write_pending_note(vault_manager, *, body: str, title: str = "Nota_Metadata") -> tuple[str, Path]:
-    note_path = vault_manager.save_atomic_note(title=title, content=_pending_markdown(body=body))
-    relative = note_path.resolve().relative_to(
+    target_path = vault_manager.atomic_note_path(title)
+    relative = target_path.resolve().relative_to(
         vault_manager.config.vault_path.resolve()
     ).as_posix()
-    return document_id_for_relative_path(relative), note_path
+    document_id = document_id_for_relative_path(relative)
+    markdown = _pending_markdown(body=body, title=title, note_id=document_id)
+    note_path = vault_manager.save_atomic_note(title=title, content=markdown)
+    auxiliary_store = JobStore(vault_manager.config.vault_path)
+    try:
+        auxiliary_store.register_note(
+            note_id=document_id,
+            relative_path=relative,
+            revision=1,
+            content_hash=content_hash_for_markdown(markdown),
+            note_type="summary",
+            origin_kind="meeting",
+            theme=vault_manager.active_theme,
+            issue="_Sin_Cuestion",
+            status="pending_review",
+        )
+    finally:
+        auxiliary_store.close()
+    return document_id, note_path
 
 
 @pytest.fixture
@@ -98,6 +130,41 @@ def test_issue_must_exist_in_active_theme(temp_vault_manager):
     assert "issue" in error.value.field_errors
 
 
+def test_metadata_snapshot_projects_v2_without_inventing_origin_identity():
+    snapshot = metadata_form_snapshot(
+        {
+            "schema_version": 2,
+            "note_type": "source",
+            "source_kind": "meeting",
+            "sources": ["legacy-origin-id"],
+        }
+    )
+
+    assert snapshot["schema_version"] == 3
+    assert snapshot["note_type"] == "summary"
+    assert snapshot["origin_kind"] == "meeting"
+    assert snapshot["origins"] == []
+    assert snapshot["legacy_origin_ids"] == ["legacy-origin-id"]
+    assert snapshot["migration_status"] == "pending_origins"
+    assert "source_kind" not in snapshot
+    assert "sources" not in snapshot
+
+
+def test_metadata_write_normalizes_only_complete_v2_origins():
+    normalized = validate_metadata_save_fields(
+        {"source_kind": "meeting", "sources": [ORIGIN_REF]},
+        allowed_issues=["_Sin_Cuestion"],
+    )
+
+    assert normalized == {"origin_kind": "meeting", "origins": [ORIGIN_REF]}
+
+    with pytest.raises(LegacyOriginsMigrationRequiredError):
+        validate_metadata_save_fields(
+            {"source_kind": "meeting", "sources": ["legacy-origin-id"]},
+            allowed_issues=["_Sin_Cuestion"],
+        )
+
+
 def test_invalid_metadata_is_not_committed(notes_service, temp_vault_manager):
     document_id, note_path = _write_pending_note(
         temp_vault_manager,
@@ -118,7 +185,7 @@ def test_invalid_metadata_is_not_committed(notes_service, temp_vault_manager):
 
 
 def test_bridge_validate_note_metadata_returns_field_errors(temp_vault_path):
-    bridge = FunesPyWebViewApi(FunesConsoleBackend(temp_vault_path))
+    bridge = FuentePyWebViewApi(FuenteConsoleBackend(temp_vault_path))
     result = bridge.validate_note_metadata({"tags": ["evil:\nstatus: approved"]})
     assert result["error"] == "invalid_metadata"
     assert "tags" in result["field_errors"]
@@ -135,7 +202,7 @@ def test_approve_with_metadata_validates_before_transition(
     revision = notes_service.get_note(document_id).revision
     original = note_path.read_text(encoding="utf-8")
 
-    backend = FunesConsoleBackend(temp_vault_manager.config.vault_path)
+    backend = FuenteConsoleBackend(temp_vault_manager.config.vault_path)
     backend.vault = temp_vault_manager
     result = backend.handle_action(
         "approve_note",
@@ -164,12 +231,13 @@ def test_approval_html_uses_typed_controls_not_raw_yaml_editor():
     assert 'id="metadata-tags"' in approval_section
     assert 'id="metadata-issue"' in approval_section
     assert 'id="metadata-date"' in approval_section
-    assert 'id="metadata-sources"' in approval_section
+    assert 'id="metadata-origins"' in approval_section
+    assert 'id="metadata-sources"' not in approval_section
     assert 'id="metadata-status"' in approval_section
     assert "metadata-field-error" in approval_section
     assert 'id="metadata-raw-frontmatter"' in approval_section
     assert approval_section.count("<textarea") == 1
-    assert '<textarea id="metadata-sources"' in approval_section
+    assert '<textarea id="metadata-origins"' in approval_section
     assert "<pre id=\"metadata-raw-frontmatter\">" in approval_section
     assert "frontmatter YAML" in approval_section
     assert 'value="approved"' not in approval_section
@@ -182,7 +250,7 @@ def test_frontend_metadata_methods_are_exposed_by_bridge():
     )
     called = set(WEBVIEW_CALL_PATTERN.findall(source))
     bridge_methods = {
-        name for name, member in inspect.getmembers(FunesPyWebViewApi, inspect.isfunction)
+        name for name, member in inspect.getmembers(FuentePyWebViewApi, inspect.isfunction)
         if not name.startswith("_")
     }
     metadata_calls = {
@@ -199,7 +267,7 @@ def test_frontend_metadata_methods_are_exposed_by_bridge():
 def test_get_note_metadata_raw_frontmatter_only_when_diagnostic(
     temp_vault_manager,
 ):
-    backend = FunesConsoleBackend(temp_vault_manager.config.vault_path)
+    backend = FuenteConsoleBackend(temp_vault_manager.config.vault_path)
     backend.vault = temp_vault_manager
     document_id, _ = _write_pending_note(temp_vault_manager, body="# Diag\n", title="Nota_Diag")
 
@@ -229,7 +297,6 @@ def test_successful_metadata_update_bumps_revision(notes_service, temp_vault_man
             "tags": ["nueva", "etiqueta"],
             "issue": "_Sin_Cuestion",
             "date": "2026-08-08",
-            "sources": ["fuente-b"],
             "status": "pending_review",
         },
     )
@@ -273,6 +340,7 @@ def test_validate_metadata_save_fields_rejects_approved():
 
 def test_approve_still_transitions_and_reindexes(notes_service, temp_vault_manager, monkeypatch):
     reindexed: list[str] = []
+    monkeypatch.setattr(notes_service, "require_eligible_origins", lambda _note: None)
     monkeypatch.setattr(
         notes_service,
         "_reindex_after_approval",

@@ -6,19 +6,19 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from funes.control_console import FunesConsoleBackend
-from funes.installer_contract import InstallationContext, load_receipt, run_installation
+from fuente.control_console import FuenteConsoleBackend
+from fuente.installer_contract import InstallationContext, load_receipt, run_installation
 
 
 CONSOLE_HTML = Path(__file__).resolve().parent.parent / "consola_preview.html"
 INSTALLER_SOURCE = (
-    Path(__file__).resolve().parent.parent / "funes" / "installer_gui.py"
+    Path(__file__).resolve().parent.parent / "fuente" / "installer_gui.py"
 ).read_text(encoding="utf-8")
 
 
 @pytest.fixture
 def backend(temp_vault_path):
-    backend = FunesConsoleBackend(temp_vault_path)
+    backend = FuenteConsoleBackend(temp_vault_path)
     backend._refine_graph = lambda: {"status": "success"}
     return backend
 
@@ -31,7 +31,7 @@ def test_installation_context_disables_anythingllm_by_default(tmp_path):
 
 def test_step3_never_configures_anythingllm(backend, monkeypatch):
     monkeypatch.setattr(
-        "funes.control_console.configure_anythingllm_integration",
+        "fuente.control_console.configure_anythingllm_integration",
         lambda *_: pytest.fail("AnythingLLM must be opt-in"),
     )
     result = backend.handle_action("step3_structure", {})
@@ -52,18 +52,18 @@ def test_default_run_installation_skips_anythingllm_without_side_effects(tmp_pat
     connect = MagicMock()
 
     with (
-        patch("funes.installer_contract.detect_anythingllm_installed", detect),
+        patch("fuente.installer_contract.detect_anythingllm_installed", detect),
         patch(
-            "funes.core.anythingllm_config.install_anythingllm_autonomously",
+            "fuente.core.anythingllm_config.install_anythingllm_autonomously",
             install,
         ),
         patch(
-            "funes.core.anythingllm_config.configure_anythingllm_integration",
+            "fuente.core.anythingllm_config.configure_anythingllm_integration",
             configure,
         ),
-        patch("funes.core.anythingllm_config.launch_anythingllm", launch),
-        patch("funes.core.anythingllm_config.sqlite3.connect", connect),
-        patch("funes.installer_contract.is_ollama_api_ready", return_value=False),
+        patch("fuente.core.anythingllm_config.launch_anythingllm", launch),
+        patch("fuente.core.anythingllm_config.sqlite3.connect", connect),
+        patch("fuente.installer_contract.is_ollama_api_ready", return_value=False),
     ):
         steps = run_installation(ctx)
 

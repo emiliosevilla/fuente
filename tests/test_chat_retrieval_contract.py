@@ -6,22 +6,27 @@ from typing import Any
 
 import pytest
 
-from funes.application.chat import (
+from fuente.application.chat import (
     CHAT_SYSTEM_PROMPT,
     ERROR_OLLAMA,
     ChatApplicationService,
     FakeChatProvider,
 )
-from funes.ram_governor.budget import (
+from fuente.ram_governor.budget import (
     BudgetDecision,
     MeasurementStatus,
     ResourceKind,
     measured_snapshot,
 )
-from funes.application.retrieval import MODE_BM25, MODE_HYBRID, RetrievalApplicationService
-from funes.domain.runtime_policy import RuntimePolicy
-from funes.control_console import FunesConsoleBackend
-from funes.ui.bridge import FunesPyWebViewApi
+from fuente.application.retrieval import MODE_BM25, MODE_HYBRID, RetrievalApplicationService
+from fuente.domain.runtime_policy import RuntimePolicy
+from fuente.control_console import FuenteConsoleBackend
+from fuente.ui.bridge import FuentePyWebViewApi
+
+
+def _trusted_test_hit(_hit) -> bool:
+    """This module tests chat presentation after retrieval is authorized."""
+    return True
 
 
 class FakeChroma:
@@ -105,7 +110,7 @@ def grounded_service() -> tuple[ChatApplicationService, FakeChatProvider, FakeCh
         ),
     )
     retrieval = RetrievalApplicationService(
-        store, should_fallback_to_bm25=lambda: False
+        store, should_fallback_to_bm25=lambda: False, eligibility_guard=_trusted_test_hit
     )
     provider = FakeChatProvider(
         "Según la evidencia, la fianza garantiza el contrato. No hay datos sobre X."
@@ -181,7 +186,7 @@ def test_single_note_scope_does_not_cite_other_notes(grounded_service):
 
 
 def test_bridge_and_backend_share_contract(temp_vault_path, monkeypatch):
-    backend = FunesConsoleBackend(temp_vault_path)
+    backend = FuenteConsoleBackend(temp_vault_path)
     fake = FakeChatProvider("Respuesta bridge con evidencia.")
     store = FakeChroma()
     store.add(
@@ -190,7 +195,7 @@ def test_bridge_and_backend_share_contract(temp_vault_path, monkeypatch):
         _meta("n1", "4_salida/Contratos/clausula.md"),
     )
     retrieval = RetrievalApplicationService(
-        store, should_fallback_to_bm25=lambda: True
+        store, should_fallback_to_bm25=lambda: True, eligibility_guard=_trusted_test_hit
     )
     service = ChatApplicationService(
         retrieval,
@@ -200,7 +205,7 @@ def test_bridge_and_backend_share_contract(temp_vault_path, monkeypatch):
     )
     monkeypatch.setattr(backend, "get_chat_service", lambda: service)
 
-    bridge = FunesPyWebViewApi(backend)
+    bridge = FuentePyWebViewApi(backend)
     via_backend = backend.process_chat(
         "cláusula penal arrendamiento", {"context_mode": "all_notes"}
     )
@@ -248,9 +253,27 @@ def test_chat_skips_ollama_when_budget_denies_llm(grounded_service):
     assert result["has_context"] is True
 
 
+def test_chat_refuses_unreviewed_benchmark_candidate(grounded_service):
+    service, provider, _store = grounded_service
+    service._model_resolver = lambda: "qwen3.5:0.8b"  # type: ignore[attr-defined]
+
+    class LookalikeBenchmark:
+        def is_verifiable_promotion(self) -> bool:
+            return True
+
+    service._benchmark_verdict = LookalikeBenchmark()  # type: ignore[attr-defined]
+
+    result = service.ask("¿Qué garantiza la fianza?")
+
+    assert result["ok"] is False
+    assert result["error"]["code"] == ERROR_OLLAMA
+    assert "verified benchmark" in result["error"]["message"]
+    assert not provider.calls
+
+
 def test_console_process_chat_bm25_only_on_tiny_ram(temp_vault_path, monkeypatch):
     """Integration: backend wiring skips Ollama when budget denies LLM."""
-    backend = FunesConsoleBackend(temp_vault_path)
+    backend = FuenteConsoleBackend(temp_vault_path)
     fake = FakeChatProvider("must not be invoked")
     store = FakeChroma()
     store.add(
@@ -262,7 +285,7 @@ def test_console_process_chat_bm25_only_on_tiny_ram(temp_vault_path, monkeypatch
         ),
     )
     retrieval = RetrievalApplicationService(
-        store, should_fallback_to_bm25=lambda: True
+        store, should_fallback_to_bm25=lambda: True, eligibility_guard=_trusted_test_hit
     )
     tiny_snap = measured_snapshot(
         total_gb=3.0, available_gb=0.8, safety_margin_pct=0.35

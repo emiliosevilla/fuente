@@ -4,9 +4,9 @@ import hashlib
 
 import pytest
 
-from funes.core.folder_sync import FolderSyncManager, SyncReport
-from funes.domain.sync import ConnectedFolder
-from funes.infrastructure.atomic_files import atomic_copy
+from fuente.core.folder_sync import FolderSyncManager, SyncReport
+from fuente.domain.sync import ConnectedFolder
+from fuente.infrastructure.atomic_files import atomic_copy
 
 
 def _manager(tmp_path, *connections):
@@ -186,7 +186,7 @@ def test_interrupted_atomic_copy_leaves_no_partial_destination(tmp_path, monkeyp
     def interrupt(*_args, **_kwargs):
         raise KeyboardInterrupt("simulated interruption")
 
-    monkeypatch.setattr("funes.infrastructure.atomic_files.os.replace", interrupt)
+    monkeypatch.setattr("fuente.infrastructure.atomic_files.os.replace", interrupt)
 
     with pytest.raises(KeyboardInterrupt):
         atomic_copy(source, destination)

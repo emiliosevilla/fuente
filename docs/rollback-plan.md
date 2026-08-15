@@ -1,6 +1,6 @@
 # Rollback plan
 
-This document covers **application rollback** (redeploying a known-good Funes build) and **Vault rollback** (reversing frontmatter migration). Run rollbacks in a maintenance window with ingestion stopped.
+This document covers **application rollback** (redeploying a known-good Fuente build) and **Vault rollback** (reversing frontmatter migration). Run rollbacks in a maintenance window with ingestion stopped.
 
 ## Application rollback
 
@@ -12,8 +12,8 @@ This document covers **application rollback** (redeploying a known-good Funes bu
 
 ### Steps
 
-1. **Stop workers** — quit the desktop app, stop Docker Compose (`docker compose down`), or kill headless `funes --headless` processes.
-2. **Record state** — note Vault path, `OLLAMA_URL`, and whether `.funes/state.db` has in-flight jobs (`status` not `completed`).
+1. **Stop workers** — quit the desktop app, stop Docker Compose (`docker compose down`), or kill headless `fuente --headless` processes.
+2. **Record state** — note Vault path, `OLLAMA_URL`, and whether `.fuente/state.db` has in-flight jobs (`status` not `completed`).
 3. **Revert the binary/package** — reinstall the previous wheel, Docker image tag, or PyInstaller build from your artifact store. Do not mix old code with a Vault that was migrated with a newer migrator without reading the migration manifest.
 4. **Restore dependencies** — match the previous `requirements.txt` / `pyproject.toml` lock if the release changed extras (`[webview]`, `[audio]`, etc.).
 5. **Verify** — run `PYTHONDONTWRITEBYTECODE=1 python3 scripts/release_gate.py --skip-pytest --only sample_vault_smoke` against a scratch Vault, then start headless with `--flush` on a copy of production data before re-enabling continuous mode.
@@ -21,23 +21,40 @@ This document covers **application rollback** (redeploying a known-good Funes bu
 
 ### Docker-specific
 
-- Pin `image: funes:<previous-tag>` in `docker-compose.yml` before `docker compose up -d`.
+- Pin `image: fuente:<previous-tag>` in `docker-compose.yml` before `docker compose up -d`.
 - Persist `/vault` on the host; rolling back the image does not undo Vault file changes.
 
 ### Installer-specific
 
-- Receipt path: `<install_dir>/.funes_install_receipt.json` (see `funes/installer_contract.py`).
-- Re-run `instalar_funes.bat` / `instalar_funes.command` after restoring the previous package; steps are idempotent.
+- Receipt path: `<install_dir>/.fuente_install_receipt.json` (see `fuente/installer_contract.py`).
+- Re-run `instalar_fuente.bat` / `instalar_fuente.command` after restoring the previous package; steps are idempotent.
 
 ## Vault migration rollback
 
 Frontmatter migration is **reversible per manifest**. Full procedure:
 
 ```bash
-python scripts/migrate_vault.py /path/to/Vault --rollback .funes/migrations/<migration_id>/manifest.json
+python scripts/migrate_vault.py /path/to/Vault --rollback .fuente/migrations/<migration_id>/manifest.json
 ```
 
 See [`migration-guide.md`](migration-guide.md) for the manifest layout and the independent MOC/Chroma rebuild behavior controlled by `moc_rebuilt` and `index_rebuilt`.
+
+### Sumarios physical migration rollback
+
+The `Fuentes → Sumarios` move has its own approved manifest. It is never a
+bulk text replacement and it does not include `3_limpio`.
+
+```bash
+python3 scripts/migrate_vault.py --sumarios-rollback --vault /path/to/Vault \
+  --manifest /path/to/Vault/.fuente/migrations/sumarios-plan.json
+```
+
+The command checks the post-apply hash before every reverse rename. If a person
+edited a moved note, it leaves that note untouched and records
+`content_changed_after_apply`; resolve that one note manually and keep the
+manifest as the recovery record. Do not delete the manifest until Obsidian has
+been checked with `_Indice_MOC.md`, one note per origin subtype, and a note
+containing a moved-route wikilink.
 
 ### Manifest-controlled rebuilds
 
@@ -61,7 +78,7 @@ other flag is true.
 
 ### Preconditions
 
-- The migration manifest and `backups/` directory under `.funes/migrations/<id>/` must exist.
+- The migration manifest and `backups/` directory under `.fuente/migrations/<id>/` must exist.
 - Stop ingestion before rollback to avoid concurrent writes to the same note paths.
 
 ### After Vault rollback
@@ -76,10 +93,10 @@ other flag is true.
 |-------|-------------------|
 | Notes edited manually after migration | Restore from Obsidian sync/backup; manifest rollback only restores pre-migration snapshots for manifest entries |
 | Quarantine items | Use quarantine restore APIs / console; not reversed by migration rollback |
-| `.funes/state.db` job history | Restore from filesystem backup or let jobs resume; no automatic down-migration |
+| `.fuente/state.db` job history | Restore from filesystem backup or let jobs resume; no automatic down-migration |
 | MOC catalog | Migration rollback refreshes when manifest recorded `moc_rebuilt: true`; otherwise run MOC regeneration manually |
 | Chroma index | Migration rollback reconciles when manifest recorded `index_rebuilt: true`; otherwise run index reconciliation manually |
 
 ## Escalation
 
-If application rollback and Vault rollback both fail to restore service, restore the entire Vault directory and `.funes/` from offline backup, then redeploy the last gate-green build identified by your release tag and `scripts/release_gate.py` output.
+If application rollback and Vault rollback both fail to restore service, restore the entire Vault directory and `.fuente/` from offline backup, then redeploy the last gate-green build identified by your release tag and `scripts/release_gate.py` output.

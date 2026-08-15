@@ -7,15 +7,21 @@ from types import SimpleNamespace
 
 import pytest
 
-from funes.application.notes import NotesApplicationService
-from funes.application.reflow import ReflowApplicationService
-from funes.application.reflow_jobs import ReflowJobService, ReflowRequestStore
-from funes.config import get_default_config
-from funes.core.vault import VaultManager
-from funes.domain.frontmatter import serialize_frontmatter
-from funes.domain.errors import PathAuthorizationError
-from funes.domain.paths import document_id_for_relative_path
-from funes.infrastructure.sqlite_store import JobStore
+from fuente.application.approval import ApprovalApplicationService
+from fuente.application.notes import NotesApplicationService
+from fuente.application.reflow import ReflowApplicationService
+from fuente.application.reflow_jobs import ReflowJobService, ReflowRequestStore
+from fuente.config import get_default_config
+from fuente.core.vault import VaultManager
+from fuente.domain.approvals import ApprovalLedger
+from fuente.domain.documents import content_hash_for_markdown
+from fuente.domain.frontmatter import serialize_frontmatter
+from fuente.domain.errors import PathAuthorizationError
+from fuente.domain.paths import document_id_for_relative_path
+from fuente.infrastructure.sqlite_store import JobStore
+
+
+CLEAN_NOTE_ID = "4ca13d5c-4d78-4f37-8c3c-d1dc530a4dc9"
 
 
 def _note(*, title: str = "Original", body: str = "# Original\n") -> str:
@@ -24,11 +30,35 @@ def _note(*, title: str = "Original", body: str = "# Original\n") -> str:
             "schema_version": 1,
             "title": title,
             "date": "2026-08-11",
-            "author": "Funes",
+            "author": "Fuente",
             "tags": [],
             "issue": "_Sin_Cuestion",
             "status": "approved",
             "sources": [],
+            "history": [],
+        }
+    ) + body
+
+
+def _derived_note(
+    *,
+    note_id: str,
+    origin: dict,
+    title: str = "Original",
+    body: str = "# Original\n",
+) -> str:
+    return serialize_frontmatter(
+        {
+            "schema_version": 3,
+            "note_id": note_id,
+            "note_type": "concept",
+            "title": title,
+            "date": "2026-08-14",
+            "author": "Fuente",
+            "tags": [],
+            "issue": "_Sin_Cuestion",
+            "status": "approved",
+            "origins": [origin],
             "history": [],
         }
     ) + body
@@ -67,14 +97,62 @@ class _SimulatedProcessLoss(BaseException):
 @pytest.fixture
 def reflow_harness(tmp_path: Path):
     vault = VaultManager(get_default_config(tmp_path / "vault").vault)
-    note_path = vault.save_atomic_note("Original", _note())
+    job_store = JobStore(vault.config.vault_path)
+    clean_path = vault.clean_dir / "canonical-origin.md"
+    clean_relative = clean_path.relative_to(vault.config.vault_path).as_posix()
+    clean_markdown = serialize_frontmatter(
+        {
+            "schema_version": 3,
+            "note_id": CLEAN_NOTE_ID,
+            "note_type": "concept",
+            "title": "Canonical origin",
+            "date": "2026-08-14",
+            "author": "Fuente",
+            "tags": [],
+            "issue": "_Sin_Cuestion",
+            "status": "pending_review",
+            "origins": [],
+            "history": [],
+        }
+    ) + "# Canonical origin\n"
+    clean_path.write_text(clean_markdown, encoding="utf-8")
+    job_store.register_note(
+        note_id=CLEAN_NOTE_ID,
+        relative_path=clean_relative,
+        content_hash=content_hash_for_markdown(clean_markdown),
+        note_type="concept",
+        origin_kind=None,
+        theme="General",
+        issue="_Sin_Cuestion",
+        status="pending_review",
+    )
+    ledger = ApprovalLedger(
+        job_store,
+        vault_root=vault.config.vault_path,
+        clean_root=vault.clean_dir,
+        derived_root=vault.output_dir,
+    )
+    approved = ApprovalApplicationService(vault=vault, ledger=ledger).approve_clean(
+        CLEAN_NOTE_ID, 1, "emilio"
+    )
+    origin = {
+        "note_id": approved.note_id,
+        "revision": approved.revision,
+        "content_hash": approved.content_hash,
+        "path": clean_relative,
+    }
+    note_path = vault.atomic_note_path("Original")
     relative = note_path.resolve().relative_to(vault.config.vault_path.resolve()).as_posix()
     document_id = document_id_for_relative_path(relative)
-    job_store = JobStore(vault.config.vault_path)
+    note_path.write_text(
+        _derived_note(note_id=document_id, origin=origin),
+        encoding="utf-8",
+    )
     notes = NotesApplicationService(
         vault=vault,
         path_resolver=vault.path_resolver(),
         job_store=job_store,
+        approval_ledger=ledger,
     )
     request_store = ReflowRequestStore(job_store, path_resolver=vault.path_resolver())
     link_service = ReflowApplicationService(
@@ -146,7 +224,7 @@ def test_enrichment_writes_a_pending_review_candidate_without_touching_original(
                 "schema_version": 1,
                 "title": "Generated",
                 "date": "2026-08-11",
-                "author": "Funes",
+                "author": "Fuente",
                 "tags": ["generated"],
                 "issue": "_Sin_Cuestion",
                 "status": "approved",
@@ -167,11 +245,38 @@ def test_enrichment_writes_a_pending_review_candidate_without_touching_original(
     candidate = notes.get_note(result.candidate_document_id)
     assert candidate.status == "pending_review"
     assert candidate.title == "Generated"
+    assert candidate.frontmatter["schema_version"] == 3
+    assert candidate.note_id == candidate.document_id
+    assert [origin.to_dict() for origin in candidate.origins] == [
+        origin.to_dict() for origin in notes.get_note(document_id).origins
+    ]
+    assert "sources" not in candidate.frontmatter
     assert result.candidate_path.startswith("4_salida/")
 
     again = _job_service(reflow_harness, generator).run(request.request_id)
     assert again == result
     assert len(generator.calls) == 1
+
+
+def test_unapproved_origin_blocks_before_generation_and_candidate_write(
+    reflow_harness,
+):
+    vault, _note_path, document_id, _store, notes, requests, _links = reflow_harness
+    notes.update_note_body(
+        CLEAN_NOTE_ID,
+        expected_revision=1,
+        body_markdown="# Canonical origin changed\n",
+    )
+    generator = _Generator()
+    request = requests.submit(document_id, expected_revision=1, mode="enrich")
+
+    result = _job_service(reflow_harness, generator).run(request.request_id)
+
+    assert result.status == "failed"
+    assert result.error == "origin_not_approved"
+    assert generator.calls == []
+    review_dir = vault.output_dir / "_Reflow_Review"
+    assert not review_dir.exists() or list(review_dir.glob("*.md")) == []
 
 
 def test_failed_generator_leaves_original_bytes_and_revision_unchanged(reflow_harness):
@@ -246,17 +351,22 @@ def test_failed_request_requires_explicit_retry(reflow_harness):
 
 def test_links_and_all_modes_create_review_candidates(reflow_harness):
     _vault, note_path, document_id, _store, notes, requests, links = reflow_harness
-    note_path.write_text(_note(body="# Original\n\nGenerated.\n"), encoding="utf-8")
+    notes.update_note_body(
+        document_id,
+        expected_revision=1,
+        body_markdown="# Original\n\nGenerated.\n",
+    )
     source_bytes = note_path.read_bytes()
+    source_revision = notes.get_note(document_id).revision
     generator = _Generator(result=_note(title="All generated", body="# All generated\n"))
 
-    links_request = requests.submit(document_id, expected_revision=1, mode="links")
+    links_request = requests.submit(document_id, expected_revision=source_revision, mode="links")
     links_result = _job_service(reflow_harness, generator).run(links_request.request_id)
     assert links_result.status == "completed"
     assert note_path.read_bytes() == source_bytes
     assert notes.get_note(links_result.candidate_document_id).status == "pending_review"
 
-    all_request = requests.submit(document_id, expected_revision=1, mode="all")
+    all_request = requests.submit(document_id, expected_revision=source_revision, mode="all")
     all_result = _job_service(reflow_harness, generator).run(all_request.request_id)
     assert all_result.status == "completed"
     assert notes.get_note(all_result.candidate_document_id).status == "pending_review"

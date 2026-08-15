@@ -2,7 +2,7 @@ from pathlib import Path
 
 
 CONSOLE = Path(__file__).resolve().parent.parent / "consola_preview.html"
-CSS = Path(__file__).resolve().parent.parent / "funes/ui/static/console.css"
+CSS = Path(__file__).resolve().parent.parent / "fuente/ui/static/console.css"
 
 
 def _source() -> str:

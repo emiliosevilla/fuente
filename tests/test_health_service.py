@@ -8,12 +8,12 @@ import urllib.request
 import webbrowser
 from pathlib import Path
 
-from funes.application.health import HealthService
-import funes.application.health as health_module
-import funes.core.anythingllm_config as anythingllm_config
-from funes.config import AppConfig, VaultConfig
-from funes.control_console import FunesConsoleBackend
-from funes.ui.bridge import FunesPyWebViewApi
+from fuente.application.health import HealthService
+import fuente.application.health as health_module
+import fuente.core.anythingllm_config as anythingllm_config
+from fuente.config import AppConfig, VaultConfig
+from fuente.control_console import FuenteConsoleBackend
+from fuente.ui.bridge import FuentePyWebViewApi
 
 
 def make_config(vault_path: Path, *, ollama_url: str = "http://localhost:11434") -> AppConfig:
@@ -244,8 +244,8 @@ def test_health_snapshot_calls_no_mutating_or_external_helpers(tmp_path, monkeyp
 
 
 def test_backend_and_bridge_health_are_fresh_and_json_serializable(temp_vault_path, monkeypatch):
-    backend = FunesConsoleBackend(temp_vault_path)
-    bridge = FunesPyWebViewApi(backend)
+    backend = FuenteConsoleBackend(temp_vault_path)
+    bridge = FuentePyWebViewApi(backend)
     calls: list[str] = []
 
     def http_json(url, timeout):
@@ -272,7 +272,7 @@ def test_backend_and_bridge_health_are_fresh_and_json_serializable(temp_vault_pa
 def test_backend_get_health_does_not_update_ram_governor_last_decision(
     temp_vault_path, monkeypatch
 ):
-    backend = FunesConsoleBackend(temp_vault_path)
+    backend = FuenteConsoleBackend(temp_vault_path)
     monkeypatch.setattr(health_module, "_http_json", lambda *_args: {"models": []})
     backend.ram_governor.recommend_model_decision()
     before = backend.ram_governor.last_budget_decision()
@@ -283,8 +283,8 @@ def test_backend_get_health_does_not_update_ram_governor_last_decision(
 
 
 def test_bridge_get_health_returns_backend_snapshot(temp_vault_path):
-    backend = FunesConsoleBackend(temp_vault_path)
-    bridge = FunesPyWebViewApi(backend)
+    backend = FuenteConsoleBackend(temp_vault_path)
+    bridge = FuentePyWebViewApi(backend)
     bridge_snapshot = bridge.get_health()
     backend_snapshot = backend.get_health()
     bridge_snapshot.pop("checked_at")

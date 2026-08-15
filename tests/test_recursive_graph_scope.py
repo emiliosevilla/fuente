@@ -2,27 +2,44 @@
 from __future__ import annotations
 
 from pathlib import Path
+from uuid import NAMESPACE_URL, uuid5
 
-from funes.domain.frontmatter import parse_frontmatter, serialize_frontmatter
-from funes.domain.paths import document_id_for_relative_path
-from funes.graph_engine.linker import CANONICAL_MOC_FILENAME, GraphLinker
-from funes.graph_engine.optimized_loop import OptimizadoGraphLoop
+from fuente.domain.frontmatter import parse_frontmatter, serialize_frontmatter
+from fuente.domain.paths import document_id_for_relative_path
+from fuente.graph_engine.linker import CANONICAL_MOC_FILENAME, GraphLinker
+from fuente.graph_engine.optimized_loop import OptimizadoGraphLoop
+
+
+APPROVED_ORIGIN = {
+    "note_id": "4ca13d5c-4d78-4f37-8c3c-d1dc530a4dc9",
+    "revision": 1,
+    "content_hash": "a" * 64,
+    "path": "3_limpio/origen-grafo.md",
+}
 
 
 def _note(title: str, body: str, issue: str = "_Sin_Cuestion") -> str:
+    note_id = str(uuid5(NAMESPACE_URL, f"grafo:{issue}:{title}:{body}"))
     return serialize_frontmatter(
         {
-            "schema_version": 1,
+            "schema_version": 3,
+            "note_id": note_id,
+            "note_type": "concept",
             "title": title,
-            "date": "2026-08-08",
-            "author": "Funes",
+            "date": "2026-08-15",
+            "author": "Fuente",
             "tags": [],
             "issue": issue,
             "status": "approved",
-            "sources": [],
+            "origins": [APPROVED_ORIGIN],
             "history": [],
         }
     ) + body
+
+
+def _approved_origin_guard(note) -> None:
+    """Keep these graph tests focused on linking after provenance is validated."""
+    assert tuple(note.origins) == (APPROVED_ORIGIN,)
 
 
 def test_graph_linker_document_id_is_vault_relative(tmp_path: Path):
@@ -76,7 +93,7 @@ def test_optimized_loop_enumerates_notes_once_per_refinement_pass(tmp_path, monk
         encoding="utf-8",
     )
 
-    loop = OptimizadoGraphLoop(output)
+    loop = OptimizadoGraphLoop(output, eligibility_guard=_approved_origin_guard)
     original_enumerate_notes = loop.linker.enumerate_notes
     enumeration_calls = 0
 
@@ -192,7 +209,7 @@ def test_duplicate_stem_refine_does_not_cross_link_own_title(tmp_path: Path):
         encoding="utf-8",
     )
 
-    loop = OptimizadoGraphLoop(output)
+    loop = OptimizadoGraphLoop(output, eligibility_guard=_approved_origin_guard)
     result = loop.refine_knowledge_graph(target_issue="Contratos")
     assert result["status"] == "success"
 
@@ -221,7 +238,7 @@ def test_partial_issue_refresh_preserves_unrelated_moc_entries(tmp_path: Path):
         encoding="utf-8",
     )
 
-    loop = OptimizadoGraphLoop(output)
+    loop = OptimizadoGraphLoop(output, eligibility_guard=_approved_origin_guard)
     loop.refine_knowledge_graph()
 
     moc_path = output / CANONICAL_MOC_FILENAME

@@ -1,5 +1,9 @@
 # Funes Cloud Folder Synchronization Implementation Plan
 
+> **Estado: completado e histórico (2026-08-13).** La entrada montada
+> OneDrive/SharePoint está implementada como lectura unidireccional. Consultar
+> [`docs/planning-index.md`](../../planning-index.md) para trabajo nuevo.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Make OneDrive and SharePoint-backed Obsidian folders reliable, visible, recursive, collision-safe inbound sources for Funes without adding cloud credentials or a second source of truth.

@@ -9,6 +9,7 @@ from tests.integration.conftest import (
     ScriptedChunker,
     assert_job_history_explains_recovery,
     assert_single_note,
+    approve_waiting_clean,
     build_harness,
     reopen_harness,
     resume_to_completion,
@@ -70,6 +71,9 @@ def test_failure_after_chroma_indexing_reconciles_stale_chunks(temp_vault_path):
     )
     try:
         job = harness.service.submit(SOURCE_IDENTITY)
+        waiting = harness.service.resume(job.job_id)
+        assert waiting.stage == "saved_clean"
+        approve_waiting_clean(harness, waiting)
         with pytest.raises(KeyboardInterrupt):
             harness.service.resume(job.job_id)
 

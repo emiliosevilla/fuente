@@ -7,10 +7,10 @@ import re
 
 import pytest
 
-from funes.control_console import FunesConsoleBackend
-from funes.domain.jobs import JobConflictError
-from funes.infrastructure.sqlite_store import JobStore
-from funes.ui.bridge import FunesPyWebViewApi
+from fuente.control_console import FuenteConsoleBackend
+from fuente.domain.jobs import JobConflictError
+from fuente.infrastructure.sqlite_store import JobStore
+from fuente.ui.bridge import FuentePyWebViewApi
 
 
 CONSOLE_HTML = Path(__file__).resolve().parent.parent / "consola_preview.html"
@@ -156,11 +156,11 @@ class _IngestionStub:
 
 @pytest.fixture
 def queue_bridge(temp_vault_path):
-    backend = FunesConsoleBackend(temp_vault_path)
+    backend = FuenteConsoleBackend(temp_vault_path)
     store = JobStore(temp_vault_path)
     backend.attach_ingestion_service(_IngestionStub(store), store)
     try:
-        yield FunesPyWebViewApi(backend), backend, store
+        yield FuentePyWebViewApi(backend), backend, store
     finally:
         store.close()
 

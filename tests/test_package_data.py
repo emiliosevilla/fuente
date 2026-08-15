@@ -10,12 +10,12 @@ from pathlib import Path
 
 def test_console_css_is_present_and_byte_identical_in_wheel(tmp_path):
     root = Path(__file__).resolve().parent.parent
-    source_css = root / "funes" / "ui" / "static" / "console.css"
+    source_css = root / "fuente" / "ui" / "static" / "console.css"
     source_root = tmp_path / "source"
     source_root.mkdir()
     shutil.copy2(root / "pyproject.toml", source_root / "pyproject.toml")
     shutil.copy2(root / "README.md", source_root / "README.md")
-    shutil.copytree(root / "funes", source_root / "funes")
+    shutil.copytree(root / "fuente", source_root / "fuente")
     wheel_dir = tmp_path / "wheel"
     wheel_dir.mkdir()
 
@@ -54,7 +54,7 @@ def test_console_css_is_present_and_byte_identical_in_wheel(tmp_path):
         cwd=source_root,
     )
 
-    installed_css = target / "funes" / "ui" / "static" / "console.css"
+    installed_css = target / "fuente" / "ui" / "static" / "console.css"
     assert installed_css.is_file()
     assert installed_css.read_bytes() == source_css.read_bytes()
 
@@ -64,7 +64,7 @@ def test_console_css_is_present_and_byte_identical_in_wheel(tmp_path):
             "-c",
             (
                 "from importlib import resources; "
-                "root = resources.files('funes.resources.demo_vault'); "
+                "root = resources.files('fuente.resources.demo_vault'); "
                 "manifest = root.joinpath('manifest.json').read_text(encoding='utf-8'); "
                 "assert 'demo_version' in manifest; "
                 "[root.joinpath('notes', name).read_text(encoding='utf-8') for name in "
@@ -80,10 +80,10 @@ def test_console_css_is_present_and_byte_identical_in_wheel(tmp_path):
     assert probe.returncode == 0
 
     with zipfile.ZipFile(wheels[0]) as archive:
-        assert "funes/ui/static/console.css" in archive.namelist()
-        assert "funes/resources/demo_vault/manifest.json" in archive.namelist()
+        assert "fuente/ui/static/console.css" in archive.namelist()
+        assert "fuente/resources/demo_vault/manifest.json" in archive.namelist()
         assert {
-            "funes/resources/demo_vault/notes/Introduccion.md",
-            "funes/resources/demo_vault/notes/Arquitectura_Local.md",
-            "funes/resources/demo_vault/notes/Flujo_Revision.md",
+            "fuente/resources/demo_vault/notes/Introduccion.md",
+            "fuente/resources/demo_vault/notes/Arquitectura_Local.md",
+            "fuente/resources/demo_vault/notes/Flujo_Revision.md",
         } <= set(archive.namelist())

@@ -3,7 +3,7 @@ requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "funes"
+name = "fuente"
 version = "0.1.0"
 description = "ETL Knowledge Base autónomo con IA local y RAG para Obsidian"
 readme = "README.md"
@@ -24,7 +24,7 @@ dependencies = [
 ]
 
 [project.scripts]
-funes = "funes.main:main"
+fuente = "fuente.main:main"
 
 [project.optional-dependencies]
 webview = [
@@ -58,12 +58,12 @@ all = [
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["funes*"]
+include = ["fuente*"]
 
 [tool.setuptools.package-data]
-"funes.infrastructure.migrations" = ["*.sql"]
-"funes.ui.static" = ["*.css"]
-"funes.resources.demo_vault" = ["manifest.json", "notes/*.md"]
+"fuente.infrastructure.migrations" = ["*.sql"]
+"fuente.ui.static" = ["*.css"]
+"fuente.resources.demo_vault" = ["manifest.json", "notes/*.md"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

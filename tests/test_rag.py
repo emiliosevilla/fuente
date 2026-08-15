@@ -3,15 +3,15 @@ import tempfile
 from pathlib import Path
 from unittest.mock import MagicMock, call, patch
 
-from funes.rag.chroma_store import ChromaStore, _patch_sqlite_for_chroma
-from funes.rag.semantic_chunker import SemanticChunker
+from fuente.rag.chroma_store import ChromaStore, _patch_sqlite_for_chroma
+from fuente.rag.semantic_chunker import SemanticChunker
 
 
 class TestRAG(unittest.TestCase):
 
     def setUp(self):
         self.temp_dir = tempfile.TemporaryDirectory()
-        self.chroma_dir = Path(self.temp_dir.name) / ".funes" / "chroma"
+        self.chroma_dir = Path(self.temp_dir.name) / ".fuente" / "chroma"
 
     def tearDown(self):
         self.temp_dir.cleanup()
@@ -136,11 +136,11 @@ Más información detallada sobre la subsección.
     # 3. HybridSearcher & BM25Okapi
     # ------------------------------------------------------------------
     def test_bm25_inverted_index(self):
-        from funes.rag.hybrid_search import BM25Okapi
+        from fuente.rag.hybrid_search import BM25Okapi
 
         bm25 = BM25Okapi()
         docs = [
-            {"id": "doc1", "content": "Sistema ETL inteligente Funes en Python"},
+            {"id": "doc1", "content": "Sistema ETL inteligente Fuente en Python"},
             {"id": "doc2", "content": "Base de datos vectorial ChromaDB y RAG semántico"},
             {"id": "doc3", "content": "Generación de notas atómicas en Obsidian Vault con Python"},
         ]
@@ -152,7 +152,7 @@ Más información detallada sobre la subsección.
         self.assertIn("bm25_score", results[0])
 
     def test_hybrid_rrf_searcher(self):
-        from funes.rag.hybrid_search import HybridSearcher
+        from fuente.rag.hybrid_search import HybridSearcher
 
         searcher = HybridSearcher()
         vector_res = [

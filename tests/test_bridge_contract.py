@@ -2,8 +2,8 @@ import inspect
 import re
 from pathlib import Path
 
-from funes.control_console import FunesConsoleBackend
-from funes.ui.bridge import FunesPyWebViewApi
+from fuente.control_console import FuenteConsoleBackend
+from fuente.ui.bridge import FuentePyWebViewApi
 
 
 WEBVIEW_CALL_PATTERN = re.compile(r"window\.pywebview\.api\.([A-Za-z_]\w*)\(")
@@ -18,7 +18,7 @@ def _frontend_called_methods() -> set[str]:
 
 def test_every_frontend_called_method_is_exposed_by_typed_bridge():
     bridge_methods = {
-        name for name, member in inspect.getmembers(FunesPyWebViewApi, inspect.isfunction)
+        name for name, member in inspect.getmembers(FuentePyWebViewApi, inspect.isfunction)
         if not name.startswith("_")
     }
 
@@ -26,7 +26,7 @@ def test_every_frontend_called_method_is_exposed_by_typed_bridge():
 
 
 def test_trigger_action_rejects_unknown_actions_and_malformed_payloads(temp_vault_path):
-    bridge = FunesPyWebViewApi(FunesConsoleBackend(temp_vault_path))
+    bridge = FuentePyWebViewApi(FuenteConsoleBackend(temp_vault_path))
 
     assert bridge.trigger_action("not-an-action", {}) == {
         "error": "unknown_action",
@@ -41,7 +41,7 @@ def test_trigger_action_rejects_unknown_actions_and_malformed_payloads(temp_vaul
 def test_trigger_action_rejects_action_specific_malformed_payloads_before_backend(
     temp_vault_path,
 ):
-    bridge = FunesPyWebViewApi(FunesConsoleBackend(temp_vault_path))
+    bridge = FuentePyWebViewApi(FuenteConsoleBackend(temp_vault_path))
     backend_calls = []
     bridge.backend.handle_action = lambda action, payload: backend_calls.append(
         (action, payload)
@@ -62,7 +62,7 @@ def test_trigger_action_rejects_action_specific_malformed_payloads_before_backen
 
 
 def test_trigger_action_dispatches_allowlisted_anythingllm_action(temp_vault_path):
-    bridge = FunesPyWebViewApi(FunesConsoleBackend(temp_vault_path))
+    bridge = FuentePyWebViewApi(FuenteConsoleBackend(temp_vault_path))
     backend_calls = []
     bridge.backend.handle_action = lambda action, payload: backend_calls.append(
         (action, payload)
@@ -84,14 +84,14 @@ def test_note_mutation_methods_use_identifiers_not_absolute_path_parameters():
 
     for method_name in mutation_methods:
         parameter_names = inspect.signature(
-            getattr(FunesPyWebViewApi, method_name)
+            getattr(FuentePyWebViewApi, method_name)
         ).parameters
         assert "path" not in parameter_names
         assert "file_path" not in parameter_names
 
 
 def test_bridge_rejects_absolute_note_identifier_without_mutation(temp_vault_path):
-    bridge = FunesPyWebViewApi(FunesConsoleBackend(temp_vault_path))
+    bridge = FuentePyWebViewApi(FuenteConsoleBackend(temp_vault_path))
     external = temp_vault_path.parent / "outside.md"
     external.write_text("private", encoding="utf-8")
 

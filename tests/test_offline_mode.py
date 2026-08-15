@@ -1,14 +1,14 @@
 import re
 from pathlib import Path
 
-from funes.config import (
+from fuente.config import (
     AppConfig,
     EXTERNAL_ENABLED_MODE,
     LOCAL_ONLY_MODE,
     VaultConfig,
     describe_offline_mode,
 )
-from funes.control_console import FunesConsoleBackend
+from fuente.control_console import FuenteConsoleBackend
 
 CONSOLE_HTML = Path(__file__).resolve().parent.parent / "consola_preview.html"
 
@@ -83,20 +83,20 @@ def test_describe_offline_mode_external_when_non_loopback_url():
 
 
 def test_console_initial_state_exposes_offline_mode(temp_vault_path):
-    backend = FunesConsoleBackend(temp_vault_path)
+    backend = FuenteConsoleBackend(temp_vault_path)
     state = backend.get_initial_state_dict()
     assert "offline_mode" in state
     assert state["offline_mode"]["is_local_only"] is True
 
 
 def test_settings_info_exposes_offline_mode(temp_vault_path):
-    backend = FunesConsoleBackend(temp_vault_path)
+    backend = FuenteConsoleBackend(temp_vault_path)
     info = backend.get_settings_info()
     assert info["offline_mode"]["mode"] == LOCAL_ONLY_MODE
 
 
 def test_save_settings_response_includes_offline_mode(temp_vault_path):
-    backend = FunesConsoleBackend(temp_vault_path)
+    backend = FuenteConsoleBackend(temp_vault_path)
     result = backend.save_settings(
         {
             "ollama_url": "http://192.168.1.10:11434",

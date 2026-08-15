@@ -3,14 +3,16 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from funes.application.notes import NotesApplicationService
-from funes.config import get_default_config
-from funes.core.vault import VaultManager
-from funes.domain.paths import AuthorizedPathResolver, document_id_for_relative_path
-from funes.domain.runtime_policy import resolve_runtime_policy
-from funes.infrastructure.sqlite_store import JobStore
-from funes.watcher.watcher import ETLPipeline
+from fuente.application.notes import NotesApplicationService
+from fuente.config import get_default_config
+from fuente.core.vault import VaultManager
+from fuente.domain.paths import AuthorizedPathResolver
+from fuente.domain.runtime_policy import resolve_runtime_policy
+from fuente.infrastructure.sqlite_store import JobStore
+from fuente.watcher.watcher import ETLPipeline
+from tests.conftest import approved_clean_origin, save_v3_summary_note
 from tests.test_ingestion_recovery import _build_harness
+from fuente.domain.frontmatter import parse_frontmatter
 
 
 class ForbiddenChroma:
@@ -31,6 +33,17 @@ def test_eco_ingestion_skips_vectors_and_waits_without_fake_llm(temp_vault_path)
         harness.service.chroma = ForbiddenChroma()
 
         submitted = harness.service.submit("1_entrada/informe_trimestral.txt")
+        waiting = harness.service.resume(submitted.job_id)
+        assert waiting.stage == "saved_clean"
+        clean_metadata, _body = parse_frontmatter(
+            (temp_vault_path / waiting.clean_artifact).read_text(encoding="utf-8")
+        )
+        request = harness.service.approval_service.request_approval(
+            clean_metadata["note_id"]
+        )
+        harness.service.approval_service.approve_clean(
+            request.note_id, request.revision, "pytest"
+        )
         result = harness.service.resume(submitted.job_id)
 
         assert result.stage == "indexed_chunks"
@@ -59,7 +72,7 @@ def test_eco_pipeline_does_not_construct_chroma(tmp_path, monkeypatch):
     config = get_default_config(tmp_path / "vault")
     config.resource_profile = "eco_strict"
     monkeypatch.setattr(
-        "funes.watcher.watcher.ChromaStore",
+        "fuente.watcher.watcher.ChromaStore",
         lambda *_args, **_kwargs: (_ for _ in ()).throw(
             AssertionError("Eco constructed Chroma")
         ),
@@ -78,25 +91,15 @@ def test_eco_approval_updates_markdown_without_reindex(temp_vault_path):
     config.resource_profile = "eco_strict"
     policy = resolve_runtime_policy(config, budget=None)
     vault = VaultManager(config.vault)
-    note_path = vault.save_atomic_note(
+    store = JobStore(config.vault.vault_path)
+    origin = approved_clean_origin(vault, store, filename="origen-eco.md")
+    document_id, note_path = save_v3_summary_note(
+        vault,
         title="Eco approval",
-        content=(
-            "---\n"
-            "schema_version: 1\n"
-            "title: Eco approval\n"
-            "date: ''\n"
-            "author: Funes\n"
-            "tags: []\n"
-            "issue: _Sin_Cuestion\n"
-            "status: pending_review\n"
-            "sources: []\n"
-            "history: []\n"
-            "---\n"
-            "# Contenido\n"
-        ),
+        body="# Contenido\n",
+        origins=[origin],
+        store=store,
     )
-    relative = note_path.resolve().relative_to(config.vault.vault_path.resolve()).as_posix()
-    document_id = document_id_for_relative_path(relative)
     resolver = AuthorizedPathResolver(
         vault_root=config.vault.vault_path,
         output=vault.output_dir,
@@ -105,7 +108,6 @@ def test_eco_approval_updates_markdown_without_reindex(temp_vault_path):
         clean=vault.clean_dir,
         quarantine=vault.quarantine_dir,
     )
-    store = JobStore(config.vault.vault_path)
     try:
         service = NotesApplicationService(
             vault=vault,
@@ -117,6 +119,6 @@ def test_eco_approval_updates_markdown_without_reindex(temp_vault_path):
         approved = service.approve(document_id, service.get_note(document_id).revision)
 
         assert approved.status == "approved"
-        assert store.get_document_identity(document_id)["revision"] == 2
+        assert store.get_note(document_id)["revision"] == 2
     finally:
         store.close()

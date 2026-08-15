@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from funes.installer_contract import (
+from fuente.installer_contract import (
     InstallationContext,
     InstallStepResult,
     PrerequisiteStatus,
@@ -27,10 +27,10 @@ from funes.installer_contract import (
     step_install_model,
     wait_for_ollama_ready,
 )
-from funes.core.anythingllm_config import launch_anythingllm
-from funes.core.folder_sync import FolderSyncManager
-from funes.domain.sync import ConnectedFolder
-from funes import installer_gui
+from fuente.core.anythingllm_config import launch_anythingllm
+from fuente.core.folder_sync import FolderSyncManager
+from fuente.domain.sync import ConnectedFolder
+from fuente import installer_gui
 
 
 @pytest.fixture
@@ -45,14 +45,14 @@ def install_ctx(tmp_path):
     )
 
 
-def test_resolve_vault_path_appends_funes_subfolder(tmp_path):
+def test_resolve_vault_path_appends_fuente_subfolder(tmp_path):
     raw = tmp_path / "Documents"
-    assert resolve_vault_path(raw) == raw / "Funes"
-    assert resolve_vault_path(tmp_path / "Funes_Vault") == (tmp_path / "Funes_Vault").resolve()
+    assert resolve_vault_path(raw) == raw / "Fuente"
+    assert resolve_vault_path(tmp_path / "Fuente_Vault") == (tmp_path / "Fuente_Vault").resolve()
 
 
 def test_ensure_vault_structure_is_idempotent(tmp_path):
-    vault = tmp_path / "Funes"
+    vault = tmp_path / "Fuente"
     first = ensure_vault_structure(vault)
     second = ensure_vault_structure(vault)
 
@@ -126,7 +126,7 @@ def test_build_receipt_serializes_connected_folder_roots_as_json_safe(tmp_path):
     manual_root.mkdir()
     ctx = InstallationContext(
         base_dir=tmp_path,
-        vault_path=tmp_path / "Funes",
+        vault_path=tmp_path / "Fuente",
         cloud_folders=[
             ConnectedFolder("sharepoint_mount", str(cloud_root), "Marketing", True),
             manual_root,
@@ -145,7 +145,7 @@ def test_build_receipt_serializes_connected_folder_roots_as_json_safe(tmp_path):
 
 def test_gui_auto_detect_regression_accepts_connected_folder_records(tmp_path):
     detected = ConnectedFolder("onedrive_mount", str(tmp_path), "OneDrive", True)
-    wizard = object.__new__(installer_gui.FunesInstallerWizard)
+    wizard = object.__new__(installer_gui.FuenteInstallerWizard)
     wizard.cloud_folders = []
     wizard._refresh_cloud_listbox = MagicMock()
 
@@ -154,7 +154,7 @@ def test_gui_auto_detect_regression_accepts_connected_folder_records(tmp_path):
         "detect_cloud_folders",
         return_value=[detected],
     ):
-        installer_gui.FunesInstallerWizard._on_detect_cloud_installer(wizard, silent=True)
+        installer_gui.FuenteInstallerWizard._on_detect_cloud_installer(wizard, silent=True)
 
     assert wizard.cloud_folders == [detected]
     wizard._refresh_cloud_listbox.assert_called_once_with()
@@ -163,7 +163,7 @@ def test_gui_auto_detect_regression_accepts_connected_folder_records(tmp_path):
 def test_receipt_roundtrip(tmp_path):
     receipt = {
         "version": "1",
-        "vault_path": str(tmp_path / "Funes"),
+        "vault_path": str(tmp_path / "Fuente"),
         "success": True,
         "steps": [],
     }
@@ -180,9 +180,9 @@ def test_model_install_failure_when_pull_fails(install_ctx):
     governor._http_json.return_value = {"models": []}
     governor.ensure_model_available.return_value = False
 
-    with patch("funes.ram_governor.governor.RAMGovernor", return_value=governor), patch(
-        "funes.installer_contract.model_is_installed", return_value=False
-    ), patch("funes.installer_contract.start_ollama_service", return_value=True):
+    with patch("fuente.ram_governor.governor.RAMGovernor", return_value=governor), patch(
+        "fuente.installer_contract.model_is_installed", return_value=False
+    ), patch("fuente.installer_contract.start_ollama_service", return_value=True):
         result = step_install_model(install_ctx)
 
     assert result.success is False
@@ -195,9 +195,9 @@ def test_model_install_skipped_when_already_present(install_ctx):
     governor.check_ollama_status.return_value = True
     governor.recommend_model.return_value = "qwen2.5:7b"
 
-    with patch("funes.ram_governor.governor.RAMGovernor", return_value=governor), patch(
-        "funes.installer_contract.model_is_installed", return_value=True
-    ), patch("funes.installer_contract.start_ollama_service", return_value=True):
+    with patch("fuente.ram_governor.governor.RAMGovernor", return_value=governor), patch(
+        "fuente.installer_contract.model_is_installed", return_value=True
+    ), patch("fuente.installer_contract.start_ollama_service", return_value=True):
         result = step_install_model(install_ctx)
 
     assert result.success is True
@@ -207,7 +207,7 @@ def test_model_install_skipped_when_already_present(install_ctx):
 
 
 def test_run_installation_without_log_does_not_raise(tmp_path):
-    vault = tmp_path / "Funes"
+    vault = tmp_path / "Fuente"
     ctx = InstallationContext(
         base_dir=tmp_path,
         vault_path=vault,
@@ -224,7 +224,7 @@ def test_run_installation_without_log_does_not_raise(tmp_path):
 
 
 def test_receipt_stores_model_name_from_step(tmp_path):
-    vault = tmp_path / "Funes"
+    vault = tmp_path / "Fuente"
     ctx = InstallationContext(
         base_dir=tmp_path,
         vault_path=vault,
@@ -244,7 +244,7 @@ def test_receipt_stores_model_name_from_step(tmp_path):
     )
 
     with patch(
-        "funes.installer_contract.step_install_model", return_value=model_result
+        "fuente.installer_contract.step_install_model", return_value=model_result
     ):
         run_installation(ctx)
 
@@ -253,7 +253,7 @@ def test_receipt_stores_model_name_from_step(tmp_path):
 
 
 def test_on_step_start_callback_fires_in_order(tmp_path):
-    vault = tmp_path / "Funes"
+    vault = tmp_path / "Fuente"
     seen: list[str] = []
     ctx = InstallationContext(
         base_dir=tmp_path,
@@ -282,9 +282,9 @@ def test_anythingllm_requires_confirmation(install_ctx):
     install_ctx.confirm = lambda _t, _m: False
 
     with patch(
-        "funes.core.anythingllm_config.is_anythingllm_installed", return_value=False
+        "fuente.core.anythingllm_config.is_anythingllm_installed", return_value=False
     ), patch(
-        "funes.core.anythingllm_config.install_anythingllm_autonomously",
+        "fuente.core.anythingllm_config.install_anythingllm_autonomously",
         return_value=True,
     ):
         result = step_install_anythingllm(install_ctx)
@@ -295,16 +295,16 @@ def test_anythingllm_requires_confirmation(install_ctx):
 
 def test_launch_anythingllm_without_install_does_not_open_browser(monkeypatch):
     monkeypatch.setattr(
-        "funes.core.anythingllm_config.get_anythingllm_paths",
+        "fuente.core.anythingllm_config.get_anythingllm_paths",
         lambda: {"app_path": None, "data_dir": None},
     )
     popen = MagicMock()
     browser = MagicMock()
     installer = MagicMock()
-    monkeypatch.setattr("funes.core.anythingllm_config.subprocess.Popen", popen)
-    monkeypatch.setattr("funes.core.anythingllm_config.webbrowser.open", browser)
+    monkeypatch.setattr("fuente.core.anythingllm_config.subprocess.Popen", popen)
+    monkeypatch.setattr("fuente.core.anythingllm_config.webbrowser.open", browser)
     monkeypatch.setattr(
-        "funes.core.anythingllm_config.install_anythingllm_autonomously", installer
+        "fuente.core.anythingllm_config.install_anythingllm_autonomously", installer
     )
 
     assert launch_anythingllm() is False
@@ -314,7 +314,7 @@ def test_launch_anythingllm_without_install_does_not_open_browser(monkeypatch):
 
 
 def test_run_installation_second_run_no_duplicate_cloud_folders(tmp_path):
-    vault = tmp_path / "Funes"
+    vault = tmp_path / "Fuente"
     vault.mkdir()
     for sub in ("1_entrada", "2_sucio", "3_limpio", "4_salida"):
         (vault / sub).mkdir()
@@ -342,13 +342,13 @@ def test_run_installation_second_run_no_duplicate_cloud_folders(tmp_path):
     assert installation_succeeded(first)
     assert installation_succeeded(second)
 
-    config_file = vault / ".funes_connected_folders.json"
+    config_file = vault / ".fuente_connected_folders.json"
     data = json.loads(config_file.read_text(encoding="utf-8"))
     assert len(data["folders"]) == 2
 
 
 def test_installer_preserves_existing_provider_records_when_adding_folders(tmp_path):
-    vault = tmp_path / "Funes"
+    vault = tmp_path / "Fuente"
     vault.mkdir()
     existing_root = tmp_path / "team-share"
     disabled_root = tmp_path / "one-drive"
@@ -382,7 +382,7 @@ def test_installer_preserves_existing_provider_records_when_adding_folders(tmp_p
 
 
 def test_installer_persists_detected_provider_metadata(tmp_path):
-    vault = tmp_path / "Funes"
+    vault = tmp_path / "Fuente"
     vault.mkdir()
     detected_root = tmp_path / "sharepoint-library"
     detected_root.mkdir()
@@ -398,7 +398,7 @@ def test_installer_persists_detected_provider_metadata(tmp_path):
     result = step_save_cloud_folders(ctx)
 
     assert result.success
-    data = json.loads((vault / ".funes_connected_folders.json").read_text(encoding="utf-8"))
+    data = json.loads((vault / ".fuente_connected_folders.json").read_text(encoding="utf-8"))
     assert data["folders"] == [
         {
             "provider": "sharepoint_mount",
@@ -431,8 +431,8 @@ def test_wait_for_ollama_ready_polls_until_ready():
         calls["count"] += 1
         return calls["count"] >= 2
 
-    with patch("funes.installer_contract.is_ollama_api_ready", side_effect=_ready), patch(
-        "funes.installer_contract.time.sleep", return_value=None
+    with patch("fuente.installer_contract.is_ollama_api_ready", side_effect=_ready), patch(
+        "fuente.installer_contract.time.sleep", return_value=None
     ):
         assert wait_for_ollama_ready(timeout_sec=5, poll_sec=0.01) is True
     assert calls["count"] >= 2

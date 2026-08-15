@@ -3,7 +3,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 CONSOLE = (ROOT / "consola_preview.html").read_text(encoding="utf-8")
-LAUNCHER = (ROOT / "funes" / "control_console.py").read_text(encoding="utf-8")
+LAUNCHER = (ROOT / "fuente" / "control_console.py").read_text(encoding="utf-8")
 
 
 def _between(source: str, start: str, end: str) -> str:
@@ -56,5 +56,5 @@ def test_reader_export_keeps_opaque_document_id_and_strict_csp():
     assert "default-src 'self'" in csp_line
     assert "base-uri 'none'" in csp_line
     assert "object-src 'none'" in csp_line
-    assert "script-src 'self' 'nonce-funes-console'" in csp_line
+    assert "script-src 'self' 'nonce-fuente-console'" in csp_line
     assert "unsafe-inline" not in csp_line

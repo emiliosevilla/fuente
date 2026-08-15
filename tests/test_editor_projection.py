@@ -3,9 +3,9 @@ from __future__ import annotations
 
 import unittest
 
-from funes.domain.documents import NoteDocument
-from funes.domain.frontmatter import serialize_frontmatter
-from funes.ui.markdown_projection import (
+from fuente.domain.documents import NoteDocument
+from fuente.domain.frontmatter import serialize_frontmatter
+from fuente.ui.markdown_projection import (
     EDITOR_STRATEGY,
     markdown_to_projection,
     note_body_from_projection,
@@ -20,7 +20,7 @@ def _minimal_frontmatter(**overrides) -> dict:
         "schema_version": 1,
         "title": "Projection test",
         "date": "2026-08-08",
-        "author": "Funes",
+        "author": "Fuente",
         "tags": [],
         "issue": "_Sin_Cuestion",
         "status": "pending_review",

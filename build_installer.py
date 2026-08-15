@@ -1,5 +1,5 @@
 """
-Script de empaquetado para distribución de ejecutables independientes y paquetes autónomos de Funes.
+Script de empaquetado para distribución de ejecutables independientes y paquetes autónomos de Fuente.
 Genera los archivos ZIP de distribución listos para macOS o Windows sin mezclar scripts de otros S.O.
 """
 import os
@@ -14,7 +14,7 @@ def add_dir_to_zip(zf: zipfile.ZipFile, source_dir: Path, arc_dir_name: str):
     if not source_dir.exists():
         return
     for root, dirs, files in os.walk(source_dir):
-        dirs[:] = [d for d in dirs if d not in ("__pycache__", "1_entrada", "2_sucio", "3_limpio", "4_salida", ".funes", "chroma", "venv") and not d.startswith(".")]
+        dirs[:] = [d for d in dirs if d not in ("__pycache__", "1_entrada", "2_sucio", "3_limpio", "4_salida", ".fuente", "chroma", "venv") and not d.startswith(".")]
         for file in files:
             if file.endswith(".pyc") or file.endswith(".html") or file.startswith("."):
                 continue
@@ -26,7 +26,7 @@ def add_dir_to_zip(zf: zipfile.ZipFile, source_dir: Path, arc_dir_name: str):
 
 
 def build():
-    print("=== Compilador de Distribución Funes ===")
+    print("=== Compilador de Distribución Fuente ===")
     
     base_dir = Path(__file__).resolve().parent
 
@@ -46,17 +46,17 @@ def build():
                 print("Por favor, instala PyInstaller manualmente ejecutando: pip install pyinstaller")
                 sys.exit(1)
 
-    spec_file = base_dir / "funes.spec"
+    spec_file = base_dir / "fuente.spec"
     if not spec_file.exists():
-        print("[!] No se encontró funes.spec. Generando compilación genérica...")
+        print("[!] No se encontró fuente.spec. Generando compilación genérica...")
         cmd = [
             sys.executable,
             "-m",
             "PyInstaller",
-            "--name=Funes_macOS" if sys.platform == "darwin" else "--name=Funes_windows",
+            "--name=Fuente_macOS" if sys.platform == "darwin" else "--name=Fuente_windows",
             "--onefile",
             "--clean",
-            "funes/main.py",
+            "fuente/main.py",
         ]
     else:
         cmd = [
@@ -64,7 +64,7 @@ def build():
             "-m",
             "PyInstaller",
             "--clean",
-            "funes.spec",
+            "fuente.spec",
         ]
 
     print(f"Ejecutando compilación PyInstaller: {' '.join(cmd)}")
@@ -79,11 +79,11 @@ def build():
     is_mac = sys.platform == "darwin"
     is_win = sys.platform == "win32"
 
-    zip_name = "Funes_Distribucion_macOS.zip" if is_mac else "Funes_Distribucion_Windows.zip"
+    zip_name = "Fuente_Distribucion_macOS.zip" if is_mac else "Fuente_Distribucion_Windows.zip"
     zip_path = dist_dir / zip_name
 
     # Definición de archivos a incluir según la plataforma
-    main_exe_name = "Funes_macOS" if is_mac else "Funes_windows.exe"
+    main_exe_name = "Fuente_macOS" if is_mac else "Fuente_windows.exe"
     main_exe = dist_dir / main_exe_name
     if not main_exe.exists():
         main_exe = base_dir / main_exe_name
@@ -91,7 +91,7 @@ def build():
     # Archivos raíz específicos por S.O. (¡Sin mezclar .bat en macOS ni .command en Windows!)
     if is_mac:
         root_files = [
-            base_dir / "instalar_funes.command",
+            base_dir / "instalar_fuente.command",
             base_dir / "create_shortcuts.py",
             base_dir / "pyproject.toml",
             base_dir / "requirements.txt",
@@ -99,8 +99,8 @@ def build():
         ]
     else:
         root_files = [
-            base_dir / "instalar_funes.bat",
-            base_dir / "run_funes.bat",
+            base_dir / "instalar_fuente.bat",
+            base_dir / "run_fuente.bat",
             base_dir / "create_shortcuts.py",
             base_dir / "pyproject.toml",
             base_dir / "requirements.txt",
@@ -116,7 +116,7 @@ def build():
         for file_path in root_files:
             if file_path.exists() and file_path.is_file():
                 arcname = file_path.name
-                if is_mac and (file_path.suffix in [".command", ""] or file_path.name == "Funes_macOS"):
+                if is_mac and (file_path.suffix in [".command", ""] or file_path.name == "Fuente_macOS"):
                     # Preservar permisos de ejecución POSIX (0755)
                     with open(file_path, "rb") as f_in:
                         data = f_in.read()
@@ -127,8 +127,8 @@ def build():
                 else:
                     zf.write(file_path, arcname=arcname)
 
-        # 2. Agregar carpeta completa 'funes/'
-        add_dir_to_zip(zf, base_dir / "funes", "funes")
+        # 2. Agregar carpeta completa 'fuente/'
+        add_dir_to_zip(zf, base_dir / "fuente", "fuente")
 
         # 3. Agregar carpeta completa 'assets/'
         add_dir_to_zip(zf, base_dir / "assets", "assets")

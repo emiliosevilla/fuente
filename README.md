@@ -1,10 +1,10 @@
 <p align="center">
-  <img src="assets/funes_icon.png" alt="Funes Icon" width="128" />
-  <h1 align="center">Funes</h1>
+  <img src="assets/fuente_icon.png" alt="Fuente Icon" width="128" />
+  <h1 align="center">Fuente</h1>
 </p>
 
 <p align="center">
-  <b>Funes "el memorioso"</b> es un sistema inteligente de ETL (Extracción, Transformación y Carga) e Ingesta de Conocimiento diseñado para procesar flujos diarios de archivos multiformato desestructurados y volcarlos automáticamente en tu <b>Vault de Obsidian</b> como notas atómicas hiperconectadas (<code>[[WikiLinks]]</code>). Desarrollado para la gestión inteligente, local y privada del conocimiento personal y/o profesional.
+  <b>Fuente "el memorioso"</b> es un sistema inteligente de ETL (Extracción, Transformación y Carga) e Ingesta de Conocimiento diseñado para procesar flujos diarios de archivos multiformato desestructurados y volcarlos automáticamente en tu <b>Vault de Obsidian</b> como notas atómicas hiperconectadas (<code>[[WikiLinks]]</code>). Desarrollado para la gestión inteligente, local y privada del conocimiento personal y/o profesional.
 </p>
 
 ---
@@ -16,7 +16,7 @@
    - `2_sucio/`: Copia de respaldo original para auditoría e integridad.
    - `3_limpio/`: Transcripción verbatim a Markdown plano (`.md`).
    - `4_salida/`: Notas atómicas estructuradas con metadatos e interconexión masiva (`[[WikiLinks]]`).
-   - `.funes/`: Cuarentena (`quarantine/`) y estado local; la capa vectorial Chroma es opcional en runtime según la política efectiva. En `Eco estricto` no se construye, lee ni escribe Chroma.
+   - `.fuente/`: Cuarentena (`quarantine/`) y estado local; la capa vectorial Chroma es opcional en runtime según la política efectiva. En `Eco estricto` no se construye, lee ni escribe Chroma.
 
 2. **Soporte Multiformato Extensivo**:
    - **Documentos y Tablas**: PDF, DOCX, DOC, XLSX, XLS, PPTX, CSV, JSON, HTML, MSG, TXT, MD.
@@ -43,7 +43,7 @@ El perfil guardado (`Auto` o `Eco estricto`) no es por sí solo una promesa de c
 
 4. **Bucle de Grafo Optimizado (`OptimizadoGraphLoop`)**:
    - Refina el grafo de conocimiento: re-evalúa notas, inserta enlaces `[[WikiLinks]]` cruzados y genera/actualiza el mapa de contenidos global **`4_salida/_Indice_MOC.md`**.
-   - **Hilo de fondo** solo cuando `ApplicationLifecycle` arranca en modo `continuous` (consola GUI abierta) o `headless` (`funes --headless`); al cerrar la consola o detener el worker, el hilo se detiene de forma acotada.
+   - **Hilo de fondo** solo cuando `ApplicationLifecycle` arranca en modo `continuous` (consola GUI abierta) o `headless` (`fuente --headless`); al cerrar la consola o detener el worker, el hilo se detiene de forma acotada.
    - **Pasadas bajo demanda**: Paso 3 de la consola (`step3_structure`), modo `--flush` (un pase opcional sin hilo persistente) y acciones manuales de tema/grafo en la consola.
    - Sin lifecycle activo no hay servicio siempre encendido: la ingesta puntual o `--flush` pueden ejecutar un refine sin implicar un bucle autónomo permanente.
 
@@ -51,18 +51,18 @@ El perfil guardado (`Auto` o `Eco estricto`) no es por sí solo una promesa de c
    - **Filtro de Archivos Temporales**: Ignora automáticamente archivos temporales de Office (`~$*`), descargas en curso (`.crdownload`, `.part`), y archivos bloqueados (`.tmp`, `.lock`).
    - **Reintentos en Red**: Resistencia ante micro-cortes en unidades de red compartidas (`SMB/NFS`).
    - **Compatibilidad SQLite**: Auto-parche para versiones heredadas de SQLite mediante `pysqlite3`.
-   - **Aislamiento de Cuarentena**: Archivos defectuosos se trasladan a `.funes/quarantine/` sin detener el flujo de ingesta.
+   - **Aislamiento de Cuarentena**: Archivos defectuosos se trasladan a `.fuente/quarantine/` sin detener el flujo de ingesta.
 
 ---
 
 ## 📦 Instalación y Uso Rápido
 
-Puedes iniciar Funes de forma inmediata usando los scripts oficiales preconfigurados:
+Puedes iniciar Fuente de forma inmediata usando los scripts oficiales preconfigurados:
 
-- **Windows**: Haz doble clic en `instalar_funes.bat`
-- **macOS**: Haz doble clic en `instalar_funes.command`
+- **Windows**: Haz doble clic en `instalar_fuente.bat`
+- **macOS**: Haz doble clic en `instalar_fuente.command`
 
-Estos scripts instalarán el entorno virtual, crearán los accesos directos de escritorio (`Funes.lnk` / `Funes.command`) y lanzarán la aplicación.
+Estos scripts instalarán el entorno virtual, crearán los accesos directos de escritorio (`Fuente.lnk` / `Fuente.command`) y lanzarán la aplicación.
 
 ### Instalación manual por conjuntos de funcionalidades
 
@@ -81,14 +81,14 @@ Las capacidades opcionales se activan con *extras* de `pyproject.toml`:
 | OCR | `pip install -e ".[ocr]"` | OCR de imágenes vía pytesseract + Pillow |
 | Office avanzado | `pip install -e ".[office]"` | MarkItDown y Docling como convertidores prioritarios |
 | Escritorio completo | `pip install -e ".[all]"` | webview + audio + ocr + office |
-| Desarrollo / empaquetado | `pip install -e ".[dev]"` | PyInstaller para `funes.spec` |
+| Desarrollo / empaquetado | `pip install -e ".[dev]"` | PyInstaller para `fuente.spec` |
 | Pruebas | `pip install -e ".[test]"` | pytest |
 
 **Binarios de sistema** (Tesseract, FFmpeg, Ollama, Obsidian) no los instala pip. Consulta la matriz completa de dependencias, versiones registradas y comprobaciones de entorno en [`docs/dependency-matrix.md`](docs/dependency-matrix.md).
 
 ### Modo offline, instalación e inferencia
 
-Funes distingue dos fases con requisitos de red distintos:
+Fuente distingue dos fases con requisitos de red distintos:
 
 | Fase | Qué implica red | Comportamiento por defecto |
 |------|-----------------|----------------------------|
@@ -113,11 +113,11 @@ La interfaz (`consola_preview.html`) usa tipografías del sistema y una polític
 
 ### Fuentes montadas de OneDrive/SharePoint
 
-Funes puede leer una carpeta que el cliente oficial de OneDrive o SharePoint ya haya montado en el sistema de archivos. La vinculación se hace desde el selector nativo de la consola y la interfaz guarda un identificador opaco de conexión, no una ruta suministrada por el navegador.
+Fuente puede leer una carpeta que el cliente oficial de OneDrive o SharePoint ya haya montado en el sistema de archivos. La vinculación se hace desde el selector nativo de la consola y la interfaz guarda un identificador opaco de conexión, no una ruta suministrada por el navegador.
 
-- La sincronización es unidireccional: fuente montada → `1_entrada` del tema activo. Funes no escribe en la carpeta del proveedor.
+- La sincronización es unidireccional: fuente montada → `1_entrada` del tema activo. Fuente no escribe en la carpeta del proveedor.
 - El recorrido es recursivo, omite elementos ocultos y enlaces simbólicos, conserva un manifiesto local para idempotencia y muestra conflictos/avisos medidos.
-- No hay OAuth, Graph API, credenciales cloud, SDK del proveedor ni conexión de red implícita. Si el cliente no monta la carpeta, Funes no la inventa ni afirma que esté disponible.
+- No hay OAuth, Graph API, credenciales cloud, SDK del proveedor ni conexión de red implícita. Si el cliente no monta la carpeta, Fuente no la inventa ni afirma que esté disponible.
 - La matriz de pruebas y el release gate cubren el contrato de fuentes, la reconciliación, el aislamiento por tema y la proyección segura de la UI.
 
 Estas descripciones documentan contratos medidos; no implican que Ollama, Obsidian o AnythingLLM estén instalados o ejecutándose en una máquina concreta. El panel Health es la fuente de disponibilidad actual.
@@ -218,7 +218,7 @@ Antes de etiquetar o publicar una build, ejecuta el gate fail-closed:
 PYTHONDONTWRITEBYTECODE=1 python3 scripts/release_gate.py
 ```
 
-Documentación del checklist y mapeo de condiciones: [`docs/release-gate.md`](docs/release-gate.md). El gate ejecuta pytest, comprueba que el árbol git permanece limpio (ignorando `__pycache__`, `funes.egg-info` y `.pytest_cache`), valida hallazgos de seguridad residuales y ejecuta un smoke offline de Vault (migración → ingesta ETL → revisión → búsqueda → exportación → rollback).
+Documentación del checklist y mapeo de condiciones: [`docs/release-gate.md`](docs/release-gate.md). El gate ejecuta pytest, comprueba que el árbol git permanece limpio (ignorando `__pycache__`, `fuente.egg-info` y `.pytest_cache`), valida hallazgos de seguridad residuales y ejecuta un smoke offline de Vault (migración → ingesta ETL → revisión → búsqueda → exportación → rollback).
 
 Tras ejecutar pruebas desde un checkpoint limpio, `git status --short` debe permanecer vacío salvo ruido de caché ignorado por el gate.
 

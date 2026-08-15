@@ -3,17 +3,17 @@ import tempfile
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-import funes.core.app_checker as app_checker
-import funes.ram_governor.governor as governor
-from funes.core.app_checker import (
+import fuente.core.app_checker as app_checker
+import fuente.ram_governor.governor as governor
+from fuente.core.app_checker import (
     SYSTEM_WHITELIST,
     APP_DISPLAY_NAMES,
     get_running_user_apps,
     launch_obsidian,
 )
-from funes.ram_governor.budget import MODEL_CATALOG
-from funes.ram_governor.governor import RAMGovernor
-from funes.watcher.watcher import is_temporary_or_system_file, wait_until_file_stable
+from fuente.ram_governor.budget import MODEL_CATALOG
+from fuente.ram_governor.governor import RAMGovernor
+from fuente.watcher.watcher import is_temporary_or_system_file, wait_until_file_stable
 
 
 class TestSystemChecker(unittest.TestCase):
@@ -40,7 +40,7 @@ class TestSystemChecker(unittest.TestCase):
         self.assertEqual(APP_DISPLAY_NAMES.get("code"), "Visual Studio Code")
 
     def test_get_running_user_apps_mocked(self):
-        with patch("funes.core.app_checker.get_mac_visible_apps", return_value=["Google Chrome", "Word"]):
+        with patch("fuente.core.app_checker.get_mac_visible_apps", return_value=["Google Chrome", "Word"]):
             apps = get_running_user_apps()
             app_names = [a[1] for a in apps]
             self.assertIn("Google Chrome", app_names)

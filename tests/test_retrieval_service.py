@@ -9,15 +9,20 @@ from typing import Any
 
 import pytest
 
-from funes.application.retrieval import (
+from fuente.application.retrieval import (
     DEGRADATION_RAM,
     MODE_BM25,
     MODE_HYBRID,
     MODE_NONE,
     RetrievalApplicationService,
 )
-from funes.rag.hybrid_search import HybridSearcher
-from funes.domain.runtime_policy import RuntimePolicy
+from fuente.rag.hybrid_search import HybridSearcher
+from fuente.domain.runtime_policy import RuntimePolicy
+
+
+def _trusted_test_hit(_hit) -> bool:
+    """This module tests ranking and scopes, not the approval boundary."""
+    return True
 
 
 class FakeChroma:
@@ -132,6 +137,7 @@ def test_single_note_cannot_retrieve_another_note(corpus: FakeChroma):
     service = RetrievalApplicationService(
         corpus,
         should_fallback_to_bm25=lambda: False,
+        eligibility_guard=_trusted_test_hit,
     )
     # Query terms that match both note-a and note-b lexically if unscoped.
     ctx = service.build_context(
@@ -153,6 +159,7 @@ def test_all_notes_retrieves_nested_issue_notes(corpus: FakeChroma):
     service = RetrievalApplicationService(
         corpus,
         should_fallback_to_bm25=lambda: False,
+        eligibility_guard=_trusted_test_hit,
     )
     ctx = service.build_context("arrendamiento fianza alquiler", "all_notes", limit=5)
     assert ctx["has_context"] is True
@@ -169,6 +176,7 @@ def test_empty_and_low_memory_return_clear_no_context(corpus: FakeChroma):
     service = RetrievalApplicationService(
         FakeChroma(),  # empty index
         should_fallback_to_bm25=lambda: False,
+        eligibility_guard=_trusted_test_hit,
     )
     empty_ctx = service.build_context("cualquier consulta", "all_notes")
     assert empty_ctx["has_context"] is False
@@ -178,7 +186,7 @@ def test_empty_and_low_memory_return_clear_no_context(corpus: FakeChroma):
     assert empty_ctx["mode"] == MODE_NONE
 
     blank_query = RetrievalApplicationService(
-        corpus, should_fallback_to_bm25=lambda: False
+        corpus, should_fallback_to_bm25=lambda: False, eligibility_guard=_trusted_test_hit
     ).build_context("   ", "all_notes")
     assert blank_query["has_context"] is False
 
@@ -186,6 +194,7 @@ def test_empty_and_low_memory_return_clear_no_context(corpus: FakeChroma):
     low_mem_empty = RetrievalApplicationService(
         FakeChroma(),
         should_fallback_to_bm25=lambda: True,
+        eligibility_guard=_trusted_test_hit,
     ).build_context("consulta sin corpus", "all_notes")
     assert low_mem_empty["has_context"] is False
     assert low_mem_empty["degraded"] is True
@@ -199,6 +208,7 @@ def test_low_memory_uses_bm25_and_records_degradation(corpus: FakeChroma):
     service = RetrievalApplicationService(
         corpus,
         should_fallback_to_bm25=lambda: True,
+        eligibility_guard=_trusted_test_hit,
     )
     ctx = service.build_context("arrendamiento urbano fianza", "all_notes", limit=3)
     assert ctx["has_context"] is True
@@ -214,6 +224,7 @@ def test_hybrid_ram_fallback_keeps_historical_bm25_public_mode(corpus: FakeChrom
     service = RetrievalApplicationService(
         corpus,
         should_fallback_to_bm25=lambda: True,
+        eligibility_guard=_trusted_test_hit,
     )
 
     ctx = service.build_context("arrendamiento", "all_notes", limit=3)
@@ -225,7 +236,7 @@ def test_hybrid_ram_fallback_keeps_historical_bm25_public_mode(corpus: FakeChrom
 
 def test_issue_and_theme_scopes(corpus: FakeChroma):
     service = RetrievalApplicationService(
-        corpus, should_fallback_to_bm25=lambda: False
+        corpus, should_fallback_to_bm25=lambda: False, eligibility_guard=_trusted_test_hit
     )
     issue_ctx = service.build_context(
         "arrendamiento", "issue:Contratos", limit=5
@@ -252,6 +263,7 @@ def test_bounds_chunks_chars_and_sources():
     service = RetrievalApplicationService(
         store,
         should_fallback_to_bm25=lambda: False,
+        eligibility_guard=_trusted_test_hit,
         max_chars=200,
         max_sources=2,
         snippet_chars=80,
@@ -273,6 +285,7 @@ def test_bm25_cache_invalidates_on_index_change(corpus: FakeChroma):
         corpus,
         hybrid_searcher=searcher,
         should_fallback_to_bm25=lambda: True,
+        eligibility_guard=_trusted_test_hit,
     )
     service.build_context("responsabilidad civil", "all_notes")
     builds_after_first = corpus.get_all_calls
@@ -336,7 +349,10 @@ def test_eco_strict_retrieval_never_touches_chroma():
         reason="eco_strict test policy",
     )
     service = RetrievalApplicationService(
-        ForbiddenChroma(), corpus_provider=CorpusProvider(), runtime_policy=policy
+        ForbiddenChroma(),
+        corpus_provider=CorpusProvider(),
+        runtime_policy=policy,
+        eligibility_guard=_trusted_test_hit,
     )
 
     hits = service.search("contrato", limit=3)

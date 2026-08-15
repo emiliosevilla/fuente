@@ -3,17 +3,20 @@ from __future__ import annotations
 
 import pytest
 
-from funes.config import VaultConfig
-from funes.control_console import FunesConsoleBackend
-from funes.core.vault import VaultManager
-from funes.domain.errors import PathAuthorizationError
-from funes.application.fusion import FusionApplicationService
-from funes.application.notes import NotesApplicationService
-from funes.domain.frontmatter import serialize_frontmatter
-from funes.domain.paths import document_id_for_relative_path
-from funes.domain.paths import SourcePathAuthorizer
-from funes.infrastructure.sqlite_store import JobStore
-from funes.rag.vault_corpus import VaultCorpusProvider
+from fuente.config import VaultConfig
+from fuente.application.approval import ApprovalApplicationService
+from fuente.control_console import FuenteConsoleBackend
+from fuente.core.vault import VaultManager
+from fuente.domain.approvals import ApprovalLedger
+from fuente.domain.documents import content_hash_for_markdown
+from fuente.domain.errors import PathAuthorizationError
+from fuente.application.fusion import FusionApplicationService
+from fuente.application.notes import NotesApplicationService
+from fuente.domain.frontmatter import serialize_frontmatter
+from fuente.domain.paths import document_id_for_relative_path
+from fuente.domain.paths import SourcePathAuthorizer
+from fuente.infrastructure.sqlite_store import JobStore
+from fuente.rag.vault_corpus import VaultCorpusProvider
 
 
 @pytest.mark.parametrize(
@@ -40,6 +43,57 @@ def test_rejects_symlink_outside_vault(path_resolver, temp_vault_path):
 
     with pytest.raises(PathAuthorizationError):
         path_resolver.resolve_note("4_salida/outside.md")
+
+
+def test_clean_approval_rejects_catalog_path_through_symlink(temp_vault_manager, tmp_path):
+    note_id = "4ca13d5c-4d78-4f37-8c3c-d1dc530a4dc9"
+    markdown = serialize_frontmatter(
+        {
+            "schema_version": 3,
+            "note_id": note_id,
+            "note_type": "concept",
+            "title": "Fuera",
+            "date": "2026-08-14",
+            "author": "Fuente",
+            "tags": [],
+            "issue": "_Sin_Cuestion",
+            "status": "pending_review",
+            "history": [],
+            "origins": [],
+        }
+    ) + "# Fuera\n"
+    external = tmp_path / "outside-clean.md"
+    external.write_text(markdown, encoding="utf-8")
+    link = temp_vault_manager.clean_dir / "linked-clean.md"
+    link.symlink_to(external)
+    relative_path = link.relative_to(
+        temp_vault_manager.config.vault_path
+    ).as_posix()
+    store = JobStore(temp_vault_manager.config.vault_path)
+    store.register_note(
+        note_id=note_id,
+        relative_path=relative_path,
+        content_hash=content_hash_for_markdown(markdown),
+        note_type="concept",
+        origin_kind=None,
+        theme="General",
+        issue="_Sin_Cuestion",
+        status="pending_review",
+    )
+    ledger = ApprovalLedger(
+        store,
+        vault_root=temp_vault_manager.config.vault_path,
+        clean_root=temp_vault_manager.clean_dir,
+        derived_root=temp_vault_manager.output_dir,
+    )
+    try:
+        with pytest.raises(PathAuthorizationError):
+            ApprovalApplicationService(
+                vault=temp_vault_manager,
+                ledger=ledger,
+            ).approve_clean(note_id, 1, "emilio")
+    finally:
+        store.close()
 
 
 def test_source_path_authorizer_rejects_outside_paths_and_symlink_components(tmp_path):
@@ -131,7 +185,7 @@ def test_rejects_quarantine_identifiers_with_path_separators(path_resolver, quar
 def test_backend_save_note_rejects_absolute_external_path_without_mutation(
     temp_vault_path, external_note_path
 ):
-    backend = FunesConsoleBackend(temp_vault_path)
+    backend = FuenteConsoleBackend(temp_vault_path)
 
     result = backend.handle_action(
         "save_note",

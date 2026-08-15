@@ -3,10 +3,10 @@ from pathlib import Path
 
 import pytest
 
-from funes.config import VaultConfig
-from funes.core.vault import VaultManager
-from funes.domain.errors import PathAuthorizationError
-from funes.domain.quarantine import (
+from fuente.config import VaultConfig
+from fuente.core.vault import VaultManager
+from fuente.domain.errors import PathAuthorizationError
+from fuente.domain.quarantine import (
     InvalidModelOutputError,
     QuarantineService,
 )
@@ -50,7 +50,7 @@ def test_quarantine_uses_canonical_location_and_preserves_provenance(tmp_path):
     service = QuarantineService(vault_root)
     item = service.quarantine(source, error_code="unsupported_content", attempt_count=3)
 
-    assert service.quarantine_dir == vault_root / ".funes" / "quarantine"
+    assert service.quarantine_dir == vault_root / ".fuente" / "quarantine"
     assert not source.exists()
     assert item["quarantine_id"]
     assert (service.quarantine_dir / item["stored_filename"]).read_text(encoding="utf-8") == "source contents"

@@ -1,7 +1,7 @@
 """Index reconciliation through the real ingestion pipeline (Task 8.2)."""
 from __future__ import annotations
 
-from funes.application.ingestion import document_id_for_source
+from fuente.application.ingestion import document_id_for_source
 
 from tests.integration.conftest import (
     ScriptedChunker,

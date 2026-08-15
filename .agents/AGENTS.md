@@ -38,3 +38,8 @@ En cada iteración, tanto la Entrevista como la Autocrítica evalúan obligatori
 - No exigir `/git` como permiso adicional para esas operaciones. El workflow `/git` y `./scripts/git_ship.sh` son atajos para una cascada concreta de publicación.
 - Se mantienen los bloqueos automáticos globales para `reset --hard`, `clean -f`, `push --force`, refspecs forzados, `filter-branch`, `filter-repo`, rebase interactivo, `branch -D` y `git rm` sin `--cached`.
 - Antes de una operación destructiva, medir el repositorio y el objetivo exacto y comunicar la consecuencia.
+
+### 🔀 Regla obligatoria de PR para merges entre ramas (2026-08-15)
+- Todos los merges entre ramas deben hacerse mediante un Pull Request.
+- No ejecutar `git merge` directo entre ramas salvo orden explícita del propietario.
+- Para promover `dev` a `main`: publicar `dev`, abrir el PR `dev → main`, fusionarlo desde GitHub y volver a `dev`.

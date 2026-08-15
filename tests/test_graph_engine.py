@@ -3,11 +3,11 @@ import tempfile
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-from funes.control_console import FunesConsoleBackend
-from funes.domain.frontmatter import parse_frontmatter, serialize_frontmatter
-from funes.graph_engine.atomic_generator import AtomicNoteGenerator
-from funes.graph_engine.linker import GraphLinker
-from funes.graph_engine.optimized_loop import OptimizadoGraphLoop
+from fuente.control_console import FuenteConsoleBackend
+from fuente.domain.frontmatter import parse_frontmatter, serialize_frontmatter
+from fuente.graph_engine.atomic_generator import AtomicNoteGenerator
+from fuente.graph_engine.linker import GraphLinker
+from fuente.graph_engine.optimized_loop import OptimizadoGraphLoop
 
 
 class TestGraphEngine(unittest.TestCase):
@@ -30,9 +30,11 @@ class TestGraphEngine(unittest.TestCase):
 
         self.assertIn("---", note)
         metadata, _ = parse_frontmatter(note)
-        self.assertEqual(metadata["schema_version"], 1)
+        self.assertEqual(metadata["schema_version"], 3)
+        self.assertNotIn("sources", metadata)
+        self.assertEqual(metadata["origins"], [])
         self.assertEqual(metadata["title"], "informe")
-        self.assertEqual(metadata["author"], "Funes Extractor")
+        self.assertEqual(metadata["author"], "Fuente Extractor")
         self.assertIn(clean_text, note)
 
     def test_atomic_generator_mock_ollama_requests(self):
@@ -55,7 +57,7 @@ class TestGraphEngine(unittest.TestCase):
     def test_linker_autolinking_and_protection(self):
         # Crear notas de destino en 4_salida
         target_metadata = {
-            "schema_version": 1, "date": "2026-08-07", "author": "Funes",
+            "schema_version": 1, "date": "2026-08-07", "author": "Fuente",
             "tags": [], "issue": "_Sin_Cuestion", "status": "approved",
             "sources": [], "history": [],
         }
@@ -122,6 +124,40 @@ También mencionamos `Redes Neuronales en código inline`.
         assert second[0].document_id == note_id
         assert second[0].relative_path == "Cuestion/nueva.md"
 
+    def test_graph_enumeration_preserves_typed_origins(self):
+        origin = {
+            "note_id": "4ca13d5c-4d78-4f37-8c3c-d1dc530a4dc9",
+            "revision": 2,
+            "content_hash": "a" * 64,
+            "path": "3_limpio/origen.md",
+        }
+        note_id = "89a2f4fb-1d7b-4aa1-9793-119970502a00"
+        path = self.output_dir / "Cuestion" / "derivada.md"
+        path.parent.mkdir()
+        path.write_text(
+            serialize_frontmatter(
+                {
+                    "schema_version": 3,
+                    "note_id": note_id,
+                    "note_type": "concept",
+                    "title": "Derivada",
+                    "date": "2026-08-14",
+                    "author": "Fuente",
+                    "tags": [],
+                    "issue": "Cuestion",
+                    "status": "approved",
+                    "origins": [origin],
+                    "history": [],
+                }
+            )
+            + "# Derivada\n",
+            encoding="utf-8",
+        )
+
+        discovered = GraphLinker(self.output_dir).enumerate_notes()
+
+        assert discovered[0].origins == (origin,)
+
     # ------------------------------------------------------------------
     # 3. OptimizadoGraphLoop
     # ------------------------------------------------------------------
@@ -130,10 +166,20 @@ También mencionamos `Redes Neuronales en código inline`.
         nota_a = self.output_dir / "Obsidian Vault.md"
         nota_b = self.output_dir / "Gestión de Conocimiento.md"
 
-        nota_a.write_text("---\ntitle: Obsidian Vault\n---\n# Obsidian Vault\nNotas para Gestión de Conocimiento.", encoding="utf-8")
-        nota_b.write_text("---\ntitle: Gestión de Conocimiento\n---\n# Gestión de Conocimiento\nUso de Obsidian Vault.", encoding="utf-8")
+        nota_a.write_text(
+            "---\ntitle: Obsidian Vault\nstatus: approved\n---\n"
+            "# Obsidian Vault\nNotas para Gestión de Conocimiento.",
+            encoding="utf-8",
+        )
+        nota_b.write_text(
+            "---\ntitle: Gestión de Conocimiento\nstatus: approved\n---\n"
+            "# Gestión de Conocimiento\nUso de Obsidian Vault.",
+            encoding="utf-8",
+        )
 
-        loop = OptimizadoGraphLoop(self.output_dir)
+        loop = OptimizadoGraphLoop(
+            self.output_dir, eligibility_guard=lambda _target: None
+        )
         loop.refine_knowledge_graph()
 
         # Verificar que se crearon los hipervínculos bidireccionales
@@ -148,7 +194,7 @@ También mencionamos `Redes Neuronales en código inline`.
             "schema_version": 1,
             "title": "Nota válida",
             "date": "2026-08-07",
-            "author": "Funes",
+            "author": "Fuente",
             "tags": [],
             "issue": "Cuestion",
             "status": "approved",
@@ -158,19 +204,31 @@ También mencionamos `Redes Neuronales en código inline`.
         issue_dir = self.output_dir / "Cuestion"
         issue_dir.mkdir()
         (issue_dir / "valida.md").write_text(valid, encoding="utf-8")
+        pending = valid.replace("status: approved", "status: pending_review").replace(
+            "Nota válida", "Nota pendiente"
+        )
+        (issue_dir / "pendiente.md").write_text(pending, encoding="utf-8")
         (issue_dir / "invalida.md").write_text("---\ntitle: duplicada\ntitle: inválida\n---\n", encoding="utf-8")
         (self.output_dir / "grafo_valida.md").write_text(valid, encoding="utf-8")
         (self.output_dir / "grafo_invalida.md").write_text("sin frontmatter", encoding="utf-8")
 
-        OptimizadoGraphLoop(self.output_dir).refine_knowledge_graph()
+        OptimizadoGraphLoop(
+            self.output_dir, eligibility_guard=lambda _target: None
+        ).refine_knowledge_graph()
 
         master = (issue_dir / "_Cuestion_Cuestion.md").read_text(encoding="utf-8")
         moc = (self.output_dir / "_Indice_MOC.md").read_text(encoding="utf-8")
-        graph = FunesConsoleBackend(self.output_dir.parent).get_graph_data()
+        master_metadata, _ = parse_frontmatter(master)
+        moc_metadata, _ = parse_frontmatter(moc)
+        self.assertEqual(master_metadata["status"], "approved")
+        self.assertEqual(moc_metadata["status"], "approved")
+        graph = FuenteConsoleBackend(self.output_dir.parent).get_graph_data()
 
         self.assertIn("[[valida]]", master)
+        self.assertNotIn("pendiente", master)
         self.assertNotIn("invalida", master)
         self.assertIn("[[valida]]", moc)
+        self.assertNotIn("pendiente", moc)
         self.assertNotIn("invalida", moc)
         discovered = GraphLinker(self.output_dir).get_existing_note_titles()
         graph_nodes = [node["id"] for node in graph["nodes"]]

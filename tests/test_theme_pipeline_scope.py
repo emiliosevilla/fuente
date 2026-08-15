@@ -10,15 +10,15 @@ from unittest.mock import patch
 
 import pytest
 
-from funes.application.lifecycle import ApplicationLifecycle
-from funes.config import get_default_config
-from funes.control_console import FunesConsoleBackend
-from funes.core.folder_sync import FolderSyncManager
-from funes.core.vault import VaultManager, document_id_for_relative_path
-from funes.domain.frontmatter import serialize_frontmatter
-from funes.domain.runtime_policy import ExecutionProfile, RuntimePolicy
-from funes.graph_engine.optimized_loop import OptimizadoGraphLoop
-from funes.watcher.watcher import ETLPipeline, FolderMonitor
+from fuente.application.lifecycle import ApplicationLifecycle
+from fuente.config import get_default_config
+from fuente.control_console import FuenteConsoleBackend
+from fuente.core.folder_sync import FolderSyncManager
+from fuente.core.vault import VaultManager, document_id_for_relative_path
+from fuente.domain.frontmatter import serialize_frontmatter
+from fuente.domain.runtime_policy import ExecutionProfile, RuntimePolicy
+from fuente.graph_engine.optimized_loop import OptimizadoGraphLoop
+from fuente.watcher.watcher import ETLPipeline, FolderMonitor
 
 
 THEME = "Derecho_Civil"
@@ -33,7 +33,7 @@ def _mock_generate(clean_md_content, model_name, file_name):
             "schema_version": 1,
             "title": stem,
             "date": "",
-            "author": "Funes",
+            "author": "Fuente",
             "tags": [],
             "issue": "_Sin_Cuestion",
             "status": "pending_review",
@@ -90,10 +90,12 @@ def themed_pipeline(temp_vault_path):
 
 
 @patch(
-    "funes.watcher.watcher.AtomicNoteGenerator.generate_atomic_note",
+    "fuente.watcher.watcher.AtomicNoteGenerator.generate_atomic_note",
     side_effect=_mock_generate,
 )
 def test_processing_writes_only_inside_active_theme(mock_gen, themed_pipeline):
+    from tests.conftest import approve_saved_clean_job
+
     pipeline = themed_pipeline
     theme_dir = pipeline.vault.current_theme_dir
     general = _general_roots(pipeline.config.vault.vault_path)
@@ -102,7 +104,10 @@ def test_processing_writes_only_inside_active_theme(mock_gen, themed_pipeline):
     source.write_text(SOURCE_BODY, encoding="utf-8")
     assert source.resolve().is_relative_to(theme_dir.resolve())
 
-    assert pipeline.process_file(source) is True
+    assert pipeline.process_file(source) is False
+    waiting = list(pipeline.job_store.list_jobs())[0]
+    approve_saved_clean_job(pipeline.ingestion, pipeline.vault, waiting)
+    assert pipeline.ingestion.resume(waiting.job_id).stage == "completed"
 
     dirty = list(pipeline.vault.dirty_dir.glob(f"{Path(SOURCE_NAME).stem}*"))
     clean = list(pipeline.vault.clean_dir.glob(f"{Path(SOURCE_NAME).stem}*.md"))
@@ -190,7 +195,7 @@ def test_enumerate_documents_excludes_system_hidden_moc_and_quarantine(temp_vaul
     assert any(rel.endswith("_Sin_Cuestion/Nota_Default.md") for rel in relative_paths)
     assert all(not rel.endswith("_Indice_MOC.md") for rel in relative_paths)
     assert all(".hidden_note.md" not in rel for rel in relative_paths)
-    assert all(".funes" not in rel for rel in relative_paths)
+    assert all(".fuente" not in rel for rel in relative_paths)
     assert all("quarantine" not in rel for rel in relative_paths)
 
     for document_id, relative in listed:
@@ -251,7 +256,7 @@ def test_console_set_theme_shares_lifecycle_vault_and_retargets_services(temp_va
     for root in _general_roots(temp_vault_path).values():
         root.mkdir(parents=True, exist_ok=True)
 
-    backend = FunesConsoleBackend(temp_vault_path)
+    backend = FuenteConsoleBackend(temp_vault_path)
     assert backend.sync_manager.active_theme_dir == temp_vault_path.resolve()
     lifecycle = ApplicationLifecycle(
         backend.config,
@@ -312,7 +317,7 @@ def test_console_set_theme_shares_lifecycle_vault_and_retargets_services(temp_va
 def test_console_vault_change_rebinds_sync_manager_to_new_current_theme_dir(
     temp_vault_path, tmp_path
 ):
-    backend = FunesConsoleBackend(temp_vault_path)
+    backend = FuenteConsoleBackend(temp_vault_path)
     new_vault = tmp_path / "new-vault"
 
     result = backend.save_settings({"vault_path": str(new_vault)})

@@ -7,12 +7,13 @@ from pathlib import Path
 
 import test_a
 
-from funes.config import get_default_config
-from funes.core.vault import VaultManager
+from fuente.config import get_default_config
+from fuente.core.vault import VaultManager
+from tests.conftest import save_v3_summary_note
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-REPO_VAULT = REPO_ROOT / "Vault_Funes"
-REPO_MANIFEST = REPO_VAULT / ".funes" / "quarantine" / "manifest.json"
+REPO_VAULT = REPO_ROOT / "Vault_Fuente"
+REPO_MANIFEST = REPO_VAULT / ".fuente" / "quarantine" / "manifest.json"
 
 
 class TestTestEnvironment(unittest.TestCase):
@@ -39,7 +40,9 @@ class TestTestEnvironment(unittest.TestCase):
             vault_path = Path(tmp) / "isolated_vault"
             config = get_default_config(vault_path)
             manager = VaultManager(config.vault)
-            note = manager.save_atomic_note("Harness_Check", "Temporary note content")
+            _document_id, note = save_v3_summary_note(
+                manager, title="Harness_Check", body="Temporary note content"
+            )
             self.assertTrue(note.exists())
         after = REPO_MANIFEST.read_bytes()
         self.assertEqual(before, after)
@@ -56,7 +59,7 @@ class TestTestEnvironment(unittest.TestCase):
         self.assertEqual(
             result.stdout,
             test_a.GIT_STATUS_AT_SUITE_START,
-            "Tracked bytecode or Vault_Funes changed during the test suite",
+            "Tracked bytecode or Vault_Fuente changed during the test suite",
         )
         if not test_a.GIT_STATUS_AT_SUITE_START.strip():
             self.assertEqual(
@@ -67,17 +70,19 @@ class TestTestEnvironment(unittest.TestCase):
             artifact_lines = [
                 line
                 for line in result.stdout.splitlines()
-                if ".pyc" in line or "__pycache__" in line or "Vault_Funes" in line
+                if ".pyc" in line or "__pycache__" in line or "Vault_Fuente" in line
             ]
             self.assertEqual(
                 artifact_lines,
                 [],
-                f"Tracked bytecode or Vault_Funes must not change: {artifact_lines}",
+                f"Tracked bytecode or Vault_Fuente must not change: {artifact_lines}",
             )
 
 
 def test_pytest_temp_vault_fixture(temp_vault_path, temp_vault_manager):
     """Pytest-only: conftest fixtures provide an isolated Vault with cleanup."""
     assert temp_vault_path.resolve() != REPO_VAULT.resolve()
-    note = temp_vault_manager.save_atomic_note("Pytest_Fixture", "fixture body")
+    _document_id, note = save_v3_summary_note(
+        temp_vault_manager, title="Pytest_Fixture", body="fixture body"
+    )
     assert note.exists()

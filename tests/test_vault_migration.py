@@ -8,12 +8,16 @@ from pathlib import Path
 
 import pytest
 
-from funes.domain.frontmatter import parse_frontmatter, serialize_frontmatter
-from funes.domain.note_catalog import NoteCatalog
-from funes.domain.paths import document_id_for_relative_path
-from funes.graph_engine.linker import CANONICAL_MOC_FILENAME
-from funes.infrastructure.sqlite_store import JobStore
-from funes.infrastructure.vault_migration import MigrationBlockedError, VaultMigrator
+from fuente.application.approval import ApprovalApplicationService
+from fuente.config import get_default_config
+from fuente.core.vault import VaultManager
+from fuente.domain.approvals import ApprovalLedger
+from fuente.domain.documents import content_hash_for_markdown
+from fuente.domain.frontmatter import FrontmatterError, parse_frontmatter, serialize_frontmatter
+from fuente.graph_engine.linker import CANONICAL_MOC_FILENAME
+from fuente.domain.paths import document_id_for_relative_path
+from fuente.infrastructure.sqlite_store import JobStore
+from fuente.infrastructure.vault_migration import MigrationBlockedError, VaultMigrator
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SCRIPT = REPO_ROOT / "scripts" / "migrate_vault.py"
@@ -22,7 +26,7 @@ SCRIPT = REPO_ROOT / "scripts" / "migrate_vault.py"
 LEGACY_NOTE = """---
 título: "Nota histórica"
 fecha: "2026-08-07"
-autor: "Funes"
+autor: "Fuente"
 claves: [historia]
 fuentes: []
 estado: "pendiente_aprobacion"
@@ -36,7 +40,7 @@ CANONICAL_NOTE = serialize_frontmatter(
         "schema_version": 1,
         "title": "Nota canónica",
         "date": "2026-08-07",
-        "author": "Funes",
+        "author": "Fuente",
         "tags": [],
         "issue": "_Sin_Cuestion",
         "status": "approved",
@@ -44,6 +48,28 @@ CANONICAL_NOTE = serialize_frontmatter(
         "history": [],
     }
 ) + "# Ya migrada\n"
+
+APPROVED_ORIGIN_ID = "4ca13d5c-4d78-4f37-8c3c-d1dc530a4dc9"
+
+
+def _eligible_derived_markdown(
+    *, note_id: str, title: str, body: str, origin: dict[str, object]
+) -> str:
+    return serialize_frontmatter(
+        {
+            "schema_version": 3,
+            "note_id": note_id,
+            "note_type": "concept",
+            "title": title,
+            "date": "2026-08-14",
+            "author": "Fuente",
+            "tags": [],
+            "issue": "Issue-A",
+            "status": "approved",
+            "origins": [origin],
+            "history": [],
+        }
+    ) + body
 
 
 class FakeChroma:
@@ -71,7 +97,7 @@ class FakeChroma:
 
 @pytest.fixture
 def vault_tree(temp_vault_path: Path) -> Path:
-    for name in ("1_entrada", "2_sucio", "3_limpio", "4_salida", ".funes"):
+    for name in ("1_entrada", "2_sucio", "3_limpio", "4_salida", ".fuente"):
         (temp_vault_path / name).mkdir(parents=True, exist_ok=True)
     (temp_vault_path / "4_salida" / "_Sin_Cuestion").mkdir(parents=True, exist_ok=True)
     return temp_vault_path
@@ -93,13 +119,14 @@ def test_dry_run_makes_no_changes(vault_tree: Path):
 
     assert report.migratable_notes == 1
     assert note.read_text(encoding="utf-8") == before
-    migration_manifests = list((vault_tree / ".funes" / "migrations").rglob("manifest.json"))
+    migration_manifests = list((vault_tree / ".fuente" / "migrations").rglob("manifest.json"))
     assert not migration_manifests
 
 
-def test_identity_backfill_writes_stable_id_without_moving_and_is_idempotent(vault_tree: Path):
+def test_identity_backfill_refuses_retired_v2_source_serialization(vault_tree: Path):
     note = _write_note(vault_tree, "4_salida/_Sin_Cuestion/legacy.md", LEGACY_NOTE)
     original_path = note.relative_to(vault_tree).as_posix()
+    before = note.read_text(encoding="utf-8")
     migrator = VaultMigrator(vault_tree)
 
     dry_run = migrator.identity_backfill(dry_run=True)
@@ -109,29 +136,18 @@ def test_identity_backfill_writes_stable_id_without_moving_and_is_idempotent(vau
     assert note.relative_to(vault_tree).as_posix() == original_path
     assert "note_id:" not in note.read_text(encoding="utf-8")
 
-    manifest = migrator.identity_backfill()
-    metadata, body = parse_frontmatter(note.read_text(encoding="utf-8"))
-    expected_id = document_id_for_relative_path(original_path)
-    assert metadata["schema_version"] == 2
-    assert metadata["note_id"] == expected_id
-    assert metadata["note_type"] == "source"
-    assert metadata["source_kind"] == "unclassified"
-    assert body == "# Cuerpo legacy\n"
+    # Task 3 retired v2 ``source_kind`` serialization.  Identity backfill may
+    # inspect legacy input, but must not recreate the retired v2 source form.
+    with pytest.raises(FrontmatterError, match="v2 source notes must be migrated"):
+        migrator.identity_backfill()
+    assert note.read_text(encoding="utf-8") == before
     assert note.relative_to(vault_tree).as_posix() == original_path
-
-    with JobStore(vault_tree) as store:
-        catalog = NoteCatalog(store, vault_root=vault_tree)
-        assert catalog.resolve(expected_id)["relative_path"] == original_path
-
-    resumed = migrator.identity_backfill(manifest_path=migrator._manifest_file(manifest))
-    assert resumed.status == "completed"
-    assert len(resumed.entries) == len(manifest.entries)
 
 
 def test_identity_backfill_rollback_refuses_human_edit(vault_tree: Path):
     note = _write_note(vault_tree, "4_salida/_Sin_Cuestion/legacy.md", LEGACY_NOTE)
     migrator = VaultMigrator(vault_tree)
-    manifest = migrator.identity_backfill()
+    manifest = migrator.apply(rebuild_index=False, rebuild_moc=False)
     manifest_path = migrator._manifest_file(manifest)
     note.write_text(note.read_text(encoding="utf-8") + "\nEdición humana.\n", encoding="utf-8")
 
@@ -192,8 +208,14 @@ def test_apply_writes_manifest_migrates_and_rebuilds_moc(vault_tree: Path):
     assert manifest_path.is_file()
     backup_root = vault_tree / manifest.backup_dir
     assert any(backup_root.iterdir())
+    # A migrated legacy v1 note still has no typed, approved origins. The
+    # generated MOC is nevertheless an auto-approved empty projection; it
+    # must not list the legacy note as approved content.
     moc = vault_tree / "4_salida" / CANONICAL_MOC_FILENAME
-    assert moc.is_file()
+    assert moc.exists()
+    moc_metadata, moc_body = parse_frontmatter(moc.read_text(encoding="utf-8"))
+    assert moc_metadata["status"] == "approved"
+    assert "legacy" not in moc_body.lower()
 
 
 def test_apply_is_idempotent(vault_tree: Path):
@@ -378,7 +400,7 @@ def test_apply_with_force_migrates_when_other_notes_block_scan(vault_tree: Path)
 
 def test_apply_rejects_cross_vault_manifest(vault_tree: Path, temp_vault_path: Path):
     other = temp_vault_path / "other_vault"
-    for name in ("1_entrada", "4_salida", ".funes"):
+    for name in ("1_entrada", "4_salida", ".fuente"):
         (other / name).mkdir(parents=True)
     (other / "4_salida" / "_Sin_Cuestion").mkdir(parents=True)
     _write_note(vault_tree, "4_salida/_Sin_Cuestion/legacy.md", LEGACY_NOTE)
@@ -400,6 +422,111 @@ def test_apply_does_not_mutate_non_manifest_notes(vault_tree: Path):
     migrator.apply(rebuild_index=False, rebuild_moc=True)
 
     assert stable.read_text(encoding="utf-8") == stable_before
+
+
+def test_catalog_rebuild_does_not_rewrite_eligible_notes_outside_manifest_or_rollback(
+    vault_tree: Path,
+):
+    vault = VaultManager(get_default_config(vault_tree).vault)
+    store = JobStore(vault_tree)
+    try:
+        origin_path = vault.clean_dir / "origen.md"
+        origin_relative = origin_path.relative_to(vault_tree).as_posix()
+        origin_markdown = serialize_frontmatter(
+            {
+                "schema_version": 3,
+                "note_id": APPROVED_ORIGIN_ID,
+                "note_type": "concept",
+                "title": "Origen aprobado",
+                "date": "2026-08-14",
+                "author": "Fuente",
+                "tags": [],
+                "issue": "Issue-A",
+                "status": "pending_review",
+                "origins": [],
+                "history": [],
+            }
+        ) + "# Origen aprobado\n"
+        origin_path.write_text(origin_markdown, encoding="utf-8")
+        origin_hash = content_hash_for_markdown(origin_markdown)
+        store.register_note(
+            note_id=APPROVED_ORIGIN_ID,
+            relative_path=origin_relative,
+            content_hash=origin_hash,
+            note_type="concept",
+            origin_kind=None,
+            theme="General",
+            issue="Issue-A",
+            status="pending_review",
+        )
+        approved = ApprovalApplicationService(
+            vault=vault,
+            ledger=ApprovalLedger(
+                store,
+                vault_root=vault_tree,
+                clean_root=vault.clean_dir,
+                derived_root=vault.output_dir,
+            ),
+        ).approve_clean(APPROVED_ORIGIN_ID, 1, "emilio")
+        origin = {
+            "note_id": approved.note_id,
+            "revision": approved.revision,
+            "content_hash": approved.content_hash,
+            "path": origin_relative,
+        }
+        first_relative = "4_salida/Issue-A/Alpha.md"
+        second_relative = "4_salida/Issue-A/Beta.md"
+        first_id = document_id_for_relative_path(first_relative)
+        second_id = document_id_for_relative_path(second_relative)
+        first = _write_note(
+            vault_tree,
+            first_relative,
+            _eligible_derived_markdown(
+                note_id=first_id,
+                title="Alpha",
+                body="# Alpha\n\nBeta debe conservarse sin autoenlace.\n",
+                origin=origin,
+            ),
+        )
+        second = _write_note(
+            vault_tree,
+            second_relative,
+            _eligible_derived_markdown(
+                note_id=second_id,
+                title="Beta",
+                body="# Beta\n",
+                origin=origin,
+            ),
+        )
+        for note_id, relative, path in (
+            (first_id, first_relative, first),
+            (second_id, second_relative, second),
+        ):
+            store.register_note(
+                note_id=note_id,
+                relative_path=relative,
+                content_hash=content_hash_for_markdown(path.read_text(encoding="utf-8")),
+                note_type="concept",
+                origin_kind=None,
+                theme="General",
+                issue="Issue-A",
+                status="approved",
+            )
+        before = {path: path.read_bytes() for path in (first, second)}
+        migrator = VaultMigrator(vault_tree)
+
+        manifest = migrator.apply(rebuild_index=False, rebuild_moc=True)
+
+        assert manifest.entries == []
+        assert {path: path.read_bytes() for path in (first, second)} == before
+        assert (vault.output_dir / CANONICAL_MOC_FILENAME).is_file()
+        assert (vault.output_dir / "Issue-A" / "_Cuestion_Issue-A.md").is_file()
+
+        migrator.rollback(migrator._manifest_file(manifest))
+
+        assert {path: path.read_bytes() for path in (first, second)} == before
+    finally:
+        store.close()
 
 
 def test_unsafe_path_excluded_from_manifest_and_apply(vault_tree: Path, tmp_path: Path):

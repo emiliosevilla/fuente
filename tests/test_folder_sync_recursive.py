@@ -6,11 +6,11 @@ from pathlib import Path
 
 import pytest
 
-from funes.config import get_default_config
-from funes.core.folder_sync import FolderSyncManager, SyncReport
-from funes.core.vault import VaultManager
-from funes.domain.errors import PathAuthorizationError
-from funes.domain.sync import ConnectedFolder
+from fuente.config import get_default_config
+from fuente.core.folder_sync import FolderSyncManager, SyncReport
+from fuente.core.vault import VaultManager
+from fuente.domain.errors import PathAuthorizationError
+from fuente.domain.sync import ConnectedFolder
 
 
 def _symlink_or_skip(link: Path, target: Path, *, directory: bool = False) -> None:

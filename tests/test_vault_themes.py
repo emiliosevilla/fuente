@@ -2,14 +2,15 @@ import unittest
 import tempfile
 import shutil
 from pathlib import Path
-from funes.config import VaultConfig
-from funes.core.vault import VaultManager
+from fuente.config import VaultConfig
+from fuente.core.vault import VaultManager
+from tests.conftest import save_v3_summary_note
 
 
 class TestVaultThemesAndIssues(unittest.TestCase):
     def setUp(self):
         self.temp_dir = tempfile.mkdtemp()
-        self.vault_path = Path(self.temp_dir) / "Vault_Funes"
+        self.vault_path = Path(self.temp_dir) / "Vault_Fuente"
         self.config = VaultConfig(vault_path=self.vault_path)
         self.vault_mgr = VaultManager(self.config)
 
@@ -42,9 +43,10 @@ class TestVaultThemesAndIssues(unittest.TestCase):
     def test_save_atomic_note_in_issue(self):
         self.vault_mgr.create_theme("Filosofia")
         self.vault_mgr.create_issue_in_theme("Metafisica")
-        note_path = self.vault_mgr.save_atomic_note(
+        _document_id, note_path = save_v3_summary_note(
+            self.vault_mgr,
             title="Principio_No_Contradiccion",
-            content="# Principio de No Contradicción\n...",
+            body="# Principio de No Contradicción\n...",
             issue_name="Metafisica"
         )
         self.assertTrue(note_path.exists())

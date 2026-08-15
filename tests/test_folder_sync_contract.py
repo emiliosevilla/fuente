@@ -3,20 +3,20 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from funes.core.folder_sync import FolderSyncManager, FolderSyncModal
-from funes.domain.sync import (
+from fuente.core.folder_sync import FolderSyncManager, FolderSyncModal
+from fuente.domain.sync import (
     ConnectedFolder,
     SyncManifestEntry,
     SyncProvider,
     SyncRecordValidationError,
 )
-from funes.infrastructure.sqlite_store import JobStore
+from fuente.infrastructure.sqlite_store import JobStore
 
 
 def test_legacy_json_entries_load_as_local_connections_without_rewrite(tmp_path):
     source = tmp_path / "legacy-source"
     source.mkdir()
-    config_file = tmp_path / ".funes_connected_folders.json"
+    config_file = tmp_path / ".fuente_connected_folders.json"
     config_file.write_text(json.dumps({"folders": [str(source)]}), encoding="utf-8")
 
     manager = FolderSyncManager(tmp_path)
@@ -80,7 +80,7 @@ def test_disabled_connection_is_not_scanned(tmp_path):
 
 
 def test_malformed_connection_has_stable_diagnostic(tmp_path):
-    (tmp_path / ".funes_connected_folders.json").write_text(
+    (tmp_path / ".fuente_connected_folders.json").write_text(
         json.dumps({"folders": [{"provider": "network", "root": "/mnt/nas"}]}),
         encoding="utf-8",
     )

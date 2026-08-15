@@ -2,12 +2,32 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from funes.domain.documents import MarkdownDocument, NoteDocument
-from funes.domain.frontmatter import FrontmatterError, parse_frontmatter, serialize_frontmatter
-from funes.graph_engine.linker import GraphLinker
+from fuente.domain.documents import MarkdownDocument, NoteDocument
+from fuente.domain.frontmatter import (
+    FrontmatterError,
+    canonicalize_v3,
+    parse_frontmatter,
+    serialize_frontmatter,
+)
+from fuente.domain.origins import LegacyOriginsMigrationRequiredError
+from fuente.graph_engine.linker import GraphLinker
 
 
 class TestFrontmatterSchema(unittest.TestCase):
+    V3_SUMMARY = """---
+schema_version: 3
+note_id: 4ca13d5c-4d78-4f37-8c3c-d1dc530a4dc9
+note_type: summary
+origin_kind: meeting
+origins:
+  - note_id: 89a2f4fb-1d7b-4aa1-9793-119970502a00
+    revision: 4
+    content_hash: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+    path: Tema/3_limpio/reunion-2026-08-14.md
+---
+# Sumario
+"""
+
     def test_schema_v1_remains_readable(self):
         metadata, body = parse_frontmatter(
             """---
@@ -27,7 +47,7 @@ title: "Nota histórica"
             """---
 título: "Nota histórica"
 fecha: "2026-08-07"
-autor: "Funes"
+autor: "Fuente"
 claves: [historia, "prueba"]
 fuentes: ["archivo.pdf"]
 estado: "pendiente_aprobacion"
@@ -39,7 +59,7 @@ historial: []
         self.assertEqual(metadata["schema_version"], 1)
         self.assertEqual(metadata["title"], "Nota histórica")
         self.assertEqual(metadata["date"], "2026-08-07")
-        self.assertEqual(metadata["author"], "Funes")
+        self.assertEqual(metadata["author"], "Fuente")
         self.assertEqual(metadata["tags"], ["historia", "prueba"])
         self.assertEqual(metadata["sources"], ["archivo.pdf"])
         self.assertEqual(metadata["status"], "pending_review")
@@ -78,6 +98,216 @@ source_kind: meeting
         self.assertEqual(metadata["note_id"], "4ca13d5c-4d78-4f37-8c3c-d1dc530a4dc9")
         self.assertEqual(metadata["note_type"], "source")
         self.assertEqual(metadata["source_kind"], "meeting")
+
+    def test_v3_summary_requires_typed_origins(self):
+        metadata, _ = parse_frontmatter(self.V3_SUMMARY)
+
+        self.assertEqual(metadata["schema_version"], 3)
+        self.assertEqual(metadata["note_type"], "summary")
+        self.assertEqual(metadata["origins"][0]["revision"], 4)
+        self.assertNotIn("sources", metadata)
+        self.assertNotIn("source_kind", metadata)
+
+    def test_v3_rejects_origin_kind_on_a_concept(self):
+        with self.assertRaisesRegex(FrontmatterError, "origin_kind"):
+            parse_frontmatter(
+                """---
+schema_version: 3
+note_id: 4ca13d5c-4d78-4f37-8c3c-d1dc530a4dc9
+note_type: concept
+origin_kind: meeting
+origins: []
+---
+# Concepto
+"""
+            )
+
+    def test_v2_sources_are_normalized_only_in_memory(self):
+        metadata, _ = parse_frontmatter(
+            """---
+schema_version: 2
+note_id: 4ca13d5c-4d78-4f37-8c3c-d1dc530a4dc9
+note_type: concept
+sources: ["legacy-origen-42"]
+---
+# Concepto
+"""
+        )
+
+        self.assertEqual(metadata["origins"], [])
+        self.assertEqual(metadata["legacy_origin_ids"], ["legacy-origen-42"])
+        self.assertNotIn("sources", canonicalize_v3(metadata))
+        self.assertNotIn("source_kind", canonicalize_v3(metadata))
+
+    def test_serializing_v1_and_v2_never_reemits_legacy_provenance_fields(self):
+        v1, _ = parse_frontmatter(
+            """---
+schema_version: 1
+title: "Nota histórica"
+source_kind: meeting
+sources: ["legacy-origen-42"]
+---
+# Cuerpo
+"""
+        )
+        v2, _ = parse_frontmatter(
+            """---
+schema_version: 2
+note_id: 4ca13d5c-4d78-4f37-8c3c-d1dc530a4dc9
+note_type: concept
+sources: ["legacy-origen-42"]
+---
+# Concepto
+"""
+        )
+
+        for metadata in (v1, v2):
+            serialized = serialize_frontmatter(metadata)
+            self.assertNotIn("sources:", serialized)
+            self.assertNotIn("source_kind:", serialized)
+
+    def test_serializing_a_v2_source_fails_closed_until_migration(self):
+        metadata, _ = parse_frontmatter(
+            """---
+schema_version: 2
+note_id: 4ca13d5c-4d78-4f37-8c3c-d1dc530a4dc9
+note_type: source
+source_kind: meeting
+---
+# Reunión
+"""
+        )
+
+        with self.assertRaisesRegex(FrontmatterError, "migrated before serialization"):
+            serialize_frontmatter(metadata)
+
+    def test_serializing_legacy_metadata_preserves_normalized_origins_without_old_fields(self):
+        metadata, _ = parse_frontmatter(
+            """---
+schema_version: 2
+note_id: 4ca13d5c-4d78-4f37-8c3c-d1dc530a4dc9
+note_type: concept
+sources:
+  - legacy-origen-42
+  - note_id: 89a2f4fb-1d7b-4aa1-9793-119970502a00
+    revision: 4
+    content_hash: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+    path: Tema/3_limpio/reunion-2026-08-14.md
+---
+# Concepto
+"""
+        )
+
+        serialized = serialize_frontmatter(metadata)
+        reread, _ = parse_frontmatter(serialized + "# Concepto\n")
+
+        self.assertNotIn("sources:", serialized)
+        self.assertNotIn("source_kind:", serialized)
+        self.assertEqual(reread["legacy_origin_ids"], ["legacy-origen-42"])
+        self.assertEqual(reread["origins"][0]["revision"], 4)
+
+    def test_canonicalize_v3_preserves_raw_legacy_source_ids(self):
+        metadata = {
+            "schema_version": 2,
+            "note_id": "4ca13d5c-4d78-4f37-8c3c-d1dc530a4dc9",
+            "note_type": "concept",
+            "legacy_origin_ids": [],
+            "sources": ["legacy-origen-42"],
+        }
+        canonical = canonicalize_v3(metadata)
+
+        self.assertEqual(canonical["origins"], [])
+        self.assertEqual(canonical["legacy_origin_ids"], ["legacy-origen-42"])
+        self.assertNotIn("sources", canonical)
+        self.assertEqual(metadata["legacy_origin_ids"], [])
+
+    def test_v3_serialization_is_stable_and_never_emits_legacy_source_fields(self):
+        metadata, _ = parse_frontmatter(self.V3_SUMMARY)
+        metadata["sources"] = ["must-not-be-written"]
+        metadata["source_kind"] = "meeting"
+
+        serialized = serialize_frontmatter(metadata)
+
+        self.assertIn("schema_version: 3", serialized)
+        self.assertIn("origin_kind: meeting", serialized)
+        self.assertIn("origins:", serialized)
+        self.assertNotIn("sources:", serialized)
+        self.assertNotIn("source_kind:", serialized)
+        self.assertEqual(parse_frontmatter(serialized + "# Sumario\n")[0], canonicalize_v3(metadata))
+
+    def test_v3_preserves_unmigrated_legacy_origins_for_later_generation_blocking(self):
+        metadata, _ = parse_frontmatter(
+            """---
+schema_version: 3
+note_id: 4ca13d5c-4d78-4f37-8c3c-d1dc530a4dc9
+note_type: summary
+origin_kind: meeting
+origins:
+  - note_id: 89a2f4fb-1d7b-4aa1-9793-119970502a00
+    revision: 4
+    content_hash: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+    path: Tema/3_limpio/reunion-2026-08-14.md
+legacy_origin_ids: ["legacy-origen-42"]
+---
+# Sumario
+"""
+        )
+
+        self.assertEqual(metadata["legacy_origin_ids"], ["legacy-origen-42"])
+        self.assertIn("legacy_origin_ids:", serialize_frontmatter(metadata))
+
+    def test_v3_summary_rejects_empty_origins(self):
+        with self.assertRaisesRegex(FrontmatterError, "summary origins"):
+            parse_frontmatter(
+                """---
+schema_version: 3
+note_id: 4ca13d5c-4d78-4f37-8c3c-d1dc530a4dc9
+note_type: summary
+origin_kind: meeting
+origins: []
+---
+# Sumario
+"""
+            )
+
+    def test_v3_metadata_is_available_through_origin_accessors(self):
+        markdown_document = MarkdownDocument.from_markdown(self.V3_SUMMARY)
+        note_document = NoteDocument.from_persisted(
+            document_id="doc-1",
+            relative_path="4_salida/Sumarios/reunion.md",
+            markdown=self.V3_SUMMARY,
+            revision=1,
+        )
+
+        for document in (markdown_document, note_document):
+            self.assertEqual(document.origin_kind, "meeting")
+            self.assertEqual(document.origins[0].note_id, "89a2f4fb-1d7b-4aa1-9793-119970502a00")
+            self.assertEqual(document.origins[0].path, "Tema/3_limpio/reunion-2026-08-14.md")
+
+    def test_document_accessors_keep_legacy_origin_ids_separate_from_typed_origins(self):
+        markdown = """---
+schema_version: 2
+note_id: 4ca13d5c-4d78-4f37-8c3c-d1dc530a4dc9
+note_type: concept
+sources: ["legacy-origen-42"]
+---
+# Concepto
+"""
+
+        markdown_document = MarkdownDocument.from_markdown(markdown)
+        note_document = NoteDocument.from_persisted(
+            document_id="doc-1",
+            relative_path="Conceptos/nota.md",
+            markdown=markdown,
+            revision=1,
+        )
+
+        for document in (markdown_document, note_document):
+            self.assertEqual(document.origins, ())
+            self.assertEqual(document.legacy_origin_ids, ("legacy-origen-42",))
+            self.assertTrue(document.has_unmigrated_legacy_origins)
+            with self.assertRaises(LegacyOriginsMigrationRequiredError):
+                document.require_migrated_origins()
 
     def test_schema_v2_requires_a_uuid_note_id(self):
         with self.assertRaisesRegex(FrontmatterError, "note_id"):
@@ -214,7 +444,7 @@ source_kind: meeting
 schema_version: 1
 title: "Título con comillas"
 date: "2026-08-07"
-author: "Funes"
+author: "Fuente"
 tags: [uno, dos]
 issue: "_Sin_Cuestion"
 status: "pending_review"
@@ -251,7 +481,7 @@ Separador de cuerpo.
                     "schema_version": 1,
                     "title": "Nota relacionada",
                     "date": "2026-08-07",
-                    "author": "Funes",
+                    "author": "Fuente",
                     "tags": [],
                     "issue": "_Sin_Cuestion",
                     "status": "approved",
@@ -267,7 +497,7 @@ Separador de cuerpo.
                     "schema_version": 1,
                     "title": "Origen",
                     "date": "2026-08-07",
-                    "author": "Funes",
+                    "author": "Fuente",
                     "tags": ["Nota relacionada"],
                     "issue": "_Sin_Cuestion",
                     "status": "pending_review",

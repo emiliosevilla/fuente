@@ -1,13 +1,13 @@
 from pathlib import Path
 import re
 
-from funes.control_console import FunesConsoleBackend
-from funes.core.vault import document_id_for_relative_path
+from fuente.control_console import FuenteConsoleBackend
+from fuente.core.vault import document_id_for_relative_path
 
 
 def test_note_document_uses_text_tokens_for_hostile_markdown(temp_vault_path):
     """Raw note text must never become executable HTML in the bridge response."""
-    backend = FunesConsoleBackend(temp_vault_path)
+    backend = FuenteConsoleBackend(temp_vault_path)
     note = backend.vault.output_dir / "hostile.md"
     note.write_text(
         "# <script>alert(1)</script>\n"
@@ -39,7 +39,7 @@ def test_note_document_uses_text_tokens_for_hostile_markdown(temp_vault_path):
 
 
 def test_wikilink_ids_escape_quote_breaking_paths(temp_vault_path):
-    backend = FunesConsoleBackend(temp_vault_path)
+    backend = FuenteConsoleBackend(temp_vault_path)
     target = backend.vault.output_dir / 'target".md'
     source = backend.vault.output_dir / 'source".md'
     target.write_text("target", encoding="utf-8")
@@ -82,7 +82,7 @@ def test_console_has_no_inline_style_execution():
     assert re.search(r"\sstyle\s*=", source, re.I) is None
     assert ".style.cssText" not in source
     assert ".style." not in source
-    assert (source_path.parent / "funes/ui/static/console.css").is_file()
+    assert (source_path.parent / "fuente/ui/static/console.css").is_file()
 
 
 def test_console_stylesheet_link_resolves_to_local_packaged_css():
@@ -96,10 +96,10 @@ def test_console_stylesheet_link_resolves_to_local_packaged_css():
 
     assert link is not None
     href = link.group(1)
-    assert href == "funes/ui/static/console.css"
+    assert href == "fuente/ui/static/console.css"
 
     resolved_css = (source_path.parent / href).resolve()
-    packaged_css = (source_path.parent / "funes/ui/static/console.css").resolve()
+    packaged_css = (source_path.parent / "fuente/ui/static/console.css").resolve()
     assert resolved_css.is_file()
     assert resolved_css == packaged_css
     assert resolved_css.read_bytes() == packaged_css.read_bytes()

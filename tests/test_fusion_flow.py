@@ -6,31 +6,47 @@ import threading
 
 import pytest
 
-import funes.application.notes as notes_module
-from funes.application.fusion import FusionApplicationService
-from funes.application.notes import NotesApplicationService
-from funes.config import get_default_config
-from funes.control_console import FunesConsoleBackend
-from funes.core.vault import VaultManager
-from funes.domain.documents import content_hash_for_markdown
-from funes.domain.errors import NoteRevisionConflictError, PathAuthorizationError
-from funes.domain.frontmatter import parse_frontmatter, serialize_frontmatter
-from funes.domain.paths import document_id_for_relative_path
-from funes.infrastructure.sqlite_store import JobStore
-from funes.ui.bridge import FunesPyWebViewApi
+import fuente.application.notes as notes_module
+from fuente.application.approval import ApprovalApplicationService
+from fuente.application.fusion import FusionApplicationService
+from fuente.application.notes import NotesApplicationService
+from fuente.config import get_default_config
+from fuente.control_console import FuenteConsoleBackend
+from fuente.core.vault import VaultManager
+from fuente.domain.approvals import ApprovalLedger
+from fuente.domain.documents import content_hash_for_markdown
+from fuente.domain.errors import NoteRevisionConflictError, PathAuthorizationError
+from fuente.domain.frontmatter import parse_frontmatter, serialize_frontmatter
+from fuente.domain.paths import document_id_for_relative_path
+from fuente.infrastructure.sqlite_store import JobStore
+from fuente.ui.bridge import FuentePyWebViewApi
 
 
-def _markdown(*, title: str, issue: str, body: str, status: str = "approved") -> str:
+APPROVED_ORIGIN_ID = "4ca13d5c-4d78-4f37-8c3c-d1dc530a4dc9"
+UNAPPROVED_ORIGIN_ID = "89a2f4fb-1d7b-4aa1-9793-119970502a00"
+
+
+def _markdown(
+    *,
+    note_id: str,
+    title: str,
+    issue: str,
+    body: str,
+    origins: list[dict],
+    status: str = "approved",
+) -> str:
     return serialize_frontmatter(
         {
-            "schema_version": 1,
+            "schema_version": 3,
+            "note_id": note_id,
+            "note_type": "concept",
             "title": title,
             "date": "2026-08-11",
             "author": "test",
             "tags": [],
             "issue": issue,
             "status": status,
-            "sources": [],
+            "origins": origins,
             "history": [],
         }
     ) + body
@@ -43,15 +59,63 @@ def _write_note(
     title: str,
     issue: str,
     body: str,
+    origins: list[dict],
     status: str = "approved",
 ) -> tuple[str, Path]:
     path = vault.config.vault_path / relative
+    document_id = document_id_for_relative_path(relative)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
-        _markdown(title=title, issue=issue, body=body, status=status),
+        _markdown(
+            note_id=document_id,
+            title=title,
+            issue=issue,
+            body=body,
+            origins=origins,
+            status=status,
+        ),
         encoding="utf-8",
     )
-    return document_id_for_relative_path(relative), path
+    return document_id, path
+
+
+def _register_clean_origin(
+    vault: VaultManager,
+    store: JobStore,
+    *,
+    note_id: str,
+    filename: str,
+) -> tuple[Path, str, str]:
+    path = vault.clean_dir / filename
+    relative = path.relative_to(vault.config.vault_path).as_posix()
+    markdown = serialize_frontmatter(
+        {
+            "schema_version": 3,
+            "note_id": note_id,
+            "note_type": "concept",
+            "title": "Origen canónico",
+            "date": "2026-08-14",
+            "author": "Fuente",
+            "tags": [],
+            "issue": "_Sin_Cuestion",
+            "status": "pending_review",
+            "history": [],
+            "origins": [],
+        }
+    ) + "# Origen canónico\n"
+    path.write_text(markdown, encoding="utf-8")
+    content_hash = content_hash_for_markdown(markdown)
+    store.register_note(
+        note_id=note_id,
+        relative_path=relative,
+        content_hash=content_hash,
+        note_type="concept",
+        origin_kind=None,
+        theme="General",
+        issue="_Sin_Cuestion",
+        status="pending_review",
+    )
+    return path, relative, content_hash
 
 
 @pytest.fixture
@@ -59,15 +123,42 @@ def fusion_harness(tmp_path: Path):
     vault = VaultManager(get_default_config(tmp_path / "vault").vault)
     resolver = vault.path_resolver()
     store = JobStore(vault.config.vault_path)
-    notes = NotesApplicationService(vault=vault, path_resolver=resolver, job_store=store)
+    _path, relative, _content_hash = _register_clean_origin(
+        vault,
+        store,
+        note_id=APPROVED_ORIGIN_ID,
+        filename="approved-origin.md",
+    )
+    ledger = ApprovalLedger(
+        store,
+        vault_root=vault.config.vault_path,
+        clean_root=vault.clean_dir,
+        derived_root=vault.output_dir,
+    )
+    approval = ApprovalApplicationService(vault=vault, ledger=ledger)
+    approved = approval.approve_clean(APPROVED_ORIGIN_ID, 1, "emilio")
+    origin = {
+        "note_id": approved.note_id,
+        "revision": approved.revision,
+        "content_hash": approved.content_hash,
+        "path": relative,
+    }
+    notes = NotesApplicationService(
+        vault=vault,
+        path_resolver=resolver,
+        job_store=store,
+        approval_ledger=ledger,
+    )
     service = FusionApplicationService(notes_service=notes)
     try:
-        yield vault, service, notes, store
+        yield vault, service, notes, store, origin
     finally:
         store.close()
 
 
-def _two_sources(vault: VaultManager) -> tuple[tuple[str, Path], tuple[str, Path]]:
+def _two_sources(
+    vault: VaultManager, origin: dict
+) -> tuple[tuple[str, Path], tuple[str, Path]]:
     return (
         _write_note(
             vault,
@@ -75,6 +166,7 @@ def _two_sources(vault: VaultManager) -> tuple[tuple[str, Path], tuple[str, Path
             title="Alpha",
             issue="Issue-A",
             body="# Alpha\n\nContenido A.\n",
+            origins=[origin],
         ),
         _write_note(
             vault,
@@ -82,20 +174,21 @@ def _two_sources(vault: VaultManager) -> tuple[tuple[str, Path], tuple[str, Path
             title="Beta",
             issue="Issue-A",
             body="# Beta\n\nContenido B.\n",
+            origins=[origin],
         ),
     )
 
 
 def test_preview_rejects_fewer_than_two_document_ids(fusion_harness):
-    _vault, service, _notes, _store = fusion_harness
+    _vault, service, _notes, _store, _origin = fusion_harness
 
     with pytest.raises(ValueError, match="at least two"):
         service.preview(["one"], "Fusion", "Issue-A")
 
 
 def test_preview_is_read_only_and_records_every_source_revision(fusion_harness):
-    vault, service, _notes, store = fusion_harness
-    (first_id, first_path), (second_id, second_path) = _two_sources(vault)
+    vault, service, _notes, store, origin = fusion_harness
+    (first_id, first_path), (second_id, second_path) = _two_sources(vault, origin)
     before_bytes = {first_id: first_path.read_bytes(), second_id: second_path.read_bytes()}
     before_identities = {
         first_id: store.get_document_identity(first_id),
@@ -114,9 +207,9 @@ def test_preview_is_read_only_and_records_every_source_revision(fusion_harness):
     assert store.get_document_identity(second_id) == before_identities[second_id]
 
 
-def test_commit_creates_pending_review_note_with_source_ids_and_revisions(fusion_harness):
-    vault, service, _notes, _store = fusion_harness
-    (first_id, first_path), (second_id, second_path) = _two_sources(vault)
+def test_commit_creates_pending_review_v3_note_with_approved_origins(fusion_harness):
+    vault, service, _notes, _store, origin = fusion_harness
+    (first_id, first_path), (second_id, second_path) = _two_sources(vault, origin)
     source_bytes = {first_id: first_path.read_bytes(), second_id: second_path.read_bytes()}
     preview = service.preview([first_id, second_id], "Fusion revisable", "Issue-A")
 
@@ -125,8 +218,11 @@ def test_commit_creates_pending_review_note_with_source_ids_and_revisions(fusion
     metadata, body = parse_frontmatter(result.to_markdown())
     assert result.status == "pending_review"
     assert metadata["status"] == "pending_review"
-    assert metadata["sources"] == [first_id, second_id]
-    assert metadata["source_revisions"] == {first_id: 1, second_id: 1}
+    assert metadata["schema_version"] == 3
+    assert metadata["note_id"] == result.document_id
+    assert metadata["origins"] == [origin]
+    assert "sources" not in metadata
+    assert "source_revisions" not in metadata
     assert metadata["title"] == "Fusion revisable"
     assert metadata["issue"] == "Issue-A"
     assert first_id in body and second_id in body
@@ -136,8 +232,8 @@ def test_commit_creates_pending_review_note_with_source_ids_and_revisions(fusion
 
 
 def test_commit_rejects_stale_source_revision_without_touching_sources(fusion_harness):
-    vault, service, notes, _store = fusion_harness
-    (first_id, first_path), (second_id, second_path) = _two_sources(vault)
+    vault, service, notes, _store, origin = fusion_harness
+    (first_id, first_path), (second_id, second_path) = _two_sources(vault, origin)
     preview = service.preview([first_id, second_id], "Stale fusion", "Issue-A")
     original_bytes = {first_id: first_path.read_bytes(), second_id: second_path.read_bytes()}
 
@@ -153,8 +249,8 @@ def test_commit_rejects_stale_source_revision_without_touching_sources(fusion_ha
 
 
 def test_commit_rolls_back_new_target_when_canonical_write_fails(fusion_harness, monkeypatch):
-    vault, service, _notes, _store = fusion_harness
-    (first_id, first_path), (second_id, second_path) = _two_sources(vault)
+    vault, service, _notes, _store, origin = fusion_harness
+    (first_id, first_path), (second_id, second_path) = _two_sources(vault, origin)
     preview = service.preview([first_id, second_id], "Write failure fusion", "Issue-A")
     original_bytes = {first_id: first_path.read_bytes(), second_id: second_path.read_bytes()}
     target = vault.atomic_note_path(preview.title, preview.target_issue)
@@ -179,8 +275,8 @@ def test_commit_rolls_back_new_target_when_canonical_write_fails(fusion_harness,
 def test_commit_rolls_back_target_file_and_identity_after_identity_creation_failure(
     fusion_harness, monkeypatch
 ):
-    vault, service, _notes, store = fusion_harness
-    (first_id, first_path), (second_id, second_path) = _two_sources(vault)
+    vault, service, _notes, store, origin = fusion_harness
+    (first_id, first_path), (second_id, second_path) = _two_sources(vault, origin)
     preview = service.preview([first_id, second_id], "Identity failure fusion", "Issue-A")
     target = vault.atomic_note_path(preview.title, preview.target_issue)
     target_id = document_id_for_relative_path(
@@ -209,7 +305,7 @@ def test_commit_rolls_back_target_file_and_identity_after_identity_creation_fail
 def test_concurrent_commits_to_same_destination_leave_one_pending_note_intact(
     fusion_harness, monkeypatch
 ):
-    vault, _service, _notes, _store = fusion_harness
+    vault, _service, _notes, _store, origin = fusion_harness
     sources = [
         _write_note(
             vault,
@@ -217,6 +313,7 @@ def test_concurrent_commits_to_same_destination_leave_one_pending_note_intact(
             title=f"Concurrent {index}",
             issue="Issue-A",
             body=f"# Concurrent {index}\n\nSource {index}.\n",
+            origins=[origin],
         )
         for index in range(4)
     ]
@@ -260,7 +357,7 @@ def test_concurrent_commits_to_same_destination_leave_one_pending_note_intact(
             target.resolve().relative_to(vault.config.vault_path.resolve()).as_posix()
         )
         winning_metadata, _body = parse_frontmatter(target.read_text(encoding="utf-8"))
-        assert winning_metadata["sources"] == list(results[0].source_ids)
+        assert winning_metadata["origins"] == [origin]
         assert store_one.get_document_identity(target_id) is not None
     finally:
         store_one.close()
@@ -268,11 +365,11 @@ def test_concurrent_commits_to_same_destination_leave_one_pending_note_intact(
 
 
 def test_bridge_preview_and_commit_are_document_id_only(fusion_harness):
-    vault, service, _notes, _store = fusion_harness
-    (first_id, _first_path), (second_id, _second_path) = _two_sources(vault)
-    backend = FunesConsoleBackend(vault.config.vault_path)
+    vault, service, _notes, _store, origin = fusion_harness
+    (first_id, _first_path), (second_id, _second_path) = _two_sources(vault, origin)
+    backend = FuenteConsoleBackend(vault.config.vault_path)
     backend._fusion_service = service
-    bridge = FunesPyWebViewApi(backend)
+    bridge = FuentePyWebViewApi(backend)
 
     preview = bridge.preview_fusion([first_id, second_id], "Bridge fusion", "Issue-A")
     assert preview["source_ids"] == [first_id, second_id]
@@ -284,12 +381,103 @@ def test_bridge_preview_and_commit_are_document_id_only(fusion_harness):
 
 
 def test_legacy_path_based_merge_action_is_rejected(fusion_harness):
-    vault, _service, _notes, _store = fusion_harness
-    bridge = FunesPyWebViewApi(FunesConsoleBackend(vault.config.vault_path))
+    vault, _service, _notes, _store, _origin = fusion_harness
+    bridge = FuentePyWebViewApi(FuenteConsoleBackend(vault.config.vault_path))
 
     result = bridge.merge_notes(["4_salida/Issue-A/alpha.md", "4_salida/Issue-A/beta.md"], "Legacy", "Issue-A")
 
     assert result == {"error": "path_not_authorized", "message": "Path is not authorized"}
+
+
+def test_fusion_does_not_write_when_one_origin_is_unapproved(fusion_harness):
+    vault, service, _notes, store, approved_origin = fusion_harness
+    _path, relative, content_hash = _register_clean_origin(
+        vault,
+        store,
+        note_id=UNAPPROVED_ORIGIN_ID,
+        filename="unapproved-origin.md",
+    )
+    unapproved_origin = {
+        "note_id": UNAPPROVED_ORIGIN_ID,
+        "revision": 1,
+        "content_hash": content_hash,
+        "path": relative,
+    }
+    first_id, first_path = _write_note(
+        vault,
+        "4_salida/Issue-A/approved.md",
+        title="Approved derivative",
+        issue="Issue-A",
+        body="# Approved\n",
+        origins=[approved_origin],
+    )
+    second_id, second_path = _write_note(
+        vault,
+        "4_salida/Issue-A/unapproved.md",
+        title="Unapproved derivative",
+        issue="Issue-A",
+        body="# Unapproved\n",
+        origins=[unapproved_origin],
+    )
+    preview = service.preview(
+        [first_id, second_id], "Blocked fusion", "Issue-A"
+    )
+    target = vault.atomic_note_path(preview.title, preview.target_issue)
+    before = (first_path.read_bytes(), second_path.read_bytes())
+
+    with pytest.raises(Exception) as blocked:
+        service.commit(preview.preview_id, preview.source_revisions)
+
+    assert type(blocked.value).__name__ == "CanonicalEligibilityError"
+    assert getattr(blocked.value, "code", None) == "origin_not_approved"
+    assert not target.exists()
+    assert store.get_document_identity(
+        document_id_for_relative_path(
+            target.relative_to(vault.config.vault_path).as_posix()
+        )
+    ) is None
+    assert (first_path.read_bytes(), second_path.read_bytes()) == before
+
+
+def test_fusion_blocks_unmigrated_legacy_origins_before_writing(fusion_harness):
+    vault, service, _notes, _store, approved_origin = fusion_harness
+    approved_id, _approved_path = _write_note(
+        vault,
+        "4_salida/Issue-A/typed.md",
+        title="Typed derivative",
+        issue="Issue-A",
+        body="# Typed\n",
+        origins=[approved_origin],
+    )
+    legacy_relative = "4_salida/Issue-A/legacy.md"
+    legacy_id = document_id_for_relative_path(legacy_relative)
+    legacy_path = vault.config.vault_path / legacy_relative
+    legacy_path.write_text(
+        "---\n"
+        "schema_version: 1\n"
+        "title: Legacy derivative\n"
+        "date: '2026-08-11'\n"
+        "author: test\n"
+        "tags: []\n"
+        "issue: Issue-A\n"
+        "status: approved\n"
+        "sources: [legacy-origin-id]\n"
+        "history: []\n"
+        "---\n"
+        "# Legacy\n",
+        encoding="utf-8",
+    )
+    preview = service.preview(
+        [approved_id, legacy_id], "Legacy blocked fusion", "Issue-A"
+    )
+    target = vault.atomic_note_path(preview.title, preview.target_issue)
+
+    with pytest.raises(Exception) as blocked:
+        service.commit(preview.preview_id, preview.source_revisions)
+
+    assert type(blocked.value).__name__ == "CanonicalEligibilityError"
+    assert getattr(blocked.value, "code", None) == "origin_not_approved"
+    assert not target.exists()
 
 
 def test_fusion_ui_has_explicit_confirmation_and_safe_projection_contract():

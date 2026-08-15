@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Funes — Documentación (README HTML)</title>
+  <title>Fuente — Documentación (README HTML)</title>
   
   <!-- Google Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -391,7 +391,7 @@
         <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h7"></path></svg>
       </button>
       <div class="header-title">
-        <span>Funes</span>
+        <span>Fuente</span>
         <span style="font-weight: 400; opacity: 0.6; font-size: 0.9em;">/ README.html</span>
       </div>
       <div class="static-badge">
@@ -426,10 +426,10 @@
       
       <!-- Hero Header -->
       <div class="hero-header">
-        <img src="assets/funes_icon.png" alt="Funes Icon" class="hero-icon" />
-        <h1 class="hero-title">Funes</h1>
+        <img src="assets/fuente_icon.png" alt="Fuente Icon" class="hero-icon" />
+        <h1 class="hero-title">Fuente</h1>
         <div class="hero-description">
-          <b>Funes "el memorioso"</b> es un sistema inteligente de ETL (Extracción, Transformación y Carga) e Ingesta de Conocimiento diseñado para procesar flujos diarios de archivos multiformato desestructurados y volcarlos automáticamente en tu <b>Vault de Obsidian</b> como notas atómicas hiperconectadas (<span class="wikilink">[[WikiLinks]]</span>). Desarrollado para la gestión inteligente, local y privada del conocimiento personal y/o profesional.
+          <b>Fuente "el memorioso"</b> es un sistema inteligente de ETL (Extracción, Transformación y Carga) e Ingesta de Conocimiento diseñado para procesar flujos diarios de archivos multiformato desestructurados y volcarlos automáticamente en tu <b>Vault de Obsidian</b> como notas atómicas hiperconectadas (<span class="wikilink">[[WikiLinks]]</span>). Desarrollado para la gestión inteligente, local y privada del conocimiento personal y/o profesional.
         </div>
       </div>
 
@@ -448,7 +448,7 @@
               <li><code>2_sucio/</code>: Copia de respaldo original para auditoría e integridad.</li>
               <li><code>3_limpio/</code>: Transcripción verbatim a Markdown plano (<code>.md</code>).</li>
               <li><code>4_salida/</code>: Notas atómicas estructuradas con metadatos e interconexión masiva (<span class="wikilink">[[WikiLinks]]</span>).</li>
-              <li><code>.funes/</code>: Cuarentena (<code>quarantine/</code>) y base de datos vectorial semántica ChromaDB.</li>
+              <li><code>.fuente/</code>: Cuarentena (<code>quarantine/</code>) y base de datos vectorial semántica ChromaDB.</li>
             </ul>
           </div>
 
@@ -484,7 +484,7 @@
               <li><b>Filtro de Archivos Temporales</b>: Ignora automáticamente archivos temporales de Office (<code>~$*</code>), descargas en curso (<code>.crdownload</code>, <code>.part</code>), y archivos bloqueados (<code>.tmp</code>, <code>.lock</code>).</li>
               <li><b>Reintentos en Red</b>: Resistencia ante micro-cortes en unidades de red compartidas (<code>SMB/NFS</code>).</li>
               <li><b>Compatibilidad SQLite</b>: Auto-parche para versiones heredadas de SQLite mediante <code>pysqlite3</code>.</li>
-              <li><b>Aislamiento de Cuarentena</b>: Archivos defectuosos se trasladan a <code>.funes/quarantine/</code> sin detener el flujo de ingesta.</li>
+              <li><b>Aislamiento de Cuarentena</b>: Archivos defectuosos se trasladan a <code>.fuente/quarantine/</code> sin detener el flujo de ingesta.</li>
             </ul>
           </div>
 
@@ -496,14 +496,14 @@
       <!-- Section: Instalación y Uso Rápido -->
       <section class="doc-section" id="instalacion">
         <h2>📦 Instalación y Uso Rápido</h2>
-        <p>Puedes iniciar Funes de forma inmediata usando los scripts oficiales preconfigurados:</p>
+        <p>Puedes iniciar Fuente de forma inmediata usando los scripts oficiales preconfigurados:</p>
         
         <ul style="padding-left:1.5rem; margin-bottom:1rem; color:var(--text-secondary);">
-          <li><b>Windows</b>: Haz doble clic en <code>instalar_funes.bat</code></li>
-          <li><b>macOS</b>: Haz doble clic en <code>instalar_funes.command</code></li>
+          <li><b>Windows</b>: Haz doble clic en <code>instalar_fuente.bat</code></li>
+          <li><b>macOS</b>: Haz doble clic en <code>instalar_fuente.command</code></li>
         </ul>
         
-        <p>Estos scripts instalarán el entorno virtual, crearán los accesos directos de escritorio (<code>Funes.lnk</code> / <code>Funes.command</code>) y lanzarán la aplicación.</p>
+        <p>Estos scripts instalarán el entorno virtual, crearán los accesos directos de escritorio (<code>Fuente.lnk</code> / <code>Fuente.command</code>) y lanzarán la aplicación.</p>
       </section>
 
       <hr />
@@ -592,12 +592,12 @@
         document.documentElement.classList.remove('dark');
         document.documentElement.classList.add('light');
         themeIcon.textContent = '☀️';
-        safeStorage.setItem('funes-theme', 'light');
+        safeStorage.setItem('fuente-theme', 'light');
       } else {
         document.documentElement.classList.remove('light');
         document.documentElement.classList.add('dark');
         themeIcon.textContent = '🌙';
-        safeStorage.setItem('funes-theme', 'dark');
+        safeStorage.setItem('fuente-theme', 'dark');
       }
     }
 
@@ -606,7 +606,7 @@
       isLight = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches;
     } catch(e) {}
     
-    const savedTheme = safeStorage.getItem('funes-theme') || (isLight ? 'light' : 'dark');
+    const savedTheme = safeStorage.getItem('fuente-theme') || (isLight ? 'light' : 'dark');
     setTheme(savedTheme);
 
     themeBtn.addEventListener('click', () => {

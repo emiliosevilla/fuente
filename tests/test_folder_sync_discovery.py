@@ -6,9 +6,9 @@ from pathlib import Path
 
 import pytest
 
-import funes.core.folder_sync as folder_sync_module
-from funes.core.folder_sync import FolderSyncManager
-from funes.domain.sync import ConnectedFolder, SyncProvider
+import fuente.core.folder_sync as folder_sync_module
+from fuente.core.folder_sync import FolderSyncManager
+from fuente.domain.sync import ConnectedFolder, SyncProvider
 
 
 def _connection(provider: SyncProvider, root: Path) -> ConnectedFolder:

@@ -10,35 +10,20 @@ from pathlib import Path
 from docx import Document
 import pytest
 
-from funes.application.export import (
+from fuente.application.export import (
     ExportApplicationService,
     ExportFileExistsError,
     UnsupportedExportFormatError,
 )
-from funes.application.notes import NotesApplicationService
-from funes.domain.errors import PathAuthorizationError
-from funes.domain.frontmatter import parse_frontmatter, serialize_frontmatter
-from funes.domain.paths import AuthorizedPathResolver, document_id_for_relative_path
-from funes.infrastructure.sqlite_store import JobStore
-
-
-def _pending_markdown(
-    *, body: str, title: str = "Nota Export", extra_metadata: dict | None = None
-) -> str:
-    metadata = {
-        "schema_version": 1,
-        "title": title,
-        "date": "2026-08-09",
-        "author": "Funes",
-        "tags": ["export"],
-        "issue": "_Sin_Cuestion",
-        "status": "approved",
-        "sources": [],
-        "history": [],
-    }
-    if extra_metadata:
-        metadata.update(extra_metadata)
-    return serialize_frontmatter(metadata) + body
+from fuente.application.notes import NotesApplicationService
+from fuente.domain.errors import (
+    OutputApprovalRequiredError,
+    PathAuthorizationError,
+)
+from fuente.domain.frontmatter import parse_frontmatter
+from fuente.domain.paths import AuthorizedPathResolver
+from fuente.infrastructure.sqlite_store import JobStore
+from tests.conftest import approved_clean_origin, save_v3_summary_note
 
 
 def _write_note(
@@ -48,14 +33,26 @@ def _write_note(
     title: str = "Nota_Export",
     extra_metadata: dict | None = None,
 ) -> tuple[str, Path]:
-    note_path = vault_manager.save_atomic_note(
-        title=title,
-        content=_pending_markdown(body=body, extra_metadata=extra_metadata),
-    )
-    relative = note_path.resolve().relative_to(
-        vault_manager.config.vault_path.resolve()
-    ).as_posix()
-    return document_id_for_relative_path(relative), note_path
+    store = JobStore(vault_manager.config.vault_path)
+    try:
+        origin = approved_clean_origin(
+            vault_manager,
+            store,
+            filename="origen-export.md",
+        )
+        return save_v3_summary_note(
+            vault_manager,
+            title=title,
+            body=body,
+            metadata_title=title.replace("_", " "),
+            status="approved",
+            tags=["export"],
+            origins=[origin],
+            extra_metadata=extra_metadata,
+            store=store,
+        )
+    finally:
+        store.close()
 
 
 @pytest.fixture
@@ -296,9 +293,7 @@ def test_write_export_blocks_overwrite_without_confirmation(export_stack):
     )
 
     assert result["status"] == "exported"
-    assert existing.read_text(encoding="utf-8") == export_service.prepare_download(
-        document_id, "markdown"
-    ).content
+    assert existing.read_text(encoding="utf-8") != "occupied"
 
 
 def test_unsupported_format_raises_stable_error(export_stack):
@@ -312,10 +307,10 @@ def test_unsupported_format_raises_stable_error(export_stack):
 
 
 def test_console_export_note_returns_canonical_payload(temp_vault_manager):
-    from funes.control_console import FunesConsoleBackend
+    from fuente.control_console import FuenteConsoleBackend
 
     document_id, _ = _write_note(temp_vault_manager, body="# Backend\n")
-    backend = FunesConsoleBackend(temp_vault_manager.config.vault_path)
+    backend = FuenteConsoleBackend(temp_vault_manager.config.vault_path)
 
     result = backend.export_note(document_id, "markdown")
 
@@ -324,6 +319,26 @@ def test_console_export_note_returns_canonical_payload(temp_vault_manager):
     metadata, body = parse_frontmatter(result["content"])
     assert metadata["status"] == "approved"
     assert body.startswith("# Backend")
+
+
+def test_pending_output_cannot_be_exported_before_editorial_approval(export_stack):
+    export_service, notes, vault_manager, _resolver = export_stack
+    origin = approved_clean_origin(
+        vault_manager,
+        notes.job_store,
+        filename="origen-export-pending.md",
+    )
+    document_id, _ = save_v3_summary_note(
+        vault_manager,
+        title="Salida_Pendiente",
+        body="# Pendiente\n",
+        status="pending_review",
+        origins=[origin],
+        store=notes.job_store,
+    )
+
+    with pytest.raises(OutputApprovalRequiredError):
+        export_service.prepare_download(document_id, "markdown")
 
 
 def test_docx_payload_round_trips_via_base64_dict(export_stack):

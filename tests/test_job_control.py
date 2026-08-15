@@ -5,14 +5,14 @@ from pathlib import Path
 
 import pytest
 
-from funes.application.job_control import (
+from fuente.application.job_control import (
     JobControlService,
     JobRequeueError,
     decode_cursor,
     encode_cursor,
 )
-from funes.domain.jobs import JobConflictError
-from funes.infrastructure.sqlite_store import JobStore
+from fuente.domain.jobs import JobConflictError
+from fuente.infrastructure.sqlite_store import JobStore
 
 
 def test_job_page_and_detail_expose_durable_reason_and_events(tmp_path: Path):

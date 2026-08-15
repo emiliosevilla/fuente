@@ -9,12 +9,12 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from funes.application.ingestion import IngestionApplicationService, _RunContext
-from funes.config import DEFAULT_ISSUE, get_default_config
-from funes.core.vault import VaultManager
-from funes.domain.jobs import CURRENT_PIPELINE_VERSION, JobRecord
-from funes.rag.chroma_store import ChromaInitError, ChromaStore, _patch_sqlite_for_chroma
-from funes.rag.index_records import (
+from fuente.application.ingestion import IngestionApplicationService, _RunContext
+from fuente.config import DEFAULT_ISSUE, get_default_config
+from fuente.core.vault import VaultManager
+from fuente.domain.jobs import CURRENT_PIPELINE_VERSION, JobRecord
+from fuente.rag.chroma_store import ChromaInitError, ChromaStore, _patch_sqlite_for_chroma
+from fuente.rag.index_records import (
     REQUIRED_CHUNK_METADATA_KEYS,
     ChunkIdentity,
     DocumentChunkSet,
@@ -24,7 +24,7 @@ from funes.rag.index_records import (
     obsolete_chunk_ids,
     query_result_source_fields,
 )
-from funes.rag.semantic_chunker import SemanticChunker
+from fuente.rag.semantic_chunker import SemanticChunker
 
 
 class _RecordingChroma:

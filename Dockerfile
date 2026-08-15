@@ -1,4 +1,4 @@
-# Dockerfile para despliegue autónomo o en servidor/NAS de Funes Knowledge Base
+# Dockerfile para despliegue autónomo o en servidor/NAS de Fuente Knowledge Base
 FROM python:3.11-slim
 
 # Evitar escritura de bytecode de python y forzar buffering de logs
@@ -31,5 +31,5 @@ RUN pip install --no-cache-dir -e .
 VOLUME ["/vault"]
 
 # Comando por defecto: worker headless continuo sobre el Vault montado en /vault
-ENTRYPOINT ["funes"]
+ENTRYPOINT ["fuente"]
 CMD ["--headless", "--vault", "/vault"]

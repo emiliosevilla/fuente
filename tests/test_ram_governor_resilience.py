@@ -3,8 +3,8 @@ import unittest
 import time
 from unittest import mock
 
-from funes.ram_governor.governor import RAMGovernor, OS_WHITELIST
-from funes.rag.hybrid_search import HybridSearcher, BM25Okapi
+from fuente.ram_governor.governor import RAMGovernor, OS_WHITELIST
+from fuente.rag.hybrid_search import HybridSearcher, BM25Okapi
 
 try:
     import psutil
@@ -29,8 +29,8 @@ class TestRAMGovernorResilience(unittest.TestCase):
         self.assertIn("launchd", OS_WHITELIST["darwin"])
         self.assertIn("explorer.exe", OS_WHITELIST["win32"])
 
-    @mock.patch("funes.ram_governor.governor.HAS_PSUTIL", True)
-    @mock.patch("funes.ram_governor.governor.psutil")
+    @mock.patch("fuente.ram_governor.governor.HAS_PSUTIL", True)
+    @mock.patch("fuente.ram_governor.governor.psutil")
     def test_get_top_resource_hogs_filters_whitelist(self, mock_psutil):
         """Verifica que get_top_resource_hogs excluye los procesos protegidos por la whitelist del SO."""
         mock_proc_sys = mock.MagicMock()
@@ -51,8 +51,8 @@ class TestRAMGovernorResilience(unittest.TestCase):
         self.assertIn(9999, pids)
         self.assertEqual(hogs[0]["name"], "VideoEditor")
 
-    @mock.patch("funes.ram_governor.governor.HAS_PSUTIL", True)
-    @mock.patch("funes.ram_governor.governor.psutil")
+    @mock.patch("fuente.ram_governor.governor.HAS_PSUTIL", True)
+    @mock.patch("fuente.ram_governor.governor.psutil")
     def test_terminate_processes_two_phase(self, mock_psutil):
         """Verifica que terminate_processes aplica la secuencia de 2 fases (SIGTERM ➔ espera ➔ SIGKILL) de forma segura."""
         mock_proc = mock.MagicMock()
@@ -72,8 +72,8 @@ class TestRAMGovernorResilience(unittest.TestCase):
         mock_proc.kill.assert_called_once()
         self.assertIn(8888, res["terminated"])
 
-    @mock.patch("funes.ram_governor.governor.HAS_PSUTIL", True)
-    @mock.patch("funes.ram_governor.governor.psutil")
+    @mock.patch("fuente.ram_governor.governor.HAS_PSUTIL", True)
+    @mock.patch("fuente.ram_governor.governor.psutil")
     def test_terminate_processes_skips_whitelisted(self, mock_psutil):
         """Verifica que terminate_processes nunca intenta matar un proceso de la Whitelist del SO."""
         mock_proc = mock.MagicMock()

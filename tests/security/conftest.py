@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from funes.domain.paths import AuthorizedPathResolver
+from fuente.domain.paths import AuthorizedPathResolver
 
 MALICIOUS_APPLESCRIPT_INPUT = (
     'Title " \\ \n") & do shell script "touch /tmp/pwned" & ("'
@@ -43,7 +43,7 @@ def path_resolver(temp_vault_path):
         "input": temp_vault_path / "1_entrada",
         "dirty": temp_vault_path / "2_sucio",
         "clean": temp_vault_path / "3_limpio",
-        "quarantine": temp_vault_path / ".funes" / "quarantine",
+        "quarantine": temp_vault_path / ".fuente" / "quarantine",
     }
     for root in roots.values():
         root.mkdir(parents=True, exist_ok=True)

@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from funes.domain.jobs import (
+from fuente.domain.jobs import (
     CLAIMED_STATUS,
     DEFAULT_STAGE,
     DEFAULT_STATUS,
@@ -13,18 +13,18 @@ from funes.domain.jobs import (
     JobNotFoundError,
     JobStoreBusyError,
 )
-from funes.infrastructure.sqlite_store import JobStore
+from fuente.infrastructure.sqlite_store import JobStore
 
 
 def _seed_pre_cancellation_database(vault_root: Path) -> tuple[Path, str]:
-    db_path = vault_root / ".funes" / "state.db"
+    db_path = vault_root / ".fuente" / "state.db"
     db_path.parent.mkdir(parents=True)
     connection = sqlite3.connect(db_path)
     try:
         connection.execute(
             "CREATE TABLE schema_migrations (version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL)"
         )
-        migrations_dir = Path(__file__).resolve().parents[1] / "funes" / "infrastructure" / "migrations"
+        migrations_dir = Path(__file__).resolve().parents[1] / "fuente" / "infrastructure" / "migrations"
         for version in (1, 2):
             connection.executescript(
                 (migrations_dir / f"{version:03d}_{'jobs' if version == 1 else 'scheduler'}.sql").read_text(
@@ -108,13 +108,13 @@ class _FlakyConnection:
         return getattr(self._real, name)
 
 
-def test_creates_database_under_vault_funes_directory(tmp_path):
+def test_creates_database_under_vault_fuente_directory(tmp_path):
     vault_root = tmp_path / "vault"
     vault_root.mkdir()
 
     store = JobStore(vault_root)
     try:
-        assert store.db_path == vault_root / ".funes" / "state.db"
+        assert store.db_path == vault_root / ".fuente" / "state.db"
         assert store.db_path.exists()
     finally:
         store.close()
@@ -477,26 +477,26 @@ def test_migrations_are_recorded_and_not_reapplied(tmp_path):
     store = JobStore(vault_root)
     store.close()
 
-    raw_connection = sqlite3.connect(vault_root / ".funes" / "state.db")
+    raw_connection = sqlite3.connect(vault_root / ".fuente" / "state.db")
     try:
         versions = [
             row[0]
             for row in raw_connection.execute("SELECT version FROM schema_migrations")
         ]
-        assert versions == [1, 2, 3, 4, 5, 6, 7, 9]
+        assert versions == [1, 2, 3, 4, 5, 6, 7, 9, 10, 11]
     finally:
         raw_connection.close()
 
     # Reopening must not error or duplicate the migration record.
     reopened = JobStore(vault_root)
     try:
-        raw_connection = sqlite3.connect(vault_root / ".funes" / "state.db")
+        raw_connection = sqlite3.connect(vault_root / ".fuente" / "state.db")
         versions = [
             row[0]
             for row in raw_connection.execute("SELECT version FROM schema_migrations")
         ]
         raw_connection.close()
-        assert versions == [1, 2, 3, 4, 5, 6, 7, 9]
+        assert versions == [1, 2, 3, 4, 5, 6, 7, 9, 10, 11]
     finally:
         reopened.close()
 
@@ -523,6 +523,8 @@ def test_migration_003_preserves_legacy_rows_and_adds_nullable_fields(tmp_path):
             6,
             7,
             9,
+            10,
+            11,
         }
         columns = {
             row[1]: row[3]

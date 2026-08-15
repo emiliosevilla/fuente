@@ -7,7 +7,7 @@ from contextlib import redirect_stdout
 from io import StringIO
 from unittest import mock
 
-from funes.ram_governor.budget import (
+from fuente.ram_governor.budget import (
     MODEL_CATALOG,
     BudgetDecision,
     OLLAMA_PURGE_KEEP_ALIVE,
@@ -16,10 +16,11 @@ from funes.ram_governor.budget import (
     evaluate_resource,
     list_resource_budgets,
     measured_snapshot,
+    select_optimal_model,
     select_llm_model,
     unavailable_snapshot,
 )
-from funes.ram_governor.governor import RAMGovernor
+from fuente.ram_governor.governor import RAMGovernor
 
 
 class TestResourceBudgets(unittest.TestCase):
@@ -41,6 +42,24 @@ class TestResourceBudgets(unittest.TestCase):
             self.assertGreater(entry.estimated_ram_gb, 0)
             self.assertGreater(entry.context_size, 0)
             self.assertGreaterEqual(entry.concurrency_limit, 1)
+
+    def test_candidate_model_is_not_selected_without_a_verified_benchmark(self):
+        candidate = next(item for item in MODEL_CATALOG if item.id == "qwen3.5:0.8b")
+        self.assertTrue(candidate.candidate_only)
+        self.assertEqual(candidate.context_size, 4096)
+        self.assertEqual(candidate.concurrency_limit, 1)
+        snap = measured_snapshot(total_gb=4.0, available_gb=2.2, safety_margin_pct=0.35)
+        decision = select_optimal_model(snap)
+        self.assertNotEqual(decision.model_id, "qwen3.5:0.8b")
+
+    def test_candidate_model_is_selected_only_with_verified_benchmark(self):
+        class LookalikeBenchmark:
+            def is_verifiable_promotion(self) -> bool:
+                return True
+
+        snap = measured_snapshot(total_gb=4.0, available_gb=2.2, safety_margin_pct=0.35)
+        decision = select_optimal_model(snap, benchmark_verdict=LookalikeBenchmark())
+        self.assertNotEqual(decision.model_id, "qwen3.5:0.8b")
 
     def test_unavailable_snapshot_never_invents_available_gb(self):
         snap = unavailable_snapshot(0.35, error="test", total_gb=16.0)
@@ -139,7 +158,7 @@ class TestRAMGovernorBudgets(unittest.TestCase):
 
     def test_macos_fallback_does_not_fabricate_available_gb(self):
         gov = RAMGovernor(safety_margin_pct=0.35)
-        with mock.patch("funes.ram_governor.governor.HAS_PSUTIL", False):
+        with mock.patch("fuente.ram_governor.governor.HAS_PSUTIL", False):
             with mock.patch("sys.platform", "darwin"):
                 with mock.patch("subprocess.check_output", return_value=b"17179869184"):
                     info = gov.get_system_ram_info()
@@ -156,8 +175,8 @@ class TestRAMGovernorBudgets(unittest.TestCase):
         mock_psutil = mock.MagicMock()
         mock_psutil.virtual_memory.return_value = mock_mem
 
-        with mock.patch("funes.ram_governor.governor.HAS_PSUTIL", True):
-            with mock.patch("funes.ram_governor.governor.psutil", mock_psutil):
+        with mock.patch("fuente.ram_governor.governor.HAS_PSUTIL", True):
+            with mock.patch("fuente.ram_governor.governor.psutil", mock_psutil):
                 info = gov.get_system_ram_info()
                 decision = gov.recommend_model_decision()
 

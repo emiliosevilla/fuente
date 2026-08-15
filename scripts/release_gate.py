@@ -23,7 +23,7 @@ DEFAULT_PYTEST_TIMEOUT = 600
 
 # Git porcelain paths ignored after test runs (noise, not production drift).
 _CLEAN_IGNORE = re.compile(
-    r"^(?:funes\.egg-info/|\.pytest_cache/|(?:.*/)?__pycache__/|.*\.pyc$)"
+    r"^(?:fuente\.egg-info/|\.pytest_cache/|(?:.*/)?__pycache__/|.*\.pyc$)"
 )
 
 def _parse_security_table(text: str) -> list[tuple[str, str]]:
@@ -253,22 +253,27 @@ def check_readme_honesty(repo_root: Path = REPO_ROOT) -> GateCheck:
 
 def sample_vault_smoke(vault_path: Path) -> tuple[bool, str]:
     """Offline Vault path: migrate → ingest → review → search → export → restore."""
-    from funes.application.export import ExportApplicationService
-    from funes.application.ingestion import IngestionApplicationService, document_id_for_source
-    from funes.application.notes import NotesApplicationService
-    from funes.application.retrieval import RetrievalApplicationService
-    from funes.domain.frontmatter import parse_frontmatter, serialize_frontmatter
-    from funes.domain.paths import AuthorizedPathResolver
-    from funes.extractors.registry import ExtractorRegistry
-    from funes.graph_engine.linker import GraphLinker
-    from funes.infrastructure.sqlite_store import JobStore
-    from funes.infrastructure.vault_migration import VaultMigrator
-    from funes.rag.semantic_chunker import SemanticChunker
+    from uuid import NAMESPACE_URL, uuid5
+
+    from fuente.application.approval import ApprovalApplicationService
+    from fuente.application.export import ExportApplicationService
+    from fuente.application.ingestion import IngestionApplicationService, document_id_for_source
+    from fuente.application.notes import NotesApplicationService
+    from fuente.application.retrieval import RetrievalApplicationService
+    from fuente.domain.approvals import ApprovalLedger
+    from fuente.domain.documents import content_hash_for_markdown
+    from fuente.domain.frontmatter import parse_frontmatter, serialize_frontmatter
+    from fuente.domain.paths import AuthorizedPathResolver, document_id_for_relative_path
+    from fuente.extractors.registry import ExtractorRegistry
+    from fuente.graph_engine.linker import GraphLinker
+    from fuente.infrastructure.sqlite_store import JobStore
+    from fuente.infrastructure.vault_migration import VaultMigrator
+    from fuente.rag.semantic_chunker import SemanticChunker
 
     legacy_note = """---
 título: "Nota smoke"
 fecha: "2026-08-09"
-autor: "Funes"
+autor: "Fuente"
 claves: [smoke]
 fuentes: []
 estado: "pendiente_aprobacion"
@@ -337,7 +342,7 @@ historial: []
                     "schema_version": 1,
                     "title": stem,
                     "date": "2026-08-09",
-                    "author": "Funes",
+                    "author": "Fuente",
                     "tags": ["smoke"],
                     "issue": "_Sin_Cuestion",
                     "status": "pending_review",
@@ -348,7 +353,7 @@ historial: []
 
     class FakeGovernor:
         def measure_memory(self):
-            from funes.ram_governor.budget import measured_snapshot
+            from fuente.ram_governor.budget import measured_snapshot
 
             return measured_snapshot(
                 total_gb=32.0, available_gb=24.0, safety_margin_pct=0.35
@@ -366,7 +371,7 @@ historial: []
         def get_ollama_process_state(self) -> dict:
             return {"ok": True, "models": [], "error": None}
 
-    for name in ("1_entrada", "2_sucio", "3_limpio", "4_salida", ".funes"):
+    for name in ("1_entrada", "2_sucio", "3_limpio", "4_salida", ".fuente"):
         (vault_path / name).mkdir(parents=True, exist_ok=True)
     (vault_path / "4_salida" / "_Sin_Cuestion").mkdir(parents=True, exist_ok=True)
 
@@ -385,8 +390,8 @@ historial: []
     if metadata.get("schema_version") != 1 or metadata.get("status") != "pending_review":
         return False, f"unexpected post-migrate metadata: {metadata}"
 
-    from funes.config import get_default_config
-    from funes.core.vault import VaultManager
+    from fuente.config import get_default_config
+    from fuente.core.vault import VaultManager
 
     config = get_default_config(vault_path)
     vault = VaultManager(config.vault)
@@ -400,6 +405,50 @@ historial: []
     )
     store = JobStore(vault.config.vault_path)
     try:
+        origin_path = vault.clean_dir / "smoke-origin.md"
+        origin_relative = origin_path.relative_to(vault.config.vault_path).as_posix()
+        origin_id = str(uuid5(NAMESPACE_URL, f"{vault_path}:smoke-origin"))
+        origin_markdown = serialize_frontmatter(
+            {
+                "schema_version": 3,
+                "note_id": origin_id,
+                "note_type": "concept",
+                "title": "Origen smoke aprobado",
+                "date": "2026-08-15",
+                "author": "Fuente",
+                "tags": ["smoke"],
+                "issue": "_Sin_Cuestion",
+                "status": "pending_review",
+                "origins": [],
+                "history": [],
+            }
+        ) + "# Origen smoke aprobado\n"
+        origin_path.write_text(origin_markdown, encoding="utf-8")
+        store.register_note(
+            note_id=origin_id,
+            relative_path=origin_relative,
+            content_hash=content_hash_for_markdown(origin_markdown),
+            note_type="concept",
+            origin_kind=None,
+            theme="General",
+            issue="_Sin_Cuestion",
+            status="pending_review",
+        )
+        approval_ledger = ApprovalLedger(
+            store,
+            vault_root=vault.config.vault_path,
+            clean_root=vault.clean_dir,
+            derived_root=vault.output_dir,
+        )
+        approved_origin = ApprovalApplicationService(
+            vault=vault, ledger=approval_ledger
+        ).approve_clean(origin_id, 1, "release-gate")
+        origin = {
+            "note_id": approved_origin.note_id,
+            "revision": approved_origin.revision,
+            "content_hash": approved_origin.content_hash,
+            "path": origin_relative,
+        }
         ingestion = IngestionApplicationService(
             config=config,
             vault=vault,
@@ -416,6 +465,21 @@ historial: []
         source_path.write_text(ingest_text, encoding="utf-8")
         job = ingestion.submit(ingest_identity)
         completed = ingestion.resume(job.job_id)
+        if completed.stage == "saved_clean":
+            if completed.clean_artifact is None:
+                return False, "ingestion saved_clean without canonical artifact"
+            clean_metadata, _body = parse_frontmatter(
+                (vault.config.vault_path / completed.clean_artifact).read_text(
+                    encoding="utf-8"
+                )
+            )
+            approval = ingestion.approval_service.request_approval(
+                clean_metadata["note_id"]
+            )
+            ingestion.approval_service.approve_clean(
+                approval.note_id, approval.revision, "release-gate"
+            )
+            completed = ingestion.resume(job.job_id)
         if completed.stage != "completed":
             return False, f"ingestion stage {completed.stage} status {completed.status}"
         if source_path.exists():
@@ -437,21 +501,64 @@ historial: []
             path_resolver=resolver,
             job_store=store,
             chroma_store=None,
+            approval_ledger=approval_ledger,
         )
         loaded = notes.get_note(ingested_rel)
         document_id = loaded.document_id
+        derived_markdown = serialize_frontmatter(
+            {
+                "schema_version": 3,
+                "note_id": document_id,
+                "note_type": "concept",
+                "title": loaded.title,
+                "date": "2026-08-15",
+                "author": "Fuente",
+                "tags": ["smoke"],
+                "issue": "_Sin_Cuestion",
+                "status": "pending_review",
+                "origins": [origin],
+                "history": [],
+            }
+        ) + loaded.body_markdown
+        ingested_path.write_text(derived_markdown, encoding="utf-8")
+        document_id = document_id_for_relative_path(ingested_rel)
+        loaded = notes.get_note(document_id)
         approved = notes.approve(document_id, loaded.revision)
         if approved.status != "approved":
             return False, f"approve status {approved.status}"
 
+        approved_markdown = approved.to_markdown()
+        approved_chunks = SemanticChunker().chunk_markdown(
+            approved.body_markdown,
+            ingested_rel,
+            document_id=approved.document_id,
+            content_hash=content_hash_for_markdown(approved_markdown),
+            relative_path=ingested_rel,
+            issue="_Sin_Cuestion",
+        )
+        fake_chroma.vectors.clear()
+        fake_chroma.add_chunks(
+            [chunk["content"] for chunk in approved_chunks],
+            [chunk["metadata"] for chunk in approved_chunks],
+            [chunk["id"] for chunk in approved_chunks],
+        )
+
+        def eligible_hit(hit: dict) -> bool:
+            try:
+                hit_note = notes.get_note(str((hit.get("metadata") or {})["document_id"]))
+                return hit_note.status == "approved" and not notes.require_eligible_origins(hit_note)
+            except (KeyError, TypeError, ValueError):
+                return False
+
         retrieval = RetrievalApplicationService(
             chroma_store=fake_chroma,
             should_fallback_to_bm25=lambda: False,
+            eligibility_guard=eligible_hit,
         )
         context = retrieval.build_context(
             "retrieval_alpha",
             "single_note",
-            document_id=document_id_for_source(ingest_identity),
+            document_id=approved.document_id,
         )
         if not context.get("has_context"):
             return False, "retrieval returned no context after ingest"
@@ -476,7 +583,7 @@ historial: []
 def check_sample_vault_smoke() -> GateCheck:
     import tempfile
 
-    with tempfile.TemporaryDirectory(prefix="funes-smoke-") as tmp:
+    with tempfile.TemporaryDirectory(prefix="fuente-smoke-") as tmp:
         vault = Path(tmp) / "vault"
         vault.mkdir()
         ok, detail = sample_vault_smoke(vault)
@@ -515,7 +622,7 @@ def run_all_checks(
 
 
 def format_report(checks: Sequence[GateCheck]) -> str:
-    lines = ["Funes release gate", "=================="]
+    lines = ["Fuente release gate", "=================="]
     for check in checks:
         mark = "PASS" if check.passed else "FAIL"
         lines.append(f"[{mark}] {check.id}")
@@ -531,7 +638,7 @@ def format_report(checks: Sequence[GateCheck]) -> str:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Fail-closed Funes release gate")
+    parser = argparse.ArgumentParser(description="Fail-closed Fuente release gate")
     parser.add_argument(
         "--skip-pytest",
         action="store_true",

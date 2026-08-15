@@ -5,11 +5,11 @@ import threading
 
 import pytest
 
-from funes.application.lifecycle import ApplicationLifecycle
-from funes.config import get_default_config
-from funes.control_console import FunesConsoleBackend
-from funes.core.vault import VaultManager
-from funes.graph_engine.optimized_loop import OptimizadoGraphLoop
+from fuente.application.lifecycle import ApplicationLifecycle
+from fuente.config import get_default_config
+from fuente.control_console import FuenteConsoleBackend
+from fuente.core.vault import VaultManager
+from fuente.graph_engine.optimized_loop import OptimizadoGraphLoop
 
 
 class _Pipeline:
@@ -54,10 +54,10 @@ def test_console_graph_actions_fail_closed_without_started_lifecycle(
     tmp_path, monkeypatch
 ):
     monkeypatch.setattr(
-        "funes.control_console.OptimizadoGraphLoop",
+        "fuente.control_console.OptimizadoGraphLoop",
         lambda *_args, **_kwargs: pytest.fail("console must not construct a graph loop"),
     )
-    backend = FunesConsoleBackend(tmp_path / "Vault")
+    backend = FuenteConsoleBackend(tmp_path / "Vault")
 
     for action in ("run_optimized_cycle", "reindex_notes", "step3_structure", "reflow_links"):
         result = backend.handle_action(action, {})
@@ -68,14 +68,14 @@ def test_reflow_action_does_not_start_a_loop_or_call_anythingllm(
     tmp_path, monkeypatch
 ):
     monkeypatch.setattr(
-        "funes.control_console.OptimizadoGraphLoop",
+        "fuente.control_console.OptimizadoGraphLoop",
         lambda *_args, **_kwargs: pytest.fail("reflow must not construct a graph loop"),
     )
     monkeypatch.setattr(
-        "funes.control_console.is_anythingllm_installed",
+        "fuente.control_console.is_anythingllm_installed",
         lambda: pytest.fail("reflow must not inspect AnythingLLM"),
     )
-    backend = FunesConsoleBackend(tmp_path / "Vault")
+    backend = FuenteConsoleBackend(tmp_path / "Vault")
 
     assert backend.handle_action("reflow_links", {})["error"] == (
         "graph_service_unavailable"
@@ -86,7 +86,7 @@ def test_console_graph_action_delegates_to_lifecycle_loop(tmp_path):
     config = get_default_config(tmp_path / "Vault")
     lifecycle = _lifecycle(config)
     lifecycle.start()
-    backend = FunesConsoleBackend(config.vault.vault_path)
+    backend = FuenteConsoleBackend(config.vault.vault_path)
     backend.attach_lifecycle(lifecycle)
 
     try:

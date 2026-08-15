@@ -6,10 +6,10 @@ from pathlib import Path
 
 import pytest
 
-import funes.application.onboarding as onboarding_module
-from funes.application.onboarding import OnboardingService
-from funes.domain.frontmatter import parse_frontmatter
-from funes.domain.paths import AuthorizedPathResolver
+import fuente.application.onboarding as onboarding_module
+from fuente.application.onboarding import OnboardingService
+from fuente.domain.frontmatter import parse_frontmatter
+from fuente.domain.paths import AuthorizedPathResolver
 
 
 def _service(vault: Path) -> OnboardingService:
@@ -18,7 +18,7 @@ def _service(vault: Path) -> OnboardingService:
 
 def _manifest() -> dict:
     return json.loads(
-        resources.files("funes.resources.demo_vault")
+        resources.files("fuente.resources.demo_vault")
         .joinpath("manifest.json")
         .read_text(encoding="utf-8")
     )
@@ -40,7 +40,7 @@ def test_demo_vault_is_idempotent_and_never_overwrites(tmp_path: Path):
     assert second.status == "demo_installed"
     assert second.created_paths == ()
     assert protected.read_text(encoding="utf-8") == "edición humana"
-    assert json.loads((vault / ".funes" / "onboarding.json").read_text())[
+    assert json.loads((vault / ".fuente" / "onboarding.json").read_text())[
         "status"
     ] == "demo_installed"
 
@@ -58,7 +58,7 @@ def test_collision_blocks_before_any_demo_or_marker_write(tmp_path: Path):
     assert "4_salida/Demo/Arquitectura_Local.md" in result.collisions
     assert not (vault / "4_salida" / "Demo" / "Introduccion.md").exists()
     assert not (vault / "4_salida" / "Demo" / "Flujo_Revision.md").exists()
-    assert not (vault / ".funes" / "onboarding.json").exists()
+    assert not (vault / ".fuente" / "onboarding.json").exists()
     assert collision.read_text(encoding="utf-8") == "contenido humano"
 
 
@@ -74,7 +74,7 @@ def test_install_rolls_back_notes_when_second_atomic_write_fails(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, initial_marker: bytes | None
 ):
     vault = tmp_path / "Vault"
-    marker = vault / ".funes" / "onboarding.json"
+    marker = vault / ".fuente" / "onboarding.json"
     if initial_marker is not None:
         marker.parent.mkdir(parents=True)
         marker.write_bytes(initial_marker)
@@ -107,7 +107,7 @@ def test_preexisting_identical_notes_are_classified_without_rewriting(tmp_path: 
     vault = tmp_path / "Vault"
     service = _service(vault)
     manifest = _manifest()
-    bundle = resources.files("funes.resources.demo_vault")
+    bundle = resources.files("fuente.resources.demo_vault")
     for entry in manifest["notes"]:
         destination = vault / entry["destination"]
         destination.parent.mkdir(parents=True, exist_ok=True)
@@ -132,7 +132,7 @@ def test_dismissed_onboarding_does_not_auto_prompt(tmp_path: Path):
     assert status.status == "dismissed"
     assert service.status().show_first_run_panel is False
     assert not (vault / "4_salida" / "Demo").exists()
-    marker = json.loads((vault / ".funes" / "onboarding.json").read_text())
+    marker = json.loads((vault / ".fuente" / "onboarding.json").read_text())
     assert marker["status"] == "dismissed"
 
 
@@ -148,7 +148,7 @@ def test_demo_manifest_notes_have_schema_one_and_resolvable_links(tmp_path: Path
         input=vault / "1_entrada",
         dirty=vault / "2_sucio",
         clean=vault / "3_limpio",
-        quarantine=vault / ".funes" / "quarantine",
+        quarantine=vault / ".fuente" / "quarantine",
     )
     manifest = _manifest()
     pending = 0

@@ -53,10 +53,14 @@ class FuenteInstallerWizard(tk.Tk):
 
         self.obsidian_status_var = tk.StringVar(value="Comprobando...")
         self.ollama_status_var = tk.StringVar(value="Comprobando...")
+        self.ocr_status_var = tk.StringVar(value="Comprobando...")
         self.anythingllm_status_var = tk.StringVar(value="Opcional, no configurado")
 
         self.cloud_folders: list[ConnectedFolder] = []
         self.anythingllm_opt_in_var = tk.BooleanVar(value=False)
+        self.ocr_opt_in_var = tk.BooleanVar(
+            value=os.environ.get("FUENTE_INSTALL_OCR", "0") == "1"
+        )
         self.run_first_flush_var = tk.BooleanVar(value=True)
 
         self.current_step = 1
@@ -376,6 +380,36 @@ class FuenteInstallerWizard(tk.Tk):
         )
         lbl_any_stat.pack(side="left")
 
+        ocr_frame = tk.Frame(req_box, bg="#FFFFFF")
+        ocr_frame.pack(fill="x", pady=8)
+        tk.Label(
+            ocr_frame,
+            text="• OCR Tesseract:",
+            font=("Helvetica", 11, "bold"),
+            bg="#FFFFFF",
+            width=18,
+            anchor="w",
+        ).pack(side="left")
+        tk.Label(
+            ocr_frame,
+            textvariable=self.ocr_status_var,
+            font=("Helvetica", 11, "bold"),
+            bg="#FFFFFF",
+            fg="#2563EB",
+        ).pack(side="left")
+
+        ocr_opt_in = tk.Checkbutton(
+            req_box,
+            text="Instalar OCR Tesseract con inglés y español",
+            variable=self.ocr_opt_in_var,
+            command=self._check_requirements,
+            font=("Helvetica", 10, "bold"),
+            fg="#1F2937",
+            bg="#FFFFFF",
+            anchor="w",
+        )
+        ocr_opt_in.pack(fill="x", pady=(8, 0))
+
         anythingllm_opt_in = tk.Checkbutton(
             req_box,
             text="Integración externa AnythingLLM",
@@ -425,6 +459,15 @@ class FuenteInstallerWizard(tk.Tk):
             self.anythingllm_status_var.set("✓ Detectado correctamente")
         else:
             self.anythingllm_status_var.set("⚠️ No detectado (se pedirá confirmación)")
+
+        if prereqs.tesseract_installed and {"eng", "spa"}.issubset(
+            set(prereqs.tesseract_languages)
+        ):
+            self.ocr_status_var.set("✓ Tesseract listo (eng + spa)")
+        elif self.ocr_opt_in_var.get():
+            self.ocr_status_var.set("⚠️ Se instalará con confirmación")
+        else:
+            self.ocr_status_var.set("Opcional, no seleccionado")
 
         if self._existing_receipt:
             vault = self._existing_receipt.get("vault_path")
@@ -673,6 +716,7 @@ class FuenteInstallerWizard(tk.Tk):
                 cloud_folders=list(self.cloud_folders),
                 confirm=self._confirm_on_main_thread,
                 log=self._log,
+                install_ocr=self.ocr_opt_in_var.get(),
                 install_anythingllm=self.anythingllm_opt_in_var.get(),
                 configure_anythingllm=self.anythingllm_opt_in_var.get(),
                 existing_receipt=self._existing_receipt,
@@ -681,7 +725,8 @@ class FuenteInstallerWizard(tk.Tk):
             step_labels = {
                 "vault_structure": ("2. Verificando estructura del Vault...", 25),
                 "cloud_folders": ("3. Vinculando carpetas de la nube...", 40),
-                "ollama_model": ("4. Evaluando modelo LLM recomendado...", 55),
+                "ocr_runtime": ("4. Comprobando OCR Tesseract...", 50),
+                "ollama_model": ("5. Evaluando modelo LLM recomendado...", 60),
                 "anythingllm_install": ("Opcional: verificando AnythingLLM Desktop...", 70),
                 "anythingllm_config": ("Opcional: configurando integración AnythingLLM...", 80),
                 "shortcuts": ("5. Generando acceso directo en el Escritorio...", 90),

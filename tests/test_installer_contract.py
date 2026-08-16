@@ -270,6 +270,7 @@ def test_on_step_start_callback_fires_in_order(tmp_path):
     assert seen == [
         "vault_structure",
         "cloud_folders",
+        "ocr_runtime",
         "ollama_model",
         "anythingllm_install",
         "anythingllm_config",

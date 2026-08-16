@@ -1,4 +1,5 @@
 import logging
+import sys
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
@@ -10,6 +11,8 @@ from fuente.extractors.tex_tm import TeXAndTeXmacsExtractor
 from fuente.extractors.audio import AudioExtractor
 from fuente.extractors.ocr_image import ImageOCRExtractor
 from fuente.extractors.extended_formats import ExtendedFormatsExtractor
+from fuente.extractors.macos_vision import MacOSVisionOCR
+from fuente.extractors.ocr_runtime import FallbackOCR, TesseractOCR
 
 logger = logging.getLogger(__name__)
 
@@ -32,11 +35,12 @@ class ExtractorRegistry:
         self._build_extractors()
 
     def _build_extractors(self) -> None:
+        ocr_backend = build_ocr_backend()
         self.extractors: List[BaseExtractor] = [
-            TextAndOfficeExtractor(),
+            TextAndOfficeExtractor(ocr_backend=ocr_backend),
             TeXAndTeXmacsExtractor(),
             AudioExtractor(self.policy),
-            ImageOCRExtractor(),
+            ImageOCRExtractor(ocr_backend=ocr_backend),
             ExtendedFormatsExtractor(),
         ]
 
@@ -72,3 +76,14 @@ class ExtractorRegistry:
                 f"[No se pudo leer el archivo {file_path.name}: {str(e)}]",
                 {"original_file": file_path.name},
             )
+
+
+def build_ocr_backend(*, platform: str | None = None):
+    """Select the layout-aware local OCR backend with a safe native fallback."""
+    tesseract = TesseractOCR()
+    if (platform or sys.platform) == "darwin":
+        vision = MacOSVisionOCR()
+        if tesseract.available():
+            return FallbackOCR(tesseract, vision)
+        return FallbackOCR(vision, tesseract)
+    return tesseract

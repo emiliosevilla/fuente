@@ -1,13 +1,22 @@
 import csv
 import json
-import re
 import logging
+import re
 from pathlib import Path
-from typing import Tuple, Dict, Any
+from typing import Any, Protocol
 
 from fuente.extractors.base import BaseExtractor
+from fuente.extractors.base import ExtractionResult
+from fuente.extractors.macos_vision import (
+    MacOSVisionOCR,
+    OCRProcessingError,
+    OCRUnavailableError,
+)
 
 logger = logging.getLogger(__name__)
+
+class OCRPDFBackend(Protocol):
+    def extract_pdf(self, path: Path) -> str: ...
 
 
 class TextAndOfficeExtractor(BaseExtractor):
@@ -21,6 +30,9 @@ class TextAndOfficeExtractor(BaseExtractor):
         ".msg", ".csv",
         ".json", ".html", ".htm"
     }
+
+    def __init__(self, ocr_backend: OCRPDFBackend | None = None) -> None:
+        self.ocr_backend = ocr_backend or MacOSVisionOCR()
 
     def can_handle(self, file_path: Path) -> bool:
         return file_path.suffix.lower() in self.SUPPORTED_EXTENSIONS
@@ -51,7 +63,7 @@ class TextAndOfficeExtractor(BaseExtractor):
             if ext in {".txt", ".md"}:
                 return self._extract_txt(file_path), metadata
             elif ext == ".pdf":
-                return self._extract_pdf(file_path), metadata
+                return self._extract_pdf(file_path, metadata)
             elif ext in {".docx", ".doc"}:
                 return self._extract_docx(file_path), metadata
             elif ext in {".xlsx", ".xls"}:
@@ -111,18 +123,58 @@ class TextAndOfficeExtractor(BaseExtractor):
         with open(path, "r", encoding="utf-8", errors="replace") as f:
             return f.read()
 
-    def _extract_pdf(self, path: Path) -> str:
+    def _extract_pdf(self, path: Path, metadata: dict[str, Any]) -> ExtractionResult:
         try:
             import pdfplumber
             text_parts = []
             with pdfplumber.open(path) as pdf:
+                page_count = len(pdf.pages)
                 for i, page in enumerate(pdf.pages):
                     t = page.extract_text()
                     if t:
                         text_parts.append(f"<!-- Página {i+1} -->\n" + t)
-            return "\n\n".join(text_parts) if text_parts else f"[PDF {path.name} sin texto extraíble o escaneado. Utilizar OCR.]"
-        except ImportError:
-            return self._extract_fallback(path)
+            extracted = "\n\n".join(text_parts).strip()
+            metadata = {**metadata, "page_count": page_count, "extraction_method": "pdf_text"}
+            if extracted:
+                return ExtractionResult(extracted, {**metadata, "extraction_status": "completed"})
+        except ImportError as error:
+            return ExtractionResult(
+                None,
+                {**metadata, "extraction_status": "failed"},
+                "failed",
+                f"pdf_text_unavailable: {error}",
+            )
+        except Exception as error:
+            return ExtractionResult(
+                None,
+                {**metadata, "extraction_status": "failed"},
+                "failed",
+                f"pdf_text_error: {type(error).__name__}: {error}",
+            )
+
+        try:
+            ocr_text = self.ocr_backend.extract_pdf(path).strip()
+            metadata["extraction_method"] = getattr(
+                self.ocr_backend,
+                "last_method",
+                getattr(self.ocr_backend, "method", "macos_vision"),
+            )
+        except OCRUnavailableError as error:
+            reason = f"ocr_unavailable: {error}"
+            return ExtractionResult(None, {**metadata, "extraction_status": "failed", "extraction_reason": reason}, "failed", reason)
+        except OCRProcessingError as error:
+            reason = f"ocr_error: {error}"
+            return ExtractionResult(None, {**metadata, "extraction_status": "failed", "extraction_reason": reason}, "failed", reason)
+        except Exception as error:
+            reason = f"ocr_error: {type(error).__name__}: {error}"
+            return ExtractionResult(None, {**metadata, "extraction_status": "failed", "extraction_reason": reason}, "failed", reason)
+        if not ocr_text:
+            reason = "ocr_empty: Vision no devolvió texto"
+            return ExtractionResult(None, {**metadata, "extraction_status": "failed", "extraction_reason": reason}, "failed", reason)
+        return ExtractionResult(
+            ocr_text,
+            {**metadata, "extraction_status": "completed"},
+        )
 
     def _extract_docx(self, path: Path) -> str:
         try:

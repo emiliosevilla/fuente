@@ -167,8 +167,10 @@ FFmpeg, Ollama y las comprobaciones de entorno.
 - Windows: `instalar_fuente.bat`
 
 Los instaladores preparan el entorno, comprueban requisitos y crean los
-accesos directos correspondientes. No descargan modelos de Ollama durante el
-arranque normal.
+accesos directos correspondientes. Si eliges los extras completos, también
+ofrecen instalar Tesseract con los idiomas `eng` y `spa`, y verifican el motor
+antes de habilitar OCR. La instalación básica no descarga el motor OCR. No
+descargan modelos de Ollama durante el arranque normal.
 
 ## Uso
 

@@ -127,7 +127,7 @@ class AtomicNoteGenerator:
             "status": "pending_review",
             "origins": [],
             "history": [],
-        }) + f"""
+        }, human_labels=True) + f"""
 # {stem}
 
 ## Resumen Ejecutivo

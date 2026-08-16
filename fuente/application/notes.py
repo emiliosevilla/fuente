@@ -19,7 +19,7 @@ from fuente.domain.errors import (
     OutputApprovalRequiredError,
     PathAuthorizationError,
 )
-from fuente.domain.frontmatter import FrontmatterError, serialize_frontmatter
+from fuente.domain.frontmatter import FrontmatterError, serialize_human_frontmatter
 from fuente.domain.metadata_form import validate_metadata_fields, validate_metadata_save_fields
 from fuente.domain.paths import AuthorizedPathResolver, document_id_for_relative_path
 from fuente.infrastructure.atomic_files import atomic_write_text, document_file_lock
@@ -563,7 +563,7 @@ class NotesApplicationService:
         allowed_issues = self.vault.get_issues_in_theme()
         validate_metadata_fields(metadata, allowed_issues=allowed_issues)
 
-        markdown = serialize_frontmatter(metadata) + (
+        markdown = serialize_human_frontmatter(metadata) + (
             note.body_markdown if body_markdown is None else body_markdown
         )
         path, relative = self._resolve_note_path(note.document_id)
@@ -651,10 +651,6 @@ class NotesApplicationService:
             relative_path=relative,
             markdown=markdown,
             revision=int(updated_identity["revision"]),
-        ).with_metadata(
-            metadata,
-            revision=int(updated_identity["revision"]),
-            content_hash=str(updated_identity["content_hash"]),
         )
         if reindex:
             self._reindex_after_approval(updated)

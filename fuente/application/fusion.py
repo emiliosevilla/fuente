@@ -12,7 +12,7 @@ from fuente.application.notes import NotesApplicationService
 from fuente.domain.documents import NoteDocument
 from fuente.domain.errors import PathAuthorizationError
 from fuente.domain.errors import NoteRevisionConflictError
-from fuente.domain.frontmatter import serialize_frontmatter
+from fuente.domain.frontmatter import serialize_human_frontmatter
 from fuente.domain.origins import OriginRef
 from fuente.domain.paths import AuthorizedPathResolver, document_id_for_relative_path
 from fuente.infrastructure.atomic_files import document_file_lock
@@ -150,7 +150,7 @@ class FusionApplicationService:
             source_notes=sources,
             origins=origins,
             body_markdown=body,
-            canonical_markdown=serialize_frontmatter(metadata) + body,
+            canonical_markdown=serialize_human_frontmatter(metadata) + body,
         )
         self._previews[preview.preview_id] = preview
         return preview

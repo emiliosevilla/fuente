@@ -19,6 +19,9 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Sequence
 
 from fuente.domain.sync import ConnectedFolder, SyncProvider
+from fuente.extractors.ocr_runtime import (
+    resolve_tesseract_command,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +31,8 @@ DEFAULT_OLLAMA_URL = "http://localhost:11434"
 VAULT_SUBDIRS = ("1_entrada", "2_sucio", "3_limpio", "4_salida")
 OLLAMA_READY_TIMEOUT_SEC = 30.0
 OLLAMA_READY_POLL_SEC = 1.0
+OCR_REQUIRED_LANGUAGES = frozenset({"eng", "spa"})
+WINDOWS_TESSERACT_DOWNLOAD = "https://tesseract-ocr.github.io/tessdoc/Downloads.html"
 
 ConfirmCallback = Callable[[str, str], bool]
 LogCallback = Callable[[str], None]
@@ -40,6 +45,8 @@ class PrerequisiteStatus:
     ollama_binary_installed: bool
     ollama_api_ready: bool
     anythingllm_installed: bool
+    tesseract_installed: bool = False
+    tesseract_languages: tuple[str, ...] = ()
 
     @property
     def ollama_ready(self) -> bool:
@@ -68,6 +75,7 @@ class InstallationContext:
     log: Optional[LogCallback] = None
     on_step_start: Optional[StepStartCallback] = None
     install_model: bool = True
+    install_ocr: bool = False
     install_anythingllm: bool = False
     configure_anythingllm: bool = False
     create_shortcuts: bool = True
@@ -114,6 +122,159 @@ def detect_ollama_binary_installed() -> bool:
     if sys.platform == "darwin" and Path("/Applications/Ollama.app").exists():
         return True
     return False
+
+
+@dataclass(frozen=True)
+class OCRStatus:
+    command: Optional[str]
+    languages: frozenset[str]
+
+    @property
+    def missing_languages(self) -> frozenset[str]:
+        return OCR_REQUIRED_LANGUAGES - self.languages
+
+    @property
+    def ready(self) -> bool:
+        return self.command is not None and not self.missing_languages
+
+    @property
+    def summary(self) -> str:
+        if self.command is None:
+            return "Tesseract no está instalado"
+        if self.missing_languages:
+            missing = ", ".join(sorted(self.missing_languages))
+            return f"Faltan idiomas de Tesseract: {missing}"
+        return f"Tesseract listo ({self.command})"
+
+
+def list_tesseract_languages(command: str | Path) -> set[str]:
+    try:
+        result = subprocess.run(
+            [str(command), "--list-langs"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except OSError:
+        return set()
+    if result.returncode != 0:
+        return set()
+    return {
+        line.strip()
+        for line in result.stdout.splitlines()
+        if line.strip() and not line.lower().startswith("list of available")
+    }
+
+
+def detect_ocr_status() -> OCRStatus:
+    command = resolve_tesseract_command()
+    if command is None:
+        return OCRStatus(command=None, languages=frozenset())
+    return OCRStatus(
+        command=str(command),
+        languages=frozenset(list_tesseract_languages(command)),
+    )
+
+
+def step_install_ocr(ctx: InstallationContext) -> InstallStepResult:
+    if not ctx.install_ocr:
+        return InstallStepResult(
+            name="ocr_runtime",
+            success=True,
+            skipped=True,
+            message="OCR opcional no seleccionado",
+        )
+
+    current = detect_ocr_status()
+    if current.ready:
+        return InstallStepResult(
+            name="ocr_runtime",
+            success=True,
+            skipped=True,
+            message=current.summary,
+        )
+
+    confirm = ctx.confirm or (lambda _title, _message: False)
+    if not confirm(
+        "Instalar OCR",
+        "Fuente necesita Tesseract y los idiomas inglés/español para OCR. "
+        "¿Quieres instalarlo en este equipo?",
+    ):
+        return InstallStepResult(
+            name="ocr_runtime",
+            success=False,
+            message="OCR no instalado porque no se confirmó la instalación",
+            actionable=_ocr_install_actionable(),
+        )
+
+    command = _ocr_install_command()
+    if command is None:
+        return InstallStepResult(
+            name="ocr_runtime",
+            success=False,
+            message="No hay un instalador automático de OCR disponible para esta plataforma",
+            actionable=_ocr_install_actionable(),
+        )
+
+    try:
+        result = subprocess.run(command, check=False)
+    except OSError as error:
+        return InstallStepResult(
+            name="ocr_runtime",
+            success=False,
+            message=f"No se pudo ejecutar el instalador de OCR: {error}",
+            actionable=_ocr_install_actionable(),
+        )
+    if result.returncode != 0:
+        return InstallStepResult(
+            name="ocr_runtime",
+            success=False,
+            message=f"El instalador de OCR terminó con código {result.returncode}",
+            actionable=_ocr_install_actionable(),
+        )
+
+    verified = detect_ocr_status()
+    if not verified.ready:
+        return InstallStepResult(
+            name="ocr_runtime",
+            success=False,
+            message=f"OCR instalado pero no verificable: {verified.summary}",
+            actionable=_ocr_install_actionable(),
+        )
+    return InstallStepResult(
+        name="ocr_runtime",
+        success=True,
+        message=f"OCR verificado con idiomas eng y spa ({verified.command})",
+    )
+
+
+def _ocr_install_command() -> list[str] | None:
+    if sys.platform == "darwin":
+        if shutil.which("brew") is None:
+            return None
+        return ["brew", "install", "tesseract", "tesseract-lang"]
+    if sys.platform == "win32" and shutil.which("winget"):
+        return [
+            "winget",
+            "install",
+            "--id",
+            "tesseract-ocr.tesseract",
+            "-e",
+            "--accept-package-agreements",
+            "--accept-source-agreements",
+        ]
+    return None
+
+
+def _ocr_install_actionable() -> str:
+    if sys.platform == "darwin":
+        return "Instala Homebrew y ejecuta: brew install tesseract tesseract-lang"
+    if sys.platform == "win32":
+        return (
+            "Instala Tesseract desde la documentación oficial y asegúrate de "
+            f"tener eng y spa: {WINDOWS_TESSERACT_DOWNLOAD}"
+        )
+    return "Instala Tesseract con el gestor de paquetes de tu distribución e incluye eng y spa"
 
 
 def is_ollama_api_ready(ollama_url: str = DEFAULT_OLLAMA_URL, timeout: float = 2.0) -> bool:
@@ -174,6 +335,7 @@ def detect_prerequisites(
     *,
     include_anythingllm: bool = False,
 ) -> PrerequisiteStatus:
+    ocr = detect_ocr_status()
     return PrerequisiteStatus(
         obsidian_installed=detect_obsidian_installed(),
         ollama_binary_installed=detect_ollama_binary_installed(),
@@ -181,6 +343,8 @@ def detect_prerequisites(
         anythingllm_installed=(
             detect_anythingllm_installed() if include_anythingllm else False
         ),
+        tesseract_installed=ocr.command is not None,
+        tesseract_languages=tuple(sorted(ocr.languages)),
     )
 
 
@@ -556,6 +720,8 @@ def run_installation(ctx: InstallationContext) -> List[InstallStepResult]:
     log(f"[+] Preparing vault at {ctx.vault_path}")
     results.append(_run_named_step("vault_structure", lambda: ensure_vault_structure(ctx.vault_path)))
     results.append(_run_named_step("cloud_folders", lambda: step_save_cloud_folders(ctx)))
+
+    results.append(_run_named_step("ocr_runtime", lambda: step_install_ocr(ctx)))
 
     model_step = _run_named_step("ollama_model", lambda: step_install_model(ctx))
     results.append(model_step)

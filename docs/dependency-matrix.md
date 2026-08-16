@@ -117,7 +117,7 @@ These are **not** installed by pip. Install them separately; Fuente degrades gra
 
 | Binary | Required for | macOS | Windows | Linux |
 |--------|--------------|-------|---------|-------|
-| **Tesseract OCR** | Image OCR (`[ocr]` extra) | `brew install tesseract tesseract-lang` | [UB Mannheim build](https://github.com/UB-Mannheim/tesseract/wiki) | `apt install tesseract-ocr tesseract-ocr-spa` |
+| **Tesseract OCR** | Image/PDF OCR (`[ocr]` extra) | `brew install tesseract tesseract-lang` | [Tesseract downloads](https://tesseract-ocr.github.io/tessdoc/Downloads.html) | `apt install tesseract-ocr tesseract-ocr-spa` |
 | **FFmpeg** | faster-whisper audio decoding (`[audio]` extra) | `brew install ffmpeg` | [ffmpeg.org](https://ffmpeg.org/download.html) or `winget install ffmpeg` | `apt install ffmpeg` |
 | **Ollama** | Local LLM inference (RAM Governor, chat, atomic notes) | [ollama.com/download](https://ollama.com/download) | same | `curl -fsSL https://ollama.com/install.sh \| sh` |
 | **Obsidian** | Vault destination (WikiLinks, MOC output) | [obsidian.md/download](https://obsidian.md/download) or `brew install --cask obsidian` | same | AppImage / Flatpak from official site |
@@ -126,10 +126,17 @@ These are **not** installed by pip. Install them separately; Fuente degrades gra
 
 ```bash
 tesseract --version
+tesseract --list-langs  # debe incluir eng y spa cuando OCR está seleccionado
 ffmpeg -version
 ollama --version
 # Obsidian: launch app or verify install path (see installer scripts)
 ```
+
+Los paquetes Python `pytesseract` y Pillow no contienen el ejecutable OCR. El
+instalador de Fuente ofrece la instalación del binario con confirmación: usa
+Homebrew en macOS y WinGet, con una ruta manual documentada, en Windows. En
+macOS se intenta Vision primero y Tesseract después; en Windows Tesseract es el
+backend principal.
 
 ## PyInstaller assets
 

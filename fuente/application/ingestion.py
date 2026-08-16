@@ -140,6 +140,14 @@ class ContentRetryExhaustedError(ValueError):
         self.attempt_count = attempt_count
 
 
+class ExtractionFailedError(ValueError):
+    """A source extractor returned a durable, user-visible failure reason."""
+
+    def __init__(self, reason: str, *, code: str = "extraction_failed") -> None:
+        super().__init__(reason)
+        self.code = code
+
+
 class SourceNotStableError(RuntimeError):
     """The source file is temporary, empty or still being written."""
 
@@ -627,6 +635,12 @@ class IngestionApplicationService:
                 result.reason or "extraction_skipped",
                 "Extraction skipped by runtime policy",
             )
+        if result.status == "failed":
+            reason = result.reason or str(
+                result.metadata.get("extraction_reason") or "Extraction failed"
+            )
+            code = reason.split(":", 1)[0].strip() or "extraction_failed"
+            raise ExtractionFailedError(reason, code=code)
         if result.content is None:
             raise ValueError("completed extraction returned no content")
         context.content = result.content
@@ -1182,7 +1196,7 @@ class IngestionApplicationService:
             )
             for retired_key in ("sources", "source_kind", "legacy_origin_ids"):
                 metadata.pop(retired_key, None)
-            context.candidate = serialize_frontmatter(metadata) + body
+            context.candidate = serialize_frontmatter(metadata, human_labels=True) + body
         except FrontmatterError as error:
             # The model output is untrusted.  Its malformed frontmatter is a
             # reviewable candidate failure, not a pipeline fault that moves

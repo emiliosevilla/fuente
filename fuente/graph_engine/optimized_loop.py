@@ -6,7 +6,7 @@ from typing import Callable, Dict, List, Optional, Set
 
 from fuente.application.reflow import AuthorizedReflowTarget
 from fuente.domain.errors import CanonicalEligibilityError, OutputApprovalRequiredError
-from fuente.domain.frontmatter import parse_frontmatter, serialize_frontmatter
+from fuente.domain.frontmatter import parse_frontmatter, serialize_human_frontmatter
 from fuente.infrastructure.atomic_files import atomic_write_text
 from fuente.graph_engine.linker import CANONICAL_MOC_FILENAME, GraphLinker, NoteLinkTarget
 
@@ -371,7 +371,7 @@ class OptimizadoGraphLoop:
         targets = link_targets or [n.stem for n in notes if not n.name.startswith("_")]
 
         lines = [
-            serialize_frontmatter({
+            serialize_human_frontmatter({
                 "schema_version": 3,
                 "note_id": str(uuid5(NAMESPACE_URL, f"fuente://graph/issue/{issue_name}")),
                 "note_type": "concept",
@@ -417,7 +417,7 @@ class OptimizadoGraphLoop:
         now_str = self._existing_generated_date(moc_path)
 
         lines = [
-            serialize_frontmatter({
+            serialize_human_frontmatter({
                 "schema_version": 3,
                 "note_id": str(uuid5(NAMESPACE_URL, "fuente://graph/moc")),
                 "note_type": "concept",

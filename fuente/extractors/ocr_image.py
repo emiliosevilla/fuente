@@ -1,10 +1,17 @@
-import logging
 from pathlib import Path
-from typing import Tuple, Dict, Any
+from typing import Any, Protocol
 
+from fuente.extractors.base import ExtractionResult
 from fuente.extractors.base import BaseExtractor
+from fuente.extractors.macos_vision import (
+    MacOSVisionOCR,
+    OCRProcessingError,
+    OCRUnavailableError,
+)
 
-logger = logging.getLogger(__name__)
+
+class OCRImageBackend(Protocol):
+    def extract_image(self, path: Path) -> str: ...
 
 
 class ImageOCRExtractor(BaseExtractor):
@@ -15,20 +22,36 @@ class ImageOCRExtractor(BaseExtractor):
     def can_handle(self, file_path: Path) -> bool:
         return file_path.suffix.lower() in self.SUPPORTED_EXTENSIONS
 
-    def extract(self, file_path: Path) -> Tuple[str, Dict[str, Any]]:
-        metadata = {"original_file": file_path.name, "format": file_path.suffix.lower(), "type": "image"}
+    def __init__(self, ocr_backend: OCRImageBackend | None = None) -> None:
+        self.ocr_backend = ocr_backend or MacOSVisionOCR()
 
+    def extract(self, file_path: Path) -> ExtractionResult:
+        metadata: dict[str, Any] = {
+            "original_file": file_path.name,
+            "format": file_path.suffix.lower(),
+            "type": "image",
+            "extraction_method": getattr(self.ocr_backend, "method", "macos_vision"),
+        }
         try:
-            import pytesseract
-            from PIL import Image
-
-            img = Image.open(file_path)
-            ocr_text = pytesseract.image_to_string(img, lang="spa+eng")
-
-            if not ocr_text.strip():
-                ocr_text = f"[Imagen sin texto detectado por OCR: {file_path.name}]"
-
-            return f"<!-- OCR de {file_path.name} -->\n\n{ocr_text.strip()}", metadata
-        except Exception as e:
-            logger.warning(f"Tesseract OCR no disponible o error al procesar {file_path.name}: {e}")
-            return f"[Imagen {file_path.name}: requiere Tesseract/PIL para extracción OCR]", metadata
+            ocr_text = self.ocr_backend.extract_image(file_path).strip()
+            metadata["extraction_method"] = getattr(
+                self.ocr_backend,
+                "last_method",
+                metadata["extraction_method"],
+            )
+        except OCRUnavailableError as error:
+            reason = f"ocr_unavailable: {error}"
+            return ExtractionResult(None, {**metadata, "extraction_status": "failed", "extraction_reason": reason}, "failed", reason)
+        except OCRProcessingError as error:
+            reason = f"ocr_error: {error}"
+            return ExtractionResult(None, {**metadata, "extraction_status": "failed", "extraction_reason": reason}, "failed", reason)
+        except Exception as error:
+            reason = f"ocr_error: {type(error).__name__}: {error}"
+            return ExtractionResult(None, {**metadata, "extraction_status": "failed", "extraction_reason": reason}, "failed", reason)
+        if not ocr_text:
+            reason = "ocr_empty: Vision no devolvió texto"
+            return ExtractionResult(None, {**metadata, "extraction_status": "failed", "extraction_reason": reason}, "failed", reason)
+        return ExtractionResult(
+            f"<!-- OCR de {file_path.name} -->\n\n{ocr_text}",
+            {**metadata, "extraction_status": "completed"},
+        )

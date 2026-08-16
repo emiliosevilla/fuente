@@ -54,12 +54,14 @@ set "PYTHONPATH=%ROOT_DIR%;%PYTHONPATH%"
 python -m pip install --upgrade pip
 set /p FEATURE_SET="Instalar extras completos (.[all]) para audio/OCR/ofimatica? [s/N]: "
 if /I "!FEATURE_SET!"=="s" (
+    set "FUENTE_INSTALL_OCR=1"
     if exist pyproject.toml (
         pip install -e ".[all]"
     ) else if exist setup.py (
         pip install -e ".[all]"
     )
 ) else (
+    set "FUENTE_INSTALL_OCR=0"
     if exist pyproject.toml (
         pip install -e .
     ) else if exist setup.py (

@@ -180,7 +180,16 @@ class _PDFBackend:
         return self.value
 
 
-def test_pdf_ocr_fallback_is_used_only_when_pdf_text_is_empty(monkeypatch, tmp_path) -> None:
+@pytest.fixture
+def pdf_without_optional_converters(monkeypatch) -> None:
+    """Force PDF tests through pdfplumber/OCR regardless of installed extras."""
+    monkeypatch.setattr(TextAndOfficeExtractor, "_try_docling", lambda *_args: None)
+    monkeypatch.setattr(TextAndOfficeExtractor, "_try_markitdown", lambda *_args: None)
+
+
+def test_pdf_ocr_fallback_is_used_only_when_pdf_text_is_empty(
+    monkeypatch, tmp_path, pdf_without_optional_converters
+) -> None:
     class EmptyPage:
         def extract_text(self):
             return ""
@@ -206,7 +215,9 @@ def test_pdf_ocr_fallback_is_used_only_when_pdf_text_is_empty(monkeypatch, tmp_p
     assert result.metadata["extraction_method"] == "macos_vision"
 
 
-def test_pdf_ocr_records_the_backend_that_produced_the_text(monkeypatch, tmp_path) -> None:
+def test_pdf_ocr_records_the_backend_that_produced_the_text(
+    monkeypatch, tmp_path, pdf_without_optional_converters
+) -> None:
     class EmptyPage:
         def extract_text(self):
             return ""
@@ -231,7 +242,9 @@ def test_pdf_ocr_records_the_backend_that_produced_the_text(monkeypatch, tmp_pat
     assert result.metadata["extraction_method"] == "tesseract"
 
 
-def test_pdf_ocr_failure_is_explicit_and_never_a_placeholder(monkeypatch, tmp_path) -> None:
+def test_pdf_ocr_failure_is_explicit_and_never_a_placeholder(
+    monkeypatch, tmp_path, pdf_without_optional_converters
+) -> None:
     class EmptyPage:
         def extract_text(self):
             return ""

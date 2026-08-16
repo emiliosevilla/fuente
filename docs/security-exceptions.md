@@ -1,25 +1,27 @@
 # Security exceptions
 
-## SEC-012 — ChromaDB CVE-2026-45829
+## SEC-012 — ChromaDB CVE-2026-45829 — resolved 2026-08-16
 
-- **Dependency:** `chromadb==1.5.9` (`requirements.txt`), also constrained as
-  `chromadb~=1.5.0` in `pyproject.toml`.
+- **Dependency:** `chromadb==0.6.3` in `requirements.txt` and `pyproject.toml`.
 - **Upstream advisory:** [GHSA-f4j7-r4q5-qw2c](https://github.com/advisories/GHSA-f4j7-r4q5-qw2c)
-  / CVE-2026-45829. It affects ChromaDB 1.0.0 through 1.5.9. At the time of
-  assessment, no patched release is available.
-- **Funes assessment:** accepted as P2 only while the controls below remain in
-  force. The advisory requires Chroma's server endpoint; Funes uses an embedded
-  persistent store and does not expose that endpoint.
+  / CVE-2026-45829. It affects ChromaDB 1.0.0 through 1.5.9. PyPI still has no
+  patched release after 1.5.9, so Fuente uses the latest pre-1.0 release outside
+  the affected range instead of retaining the vulnerable dependency.
+- **Resolution evidence:** GitHub's advisory query reports no advisory affecting
+  `chromadb@0.6.3`. A Python 3.14 smoke test verified `PersistentClient`, upsert,
+  query and delete with 0.6.3. Fuente's Markdown remains canonical; if an index
+  created by 1.5.9 cannot be opened after the downgrade, it must be rebuilt from
+  the approved Markdown rather than migrated as authoritative data.
 
-### Mandatory controls
+### Retained defense-in-depth controls
 
 1. **Embedded Chroma only.** `ChromaStore` creates only
-   `chromadb.PersistentClient(path=...)`. Funes must not create `HttpClient`,
+   `chromadb.PersistentClient(path=...)`. Fuente must not create `HttpClient`,
    `CloudClient`, or any Chroma server/listener, and must not add a Chroma host
    or port setting.
 2. **Local model identifiers only.** User settings may contain a simple Ollama
    model name such as `qwen3.5:0.8b`, but never a URL, repository reference, or
-   model-loader option. In particular, Funes must never accept or forward
+   model-loader option. In particular, Fuente must never accept or forward
    `trust_remote_code`.
 3. **No automatic model acquisition.** Runtime selection is limited to models
    already installed in the local Ollama inventory. Downloading a model remains
@@ -34,9 +36,9 @@
 - `tests/test_config_persistence.py::TestConfigPersistenceAndSettings::test_config_ignores_unsafe_custom_model_reference`
   prevents a persisted unsafe value from reaching runtime.
 
-### Reassessment and closure
+### Reassessment
 
-Review this exception whenever ChromaDB publishes a fix or whenever Funes adds
-any network-facing API, remote Chroma deployment, or model-loading feature. A
-future patched version should replace the affected dependency and this entry
-should be marked resolved with the upgrade and test evidence.
+Review the pin whenever ChromaDB publishes a fixed release or whenever Fuente
+adds any network-facing API, remote Chroma deployment, or model-loading feature.
+Do not return to the affected range. A future upgrade must preserve the embedded
+client boundary and pass the dependency-policy and RAG regression tests.

@@ -56,6 +56,11 @@ The provider client remains responsible for authentication and mounting. Fuente 
 
 Linux-only: core includes `pysqlite3-binary` when `platform_system == "Linux"` for ChromaDB on SQLite &lt; 3.35.
 
+Security pin: Fuente uses `chromadb==0.6.3`, the latest pre-1.0 release outside
+the affected range of CVE-2026-45829. PyPI has no patched release after 1.5.9
+yet. Because the vector index is derived data, an index created by 1.5.9 that
+cannot be opened by 0.6.3 must be rebuilt from approved Markdown.
+
 ### Runtime profiles and resource policy
 
 `pyproject.toml` sigue declarando `chromadb` dentro del conjunto core. Esa declaración de empaquetado no significa que todos los perfiles inicialicen la capa vectorial:
@@ -78,7 +83,7 @@ El Vault demo forma parte del paquete como `fuente.resources.demo_vault`, con su
 
 AnythingLLM queda fuera de las dependencias core y del camino de instalación por defecto. Si se usa, es una integración externa de terceros opt-in; su presencia no se deduce de esta matriz ni se promete como servicio disponible.
 
-## Recorded package versions (2026-08-09)
+## Recorded package versions (2026-08-16)
 
 Measured from the development environment (`pip show` / `pip index versions`). Versions marked *expected* were not installed locally but match current PyPI releases at verification time.
 
@@ -88,7 +93,7 @@ Measured from the development environment (`pip show` / `pip index versions`). V
 |---------|---------|
 | watchdog | 6.0.0 |
 | psutil | 7.2.2 |
-| chromadb | 1.5.9 |
+| chromadb | 0.6.3 |
 | requests | 2.34.2 |
 | pydantic | 2.13.4 |
 | pyyaml | 6.0.3 |

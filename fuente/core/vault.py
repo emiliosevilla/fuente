@@ -12,6 +12,7 @@ from fuente.domain.documents import MarkdownDocument
 from fuente.domain.frontmatter import FrontmatterError, serialize_frontmatter
 from fuente.domain.errors import PathAuthorizationError
 from fuente.domain.paths import AuthorizedPathResolver, document_id_for_relative_path
+from fuente.extractors.base import enrich_extraction_metadata
 from fuente.domain.quarantine import QuarantineService
 from fuente.infrastructure.atomic_files import atomic_write_json, atomic_write_text
 
@@ -311,6 +312,7 @@ class VaultManager:
             "history": [],
             **metadata,
         }
+        document_metadata = enrich_extraction_metadata(document_metadata, content)
         # `3_limpio` is the canonical record.  It needs a stable v3 identity
         # so a human approval can bind to these exact bytes.  It is an input
         # record, not a derived summary, and therefore has no origins itself.
@@ -320,14 +322,14 @@ class VaultManager:
                 "note_id": document_id_for_relative_path(
                     self._vault_relative_identity(clean_path)
                 ),
-                "note_type": "concept",
+                "note_type": "original",
                 "origins": [],
             }
         )
         for retired_key in ("sources", "source_kind", "origin_kind", "legacy_origin_ids"):
             document_metadata.pop(retired_key, None)
         document_metadata["issue"] = document_metadata.get("issue") or DEFAULT_ISSUE
-        full_content = serialize_frontmatter(document_metadata) + content
+        full_content = serialize_frontmatter(document_metadata, human_labels=True) + content
 
         atomic_write_text(clean_path, full_content)
 
@@ -376,7 +378,16 @@ class VaultManager:
                 "origin_kind and at least one complete OriginRef"
             )
         target_issue_dir.mkdir(parents=True, exist_ok=True)
-        atomic_write_text(output_path, document.to_markdown())
+        human_labels = any(
+            line.split(":", 1)[0].strip()
+            in {"versión_esquema", "id_nota", "tipo_nota", "título", "estado"}
+            for line in content.splitlines()[:32]
+            if ":" in line
+        )
+        atomic_write_text(
+            output_path,
+            serialize_frontmatter(metadata, human_labels=human_labels) + document.body,
+        )
 
         logger.info(f"Nota atómica guardada en {target_issue_dir.name}: {output_path.name}")
         return output_path

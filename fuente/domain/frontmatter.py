@@ -18,7 +18,7 @@ V2_SCHEMA_VERSION = 2
 LEGACY_SCHEMA_VERSION = 1
 ALLOWED_STATUSES = frozenset({"pending_review", "approved", "rejected", "draft", "archived"})
 NOTE_TYPES = frozenset({"source", "concept", "topic", "question", "result"})
-V3_NOTE_TYPES = frozenset({"summary", "concept", "topic", "question", "result"})
+V3_NOTE_TYPES = frozenset({"original", "summary", "concept", "topic", "question", "result"})
 SOURCE_KINDS = frozenset(
     {"call", "meeting", "email", "working_document", "official_document", "unclassified"}
 )
@@ -27,13 +27,43 @@ _KEY_MIGRATIONS = {
     "fecha": "date",
     "autor": "author",
     "claves": "tags",
+    "cuestión": "issue",
     "fuentes": "sources",
     "estado": "status",
     "historial": "history",
+    "versión_esquema": "schema_version",
+    "id_nota": "note_id",
+    "tipo_nota": "note_type",
+    "tipo_origen": "origin_kind",
+    "orígenes": "origins",
+    "identificadores_origen_legacy": "legacy_origin_ids",
+    "archivo_original": "original_file",
+    "formato": "format",
+    "tipo": "type",
+    "estado_extracción": "extraction_status",
+    "método_extracción": "extraction_method",
+    "motivo_extracción": "extraction_reason",
 }
 _STATUS_MIGRATIONS = {
     "pendiente_aprobacion": "pending_review",
+    "pendiente de aprobación": "pending_review",
     "aprobada": "approved",
+    "aprobado": "approved",
+    "rechazado": "rejected",
+    "rechazada": "rejected",
+    "no aprobado": "rejected",
+    "borrador": "draft",
+    "archivado": "archived",
+}
+_EXTRACTION_STATUS_MIGRATIONS = {
+    "pendiente de extracción": "pending",
+    "pendiente_extraccion": "pending",
+    "completado": "completed",
+    "completada": "completed",
+    "fallido": "failed",
+    "fallida": "failed",
+    "omitido": "skipped",
+    "omitida": "skipped",
 }
 _DEFAULTS = {
     "title": "",
@@ -47,6 +77,40 @@ _DEFAULTS = {
 _LEGACY_DEFAULTS = {"sources": []}
 _STRING_FIELDS = ("title", "date", "author", "issue")
 _LIST_FIELDS = ("tags", "history")
+_HUMAN_SERIALIZATION_KEYS = {
+    "schema_version": "versión_esquema",
+    "note_id": "id_nota",
+    "note_type": "tipo_nota",
+    "title": "título",
+    "date": "fecha",
+    "author": "autor",
+    "tags": "claves",
+    "issue": "cuestión",
+    "status": "estado",
+    "origin_kind": "tipo_origen",
+    "origins": "orígenes",
+    "legacy_origin_ids": "identificadores_origen_legacy",
+    "history": "historial",
+    "original_file": "archivo_original",
+    "format": "formato",
+    "type": "tipo",
+    "extraction_status": "estado_extracción",
+    "extraction_method": "método_extracción",
+    "extraction_reason": "motivo_extracción",
+}
+_HUMAN_STATUS_VALUES = {
+    "pending_review": "pendiente de aprobación",
+    "approved": "aprobado",
+    "rejected": "no aprobado",
+    "draft": "borrador",
+    "archived": "archivado",
+}
+_HUMAN_EXTRACTION_STATUS_VALUES = {
+    "pending": "pendiente de extracción",
+    "completed": "completado",
+    "failed": "fallido",
+    "skipped": "omitido",
+}
 
 
 def parse_frontmatter(markdown: str) -> tuple[dict, str]:
@@ -71,8 +135,13 @@ def parse_frontmatter(markdown: str) -> tuple[dict, str]:
     return metadata, body
 
 
-def serialize_frontmatter(metadata: dict) -> str:
-    """Validate and serialize metadata in the canonical frontmatter envelope."""
+def serialize_frontmatter(metadata: dict, *, human_labels: bool = False) -> str:
+    """Validate and serialize metadata in the canonical frontmatter envelope.
+
+    ``human_labels`` is opt-in so existing writers keep their byte-level
+    representation. New documents can expose Spanish labels while readers
+    still receive the canonical English keys through ``_KEY_MIGRATIONS``.
+    """
     if not isinstance(metadata, dict):
         raise FrontmatterError("Frontmatter metadata must be a mapping")
     canonical = _migrate(metadata)
@@ -86,9 +155,27 @@ def serialize_frontmatter(metadata: dict) -> str:
         raise FrontmatterError("v2 source notes must be migrated before serialization")
     if canonical.get("schema_version") in {LEGACY_SCHEMA_VERSION, V2_SCHEMA_VERSION}:
         canonical = _without_retired_provenance_fields(canonical)
+    if human_labels:
+        canonical = {
+            _HUMAN_SERIALIZATION_KEYS.get(key, key): value
+            for key, value in canonical.items()
+        }
+        if "estado" in canonical:
+            canonical["estado"] = _HUMAN_STATUS_VALUES.get(
+                canonical["estado"], canonical["estado"]
+            )
+        if "estado_extracción" in canonical:
+            canonical["estado_extracción"] = _HUMAN_EXTRACTION_STATUS_VALUES.get(
+                canonical["estado_extracción"], canonical["estado_extracción"]
+            )
     return "---\n" + yaml.safe_dump(
         canonical, allow_unicode=True, sort_keys=False, default_flow_style=False
     ) + "---\n"
+
+
+def serialize_human_frontmatter(metadata: dict) -> str:
+    """Serialize a newly written note with Spanish human-facing field names."""
+    return serialize_frontmatter(metadata, human_labels=True)
 
 
 def _reject_duplicate_keys(node: yaml.Node | None) -> None:
@@ -140,6 +227,10 @@ def _migrate(metadata: dict, *, default_schema_version: int = LEGACY_SCHEMA_VERS
     migrated["status"] = _STATUS_MIGRATIONS.get(
         migrated.get("status", "pending_review"), migrated.get("status", "pending_review")
     )
+    if "extraction_status" in migrated:
+        migrated["extraction_status"] = _EXTRACTION_STATUS_MIGRATIONS.get(
+            migrated["extraction_status"], migrated["extraction_status"]
+        )
     migrated.setdefault("schema_version", default_schema_version)
     for key, value in _DEFAULTS.items():
         migrated.setdefault(key, value.copy() if isinstance(value, list) else value)

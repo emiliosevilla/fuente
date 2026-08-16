@@ -1,12 +1,30 @@
 # Fuente — Tablero de estado (task.md)
 
 > **Índice de planificación:** [`docs/planning-index.md`](planning-index.md) separa el plan vigente, los planes cerrados y la evidencia histórica.
-> **Checkout medido (2026-08-15):** `dev`/`origin/dev`/`main`/`origin/main` = `373c294`; el checkout tiene cambios documentales locales en revisión.
-> **Estado del producto:** hardening, Wave 1, Wave 2, fuentes montadas, base editorial, renombrado del producto a Fuente y sistema visual Nord están implementados; quedan checkpoints humanos del Vault y de la interfaz.
-> **Última evidencia de release medida:** suite completa `1094 passed, 1 skipped, 1 warning`; `scripts/release_gate.py` devuelve `RESULT: READY`.
-> **Siguiente ciclo vigente:** cerrar los checkpoints humanos de las Tareas 1–10, actualizar el ledger SDD y ejecutar el benchmark real de `qwen3.5:0.8b` cuando existan documentos canónicos aprobados.
+> **Checkout medido (2026-08-16):** rama activa `dev` y `origin/dev` en `f677af0`; `main` y `origin/main` en `d1f7d0b`; el PR #16 está fusionado. Esta actualización documental deja cambios locales pendientes de publicación.
+> **Estado del producto:** hardening, Wave 1, Wave 2, fuentes montadas, base editorial, renombrado del producto a Fuente, sistema visual Nord y correctivos OCR están implementados y publicados.
+> **Estado OCR:** Tesseract se instala como paso explícito con `eng` y `spa`; la extracción automática genera candidatos sin intervención posterior de Codex y reconstruye tablas por geometría genérica.
+> **Siguiente ciclo vigente:** promover y registrar formalmente la aprobación de las tres candidatas OCR en `3_limpio`, cerrar los checkpoints humanos de Vault/UI y ejecutar el benchmark real de `qwen3.5:0.8b` solo después de disponer de fuentes canónicas aprobadas.
 > **Histórico SDD:** la [evidencia versionada de la base v2](history/2026-08-13-editorial-foundation-evidence.md) resume el trabajo cerrado; `.superpowers/sdd/` conserva informes locales ignorados por Git. Ninguno contiene trabajo pendiente.
 > **Gate:** `PYTHONDONTWRITEBYTECODE=1 python3 scripts/release_gate.py`
+
+---
+
+## Correctivo P01 — OCR y candidatos automáticos (2026-08-16)
+
+| Área | Estado actual | Evidencia | Resto |
+|---|---|---|---|
+| Motor OCR | Ejecutado | `fuente/extractors/ocr_runtime.py`, `fuente/extractors/ocr_image.py`, fallback macOS/Windows y uso de `eng+spa`. | Ningún cambio funcional pendiente para la muestra aceptada. |
+| Tablas | Ejecutado | Reconstrucción por posiciones OCR, sin nombres de dominio fijos; pruebas con tablas genéricas. | Mantener regresiones si aparecen nuevos formatos. |
+| Metadatos | Ejecutado | Fecha, autor y estados humanizados (`pendiente de aprobación`, `aprobado`, `no aprobado`, `completado`). | Registrar la aprobación en el Vault. |
+| Instalación | Ejecutado | `fuente/installer_contract.py`, GUI y scripts macOS/Windows ofrecen y verifican Tesseract. | Comprobar ambos caminos en máquinas limpias cuando se haga la validación humana. |
+| Candidatas P01 | Generadas automáticamente y aceptadas en revisión | `scripts/regenerate_p01_candidates.py` y `tests/test_p01_correctives.py`. | Promover las salidas al estado canónico aprobado. |
+
+La aceptación de las tres candidatas es una decisión editorial sobre la muestra,
+no una afirmación de que el Vault ya esté actualizado. La medición actual de
+`/Users/emiliosevillaortego/Documents/Funes_Vault/3_limpio/` encuentra las tres
+notas con `status: pending_review`; por tanto, el ledger de aprobación y el
+benchmark siguen bloqueados hasta ejecutar esa promoción.
 
 ---
 

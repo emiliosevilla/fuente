@@ -21,8 +21,10 @@ comandos Git manuales.
    tenga dos padres. No afirmar publicación completada antes de esa verificación.
 6. Detenerse en el primer fallo. Si el PR queda bloqueado por revisiones,
    checks o políticas, dejarlo abierto y comunicar la URL y el motivo.
-7. No usar `--admin` salvo autorización expresa y específica del usuario para
-   saltarse la protección concreta que GitHub haya señalado.
+7. El usuario autoriza expresamente el uso de `--admin` en los PR de este
+   repositorio (`dev -> main`) cuando GitHub bloquee el merge normal por una
+   protección de rama. Usarlo solo después del preflight, verificando el PR,
+   su motivo de bloqueo y los cambios que se van a promocionar.
 8. No borrar `dev` después del merge y conservarla como rama de trabajo activa.
 9. Derivar el repositorio desde `origin`; no hardcodear propietario ni nombre.
 

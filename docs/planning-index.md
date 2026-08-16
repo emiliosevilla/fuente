@@ -16,7 +16,7 @@ explica decisiones o evidencia anterior.
 | Estado | Documento | Uso correcto |
 |---|---|---|
 | **Vigente — decisión** | [Especificación Fuente](superpowers/specs/2026-08-14-fuente-canonical-record-and-terminology.md) | Define qué debe construirse: `3_limpio` aprobado, `4_salida` aprobado por separado, `origins`, `Sumarios`, renombre y Nord. |
-| **Vigente — ejecución** | [SDD de ejecución Fuente](superpowers/plans/2026-08-14-fuente-execution-sdd.md) | Ejecutar sus diez tareas, en orden y con los puntos humanos descritos. |
+| **Vigente — ejecución y ledger** | [SDD de ejecución Fuente](superpowers/plans/2026-08-14-fuente-execution-sdd.md) | El ledger operativo al principio del documento manda sobre el estado actual; las diez secciones detalladas conservan el diseño y los criterios de ejecución que aún haya que reconciliar. |
 | **Vigente — hoja de ruta** | [Plan de migración Fuente](superpowers/plans/2026-08-14-fuente-canonical-record-rename-and-nord.md) | Consulta resumida de fases; no duplicar sus tareas frente al SDD. |
 | **Completado — evidencia** | [Base editorial v2](history/2026-08-13-editorial-foundation-evidence.md) | Resume en el repositorio cómo se implantaron schema v2, catálogo, aliases, backfill y estabilidad de `note_id`. No reejecutar sus briefs. |
 | **Completado — histórico** | [Cloud folder sync](superpowers/plans/2026-08-11-funes-cloud-folder-sync.md) | Referencia de la entrada unidireccional OneDrive/SharePoint montada. |
@@ -42,6 +42,13 @@ explica decisiones o evidencia anterior.
 - **Completado**: está implementado y su evidencia se conserva.
 - **Sustituido**: explica antecedentes, pero una decisión posterior cambió su dirección.
 - **Aparcado**: no está programado y no bloquea el producto.
+
+El estado operativo vigente a 2026-08-16 incluye el correctivo OCR P01: motor
+Tesseract con `eng` y `spa`, instalación explícita para macOS/Windows,
+reconstrucción genérica de tablas y generación automática de candidatas. Las
+tres candidatas fueron aceptadas editorialmente, pero la medición del Vault aún
+las muestra en `3_limpio` como `pending_review`; la promoción formal y el
+benchmark de `qwen3.5:0.8b` siguen pendientes/bloqueados respectivamente.
 
 Al cerrar una nueva tarea Fuente:
 

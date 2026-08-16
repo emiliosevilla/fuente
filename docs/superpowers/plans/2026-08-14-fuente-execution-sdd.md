@@ -1,4 +1,4 @@
-# Fuente — registro canónico, migración y Nord Implementation Plan
+# Fuente — registro canónico, migración, OCR y Nord — SDD y ledger de ejecución
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use `superpowers:subagent-driven-development` (recommended) or `superpowers:executing-plans` to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -9,6 +9,40 @@
 **Tech Stack:** Python 3.10+, PyYAML 6, SQLite, pytest, Ollama local por HTTP loopback, HTML/CSS de la consola PyWebView/Tk, Markdown compatible con Obsidian.
 
 **Spec:** [`docs/superpowers/specs/2026-08-14-fuente-canonical-record-and-terminology.md`](../specs/2026-08-14-fuente-canonical-record-and-terminology.md)
+
+> **Cómo leer este documento (actualizado 2026-08-16):** el ledger operativo de
+> abajo es la fuente de verdad para saber qué está ejecutado y qué queda por
+> ejecutar. Las casillas de las secciones detalladas conservan el diseño
+> original del SDD y no deben interpretarse por sí solas como el estado actual.
+> Varias rutas `funes/...` de esas secciones son referencias históricas del
+> diseño; el checkout operativo actual usa `fuente/...`.
+
+## Ledger operativo de ejecución — 2026-08-16
+
+| Orden lógico | Asunto | Estado | Evidencia y trabajo restante |
+|---|---|---|---|
+| 1 | Runtime OCR local y extracción con estructura | **Ejecutado** | Tesseract usa `eng+spa`; hay fallback macOS/Windows, extracción PDF/imagen, detección de fecha y autor, estados en español y reconstrucción genérica de tablas por geometría. Evidencia: `fuente/extractors/ocr_runtime.py`, `fuente/extractors/ocr_image.py`, `tests/test_ocr_runtime.py` y `tests/test_p01_correctives.py`. |
+| 2 | Setup de OCR | **Ejecutado** | El instalador ofrece OCR como paso explícito y verifica Tesseract con `eng` y `spa`; macOS usa Homebrew y Windows WinGet cuando están disponibles. Evidencia: `fuente/installer_contract.py`, `fuente/installer_gui.py`, `instalar_fuente.command`, `instalar_fuente.bat`. |
+| 3 | Regeneración automática de las tres candidatas P01 | **Ejecutado** | `scripts/regenerate_p01_candidates.py` genera los `.md` sin intervención posterior de Codex. La muestra fue aceptada por el revisor como suficientemente precisa. |
+| 4 | Promoción y aprobación persistente en el Vault | **Pendiente** | La decisión editorial de la muestra es favorable, pero la medición actual del Vault muestra las tres notas en `3_limpio/` con `status: pending_review`; además, las dos candidatas de certificado siguen siendo placeholders. Hay que promover las salidas automáticas y registrar el estado aprobado en el propio flujo, sin editar su contenido a mano. |
+| 5 | Benchmark real de `qwen3.5:0.8b` | **Bloqueado** | Solo puede ejecutarse con casos canónicos aprobados en `3_limpio`; no se auto-promueve el modelo. |
+| 6 | Checkpoints humanos de Vault/UI y cierre documental | **Pendiente** | Falta conservar evidencia de la revisión del Vault y la comprobación visual de la UI, y cerrar la reconciliación formal de las Tareas 1–10 del SDD detallado. |
+
+### Estado de la muestra OCR
+
+La decisión vigente del revisor es considerar aprobadas las tres candidatas por
+su precisión global. Esto no equivale todavía a que el Vault las haya marcado
+como aprobadas: al medir `/Users/emiliosevillaortego/Documents/Funes_Vault` el
+16 de agosto, las tres notas canónicas siguen con `status: pending_review`.
+Hasta completar esa promoción, el benchmark y cualquier derivación que exija
+una fuente canónica aprobada permanecen bloqueados.
+
+### Estado de las tareas del SDD detallado
+
+- **Base técnica, renombrado Fuente, instaladores, Wave 1/Wave 2 y sistema Nord:** implementados según la evidencia de `docs/task.md` y publicados en `main` mediante el PR #16.
+- **Tareas 1–7 y 9:** tienen implementación o cobertura histórica documentada, pero sus casillas detalladas no son un ledger fiable; quedan por reconciliar con las rutas actuales y por completar los checkpoints humanos que correspondan.
+- **Tarea 8:** renombrado Funes → Fuente ejecutado; el PR #16 quedó fusionado en `main` con `d1f7d0b`.
+- **Tarea 10:** el gate técnico está documentado como `RESULT: READY`; el cierre formal sigue pendiente hasta registrar la evidencia actual de Vault/UI y la retirada de compatibilidad que proceda.
 
 ## Global Constraints
 

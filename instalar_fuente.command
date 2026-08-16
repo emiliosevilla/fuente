@@ -47,10 +47,12 @@ export TK_SILENCE_DEPRECATION=1
 
 pip install --upgrade pip
 if confirm "¿Instalar extras completos (.[all]) para audio/OCR/ofimática?"; then
+    export FUENTE_INSTALL_OCR=1
     if [ -f "pyproject.toml" ] || [ -f "setup.py" ]; then
         pip install -e ".[all]"
     fi
 else
+    export FUENTE_INSTALL_OCR=0
     if [ -f "pyproject.toml" ] || [ -f "setup.py" ]; then
         pip install -e .
     fi

@@ -6,6 +6,7 @@ from unittest.mock import MagicMock, patch
 
 from fuente.extractors.tex_tm import TeXAndTeXmacsExtractor
 from fuente.extractors.audio import AudioExtractor
+from fuente.extractors.macos_vision import OCRUnavailableError
 from fuente.extractors.ocr_image import ImageOCRExtractor
 from fuente.extractors.office_pdf import TextAndOfficeExtractor
 
@@ -116,30 +117,31 @@ Fin del documento.
         img_file = self.temp_path / "captura.png"
         img_file.write_bytes(b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR")
 
-        extractor = ImageOCRExtractor()
+        class UnavailableBackend:
+            def extract_image(self, _path):
+                raise OCRUnavailableError("Vision no está disponible")
+
+        extractor = ImageOCRExtractor(ocr_backend=UnavailableBackend())
         self.assertTrue(extractor.can_handle(img_file))
 
-        with patch.dict("sys.modules", {"pytesseract": None}):
-            extracted, meta = extractor.extract(img_file)
-            self.assertEqual(meta["type"], "image")
-            self.assertIn("requiere Tesseract/PIL", extracted)
+        extracted, meta = extractor.extract(img_file)
+        self.assertIsNone(extracted)
+        self.assertEqual(meta["type"], "image")
+        self.assertEqual(meta["extraction_status"], "failed")
 
     def test_ocr_extractor_mock_tesseract(self):
         img_file = self.temp_path / "escaner.jpg"
         img_file.write_bytes(b"\xff\xd8\xff\xe0\x00\x10JFIF")
 
-        extractor = ImageOCRExtractor()
+        class WorkingBackend:
+            def extract_image(self, _path):
+                return "  TEXTO EXTRAIDO POR OCR  "
 
-        mock_pytesseract = MagicMock()
-        mock_pytesseract.image_to_string.return_value = "  TEXTO EXTRAIDO POR OCR  "
-
-        mock_pil = MagicMock()
-        mock_pil.Image.open.return_value = MagicMock()
-
-        with patch.dict("sys.modules", {"pytesseract": mock_pytesseract, "PIL": mock_pil}):
-            extracted, meta = extractor.extract(img_file)
-            self.assertIn("OCR de escaner.jpg", extracted)
-            self.assertIn("TEXTO EXTRAIDO POR OCR", extracted)
+        extractor = ImageOCRExtractor(ocr_backend=WorkingBackend())
+        extracted, meta = extractor.extract(img_file)
+        self.assertIn("OCR de escaner.jpg", extracted)
+        self.assertIn("TEXTO EXTRAIDO POR OCR", extracted)
+        self.assertEqual(meta["extraction_status"], "completed")
 
     # ------------------------------------------------------------------
     # 4. TextAndOfficeExtractor

@@ -24,9 +24,10 @@
 | 1 | Runtime OCR local y extracción con estructura | **Ejecutado** | Tesseract usa `eng+spa`; hay fallback macOS/Windows, extracción PDF/imagen, detección de fecha y autor, estados en español y reconstrucción genérica de tablas por geometría. Evidencia: `fuente/extractors/ocr_runtime.py`, `fuente/extractors/ocr_image.py`, `tests/test_ocr_runtime.py` y `tests/test_p01_correctives.py`. |
 | 2 | Setup de OCR | **Ejecutado** | El instalador ofrece OCR como paso explícito y verifica Tesseract con `eng` y `spa`; macOS usa Homebrew y Windows WinGet cuando están disponibles. Evidencia: `fuente/installer_contract.py`, `fuente/installer_gui.py`, `instalar_fuente.command`, `instalar_fuente.bat`. |
 | 3 | Regeneración automática de las tres candidatas P01 | **Ejecutado** | `scripts/regenerate_p01_candidates.py` genera los `.md` sin intervención posterior de Codex. La muestra fue aceptada por el revisor como suficientemente precisa. |
-| 4 | Promoción y aprobación persistente en el Vault | **Pendiente** | La decisión editorial de la muestra es favorable, pero la medición actual del Vault muestra las tres notas en `3_limpio/` con `status: pending_review`; además, las dos candidatas de certificado siguen siendo placeholders. Hay que promover las salidas automáticas y registrar el estado aprobado en el propio flujo, sin editar su contenido a mano. |
-| 5 | Benchmark real de `qwen3.5:0.8b` | **Bloqueado** | Solo puede ejecutarse con casos canónicos aprobados en `3_limpio`; no se auto-promueve el modelo. |
-| 6 | Checkpoints humanos de Vault/UI y cierre documental | **Pendiente** | Falta conservar evidencia de la revisión del Vault y la comprobación visual de la UI, y cerrar la reconciliación formal de las Tareas 1–10 del SDD detallado. |
+| 4 | CVE-2026-45829 en ChromaDB | **Resuelto localmente; pendiente de publicación** | `chromadb==1.5.9` fue sustituido por `0.6.3`, fuera del rango afectado. `pip check` pasa; smoke embebido, regresiones de seguridad/RAG y suite completa en verde. La alerta de GitHub se cerrará solo cuando el cambio llegue a la rama por defecto. |
+| 5 | Promoción y aprobación persistente en el Vault | **Pendiente** | La decisión editorial de la muestra es favorable, pero la medición actual del Vault muestra las tres notas en `3_limpio/` con `status: pending_review`; además, las dos candidatas de certificado siguen siendo placeholders. Hay que promover las salidas automáticas y registrar el estado aprobado en el propio flujo, sin editar su contenido a mano. |
+| 6 | Benchmark real de `qwen3.5:0.8b` | **Bloqueado** | Solo puede ejecutarse con casos canónicos aprobados en `3_limpio`; no se auto-promueve el modelo. |
+| 7 | Checkpoints humanos de Vault/UI y cierre documental | **Pendiente** | Falta conservar evidencia de la revisión del Vault y la comprobación visual de la UI, y cerrar la reconciliación formal de las Tareas 1–10 del SDD detallado. |
 
 ### Estado de la muestra OCR
 
@@ -39,7 +40,7 @@ una fuente canónica aprobada permanecen bloqueados.
 
 ### Estado de las tareas del SDD detallado
 
-- **Base técnica, renombrado Fuente, instaladores, Wave 1/Wave 2 y sistema Nord:** implementados según la evidencia de `docs/task.md` y publicados en `main` mediante el PR #16.
+- **Base técnica, renombrado Fuente, instaladores, Wave 1/Wave 2 y sistema Nord:** implementados según la evidencia de `docs/task.md` y publicados en `main`; el último cierre documental llegó mediante el PR #17.
 - **Tareas 1–7 y 9:** tienen implementación o cobertura histórica documentada, pero sus casillas detalladas no son un ledger fiable; quedan por reconciliar con las rutas actuales y por completar los checkpoints humanos que correspondan.
 - **Tarea 8:** renombrado Funes → Fuente ejecutado; el PR #16 quedó fusionado en `main` con `d1f7d0b`.
 - **Tarea 10:** el gate técnico está documentado como `RESULT: READY`; el cierre formal sigue pendiente hasta registrar la evidencia actual de Vault/UI y la retirada de compatibilidad que proceda.

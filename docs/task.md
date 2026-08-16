@@ -1,12 +1,25 @@
 # Fuente — Tablero de estado (task.md)
 
 > **Índice de planificación:** [`docs/planning-index.md`](planning-index.md) separa el plan vigente, los planes cerrados y la evidencia histórica.
-> **Checkout medido (2026-08-16):** rama activa `dev` y `origin/dev` en `f677af0`; `main` y `origin/main` en `d1f7d0b`; el PR #16 está fusionado. Esta actualización documental deja cambios locales pendientes de publicación.
+> **Checkout medido (2026-08-16):** rama activa `dev` y `origin/dev` en `3e93092`; `main` y `origin/main` en `edfbc41`; el PR #17 está fusionado. La corrección de seguridad actual deja cambios locales pendientes de publicación.
 > **Estado del producto:** hardening, Wave 1, Wave 2, fuentes montadas, base editorial, renombrado del producto a Fuente, sistema visual Nord y correctivos OCR están implementados y publicados.
 > **Estado OCR:** Tesseract se instala como paso explícito con `eng` y `spa`; la extracción automática genera candidatos sin intervención posterior de Codex y reconstruye tablas por geometría genérica.
 > **Siguiente ciclo vigente:** promover y registrar formalmente la aprobación de las tres candidatas OCR en `3_limpio`, cerrar los checkpoints humanos de Vault/UI y ejecutar el benchmark real de `qwen3.5:0.8b` solo después de disponer de fuentes canónicas aprobadas.
 > **Histórico SDD:** la [evidencia versionada de la base v2](history/2026-08-13-editorial-foundation-evidence.md) resume el trabajo cerrado; `.superpowers/sdd/` conserva informes locales ignorados por Git. Ninguno contiene trabajo pendiente.
 > **Gate:** `PYTHONDONTWRITEBYTECODE=1 python3 scripts/release_gate.py`
+
+---
+
+## Seguridad — ChromaDB CVE-2026-45829 (2026-08-16)
+
+- **Resuelto localmente:** `chromadb==1.5.9` fue sustituido por `0.6.3`, fuera
+  del rango vulnerable `>=1.0.0, <=1.5.9`.
+- **Controles conservados:** solo `PersistentClient` embebido; no hay servidor,
+  `HttpClient`, repositorios de modelos ni `trust_remote_code` configurables.
+- **Evidencia:** `pip check` sin conflictos, smoke real de Chroma embebido,
+  matriz seguridad/RAG `80 passed` y suite completa `1122 passed, 1 skipped`.
+- **Pendiente:** publicar el cambio en `main` para que Dependabot vuelva a leer
+  `requirements.txt` y cierre la alerta #1.
 
 ---
 

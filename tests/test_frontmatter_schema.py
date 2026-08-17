@@ -82,6 +82,8 @@ body
             )
         with self.assertRaises(FrontmatterError):
             parse_frontmatter("---\ntitle: Note\nstatus: unknown\n---\nbody")
+        with self.assertRaisesRegex(FrontmatterError, "revision must be a positive integer"):
+            parse_frontmatter("---\ntitle: Note\nrevision: 0\n---\nbody")
 
     def test_schema_v2_source_requires_persistent_identity(self):
         metadata, _ = parse_frontmatter(

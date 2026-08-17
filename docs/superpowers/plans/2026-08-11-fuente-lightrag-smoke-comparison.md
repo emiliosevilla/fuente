@@ -1,4 +1,4 @@
-# Funes LightRAG Comparative Smoke Test Plan
+# Fuente LightRAG Comparative Smoke Test Plan
 
 > **Estado: aparcado; evaluación opcional, no producto (2026-08-14).**
 > LightRAG no pertenece al runtime ni al gate actual. Solo retomar con una
@@ -6,20 +6,20 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Add an opt-in, reproducible comparison between Funes' current Chroma/BM25 retrieval and an externally running LightRAG server without changing Funes' production dependencies or default runtime.
+**Goal:** Add an opt-in, reproducible comparison between Fuente' current Chroma/BM25 retrieval and an externally running LightRAG server without changing Fuente' production dependencies or default runtime.
 
-**Architecture:** The evaluation uses one fixed Markdown corpus, one fixed query/gold set, and two adapters: the in-process Funes retrieval adapter and an HTTP LightRAG adapter. LightRAG is launched and configured outside the default application, using its documented `/health`, `/documents/text`, `/documents/track_status/{track_id}`, and `/query` endpoints. The runner emits JSON/Markdown evidence with retrieval quality, latency, citation/source coverage, errors, and optional process RSS; it does not install, start, or mutate LightRAG unless explicitly requested.
+**Architecture:** The evaluation uses one fixed Markdown corpus, one fixed query/gold set, and two adapters: the in-process Fuente retrieval adapter and an HTTP LightRAG adapter. LightRAG is launched and configured outside the default application, using its documented `/health`, `/documents/text`, `/documents/track_status/{track_id}`, and `/query` endpoints. The runner emits JSON/Markdown evidence with retrieval quality, latency, citation/source coverage, errors, and optional process RSS; it does not install, start, or mutate LightRAG unless explicitly requested.
 
-**Tech Stack:** Python standard library HTTP client, existing Funes retrieval services, pytest, optional externally managed LightRAG Server, JSON/Markdown reports. Official reference: [LightRAG repository and server guidance](https://github.com/HKUDS/LightRAG) and [LightRAG API server documentation](https://github.com/HKUDS/LightRAG/blob/main/docs/LightRAG-API-Server.md).
+**Tech Stack:** Python standard library HTTP client, existing Fuente retrieval services, pytest, optional externally managed LightRAG Server, JSON/Markdown reports. Official reference: [LightRAG repository and server guidance](https://github.com/HKUDS/LightRAG) and [LightRAG API server documentation](https://github.com/HKUDS/LightRAG/blob/main/docs/LightRAG-API-Server.md).
 
 ## Global Constraints
 
 - LightRAG is evaluation-only; it is not added to `pyproject.toml`, `requirements.txt`, the installer, or the release gate default path.
-- The current Funes Chroma/BM25 implementation remains the baseline and the production default.
+- The current Fuente Chroma/BM25 implementation remains the baseline and the production default.
 - No cloud LLM, cloud embedding, or outbound network call is allowed in the default test suite.
 - The comparison corpus and gold queries are versioned fixtures with stable document IDs and expected source anchors.
 - The runner must fail closed on an unhealthy or unauthenticated LightRAG endpoint and must report `unavailable`, not fabricate a score.
-- Results must identify the LightRAG server version/configuration and the Funes runtime policy used.
+- Results must identify the LightRAG server version/configuration and the Fuente runtime policy used.
 - No benchmark result is a production decision until repeated runs and RAM/latency evidence are reviewed by a human.
 
 ---
@@ -68,17 +68,17 @@
   git commit -m "test: add deterministic rag comparison corpus"
   ```
 
-### Task 2: Build the common benchmark data model and Funes baseline adapter
+### Task 2: Build the common benchmark data model and Fuente baseline adapter
 
 **Files:**
-- Create: `funes/evaluation/__init__.py`
-- Create: `funes/evaluation/rag_comparison.py`
+- Create: `fuente/evaluation/__init__.py`
+- Create: `fuente/evaluation/rag_comparison.py`
 - Create: `scripts/rag_compare.py`
 - Test: `tests/evaluation/test_rag_comparison_baseline.py`
 
 **Interfaces:**
 - Consumes: fixture manifest from Task 1 and `RetrievalApplicationService.build_context`.
-- Produces: `RagQuery`, `RagHit`, `RagRunResult`, `RagBackend` protocol, `FunesRagBackend.query(RagQuery) -> RagRunResult`, and `evaluate_run(manifest, results) -> dict`.
+- Produces: `RagQuery`, `RagHit`, `RagRunResult`, `RagBackend` protocol, `FuenteRagBackend.query(RagQuery) -> RagRunResult`, and `evaluate_run(manifest, results) -> dict`.
 
 - [ ] **Step 1: Write baseline adapter tests**
 
@@ -94,9 +94,9 @@
 
   Expected: the evaluation package and adapter are absent.
 
-- [ ] **Step 3: Implement the common result model and Funes adapter**
+- [ ] **Step 3: Implement the common result model and Fuente adapter**
 
-  Use dataclasses with JSON-safe `as_dict()` methods. For the Funes adapter, load the fixture vault through the existing authorized corpus path, query the configured runtime policy, and capture only retrieval evidence; do not call an LLM for the first comparison.
+  Use dataclasses with JSON-safe `as_dict()` methods. For the Fuente adapter, load the fixture vault through the existing authorized corpus path, query the configured runtime policy, and capture only retrieval evidence; do not call an LLM for the first comparison.
 
 - [ ] **Step 4: Implement deterministic metrics**
 
@@ -107,7 +107,7 @@
   Run the Step 2 command and:
 
   ```bash
-  PYTHONDONTWRITEBYTECODE=1 python3 scripts/rag_compare.py --backend funes --fixtures tests/fixtures/rag_comparison --output /tmp/funes-rag-baseline.json
+  PYTHONDONTWRITEBYTECODE=1 python3 scripts/rag_compare.py --backend fuente --fixtures tests/fixtures/rag_comparison --output /tmp/fuente-rag-baseline.json
   ```
 
   Expected: a deterministic baseline report is produced without network access.
@@ -117,16 +117,16 @@
   Human operator runs:
 
   ```bash
-  git add funes/evaluation scripts/rag_compare.py tests/evaluation/test_rag_comparison_baseline.py
-  git commit -m "feat: add reproducible Funes rag benchmark baseline"
+  git add fuente/evaluation scripts/rag_compare.py tests/evaluation/test_rag_comparison_baseline.py
+  git commit -m "feat: add reproducible Fuente rag benchmark baseline"
   ```
 
 ### Task 3: Add a strict LightRAG HTTP adapter with offline contract tests
 
 **Files:**
-- Modify: `funes/evaluation/rag_comparison.py`
+- Modify: `fuente/evaluation/rag_comparison.py`
 - Modify: `scripts/rag_compare.py`
-- Create: `funes/evaluation/lightrag_client.py`
+- Create: `fuente/evaluation/lightrag_client.py`
 - Test: `tests/evaluation/test_lightrag_client.py`
 - Test: `tests/security/test_lightrag_smoke_boundary.py`
 
@@ -165,7 +165,7 @@
   Human operator runs:
 
   ```bash
-  git add funes/evaluation/rag_comparison.py funes/evaluation/lightrag_client.py scripts/rag_compare.py tests/evaluation/test_lightrag_client.py tests/security/test_lightrag_smoke_boundary.py
+  git add fuente/evaluation/rag_comparison.py fuente/evaluation/lightrag_client.py scripts/rag_compare.py tests/evaluation/test_lightrag_client.py tests/security/test_lightrag_smoke_boundary.py
   git commit -m "feat: add opt-in LightRAG smoke adapter"
   ```
 
@@ -180,11 +180,11 @@
 
 **Interfaces:**
 - Consumes: adapters and fixture manifest from Tasks 1–3.
-- Produces: CLI commands `python3 scripts/rag_compare.py --backend funes|lightrag|both` and `python3 scripts/lightrag_smoke.py --base-url URL --fixtures PATH --output PATH`; reports `run_id`, backend, runtime policy, endpoint, server health, query results, metrics, and errors.
+- Produces: CLI commands `python3 scripts/rag_compare.py --backend fuente|lightrag|both` and `python3 scripts/lightrag_smoke.py --base-url URL --fixtures PATH --output PATH`; reports `run_id`, backend, runtime policy, endpoint, server health, query results, metrics, and errors.
 
 - [ ] **Step 1: Write CLI tests**
 
-  Assert default invocation runs only Funes, `--backend lightrag` without a URL returns a clear unavailable result, `--backend both` keeps one backend failure from fabricating the other score, output paths are explicit and outside the repository by default, and `--help` documents the opt-in network behavior.
+  Assert default invocation runs only Fuente, `--backend lightrag` without a URL returns a clear unavailable result, `--backend both` keeps one backend failure from fabricating the other score, output paths are explicit and outside the repository by default, and `--help` documents the opt-in network behavior.
 
 - [ ] **Step 2: Run CLI tests to verify they fail**
 
@@ -198,7 +198,7 @@
 
 - [ ] **Step 3: Implement the offline-safe CLI**
 
-  Make Funes the default backend, require an explicit LightRAG base URL for external runs, require `--confirm-external` for non-loopback URLs, and write JSON plus a human-readable Markdown summary. Add no automatic installer or subprocess launch.
+  Make Fuente the default backend, require an explicit LightRAG base URL for external runs, require `--confirm-external` for non-loopback URLs, and write JSON plus a human-readable Markdown summary. Add no automatic installer or subprocess launch.
 
 - [ ] **Step 4: Add optional process-resource sampling**
 
@@ -210,7 +210,7 @@
 
   ```bash
   PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -p no:cacheprovider tests/evaluation/test_rag_compare_cli.py tests/evaluation/test_rag_comparison_baseline.py -q
-  PYTHONDONTWRITEBYTECODE=1 python3 scripts/rag_compare.py --backend funes --fixtures tests/fixtures/rag_comparison --output /tmp/funes-rag-baseline.json
+  PYTHONDONTWRITEBYTECODE=1 python3 scripts/rag_compare.py --backend fuente --fixtures tests/fixtures/rag_comparison --output /tmp/fuente-rag-baseline.json
   ```
 
   Expected: default operation remains offline and the report is reproducible.
@@ -253,15 +253,15 @@
 
 - [ ] **Step 3: Implement the operator protocol**
 
-  Document one fixed LightRAG configuration, one fixed Funes runtime policy, at least five repeated runs per backend, warm/cold labeling, model and embedding identifiers, corpus reset between runs, and the rule that quality, p95 latency, RSS, and error rate must all be reported before a recommendation.
+  Document one fixed LightRAG configuration, one fixed Fuente runtime policy, at least five repeated runs per backend, warm/cold labeling, model and embedding identifiers, corpus reset between runs, and the rule that quality, p95 latency, RSS, and error rate must all be reported before a recommendation.
 
-- [ ] **Step 4: Execute the Funes-only regression path**
+- [ ] **Step 4: Execute the Fuente-only regression path**
 
   Run:
 
   ```bash
   PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -p no:cacheprovider tests/evaluation -q
-  PYTHONDONTWRITEBYTECODE=1 python3 scripts/rag_compare.py --backend funes --fixtures tests/fixtures/rag_comparison --output /tmp/funes-rag-protocol.json
+  PYTHONDONTWRITEBYTECODE=1 python3 scripts/rag_compare.py --backend fuente --fixtures tests/fixtures/rag_comparison --output /tmp/fuente-rag-protocol.json
   ```
 
   Expected: the protocol is testable without LightRAG installed.
@@ -322,10 +322,10 @@
   ```bash
   PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -p no:cacheprovider tests -q
   PYTHONDONTWRITEBYTECODE=1 python3 scripts/release_gate.py
-  PYTHONDONTWRITEBYTECODE=1 python3 scripts/rag_compare.py --backend funes --fixtures tests/fixtures/rag_comparison --output /tmp/funes-rag-final.json
+  PYTHONDONTWRITEBYTECODE=1 python3 scripts/rag_compare.py --backend fuente --fixtures tests/fixtures/rag_comparison --output /tmp/fuente-rag-final.json
   ```
 
-  Expected: full suite and release gate pass with no LightRAG service, and the Funes-only comparison remains available.
+  Expected: full suite and release gate pass with no LightRAG service, and the Fuente-only comparison remains available.
 
 - [ ] **Step 5: Commit final isolation evidence**
 
@@ -338,7 +338,7 @@
 
 ## Checkpoints
 
-- After Task 2: Funes has a deterministic, offline baseline report.
+- After Task 2: Fuente has a deterministic, offline baseline report.
 - After Task 4: LightRAG can be tested only by explicit endpoint/configuration, while default execution remains offline.
 - After Task 5: repeated comparison evidence has a stable protocol and no fabricated scores.
 - After Task 6: production and release-gate behavior are unchanged unless an operator explicitly runs the evaluation.

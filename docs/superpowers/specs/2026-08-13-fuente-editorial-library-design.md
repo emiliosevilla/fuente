@@ -1,16 +1,16 @@
-# Funes Editorial Library — Design Specification
+# Fuente Editorial Library — Design Specification
 
 > **Dirección reemplazada para cambios futuros (2026-08-14):** el registro
 > canónico pasa a ser el Markdown aprobado de `3_limpio`; `Fuentes` pasa a
-> `Sumarios`; y Funes se convertirá en Fuente. Esta especificación conserva el
+> `Sumarios`; y Fuente se convertirá en Fuente. Esta especificación conserva el
 > diseño v2 como antecedente técnico. Aplicar en adelante
 > [`2026-08-14-fuente-canonical-record-and-terminology.md`](2026-08-14-fuente-canonical-record-and-terminology.md).
 
-**Goal:** evolve Funes from a route-oriented local ETL into a safe editorial
+**Goal:** evolve Fuente from a route-oriented local ETL into a safe editorial
 library for Obsidian. The Markdown Vault remains portable and authoritative;
 SQLite, graph and RAG are reconstructible derived indexes. The result must
 create better source notes, concepts, topics, questions and results without
-allowing an LLM, an imported document or a folder instruction to alter Funes'
+allowing an LLM, an imported document or a folder instruction to alter Fuente'
 security boundary.
 
 **Architecture:** introduce one immutable `note_id` in Markdown frontmatter;
@@ -29,10 +29,10 @@ dependency on the Obsidian CLI are introduced.
 
 ## 1. Product outcome and non-goals
 
-Funes will compile raw material into explicit editorial candidates, not silently
+Fuente will compile raw material into explicit editorial candidates, not silently
 rewrite a personal knowledge base. A human must approve publication, movement,
 taxonomy correction and any external-model authorization already required by
-Funes.
+Fuente.
 
 The target output structure for each active theme is:
 
@@ -55,7 +55,7 @@ The target output structure for each active theme is:
 
 This structure is a navigation and presentation convention. Frontmatter—not a
 path segment—is the authority for a note's type, source subtype, question and
-state. Funes must never infer `issue` from the first directory below
+state. Fuente must never infer `issue` from the first directory below
 `4_salida` after the new schema is active.
 
 Out of scope for this design:
@@ -72,7 +72,7 @@ Out of scope for this design:
 
 ## 2. Architectural invariants
 
-1. Markdown files are the portable system of record. `.funes/state.db`, Chroma,
+1. Markdown files are the portable system of record. `.fuente/state.db`, Chroma,
    MOC and graph artifacts can be rebuilt from them.
 2. `note_id` is the only canonical note identity. It is immutable, opaque and
    never accepted as a mutable field from an LLM or the UI.
@@ -82,7 +82,7 @@ Out of scope for this design:
 4. A `source_id`/`ingestion_key` identifies an inbound source, not an output
    note. Existing path-derived ingest UUIDs become aliases where required.
 5. Exactly one active path maps to each active `note_id`. Duplicate frontmatter
-   IDs are an `identity_collision`, not a tie that Funes may resolve itself.
+   IDs are an `identity_collision`, not a tie that Fuente may resolve itself.
 6. Every mutation uses `note_id + expected_revision + expected_content_hash`.
    A move increments revision even if file bytes do not change.
 7. The bridge accepts the legacy JSON field `document_id` only as a temporary
@@ -106,7 +106,7 @@ schema_version: 2
 note_id: 6c629eba-a0f0-5b38-a25a-81de3bdd0184
 title: Reunión de contratación del 13 de agosto
 date: 2026-08-13
-author: Funes
+author: Fuente
 tags: [contratación, reunión]
 note_type: source             # source | concept | topic | question | result
 source_kind: meeting          # only source: call | meeting | email | working_document | official_document | unclassified
@@ -129,8 +129,8 @@ Rules:
 - `note_type`, `source_kind`, `theme` and `issue` use closed vocabulary
   validation. Spanish display labels are UI/template concern, not alternative
   serialized values.
-- Funes-owned fields (`note_id`, `schema_version`, `status`, `history`,
-  revision-managed data and routes) are rendered by Funes, not supplied by a
+- Fuente-owned fields (`note_id`, `schema_version`, `status`, `history`,
+  revision-managed data and routes) are rendered by Fuente, not supplied by a
   model output.
 - `sources` and internal links use the stable ID/catalog resolution internally;
   Markdown keeps readable wikilinks and is rewritten only by an approved
@@ -186,7 +186,7 @@ The existing pipeline remains the authoritative path:
 1_entrada -> 2_sucio -> 3_limpio -> editorial candidate -> human review -> 4_salida
 ```
 
-Funes first derives deterministic facts (extension, MIME, provider metadata and
+Fuente first derives deterministic facts (extension, MIME, provider metadata and
 known origin). An optional model classifier returns a closed DTO with a
 confidence. Low confidence, malformed data or disagreement with deterministic
 constraints routes to `Fuentes/Sin_clasificar`; it never silently guesses a
@@ -209,15 +209,15 @@ ingest.
 
 ### 5.2 Policies and templates
 
-The resolver reads only registered policy files at fixed Funes-owned locations:
+The resolver reads only registered policy files at fixed Fuente-owned locations:
 global, theme, phase and collection. A manifest at
-`.funes/editorial_policies` records each canonical path, SHA-256, scope,
+`.fuente/editorial_policies` records each canonical path, SHA-256, scope,
 approval status and approval date. A changed hash invalidates approval.
 
 Precedence is:
 
 ```text
-immutable Funes security
+immutable Fuente security
 > approved global policy
 > approved theme policy
 > approved phase policy
@@ -236,7 +236,7 @@ state or the human-review requirement.
 
 `TemplateRegistry` returns a typed `TemplateSpec`: controlled frontmatter
 defaults, required headings, allowed link forms and a model-input contract.
-The model is asked for a structured editorial DTO; Funes renders the Markdown
+The model is asked for a structured editorial DTO; Fuente renders the Markdown
 and validates frontmatter, allowed embeds, link targets, sizes and controlled
 fields before saving it.
 
@@ -335,11 +335,11 @@ Before any real Vault is moved, automated coverage must prove at least:
 Delivery is deliberately split because the three subsystems have different
 failure modes:
 
-1. `2026-08-13-funes-editorial-foundation.md` — durable identity and safe
+1. `2026-08-13-fuente-editorial-foundation.md` — durable identity and safe
    migration machinery.
-2. `2026-08-13-funes-editorial-compilation.md` — registered policies,
+2. `2026-08-13-fuente-editorial-compilation.md` — registered policies,
    specialized templates, controlled taxonomy and health/retrieval updates.
-3. `2026-08-13-funes-reader-context.md` — reader context API, responsive
+3. `2026-08-13-fuente-reader-context.md` — reader context API, responsive
    three-pane UI and generated Obsidian views.
 
 The next plan cannot start until the previous plan's tests and focused review
@@ -357,8 +357,8 @@ The warning is external ChromaDB telemetry. The measured release gate returns
 `RESULT: BLOCKED (1 check)`, with only `source_tree_clean` failing because the
 checkout contains local modified/untracked entries. The physical taxonomy
 planner/executor is implemented and focused-tested. Human approval was
-recorded on 2026-08-14; the real `Vault_Funes` tree was normalized reversibly
+recorded on 2026-08-14; the real `Fuente_Vault` tree was normalized reversibly
 and 14 notes were moved to `4_salida/Fuentes/Sin_clasificar`, with no path
-qualified wikilinks or destination collisions. `00_MOC_Funes.md` remained at
+qualified wikilinks or destination collisions. `00_MOC_Fuente.md` remained at
 the output root. Fine-grained editorial classification remains a human-review
 task.

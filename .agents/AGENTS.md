@@ -1,4 +1,4 @@
-# Reglas de Proyecto Funes
+# Reglas de Proyecto Fuente
 
 ## Protocolo Grill-Me + Goal (`/grill-me-goal` o `/grill-me`) — SOLO BAJO PETICIÓN EXPLÍCITA (EXACTAMENTE 7 ITERACIONES)
 

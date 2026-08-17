@@ -35,7 +35,7 @@
 
 La aceptación de las tres candidatas es una decisión editorial sobre la muestra,
 no una afirmación de que el Vault ya esté actualizado. La medición actual de
-`/Users/emiliosevillaortego/Documents/Funes_Vault/3_limpio/` encuentra las tres
+`/Users/emiliosevillaortego/Documents/Fuente_Vault/3_limpio/` encuentra las tres
 notas con `status: pending_review`; por tanto, el ledger de aprobación y el
 benchmark siguen bloqueados hasta ejecutar esa promoción.
 
@@ -50,7 +50,7 @@ benchmark siguen bloqueados hasta ejecutar esa promoción.
 > `3_limpio` será el único registro canónico y requerirá aprobación humana por
 > revisión; `4_salida/Sumarios` será derivado y requerirá una segunda aprobación
 > editorial independiente antes de publicarse o exportarse. La conversión del
-> repositorio, paquete, remoto y carpeta local de Funes a Fuente ya está hecha;
+> repositorio, paquete, remoto y carpeta local de Fuente a Fuente ya está hecha;
 > el Vault conserva su nombre físico hasta una decisión específica.
 
 ### Estado medido actual — SDD Fuente (2026-08-15)
@@ -68,7 +68,7 @@ benchmark siguen bloqueados hasta ejecutar esa promoción.
 
 ### Revalidación actual del Vault — 2026-08-15
 
-- El Vault medido es `/Users/emiliosevillaortego/Documents/Funes_Vault`.
+- El Vault medido es `/Users/emiliosevillaortego/Documents/Fuente_Vault`.
 - `3_limpio/` contiene **3 Markdown**, todos con `schema_version: 3` y
   `status: pending_review`; no hay todavía una nota canónica aprobada.
 - `4_salida/` contiene únicamente `_Indice_MOC.md`; no existe
@@ -80,7 +80,7 @@ benchmark siguen bloqueados hasta ejecutar esa promoción.
 | Eje | Definición operativa |
 |-----|----------------------|
 | **Objetivo** | ETL local → Vault Obsidian: notas atómicas, hiperconectadas, revisables, buscables y exportables, sin ceder el conocimiento a la nube. |
-| **Intención** | “Memoria externa” privada: el usuario vuelca archivos; Funes estructura, enlaza y recupera con evidencia; la aprobación humana es un acto real, no cosmética. |
+| **Intención** | “Memoria externa” privada: el usuario vuelca archivos; Fuente estructura, enlaza y recupera con evidencia; la aprobación humana es un acto real, no cosmética. |
 | **Licencia / coste** | 100% gratuito y open source; sin APIs de pago obligatorias. |
 | **LLM** | Prioridad absoluta a **Ollama en loopback** (`http://localhost:11434`). Cualquier endpoint no-loopback exige opt-in explícito + aviso visible. |
 | **Hardware** | Debe degradar con gracia hasta máquinas **&lt; 8 GB RAM** (objetivo stretch: usable en ~4 GB con modelo eco + BM25-only). |
@@ -236,14 +236,14 @@ TipTap, native Graph API/OAuth, la integración de LightRAG en producción y las
 
 ### Cierre final — fuentes montadas y evidencia de release (2026-08-13)
 
-El cierre de Funes queda documentado así:
+El cierre de Fuente queda documentado así:
 
 1. **Duplicados locales:** resueltos de forma reversible; los cuatro ficheros permanecen fuera del checkout para una decisión posterior de procedencia y no bloquean el producto.
 2. **Task 5:** completada; el contrato de fuentes montadas está cableado entre dominio, sincronizador, backend, bridge y consola.
 3. **Task 6:** completada; README, matriz, task log y release gate documentan el límite unidireccional OneDrive/SharePoint montado.
 4. **Evidencia final:** completada; el último gate del árbol limpio devolvió `RESULT: READY`.
 
-La sincronización no implementa OAuth, Graph API, credenciales ni escritura de vuelta al proveedor. El cliente oficial debe montar primero la carpeta; Funes solo lee esa entrada y la copia al `1_entrada` del tema activo.
+La sincronización no implementa OAuth, Graph API, credenciales ni escritura de vuelta al proveedor. El cliente oficial debe montar primero la carpeta; Fuente solo lee esa entrada y la copia al `1_entrada` del tema activo.
 
 ### Base editorial estable — implementación medida (2026-08-14)
 
@@ -272,7 +272,7 @@ ChromaDB. `git diff --check` pasa. La publicación Git no forma parte de esta
 evidencia histórica.
 
 **Registro histórico de la reorganización (2026-08-14):** la reorganización
-física fue autorizada y ejecutada sobre `Vault_Funes`. La cifra de 14 notas y
+física fue autorizada y ejecutada sobre `Fuente_Vault`. La cifra de 14 notas y
 su clasificación en `Fuentes/Sin_clasificar` pertenece a esa medición histórica
 y no describe el Vault actual; la revalidación vigente está arriba.
 
@@ -285,9 +285,9 @@ El flujo aprobado queda disponible en `scripts/migrate_vault.py`:
 
 Evidencia de ejecución:
 
-- Normalización reversible: `Vault_Funes/.funes/migrations/normalize-20260813T225124Z/manifest.json` — 14 notas llevadas a schema v2 con `source/unclassified`, sin alterar sus cuerpos.
-- Reorganización física: `Vault_Funes/.funes/migrations/taxonomy-20260813T225141Z/manifest.json` — 14 movimientos completados, sin colisiones.
-- `00_MOC_Funes.md` se conservó fuera de la taxonomía de notas.
+- Normalización reversible: `Fuente_Vault/.fuente/migrations/normalize-20260813T225124Z/manifest.json` — 14 notas llevadas a schema v2 con `source/unclassified`, sin alterar sus cuerpos.
+- Reorganización física: `Fuente_Vault/.fuente/migrations/taxonomy-20260813T225141Z/manifest.json` — 14 movimientos completados, sin colisiones.
+- `00_MOC_Fuente.md` se conservó fuera de la taxonomía de notas.
 - No se detectaron wikilinks con rutas de carpeta que requirieran reescritura.
 - En aquella medición histórica, las 14 notas quedaron en
   `4_salida/Fuentes/Sin_clasificar`; su clasificación editorial fina no debe
@@ -295,7 +295,7 @@ Evidencia de ejecución:
 
 ### Medición final del checkout (2026-08-13)
 
-- **Duplicados locales:** resueltos de forma reversible; los cuatro ficheros se conservan fuera del checkout en `/private/tmp/funes-untracked-review-20260813/` para una decisión posterior de procedencia. No bloquean el loader ni el gate.
+- **Duplicados locales:** resueltos de forma reversible; los cuatro ficheros se conservan fuera del checkout en `/private/tmp/fuente-untracked-review-20260813/` para una decisión posterior de procedencia. No bloquean el loader ni el gate.
 - **Task 5:** completada en dominio, sincronizador, backend, bridge y consola; la suite focalizada de fuentes/UI pasó.
 - **Task 6:** completada en README, matriz, task log y release gate; los documentos describen correctamente la entrada montada y unidireccional.
 - **Evidencia focalizada:** **68 passed**.

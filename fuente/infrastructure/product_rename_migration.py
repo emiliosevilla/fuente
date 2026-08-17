@@ -14,7 +14,14 @@ from fuente.infrastructure.atomic_files import atomic_write_json
 
 
 PRODUCT_RENAME_SCHEMA_VERSION = 1
-ALLOWED_STATUSES = {"planned", "applied", "rolled_back"}
+VALID_STATE_PAIRS = {
+    ("planned", "planned"),
+    ("planned", "backup_ready"),
+    ("applied", "completed"),
+    ("applied", "rollback_in_progress"),
+    ("rolled_back", "cleanup_pending"),
+    ("rolled_back", "completed"),
+}
 
 
 def _digest(path: Path) -> str:
@@ -40,6 +47,30 @@ def _safe_directory(path: Path, label: str) -> None:
         raise ValueError(f"{label} must not be a symlink")
     if not path.is_dir():
         raise ValueError(f"{label} must be a directory")
+
+
+def _present(path: Path) -> bool:
+    return path.exists() or path.is_symlink()
+
+
+def _assert_absent(path: Path, label: str) -> None:
+    if _present(path):
+        raise FileExistsError(f"unexpected {label}: {path}")
+
+
+def _validate_backup(plan: "ProductRenamePlan") -> Path:
+    backup = Path(plan.backup_path)
+    if not backup.is_dir() or backup.is_symlink() or not plan.backup_digest:
+        raise ValueError("migration backup is missing or unsafe")
+    if _digest(backup) != plan.backup_digest or _digest(backup) != plan.source_digest:
+        raise ValueError("migration backup digest does not match the planned state")
+    return backup
+
+
+def _validate_directory_digest(path: Path, label: str, expected: str) -> None:
+    _safe_directory(path, label)
+    if _digest(path) != expected:
+        raise ValueError(f"{label} digest does not match the planned state")
 
 
 @dataclass
@@ -88,8 +119,8 @@ def _load_plan(path: Path | str) -> tuple[Path, ProductRenamePlan]:
     plan = ProductRenamePlan.from_dict(payload)
     if plan.schema_version != PRODUCT_RENAME_SCHEMA_VERSION:
         raise ValueError("manifest schema is not supported")
-    if plan.status not in ALLOWED_STATUSES:
-        raise ValueError("manifest status is ambiguous")
+    if (plan.status, plan.phase) not in VALID_STATE_PAIRS:
+        raise ValueError("manifest status/phase is ambiguous")
     if not re.fullmatch(r"product-rename-[0-9a-f-]{36}", plan.migration_id):
         raise ValueError("manifest migration id is invalid")
     root = manifest.parent
@@ -202,27 +233,83 @@ def apply_product_rename(manifest_path: Path | str) -> ProductRenamePlan:
 
 def rollback_product_rename(manifest_path: Path | str) -> ProductRenamePlan:
     manifest, plan = _load_plan(manifest_path)
-    if plan.status != "applied":
-        raise ValueError("manifest is not in applied state")
     root = Path(plan.root).resolve()
     source = root / plan.source_relative_path
     destination = root / plan.destination_relative_path
-    backup = Path(plan.backup_path)
-    _safe_directory(destination, ".fuente")
-    if source.exists() or source.is_symlink():
-        raise FileExistsError(f"rollback destination collision: {source}")
-    if not backup.is_dir() or backup.is_symlink() or not plan.backup_digest:
-        raise ValueError("migration backup is missing or unsafe")
-    if _digest(backup) != plan.backup_digest or _digest(backup) != plan.source_digest:
-        raise ValueError("migration backup digest does not match the planned state")
-    if _digest(destination) != plan.source_digest:
-        raise ValueError(".fuente changed after apply")
-
     restored = root / f".funes-restore-{plan.migration_id}"
-    shutil.copytree(backup, restored, symlinks=False)
-    os.rename(restored, source)
-    shutil.rmtree(destination)
+    retired = root / f".fuente-rollback-{plan.migration_id}"
+    backup = _validate_backup(plan)
+
+    if plan.status == "rolled_back":
+        if plan.phase != "cleanup_pending":
+            _validate_directory_digest(source, ".funes", plan.source_digest)
+            _assert_absent(destination, ".fuente")
+            _assert_absent(restored, "restore directory")
+            _assert_absent(retired, "retired directory")
+            return plan
+        _validate_directory_digest(source, ".funes", plan.source_digest)
+        _assert_absent(destination, ".fuente")
+        _assert_absent(restored, "restore directory")
+        if _present(retired):
+            _validate_directory_digest(retired, "retired directory", plan.source_digest)
+            shutil.rmtree(retired)
+        plan.phase = "completed"
+        _write_plan(manifest, plan)
+        return plan
+
+    if plan.status != "applied":
+        raise ValueError("manifest is not in an applicable rollback state")
+
+    # Recover the historical implementation's post-rollback topology: the
+    # tree is already restored but the manifest was not persisted.
+    if plan.phase == "completed" and _present(source) and not _present(destination):
+        _validate_directory_digest(source, ".funes", plan.source_digest)
+        _assert_absent(restored, "restore directory")
+        _assert_absent(retired, "retired directory")
+        plan.status = "rolled_back"
+        _write_plan(manifest, plan)
+        return plan
+
+    if plan.phase == "completed":
+        _validate_directory_digest(destination, ".fuente", plan.source_digest)
+        _assert_absent(source, ".funes")
+        _assert_absent(restored, "restore directory")
+        _assert_absent(retired, "retired directory")
+        plan.phase = "rollback_in_progress"
+        _write_plan(manifest, plan)
+    elif plan.phase != "rollback_in_progress":
+        raise ValueError("manifest is not in an applicable rollback phase")
+
+    if _present(destination):
+        _validate_directory_digest(destination, ".fuente", plan.source_digest)
+        _assert_absent(source, ".funes")
+        if _present(restored):
+            _validate_directory_digest(restored, "restore directory", plan.source_digest)
+        else:
+            shutil.copytree(backup, restored, symlinks=False)
+            _validate_directory_digest(restored, "restore directory", plan.source_digest)
+        os.rename(destination, retired)
+        os.rename(restored, source)
+    elif _present(restored) and _present(retired):
+        _validate_directory_digest(restored, "restore directory", plan.source_digest)
+        _validate_directory_digest(retired, "retired directory", plan.source_digest)
+        _assert_absent(source, ".funes")
+        os.rename(restored, source)
+    elif _present(source) and _present(retired):
+        _validate_directory_digest(source, ".funes", plan.source_digest)
+        _validate_directory_digest(retired, "retired directory", plan.source_digest)
+    else:
+        raise ValueError("rollback topology is incomplete or ambiguous")
+
+    _validate_directory_digest(source, ".funes", plan.source_digest)
+    _assert_absent(destination, ".fuente")
+    _assert_absent(restored, "restore directory")
+    _validate_directory_digest(retired, "retired directory", plan.source_digest)
     plan.status = "rolled_back"
+    plan.phase = "cleanup_pending"
+    _write_plan(manifest, plan)
+
+    shutil.rmtree(retired)
     plan.phase = "completed"
     _write_plan(manifest, plan)
     return plan

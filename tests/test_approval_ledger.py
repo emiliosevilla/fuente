@@ -295,6 +295,9 @@ def test_editing_approved_clean_note_invalidates_approval_and_marks_derivative(
 
     assert updated.revision == 2
     assert updated.content_hash != old_hash
+    metadata, _body = parse_frontmatter(clean_path.read_text(encoding="utf-8"))
+    assert metadata["revision"] == updated.revision
+    assert metadata["revision"] == store.get_note(NOTE_ID)["revision"]
     assert ledger.is_current(NOTE_ID, 1, old_hash) is False
     assert approvals.is_eligible(NOTE_ID, 2, updated.content_hash) is False
     assert store.get_note(NOTE_ID)["status"] == "pending_review"
@@ -344,6 +347,7 @@ def test_console_edit_of_approved_clean_note_persists_pending_review_and_lists_i
 
         assert updated["revision"] == 2
         assert before_bytes != after_bytes
+        assert metadata["revision"] == updated["revision"]
         assert metadata["status"] == "pending_review"
         assert catalog["status"] == "pending_review"
         assert catalog["revision"] == 2

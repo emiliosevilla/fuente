@@ -93,7 +93,10 @@ def test_editor_document_keeps_frontmatter_outside_body_and_updates_canonically(
     )
     assert updated.revision == editor["revision"] + 1
     assert updated.body_markdown == edited_body
-    assert persisted_metadata == editor["frontmatter"]
+    assert persisted_metadata == {
+        **editor["frontmatter"],
+        "revision": updated.revision,
+    }
     assert persisted_body == edited_body
 
 

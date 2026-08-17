@@ -563,9 +563,6 @@ class NotesApplicationService:
         allowed_issues = self.vault.get_issues_in_theme()
         validate_metadata_fields(metadata, allowed_issues=allowed_issues)
 
-        markdown = serialize_human_frontmatter(metadata) + (
-            note.body_markdown if body_markdown is None else body_markdown
-        )
         path, relative = self._resolve_note_path(note.document_id)
         previous_markdown = path.read_text(encoding="utf-8")
         previous_hash = content_hash_for_markdown(previous_markdown)
@@ -584,6 +581,25 @@ class NotesApplicationService:
         if reindex:
             self.require_eligible_origins(note)
 
+        markdown = serialize_human_frontmatter(metadata) + (
+            note.body_markdown if body_markdown is None else body_markdown
+        )
+        is_clean_catalog_note = (
+            catalog_record is not None
+            and path.resolve().is_relative_to(self.vault.clean_dir.resolve())
+        )
+        approval_was_current = is_clean_catalog_note and self.approval_ledger.is_current(
+            note.document_id,
+            expected_revision,
+            previous_hash,
+        )
+        if markdown != previous_markdown and approval_was_current:
+            metadata = dict(metadata)
+            metadata["status"] = "pending_review"
+            markdown = serialize_human_frontmatter(metadata) + (
+                note.body_markdown if body_markdown is None else body_markdown
+            )
+
         if markdown == previous_markdown:
             return NoteDocument.from_persisted(
                 document_id=note.document_id,
@@ -597,15 +613,6 @@ class NotesApplicationService:
             )
 
         new_hash = content_hash_for_markdown(markdown)
-        is_clean_catalog_note = (
-            catalog_record is not None
-            and path.resolve().is_relative_to(self.vault.clean_dir.resolve())
-        )
-        approval_was_current = is_clean_catalog_note and self.approval_ledger.is_current(
-            note.document_id,
-            expected_revision,
-            previous_hash,
-        )
         atomic_write_text(path, markdown)
 
         try:

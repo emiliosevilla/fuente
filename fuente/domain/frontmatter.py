@@ -315,6 +315,11 @@ def _without_retired_provenance_fields(metadata: dict) -> dict:
 
 
 def _validate(metadata: dict) -> None:
+    revision = metadata.get("revision")
+    if revision is not None and (
+        isinstance(revision, bool) or not isinstance(revision, int) or revision < 1
+    ):
+        raise FrontmatterError("revision must be a positive integer")
     schema_version = metadata.get("schema_version")
     if schema_version == LEGACY_SCHEMA_VERSION:
         _validate_v1(metadata)

@@ -560,9 +560,6 @@ class NotesApplicationService:
                     reindex=reindex,
                 )
 
-        allowed_issues = self.vault.get_issues_in_theme()
-        validate_metadata_fields(metadata, allowed_issues=allowed_issues)
-
         path, relative = self._resolve_note_path(note.document_id)
         previous_markdown = path.read_text(encoding="utf-8")
         previous_hash = content_hash_for_markdown(previous_markdown)
@@ -578,6 +575,15 @@ class NotesApplicationService:
             or str(catalog_record["content_hash"]) != previous_hash
         ):
             raise NoteRevisionConflictError(note.document_id)
+
+        # SQLite owns the CAS revision; materialize its next value in the
+        # Markdown written by this same transaction so both projections agree.
+        metadata = dict(metadata)
+        metadata["revision"] = (
+            expected_revision + 1 if catalog_record is not None else 1
+        )
+        allowed_issues = self.vault.get_issues_in_theme()
+        validate_metadata_fields(metadata, allowed_issues=allowed_issues)
         if reindex:
             self.require_eligible_origins(note)
 

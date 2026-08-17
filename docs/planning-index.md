@@ -1,4 +1,4 @@
-# Funes / Fuente — índice de planificación
+# Fuente — índice de planificación
 
 Este es el punto único para orientarse antes de cambiar código, Vault o documentación.
 No sustituye los documentos enlazados: indica cuál se puede ejecutar y cuál solo
@@ -19,13 +19,13 @@ explica decisiones o evidencia anterior.
 | **Vigente — ejecución y ledger** | [SDD de ejecución Fuente](superpowers/plans/2026-08-14-fuente-execution-sdd.md) | El ledger operativo al principio del documento manda sobre el estado actual; las diez secciones detalladas conservan el diseño y los criterios de ejecución que aún haya que reconciliar. |
 | **Vigente — hoja de ruta** | [Plan de migración Fuente](superpowers/plans/2026-08-14-fuente-canonical-record-rename-and-nord.md) | Consulta resumida de fases; no duplicar sus tareas frente al SDD. |
 | **Completado — evidencia** | [Base editorial v2](history/2026-08-13-editorial-foundation-evidence.md) | Resume en el repositorio cómo se implantaron schema v2, catálogo, aliases, backfill y estabilidad de `note_id`. No reejecutar sus briefs. |
-| **Completado — histórico** | [Cloud folder sync](superpowers/plans/2026-08-11-funes-cloud-folder-sync.md) | Referencia de la entrada unidireccional OneDrive/SharePoint montada. |
-| **Completado — histórico** | [Editorial workflow](superpowers/plans/2026-08-11-funes-editorial-workflow.md) | Referencia del editor, reflow, fusión y exportación ya entregados. |
-| **Sustituido — antecedente** | [Editorial library design v2](superpowers/specs/2026-08-13-funes-editorial-library-design.md) | Explica la base v2; la terminología y autoridad nuevas las define Fuente. |
-| **Sustituido — no ejecutar** | [Editorial foundation plan](superpowers/plans/2026-08-13-funes-editorial-foundation.md) | Sus entregas ya están en el SDD de evidencia y el plan Fuente las reemplaza. |
-| **Sustituido — no ejecutar** | [Editorial compilation](superpowers/plans/2026-08-13-funes-editorial-compilation.md) | Depende del modelo v2 `Fuentes`; el SDD Fuente lo absorbe tras la aprobación de `3_limpio`. |
-| **Sustituido — no ejecutar** | [Reader context](superpowers/plans/2026-08-13-funes-reader-context.md) | El lector de tres paneles se implementa dentro de la Task 9 del SDD Fuente. |
-| **Aparcado — evaluación opcional** | [LightRAG smoke comparison](superpowers/plans/2026-08-11-funes-lightrag-smoke-comparison.md) | No es producto ni requisito de release; solo se retoma con una decisión explícita de evaluación. |
+| **Completado — histórico** | [Cloud folder sync](superpowers/plans/2026-08-11-fuente-cloud-folder-sync.md) | Referencia de la entrada unidireccional OneDrive/SharePoint montada. |
+| **Completado — histórico** | [Editorial workflow](superpowers/plans/2026-08-11-fuente-editorial-workflow.md) | Referencia del editor, reflow, fusión y exportación ya entregados. |
+| **Sustituido — antecedente** | [Editorial library design v2](superpowers/specs/2026-08-13-fuente-editorial-library-design.md) | Explica la base v2; la terminología y autoridad nuevas las define Fuente. |
+| **Sustituido — no ejecutar** | [Editorial foundation plan](superpowers/plans/2026-08-13-fuente-editorial-foundation.md) | Sus entregas ya están en el SDD de evidencia y el plan Fuente las reemplaza. |
+| **Sustituido — no ejecutar** | [Editorial compilation](superpowers/plans/2026-08-13-fuente-editorial-compilation.md) | Depende del modelo v2 `Fuentes`; el SDD Fuente lo absorbe tras la aprobación de `3_limpio`. |
+| **Sustituido — no ejecutar** | [Reader context](superpowers/plans/2026-08-13-fuente-reader-context.md) | El lector de tres paneles se implementa dentro de la Task 9 del SDD Fuente. |
+| **Aparcado — evaluación opcional** | [LightRAG smoke comparison](superpowers/plans/2026-08-11-fuente-lightrag-smoke-comparison.md) | No es producto ni requisito de release; solo se retoma con una decisión explícita de evaluación. |
 
 ## Qué contiene cada zona
 

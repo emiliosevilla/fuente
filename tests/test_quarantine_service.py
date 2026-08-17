@@ -124,8 +124,8 @@ def test_invalid_model_output_preserves_source_for_review(tmp_path):
 
 def test_migrates_legacy_console_and_theme_quarantine_once(tmp_path):
     vault_root = tmp_path / "vault"
-    legacy_console = vault_root / ".funes_quarantine"
-    legacy_theme = vault_root / "Topic" / ".funes_quarantine"
+    legacy_console = vault_root / ".fuente_quarantine"
+    legacy_theme = vault_root / "Topic" / ".fuente_quarantine"
     legacy_console.mkdir(parents=True)
     legacy_theme.mkdir(parents=True)
     (legacy_console / "console.txt").write_text("console", encoding="utf-8")
@@ -156,8 +156,8 @@ def test_migrates_legacy_console_and_theme_quarantine_once(tmp_path):
 
 def test_migration_keeps_distinct_legacy_files_with_identical_content(tmp_path):
     vault_root = tmp_path / "vault"
-    legacy_console = vault_root / ".funes_quarantine"
-    legacy_theme = vault_root / "Topic" / ".funes_quarantine"
+    legacy_console = vault_root / ".fuente_quarantine"
+    legacy_theme = vault_root / "Topic" / ".fuente_quarantine"
     legacy_console.mkdir(parents=True)
     legacy_theme.mkdir(parents=True)
     (legacy_console / "first.txt").write_text("same contents", encoding="utf-8")

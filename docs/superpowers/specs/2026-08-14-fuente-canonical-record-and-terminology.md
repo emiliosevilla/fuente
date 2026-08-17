@@ -5,7 +5,7 @@ código, rutas, paquetes, repositorio ni GitHub.
 
 **Prevalencia:** esta especificación prevalece, para los trabajos futuros,
 sobre la terminología y el modelo de autoridad de
-`2026-08-13-funes-editorial-library-design.md` y sus planes derivados. La
+`2026-08-13-fuente-editorial-library-design.md` y sus planes derivados. La
 historia técnica anterior se conserva como referencia de migración.
 
 ## 1. Decisiones de producto
@@ -22,7 +22,7 @@ historia técnica anterior se conserva como referencia de migración.
    exportable o disponible como resultado editorial. Esta aprobación no puede
    crear ni sustituir la aprobación de sus orígenes en `3_limpio`.
 4. El producto, paquete, configuración, documentación, interfaz y repositorio
-   pasarán de **Funes** a **Fuente** mediante una migración planificada. No se
+   pasarán de **Fuente** a **Fuente** mediante una migración planificada. No se
    debe hacer un cambio parcial de nombre.
 5. En el dominio editorial, un **origen** es la referencia verificable al
    documento aprobado de `3_limpio` que sostiene una afirmación. Un **sumario**
@@ -69,14 +69,14 @@ salidas publicables aunque sus orígenes sigan siendo válidos.
 
 | Concepto | Nombre nuevo y uso | Nombre anterior a retirar |
 |---|---|---|
-| Producto | `Fuente` | `Funes` |
+| Producto | `Fuente` | `Fuente` |
 | Documento que sustenta una afirmación | `origen` | `source`, `fuente`, `sources` cuando significan cita |
 | Referencias de una nota | `origins` | `sources` |
 | Tipo de nota derivada de un documento limpio | `summary` / `sumario` | `source` / `fuente` |
 | Clasificación del documento de origen | `origin_kind` | `source_kind` |
 | Colección de notas derivadas | `4_salida/Sumarios/` | `4_salida/Fuentes/` |
 | Carpeta técnica externa de importación | `entrada`, `proveedor` o `carpeta montada` | `fuente` / `source` |
-| Directorio interno de aplicación | `.fuente` | `.funes` |
+| Directorio interno de aplicación | `.fuente` | `.fuente` |
 
 La migración puede leer los nombres antiguos durante una ventana temporal y
 declarada. El código nuevo, los contratos nuevos y los documentos nuevos no
@@ -137,13 +137,13 @@ La estructura por tema queda definida de forma visible y estable:
 derivada: sus notas pueden ser revisadas y aprobadas para publicación, pero su
 procedencia siempre se conserva en `3_limpio` mediante `origins`.
 
-## 5. Cambio completo de Funes a Fuente
+## 5. Cambio completo de Fuente a Fuente
 
 La conversión comprende, como una única entrega coordinada: nombre de
-repositorio y remoto, directorio Python `funes/`, distribución y comandos,
-variables y textos de interfaz, archivos de configuración, `.funes`, recibos
+repositorio y remoto, directorio Python `fuente/`, distribución y comandos,
+variables y textos de interfaz, archivos de configuración, `.fuente`, recibos
 de instalador, rutas de Vault, pruebas, documentación, ejemplos y nombres de
-artefactos. También comprende las rutas `Vault_Funes` que el instalador o los
+artefactos. También comprende las rutas `Fuente_Vault` que el instalador o los
 ejemplos creen.
 
 Antes de ejecutar la conversión se hará inventario por categoría y se publicará
@@ -221,7 +221,7 @@ configurada y no empeorar esos resultados frente a la alternativa actual.
 - Un catálogo, grafo o índice eliminado se reconstruye desde Markdown sin
   cambiar el contenido de `3_limpio`.
 - Tras la migración completa, los nuevos datos y pantallas no crean
-  `Funes`, `.funes`, `Fuentes`, `source_kind` ni `sources`; las apariciones
+  `Fuente`, `.fuente`, `Fuentes`, `source_kind` ni `sources`; las apariciones
   restantes están limitadas al lector de compatibilidad, los manifiestos de
   migración y la documentación histórica.
 - La consola usa los tokens Fuente derivados de Nord de forma consistente y

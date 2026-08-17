@@ -1,4 +1,4 @@
-# Funes Editorial Foundation — Implementation Plan
+# Fuente Editorial Foundation — Implementation Plan
 
 > **Suspendido para implementación nueva (2026-08-14):** sus tareas v2 se
 > mantienen como antecedente. Antes de continuar, aplicar el orden y la
@@ -7,7 +7,7 @@
 
 > **For the implementer:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
-**Goal:** establish a persistent Markdown-backed `note_id` and a recoverable note catalog so Funes can later reorganize `4_salida` without breaking readers, jobs, graph or RAG.
+**Goal:** establish a persistent Markdown-backed `note_id` and a recoverable note catalog so Fuente can later reorganize `4_salida` without breaking readers, jobs, graph or RAG.
 
 **Architecture:** schema-v2 frontmatter carries the canonical immutable ID. SQLite becomes a reconstructible catalog with aliases, tombstones and operation journal; it is never a competing source of truth. The temporary bridge accepts `document_id` as an input field but converts it immediately to `note_id`. The physical taxonomy move is deliberately excluded from this plan; it requires a second explicit approval after the virtual taxonomy works.
 
@@ -19,8 +19,8 @@
 
 **Files:**
 
-- Modify: `funes/domain/frontmatter.py`
-- Modify: `funes/domain/documents.py`
+- Modify: `fuente/domain/frontmatter.py`
+- Modify: `fuente/domain/documents.py`
 - Test: `tests/test_frontmatter_schema.py`
 
 **Step 1: Write the failing tests**
@@ -88,15 +88,15 @@ Expected: PASS.
 **Step 5: Human checkpoint**
 
 Review the exact serialized v2 sample in a temporary Vault. A human operator
-runs, if desired: `git diff -- funes/domain/frontmatter.py funes/domain/documents.py tests/test_frontmatter_schema.py`.
+runs, if desired: `git diff -- fuente/domain/frontmatter.py fuente/domain/documents.py tests/test_frontmatter_schema.py`.
 
 ### Task 2: Create a catalog that is indexed from Markdown, aliases and tombstones
 
 **Files:**
 
-- Create: `funes/infrastructure/migrations/009_note_catalog.sql`
-- Modify: `funes/infrastructure/sqlite_store.py`
-- Create: `funes/domain/note_catalog.py`
+- Create: `fuente/infrastructure/migrations/009_note_catalog.sql`
+- Modify: `fuente/infrastructure/sqlite_store.py`
+- Create: `fuente/domain/note_catalog.py`
 - Test: `tests/test_note_catalog.py`
 
 **Step 1: Write failing catalog tests**
@@ -204,9 +204,9 @@ Expected: PASS, including existing durable-job behavior.
 
 **Files:**
 
-- Modify: `funes/domain/paths.py`
-- Modify: `funes/application/notes.py`
-- Modify: `funes/ui/bridge.py`
+- Modify: `fuente/domain/paths.py`
+- Modify: `fuente/application/notes.py`
+- Modify: `fuente/ui/bridge.py`
 - Test: `tests/test_authorized_paths.py`
 - Test: `tests/test_reader_contract.py`
 
@@ -263,9 +263,9 @@ Expected: PASS.
 
 **Files:**
 
-- Modify: `funes/infrastructure/vault_migration.py`
-- Modify: `funes/core/vault.py`
-- Modify: `funes/application/ingestion.py`
+- Modify: `fuente/infrastructure/vault_migration.py`
+- Modify: `fuente/core/vault.py`
+- Modify: `fuente/application/ingestion.py`
 - Test: `tests/test_vault_migration.py`
 - Test: `tests/test_ingestion_recovery.py`
 
@@ -296,7 +296,7 @@ apply while watcher, ingestion or reflow has an active claim. For each v1 note:
 5. persist the manifest before and after each irreversible step.
 
 No call in this task may move, copy or delete Markdown files. Reuse the
-existing backup/manifest location beneath `.funes/migrations`; extend its
+existing backup/manifest location beneath `.fuente/migrations`; extend its
 dataclass rather than introducing an untracked side file.
 
 **Step 4: Add recovery and rollback behavior**
@@ -316,10 +316,10 @@ Expected: PASS.
 
 **Files:**
 
-- Modify: `funes/core/vault.py`
-- Modify: `funes/graph_engine/linker.py`
-- Modify: `funes/rag/vault_corpus.py`
-- Modify: `funes/rag/index_records.py`
+- Modify: `fuente/core/vault.py`
+- Modify: `fuente/graph_engine/linker.py`
+- Modify: `fuente/rag/vault_corpus.py`
+- Modify: `fuente/rag/index_records.py`
 - Test: `tests/test_graph_engine.py`
 - Test: `tests/test_rag.py`
 
@@ -350,7 +350,7 @@ Run:
 ```bash
 PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -p no:cacheprovider \
   tests/test_graph_engine.py tests/test_rag.py tests/test_reflow_service.py -q
-rg -n 'document_id_for_relative_path' funes --glob '*.py'
+rg -n 'document_id_for_relative_path' fuente --glob '*.py'
 ```
 
 Expected: tests pass; remaining derivations are confined to compatibility and
@@ -361,7 +361,7 @@ backfill code and are reviewed by name.
 **Files:**
 
 - Modify: `docs/task.md`
-- Modify: `docs/superpowers/specs/2026-08-13-funes-editorial-library-design.md`
+- Modify: `docs/superpowers/specs/2026-08-13-fuente-editorial-library-design.md`
 - Test: full suite
 
 **Step 1: Run the complete suite**
@@ -389,7 +389,7 @@ the separate migration plan.
 After review, the human operator may run:
 
 ```bash
-git add funes tests docs
+git add fuente tests docs
 git commit -m "feat: establish persistent note identity"
 ```
 

@@ -14,7 +14,7 @@ registro que necesite quien clone el repositorio.
 3. Resolución de IDs opacos mediante catálogo, sin aceptar rutas de navegador.
 4. Backfill v1→v2 reversible y recuperación explícita desde Markdown.
 5. Grafo, lector y corpus RAG con `note_id` estable y ruta como metadato.
-6. Reorganización física reversible de 14 notas de `Vault_Funes/4_salida`.
+6. Reorganización física reversible de 14 notas de `Fuente_Vault/4_salida`.
 
 ## Evidencia registrada durante el cierre
 

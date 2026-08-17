@@ -1,4 +1,4 @@
-# Funes Cloud Folder Synchronization Implementation Plan
+# Fuente Cloud Folder Synchronization Implementation Plan
 
 > **Estado: completado e histórico (2026-08-13).** La entrada montada
 > OneDrive/SharePoint está implementada como lectura unidireccional. Consultar
@@ -6,9 +6,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Make OneDrive and SharePoint-backed Obsidian folders reliable, visible, recursive, collision-safe inbound sources for Funes without adding cloud credentials or a second source of truth.
+**Goal:** Make OneDrive and SharePoint-backed Obsidian folders reliable, visible, recursive, collision-safe inbound sources for Fuente without adding cloud credentials or a second source of truth.
 
-**Architecture:** Funes treats the official OneDrive/SharePoint sync client or mounted network location as the provider boundary. It reads provider folders, records a durable manifest, and copies eligible files into the active theme's `1_entrada`; it never writes back into provider folders and never implements OAuth or Microsoft Graph in this plan. Provider discovery is explicit and labeled, while all copies pass through authorized path and collision checks.
+**Architecture:** Fuente treats the official OneDrive/SharePoint sync client or mounted network location as the provider boundary. It reads provider folders, records a durable manifest, and copies eligible files into the active theme's `1_entrada`; it never writes back into provider folders and never implements OAuth or Microsoft Graph in this plan. Provider discovery is explicit and labeled, while all copies pass through authorized path and collision checks.
 
 **Tech Stack:** Python `pathlib`, SQLite/JSON manifest storage, existing `FolderSyncManager`, `VaultManager`, `AuthorizedPathResolver`, Tkinter modal, PyWebView bridge, pytest.
 
@@ -27,13 +27,13 @@
 ### Task 1: Define provider-aware sync records and manifest schema
 
 **Files:**
-- Create: `funes/domain/sync.py`
-- Modify: `funes/core/folder_sync.py`
-- Modify: `funes/infrastructure/sqlite_store.py`
+- Create: `fuente/domain/sync.py`
+- Modify: `fuente/core/folder_sync.py`
+- Modify: `fuente/infrastructure/sqlite_store.py`
 - Test: `tests/test_folder_sync_contract.py`
 
 **Interfaces:**
-- Consumes: current `.funes_connected_folders.json` records and active-theme `input_dir`/`dirty_dir` paths.
+- Consumes: current `.fuente_connected_folders.json` records and active-theme `input_dir`/`dirty_dir` paths.
 - Produces: `SyncProvider` values `local`, `network`, `onedrive_mount`, `sharepoint_mount`; `ConnectedFolder(provider: str, root: str, display_name: str, enabled: bool)`; `SyncManifestEntry(source_key: str, source_hash: str, source_mtime_ns: int, destination_relative: str, status: str)`; and `FolderSyncManager.load_connections() -> list[ConnectedFolder]`.
 
 - [ ] **Step 1: Write schema migration/compatibility tests**
@@ -52,7 +52,7 @@
 
 - [ ] **Step 3: Implement the provider and manifest records**
 
-  Add typed validation for provider/root/display name, preserve backward compatibility for the existing JSON file, and store the manifest in the vault's `.funes` system area through the existing atomic/SQLite conventions. Store hashes and source-relative paths, not secrets.
+  Add typed validation for provider/root/display name, preserve backward compatibility for the existing JSON file, and store the manifest in the vault's `.fuente` system area through the existing atomic/SQLite conventions. Store hashes and source-relative paths, not secrets.
 
 - [ ] **Step 4: Run schema and legacy tests**
 
@@ -63,15 +63,15 @@
   Human operator runs:
 
   ```bash
-  git add funes/domain/sync.py funes/core/folder_sync.py funes/infrastructure/sqlite_store.py tests/test_folder_sync_contract.py tests/test_folder_sync.py
+  git add fuente/domain/sync.py fuente/core/folder_sync.py fuente/infrastructure/sqlite_store.py tests/test_folder_sync_contract.py tests/test_folder_sync.py
   git commit -m "feat: add provider-aware sync manifest"
   ```
 
 ### Task 2: Implement recursive, authorized source scanning
 
 **Files:**
-- Modify: `funes/core/folder_sync.py`
-- Modify: `funes/domain/paths.py`
+- Modify: `fuente/core/folder_sync.py`
+- Modify: `fuente/domain/paths.py`
 - Test: `tests/test_folder_sync_recursive.py`
 - Test: `tests/security/test_path_authorization.py`
 
@@ -112,15 +112,15 @@
   Human operator runs:
 
   ```bash
-  git add funes/core/folder_sync.py funes/domain/paths.py tests/test_folder_sync_recursive.py tests/security/test_path_authorization.py
+  git add fuente/core/folder_sync.py fuente/domain/paths.py tests/test_folder_sync_recursive.py tests/security/test_path_authorization.py
   git commit -m "fix: make cloud folder scanning recursive and authorized"
   ```
 
 ### Task 3: Add idempotent copy, collision, and manifest reconciliation
 
 **Files:**
-- Modify: `funes/core/folder_sync.py`
-- Modify: `funes/infrastructure/atomic_files.py`
+- Modify: `fuente/core/folder_sync.py`
+- Modify: `fuente/infrastructure/atomic_files.py`
 - Test: `tests/test_folder_sync_reconciliation.py`
 - Test: `tests/integration/test_pipeline_idempotency.py`
 
@@ -161,16 +161,16 @@
   Human operator runs:
 
   ```bash
-  git add funes/core/folder_sync.py funes/infrastructure/atomic_files.py tests/test_folder_sync_reconciliation.py tests/integration/test_pipeline_idempotency.py
+  git add fuente/core/folder_sync.py fuente/infrastructure/atomic_files.py tests/test_folder_sync_reconciliation.py tests/integration/test_pipeline_idempotency.py
   git commit -m "feat: reconcile cloud sources atomically"
   ```
 
 ### Task 4: Detect and label mounted OneDrive/SharePoint roots
 
 **Files:**
-- Modify: `funes/core/folder_sync.py`
-- Modify: `funes/installer_contract.py`
-- Modify: `funes/installer_gui.py`
+- Modify: `fuente/core/folder_sync.py`
+- Modify: `fuente/installer_contract.py`
+- Modify: `fuente/installer_gui.py`
 - Test: `tests/test_folder_sync_discovery.py`
 - Test: `tests/test_installer_contract.py`
 
@@ -205,17 +205,17 @@
   Human operator runs:
 
   ```bash
-  git add funes/core/folder_sync.py funes/installer_contract.py funes/installer_gui.py tests/test_folder_sync_discovery.py tests/test_installer_contract.py
+  git add fuente/core/folder_sync.py fuente/installer_contract.py fuente/installer_gui.py tests/test_folder_sync_discovery.py tests/test_installer_contract.py
   git commit -m "feat: label mounted OneDrive and SharePoint sources"
   ```
 
 ### Task 5: Make sync status visible and operator-controlled
 
 **Files:**
-- Modify: `funes/control_console.py`
+- Modify: `fuente/control_console.py`
 - Modify: `consola_preview.html`
-- Modify: `funes/ui/bridge.py`
-- Modify: `funes/core/folder_sync.py`
+- Modify: `fuente/ui/bridge.py`
+- Modify: `fuente/core/folder_sync.py`
 - Test: `tests/test_folder_sync_ui_contract.py`
 
 **Interfaces:**
@@ -249,7 +249,7 @@
   Human operator runs:
 
   ```bash
-  git add funes/control_console.py consola_preview.html funes/ui/bridge.py funes/core/folder_sync.py tests/test_folder_sync_ui_contract.py
+  git add fuente/control_console.py consola_preview.html fuente/ui/bridge.py fuente/core/folder_sync.py tests/test_folder_sync_ui_contract.py
   git commit -m "feat: expose cloud sync status and conflicts"
   ```
 
@@ -281,7 +281,7 @@
 
 - [ ] **Step 3: Update the operator documentation**
 
-  Add setup instructions for clicking OneDrive/SharePoint's official local “Sync” action, selecting the resulting mounted root in Funes, choosing the active theme, reviewing conflicts, and running the import. Record that provider credentials never enter Funes.
+  Add setup instructions for clicking OneDrive/SharePoint's official local “Sync” action, selecting the resulting mounted root in Fuente, choosing the active theme, reviewing conflicts, and running the import. Record that provider credentials never enter Fuente.
 
 - [ ] **Step 4: Run the complete sync and release gate**
 

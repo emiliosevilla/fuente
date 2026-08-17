@@ -7,7 +7,7 @@ Este documento no autoriza por sí solo cambios de código, Vault, GitHub ni Git
 **Especificación rectora:**
 [`2026-08-14-fuente-canonical-record-and-terminology.md`](../specs/2026-08-14-fuente-canonical-record-and-terminology.md).
 
-**Objetivo:** convertir el producto Funes en Fuente sin perder documentos ni
+**Objetivo:** convertir el producto Fuente en Fuente sin perder documentos ni
 romper su trazabilidad; hacer que `3_limpio` sea el único registro canónico
 aprobado y que `4_salida/Sumarios` sea contenido derivado con orígenes
 verificables; aplicar un sistema visual propio basado en la paleta Nord.
@@ -45,7 +45,7 @@ promoción final requiere revisión humana de la evidencia medida.
 
 ## Fase 0 — Inventario y protección de la migración
 
-1. Medir todas las apariciones de `Funes`, `funes`, `.funes`, `Fuentes`,
+1. Medir todas las apariciones de `Fuente`, `fuente`, `.fuente`, `Fuentes`,
    `source`, `sources` y `source_kind`, agrupándolas en: identidad del
    producto, API/serialización, rutas de Vault, almacenamiento, UI, pruebas,
    ejemplos y documentación histórica.
@@ -135,18 +135,18 @@ en notas no editadas; RAG, grafo, lector y exportación encuentran el mismo
 **Punto humano:** aprobar la vista previa de destinos antes de cualquier
 movimiento físico.
 
-## Fase 4 — Cambio completo de Funes a Fuente
+## Fase 4 — Cambio completo de Fuente a Fuente
 
 1. Hacer una segunda simulación que enumere todos los cambios de identidad:
-   paquete Python, puntos de entrada, configuración, `.funes` a `.fuente`,
-   recibos, datos locales, textos, ejemplos, `Vault_Funes` y referencias de
+   paquete Python, puntos de entrada, configuración, `.fuente` a `.fuente`,
+   recibos, datos locales, textos, ejemplos, `Fuente_Vault` y referencias de
    documentación.
-2. Introducir una migración única de configuración y estado local de `.funes`
+2. Introducir una migración única de configuración y estado local de `.fuente`
    a `.fuente`, con copia de seguridad, hashes y recuperación. No mantener dos
    directorios activos después de la migración.
 3. Renombrar el paquete y sus importaciones de forma atómica en el mismo
    cambio; actualizar los comandos de instalación y las pruebas. No crear un
-   alias permanente `funes` para ocultar errores de conversión.
+   alias permanente `fuente` para ocultar errores de conversión.
 4. La persona responsable renombra el repositorio y sus integraciones remotas
    cuando la simulación local, las pruebas y la documentación estén aprobadas.
    Esta operación no la ejecuta el agente.
@@ -154,7 +154,7 @@ movimiento físico.
    necesario explicar nombres antiguos. El contenido vigente usa Fuente.
 
 **Pruebas de salida:** instalación limpia de Fuente; actualización de un Vault
-Funes existente sin pérdida; arranque, migración y rollback medidos; búsqueda
+Fuente existente sin pérdida; arranque, migración y rollback medidos; búsqueda
 sin apariciones nuevas de los nombres antiguos fuera de la compatibilidad
 declarada; documentación y comandos coherentes.
 

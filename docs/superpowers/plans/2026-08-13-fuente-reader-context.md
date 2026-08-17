@@ -1,4 +1,4 @@
-# Funes Reader Context — Implementation Plan
+# Fuente Reader Context — Implementation Plan
 
 > **Suspendido para implementación nueva (2026-08-14):** el lector posterior
 > debe exponer `origins` y usar los tokens visuales Fuente basados en Nord.
@@ -12,7 +12,7 @@
 
 **Tech Stack:** Python bridge/services, existing static console HTML/CSS/JS, pytest and existing Node contract tests.
 
-**Prerequisite:** `2026-08-13-funes-editorial-foundation.md` is implemented; reader IDs resolve through the catalog.
+**Prerequisite:** `2026-08-13-fuente-editorial-foundation.md` is implemented; reader IDs resolve through the catalog.
 
 ---
 
@@ -20,9 +20,9 @@
 
 **Files:**
 
-- Create: `funes/application/reader_context.py`
-- Modify: `funes/ui/bridge.py`
-- Modify: `funes/ui/reader_history.py`
+- Create: `fuente/application/reader_context.py`
+- Modify: `fuente/ui/bridge.py`
+- Modify: `fuente/ui/reader_history.py`
 - Test: `tests/test_reader_contract.py`
 - Test: `tests/contract/test_reader_editor_contract.py`
 
@@ -74,9 +74,9 @@ Expected: PASS.
 
 **Files:**
 
-- Modify: `funes/ui/static/console.html`
-- Modify: `funes/ui/static/console.js`
-- Modify: `funes/ui/static/console.css`
+- Modify: `fuente/ui/static/console.html`
+- Modify: `fuente/ui/static/console.js`
+- Modify: `fuente/ui/static/console.css`
 - Test: `tests/test_console_ui3_contract.py`
 - Test: `tests/test_console_graph_lifecycle.py`
 
@@ -112,8 +112,8 @@ Expected: PASS.
 
 **Files:**
 
-- Modify: `funes/ui/static/console.html`
-- Modify: `funes/ui/static/console.css`
+- Modify: `fuente/ui/static/console.html`
+- Modify: `fuente/ui/static/console.css`
 - Test: `tests/test_console_modal_close_contract.py`
 - Test: `tests/test_modals_console.py`
 
@@ -142,8 +142,8 @@ Expected: PASS.
 
 **Files:**
 
-- Modify: `funes/ui/static/console.js`
-- Modify: `funes/ui/bridge.py`
+- Modify: `fuente/ui/static/console.js`
+- Modify: `fuente/ui/bridge.py`
 - Test: `tests/contract/test_reader_editor_deferred_contract.py`
 - Test: `tests/test_reader_contract.py`
 
@@ -172,7 +172,7 @@ Expected: PASS.
 **Files:**
 
 - Modify: `docs/task.md`
-- Modify: `docs/superpowers/specs/2026-08-13-funes-editorial-library-design.md`
+- Modify: `docs/superpowers/specs/2026-08-13-fuente-editorial-library-design.md`
 
 **Step 1: Run full automated evidence**
 

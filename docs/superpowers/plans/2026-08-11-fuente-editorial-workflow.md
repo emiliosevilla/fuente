@@ -1,4 +1,4 @@
-# Funes Editorial Workflow Implementation Plan
+# Fuente Editorial Workflow Implementation Plan
 
 > **Estado: completado e histórico (2026-08-12).** Editor Markdown, reflow,
 > fusión y exportación quedaron entregados. El siguiente ciclo añade la
@@ -27,8 +27,8 @@
 ### Task 1: Add a revisioned canonical body-editor contract
 
 **Files:**
-- Modify: `funes/application/notes.py`
-- Modify: `funes/ui/markdown_projection.py`
+- Modify: `fuente/application/notes.py`
+- Modify: `fuente/ui/markdown_projection.py`
 - Test: `tests/contract/test_note_editor_contract.py`
 - Test: `tests/security/test_xss_rendering.py`
 
@@ -63,21 +63,21 @@
   Human operator runs:
 
   ```bash
-  git add funes/application/notes.py funes/ui/markdown_projection.py tests/contract/test_note_editor_contract.py tests/security/test_xss_rendering.py
+  git add fuente/application/notes.py fuente/ui/markdown_projection.py tests/contract/test_note_editor_contract.py tests/security/test_xss_rendering.py
   git commit -m "feat: add revisioned markdown editor contract"
   ```
 
 ### Task 2: Expose the editor contract through the typed bridge
 
 **Files:**
-- Modify: `funes/ui/bridge.py`
+- Modify: `fuente/ui/bridge.py`
 - Test: `tests/contract/test_bridge_note_editor_contract.py`
 - Test: `tests/security/test_bridge_payloads.py`
 - Modify: `tests/contract/test_bridge_frontend_contract.py`
 
 **Interfaces:**
 - Consumes: `NotesApplicationService.get_editor_document` and `update_note_body` from Task 1.
-- Produces: `FunesPyWebViewApi.get_note_editor(note_id: object) -> dict[str, Any]` and `FunesPyWebViewApi.update_note_body(note_id: object, expected_revision: object, body_markdown: object) -> dict[str, Any]`.
+- Produces: `FuentePyWebViewApi.get_note_editor(note_id: object) -> dict[str, Any]` and `FuentePyWebViewApi.update_note_body(note_id: object, expected_revision: object, body_markdown: object) -> dict[str, Any]`.
 
 - [ ] **Step 1: Write bridge boundary tests**
 
@@ -112,7 +112,7 @@
   Human operator runs:
 
   ```bash
-  git add funes/ui/bridge.py tests/contract/test_bridge_note_editor_contract.py tests/security/test_bridge_payloads.py tests/contract/test_bridge_frontend_contract.py
+  git add fuente/ui/bridge.py tests/contract/test_bridge_note_editor_contract.py tests/security/test_bridge_payloads.py tests/contract/test_bridge_frontend_contract.py
   git commit -m "feat: expose revisioned note editing through bridge"
   ```
 
@@ -120,7 +120,7 @@
 
 **Files:**
 - Modify: `consola_preview.html`
-- Modify: `funes/ui/static/console.css`
+- Modify: `fuente/ui/static/console.css`
 - Test: `tests/contract/test_reader_editor_contract.py`
 - Test: `tests/test_html_safety_contract.py`
 
@@ -161,17 +161,17 @@
   Human operator runs:
 
   ```bash
-  git add consola_preview.html funes/ui/static/console.css tests/contract/test_reader_editor_contract.py tests/test_html_safety_contract.py
+  git add consola_preview.html fuente/ui/static/console.css tests/contract/test_reader_editor_contract.py tests/test_html_safety_contract.py
   git commit -m "feat: add markdown edit mode to note reader"
   ```
 
 ### Task 4: Add explicit on-demand link reflow with scoped results
 
 **Files:**
-- Create: `funes/application/reflow.py`
-- Modify: `funes/application/lifecycle.py`
-- Modify: `funes/control_console.py`
-- Modify: `funes/ui/bridge.py`
+- Create: `fuente/application/reflow.py`
+- Modify: `fuente/application/lifecycle.py`
+- Modify: `fuente/control_console.py`
+- Modify: `fuente/ui/bridge.py`
 - Test: `tests/test_reflow_service.py`
 
 **Interfaces:**
@@ -205,17 +205,17 @@
   Human operator runs:
 
   ```bash
-  git add funes/application/reflow.py funes/application/lifecycle.py funes/control_console.py funes/ui/bridge.py tests/test_reflow_service.py tests/test_console_graph_lifecycle.py
+  git add fuente/application/reflow.py fuente/application/lifecycle.py fuente/control_console.py fuente/ui/bridge.py tests/test_reflow_service.py tests/test_console_graph_lifecycle.py
   git commit -m "feat: add scoped on-demand link reflow"
   ```
 
 ### Task 5: Make note enrichment reflow durable and reviewable
 
 **Files:**
-- Create: `funes/infrastructure/migrations/004_reflow_requests.sql`
-- Create: `funes/application/reflow_jobs.py`
-- Modify: `funes/infrastructure/sqlite_store.py`
-- Modify: `funes/application/reflow.py`
+- Create: `fuente/infrastructure/migrations/004_reflow_requests.sql`
+- Create: `fuente/application/reflow_jobs.py`
+- Modify: `fuente/infrastructure/sqlite_store.py`
+- Modify: `fuente/application/reflow.py`
 - Test: `tests/test_reflow_jobs.py`
 
 **Interfaces:**
@@ -259,15 +259,15 @@
   Human operator runs:
 
   ```bash
-  git add funes/infrastructure/migrations/004_reflow_requests.sql funes/application/reflow_jobs.py funes/infrastructure/sqlite_store.py funes/application/reflow.py tests/test_reflow_jobs.py
+  git add fuente/infrastructure/migrations/004_reflow_requests.sql fuente/application/reflow_jobs.py fuente/infrastructure/sqlite_store.py fuente/application/reflow.py tests/test_reflow_jobs.py
   git commit -m "feat: make note enrichment reflow durable"
   ```
 
 ### Task 6: Detect fusion candidates deterministically
 
 **Files:**
-- Create: `funes/application/fusion.py`
-- Modify: `funes/application/notes.py`
+- Create: `fuente/application/fusion.py`
+- Modify: `fuente/application/notes.py`
 - Test: `tests/test_fusion_candidates.py`
 - Test: `tests/security/test_path_authorization.py`
 
@@ -302,16 +302,16 @@
   Human operator runs:
 
   ```bash
-  git add funes/application/fusion.py funes/application/notes.py tests/test_fusion_candidates.py tests/security/test_path_authorization.py
+  git add fuente/application/fusion.py fuente/application/notes.py tests/test_fusion_candidates.py tests/security/test_path_authorization.py
   git commit -m "feat: detect deterministic note fusion candidates"
   ```
 
 ### Task 7: Add preview-then-commit fusion with source preservation
 
 **Files:**
-- Modify: `funes/application/fusion.py`
-- Modify: `funes/control_console.py`
-- Modify: `funes/ui/bridge.py`
+- Modify: `fuente/application/fusion.py`
+- Modify: `fuente/control_console.py`
+- Modify: `fuente/ui/bridge.py`
 - Modify: `consola_preview.html`
 - Test: `tests/test_fusion_flow.py`
 
@@ -356,7 +356,7 @@
   Human operator runs:
 
   ```bash
-  git add funes/application/fusion.py funes/control_console.py funes/ui/bridge.py consola_preview.html tests/test_fusion_flow.py
+  git add fuente/application/fusion.py fuente/control_console.py fuente/ui/bridge.py consola_preview.html tests/test_fusion_flow.py
   git commit -m "feat: add reviewable note fusion flow"
   ```
 

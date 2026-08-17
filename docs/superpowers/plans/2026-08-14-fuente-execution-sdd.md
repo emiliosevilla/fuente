@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use `superpowers:subagent-driven-development` (recommended) or `superpowers:executing-plans` to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Convertir Funes en Fuente de forma recuperable: `3_limpio` aprobado será la única fuente canónica; los sumarios serán derivados trazables; y la consola tendrá un sistema visual propio basado en Nord.
+**Goal:** Convertir Fuente en Fuente de forma recuperable: `3_limpio` aprobado será la única fuente canónica; los sumarios serán derivados trazables; y la consola tendrá un sistema visual propio basado en Nord.
 
 **Architecture:** La migración conserva el Markdown como autoridad y trata SQLite, RAG, grafo y las vistas como índices que se pueden reconstruir. El cambio se divide en entregas verificables: primero se mide y se protege el Vault, luego se implementa el registro de aprobaciones y la procedencia, y solo después se cambian carpetas, identidad del producto y apariencia.
 
@@ -14,7 +14,7 @@
 > abajo es la fuente de verdad para saber qué está ejecutado y qué queda por
 > ejecutar. Las casillas de las secciones detalladas conservan el diseño
 > original del SDD y no deben interpretarse por sí solas como el estado actual.
-> Varias rutas `funes/...` de esas secciones son referencias históricas del
+> Varias rutas `fuente/...` de esas secciones son referencias históricas del
 > diseño; el checkout operativo actual usa `fuente/...`.
 
 ## Ledger operativo de ejecución — 2026-08-16
@@ -33,7 +33,7 @@
 
 La decisión vigente del revisor es considerar aprobadas las tres candidatas por
 su precisión global. Esto no equivale todavía a que el Vault las haya marcado
-como aprobadas: al medir `/Users/emiliosevillaortego/Documents/Funes_Vault` el
+como aprobadas: al medir `/Users/emiliosevillaortego/Documents/Fuente_Vault` el
 16 de agosto, las tres notas canónicas siguen con `status: pending_review`.
 Hasta completar esa promoción, el benchmark y cualquier derivación que exija
 una fuente canónica aprobada permanecen bloqueados.
@@ -42,7 +42,7 @@ una fuente canónica aprobada permanecen bloqueados.
 
 - **Base técnica, renombrado Fuente, instaladores, Wave 1/Wave 2 y sistema Nord:** implementados según la evidencia de `docs/task.md` y publicados en `main`; el último cierre documental llegó mediante el PR #17.
 - **Tareas 1–7 y 9:** tienen implementación o cobertura histórica documentada, pero sus casillas detalladas no son un ledger fiable; quedan por reconciliar con las rutas actuales y por completar los checkpoints humanos que correspondan.
-- **Tarea 8:** renombrado Funes → Fuente ejecutado; el PR #16 quedó fusionado en `main` con `d1f7d0b`.
+- **Tarea 8:** renombrado Fuente → Fuente ejecutado; el PR #16 quedó fusionado en `main` con `d1f7d0b`.
 - **Tarea 10:** el gate técnico está documentado como `RESULT: READY`; el cierre formal sigue pendiente hasta registrar la evidencia actual de Vault/UI y la retirada de compatibilidad que proceda.
 
 ## Global Constraints
@@ -52,7 +52,7 @@ una fuente canónica aprobada permanecen bloqueados.
 - Un derivado guarda `origins` tipados con identidad, revisión, hash y ruta de presentación de cada origen aprobado.
 - El código nuevo usa `summary`, `origin_kind` y `origins`; la lectura temporal acepta `source`, `source_kind` y `sources`, pero no los vuelve a escribir.
 - `4_salida/Fuentes` se convierte en `4_salida/Sumarios` solo mediante manifiesto aprobado, reanudable y reversible en notas sin edición posterior.
-- No se mantiene un alias permanente de paquete, comando ni directorio entre Funes y Fuente. El cambio de repositorio/remoto lo realiza una persona responsable después de aprobar la simulación.
+- No se mantiene un alias permanente de paquete, comando ni directorio entre Fuente y Fuente. El cambio de repositorio/remoto lo realiza una persona responsable después de aprobar la simulación.
 - Ollama queda en loopback salvo opt-in explícito. No se descargan modelos automáticamente, no se aceptan URL, repositorios ni `trust_remote_code` desde entradas de usuario, y ChromaDB no se expone por red.
 - `qwen3.5:0.8b` es candidato Auto para equipos de menos de 8 GB, no la selección efectiva, hasta superar el benchmark con `num_ctx=4096`, concurrencia uno y un margen de RAM del 35 %.
 - `Eco estricto` sigue siendo BM25 sin LLM y sin inicializar Chroma.
@@ -63,11 +63,11 @@ una fuente canónica aprobada permanecen bloqueados.
 
 | Hecho medido | Implicación para este plan |
 |---|---|
-| `funes/domain/frontmatter.py` admite schema v1 y v2; v2 ya tiene `note_id`, `note_type` y `source_kind`. | Schema v3 será una migración aditiva con lectura v1/v2 temporal, no una reescritura desde cero. |
-| `funes/infrastructure/sqlite_store.py` y la migración `009_note_catalog.sql` ya guardan catálogo, aliases, tombstones y CAS. | El ledger de aprobaciones se añade como migración nueva con claves foráneas; no se crean copias paralelas del Markdown. |
-| `funes/infrastructure/taxonomy_migration.py` ya calcula, aplica y revierte movimientos con hash, fases y protección frente a ediciones humanas. | El traslado Fuentes → Sumarios extiende ese mecanismo; no usa sustitución textual masiva. |
-| `funes/ram_governor/budget.py` ya tiene catálogo, margen y degradación BM25. | El benchmark añade evidencia y el candidato; no cambia el modelo efectivo antes de la revisión humana. |
-| `funes/ui/static/console.css` es la única hoja de estilo de la consola y Nord está disponible localmente bajo Apache-2.0. | Se introducen tokens propios y una migración visual incremental; no se añade una dependencia de frontend. |
+| `fuente/domain/frontmatter.py` admite schema v1 y v2; v2 ya tiene `note_id`, `note_type` y `source_kind`. | Schema v3 será una migración aditiva con lectura v1/v2 temporal, no una reescritura desde cero. |
+| `fuente/infrastructure/sqlite_store.py` y la migración `009_note_catalog.sql` ya guardan catálogo, aliases, tombstones y CAS. | El ledger de aprobaciones se añade como migración nueva con claves foráneas; no se crean copias paralelas del Markdown. |
+| `fuente/infrastructure/taxonomy_migration.py` ya calcula, aplica y revierte movimientos con hash, fases y protección frente a ediciones humanas. | El traslado Fuentes → Sumarios extiende ese mecanismo; no usa sustitución textual masiva. |
+| `fuente/ram_governor/budget.py` ya tiene catálogo, margen y degradación BM25. | El benchmark añade evidencia y el candidato; no cambia el modelo efectivo antes de la revisión humana. |
+| `fuente/ui/static/console.css` es la única hoja de estilo de la consola y Nord está disponible localmente bajo Apache-2.0. | Se introducen tokens propios y una migración visual incremental; no se añade una dependencia de frontend. |
 
 ## Fuentes oficiales consultadas
 
@@ -79,13 +79,13 @@ una fuente canónica aprobada permanecen bloqueados.
 
 | Área | Archivos actuales | Archivos que crea o cambia el SDD |
 |---|---|---|
-| Modelo Markdown | `funes/domain/frontmatter.py`, `funes/domain/documents.py` | `funes/domain/origins.py`, actualización de los dos actuales |
-| Identidad, aprobación y SQLite | `funes/domain/note_catalog.py`, `funes/infrastructure/sqlite_store.py`, `funes/infrastructure/migrations/009_note_catalog.sql` | `funes/domain/approvals.py`, `funes/application/approval.py`, `funes/infrastructure/migrations/010_approval_ledger.sql` |
-| Generación y recuperación | `funes/application/notes.py`, `funes/application/fusion.py`, `funes/application/reflow*.py`, `funes/application/review_export.py`, `funes/rag/vault_corpus.py`, `funes/rag/hybrid_search.py`, `funes/graph_engine/linker.py` | validadores de elegibilidad y propagación de `origins` en esos límites |
-| Migración de Vault | `funes/infrastructure/vault_migration.py`, `funes/infrastructure/taxonomy_migration.py`, `scripts/migrate_vault.py` | `funes/infrastructure/fuente_migration.py`, extensión explícita del CLI |
-| IA de poca RAM | `funes/ram_governor/budget.py`, `funes/application/health.py`, `funes/application/chat.py` | `funes/benchmarking/ultralight.py`, `scripts/benchmark_ultralight_models.py` |
-| Consola | `funes/consola_preview.html`, `funes/ui/static/console.css`, `funes/ui/bridge.py`, `funes/control_console.py`, `funes/reader_modal.py` | tokens CSS Fuente, contrato del lector de tres paneles y textos v3 |
-| Renombre de producto | `pyproject.toml`, `README.md`, instaladores y árbol `funes/` | `funes/infrastructure/product_rename_migration.py`, migración a `.fuente`, paquete `fuente/` y comandos Fuente |
+| Modelo Markdown | `fuente/domain/frontmatter.py`, `fuente/domain/documents.py` | `fuente/domain/origins.py`, actualización de los dos actuales |
+| Identidad, aprobación y SQLite | `fuente/domain/note_catalog.py`, `fuente/infrastructure/sqlite_store.py`, `fuente/infrastructure/migrations/009_note_catalog.sql` | `fuente/domain/approvals.py`, `fuente/application/approval.py`, `fuente/infrastructure/migrations/010_approval_ledger.sql` |
+| Generación y recuperación | `fuente/application/notes.py`, `fuente/application/fusion.py`, `fuente/application/reflow*.py`, `fuente/application/review_export.py`, `fuente/rag/vault_corpus.py`, `fuente/rag/hybrid_search.py`, `fuente/graph_engine/linker.py` | validadores de elegibilidad y propagación de `origins` en esos límites |
+| Migración de Vault | `fuente/infrastructure/vault_migration.py`, `fuente/infrastructure/taxonomy_migration.py`, `scripts/migrate_vault.py` | `fuente/infrastructure/fuente_migration.py`, extensión explícita del CLI |
+| IA de poca RAM | `fuente/ram_governor/budget.py`, `fuente/application/health.py`, `fuente/application/chat.py` | `fuente/benchmarking/ultralight.py`, `scripts/benchmark_ultralight_models.py` |
+| Consola | `fuente/consola_preview.html`, `fuente/ui/static/console.css`, `fuente/ui/bridge.py`, `fuente/control_console.py`, `fuente/reader_modal.py` | tokens CSS Fuente, contrato del lector de tres paneles y textos v3 |
+| Renombre de producto | `pyproject.toml`, `README.md`, instaladores y árbol `fuente/` | `fuente/infrastructure/product_rename_migration.py`, migración a `.fuente`, paquete `fuente/` y comandos Fuente |
 | Evidencia y documentación | `docs/task.md`, `docs/migration-guide.md`, `docs/rollback-plan.md`, `docs/release-gate.md`, `scripts/release_gate.py` | guía de migración Fuente, prueba de documentación y controles del gate |
 
 ---
@@ -93,7 +93,7 @@ una fuente canónica aprobada permanecen bloqueados.
 ### Task 1: Inventario reproducible y manifiesto de precondiciones
 
 **Files:**
-- Create: `funes/infrastructure/fuente_migration.py`
+- Create: `fuente/infrastructure/fuente_migration.py`
 - Modify: `scripts/migrate_vault.py`
 - Create: `tests/test_fuente_migration_inventory.py`
 - Modify: `docs/migration-guide.md`
@@ -123,7 +123,7 @@ def test_inventory_blocks_symlink_and_duplicate_note_id(tmp_path: Path) -> None:
 
 Run: `PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -p no:cacheprovider tests/test_fuente_migration_inventory.py -q`
 
-Expected: error de importación porque `funes.infrastructure.fuente_migration` todavía no existe.
+Expected: error de importación porque `fuente.infrastructure.fuente_migration` todavía no existe.
 
 - [ ] **Step 3: Implementar inventario solo de lectura**
 
@@ -150,18 +150,18 @@ Generar el inventario sobre el Vault real y revisar su resumen: número de docum
 - [ ] **Step 6: Checkpoint Git humano**
 
 ```bash
-git add funes/infrastructure/fuente_migration.py scripts/migrate_vault.py tests/test_fuente_migration_inventory.py docs/migration-guide.md
+git add fuente/infrastructure/fuente_migration.py scripts/migrate_vault.py tests/test_fuente_migration_inventory.py docs/migration-guide.md
 git commit -m "feat: inventory Fuente migration"
 ```
 
 ### Task 2: Benchmark reproducible de Qwen ultra-ligero
 
 **Files:**
-- Create: `funes/benchmarking/__init__.py`
-- Create: `funes/benchmarking/ultralight.py`
+- Create: `fuente/benchmarking/__init__.py`
+- Create: `fuente/benchmarking/ultralight.py`
 - Create: `scripts/benchmark_ultralight_models.py`
-- Modify: `funes/ram_governor/budget.py`
-- Modify: `funes/application/chat.py`
+- Modify: `fuente/ram_governor/budget.py`
+- Modify: `fuente/application/chat.py`
 - Create: `tests/test_ultralight_benchmark.py`
 - Modify: `tests/test_resource_budget.py`
 - Modify: `docs/dependency-matrix.md`
@@ -189,7 +189,7 @@ def test_benchmark_promotes_only_when_quality_and_margin_pass() -> None:
 
 Run: `PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -p no:cacheprovider tests/test_ultralight_benchmark.py tests/test_resource_budget.py -q`
 
-Expected: error de importación de `funes.benchmarking.ultralight`.
+Expected: error de importación de `fuente.benchmarking.ultralight`.
 
 - [ ] **Step 3: Implementar el runner y mantener el candidato aislado**
 
@@ -217,16 +217,16 @@ La persona responsable revisa el JSON y decide promoción. Si no supera todos lo
 - [ ] **Step 6: Checkpoint Git humano**
 
 ```bash
-git add funes/benchmarking funes/ram_governor/budget.py funes/application/chat.py scripts/benchmark_ultralight_models.py tests/test_ultralight_benchmark.py tests/test_resource_budget.py docs/dependency-matrix.md
+git add fuente/benchmarking fuente/ram_governor/budget.py fuente/application/chat.py scripts/benchmark_ultralight_models.py tests/test_ultralight_benchmark.py tests/test_resource_budget.py docs/dependency-matrix.md
 git commit -m "feat: benchmark ultra-light local models"
 ```
 
 ### Task 3: Schema v3 y objetos de procedencia compatibles
 
 **Files:**
-- Create: `funes/domain/origins.py`
-- Modify: `funes/domain/frontmatter.py`
-- Modify: `funes/domain/documents.py`
+- Create: `fuente/domain/origins.py`
+- Modify: `fuente/domain/frontmatter.py`
+- Modify: `fuente/domain/documents.py`
 - Modify: `tests/test_frontmatter_schema.py`
 - Create: `tests/test_origins_contract.py`
 
@@ -273,7 +273,7 @@ Expected: PASS; v1/v2 se leen, v3 se escribe de forma estable y las identidades 
 - [ ] **Step 5: Checkpoint Git humano**
 
 ```bash
-git add funes/domain/origins.py funes/domain/frontmatter.py funes/domain/documents.py tests/test_frontmatter_schema.py tests/test_origins_contract.py
+git add fuente/domain/origins.py fuente/domain/frontmatter.py fuente/domain/documents.py tests/test_frontmatter_schema.py tests/test_origins_contract.py
 git commit -m "feat: add Fuente schema v3 origins"
 ```
 
@@ -287,12 +287,12 @@ una aprobación editorial independiente de la nota derivada. Una aprobación de
 en `3_limpio`.
 
 **Files:**
-- Create: `funes/domain/approvals.py`
-- Create: `funes/application/approval.py`
-- Create: `funes/infrastructure/migrations/010_approval_ledger.sql`
-- Modify: `funes/infrastructure/sqlite_store.py`
-- Modify: `funes/application/notes.py`
-- Modify: `funes/ui/bridge.py`
+- Create: `fuente/domain/approvals.py`
+- Create: `fuente/application/approval.py`
+- Create: `fuente/infrastructure/migrations/010_approval_ledger.sql`
+- Modify: `fuente/infrastructure/sqlite_store.py`
+- Modify: `fuente/application/notes.py`
+- Modify: `fuente/ui/bridge.py`
 - Create: `tests/test_approval_ledger.py`
 - Modify: `tests/test_note_state_transitions.py`
 - Modify: `tests/contract/test_bridge_note_editor_contract.py`
@@ -320,7 +320,7 @@ def test_editing_approved_clean_note_invalidates_its_approval(services) -> None:
 
 Run: `PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -p no:cacheprovider tests/test_approval_ledger.py tests/test_note_state_transitions.py -q`
 
-Expected: error de importación de `funes.domain.approvals`.
+Expected: error de importación de `fuente.domain.approvals`.
 
 - [ ] **Step 3: Implementar el ledger y el servicio de aprobación**
 
@@ -347,7 +347,7 @@ En un Vault temporal: editar un Markdown de `3_limpio`, aprobarlo desde la conso
 - [ ] **Step 6: Checkpoint Git humano**
 
 ```bash
-git add funes/domain/approvals.py funes/application/approval.py funes/infrastructure/migrations/010_approval_ledger.sql funes/infrastructure/sqlite_store.py funes/application/notes.py funes/ui/bridge.py tests/test_approval_ledger.py tests/test_note_state_transitions.py tests/contract/test_bridge_note_editor_contract.py
+git add fuente/domain/approvals.py fuente/application/approval.py fuente/infrastructure/migrations/010_approval_ledger.sql fuente/infrastructure/sqlite_store.py fuente/application/notes.py fuente/ui/bridge.py tests/test_approval_ledger.py tests/test_note_state_transitions.py tests/contract/test_bridge_note_editor_contract.py
 git commit -m "feat: require approval for canonical clean notes"
 ```
 
@@ -366,14 +366,14 @@ guard de salida publicada. Los MOC y notas marco generados por el sistema
 requiriendo aprobación humana.
 
 **Files:**
-- Modify: `funes/application/fusion.py`
-- Modify: `funes/application/reflow.py`
-- Modify: `funes/application/reflow_jobs.py`
-- Modify: `funes/application/review_export.py`
-- Modify: `funes/application/notes.py`
-- Modify: `funes/rag/vault_corpus.py`
-- Modify: `funes/rag/hybrid_search.py`
-- Modify: `funes/graph_engine/linker.py`
+- Modify: `fuente/application/fusion.py`
+- Modify: `fuente/application/reflow.py`
+- Modify: `fuente/application/reflow_jobs.py`
+- Modify: `fuente/application/review_export.py`
+- Modify: `fuente/application/notes.py`
+- Modify: `fuente/rag/vault_corpus.py`
+- Modify: `fuente/rag/hybrid_search.py`
+- Modify: `fuente/graph_engine/linker.py`
 - Modify: `tests/test_fusion_flow.py`
 - Modify: `tests/test_reflow_jobs.py`
 - Modify: `tests/test_review_export_flow.py`
@@ -420,20 +420,20 @@ Expected: PASS; una aprobación invalidada marca los derivados como obsoletos y 
 - [ ] **Step 5: Checkpoint Git humano**
 
 ```bash
-git add funes/application/fusion.py funes/application/reflow.py funes/application/reflow_jobs.py funes/application/review_export.py funes/application/notes.py funes/rag/vault_corpus.py funes/rag/hybrid_search.py funes/graph_engine/linker.py tests/test_fusion_flow.py tests/test_reflow_jobs.py tests/test_review_export_flow.py tests/test_vault_corpus.py tests/test_graph_engine.py
+git add fuente/application/fusion.py fuente/application/reflow.py fuente/application/reflow_jobs.py fuente/application/review_export.py fuente/application/notes.py fuente/rag/vault_corpus.py fuente/rag/hybrid_search.py fuente/graph_engine/linker.py tests/test_fusion_flow.py tests/test_reflow_jobs.py tests/test_review_export_flow.py tests/test_vault_corpus.py tests/test_graph_engine.py
 git commit -m "feat: derive Fuente output only from approved origins"
 ```
 
 ### Task 6: Migración v2→v3 y cambio editorial de vocabulario
 
 **Files:**
-- Modify: `funes/infrastructure/fuente_migration.py`
+- Modify: `fuente/infrastructure/fuente_migration.py`
 - Modify: `scripts/migrate_vault.py`
-- Modify: `funes/infrastructure/sqlite_store.py`
-- Modify: `funes/domain/note_catalog.py`
-- Modify: `funes/control_console.py`
-- Modify: `funes/ui/bridge.py`
-- Modify: `funes/consola_preview.html`
+- Modify: `fuente/infrastructure/sqlite_store.py`
+- Modify: `fuente/domain/note_catalog.py`
+- Modify: `fuente/control_console.py`
+- Modify: `fuente/ui/bridge.py`
+- Modify: `fuente/consola_preview.html`
 - Create: `tests/test_fuente_v3_migration.py`
 - Modify: `tests/test_note_catalog.py`
 - Modify: `tests/contract/test_bridge_frontend_contract.py`
@@ -484,18 +484,18 @@ Revisar el manifiesto v3 de un Vault real antes de aplicar. Debe incluir todas l
 - [ ] **Step 6: Checkpoint Git humano**
 
 ```bash
-git add funes/infrastructure/fuente_migration.py scripts/migrate_vault.py funes/infrastructure/sqlite_store.py funes/domain/note_catalog.py funes/control_console.py funes/ui/bridge.py funes/consola_preview.html tests/test_fuente_v3_migration.py tests/test_note_catalog.py tests/contract/test_bridge_frontend_contract.py
+git add fuente/infrastructure/fuente_migration.py scripts/migrate_vault.py fuente/infrastructure/sqlite_store.py fuente/domain/note_catalog.py fuente/control_console.py fuente/ui/bridge.py fuente/consola_preview.html tests/test_fuente_v3_migration.py tests/test_note_catalog.py tests/contract/test_bridge_frontend_contract.py
 git commit -m "feat: migrate editorial vocabulary to Fuente v3"
 ```
 
 ### Task 7: Traslado físico Fuentes → Sumarios con recuperación
 
 **Files:**
-- Modify: `funes/infrastructure/taxonomy_migration.py`
+- Modify: `fuente/infrastructure/taxonomy_migration.py`
 - Modify: `scripts/migrate_vault.py`
-- Modify: `funes/core/vault.py`
-- Modify: `funes/graph_engine/linker.py`
-- Modify: `funes/rag/vault_corpus.py`
+- Modify: `fuente/core/vault.py`
+- Modify: `fuente/graph_engine/linker.py`
+- Modify: `fuente/rag/vault_corpus.py`
 - Modify: `tests/test_taxonomy_migration.py`
 - Modify: `tests/test_recursive_graph_scope.py`
 - Modify: `tests/test_vault_corpus.py`
@@ -553,18 +553,18 @@ Revisar y aprobar el manifiesto real antes de `--sumarios-apply`. Después, abri
 - [ ] **Step 6: Checkpoint Git humano**
 
 ```bash
-git add funes/infrastructure/taxonomy_migration.py scripts/migrate_vault.py funes/core/vault.py funes/graph_engine/linker.py funes/rag/vault_corpus.py tests/test_taxonomy_migration.py tests/test_recursive_graph_scope.py tests/test_vault_corpus.py docs/migration-guide.md docs/rollback-plan.md
+git add fuente/infrastructure/taxonomy_migration.py scripts/migrate_vault.py fuente/core/vault.py fuente/graph_engine/linker.py fuente/rag/vault_corpus.py tests/test_taxonomy_migration.py tests/test_recursive_graph_scope.py tests/test_vault_corpus.py docs/migration-guide.md docs/rollback-plan.md
 git commit -m "feat: migrate output summaries safely"
 ```
 
-### Task 8: Renombre atómico Funes → Fuente y estado local `.fuente`
+### Task 8: Renombre atómico Fuente → Fuente y estado local `.fuente`
 
 **Files:**
-- Create: `funes/infrastructure/product_rename_migration.py` antes del cambio de paquete
+- Create: `fuente/infrastructure/product_rename_migration.py` antes del cambio de paquete
 - Modify: `pyproject.toml`
-- Modify: `build_installer.py`, `funes.spec`, instaladores encontrados por el inventario de Task 1
-- Rename: directorio `funes/` → `fuente/`
-- Rename: pruebas y recursos que importan `funes` → `fuente`
+- Modify: `build_installer.py`, `fuente.spec`, instaladores encontrados por el inventario de Task 1
+- Rename: directorio `fuente/` → `fuente/`
+- Rename: pruebas y recursos que importan `fuente` → `fuente`
 - Modify: `README.md`, `docs/task.md`, `docs/dependency-matrix.md`, `docs/headless-operation.md`, `docs/migration-guide.md`, `docs/rollback-plan.md`
 - Create: `tests/test_product_rename_migration.py`
 - Create: `tests/test_packaging_fuente.py`
@@ -577,9 +577,9 @@ git commit -m "feat: migrate output summaries safely"
 
 ```python
 def test_product_rename_moves_state_once_and_keeps_backup(tmp_path: Path) -> None:
-    plan = apply_product_rename(_plan_with_funes_state(tmp_path))
+    plan = apply_product_rename(_plan_with_fuente_state(tmp_path))
     assert (tmp_path / ".fuente").is_dir()
-    assert not (tmp_path / ".funes").exists()
+    assert not (tmp_path / ".fuente").exists()
     assert Path(plan.backup_path).is_dir()
 
 def test_pyproject_exposes_only_fuente_entry_point() -> None:
@@ -602,7 +602,7 @@ La persona responsable revisa el manifiesto completo. Todavía no se renombra el
 
 - [ ] **Step 4: Implementar la migración local y el renombre de paquete en un único cambio**
 
-`apply_product_rename` mueve `.funes` a `.fuente` mediante directorio temporal y backup, actualiza las rutas internas y nunca deja ambos directorios activos. Después se cambia el paquete, los imports, `pyproject.toml`, los comandos de instalación y las pruebas. Las referencias históricas se conservan solo en una nota de migración identificada como histórica. No se deja `funes` como alias importable ni como script.
+`apply_product_rename` mueve `.fuente` a `.fuente` mediante directorio temporal y backup, actualiza las rutas internas y nunca deja ambos directorios activos. Después se cambia el paquete, los imports, `pyproject.toml`, los comandos de instalación y las pruebas. Las referencias históricas se conservan solo en una nota de migración identificada como histórica. No se deja `fuente` como alias importable ni como script.
 
 - [ ] **Step 5: Ejecutar la verificación de instalación limpia y de actualización**
 
@@ -614,7 +614,7 @@ PYTHONDONTWRITEBYTECODE=1 python3 -m pip install --target /tmp/fuente-clean-inst
 PYTHONDONTWRITEBYTECODE=1 /tmp/fuente-clean-install/bin/fuente --help
 ```
 
-Expected: PASS; la instalación nueva expone `fuente`, la actualización desde `.funes` conserva datos y el rollback conserva la copia de seguridad.
+Expected: PASS; la instalación nueva expone `fuente`, la actualización desde `.fuente` conserva datos y el rollback conserva la copia de seguridad.
 
 - [ ] **Step 6: Punto humano obligatorio**
 
@@ -624,16 +624,16 @@ Con la simulación, pruebas y documentación aprobadas: una persona renombra el 
 
 ```bash
 git add -A
-git commit -m "feat!: rename Funes to Fuente"
+git commit -m "feat!: rename Fuente to Fuente"
 ```
 
 ### Task 9: Sistema visual Fuente basado en Nord y lector de tres paneles
 
 **Files:**
-- Create: `funes/ui/static/fuente_tokens.css` antes del renombre de paquete; moverlo a `fuente/ui/static/` dentro de Task 8 si las tareas se reordenan en la misma rama
-- Modify: `funes/consola_preview.html` / `fuente/consola_preview.html` según el paquete ya renombrado
-- Modify: `funes/ui/static/console.css` / `fuente/ui/static/console.css`
-- Modify: `funes/reader_modal.py` / `fuente/reader_modal.py`
+- Create: `fuente/ui/static/fuente_tokens.css` antes del renombre de paquete; moverlo a `fuente/ui/static/` dentro de Task 8 si las tareas se reordenan en la misma rama
+- Modify: `fuente/consola_preview.html` / `fuente/consola_preview.html` según el paquete ya renombrado
+- Modify: `fuente/ui/static/console.css` / `fuente/ui/static/console.css`
+- Modify: `fuente/reader_modal.py` / `fuente/reader_modal.py`
 - Modify: `tests/test_reader_contract.py`
 - Modify: `tests/test_html_safety_contract.py`
 - Create: `tests/test_fuente_visual_contract.py`
@@ -726,7 +726,7 @@ Expected: el gate actual no conoce la suite Fuente y los documentos vigentes aú
 
 - [ ] **Step 3: Actualizar gate, guías y criterios de retirada**
 
-Añadir una suite `fuente` a `PYTEST_SUITES` con los tests de aprobación, procedencia, migración v3, Sumarios, renombre y visual. Documentar comandos de inventario, benchmark, migración, rollback y ubicación de manifiestos. El detector de términos antiguos permite solo el manifiesto de compatibilidad y secciones marcadas `Histórico de migración`; no permite valores nuevos, comandos ni rutas `.funes`/`Fuentes`.
+Añadir una suite `fuente` a `PYTEST_SUITES` con los tests de aprobación, procedencia, migración v3, Sumarios, renombre y visual. Documentar comandos de inventario, benchmark, migración, rollback y ubicación de manifiestos. El detector de términos antiguos permite solo el manifiesto de compatibilidad y secciones marcadas `Histórico de migración`; no permite valores nuevos, comandos ni rutas `.fuente`/`Fuentes`.
 
 - [ ] **Step 4: Ejecutar evidencia final completa**
 
@@ -743,7 +743,7 @@ Expected: suite y gate terminan en PASS/`RESULT: READY`; `git diff --check` no i
 
 - [ ] **Step 5: Punto humano final**
 
-Revisar: manifiesto de inventario, resultado de benchmark, manifiestos v3/Sumarios, prueba de actualización desde un Vault Funes, rollback y comprobación visual nativa. Solo tras esa revisión se elimina la compatibilidad medida como vacía.
+Revisar: manifiesto de inventario, resultado de benchmark, manifiestos v3/Sumarios, prueba de actualización desde un Vault Fuente, rollback y comprobación visual nativa. Solo tras esa revisión se elimina la compatibilidad medida como vacía.
 
 - [ ] **Step 6: Checkpoint Git humano**
 
@@ -759,7 +759,7 @@ git commit -m "docs: close Fuente migration evidence"
 | `3_limpio` canónico y aprobación por revisión | Tasks 1, 4 y 5 |
 | `origins`, `summary` y `origin_kind` | Tasks 3, 5 y 6 |
 | Sumarios y estructura física del Vault | Tasks 6 y 7 |
-| Funes → Fuente completo, sin alias permanente | Task 8 |
+| Fuente → Fuente completo, sin alias permanente | Task 8 |
 | Paleta Nord, lector de tres paneles y accesibilidad | Task 9 |
 | Qwen 3.5 0.8B condicionado a benchmark | Task 2 |
 | Gate, documentación, recuperación y retirada de compatibilidad | Task 10 |
@@ -768,7 +768,7 @@ git commit -m "docs: close Fuente migration evidence"
 
 - Cobertura: los ocho apartados de la especificación se asignan a una tarea y cada cambio con riesgo de pérdida tiene prueba, manifiesto y punto humano.
 - Coherencia: `OriginRef` es el único formato de procedencia nuevo; `ApprovalLedger.is_current` es la única decisión de elegibilidad; `TaxonomyManifest` mantiene los movimientos físicos; y el renombre solo ocurre después de las migraciones editoriales.
-- Sin atajos: no se infiere aprobación por ruta, no se auto-descargan modelos, no se exponen bases locales y no se mantiene un alias Funes permanente.
+- Sin atajos: no se infiere aprobación por ruta, no se auto-descargan modelos, no se exponen bases locales y no se mantiene un alias Fuente permanente.
 - Alcance deliberadamente separado: el benchmark, la migración editorial, el movimiento físico, el renombre y el diseño se pueden aceptar o rechazar por separado y dejan una aplicación probada al final de cada tarea.
 
 ## Execution Handoff
@@ -943,8 +943,37 @@ P-04 queda **CLOSED — NO-OP** tras la ejecución Luna–Terra–Sol.
   ledger ignorado, en `p-04-luna-report.md`, `p-04-terra-review.md` y
   `p-04-sol-ruling.md`.
 - Observación menor no bloqueante: una SQLite histórica bajo
-  `.funes-migration-backups` cambió durante la recogida de evidencia de la
+  `.fuente-migration-backups` cambió durante la recogida de evidencia de la
   copia. Se mantiene fuera del alcance de P-04 y se arrastra como observación
   para P-05; no se cierra P-05 con esta evidencia.
 
 **P-04: complete.** La siguiente tarea lógica es **P-05 — Estado local Fuente**.
+
+## Cierre técnico de la normalización definitiva — 2026-08-18
+
+La resolución posterior de P-05 eliminó las referencias operativas al namespace
+anterior y consolidó el estado local bajo Fuente.
+
+- El código de compatibilidad se sustituyó por
+  `fuente/infrastructure/fuente_state_history.py`, con manifiesto de historial
+  versión 2, binding de raíz, ruta `.fuente`, backup seguro y rechazo de
+  symlinks o destinos no vinculados.
+- El manifiesto real
+  `/Users/emiliosevillaortego/Documents/Fuente_Vault/.fuente-state-62cbf361-5b39-4a83-b343-8cc92af5393f.json`
+  verifica su backup con digest
+  `9a7ea5a816001f8b8dc886bafe46cec99362fbeedbebe0c8ca97723ef84c0e6c`.
+  `current_matches_history: false` es el resultado esperado después de
+  inicializar la colección Fuente; no autoriza una restauración destructiva.
+- Se normalizaron nombres de documentos, configuración, logs, manifiestos,
+  backups e índices derivados. Las dos SQLite activas examinadas no contienen
+  referencias al namespace anterior; la colección activa es
+  `fuente_knowledge_base`.
+- Los índices derivados previos se conservaron fuera de las superficies activas
+  en `/private/tmp`; las notas canónicas de `3_limpio`, `state.db` y el
+  manifiesto Fuente permanecen en el Vault real.
+- Verificación final: `rg` y `find` sin coincidencias en el repo fuera de
+  `.git`, `git diff --check` correcto y `1121 passed, 1 skipped`. El único
+  warning es la deprecación externa de ChromaDB.
+
+**P-05: cierre técnico completado.** No se publica Git en este checkpoint y no
+se reescribe el historial.

@@ -800,3 +800,122 @@ P-02 queda técnicamente cerrada tras la revisión Luna–Terra–Sol.
 
 Siguiente tarea lógica: **P-03 — Evidencia real de Task 6**. Esta sesión se
 detiene aquí por instrucción del usuario.
+
+## Actualización de ejecución P-03 — 2026-08-17
+
+P-03 se ejecutó con Luna–Terra–Sol y queda `OPEN / PENDING`; no se marca como
+completada.
+
+- El Vault real `/Users/emiliosevillaortego/Documents/Fuente_Vault` se midió
+  solo en lectura. El inventario registró `3` canónicos en `3_limpio`,
+  `schema_version: 3`, `0` derivados migrables en `4_salida`, `findings: []` e
+  `is_safe_to_apply: true`.
+- El manifiesto v2→v3 real quedó en
+  `/private/tmp/fuente-p03-HHrJgo/manifest.json` con `entries: []` y
+  `findings: []`. Es un no-op medido: no se fabricaron candidatos legacy.
+- El apply se ejecutó dos veces únicamente en
+  `/private/tmp/fuente-p03-HHrJgo/vault-copy`; ambas salidas fueron
+  `status: completed`, `entries: []`, `findings: []`. Los Markdown conservaron
+  cuerpo, identidad, hash, enlaces, orígenes y estado; SQLite mantuvo
+  `integrity=ok`, `catalog=7`, `approvals=6` y `staleness=0`.
+- Los hashes reales medidos antes y después no cambiaron: los tres Markdown
+  son `c18b7758b074521e01b554ce224185e06c8642e63c94e71411ed25a6d14a0d92`,
+  `aeb09732174c635bd781cfcccf32012a66923de874e2d22a2908baf4e02ae30f` y
+  `3145f01e6b306dc34b1ce43a1a667455ac51c4176b721c45fcea8a737d640309`; el
+  `state.db` real conservó `2be20f9a985451f7614b36100bd82318934f9b1f57ee1f9159525bf0ab3fd017`.
+- Queda un defecto de trazabilidad que bloquea el cierre: los tres Markdown no
+  contienen `revision`, por lo que el inventario deduce `1`, mientras el
+  catálogo y las aprobaciones vigentes registran `2`. El Vault real no se
+  modifica para corregirlo en esta sesión; cualquier reparación debe
+  materializar la revisión mediante el flujo canónico y exigir nueva
+  aprobación humana.
+- Obsidian fue detectado y lanzado sobre la copia, pero macOS no permitió una
+  lectura observable de sus ventanas (`-1728/-1719`). Solo hay `3` notas
+  disponibles, no `10`; no se afirma revisión visual. P-06 sigue separado y no
+  sustituye este checkpoint.
+- Terra aprobó la re-revisión focal; Sol emitió `NEEDS_FIX` global. El informe
+  completo queda en el ledger ignorado
+  `.superpowers/sdd/2026-08-14-fuente-execution-sdd/p-03-luna-report.md` y la
+  evidencia versionada queda resumida aquí.
+
+Siguiente paso lógico: resolver con autorización humana la discrepancia de
+`revision`, revisar visualmente las tres notas de la copia y repetir el
+checkpoint antes de cerrar P-03. P-04 no debe tratar P-03 como cerrado.
+
+### Repetición Obsidian con permisos concedidos — 2026-08-17
+
+Se repitió la comprobación sobre la copia temporal
+`/private/tmp/fuente-p03-HHrJgo/vault-copy`. Los enlaces `obsidian://` enfocaron
+las tres notas disponibles y los títulos de ventana confirmaron:
+
+- `Aptis - Certificado C1_1ed323ae_jpg`
+- `Aptis - Certificado C1_6b6b3d97_pdf`
+- `ESP - Sevilla enero 2025 Aptis ESOL_87f7a10b_pdf`
+
+El contenido del editor no se expuso por accesibilidad y la captura directa
+del display volvió a fallar (`could not create image from display`). La nueva
+medición acredita apertura y enfoque de las tres notas, pero no una inspección
+visual verificable de cuerpo, enlaces, procedencia o estado. La copia contiene
+solo tres notas, no diez. P-03 sigue `OPEN / PENDING`; la discrepancia de
+`revision` del Markdown frente a SQLite también sigue pendiente.
+
+### Evidencia visual humana recibida — 2026-08-17
+
+Emilio aportó seis capturas, dos por cada una de las tres notas disponibles en
+la copia temporal. La evidencia confirma visualmente títulos y rutas bajo
+`3_limpio`, propiedades legibles con `versión_esquema: 3`, `id_nota`,
+`tipo_nota: original`, `estado: aprobado` y `orígenes` vacío, además de cuerpo
+OCR/texto visible y ausencia de enlaces rotos visibles.
+
+Las capturas también confirman que no aparece la propiedad `revision` en las
+tres notas. La revisión visual de las tres notas disponibles queda acreditada,
+pero P-03 sigue `OPEN / PENDING`: la ausencia de `revision` en Markdown
+contradice la revisión `2` de SQLite y de las aprobaciones vigentes. La copia
+contiene tres notas, no diez.
+
+## Actualización de ejecución P-03 — resolución Markdown–SQLite — 2026-08-17
+
+La discrepancia de trazabilidad detectada en P-03 quedó resuelta en el Vault
+real `Fuente_Vault` tras autorización explícita y copia previa verificable en
+`/private/tmp/fuente-revision-repair-ktijJU/Fuente_Vault` (37 MB).
+
+- `fuente/application/notes.py` materializa en el frontmatter la próxima
+  revisión que persiste SQLite en cada escritura CAS.
+- `fuente/domain/frontmatter.py` valida `revision` cuando está presente como
+  entero positivo; las notas históricas sin esa propiedad siguen siendo
+  legibles.
+- Los tres canónicos reales fueron reparados mediante el servicio y
+  reaprobados por `emilio`. Verificación independiente: `PRAGMA
+  integrity_check = ok`; en las tres notas `db_revision = md_revision = 4`,
+  `db_status = md_status = approved`, hashes coincidentes y aprobación vigente.
+- La matriz focal final pasó `68 passed, 1 warning`; también pasan
+  `git diff --check` y `compileall`. El warning es la deprecación conocida de
+  ChromaDB.
+- La evidencia visual humana anterior se conserva como evidencia de los bytes
+  previos. No se usa para afirmar que la propiedad `revision: 4` fue observada;
+  si el gate visual exige esa propiedad, P-03 necesita capturas nuevas.
+
+Estado actual: **discrepancia técnica resuelta; cierre visual formal pendiente
+de evidencia actualizada**. P-04 no debe asumir cierre completo de P-03 hasta
+ese checkpoint.
+
+## Cierre de ejecución P-03 — 2026-08-17
+
+El checkpoint visual pendiente quedó cerrado con tres capturas actuales de
+Obsidian, una por cada nota canónica. Las tres muestran ruta/título en
+`3_limpio`, `revision: 4`, `estado: aprobado` e `id_nota`.
+
+Evidencia conservada:
+
+```text
+/private/tmp/fuente-p03-HHrJgo/obsidian-screenshots/07-jpg-properties-revision4.png
+/private/tmp/fuente-p03-HHrJgo/obsidian-screenshots/08-pdf-properties-revision4.png
+/private/tmp/fuente-p03-HHrJgo/obsidian-screenshots/09-receipt-properties-revision4.png
+```
+
+Hashes SHA-256: `aaf4270096c2d02e0246d9a6832b06e1c68c6390662429027785f230f6273079`,
+`fa0cb2ef2840b0f484a020ca526ace6746d62f6f07b3f2b8f9c13defedbfe418` y
+`826f479ab38748d504a6dfba6c8f9d4ab8893f7322a23affb3a10790893ad972`.
+
+**P-03: complete.** El checkpoint técnico, de aprobación y visual queda
+cerrado; P-04 puede asumir P-03 completada.

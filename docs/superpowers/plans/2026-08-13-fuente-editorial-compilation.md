@@ -1,4 +1,4 @@
-# Funes Editorial Compilation — Implementation Plan
+# Fuente Editorial Compilation — Implementation Plan
 
 > **Suspendido para implementación nueva (2026-08-14):** los candidatos solo
 > podrán partir de revisiones aprobadas de `3_limpio`; la colección objetivo es
@@ -7,13 +7,13 @@
 
 > **For the implementer:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
-**Goal:** create trusted, specialized editorial candidates from Funes' existing pipeline using registered folder policies and typed templates, while keeping imported content and LLM output untrusted.
+**Goal:** create trusted, specialized editorial candidates from Fuente' existing pipeline using registered folder policies and typed templates, while keeping imported content and LLM output untrusted.
 
-**Architecture:** a policy registry selects only pre-approved, fixed-location files; a policy resolver yields a restricted DTO; a template registry chooses an immutable template by validated note type/source kind. Funes renders and validates generated Markdown itself. Taxonomy is first virtual—metadata and UI views change before any physical note movement.
+**Architecture:** a policy registry selects only pre-approved, fixed-location files; a policy resolver yields a restricted DTO; a template registry chooses an immutable template by validated note type/source kind. Fuente renders and validates generated Markdown itself. Taxonomy is first virtual—metadata and UI views change before any physical note movement.
 
 **Tech Stack:** Python, PyYAML, existing pipeline services, existing Ollama authorization configuration, pytest, static console contracts.
 
-**Prerequisite:** `2026-08-13-funes-editorial-foundation.md` is implemented and its identity/reconciliation tests pass.
+**Prerequisite:** `2026-08-13-fuente-editorial-foundation.md` is implemented and its identity/reconciliation tests pass.
 
 ---
 
@@ -21,10 +21,10 @@
 
 **Files:**
 
-- Create: `funes/editorial/__init__.py`
-- Create: `funes/editorial/policies.py`
-- Create: `funes/editorial/policy_registry.py`
-- Modify: `funes/watcher/watcher.py`
+- Create: `fuente/editorial/__init__.py`
+- Create: `fuente/editorial/policies.py`
+- Create: `fuente/editorial/policy_registry.py`
+- Modify: `fuente/watcher/watcher.py`
 - Test: `tests/test_editorial_policies.py`
 - Test: `tests/test_quarantine_watcher.py`
 
@@ -51,9 +51,9 @@ Expected: failures because policy registry and watcher exclusion do not exist.
 
 **Step 3: Implement an allow-list registry, not discovery**
 
-Store approved policy records only in `.funes/editorial_policies`. Each record
+Store approved policy records only in `.fuente/editorial_policies`. Each record
 has canonical Vault-relative path, scope, SHA-256, approved timestamp and
-status. Permit only Funes-created structural locations—global, theme, pipeline
+status. Permit only Fuente-created structural locations—global, theme, pipeline
 phase and output collection. Reject symlinks and all files not recorded in the
 registry. Set strict byte limits and UTF-8 decoding.
 
@@ -70,7 +70,7 @@ class ResolvedEditorialPolicy:
 ```
 
 Do not add endpoint/model/path/tool/environment/state fields. The resolver
-orders only approved layers under immutable Funes security.
+orders only approved layers under immutable Fuente security.
 
 **Step 4: Run focused tests**
 
@@ -82,10 +82,10 @@ Expected: PASS.
 
 **Files:**
 
-- Create: `funes/editorial/templates.py`
-- Create: `funes/editorial/classification.py`
-- Modify: `funes/graph_engine/prompts.py`
-- Modify: `funes/application/ingestion.py`
+- Create: `fuente/editorial/templates.py`
+- Create: `fuente/editorial/classification.py`
+- Modify: `fuente/graph_engine/prompts.py`
+- Modify: `fuente/application/ingestion.py`
 - Test: `tests/test_editorial_templates.py`
 - Test: `tests/test_eco_ingestion.py`
 
@@ -127,7 +127,7 @@ callers migrate.
 **Step 4: Render Markdown from validated DTOs**
 
 The LLM receives source content as a delimited data field and has no tools. It
-returns a typed candidate DTO, not frontmatter. Funes inserts `note_id`, status,
+returns a typed candidate DTO, not frontmatter. Fuente inserts `note_id`, status,
 history, source references and route after validation. Reject unknown keys,
 invalid wikilinks/embeds, oversized sections and headings that fail the selected
 template.
@@ -142,10 +142,10 @@ Expected: PASS.
 
 **Files:**
 
-- Modify: `funes/core/vault.py`
-- Modify: `funes/application/notes.py`
-- Modify: `funes/application/reflow.py`
-- Modify: `funes/graph_engine/optimized_loop.py`
+- Modify: `fuente/core/vault.py`
+- Modify: `fuente/application/notes.py`
+- Modify: `fuente/application/reflow.py`
+- Modify: `fuente/graph_engine/optimized_loop.py`
 - Test: `tests/test_reflow_service.py`
 - Test: `tests/test_graph_engine.py`
 
@@ -179,10 +179,10 @@ Expected: PASS.
 
 **Files:**
 
-- Create: `funes/editorial/compiler.py`
-- Create: `funes/editorial/health.py`
-- Modify: `funes/application/fusion.py`
-- Modify: `funes/ui/bridge.py`
+- Create: `fuente/editorial/compiler.py`
+- Create: `fuente/editorial/health.py`
+- Modify: `fuente/application/fusion.py`
+- Modify: `fuente/ui/bridge.py`
 - Test: `tests/test_editorial_compiler.py`
 - Test: `tests/test_console_step2_ingestion.py`
 
@@ -217,8 +217,8 @@ Expected: PASS.
 
 **Files:**
 
-- Create: `funes/editorial/obsidian_views.py`
-- Modify: `funes/graph_engine/linker.py`
+- Create: `fuente/editorial/obsidian_views.py`
+- Modify: `fuente/graph_engine/linker.py`
 - Test: `tests/test_obsidian_views.py`
 - Test: `tests/test_graph_engine.py`
 

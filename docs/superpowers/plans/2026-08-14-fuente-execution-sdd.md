@@ -779,3 +779,24 @@ Plan complete and saved to `docs/superpowers/plans/2026-08-14-fuente-execution-s
 2. **Inline Execution** — ejecutar las tareas aquí, por lotes con puntos de revisión humana.
 
 Antes de iniciar Task 1, confirmar qué enfoque se usará. Los checkpoints Git de este documento los realiza la persona responsable, respetando la regla de solo lectura del agente.
+
+## Actualización de ejecución P-02 — 2026-08-17
+
+P-02 queda técnicamente cerrada tras la revisión Luna–Terra–Sol.
+
+- En una copia temporal se verificó la aprobación ligada a
+  `note_id + revision + content_hash`, su invalidación al editar el canónico y
+  la reaprobación exacta posterior.
+- Se corrigió `fuente/application/notes.py` para que una edición de un
+  canónico aprobado persista `status: pending_review` además de invalidar el
+  ledger y el catálogo; `tests/test_approval_ledger.py` cubre la transición a
+  través de `FuenteConsoleBackend` y `FuentePyWebViewApi`.
+- La matriz focal terminó en `20 passed, 1 warning in 1.44s`; Terra aprobó la
+  re-revisión y Sol emitió `APPROVED`. Las guardas mantienen bloqueados los
+  derivados, indexación, grafo, RAG y exportación hasta una nueva aprobación.
+- Los tres Markdown del Vault real conservaron sus hashes y no se modificaron.
+  La ventana nativa PyWebView/Tk no se verificó; ese checkpoint continúa en
+  P-06. No se realizaron operaciones Git de escritura.
+
+Siguiente tarea lógica: **P-03 — Evidencia real de Task 6**. Esta sesión se
+detiene aquí por instrucción del usuario.

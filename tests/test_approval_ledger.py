@@ -16,7 +16,9 @@ from fuente.domain.errors import (
     NoteRevisionConflictError,
     PathAuthorizationError,
 )
-from fuente.domain.frontmatter import serialize_frontmatter
+from fuente.domain.frontmatter import parse_frontmatter, serialize_frontmatter
+from fuente.control_console import FuenteConsoleBackend
+from fuente.ui.bridge import FuentePyWebViewApi
 from fuente.infrastructure.sqlite_store import JobStore
 
 
@@ -304,6 +306,55 @@ def test_editing_approved_clean_note_invalidates_approval_and_marks_derivative(
             "marked_at": staleness[0]["marked_at"],
         }
     ]
+
+
+def test_console_edit_of_approved_clean_note_persists_pending_review_and_lists_it(
+    approval_services,
+) -> None:
+    approvals, ledger, notes, store, clean_path, _relative = approval_services
+    backend = FuenteConsoleBackend(notes.vault.config.vault_path)
+    bridge = FuentePyWebViewApi(backend)
+    try:
+        pending_markdown = clean_path.read_text(encoding="utf-8")
+        approved_markdown = pending_markdown.replace(
+            "status: pending_review", "status: approved", 1
+        )
+        clean_path.write_text(approved_markdown, encoding="utf-8")
+        store._connection.execute(
+            "UPDATE note_catalog SET content_hash = ? WHERE note_id = ?",
+            (content_hash_for_markdown(approved_markdown), NOTE_ID),
+        )
+        store._connection.commit()
+        approvals.approve_clean(NOTE_ID, 1, "emilio")
+        before_bytes = clean_path.read_bytes()
+        editor = bridge.get_note_editor(NOTE_ID)
+
+        updated = bridge.update_note_body(
+            NOTE_ID,
+            editor["revision"],
+            editor["body_markdown"] + "\nCambio desde la bandeja.\n",
+        )
+
+        after_bytes = clean_path.read_bytes()
+        metadata, _body = parse_frontmatter(
+            clean_path.read_text(encoding="utf-8")
+        )
+        catalog = store.get_note(NOTE_ID)
+        current_note = notes.get_note(NOTE_ID)
+
+        assert updated["revision"] == 2
+        assert before_bytes != after_bytes
+        assert metadata["status"] == "pending_review"
+        assert catalog["status"] == "pending_review"
+        assert catalog["revision"] == 2
+        assert ledger.is_current(
+            NOTE_ID, 1, content_hash_for_markdown(before_bytes.decode("utf-8"))
+        ) is False
+        pending = bridge.get_pending_notes()
+        assert any(item["document_id"] == NOTE_ID for item in pending["pending_notes"])
+        assert current_note.status == "pending_review"
+    finally:
+        backend._job_store.close()
 
 
 def test_failed_invalidation_transaction_restores_markdown_and_approval(

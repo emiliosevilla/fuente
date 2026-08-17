@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib
 import json
+import shutil
 from pathlib import Path
 
 import pytest
@@ -76,6 +77,13 @@ def test_product_rename_rejects_ambiguous_manifest_state(tmp_path: Path) -> None
     with pytest.raises(Exception, match="ambiguous|status|manifest"):
         _api().apply_product_rename(manifest_path)
 
+    payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+    payload["status"] = "applied"
+    payload["phase"] = "unknown"
+    manifest_path.write_text(json.dumps(payload), encoding="utf-8")
+    with pytest.raises(Exception, match="ambiguous|phase|manifest"):
+        _api().rollback_product_rename(manifest_path)
+
 
 def test_product_rename_recovers_after_persist_failure_after_rename(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     manifest_path = _plan_with_funes_state(tmp_path)
@@ -121,3 +129,58 @@ def test_product_rename_does_not_treat_broken_source_symlink_as_recovery(
 
     with pytest.raises(Exception, match="symlink|directory|recovery"):
         api.apply_product_rename(manifest_path)
+
+
+@pytest.mark.parametrize(
+    "failure_state",
+    [
+        ("applied", "rollback_in_progress"),
+        ("rolled_back", "cleanup_pending"),
+        ("rolled_back", "completed"),
+    ],
+)
+def test_product_rename_rollback_recovers_after_each_persist_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, failure_state: tuple[str, str]
+) -> None:
+    manifest_path = _plan_with_funes_state(tmp_path)
+    api = _api()
+    applied = api.apply_product_rename(manifest_path)
+    backup_digest = applied.backup_digest
+    original_write = api._write_plan
+    failed = False
+
+    def fail_once(path: Path, plan: object) -> None:
+        nonlocal failed
+        if not failed and (getattr(plan, "status", ""), getattr(plan, "phase", "")) == failure_state:
+            failed = True
+            raise OSError("simulated rollback persistence failure")
+        original_write(path, plan)
+
+    monkeypatch.setattr(api, "_write_plan", fail_once)
+    with pytest.raises(OSError, match="rollback persistence"):
+        api.rollback_product_rename(manifest_path)
+
+    monkeypatch.setattr(api, "_write_plan", original_write)
+    recovered = api.rollback_product_rename(manifest_path)
+    assert (recovered.status, recovered.phase) == ("rolled_back", "completed")
+    workspace = tmp_path / "workspace"
+    assert (workspace / ".funes").is_dir()
+    assert not (workspace / ".fuente").exists()
+    assert not list(workspace.glob(".funes-restore-*"))
+    assert not list(workspace.glob(".fuente-rollback-*"))
+    assert Path(recovered.backup_path).is_dir()
+    assert recovered.backup_digest == backup_digest
+
+
+def test_product_rename_recovers_legacy_post_rollback_topology(tmp_path: Path) -> None:
+    manifest_path = _plan_with_funes_state(tmp_path)
+    api = _api()
+    applied = api.apply_product_rename(manifest_path)
+    workspace = tmp_path / "workspace"
+    shutil.copytree(applied.backup_path, workspace / ".funes")
+    shutil.rmtree(workspace / ".fuente")
+
+    recovered = api.rollback_product_rename(manifest_path)
+    assert (recovered.status, recovered.phase) == ("rolled_back", "completed")
+    assert (workspace / ".funes").is_dir()
+    assert not (workspace / ".fuente").exists()

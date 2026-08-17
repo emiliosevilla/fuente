@@ -919,3 +919,32 @@ Hashes SHA-256: `aaf4270096c2d02e0246d9a6832b06e1c68c6390662429027785f230f627307
 
 **P-03: complete.** El checkpoint técnico, de aprobación y visual queda
 cerrado; P-04 puede asumir P-03 completada.
+
+## Cierre de ejecución P-04 — 2026-08-17
+
+P-04 queda **CLOSED — NO-OP** tras la ejecución Luna–Terra–Sol.
+
+- El manifiesto real
+  `/private/tmp/p04-luna-evidence-HU86uU/real-sumarios-plan.json` apunta a
+  `Fuente_Vault`, permanece en `status: dry_run` y contiene `entries: []`,
+  `findings: []` y `wikilink_changes: []`.
+- El alcance medido contiene tres Markdown en `3_limpio` y solo
+  `4_salida/_Indice_MOC.md`; ninguna nota de `3_limpio` entró en el manifiesto
+  y no hay derivados normales para trasladar.
+- En la copia aislada
+  `/private/tmp/p04-luna-evidence-HU86uU/vault-copy` se registró aprobación de
+  `emilio`; `--sumarios-apply` y `--sumarios-rollback` terminaron como no-op,
+  sin movimientos ni cambios de wikilinks. El manifiesto terminó
+  `status: rolled_back` y `entries: []`.
+- Los snapshots antes/después coinciden para `3_limpio` y `4_salida`; las
+  SQLite operativas bajo `.fuente` mantienen hash e integridad `ok`. El Vault
+  real no recibió apply ni rollback.
+- Terra y Sol dictaminaron `APPROVED`. La evidencia completa queda en el
+  ledger ignorado, en `p-04-luna-report.md`, `p-04-terra-review.md` y
+  `p-04-sol-ruling.md`.
+- Observación menor no bloqueante: una SQLite histórica bajo
+  `.funes-migration-backups` cambió durante la recogida de evidencia de la
+  copia. Se mantiene fuera del alcance de P-04 y se arrastra como observación
+  para P-05; no se cierra P-05 con esta evidencia.
+
+**P-04: complete.** La siguiente tarea lógica es **P-05 — Estado local Fuente**.

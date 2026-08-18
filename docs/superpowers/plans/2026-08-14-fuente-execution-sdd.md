@@ -33,7 +33,7 @@ alcanzó cada cierre.
 | 6 | Migración v2→v3 | **COMPLETE — NO-OP REAL** | P-03 cerró con inventario real vacío, prueba idempotente en copia y revisión visual de las tres notas existentes. |
 | 7 | `Fuentes`→`Sumarios` | **COMPLETE — NO-OP REAL** | P-04 cerró con manifiesto vacío, apply/rollback en copia y dictámenes Terra/Sol favorables. |
 | 8 | Identidad y estado local Fuente | **COMPLETE** | P-05 cerró la normalización, el historial recuperable y la retirada de restos operativos del namespace anterior. |
-| 9 | Nord y lector de tres regiones | **IMPLEMENTED / CHECKPOINT OPEN** | Contratos y pruebas están cerrados. Falta P-06: revisión visual nativa completa. |
+| 9 | Nord y lector de tres regiones | **IMPLEMENTED / P-06 TECHNICAL EVIDENCE** | Contratos, pruebas y la remediación técnica de identidad MOC/grafo y footer están cerrados en `a4628ac`. P-06 conserva abierta la revisión visual nativa completa. |
 | 10 | Cierre y release | **IN PROGRESS** | Falta completar P-06, P-07, las tareas Q abiertas y P-08 con gate final y dictamen independiente. |
 
 ### Estado canónico registrado
@@ -695,6 +695,33 @@ Abrir el launcher nativo y comprobar teclado, foco, contraste, error/éxito, pan
 git add fuente/ui/static/fuente_tokens.css fuente/ui/static/console.css fuente/consola_preview.html fuente/reader_modal.py tests/test_fuente_visual_contract.py tests/test_reader_contract.py tests/test_html_safety_contract.py README.md
 git commit -m "feat: apply Fuente Nord visual system"
 ```
+
+### Addendum técnico P-06 — 2026-08-18
+
+La incidencia observada en el lector nativo queda corregida y publicada en
+`a4628ac` (`fix: close Q-03 graph and MOC reader`):
+
+- El guard de salida publicada valida ahora el fichero Markdown concreto de la
+  ruta solicitada. Esto evita que una colisión de `note_id` entre `3_limpio` y
+  `4_salida` permita leer el registro equivocado; el lector, la migración y el
+  grafo comparten esa misma identidad.
+- En el Vault real, `_Indice_MOC.md` contiene exactamente un wikilink físico
+  hacia `ESP - Sevilla enero 2025 Aptis ESOL_87f7a10b_pdf`. El payload medido del
+  grafo contiene 4 nodos y 2 relaciones: 1 wikilink y 1 procedencia. La
+  procedencia se conserva en `origins` de la nota derivada; no se inventa como
+  wikilink textual.
+- La selección del MOC ya conserva su `note_id` declarado y carga el Markdown
+  autorizado. Las etiquetas largas del grafo se ajustan al canvas con elipsis,
+  y la evidencia nativa muestra un footer legible con `Nodos: 4`,
+  `Wikilinks físicos: 1` y `Procedencias: 1`.
+- Verificación: `1167 passed, 1 skipped, 1 warning`; `py_compile`,
+  `git diff --check` y las 55 pruebas focales del lector/grafo pasan. La
+  advertencia restante es la deprecación externa de ChromaDB.
+
+Este addendum cierra la remediación técnica de la incidencia. No convierte por
+inferencia el **P-06 — Revisión visual nativa** en aprobado: todavía requiere
+la comprobación humana completa de teclado, foco, contraste, error/éxito,
+pantalla estrecha y reducción de movimiento indicada por Task 9.
 
 ### Task 10: Cierre, retirada de compatibilidad y evidencia de release
 

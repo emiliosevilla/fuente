@@ -7,6 +7,7 @@ from pathlib import Path
 from fuente.control_console import FuenteConsoleBackend
 from fuente.core.vault import document_id_for_relative_path
 from fuente.domain.frontmatter import serialize_frontmatter
+from fuente.graph_engine.linker import GraphLinker
 from fuente.reader_modal import FuenteReaderModal
 from fuente.ui.bridge import FuentePyWebViewApi
 from fuente.ui.reader_history import pop_reader_history, push_reader_history
@@ -123,6 +124,44 @@ def test_get_notes_list_returns_metadata_and_opaque_document_ids(temp_vault_path
 
     issues = {n["issue"] for n in content_notes}
     assert issues == {ISSUE_A, ISSUE_B}
+
+
+def test_reflow_candidate_is_reviewable_by_id_but_hidden_from_reader_and_moc(
+    temp_vault_path,
+):
+    backend = FuenteConsoleBackend(temp_vault_path)
+    relative = (
+        "4_salida/_Reflow_Review/"
+        "_Original_reflow_00000000-0000-4000-8000-000000000001.md"
+    )
+    candidate_id = document_id_for_relative_path(relative)
+    candidate_path = temp_vault_path / relative
+    _write_canonical_note(
+        candidate_path,
+        note_id=candidate_id,
+        title="Reflow candidate",
+        body="# Reflow candidate\n",
+        status="pending_review",
+    )
+
+    candidate = backend.get_notes_service().get_note(candidate_id)
+
+    assert candidate.document_id == candidate_id
+    assert candidate.status == "pending_review"
+    assert candidate_id not in {
+        note["document_id"] for note in backend.get_notes_list()
+    }
+    assert backend.get_note_content_html(candidate_id) == {
+        "error": "path_not_authorized",
+        "message": "Path is not authorized",
+    }
+    assert candidate_id not in {
+        note.document_id
+        for note in GraphLinker(
+            backend.vault.output_dir,
+            vault_root=backend.vault.config.vault_path,
+        ).enumerate_notes()
+    }
 
 
 def test_bridge_and_native_reader_share_the_same_note_set(temp_vault_path):

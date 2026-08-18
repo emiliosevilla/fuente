@@ -9,6 +9,7 @@ from typing import Any, List, Optional, Sequence
 
 from fuente.core.vault import document_id_for_relative_path
 from fuente.domain.documents import MarkdownDocument
+from fuente.domain.paths import REFLOW_REVIEW_DIR_NAME
 
 logger = logging.getLogger(__name__)
 
@@ -58,6 +59,8 @@ class GraphLinker:
         if any(part.startswith(".") for part in relative.parts):
             return True
         if _SYSTEM_DIR_NAME in relative.parts:
+            return True
+        if REFLOW_REVIEW_DIR_NAME in relative.parts:
             return True
         if path.name.startswith("_") and path.suffix.lower() == ".md":
             return not (

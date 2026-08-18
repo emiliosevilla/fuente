@@ -1015,7 +1015,7 @@ Q-08 depende de las siete anteriores y P-08 depende del cierre de todas.
 | ID | Entregable verificable | Estado | Dependencias |
 |---|---|---|---|
 | Q-01 | DOCX byte a byte determinista | **COMPLETE** | `34b1098`, `471d5c9` y `6cd417a`; Luna DONE, Terra APPROVED y Sol APPROVED; 28 pruebas focales verdes y tres gates READY medidos. |
-| Q-02 | Higiene y gate de artefactos activos | **NOT_STARTED** | P-05 |
+| Q-02 | Higiene y gate de artefactos activos | **COMPLETE** | `0712782`, `96cd085`, `673934a` y `a328c17`; Terra implementó y corrigió, Luna APPROVED y Sol APPROVED; 25 pruebas focales y gate READY. |
 | Q-03 | Vocabulario visible coherente | **NOT_STARTED** | P-04 |
 | Q-04 | Contratos Wave 1 y limpieza de API | **NOT_STARTED** | Q-02 |
 | Q-05 | Cobertura de cuarentena e ingesta | **NOT_STARTED** | Q-04 |
@@ -1140,7 +1140,7 @@ del payload y la validez estructural del DOCX.
 - Historical rule: documentos bajo `docs/history/` no se renombran ni se usan
   para deducir artefactos activos.
 
-- [ ] **Step 1: Escribir pruebas rojas con nombres genéricos retirados**
+- [x] **Step 1: Escribir pruebas rojas con nombres genéricos retirados**
 
 ```python
 def test_active_artifact_gate_rejects_non_fuente_build_outputs(gate_module, tmp_path):
@@ -1158,13 +1158,13 @@ def test_active_artifact_gate_ignores_documented_history(gate_module, tmp_path):
     assert gate_module.check_active_artifact_hygiene(tmp_path).passed is True
 ```
 
-- [ ] **Step 2: Confirmar el fallo del nuevo contrato**
+- [x] **Step 2: Confirmar el fallo del nuevo contrato**
 
 Run: `PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -p no:cacheprovider tests/test_active_artifact_hygiene.py tests/test_release_gate.py -q`
 
 Expected: FAIL porque el check todavía no existe.
 
-- [ ] **Step 3: Implementar el check sin borrar archivos**
+- [x] **Step 3: Implementar el check sin borrar archivos**
 
 El check recorre únicamente el checkout, excluye `.git`, caches e históricos,
 y reporta sin borrar:
@@ -1178,7 +1178,7 @@ Un `*.egg-info` distinto de `fuente.egg-info` o una distribución fuera del
 prefijo permitido bloquea el gate. Añadir el check al flujo normal de
 `scripts/release_gate.py` y documentar su ID `active_artifact_hygiene`.
 
-- [ ] **Step 4: Confirmar el único artefacto permitido y regenerar en temporal**
+- [x] **Step 4: Confirmar el único artefacto permitido y regenerar en temporal**
 
 Run: `find . -path './.git' -prune -o \( -name '*.egg-info' -o -path './dist/*' \) -print`
 
@@ -1187,18 +1187,31 @@ hay nada que borrar. Añadir sus patrones a `.gitignore` y comprobar un build en
 un directorio temporal con
 `python3 -m build --outdir /private/tmp/fuente-dist-check`.
 
-- [ ] **Step 5: Verificar el gate focal**
+- [x] **Step 5: Verificar el gate focal**
 
 Run: `PYTHONDONTWRITEBYTECODE=1 python3 scripts/release_gate.py --skip-pytest --only active_artifact_hygiene source_tree_clean`
 
 Expected: ambos checks PASS y ningún archivo del Vault real cambia.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add .gitignore scripts/release_gate.py tests/test_active_artifact_hygiene.py tests/test_release_gate.py docs/release-gate.md
 git commit -m "chore: enforce active artifact hygiene"
 ```
+
+### Cierre Q-02 — 2026-08-18
+
+Q-02 queda cerrada con los commits `0712782`, `96cd085`, `673934a` y
+`a328c17`. Terra implementó el gate y corrigió sucesivamente la coincidencia
+exacta de distribución, el recorrido de `dist` anidados, la exclusión precisa
+de `docs/history`, el build tag opcional de wheels y la validación ASCII de
+versión/build tag. Luna y Sol emitieron `SPEC: APPROVED` y `QUALITY: APPROVED`
+sin hallazgos. La matriz focal pasó `25` pruebas; `py_compile`, `git diff
+--check` y el gate focal quedaron en `READY`. El probe dirigido confirmó que
+el gate rechaza `fuente-0.1-١abc-py3-none-any.whl`, acepta
+`fuente-0.1-1-py3-none-any.whl`, no modifica el árbol inspeccionado y deja
+como único artefacto activo `./fuente.egg-info`.
 
 ### Task Q-03: Vocabulario visible coherente
 

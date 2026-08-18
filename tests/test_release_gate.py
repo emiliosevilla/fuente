@@ -166,3 +166,13 @@ def test_gate_script_help():
 def test_sync_contract_is_registered_in_release_gate(gate_module):
     suite_ids = {suite_id for suite_id, _args in gate_module.PYTEST_SUITES}
     assert "sync" in suite_ids
+
+
+def test_active_artifact_hygiene_is_registered_in_release_gate(gate_module):
+    checks = gate_module.run_all_checks(
+        skip_pytest=True,
+        repo_root=REPO_ROOT,
+        only=["active_artifact_hygiene"],
+    )
+
+    assert [check.id for check in checks] == ["active_artifact_hygiene"]

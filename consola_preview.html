@@ -500,6 +500,7 @@
                     <button class="btn-small tab-btn" id="tab-btn-server" data-onclick-command="switchSettingsTab('server')">Servidor & IA</button>
                     <button class="btn-small tab-btn" id="tab-btn-template" data-onclick-command="switchSettingsTab('template')">Plantilla Nota</button>
                 </div>
+                <div id="settings-load-status" class="console-text-017" role="status" aria-live="polite"></div>
 
                 <!-- PESTAÑA 1: MEMORIA & CONEXIONES -->
                 <div class="tab-panel console-layout-033" id="tab-panel-routes">
@@ -610,6 +611,7 @@
                     <span class="console-text-019">Local por defecto</span>
                     <button class="btn-secondary console-text-020" data-onclick-command="saveSettings()">Guardar Ajustes</button>
                 </div>
+                <div id="settings-save-status" class="console-text-017" role="alert" aria-live="polite"></div>
             </div>
         </div>
     </div>
@@ -2452,16 +2454,35 @@
             });
         }
 
+        function renderSettingsLoadError(message) {
+            const statusEl = document.getElementById('settings-load-status');
+            const text = 'No se pudieron cargar los ajustes: ' + (message || 'respuesta inválida');
+            if (statusEl) statusEl.textContent = text;
+            log(text);
+        }
+
+        function renderSyncInputsLoadError(message) {
+            const statusEl = document.getElementById('sync-status-summary');
+            const text = 'No se pudieron cargar las entradas montadas: ' + (message || 'respuesta inválida');
+            if (statusEl) statusEl.textContent = text;
+            log(text);
+        }
+
+        function renderSettingsSaveError(message) {
+            const statusEl = document.getElementById('settings-save-status');
+            const text = 'No se pudieron guardar los ajustes: ' + (message || 'respuesta inválida');
+            if (statusEl) statusEl.textContent = text;
+            log(text);
+        }
+
         function loadSettingsData() {
             if (window.pywebview && window.pywebview.api) {
-                Promise.all([
-                    window.pywebview.api.get_settings_info(),
-                    window.pywebview.api.get_sync_inputs()
-                ]).then(function(results) {
-                    const info = results[0];
-                    const syncState = results[1];
+                window.pywebview.api.get_settings_info().then(function(info) {
+                    if (!info || typeof info !== 'object' || Array.isArray(info) || info.error) {
+                        renderSettingsLoadError(info && info.message);
+                        return;
+                    }
                     if (info.vault_path) { document.getElementById('setting-vault-path').value = info.vault_path; }
-                    if (syncState && Array.isArray(syncState.inputs)) { linkedInputs = syncState.inputs; }
                     if (info.output_connected_folders) { linkedOutputFolders = info.output_connected_folders; }
                     if (info.ollama_url) { document.getElementById('setting-ollama-url').value = info.ollama_url; }
                     if (info.ram_margin) { document.getElementById('setting-ram-margin').value = info.ram_margin; }
@@ -2473,8 +2494,21 @@
                     }
                     if (info.offline_mode) { applyOfflineModeState(info.offline_mode); }
                     renderLinkedFolders();
-                    updateSyncInputs(syncState);
                     populateOllamaModels(info.models, info.current_model);
+                }).catch(function(err) {
+                    renderSettingsLoadError(String(err || 'fallo del bridge'));
+                });
+
+                window.pywebview.api.get_sync_inputs().then(function(syncState) {
+                    if (!syncState || typeof syncState !== 'object' || Array.isArray(syncState) || syncState.error || !Array.isArray(syncState.inputs)) {
+                        renderSyncInputsLoadError(syncState && syncState.message);
+                        return;
+                    }
+                    linkedInputs = syncState.inputs;
+                    renderLinkedFolders();
+                    updateSyncInputs(syncState);
+                }).catch(function(err) {
+                    renderSyncInputsLoadError(String(err || 'fallo del bridge'));
                 });
             } else {
                 if (!document.getElementById('setting-vault-path').value || !document.getElementById('setting-vault-path').value.startsWith('/')) {
@@ -4306,10 +4340,42 @@
             }
         }
 
+        function renderReaderLoadError(message) {
+            const ul = document.getElementById('reader-note-list');
+            const text = 'No se pudieron cargar las notas: ' + (message || 'respuesta inválida');
+            if (ul) {
+                ul.replaceChildren();
+                const error = document.createElement('li');
+                error.className = 'reader-note-item';
+                error.setAttribute('role', 'alert');
+                error.textContent = text;
+                ul.appendChild(error);
+            }
+            log(text);
+        }
+
+        function renderReaderContentError(message) {
+            const text = message || 'No se pudo cargar el contenido de la nota.';
+            currentSelectedNoteTitle = 'Error al cargar la nota';
+            currentSelectedNotePath = '';
+            renderNoteDocument(currentSelectedNoteTitle, [
+                {"type": "heading", "level": 3, "text": currentSelectedNoteTitle},
+                {"type": "paragraph", "text": text}
+            ]);
+            log('Error cargando contenido de nota: ' + text);
+            updateReaderBackButton();
+        }
+
         function loadReaderNotes() {
             if (window.pywebview && window.pywebview.api) {
                 window.pywebview.api.get_notes_list().then(function(notes) {
+                    if (!Array.isArray(notes)) {
+                        renderReaderLoadError(notes && notes.message);
+                        return;
+                    }
                     renderNoteList(notes);
+                }).catch(function(err) {
+                    renderReaderLoadError(String(err || 'fallo del bridge'));
                 });
             } else {
                 renderNoteList(LOCAL_MOCK_NOTES.map(function(n, index) {
@@ -4447,12 +4513,18 @@
                         updateReaderBackButton();
                         return;
                     }
+                    if (!res || typeof res !== 'object' || Array.isArray(res) || !Array.isArray(res.document)) {
+                        renderReaderContentError((res && res.message) || 'respuesta inválida');
+                        return;
+                    }
                     if (res && res.title) displayTitle = res.title;
                     if (res && res.path) currentSelectedNotePath = res.path;
                     if (res && res.document_id) currentSelectedDocumentId = res.document_id;
                     currentSelectedNoteTitle = displayTitle;
                     renderNoteDocument(displayTitle, res ? res.document : []);
                     updateReaderBackButton();
+                }).catch(function(err) {
+                    renderReaderContentError(String(err || 'fallo del bridge'));
                 });
             } else {
                 const found = LOCAL_MOCK_NOTES.find(function(n, index) {
@@ -4613,19 +4685,24 @@
             };
             if (window.pywebview && window.pywebview.api) {
                 window.pywebview.api.save_settings(settings).then(function(res) {
-                    if (res && res.error) {
-                        log('Error guardando ajustes: ' + res.message);
-                    } else if (res && res.log) {
-                        log(res.log);
-                        if (res.warning) log('Advertencia: ' + res.warning);
-                        if (res.offline_mode) applyOfflineModeState(res.offline_mode);
-                        if (res.stats) updateDashboardStats(res.stats);
+                    if (!res || typeof res !== 'object' || Array.isArray(res) || res.error) {
+                        renderSettingsSaveError(res && res.message);
+                        return;
                     }
+                    if (res.log) log(res.log);
+                    if (res.warning) log('Advertencia: ' + res.warning);
+                    if (res.offline_mode) applyOfflineModeState(res.offline_mode);
+                    if (res.stats) updateDashboardStats(res.stats);
+                    const statusEl = document.getElementById('settings-save-status');
+                    if (statusEl) statusEl.textContent = 'Ajustes guardados correctamente.';
+                    closeModal('modal-settings');
+                }).catch(function(err) {
+                    renderSettingsSaveError(String(err || 'fallo del bridge'));
                 });
             } else {
                 log('Ajustes actualizados (vista previa).');
+                closeModal('modal-settings');
             }
-            closeModal('modal-settings');
         }
 
         function resetDefaultSettings() {

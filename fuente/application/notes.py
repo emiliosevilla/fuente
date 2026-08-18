@@ -68,7 +68,12 @@ class NotesApplicationService:
             ledger=self.approval_ledger,
         )
 
-    def require_eligible_origins(self, note: NoteDocument) -> None:
+    def require_eligible_origins(
+        self,
+        note: NoteDocument,
+        *,
+        requires_origins: bool = True,
+    ) -> None:
         """Enforce the only provenance gate before deriving or publishing a note."""
         try:
             note.require_migrated_origins()
@@ -76,7 +81,7 @@ class NotesApplicationService:
             raise CanonicalEligibilityError() from error
         self.require_eligible_origin_refs(
             note.origins,
-            requires_origins=True,
+            requires_origins=requires_origins,
         )
 
     def require_published_output(self, note_or_document_id: NoteDocument | str) -> None:
@@ -91,7 +96,10 @@ class NotesApplicationService:
             raise OutputApprovalRequiredError(note.document_id)
         if note.status != "approved":
             raise OutputApprovalRequiredError(note.document_id)
-        self.require_eligible_origins(note)
+        self.require_eligible_origins(
+            note,
+            requires_origins=note.note_type != "original",
+        )
 
     def require_eligible_origin_refs(
         self,

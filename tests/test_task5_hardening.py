@@ -243,6 +243,187 @@ def test_direct_graph_reflow_excludes_pending_before_any_write(tmp_path):
     assert "derivada" not in moc.read_text(encoding="utf-8")
 
 
+def test_approved_original_without_origins_enters_moc_and_physical_graph_only(tmp_path):
+    vault = VaultManager(get_default_config(tmp_path / "vault").vault)
+    store = JobStore(vault.config.vault_path)
+    issue = vault.output_dir / "Issue-A"
+    issue.mkdir(parents=True)
+    original_id = "89a2f4fb-1d7b-4aa1-9793-119970502a01"
+    pending_summary_id = "89a2f4fb-1d7b-4aa1-9793-119970502a02"
+    invalid_summary_id = "89a2f4fb-1d7b-4aa1-9793-119970502a03"
+    rejected_original_id = "89a2f4fb-1d7b-4aa1-9793-119970502a04"
+    derived_without_origins_id = "89a2f4fb-1d7b-4aa1-9793-119970502a05"
+
+    def write_note(
+        *,
+        note_id: str,
+        filename: str,
+        note_type: str,
+        status: str,
+        origins: list[dict],
+    ) -> None:
+        metadata = {
+            "schema_version": 3,
+            "note_id": note_id,
+            "note_type": note_type,
+            "title": filename,
+            "date": "2026-08-18",
+            "author": "Fuente",
+            "tags": [],
+            "issue": "Issue-A",
+            "status": status,
+            "origins": origins,
+            "history": [],
+        }
+        if note_type == "summary":
+            metadata["origin_kind"] = "official_document"
+        path = issue / f"{filename}.md"
+        markdown = serialize_frontmatter(metadata) + f"# {filename}\n\nContenido.\n"
+        path.write_text(markdown, encoding="utf-8")
+        store.register_note(
+            note_id=note_id,
+            relative_path=path.relative_to(vault.config.vault_path).as_posix(),
+            content_hash=content_hash_for_markdown(markdown),
+            note_type=note_type,
+            origin_kind=metadata.get("origin_kind"),
+            theme="General",
+            issue="Issue-A",
+            status=status,
+        )
+
+    try:
+        approved_origin = _approved_clean_origin(vault, store)
+        write_note(
+            note_id=original_id,
+            filename="Original aprobada",
+            note_type="original",
+            status="approved",
+            origins=[],
+        )
+        write_note(
+            note_id=pending_summary_id,
+            filename="Sumario pendiente",
+            note_type="summary",
+            status="pending_review",
+            origins=[approved_origin],
+        )
+        write_note(
+            note_id=invalid_summary_id,
+            filename="Sumario con origen invalido",
+            note_type="summary",
+            status="approved",
+            origins=[ORIGIN],
+        )
+        write_note(
+            note_id=rejected_original_id,
+            filename="Original rechazada",
+            note_type="original",
+            status="rejected",
+            origins=[],
+        )
+        write_note(
+            note_id=derived_without_origins_id,
+            filename="Derivada sin origen",
+            note_type="concept",
+            status="approved",
+            origins=[],
+        )
+
+        invalid_empty_summary = serialize_frontmatter(
+            {
+                "schema_version": 3,
+                "note_id": "89a2f4fb-1d7b-4aa1-9793-119970502a06",
+                "note_type": "concept",
+                "title": "Sumario sin origen",
+                "date": "2026-08-18",
+                "author": "Fuente",
+                "tags": [],
+                "issue": "Issue-A",
+                "status": "approved",
+                "origins": [],
+                "history": [],
+            }
+        ).replace(
+            "note_type: concept\n",
+            "note_type: summary\norigin_kind: official_document\n",
+        )
+        (issue / "Sumario sin origen.md").write_text(
+            invalid_empty_summary + "# Sumario sin origen\n", encoding="utf-8"
+        )
+
+        candidate_dir = vault.output_dir / "_Reflow_Review"
+        candidate_dir.mkdir()
+        (candidate_dir / "Candidato.md").write_text(
+            serialize_frontmatter(
+                {
+                    "schema_version": 3,
+                    "note_id": "89a2f4fb-1d7b-4aa1-9793-119970502a07",
+                    "note_type": "original",
+                    "title": "Candidato",
+                    "date": "2026-08-18",
+                    "author": "Fuente",
+                    "tags": [],
+                    "issue": "Issue-A",
+                    "status": "approved",
+                    "origins": [],
+                    "history": [],
+                }
+            )
+            + "# Candidato\n",
+            encoding="utf-8",
+        )
+
+        notes = NotesApplicationService(
+            vault=vault,
+            path_resolver=vault.path_resolver(),
+            job_store=store,
+        )
+        result = OptimizadoGraphLoop(
+            vault.output_dir,
+            vault_root=vault.config.vault_path,
+            eligibility_guard=lambda target: notes.require_published_output(
+                target.document_id
+            ),
+        ).rebuild_catalog()
+
+        assert result["status"] == "success"
+        assert {
+            (item["document_id"], item["reason"])
+            for item in result["excluded_notes"]
+        } == {
+            (invalid_summary_id, "origin_not_approved"),
+            (derived_without_origins_id, "origin_not_approved"),
+        }
+        moc = vault.output_dir / "_Indice_MOC.md"
+        moc_markdown = moc.read_text(encoding="utf-8")
+        assert "- [[Original aprobada]]" in moc_markdown
+        assert "Sumario pendiente" not in moc_markdown
+        assert "Sumario con origen invalido" not in moc_markdown
+        assert "Original rechazada" not in moc_markdown
+        assert "Derivada sin origen" not in moc_markdown
+        assert "Sumario sin origen" not in moc_markdown
+        assert "Candidato" not in moc_markdown
+
+        from fuente.control_console import FuenteConsoleBackend
+
+        graph = FuenteConsoleBackend(vault.config.vault_path).get_graph_data()
+        moc_node = next(
+            node
+            for node in graph["nodes"]
+            if node["path"] == "4_salida/_Indice_MOC.md"
+        )
+        original_node = next(
+            node for node in graph["nodes"] if node["document_id"] == original_id
+        )
+        assert {
+            "source": moc_node["id"],
+            "target": original_node["id"],
+            "relation": "wikilink",
+        } in graph["links"]
+    finally:
+        store.close()
+
+
 def test_moc_keeps_publicable_notes_when_an_approved_sibling_has_invalid_origins(
     tmp_path,
 ):

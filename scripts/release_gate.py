@@ -21,6 +21,17 @@ if str(REPO_ROOT) not in sys.path:
 
 DEFAULT_PYTEST_TIMEOUT = 600
 
+ACTIVE_BUILD_PATTERNS = ("*.egg-info", "dist/*.whl", "dist/*.tar.gz")
+ALLOWED_DISTRIBUTION_PREFIXES = ("fuente-", "fuente.")
+_ARTIFACT_SCAN_EXCLUDED_DIRS = {
+    ".git",
+    ".mypy_cache",
+    ".pytest_cache",
+    ".ruff_cache",
+    ".tox",
+    "__pycache__",
+}
+
 # Git porcelain paths ignored after test runs (noise, not production drift).
 _CLEAN_IGNORE = re.compile(
     r"^(?:fuente\.egg-info/|\.pytest_cache/|(?:.*/)?__pycache__/|.*\.pyc$)"
@@ -159,6 +170,98 @@ def check_source_tree_clean(repo_root: Path = REPO_ROOT) -> GateCheck:
             f"Working tree not clean after tests:\n{preview}{suffix}",
         )
     return GateCheck("source_tree_clean", True, "git status clean (ignoring pycache/egg-info)")
+
+
+def _is_excluded_artifact_path(path: Path, repo_root: Path) -> bool:
+    relative_parts = path.relative_to(repo_root).parts
+    if relative_parts[:2] == ("docs", "history"):
+        return True
+    return any(part in _ARTIFACT_SCAN_EXCLUDED_DIRS for part in relative_parts)
+
+
+def _canonicalize_distribution_name(value: str) -> str:
+    return re.sub(r"[-_.]+", "-", value).lower()
+
+
+_ALLOWED_NORMALIZED_DISTRIBUTION_NAMES = {
+    _canonicalize_distribution_name(prefix.rstrip("-."))
+    for prefix in ALLOWED_DISTRIBUTION_PREFIXES
+}
+
+
+def _distribution_name_from_filename(filename: str) -> str | None:
+    if filename.endswith(".whl"):
+        fields = filename[:-4].split("-")
+        # PEP 427: distribution-version(-build)?-python-abi-platform.whl.
+        # Distribution names are escaped in wheel filenames, so they occupy
+        # one field; a build tag is the only optional field before the tags.
+        if len(fields) not in {5, 6}:
+            return None
+        distribution, version = fields[:2]
+        if len(fields) == 6:
+            build_tag, python_tag, abi_tag, platform_tag = fields[2:]
+            if not build_tag or build_tag[0] not in "0123456789":
+                return None
+        else:
+            python_tag, abi_tag, platform_tag = fields[2:]
+    elif filename.endswith(".tar.gz"):
+        stem = filename[:-7]
+        if "-" not in stem:
+            return None
+        distribution, version = stem.rsplit("-", 1)
+    else:
+        return None
+    if (
+        not distribution
+        or not version
+        or version[0] not in "0123456789"
+        or (filename.endswith(".whl") and not all((python_tag, abi_tag, platform_tag)))
+    ):
+        return None
+    return _canonicalize_distribution_name(distribution)
+
+
+def _distribution_name_is_allowed(filename: str) -> bool:
+    return _distribution_name_from_filename(filename) in _ALLOWED_NORMALIZED_DISTRIBUTION_NAMES
+
+
+def check_active_artifact_hygiene(repo_root: Path = REPO_ROOT) -> GateCheck:
+    """Reject active build outputs that do not belong to the Fuente package.
+
+    This is a read-only scan. Historical documentation and cache directories
+    are intentionally outside the active-artifact policy.
+    """
+    offenders: list[str] = []
+
+    egg_info_pattern, *distribution_patterns = ACTIVE_BUILD_PATTERNS
+    for path in repo_root.rglob(egg_info_pattern):
+        if _is_excluded_artifact_path(path, repo_root):
+            continue
+        if path.name != "fuente.egg-info":
+            offenders.append(path.relative_to(repo_root).as_posix())
+
+    for pattern in distribution_patterns:
+        pattern_path = Path(pattern)
+        for path in repo_root.rglob(pattern_path.name):
+            if path.parent.name != pattern_path.parent.name:
+                continue
+            if _is_excluded_artifact_path(path, repo_root):
+                continue
+            if not _distribution_name_is_allowed(path.name):
+                offenders.append(path.relative_to(repo_root).as_posix())
+
+    if offenders:
+        return GateCheck(
+            "active_artifact_hygiene",
+            False,
+            "Unexpected active build artifacts (no files were deleted):\n"
+            + "\n".join(sorted(offenders)),
+        )
+    return GateCheck(
+        "active_artifact_hygiene",
+        True,
+        "Only Fuente build artifacts are present; no files were modified",
+    )
 
 
 def run_pytest_suite(
@@ -613,6 +716,7 @@ def run_all_checks(
             )
 
     maybe("source_tree_clean", lambda: check_source_tree_clean(repo_root))
+    maybe("active_artifact_hygiene", lambda: check_active_artifact_hygiene(repo_root))
     maybe("security_residuals", lambda: check_security_residuals(repo_root))
     maybe("required_docs", lambda: check_required_docs(repo_root))
     maybe("readme_honesty", lambda: check_readme_honesty(repo_root))

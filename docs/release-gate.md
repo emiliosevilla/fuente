@@ -40,6 +40,7 @@ Exit code `0` means **READY**; any failure prints `BLOCKED` and returns non-zero
 | Mounted-source sync contracts | `sync` | `pytest` folder sync, recursive/reconciliation/discovery, UI bridge, and idempotency matrices |
 | Gate self-tests | `release_gate` | `pytest tests/test_release_gate.py` |
 | Source tree clean after tests | `source_tree_clean` | `git status --porcelain` ignoring `__pycache__`, `*.pyc`, `fuente.egg-info`, `.pytest_cache` |
+| Active build-artifact hygiene | `active_artifact_hygiene` | Read-only scan rejects non-`fuente` `*.egg-info` and `dist/*.whl`/`dist/*.tar.gz`; `docs/history/`, `.git`, and caches are excluded |
 | No open P0/P1 security findings | `security_residuals` | `docs/security-residual-findings.md` has no open P0/P1 rows |
 | Operator docs present | `required_docs` | `rollback-plan.md`, `security-residual-findings.md`, `headless-operation.md`, `migration-guide.md` |
 | README matches measured behaviour | `readme_honesty` | No stale checkpoint 0.1 test counts; references this gate |

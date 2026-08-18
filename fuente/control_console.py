@@ -2107,9 +2107,16 @@ class FuenteConsoleBackend:
         if moc_path.exists():
             try:
                 relative = self._vault_relative_identity(moc_path)
+                moc_document_id = document_id_for_relative_path(relative)
+                try:
+                    moc_document_id = MarkdownDocument.from_markdown(
+                        moc_path.read_text(encoding="utf-8")
+                    ).note_id or moc_document_id
+                except (FrontmatterError, OSError, UnicodeError, ValueError):
+                    pass
                 notes.append(
                     self._note_list_entry(
-                        document_id_for_relative_path(relative),
+                        moc_document_id,
                         relative,
                         is_moc=True,
                     )

@@ -247,6 +247,9 @@ class AuthorizedPathResolver:
                 continue
 
             route_matches = document_id_for_relative_path(relative) == document_id
+            is_canonical_moc = (
+                authorized == self.roots["output"] / "_Indice_MOC.md"
+            )
             canonical_matches = False
             schema_version: object = None
             status: object = None
@@ -273,7 +276,11 @@ class AuthorizedPathResolver:
 
             if canonical_matches or (
                 route_matches
-                and (allow_canonical_route or schema_version in {None, 1})
+                and (
+                    is_canonical_moc
+                    or allow_canonical_route
+                    or schema_version in {None, 1}
+                )
             ):
                 matches.append(authorized)
 

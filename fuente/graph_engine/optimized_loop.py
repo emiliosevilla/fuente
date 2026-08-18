@@ -452,6 +452,7 @@ class OptimizadoGraphLoop:
         """Crea o actualiza el archivo canónico _Indice_MOC.md agrupando por Cuestiones."""
         moc_path = self.output_dir / CANONICAL_MOC_FILENAME
         now_str = self._existing_generated_date(moc_path)
+        emitted_targets: set[str] = set()
 
         lines = [
             serialize_human_frontmatter({
@@ -486,6 +487,9 @@ class OptimizadoGraphLoop:
                 if issue_name not in {"_Sin_Cuestion", "General"}:
                     lines.append(f"Nota Marco: [[_Cuestion_{issue_name}]]")
                 for target in sorted(note_targets, key=str.lower):
+                    if target in emitted_targets:
+                        continue
+                    emitted_targets.add(target)
                     lines.append(f"- [[{target}]]")
                 lines.append("")
 
@@ -493,12 +497,22 @@ class OptimizadoGraphLoop:
             lines.append("## ⚠️ Notas Huérfanas (Pendientes de Interconexión)")
             lines.append("")
             for orphan_target in sorted(orphans):
-                lines.append(f"- [[{orphan_target}]] ⚠️")
+                # The note already has one canonical link in its issue/catalog
+                # section. Keep this warning informational so it cannot create
+                # a second physical edge to the same target.
+                lines.append(f"- `{orphan_target}` — sin wikilink en el cuerpo ⚠️")
             lines.append("")
 
-        lines.append("## 📚 Catálogo Completo de Conocimiento")
-        lines.append("")
-        for note in sorted(notes, key=lambda n: n.link_target.lower()):
+        remaining_catalog = [
+            note
+            for note in sorted(notes, key=lambda n: n.link_target.lower())
+            if note.link_target not in emitted_targets
+        ]
+        if remaining_catalog:
+            lines.append("## 📚 Catálogo Completo de Conocimiento")
+            lines.append("")
+        for note in remaining_catalog:
+            emitted_targets.add(note.link_target)
             lines.append(f"- [[{note.link_target}]]")
 
         lines.append("")

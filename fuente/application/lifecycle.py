@@ -284,6 +284,6 @@ class ApplicationLifecycle:
         )
 
         def require_note(target) -> None:
-            notes.require_published_output(target.document_id)
+            notes.require_published_output(target)
 
         setter(require_note)

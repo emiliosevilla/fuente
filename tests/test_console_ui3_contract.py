@@ -101,3 +101,5 @@ def test_graph_layout_and_edges_are_stable_visible_and_bounded():
     assert "ctx.globalAlpha = isHighlighted ? 1.0 : 0.85" in renderer
     assert "physicsFramesRemaining" in renderer
     assert "Math.max(layoutPadding" in renderer
+    assert "ctx.measureText(visibleLabel + '…')" in renderer
+    assert "ctx.textAlign = labelOnRight ? 'left' : 'right'" in renderer

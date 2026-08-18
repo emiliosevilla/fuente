@@ -6,7 +6,7 @@ from pathlib import Path
 
 from fuente.control_console import FuenteConsoleBackend
 from fuente.core.vault import document_id_for_relative_path
-from fuente.domain.frontmatter import serialize_frontmatter
+from fuente.domain.frontmatter import serialize_frontmatter, serialize_human_frontmatter
 from fuente.graph_engine.linker import GraphLinker
 from fuente.reader_modal import FuenteReaderModal
 from fuente.ui.bridge import FuentePyWebViewApi
@@ -422,7 +422,25 @@ def test_reader_graph_marks_the_canonical_moc_without_changing_its_identity(
     backend = FuenteConsoleBackend(temp_vault_path)
     bridge = FuentePyWebViewApi(backend)
     moc_path = backend.vault.output_dir / "_Indice_MOC.md"
-    moc_path.write_text("# Índice MOC\n", encoding="utf-8")
+    moc_path.write_text(
+        serialize_human_frontmatter(
+            {
+                "schema_version": 3,
+                "note_id": "52b5f3a3-5d8d-52f3-aecb-5d75ee7ea3f9",
+                "note_type": "concept",
+                "title": "Índice MOC — Mapa de Conocimiento Global",
+                "date": "1970-01-01 00:00:00",
+                "author": "Fuente Bucle Optimizado",
+                "tags": ["moc"],
+                "issue": "_Sin_Cuestion",
+                "status": "approved",
+                "origins": [],
+                "history": [],
+            }
+        )
+        + "# Índice MOC\n",
+        encoding="utf-8",
+    )
 
     listed_moc = next(note for note in bridge.get_notes_list() if note["is_moc"])
     graph = bridge.get_graph_data()

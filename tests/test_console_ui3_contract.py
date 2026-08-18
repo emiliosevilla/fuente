@@ -58,3 +58,15 @@ def test_reader_export_keeps_opaque_document_id_and_strict_csp():
     assert "object-src 'none'" in csp_line
     assert "script-src 'self' 'nonce-fuente-console'" in csp_line
     assert "unsafe-inline" not in csp_line
+
+
+def test_graph_draws_canonical_origins_and_provenance_edges_visibly():
+    renderer = _between(
+        CONSOLE, "function initObsidianGraphCanvas", "function renderReaderLoadError"
+    )
+
+    assert "relation: l.relation || 'wikilink'" in renderer
+    assert "l.relation === 'origin'" in renderer
+    assert "ctx.setLineDash" in renderer
+    assert "n.node_type === 'canonical_origin'" in renderer
+    assert "Línea discontinua: procedencia" in CONSOLE

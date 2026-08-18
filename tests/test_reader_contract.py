@@ -10,6 +10,7 @@ from fuente.domain.frontmatter import serialize_frontmatter
 from fuente.reader_modal import FuenteReaderModal
 from fuente.ui.bridge import FuentePyWebViewApi
 from fuente.ui.reader_history import pop_reader_history, push_reader_history
+from tests.conftest import approved_clean_origin, save_v3_summary_note
 
 
 THEME = "Academia"
@@ -372,7 +373,110 @@ def test_reader_graph_matches_list_and_extracts_wikilinks(temp_vault_path):
     assert {
         "source": nodes_by_document_id[canonical_id]["id"],
         "target": nodes_by_document_id[target_entry["document_id"]]["id"],
+        "relation": "wikilink",
     } in graph["links"]
+
+
+def test_reader_graph_adds_approved_canonical_origin_node_and_link(temp_vault_path):
+    backend = FuenteConsoleBackend(temp_vault_path)
+    bridge = FuentePyWebViewApi(backend)
+    assert backend._job_store is not None
+    origin = approved_clean_origin(
+        backend.vault,
+        backend._job_store,
+        filename="Aptis - Certificado C1_1ed323ae_jpg.md",
+    )
+    summary_id, _summary_path = save_v3_summary_note(
+        backend.vault,
+        title="Nota de prueba — lector Fuente",
+        body="# Nota de prueba — lector Fuente\n\nSin wikilinks.\n",
+        status="approved",
+        origins=[origin],
+        store=backend._job_store,
+    )
+
+    graph = bridge.get_graph_data()
+    nodes_by_document_id = {
+        node["document_id"]: node for node in graph["nodes"]
+    }
+    summary_node = nodes_by_document_id[summary_id]
+    origin_node = nodes_by_document_id[origin["note_id"]]
+
+    assert origin_node["id"] == f"origin:{origin['note_id']}"
+    assert origin_node["node_type"] == "canonical_origin"
+    assert origin_node["document_id"] == origin["note_id"]
+    assert origin_node["path"] == origin["path"]
+    assert origin_node["revision"] == origin["revision"]
+    assert {
+        "source": summary_node["id"],
+        "target": origin_node["id"],
+        "relation": "origin",
+    } in graph["links"]
+
+    opened = bridge.get_note_content(origin["note_id"])
+    assert "error" not in opened
+    assert opened["document_id"] == origin["note_id"]
+    assert opened["path"] == origin["path"]
+
+
+def test_reader_graph_does_not_invent_links_or_unreferenced_clean_nodes(
+    temp_vault_path,
+):
+    backend = FuenteConsoleBackend(temp_vault_path)
+    assert backend._job_store is not None
+    unreferenced_origin = approved_clean_origin(
+        backend.vault,
+        backend._job_store,
+        filename="origen-sin-referencia.md",
+    )
+    _write_note(
+        backend.vault.output_dir / "Primera.md",
+        "Primera",
+        "_Sin_Cuestion",
+        "# Primera\n\nSin relación declarada.\n",
+    )
+    _write_note(
+        backend.vault.output_dir / "Segunda.md",
+        "Segunda",
+        "_Sin_Cuestion",
+        "# Segunda\n\nTampoco declara relación.\n",
+    )
+
+    graph = backend.get_graph_data()
+
+    assert unreferenced_origin["note_id"] not in {
+        node["document_id"] for node in graph["nodes"]
+    }
+    assert graph["links"] == []
+
+
+def test_reader_graph_rejects_origin_paths_outside_authorized_clean_root(
+    temp_vault_path,
+):
+    backend = FuenteConsoleBackend(temp_vault_path)
+    assert backend._job_store is not None
+    approved_origin = approved_clean_origin(
+        backend.vault,
+        backend._job_store,
+        filename="origen-autorizado.md",
+    )
+    unauthorized_origin = {
+        **approved_origin,
+        "path": "4_salida/origen-autorizado.md",
+    }
+    summary_id, _summary_path = save_v3_summary_note(
+        backend.vault,
+        title="Sumario con ruta de origen no autorizada",
+        body="# Sumario\n",
+        status="approved",
+        origins=[unauthorized_origin],
+        store=backend._job_store,
+    )
+
+    graph = backend.get_graph_data()
+
+    assert {node["document_id"] for node in graph["nodes"]} == {summary_id}
+    assert graph["links"] == []
 
 
 def test_unlisted_hidden_frontmatter_id_remains_unauthorized(temp_vault_path):

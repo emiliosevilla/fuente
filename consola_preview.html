@@ -246,7 +246,7 @@
                         <div class="reader-graph-container console-layout-009" id="reader-view-graph">
                             <canvas id="obsidian-graph-canvas" class="graph-canvas console-layout-010"></canvas>
                             <div class="console-layout-011">
-                                Nodos: <b id="graph-nodes-count" class="console-text-003">0</b> | Enlaces: <b id="graph-links-count" class="console-text-004">0</b> • Haz clic en un nodo para leer la nota. Arrastra los nodos para mover el mapa.
+                                Nodos: <b id="graph-nodes-count" class="console-text-003">0</b> | Enlaces: <b id="graph-links-count" class="console-text-004">0</b> • Línea discontinua: procedencia. Haz clic en un nodo para leer la nota. Arrastra los nodos para mover el mapa.
                             </div>
                         </div>
                     </section>
@@ -3387,6 +3387,8 @@
             const ctx = canvas.getContext('2d');
             const nodesCountEl = document.getElementById('graph-nodes-count');
             const linksCountEl = document.getElementById('graph-links-count');
+            const rootStyles = getComputedStyle(document.documentElement);
+            const originColor = rootStyles.getPropertyValue('--fuente-frost-2').trim() || '#5E81AC';
 
             const dpr = window.devicePixelRatio || 1;
             const width = canvas.parentElement.clientWidth || 800;
@@ -3436,7 +3438,11 @@
             links.forEach(l => {
                 const s = typeof l.source === 'string' ? nodeMap[l.source] : l.source;
                 const t = typeof l.target === 'string' ? nodeMap[l.target] : l.target;
-                if (s && t) activeLinks.push({ source: s, target: t });
+                if (s && t) activeLinks.push({
+                    source: s,
+                    target: t,
+                    relation: l.relation || 'wikilink'
+                });
             });
 
             let draggedNode = null;
@@ -3584,26 +3590,30 @@
                 // Dibujar enlaces
                 activeLinks.forEach(l => {
                     const isHighlighted = hoveredNode && (hoveredNode === l.source || hoveredNode === l.target);
+                    const isOriginRelation = l.relation === 'origin';
                     ctx.beginPath();
                     ctx.moveTo(l.source.x, l.source.y);
                     ctx.lineTo(l.target.x, l.target.y);
-                    ctx.strokeStyle = isHighlighted ? '#161411' : '#BFB4A3';
+                    ctx.strokeStyle = isHighlighted ? '#161411' : (isOriginRelation ? originColor : '#BFB4A3');
                     ctx.lineWidth = (isHighlighted ? 2.5 : 1.2) / zoom;
                     ctx.globalAlpha = isHighlighted ? 0.95 : 0.6;
+                    ctx.setLineDash(isOriginRelation ? [7 / zoom, 5 / zoom] : []);
                     ctx.stroke();
+                    ctx.setLineDash([]);
                     ctx.globalAlpha = 1.0;
                 });
 
                 // Dibujar nodos y texto con alta definición (HiDPI / Retina) y halo de contraste
                 nodes.forEach(n => {
                     const isHovered = (hoveredNode === n);
+                    const isCanonicalOrigin = n.node_type === 'canonical_origin';
                     const drawRadius = (isHovered ? n.radius + 3 : n.radius) / zoom;
                     ctx.beginPath();
                     ctx.arc(n.x, n.y, Math.max(3, drawRadius), 0, 2 * Math.PI);
-                    ctx.fillStyle = isHovered ? '#161411' : '#2E2B25';
+                    ctx.fillStyle = isHovered ? '#161411' : (isCanonicalOrigin ? originColor : '#2E2B25');
                     ctx.fill();
                     ctx.lineWidth = 1.5 / zoom;
-                    ctx.strokeStyle = '#DCD4C7';
+                    ctx.strokeStyle = isCanonicalOrigin ? '#ECEFF4' : '#DCD4C7';
                     ctx.stroke();
 
                     const fontSize = Math.max(10, Math.min(18, 12 / zoom));

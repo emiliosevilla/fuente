@@ -191,8 +191,14 @@ class OptimizadoGraphLoop:
         catalog = tuple(self.linker.enumerate_notes())
         all_notes, excluded_notes = self._eligible_catalog(catalog)
         if catalog and not all_notes:
+            index_changed = self._update_moc_index([], {}, set(), {})
             reason = excluded_notes[0]["reason"]
-            return {"error": reason, "message": reason}
+            return {
+                "error": reason,
+                "message": reason,
+                "index_changed": index_changed,
+                "excluded_notes": excluded_notes,
+            }
         notes_by_issue = self._notes_by_issue(all_notes)
 
         processed_notes_count = 0
@@ -320,8 +326,14 @@ class OptimizadoGraphLoop:
         discovered = tuple(self.linker.enumerate_notes())
         catalog, excluded_notes = self._eligible_catalog(discovered)
         if discovered and not catalog:
+            index_changed = self._update_moc_index([], {}, set(), {})
             reason = excluded_notes[0]["reason"]
-            return {"error": reason, "message": reason}
+            return {
+                "error": reason,
+                "message": reason,
+                "index_changed": index_changed,
+                "excluded_notes": excluded_notes,
+            }
 
         notes_by_issue = self._notes_by_issue(list(catalog))
         note_contents: Dict[str, str] = {}

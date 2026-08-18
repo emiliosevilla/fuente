@@ -14,7 +14,7 @@ from fuente.application.retrieval import RetrievalApplicationService
 from fuente.config import AppConfig, get_default_config
 from fuente.core.vault import VaultManager
 from fuente.domain.approvals import ApprovalLedger
-from fuente.domain.errors import CanonicalEligibilityError
+from fuente.domain.errors import CanonicalEligibilityError, OutputApprovalRequiredError
 from fuente.domain.documents import content_hash_for_markdown
 from fuente.domain.frontmatter import serialize_frontmatter
 from fuente.domain.paths import document_id_for_relative_path
@@ -318,6 +318,63 @@ def test_moc_keeps_publicable_notes_when_an_approved_sibling_has_invalid_origins
     } in graph["links"]
 
 
+@pytest.mark.parametrize(
+    ("operation_name", "eligibility_error", "expected_reason"),
+    [
+        (
+            "refine_knowledge_graph",
+            CanonicalEligibilityError(),
+            "origin_not_approved",
+        ),
+        (
+            "rebuild_catalog",
+            OutputApprovalRequiredError(DERIVED_ID),
+            "output_not_approved",
+        ),
+    ],
+)
+def test_totally_excluded_catalog_clears_stale_moc_without_touching_human_notes(
+    tmp_path,
+    operation_name,
+    eligibility_error,
+    expected_reason,
+):
+    output = tmp_path / "4_salida"
+    blocked = output / "Issue-A" / "Blocked.md"
+    blocked.parent.mkdir(parents=True)
+    blocked.write_text(
+        _derived_markdown(origins=[ORIGIN], status="approved"), encoding="utf-8"
+    )
+    original = blocked.read_bytes()
+    loop = OptimizadoGraphLoop(
+        output,
+        vault_root=tmp_path,
+        eligibility_guard=lambda _target: None,
+    )
+
+    seed_result = loop.rebuild_catalog()
+    moc = output / "_Indice_MOC.md"
+    assert seed_result["status"] == "success"
+    assert "[[Blocked]]" in moc.read_text(encoding="utf-8")
+
+    def reject(_target) -> None:
+        raise eligibility_error
+
+    loop.set_eligibility_guard(reject)
+    result = getattr(loop, operation_name)()
+
+    assert result["error"] == expected_reason
+    assert result["message"] == expected_reason
+    assert result["index_changed"] is True
+    assert result["excluded_notes"] == [
+        {"document_id": DERIVED_ID, "reason": expected_reason}
+    ]
+    assert blocked.read_bytes() == original
+    moc_markdown = moc.read_text(encoding="utf-8")
+    assert "[[Blocked]]" not in moc_markdown
+    assert "- **Total de Notas Atómicas:** 0" in moc_markdown
+
+
 def test_lifecycle_flush_automatic_graph_blocks_before_writing(tmp_path):
     class Pipeline:
         def __init__(self, config):
@@ -390,7 +447,7 @@ def test_graph_derivatives_are_v3_and_preserve_typed_origins(tmp_path):
         assert "sources" not in metadata
 
 
-def test_empty_v1_sources_cannot_generate_graph_derivatives_in_loop_or_migration(tmp_path):
+def test_empty_v1_sources_cannot_enter_graph_derivatives_in_loop_or_migration(tmp_path):
     vault_root = tmp_path / "loop-vault"
     output = vault_root / "4_salida" / "Issue-A"
     output.mkdir(parents=True)
@@ -431,7 +488,9 @@ def test_empty_v1_sources_cannot_generate_graph_derivatives_in_loop_or_migration
     manifest = VaultMigrator(migration_root).apply(rebuild_index=False, rebuild_moc=True)
 
     assert manifest.moc_rebuilt is True
-    assert not (migration_root / "4_salida" / "_Indice_MOC.md").exists()
+    migration_moc = migration_root / "4_salida" / "_Indice_MOC.md"
+    assert migration_moc.exists()
+    assert "[[legacy]]" not in migration_moc.read_text(encoding="utf-8")
     assert not (migration_output / "_Cuestion_Issue-A.md").exists()
 
 

@@ -18,6 +18,7 @@ from fuente.domain.errors import CanonicalEligibilityError, OutputApprovalRequir
 from fuente.domain.documents import content_hash_for_markdown
 from fuente.domain.frontmatter import serialize_frontmatter
 from fuente.domain.paths import document_id_for_relative_path
+from fuente.graph_engine.linker import NoteLinkTarget
 from fuente.graph_engine.optimized_loop import OptimizadoGraphLoop
 from fuente.infrastructure.sqlite_store import JobStore
 from fuente.infrastructure.vault_migration import VaultMigrator
@@ -243,7 +244,7 @@ def test_direct_graph_reflow_excludes_pending_before_any_write(tmp_path):
     assert "derivada" not in moc.read_text(encoding="utf-8")
 
 
-def test_approved_original_without_origins_enters_moc_and_physical_graph_only(tmp_path):
+def test_approved_output_wins_over_same_id_clean_catalog_route_in_graph(tmp_path):
     vault = VaultManager(get_default_config(tmp_path / "vault").vault)
     store = JobStore(vault.config.vault_path)
     issue = vault.output_dir / "Issue-A"
@@ -261,6 +262,7 @@ def test_approved_original_without_origins_enters_moc_and_physical_graph_only(tm
         note_type: str,
         status: str,
         origins: list[dict],
+        register: bool = True,
     ) -> None:
         metadata = {
             "schema_version": 3,
@@ -280,16 +282,17 @@ def test_approved_original_without_origins_enters_moc_and_physical_graph_only(tm
         path = issue / f"{filename}.md"
         markdown = serialize_frontmatter(metadata) + f"# {filename}\n\nContenido.\n"
         path.write_text(markdown, encoding="utf-8")
-        store.register_note(
-            note_id=note_id,
-            relative_path=path.relative_to(vault.config.vault_path).as_posix(),
-            content_hash=content_hash_for_markdown(markdown),
-            note_type=note_type,
-            origin_kind=metadata.get("origin_kind"),
-            theme="General",
-            issue="Issue-A",
-            status=status,
-        )
+        if register:
+            store.register_note(
+                note_id=note_id,
+                relative_path=path.relative_to(vault.config.vault_path).as_posix(),
+                content_hash=content_hash_for_markdown(markdown),
+                note_type=note_type,
+                origin_kind=metadata.get("origin_kind"),
+                theme="General",
+                issue="Issue-A",
+                status=status,
+            )
 
     try:
         approved_origin = _approved_clean_origin(vault, store)
@@ -299,6 +302,35 @@ def test_approved_original_without_origins_enters_moc_and_physical_graph_only(tm
             note_type="original",
             status="approved",
             origins=[],
+            register=False,
+        )
+        clean_path = vault.clean_dir / "ESP" / "Original limpia.md"
+        clean_path.parent.mkdir(parents=True)
+        clean_markdown = serialize_frontmatter(
+            {
+                "schema_version": 3,
+                "note_id": original_id,
+                "note_type": "original",
+                "title": "Original limpia",
+                "date": "2026-08-18",
+                "author": "Fuente",
+                "tags": [],
+                "issue": "Issue-A",
+                "status": "approved",
+                "origins": [],
+                "history": [],
+            }
+        ) + "# Original limpia\n\nRuta canónica con identidad compartida.\n"
+        clean_path.write_text(clean_markdown, encoding="utf-8")
+        store.register_note(
+            note_id=original_id,
+            relative_path=clean_path.relative_to(vault.config.vault_path).as_posix(),
+            content_hash=content_hash_for_markdown(clean_markdown),
+            note_type="original",
+            origin_kind=None,
+            theme="General",
+            issue="Issue-A",
+            status="approved",
         )
         write_note(
             note_id=pending_summary_id,
@@ -378,12 +410,24 @@ def test_approved_original_without_origins_enters_moc_and_physical_graph_only(tm
             path_resolver=vault.path_resolver(),
             job_store=store,
         )
+        with pytest.raises(OutputApprovalRequiredError) as clean_route_error:
+            notes.require_published_output(original_id)
+        assert clean_route_error.value.code == "output_not_approved"
+        clean_target = NoteLinkTarget(
+            document_id=original_id,
+            relative_path="../3_limpio/ESP/Original limpia.md",
+            stem="Original limpia",
+            link_target="Original limpia",
+            origins=(),
+        )
+        with pytest.raises(OutputApprovalRequiredError) as clean_target_error:
+            notes.require_published_output(clean_target)
+        assert clean_target_error.value.code == "output_not_approved"
+
         result = OptimizadoGraphLoop(
             vault.output_dir,
             vault_root=vault.config.vault_path,
-            eligibility_guard=lambda target: notes.require_published_output(
-                target.document_id
-            ),
+            eligibility_guard=notes.require_published_output,
         ).rebuild_catalog()
 
         assert result["status"] == "success"
@@ -397,6 +441,7 @@ def test_approved_original_without_origins_enters_moc_and_physical_graph_only(tm
         moc = vault.output_dir / "_Indice_MOC.md"
         moc_markdown = moc.read_text(encoding="utf-8")
         assert "- [[Original aprobada]]" in moc_markdown
+        assert moc_markdown.count("[[Original aprobada]]") == 1
         assert "Sumario pendiente" not in moc_markdown
         assert "Sumario con origen invalido" not in moc_markdown
         assert "Original rechazada" not in moc_markdown
@@ -422,6 +467,49 @@ def test_approved_original_without_origins_enters_moc_and_physical_graph_only(tm
         } in graph["links"]
     finally:
         store.close()
+
+
+def test_migration_graph_guard_uses_concrete_output_target_on_shared_note_id(tmp_path):
+    vault = VaultManager(get_default_config(tmp_path / "vault").vault)
+    shared_id = "89a2f4fb-1d7b-4aa1-9793-119970502a08"
+    output = vault.output_dir / "Salida compartida.md"
+    clean = vault.clean_dir / "Salida compartida.md"
+    metadata = {
+        "schema_version": 3,
+        "note_id": shared_id,
+        "note_type": "original",
+        "title": "Salida compartida",
+        "date": "2026-08-18",
+        "author": "Fuente",
+        "tags": [],
+        "issue": "_Sin_Cuestion",
+        "status": "approved",
+        "origins": [],
+        "history": [],
+    }
+    output_markdown = serialize_frontmatter(metadata) + "# Salida compartida\n"
+    clean_markdown = serialize_frontmatter(metadata) + "# Copia canónica\n"
+    output.write_text(output_markdown, encoding="utf-8")
+    clean.write_text(clean_markdown, encoding="utf-8")
+
+    with JobStore(vault.config.vault_path) as store:
+        clean_relative = clean.relative_to(vault.config.vault_path).as_posix()
+        store.register_note(
+            note_id=shared_id,
+            relative_path=clean_relative,
+            content_hash=content_hash_for_markdown(clean_markdown),
+            note_type="original",
+            origin_kind=None,
+            theme="General",
+            issue="_Sin_Cuestion",
+            status="approved",
+        )
+
+    processed = VaultMigrator(vault.config.vault_path)._refresh_moc_catalog()
+
+    assert processed == ["General"]
+    moc_markdown = (vault.output_dir / "_Indice_MOC.md").read_text(encoding="utf-8")
+    assert "[[Salida compartida]]" in moc_markdown
 
 
 def test_moc_keeps_publicable_notes_when_an_approved_sibling_has_invalid_origins(

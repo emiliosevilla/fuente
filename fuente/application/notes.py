@@ -5,7 +5,7 @@ import json
 import logging
 import time
 from pathlib import Path
-from typing import Any, Callable, Optional
+from typing import Any, Callable, Optional, Protocol
 
 from fuente.application.ingestion import CHUNK_ARTIFACT_KIND
 from fuente.core.vault import VaultManager
@@ -33,6 +33,14 @@ logger = logging.getLogger(__name__)
 
 IndexNotifier = Callable[[], None]
 MAX_BODY_MARKDOWN_CHARS = 1_000_000
+
+
+class PublishedOutputTarget(Protocol):
+    """Concrete graph target whose output path must remain authoritative."""
+
+    document_id: str
+    relative_path: str
+    origins: tuple[dict[str, Any], ...]
 
 
 class NotesApplicationService:
@@ -84,14 +92,19 @@ class NotesApplicationService:
             requires_origins=requires_origins,
         )
 
-    def require_published_output(self, note_or_document_id: NoteDocument | str) -> None:
+    def require_published_output(
+        self,
+        note_or_document_id: NoteDocument | PublishedOutputTarget | str,
+    ) -> None:
         """Require an approved derived note and currently approved origins."""
-        note = (
-            self.get_note(note_or_document_id)
-            if isinstance(note_or_document_id, str)
-            else note_or_document_id
-        )
-        path, _relative = self._resolve_note_path(note.document_id)
+        if isinstance(note_or_document_id, str):
+            note = self.get_note(note_or_document_id)
+            path, _relative = self._resolve_note_path(note.document_id)
+        elif isinstance(note_or_document_id, NoteDocument):
+            note = note_or_document_id
+            path, _relative = self._resolve_note_path(note.document_id)
+        else:
+            note, path = self._load_published_output_target(note_or_document_id)
         if not path.resolve().is_relative_to(self.vault.output_dir.resolve()):
             raise OutputApprovalRequiredError(note.document_id)
         if note.status != "approved":
@@ -100,6 +113,67 @@ class NotesApplicationService:
             note,
             requires_origins=note.note_type != "original",
         )
+
+    def _load_published_output_target(
+        self,
+        target: PublishedOutputTarget,
+    ) -> tuple[NoteDocument, Path]:
+        """Load the exact graph file without consulting an ambiguous catalog row."""
+        document_id = getattr(target, "document_id", None)
+        relative_path = getattr(target, "relative_path", None)
+        if (
+            not isinstance(document_id, str)
+            or not document_id.strip()
+            or self._looks_like_relative_path(document_id)
+            or not isinstance(relative_path, str)
+            or not relative_path
+            or "\x00" in relative_path
+            or "\\" in relative_path
+        ):
+            raise OutputApprovalRequiredError(str(document_id or ""))
+
+        supplied = Path(relative_path)
+        if supplied.is_absolute() or any(
+            part in {"", ".", ".."} for part in supplied.parts
+        ):
+            raise OutputApprovalRequiredError(document_id)
+
+        output_root = self.vault.output_dir.resolve()
+        vault_root = self.vault.config.vault_path.resolve()
+        candidate = output_root / supplied
+        if candidate.is_symlink() or self._has_symlink_component(
+            candidate, output_root
+        ):
+            raise OutputApprovalRequiredError(document_id)
+        try:
+            vault_relative = candidate.relative_to(vault_root).as_posix()
+            authorized = self.path_resolver.resolve_note(vault_relative)
+        except (PathAuthorizationError, ValueError) as error:
+            raise OutputApprovalRequiredError(document_id) from error
+        if authorized != candidate.resolve() or not authorized.is_file():
+            raise OutputApprovalRequiredError(document_id)
+
+        try:
+            markdown = authorized.read_text(encoding="utf-8")
+            note = NoteDocument.from_persisted(
+                document_id=document_id,
+                relative_path=vault_relative,
+                markdown=markdown,
+                revision=1,
+            )
+        except (FrontmatterError, OSError, UnicodeError, ValueError) as error:
+            raise OutputApprovalRequiredError(document_id) from error
+        if note.note_id != document_id:
+            raise OutputApprovalRequiredError(document_id)
+
+        try:
+            target_origins = tuple(dict(origin) for origin in target.origins)
+        except (AttributeError, TypeError, ValueError) as error:
+            raise CanonicalEligibilityError() from error
+        declared_origins = tuple(origin.to_dict() for origin in note.origins)
+        if target_origins != declared_origins:
+            raise CanonicalEligibilityError()
+        return note, authorized
 
     def require_eligible_origin_refs(
         self,

@@ -586,9 +586,7 @@ class VaultMigrator:
                 loop = OptimizadoGraphLoop(
                     output_dir,
                     vault_root=self.vault.config.vault_path,
-                    eligibility_guard=lambda target: notes.require_eligible_origins(
-                        notes.get_note(target.document_id)
-                    ),
+                    eligibility_guard=notes.require_published_output,
                 )
                 result = loop.rebuild_catalog()
                 if result.get("status") == "success":

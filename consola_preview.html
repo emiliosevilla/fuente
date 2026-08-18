@@ -3657,15 +3657,35 @@
                     const fontSize = Math.max(10, Math.min(18, 12 / zoom));
                     ctx.font = (isHovered ? '700 ' : '600 ') + fontSize + 'px "JetBrains Mono", "Courier New", monospace';
 
+                    // Keep long note titles inside the bounded graph pane.  The
+                    // native window is often Retina-scaled, so pixel positions
+                    // must be constrained using the canvas' CSS dimensions.
+                    const labelOnRight = n.x < width * 0.60;
+                    const labelX = labelOnRight ? n.x + 10 / zoom : n.x - 10 / zoom;
+                    const availableWidth = Math.max(
+                        90 / zoom,
+                        labelOnRight ? width - labelX - 8 / zoom : labelX - 8 / zoom
+                    );
+                    let visibleLabel = String(n.label || '');
+                    while (
+                        visibleLabel.length > 1
+                        && ctx.measureText(visibleLabel + '…').width > availableWidth
+                    ) {
+                        visibleLabel = visibleLabel.slice(0, -1);
+                    }
+                    if (visibleLabel !== String(n.label || '')) visibleLabel += '…';
+                    ctx.textAlign = labelOnRight ? 'left' : 'right';
+
                     // Stroke / Halo pergamino detrás del texto para que no se mezcle con las líneas
                     ctx.lineWidth = 3.5 / zoom;
                     ctx.strokeStyle = labelHaloColor;
                     ctx.lineJoin = 'round';
-                    ctx.strokeText(n.label, n.x + 10 / zoom, n.y + 4 / zoom);
+                    ctx.strokeText(visibleLabel, labelX, n.y + 4 / zoom);
 
                     // Relleno de texto oscuro de alto contraste
                     ctx.fillStyle = labelTextColor;
-                    ctx.fillText(n.label, n.x + 10 / zoom, n.y + 4 / zoom);
+                    ctx.fillText(visibleLabel, labelX, n.y + 4 / zoom);
+                    ctx.textAlign = 'start';
                 });
 
                 ctx.restore();

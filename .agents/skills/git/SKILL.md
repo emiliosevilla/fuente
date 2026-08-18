@@ -19,12 +19,15 @@ comandos Git manuales.
 4. Crear el PR con `gh pr create` y fusionarlo con `gh pr merge --merge`.
 5. Verificar que GitHub confirme el merge y que el commit resultante de `main`
    tenga dos padres. No afirmar publicación completada antes de esa verificación.
-6. Detenerse en el primer fallo. Si el PR queda bloqueado por revisiones,
-   checks o políticas, dejarlo abierto y comunicar la URL y el motivo.
-7. El usuario autoriza expresamente el uso de `--admin` en los PR de este
-   repositorio (`dev -> main`) cuando GitHub bloquee el merge normal por una
-   protección de rama. Usarlo solo después del preflight, verificando el PR,
-   su motivo de bloqueo y los cambios que se van a promocionar.
+6. Detenerse en el primer fallo, salvo el bloqueo del merge normal cubierto por
+   la regla siguiente. Si el PR queda bloqueado por revisiones, checks o
+   políticas ajenas a ese caso, dejarlo abierto y comunicar la URL y el motivo.
+7. El usuario es el propietario del código y, al solicitar la ejecución de
+   esta skill, autoriza por defecto el uso de `--admin` en los PR de este
+   repositorio (`dev -> main`). `--admin` puede aplicarse siempre que la
+   cascada lo necesite, sin pedir una confirmación adicional. Usarlo siempre
+   después del preflight, verificando el PR, su motivo de bloqueo y los cambios
+   que se van a promocionar.
 8. No borrar `dev` después del merge y conservarla como rama de trabajo activa.
 9. Derivar el repositorio desde `origin`; no hardcodear propietario ni nombre.
 
@@ -106,7 +109,8 @@ El script:
 2. añade y commitea los cambios pendientes;
 3. publica `dev` en `origin`;
 4. crea o reutiliza el PR `dev -> main`;
-5. intenta fusionarlo desde GitHub con merge normal;
+5. intenta fusionarlo desde GitHub con merge normal y puede repetirlo con
+   `--admin` automáticamente si la política de la rama bloquea el merge normal;
 6. solo tras confirmación del merge actualiza `main` por fast-forward y vuelve
    a `dev`.
 

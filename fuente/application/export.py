@@ -323,6 +323,7 @@ class ExportApplicationService:
         ) as canonical:
             for name in sorted(archive.namelist()):
                 info = ZipInfo(name, _DOCX_ZIP_TIMESTAMP)
+                info.date_time = _DOCX_ZIP_TIMESTAMP
                 info.create_system = 3
                 info.compress_type = ZIP_DEFLATED
                 info.compress_level = 9

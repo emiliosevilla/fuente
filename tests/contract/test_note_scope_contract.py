@@ -61,7 +61,7 @@ def test_nested_theme_and_issue_surface_in_bridge_subsystems(bridge_backend):
 
     graph = bridge.get_graph_data()
     node_ids = {node["document_id"] for node in graph["nodes"]}
-    assert document_id not in node_ids
+    assert document_id in node_ids
 
 
 def test_general_theme_hides_nested_theme_notes(bridge_backend):

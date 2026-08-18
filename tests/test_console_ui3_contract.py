@@ -69,7 +69,25 @@ def test_graph_draws_canonical_origins_and_provenance_edges_visibly():
     assert "l.relation === 'origin'" in renderer
     assert "ctx.setLineDash" in renderer
     assert "n.node_type === 'canonical_origin'" in renderer
-    assert "Línea discontinua: procedencia" in CONSOLE
+    assert "n.node_type === 'canonical_moc'" in renderer
+
+
+def test_graph_footer_separates_physical_wikilinks_from_validated_origins():
+    renderer = _between(
+        CONSOLE, "function initObsidianGraphCanvas", "function renderReaderLoadError"
+    )
+
+    assert 'id="graph-wikilinks-count"' in CONSOLE
+    assert 'id="graph-origins-count"' in CONSOLE
+    assert 'id="graph-links-count"' not in CONSOLE
+    assert "relation === 'wikilink'" in renderer
+    assert "relation === 'origin'" in renderer
+    assert "wikilinksCountEl.innerText = wikilinkCount" in renderer
+    assert "originsCountEl.innerText = originCount" in renderer
+    assert "Wikilinks físicos:" in CONSOLE
+    assert "Procedencias:" in CONSOLE
+    assert "Los wikilinks salen del texto Markdown/MOC" in CONSOLE
+    assert "las líneas discontinuas son origins validados" in CONSOLE
 
 
 def test_graph_layout_and_edges_are_stable_visible_and_bounded():

@@ -159,3 +159,20 @@ def test_graph_legend_uses_semantic_tokens_with_readable_contrast() -> None:
         _contrast_ratio(background, _token_hex(tokens, token)) >= 4.5
         for token in text_tokens
     )
+
+
+def test_graph_counters_use_high_contrast_tokens_on_the_dark_legend() -> None:
+    css = _read(CONSOLE_CSS_PATH)
+    tokens = _read(TOKENS_CSS_PATH)
+    background = _token_hex(tokens, "--fuente-polar-0")
+    counter_tokens = {
+        ".graph-counter-nodes": "--fuente-snow-2",
+        ".graph-counter-wikilinks": "--fuente-frost-1",
+        ".graph-counter-origins": "--fuente-warning",
+    }
+
+    for selector, token in counter_tokens.items():
+        rule = re.search(rf"{re.escape(selector)}\s*\{{([^}}]*)\}}", css, re.DOTALL)
+        assert rule is not None
+        assert f"color: var({token})" in rule.group(1)
+        assert _contrast_ratio(background, _token_hex(tokens, token)) >= 4.5

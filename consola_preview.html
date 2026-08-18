@@ -245,8 +245,12 @@
                     <section class="reader-relations-pane" data-reader-region="relations" aria-label="Relaciones locales de la nota">
                         <div class="reader-graph-container console-layout-009" id="reader-view-graph">
                             <canvas id="obsidian-graph-canvas" class="graph-canvas console-layout-010"></canvas>
-                            <div class="console-layout-011">
-                                Nodos: <b id="graph-nodes-count" class="console-text-003">0</b> | Enlaces: <b id="graph-links-count" class="console-text-004">0</b> • Línea discontinua: procedencia. Haz clic en un nodo para leer la nota. Arrastra los nodos para mover el mapa.
+                            <div class="console-layout-011" role="note" aria-label="Leyenda del grafo">
+                                <span>Nodos: <b id="graph-nodes-count" class="graph-counter-nodes">0</b></span>
+                                <span>Wikilinks físicos: <b id="graph-wikilinks-count" class="graph-counter-wikilinks">0</b></span>
+                                <span>Procedencias: <b id="graph-origins-count" class="graph-counter-origins">0</b></span>
+                                <span>Los wikilinks salen del texto Markdown/MOC; las líneas discontinuas son origins validados. El MOC es el nodo amarillo.</span>
+                                <span>Haz clic en un nodo para leer la nota. Arrastra los nodos para mover el mapa.</span>
                             </div>
                         </div>
                     </section>
@@ -3386,11 +3390,18 @@
             if (!canvas) return;
             const ctx = canvas.getContext('2d');
             const nodesCountEl = document.getElementById('graph-nodes-count');
-            const linksCountEl = document.getElementById('graph-links-count');
+            const wikilinksCountEl = document.getElementById('graph-wikilinks-count');
+            const originsCountEl = document.getElementById('graph-origins-count');
             const rootStyles = getComputedStyle(document.documentElement);
-            const originColor = rootStyles.getPropertyValue('--fuente-frost-2').trim() || '#5E81AC';
+            const originColor = rootStyles.getPropertyValue('--fuente-frost-2').trim() || '#81A1C1';
+            const mocColor = rootStyles.getPropertyValue('--fuente-warning').trim() || '#EBCB8B';
             const linkColor = rootStyles.getPropertyValue('--fuente-snow-0').trim() || '#D8DEE9';
             const highlightedLinkColor = rootStyles.getPropertyValue('--fuente-snow-2').trim() || '#ECEFF4';
+            const nodeColor = rootStyles.getPropertyValue('--fuente-polar-0').trim() || '#2E3440';
+            const hoveredNodeColor = rootStyles.getPropertyValue('--fuente-polar-2').trim() || '#434C5E';
+            const nodeBorderColor = rootStyles.getPropertyValue('--fuente-snow-2').trim() || '#ECEFF4';
+            const labelHaloColor = rootStyles.getPropertyValue('--fuente-snow-0').trim() || '#D8DEE9';
+            const labelTextColor = rootStyles.getPropertyValue('--fuente-polar-0').trim() || '#2E3440';
 
             const dpr = window.devicePixelRatio || 1;
             const width = canvas.parentElement.clientWidth || 800;
@@ -3404,7 +3415,15 @@
             let links = data.links || [];
 
             if (nodesCountEl) nodesCountEl.innerText = nodes.length;
-            if (linksCountEl) linksCountEl.innerText = links.length;
+            let wikilinkCount = 0;
+            let originCount = 0;
+            links.forEach(link => {
+                const relation = link.relation || 'wikilink';
+                if (relation === 'wikilink') wikilinkCount += 1;
+                if (relation === 'origin') originCount += 1;
+            });
+            if (wikilinksCountEl) wikilinksCountEl.innerText = wikilinkCount;
+            if (originsCountEl) originsCountEl.innerText = originCount;
 
             if (nodes.length === 0) {
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -3623,13 +3642,16 @@
                 nodes.forEach(n => {
                     const isHovered = (hoveredNode === n);
                     const isCanonicalOrigin = n.node_type === 'canonical_origin';
+                    const isCanonicalMoc = n.node_type === 'canonical_moc';
                     const drawRadius = (isHovered ? n.radius + 3 : n.radius) / zoom;
                     ctx.beginPath();
                     ctx.arc(n.x, n.y, Math.max(3, drawRadius), 0, 2 * Math.PI);
-                    ctx.fillStyle = isHovered ? '#161411' : (isCanonicalOrigin ? originColor : '#2E2B25');
+                    ctx.fillStyle = isHovered
+                        ? hoveredNodeColor
+                        : (isCanonicalMoc ? mocColor : (isCanonicalOrigin ? originColor : nodeColor));
                     ctx.fill();
                     ctx.lineWidth = 1.5 / zoom;
-                    ctx.strokeStyle = isCanonicalOrigin ? '#ECEFF4' : '#DCD4C7';
+                    ctx.strokeStyle = nodeBorderColor;
                     ctx.stroke();
 
                     const fontSize = Math.max(10, Math.min(18, 12 / zoom));
@@ -3637,12 +3659,12 @@
 
                     // Stroke / Halo pergamino detrás del texto para que no se mezcle con las líneas
                     ctx.lineWidth = 3.5 / zoom;
-                    ctx.strokeStyle = '#DCD4C7';
+                    ctx.strokeStyle = labelHaloColor;
                     ctx.lineJoin = 'round';
                     ctx.strokeText(n.label, n.x + 10 / zoom, n.y + 4 / zoom);
 
                     // Relleno de texto oscuro de alto contraste
-                    ctx.fillStyle = isHovered ? '#000000' : '#161411';
+                    ctx.fillStyle = labelTextColor;
                     ctx.fillText(n.label, n.x + 10 / zoom, n.y + 4 / zoom);
                 });
 

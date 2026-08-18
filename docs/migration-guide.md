@@ -2,6 +2,11 @@
 
 This guide describes how to migrate an existing Fuente Vault to **frontmatter schema version 1** and prepare the Fuente migration using `scripts/migrate_vault.py`.
 
+En la interfaz actual, el chat presenta sus citas como **orígenes** y las
+conexiones montadas como **entradas** o **proveedores**. Los nombres históricos
+que aparecen en las rutas y migraciones se conservan únicamente para leer
+formatos anteriores.
+
 ## Fuente precondition inventory
 
 Before any Fuente migration, create the immutable, read-only inventory. It records

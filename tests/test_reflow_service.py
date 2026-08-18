@@ -16,6 +16,7 @@ from fuente.application.reflow import (
 from fuente.config import get_default_config
 from fuente.core.vault import VaultManager
 from fuente.domain.errors import PathAuthorizationError
+from fuente.domain.errors import CanonicalEligibilityError
 from fuente.domain.frontmatter import serialize_frontmatter
 from fuente.domain.paths import document_id_for_relative_path
 from fuente.graph_engine.optimized_loop import OptimizadoGraphLoop
@@ -131,6 +132,32 @@ def test_generated_markdown_mutations_are_reported_and_invalidate_index(
     assert len(invalidations) == 2
     assert "[[Gamma]]" in (vault.output_dir / "_Indice_MOC.md").read_text(encoding="utf-8")
     assert "[[Gamma]]" in (issue / "_Cuestion_Issue-A.md").read_text(encoding="utf-8")
+
+
+def test_reflow_reports_notes_excluded_from_the_generated_moc(temp_vault_path):
+    vault = VaultManager(get_default_config(temp_vault_path).vault)
+    publicable = vault.output_dir / "Publicable.md"
+    blocked = vault.output_dir / "Bloqueada.md"
+    publicable.write_text(
+        _note("Publicable", "# Publicable\n", "_Sin_Cuestion"), encoding="utf-8"
+    )
+    blocked.write_text(
+        _note("Bloqueada", "# Bloqueada\n", "_Sin_Cuestion"), encoding="utf-8"
+    )
+    service, lifecycle, _invalidations = _service(vault)
+    blocked_id = document_id_for_relative_path("4_salida/Bloqueada.md")
+
+    def require_publicable(target) -> None:
+        if target.document_id == blocked_id:
+            raise CanonicalEligibilityError()
+
+    lifecycle.graph_loop.set_eligibility_guard(require_publicable)
+
+    result = service.reflow_links(ReflowScope())
+
+    assert result.as_dict()["excluded_notes"] == [
+        {"document_id": blocked_id, "reason": "origin_not_approved"}
+    ]
 
 
 def test_equivalent_fresh_vaults_have_deterministic_generated_markdown(tmp_path):

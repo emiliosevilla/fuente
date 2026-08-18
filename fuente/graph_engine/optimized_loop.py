@@ -93,6 +93,32 @@ class OptimizadoGraphLoop:
             grouped.setdefault(issue_name, []).append(note)
         return grouped
 
+    def _eligible_catalog(
+        self, catalog: tuple[NoteLinkTarget, ...]
+    ) -> tuple[list[NoteLinkTarget], list[dict[str, str]]]:
+        """Keep publishable notes without letting one invalid sibling stale the MOC."""
+        assert callable(self._eligibility_guard)
+        eligible: list[NoteLinkTarget] = []
+        excluded: list[dict[str, str]] = []
+        for note in catalog:
+            try:
+                self._eligibility_guard(note)
+            except (CanonicalEligibilityError, OutputApprovalRequiredError) as error:
+                excluded.append(
+                    {
+                        "document_id": note.document_id,
+                        "reason": error.code,
+                    }
+                )
+                logger.info(
+                    "Excluding non-publishable note from generated graph catalog: %s (%s)",
+                    note.relative_path,
+                    error.code,
+                )
+            else:
+                eligible.append(note)
+        return eligible, excluded
+
     def refine_knowledge_graph(
         self,
         target_issue: str = None,
@@ -163,12 +189,10 @@ class OptimizadoGraphLoop:
             }
 
         catalog = tuple(self.linker.enumerate_notes())
-        try:
-            for note in catalog:
-                self._eligibility_guard(note)
-        except (CanonicalEligibilityError, OutputApprovalRequiredError) as error:
-            return {"error": error.code, "message": str(error)}
-        all_notes = list(catalog)
+        all_notes, excluded_notes = self._eligible_catalog(catalog)
+        if catalog and not all_notes:
+            reason = excluded_notes[0]["reason"]
+            return {"error": reason, "message": reason}
         notes_by_issue = self._notes_by_issue(all_notes)
 
         processed_notes_count = 0
@@ -207,7 +231,7 @@ class OptimizadoGraphLoop:
                             content,
                             note.stem,
                             current_relative_path=note.relative_path,
-                            note_catalog=catalog,
+                            note_catalog=all_notes,
                         )
                         if updated_content != content:
                             atomic_write_text(note_path, updated_content)
@@ -273,6 +297,7 @@ class OptimizadoGraphLoop:
                 ]
             ),
             "orphans_count": len(orphans),
+            "excluded_notes": excluded_notes,
         }
 
     def _rebuild_catalog(self) -> dict:
@@ -292,12 +317,11 @@ class OptimizadoGraphLoop:
                 "orphans": [],
             }
 
-        catalog = tuple(self.linker.enumerate_notes())
-        try:
-            for note in catalog:
-                self._eligibility_guard(note)
-        except (CanonicalEligibilityError, OutputApprovalRequiredError) as error:
-            return {"error": error.code, "message": str(error)}
+        discovered = tuple(self.linker.enumerate_notes())
+        catalog, excluded_notes = self._eligible_catalog(discovered)
+        if discovered and not catalog:
+            reason = excluded_notes[0]["reason"]
+            return {"error": reason, "message": reason}
 
         notes_by_issue = self._notes_by_issue(list(catalog))
         note_contents: Dict[str, str] = {}
@@ -352,6 +376,7 @@ class OptimizadoGraphLoop:
             "orphans": sorted(orphans),
             "issues_processed": len(notes_by_issue),
             "orphans_count": len(orphans),
+            "excluded_notes": excluded_notes,
         }
 
     def _update_issue_master_note(

@@ -1,7 +1,7 @@
 """Explicit, bounded link reflow over the canonical Markdown vault."""
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from pathlib import Path, PureWindowsPath
 from typing import Any, Callable, Mapping
 
@@ -71,6 +71,7 @@ class ReflowResult:
     index_changed: bool
     orphans: list[str]
     scope: dict[str, str | None]
+    excluded_notes: list[dict[str, str]] = field(default_factory=list)
     error: str | None = None
     request_id: str | None = None
     candidate_document_id: str | None = None
@@ -80,6 +81,8 @@ class ReflowResult:
         result = asdict(self)
         if self.error is None:
             result.pop("error", None)
+        if not self.excluded_notes:
+            result.pop("excluded_notes", None)
         for optional_field in ("request_id", "candidate_document_id", "candidate_path"):
             if result[optional_field] is None:
                 result.pop(optional_field)
@@ -161,6 +164,18 @@ class ReflowApplicationService:
         orphans = raw_result.get("orphans", [])
         if not isinstance(orphans, list):
             orphans = sorted(str(item) for item in orphans)
+        excluded_notes = []
+        raw_excluded_notes = raw_result.get("excluded_notes", [])
+        if isinstance(raw_excluded_notes, list):
+            for item in raw_excluded_notes:
+                if not isinstance(item, Mapping):
+                    continue
+                document_id = item.get("document_id")
+                reason = item.get("reason")
+                if isinstance(document_id, str) and isinstance(reason, str):
+                    excluded_notes.append(
+                        {"document_id": document_id, "reason": reason}
+                    )
         return ReflowResult(
             status=str(raw_result.get("status", "success")),
             processed_notes=int(raw_result.get("processed_notes", 0)),
@@ -169,6 +184,7 @@ class ReflowApplicationService:
             index_changed=bool(raw_result.get("index_changed", False)),
             orphans=[str(item) for item in orphans],
             scope=resolved_scope,
+            excluded_notes=excluded_notes,
         )
 
     def prepare_link_candidate(

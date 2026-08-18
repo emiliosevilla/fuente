@@ -528,3 +528,117 @@ git diff --check  # sin salida
   El grafo editorial, la generación de MOC y el corpus RAG conservan sus gates
   de validez y aprobación.
 - Persiste la advertencia externa de ChromaDB descrita arriba.
+
+## Informe de fix — procedencia canónica visible en el grafo (Sol)
+
+Fecha: 2026-08-18
+Rama inicial medida: `dev`
+HEAD inicial medido: `7e1e7d95358775c311c0ea05fbd58e369580ab9e`
+
+### Evidencia humana y causa
+
+La lectura Markdown ya era correcta. El panel devolvía tres nodos de
+`4_salida` y cero enlaces porque las tres notas carecían de wikilinks. Sin
+embargo, `Nota de prueba — lector Fuente` declaraba un `OriginRef` completo a
+`3_limpio/Aptis - Certificado C1_1ed323ae_jpg.md`.
+
+`get_graph_data()` solo enumeraba `4_salida` y solo convertía wikilinks en
+aristas. Aunque `GraphLinker` ya conservaba `origins`, el backend los devolvía
+como metadatos del nodo y no los materializaba como relación. El contador era
+coherente con ese payload incompleto; el defecto estaba en la proyección del
+grafo, no en el canvas.
+
+### Decisión de diseño
+
+La especificación canónica declara que `3_limpio` es la autoridad y exige que
+desde un sumario se pueda abrir el origen exacto. Por ello se eligió una
+representación explícita, estable y navegable:
+
+- cada origen realmente referenciado aparece una sola vez como nodo con
+  `id=origin:<note_id>`, `document_id`, ruta autorizada de `3_limpio`, revisión
+  y `node_type=canonical_origin`;
+- la salida apunta al origen mediante una arista `relation=origin`;
+- los wikilinks conservan su resolución anterior y ahora se identifican como
+  `relation=wikilink`;
+- un Markdown de `3_limpio` no entra en el grafo por existir: solo entra si una
+  nota visible de `4_salida` lo referencia y la referencia sigue siendo válida.
+
+### Autorización y consistencia
+
+Antes de crear el nodo y la arista, el backend comprueba el `OriginRef` contra
+el ledger y los bytes actuales:
+
+1. el `note_id` existe en el catálogo y su ruta queda bajo `3_limpio`;
+2. ruta, revisión y hash coinciden exactamente con el `OriginRef`;
+3. el Markdown actual declara el mismo `note_id` y conserva ese hash;
+4. la aprobación canónica sigue vigente.
+
+Si falla una de esas condiciones, no se muestra una relación engañosa. El
+lector acepta el nodo canónico por ID opaco catalogado y verifica de nuevo la
+identidad del Markdown. Las rutas enviadas como identificador siguen
+rechazadas. El fallback ya existente para una ruta SQLite obsoleta de
+`4_salida` se conserva y no se aplica a rutas de `3_limpio` inconsistentes.
+
+### Representación visible
+
+El canvas ya dibujaba toda arista válida de `links`. Ahora conserva el tipo de
+relación: la procedencia usa una línea Frost discontinua y el origen canónico
+usa un nodo Frost diferenciado. La leyenda explica la línea discontinua y el
+clic usa `document_id` para abrir el Markdown canónico; no usa la ruta como
+credencial.
+
+### TDD
+
+Primera ejecución contra producción sin modificar:
+
+```text
+PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -p no:cacheprovider \
+  tests/test_reader_contract.py tests/test_console_ui3_contract.py -q
+3 failed, 19 passed in 0.61s
+```
+
+Los fallos probaron la ausencia del tipo de wikilink, del nodo/enlace de origen
+y del dibujo visible de procedencia. Tras implementar y preservar el fallback
+de salida obsoleta:
+
+```text
+22 passed in 0.40s
+```
+
+Las regresiones focales cubren:
+
+- `4_salida` con `OriginRef` vigente → nodo autorizado de `3_limpio` + arista;
+- wikilink por ruta Obsidian;
+- dos notas sin relación → cero aristas y ningún origen no referenciado;
+- `OriginRef.path` fuera de `3_limpio` → sin nodo ni arista;
+- clic por `document_id` canónico y dibujo real de la arista en canvas.
+
+### Matriz relevante
+
+```text
+lector + rutas + grafo + UI + seguridad + hardening: 109 passed in 1.20s
+bridge + editor + alcance por tema: 95 passed, 1 warning in 1.41s
+grafo recursivo + bridge + ciclo de grafo + UI: 29 passed in 0.60s
+```
+
+La advertencia es la deprecación externa de
+`asyncio.iscoroutinefunction` emitida por ChromaDB.
+
+### Comprobaciones mecánicas
+
+```text
+python modules parsed: 4
+javascript script blocks parsed: 1
+git diff --check  # sin salida
+```
+
+### Límites y preocupaciones
+
+- Un origen con aprobación, revisión, hash o ruta obsoletos queda omitido de
+  forma deliberada. El panel todavía no explica por qué se omitió; solo evita
+  dibujar una procedencia falsa.
+- No se abrió una sesión PyWebView ni se releyó el Vault real durante este fix.
+  La verificación automatizada usa Vaults temporales; la comprobación visual
+  real de los cuatro nodos y una arista queda para la siguiente apertura
+  humana de la consola.
+- No se modificó el Vault real ni se incluyó ningún archivo suyo en Git.

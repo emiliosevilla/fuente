@@ -161,6 +161,47 @@ class AuthorizedPathResolver:
             document_id, allow_canonical_route=True
         )
 
+    def resolve_reader_note_id(self, document_id: str) -> Path:
+        """Resolve one reader-visible output or catalogued clean Markdown note."""
+        if not isinstance(document_id, str) or not document_id.strip():
+            raise PathAuthorizationError()
+        if "/" in document_id or "\\" in document_id or document_id.endswith(".md"):
+            raise PathAuthorizationError()
+
+        if self.catalog is not None:
+            record = self.catalog.resolve(document_id) or self.catalog.resolve_alias(
+                document_id
+            )
+            if record is not None:
+                canonical_id = record.get("note_id")
+                relative_path = record.get("relative_path")
+                if (
+                    not isinstance(canonical_id, str)
+                    or not canonical_id
+                    or not isinstance(relative_path, str)
+                    or not relative_path
+                ):
+                    raise PathAuthorizationError()
+                output_route = False
+                for root_name in ("output", "clean"):
+                    try:
+                        path = self.resolve(
+                            relative_path,
+                            root_name=root_name,
+                            allowed_extensions={".md"},
+                        )
+                    except PathAuthorizationError:
+                        continue
+                    if root_name == "output":
+                        output_route = True
+                    if self._catalog_path_matches_identity(path, canonical_id):
+                        return path
+                if output_route:
+                    return self.resolve_note_id(document_id)
+                raise PathAuthorizationError()
+
+        return self.resolve_note_id(document_id)
+
     def _resolve_unregistered_note_id(
         self, document_id: str, *, allow_canonical_route: bool
     ) -> Path:

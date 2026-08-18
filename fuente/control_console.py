@@ -66,6 +66,7 @@ from fuente.config import (
     describe_offline_mode,
 )
 from fuente.core.vault import VaultManager
+from fuente.domain.approvals import ApprovalLedger
 from fuente.domain.documents import MarkdownDocument
 from fuente.domain.errors import (
     CanonicalEligibilityError,
@@ -75,7 +76,11 @@ from fuente.domain.errors import (
     PathAuthorizationError,
 )
 from fuente.domain.frontmatter import FrontmatterError, parse_frontmatter, serialize_frontmatter
-from fuente.domain.origins import LegacyOriginsMigrationRequiredError, parse_origins
+from fuente.domain.origins import (
+    LegacyOriginsMigrationRequiredError,
+    OriginRef,
+    parse_origins,
+)
 from fuente.domain.metadata_form import (
     MetadataValidationError,
     metadata_form_snapshot,
@@ -2119,7 +2124,7 @@ class FuenteConsoleBackend:
     def get_note_content_html(self, note_id: str) -> Dict[str, Any]:
         """Return safe, structured Markdown display tokens for a document id."""
         try:
-            path = self._path_resolver().resolve_note_id(note_id)
+            path = self._path_resolver().resolve_reader_note_id(note_id)
         except PathAuthorizationError as error:
             return self._path_error(error)
         if not path.exists():
@@ -2336,6 +2341,17 @@ class FuenteConsoleBackend:
             )
 
         links = []
+        seen_links: set[tuple[str, str, str]] = set()
+
+        def add_link(source: str, target: str, relation: str) -> None:
+            identity = (source, target, relation)
+            if identity in seen_links:
+                return
+            seen_links.add(identity)
+            links.append(
+                {"source": source, "target": target, "relation": relation}
+            )
+
         import re
         link_pattern = re.compile(r"\[\[(.*?)\]\]")
         resolver = self._path_resolver()
@@ -2355,9 +2371,67 @@ class FuenteConsoleBackend:
                         continue
                     target_id = node_target_by_path.get(target_path.resolve())
                     if target_id and target_id != source:
-                        links.append({"source": source, "target": target_id})
+                        add_link(source, target_id, "wikilink")
             except OSError:
                 pass
+
+        assert self._job_store is not None
+        approval_ledger = ApprovalLedger(
+            self._job_store,
+            vault_root=self.vault.config.vault_path,
+            clean_root=self.vault.clean_dir,
+            derived_root=self.vault.output_dir,
+        )
+        origin_node_ids: set[str] = set()
+        for note in discovered:
+            source = note.link_target
+            for raw_origin in note.origins:
+                try:
+                    origin = OriginRef.from_mapping(raw_origin)
+                    row, origin_path, origin_document = (
+                        approval_ledger.canonical_snapshot(origin.note_id)
+                    )
+                except (
+                    FrontmatterError,
+                    OSError,
+                    PathAuthorizationError,
+                    UnicodeError,
+                    ValueError,
+                ):
+                    continue
+                if (
+                    str(row.get("relative_path")) != origin.path
+                    or int(row.get("revision", 0)) != origin.revision
+                    or str(row.get("content_hash")) != origin.content_hash
+                    or origin_document.note_id != origin.note_id
+                    or origin_document.content_hash != origin.content_hash
+                    or not self._job_store.is_note_approval_current(
+                        origin.note_id,
+                        origin.revision,
+                        origin.content_hash,
+                    )
+                ):
+                    continue
+
+                origin_relative = self._vault_relative_identity(origin_path)
+                if origin_relative != origin.path:
+                    continue
+                origin_graph_id = f"origin:{origin.note_id}"
+                if origin_graph_id not in origin_node_ids:
+                    origin_node_ids.add(origin_graph_id)
+                    nodes.append(
+                        {
+                            "id": origin_graph_id,
+                            "label": origin_document.title
+                            or origin_path.stem.replace("_", " "),
+                            "path": origin_relative,
+                            "document_id": origin.note_id,
+                            "origins": [],
+                            "node_type": "canonical_origin",
+                            "revision": origin.revision,
+                        }
+                    )
+                add_link(source, origin_graph_id, "origin")
 
         return {"nodes": nodes, "links": links}
 

@@ -35,6 +35,8 @@ def test_active_artifact_gate_rejects_non_fuente_build_outputs(gate_module, tmp_
     "fuente-other-0.1-py3-none-any.whl",
     "fuente_other-0.1-py3-none-any.whl",
     "fuente.other-0.1.tar.gz",
+    "fuente-other-0.1-1-py3-none-any.whl",
+    "fuente-0.1-build-py3-none-any.whl",
 ])
 def test_active_artifact_gate_rejects_distribution_names_not_exactly_fuente(
     gate_module, tmp_path, filename
@@ -88,6 +90,7 @@ def test_active_artifact_gate_scans_nested_dist_and_exact_history_only(
 def test_active_artifact_gate_allows_fuente_outputs(gate_module, tmp_path):
     (tmp_path / "dist").mkdir()
     (tmp_path / "dist" / "fuente-0.1-py3-none-any.whl").write_bytes(b"zip")
+    (tmp_path / "dist" / "fuente-0.1-1-py3-none-any.whl").write_bytes(b"zip")
     (tmp_path / "dist" / "fuente-0.1.tar.gz").write_bytes(b"tar")
     (tmp_path / "fuente.egg-info").mkdir()
 

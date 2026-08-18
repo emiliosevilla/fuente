@@ -189,7 +189,7 @@ También mencionamos `Redes Neuronales en código inline`.
         self.assertIn("[[Gestión de Conocimiento]]", updated_a)
         self.assertIn("[[Obsidian Vault]]", updated_b)
 
-    def test_invalid_notes_are_excluded_from_graph_outputs(self):
+    def test_invalid_notes_stay_out_of_generated_moc_but_remain_in_reader_graph(self):
         valid = serialize_frontmatter({
             "schema_version": 1,
             "title": "Nota válida",
@@ -235,7 +235,7 @@ También mencionamos `Redes Neuronales en código inline`.
         self.assertIn("grafo_valida", discovered)
         self.assertNotIn("grafo_invalida", discovered)
         self.assertIn("grafo_valida", graph_nodes)
-        self.assertNotIn("grafo_invalida", graph_nodes)
+        self.assertIn("grafo_invalida", graph_nodes)
 
 
 if __name__ == "__main__":

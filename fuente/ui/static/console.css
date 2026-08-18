@@ -1120,7 +1120,19 @@
 }
 
 .console-layout-011 {
-    position: absolute; bottom: 10px; left: 12px; font-size: 0.76rem; color: var(--muted); background: rgba(220, 212, 199, 0.92); padding: 5px 12px; border-radius: 4px; border: 1px solid var(--border);
+    position: absolute; bottom: 10px; left: 12px; right: 12px; display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 0.76rem; color: var(--fuente-snow-0); background: var(--fuente-polar-0); padding: 7px 12px; border-radius: 4px; border: 1px solid var(--fuente-frost-2);
+}
+
+.graph-counter-nodes {
+    color: var(--fuente-snow-2);
+}
+
+.graph-counter-wikilinks {
+    color: var(--fuente-frost-1);
+}
+
+.graph-counter-origins {
+    color: var(--fuente-warning);
 }
 
 .console-text-003 {

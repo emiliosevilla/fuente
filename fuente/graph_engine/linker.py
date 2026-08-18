@@ -9,6 +9,7 @@ from typing import Any, List, Optional, Sequence
 
 from fuente.core.vault import document_id_for_relative_path
 from fuente.domain.documents import MarkdownDocument
+from fuente.domain.paths import REFLOW_REVIEW_DIR_NAME
 
 logger = logging.getLogger(__name__)
 
@@ -47,8 +48,10 @@ class GraphLinker:
             .as_posix()
         )
 
-    def _is_excluded(self, path: Path) -> bool:
-        """Exclude MOC/metadata, hidden paths and .fuente from note discovery."""
+    def _is_excluded(
+        self, path: Path, *, include_canonical_moc: bool = False
+    ) -> bool:
+        """Exclude hidden/system paths and, by default, MOC/metadata notes."""
         try:
             relative = path.resolve().relative_to(self.output_dir.resolve())
         except ValueError:
@@ -57,39 +60,65 @@ class GraphLinker:
             return True
         if _SYSTEM_DIR_NAME in relative.parts:
             return True
-        if path.name.startswith("_") and path.suffix.lower() == ".md":
+        if REFLOW_REVIEW_DIR_NAME in relative.parts:
             return True
+        if path.name.startswith("_") and path.suffix.lower() == ".md":
+            return not (
+                include_canonical_moc
+                and relative.as_posix() == CANONICAL_MOC_FILENAME
+            )
         return False
 
     def enumerate_notes(self) -> list[NoteLinkTarget]:
-        """Recursively list valid notes with document IDs and link targets."""
+        """Recursively list approved notes eligible for editorial graph output."""
+        return self._enumerate_notes(include_all_reader_notes=False)
+
+    def enumerate_reader_notes(self) -> list[NoteLinkTarget]:
+        """List every non-system Markdown document exposed by the local reader."""
+        return self._enumerate_notes(include_all_reader_notes=True)
+
+    def _enumerate_notes(
+        self, *, include_all_reader_notes: bool
+    ) -> list[NoteLinkTarget]:
         if not self.output_dir.exists():
             return []
 
         discovered: list[tuple[str, Path, str | None, tuple[dict[str, Any], ...]]] = []
         for file_path in sorted(self.output_dir.rglob("*.md")):
-            if not file_path.is_file() or self._is_excluded(file_path):
+            if not file_path.is_file() or self._is_excluded(
+                file_path, include_canonical_moc=include_all_reader_notes
+            ):
                 continue
             try:
                 document = MarkdownDocument.from_markdown(file_path.read_text(encoding="utf-8"))
             except (OSError, UnicodeError, ValueError):
-                logger.warning(
-                    "Skipping invalid note during title discovery: %s",
-                    file_path.name,
-                )
-                continue
+                if not include_all_reader_notes:
+                    logger.warning(
+                        "Skipping invalid note during title discovery: %s",
+                        file_path.name,
+                    )
+                    continue
+                document = None
             # Los derivados editoriales sólo entran en el grafo después de
             # la aprobación humana de 4_salida. Los MOC y marcos del sistema
             # quedan excluidos arriba por su prefijo `_`.
-            if document.metadata.get("status") != "approved":
+            if (
+                document is not None
+                and not include_all_reader_notes
+                and document.metadata.get("status") != "approved"
+            ):
                 continue
             relative = file_path.resolve().relative_to(self.output_dir.resolve()).as_posix()
             discovered.append(
                 (
                     relative,
                     file_path,
-                    document.note_id,
-                    tuple(origin.to_dict() for origin in document.origins),
+                    document.note_id if document is not None else None,
+                    (
+                        tuple(origin.to_dict() for origin in document.origins)
+                        if document is not None
+                        else ()
+                    ),
                 )
             )
 

@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; base-uri 'none'; connect-src 'self'; font-src 'self'; img-src 'self' data:; object-src 'none'; script-src 'self' 'nonce-fuente-console'; style-src 'self'">
-    <title>Fuente Control Console — Estética Papiro (Vista Previa Definitiva)</title>
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; base-uri 'none'; connect-src 'self'; font-src 'self'; img-src 'self' data:; object-src 'none'; script-src 'self' 'nonce-fuente-console' 'unsafe-eval'; style-src 'self'">
+    <title>Fuente Control Console — Estética Papiro</title>
     <!-- Font stack remains local and is defined in console.css: 'Courier New', Courier, monospace. -->
     <link rel="stylesheet" data-fuente-tokens="true" href="fuente/ui/static/fuente_tokens.css">
     <link rel="stylesheet" href="fuente/ui/static/console.css">
@@ -245,8 +245,12 @@
                     <section class="reader-relations-pane" data-reader-region="relations" aria-label="Relaciones locales de la nota">
                         <div class="reader-graph-container console-layout-009" id="reader-view-graph">
                             <canvas id="obsidian-graph-canvas" class="graph-canvas console-layout-010"></canvas>
-                            <div class="console-layout-011">
-                                Nodos: <b id="graph-nodes-count" class="console-text-003">0</b> | Enlaces: <b id="graph-links-count" class="console-text-004">0</b> • Haz clic en un nodo para leer la nota. Arrastra los nodos para mover el mapa.
+                            <div class="console-layout-011" role="note" aria-label="Leyenda del grafo">
+                                <span>Nodos: <b id="graph-nodes-count" class="graph-counter-nodes">0</b></span>
+                                <span>Wikilinks físicos: <b id="graph-wikilinks-count" class="graph-counter-wikilinks">0</b></span>
+                                <span>Procedencias: <b id="graph-origins-count" class="graph-counter-origins">0</b></span>
+                                <span>Los wikilinks salen del texto Markdown/MOC; las líneas discontinuas son origins validados. El MOC es el nodo amarillo.</span>
+                                <span>Haz clic en un nodo para leer la nota. Arrastra los nodos para mover el mapa.</span>
                             </div>
                         </div>
                     </section>
@@ -500,6 +504,7 @@
                     <button class="btn-small tab-btn" id="tab-btn-server" data-onclick-command="switchSettingsTab('server')">Servidor & IA</button>
                     <button class="btn-small tab-btn" id="tab-btn-template" data-onclick-command="switchSettingsTab('template')">Plantilla Nota</button>
                 </div>
+                <div id="settings-load-status" class="console-text-017" role="status" aria-live="polite"></div>
 
                 <!-- PESTAÑA 1: MEMORIA & CONEXIONES -->
                 <div class="tab-panel console-layout-033" id="tab-panel-routes">
@@ -610,6 +615,7 @@
                     <span class="console-text-019">Local por defecto</span>
                     <button class="btn-secondary console-text-020" data-onclick-command="saveSettings()">Guardar Ajustes</button>
                 </div>
+                <div id="settings-save-status" class="console-text-017" role="alert" aria-live="polite"></div>
             </div>
         </div>
     </div>
@@ -1070,6 +1076,86 @@
                 document.body.classList.add('modal-open');
             } else {
                 document.body.classList.remove('modal-open');
+            }
+        }
+
+        const NATIVE_REQUEST_TIMEOUT_MS = 4000;
+        let nativeBackendErrorLogged = false;
+
+        function isExplicitPreviewMode() {
+            const params = new URLSearchParams(window.location.search);
+            return params.get('preview') === 'mock';
+        }
+
+        function nativeBackendUnavailableMessage() {
+            return 'La interfaz no está conectada al backend de Fuente. Iníciala con “fuente --vault /ruta/al/Vault”.';
+        }
+
+        function renderNativeBackendStatusError(message) {
+            const text = message || nativeBackendUnavailableMessage();
+            const status = document.getElementById('bottom-status-line');
+            if (status) status.textContent = 'ERROR DE CONEXIÓN: ' + text;
+            if (!nativeBackendErrorLogged) {
+                log(text);
+                nativeBackendErrorLogged = true;
+            }
+        }
+
+        function markExplicitPreviewMode() {
+            document.title = 'Fuente Control Console — Vista previa demo';
+            const status = document.getElementById('bottom-status-line');
+            if (status) {
+                status.textContent = 'VISTA PREVIA EXPLÍCITA · DATOS DEMO · Ningún Vault está conectado';
+            }
+        }
+
+        function callNativeRequest(methodName, invoke) {
+            const startedAt = Date.now();
+            const methodReady = new Promise(function(resolve, reject) {
+                function checkMethod() {
+                    const api = window.pywebview && window.pywebview.api;
+                    if (!api || typeof api[methodName] !== 'function') {
+                        if (Date.now() - startedAt >= NATIVE_REQUEST_TIMEOUT_MS) {
+                            reject(new Error(nativeBackendUnavailableMessage()));
+                            return;
+                        }
+                        setTimeout(checkMethod, 50);
+                        return;
+                    }
+                    resolve();
+                }
+                checkMethod();
+            });
+
+            return methodReady.then(function() {
+                let timeoutId = null;
+                const response = Promise.resolve().then(invoke);
+                const timeout = new Promise(function(_resolve, reject) {
+                    timeoutId = setTimeout(function() {
+                        reject(new Error('El backend de Fuente no respondió a ' + methodName + '.'));
+                    }, NATIVE_REQUEST_TIMEOUT_MS);
+                });
+                return Promise.race([response, timeout]).then(function(result) {
+                    clearTimeout(timeoutId);
+                    return result;
+                }, function(error) {
+                    clearTimeout(timeoutId);
+                    throw error;
+                });
+            });
+        }
+
+        function recoverNativeModalLoads() {
+            if (!window.pywebview || !window.pywebview.api) return;
+
+            const readerModal = document.getElementById('modal-reader');
+            if (readerModal && readerModal.classList.contains('is-open')) {
+                loadReaderNotes();
+            }
+
+            const settingsModal = document.getElementById('modal-settings');
+            if (settingsModal && settingsModal.classList.contains('is-open')) {
+                loadSettingsData();
             }
         }
 
@@ -2452,38 +2538,85 @@
             });
         }
 
+        function renderSettingsLoadError(message) {
+            const statusEl = document.getElementById('settings-load-status');
+            const text = 'No se pudieron cargar los ajustes: ' + (message || 'respuesta inválida');
+            if (statusEl) statusEl.textContent = text;
+            log(text);
+        }
+
+        function renderSyncInputsLoadError(message) {
+            const statusEl = document.getElementById('sync-status-summary');
+            const text = 'No se pudieron cargar las entradas montadas: ' + (message || 'respuesta inválida');
+            if (statusEl) statusEl.textContent = text;
+            log(text);
+        }
+
+        function renderSettingsSaveError(message) {
+            const statusEl = document.getElementById('settings-save-status');
+            const text = 'No se pudieron guardar los ajustes: ' + (message || 'respuesta inválida');
+            if (statusEl) statusEl.textContent = text;
+            log(text);
+        }
+
         function loadSettingsData() {
-            if (window.pywebview && window.pywebview.api) {
-                Promise.all([
-                    window.pywebview.api.get_settings_info(),
-                    window.pywebview.api.get_sync_inputs()
-                ]).then(function(results) {
-                    const info = results[0];
-                    const syncState = results[1];
-                    if (info.vault_path) { document.getElementById('setting-vault-path').value = info.vault_path; }
-                    if (syncState && Array.isArray(syncState.inputs)) { linkedInputs = syncState.inputs; }
-                    if (info.output_connected_folders) { linkedOutputFolders = info.output_connected_folders; }
-                    if (info.ollama_url) { document.getElementById('setting-ollama-url').value = info.ollama_url; }
-                    if (info.ram_margin) { document.getElementById('setting-ram-margin').value = info.ram_margin; }
-                    document.getElementById('setting-allow-non-loopback-ollama').checked = !!info.allow_non_loopback_ollama;
-                    if (info.resource_profile) { document.getElementById('setting-resource-profile').value = info.resource_profile; }
-                    if (info.audio_mode) { document.getElementById('setting-audio-mode').value = info.audio_mode; }
-                    if (info.whisper_model_path !== undefined && document.getElementById('setting-whisper-model-path')) {
-                        document.getElementById('setting-whisper-model-path').value = info.whisper_model_path || '';
-                    }
-                    if (info.offline_mode) { applyOfflineModeState(info.offline_mode); }
-                    renderLinkedFolders();
-                    updateSyncInputs(syncState);
-                    populateOllamaModels(info.models, info.current_model);
-                });
-            } else {
+            const statusEl = document.getElementById('settings-load-status');
+            if (isExplicitPreviewMode()) {
                 if (!document.getElementById('setting-vault-path').value || !document.getElementById('setting-vault-path').value.startsWith('/')) {
                     document.getElementById('setting-vault-path').value = '/Users/emiliosevillaortego/Documents/Fuente_Vault';
+                }
+                if (statusEl) {
+                    statusEl.textContent = 'VISTA PREVIA EXPLÍCITA: valores demo; ningún Vault está conectado.';
                 }
                 renderLinkedFolders();
                 renderSyncStatus(null);
                 populateOllamaModels([], '');
+                return;
             }
+
+            if (statusEl) statusEl.textContent = 'Cargando ajustes desde el backend de Fuente...';
+            callNativeRequest('get_settings_info', function() {
+                return window.pywebview.api.get_settings_info();
+            }).then(function(info) {
+                if (!info || typeof info !== 'object' || Array.isArray(info) || info.error) {
+                    renderSettingsLoadError(info && info.message);
+                    return;
+                }
+                if (info.vault_path) { document.getElementById('setting-vault-path').value = info.vault_path; }
+                if (info.output_connected_folders) { linkedOutputFolders = info.output_connected_folders; }
+                if (info.ollama_url) { document.getElementById('setting-ollama-url').value = info.ollama_url; }
+                if (info.ram_margin) { document.getElementById('setting-ram-margin').value = info.ram_margin; }
+                document.getElementById('setting-allow-non-loopback-ollama').checked = !!info.allow_non_loopback_ollama;
+                if (info.resource_profile) { document.getElementById('setting-resource-profile').value = info.resource_profile; }
+                if (info.audio_mode) { document.getElementById('setting-audio-mode').value = info.audio_mode; }
+                if (info.whisper_model_path !== undefined && document.getElementById('setting-whisper-model-path')) {
+                    document.getElementById('setting-whisper-model-path').value = info.whisper_model_path || '';
+                }
+                if (info.offline_mode) { applyOfflineModeState(info.offline_mode); }
+                renderLinkedFolders();
+                populateOllamaModels(info.models, info.current_model);
+                if (statusEl) statusEl.textContent = 'Ajustes cargados desde el Vault conectado.';
+            }).catch(function(err) {
+                const message = String(err || nativeBackendUnavailableMessage());
+                renderSettingsLoadError(message);
+                renderNativeBackendStatusError(message);
+            });
+
+            callNativeRequest('get_sync_inputs', function() {
+                return window.pywebview.api.get_sync_inputs();
+            }).then(function(syncState) {
+                if (!syncState || typeof syncState !== 'object' || Array.isArray(syncState) || syncState.error || !Array.isArray(syncState.inputs)) {
+                    renderSyncInputsLoadError(syncState && syncState.message);
+                    return;
+                }
+                linkedInputs = syncState.inputs;
+                renderLinkedFolders();
+                updateSyncInputs(syncState);
+            }).catch(function(err) {
+                const message = String(err || nativeBackendUnavailableMessage());
+                renderSyncInputsLoadError(message);
+                renderNativeBackendStatusError(message);
+            });
         }
 
         function showButtonFeedback(btnEl, feedbackText) {
@@ -3257,7 +3390,18 @@
             if (!canvas) return;
             const ctx = canvas.getContext('2d');
             const nodesCountEl = document.getElementById('graph-nodes-count');
-            const linksCountEl = document.getElementById('graph-links-count');
+            const wikilinksCountEl = document.getElementById('graph-wikilinks-count');
+            const originsCountEl = document.getElementById('graph-origins-count');
+            const rootStyles = getComputedStyle(document.documentElement);
+            const originColor = rootStyles.getPropertyValue('--fuente-frost-2').trim() || '#81A1C1';
+            const mocColor = rootStyles.getPropertyValue('--fuente-warning').trim() || '#EBCB8B';
+            const linkColor = rootStyles.getPropertyValue('--fuente-snow-0').trim() || '#D8DEE9';
+            const highlightedLinkColor = rootStyles.getPropertyValue('--fuente-snow-2').trim() || '#ECEFF4';
+            const nodeColor = rootStyles.getPropertyValue('--fuente-polar-0').trim() || '#2E3440';
+            const hoveredNodeColor = rootStyles.getPropertyValue('--fuente-polar-2').trim() || '#434C5E';
+            const nodeBorderColor = rootStyles.getPropertyValue('--fuente-snow-2').trim() || '#ECEFF4';
+            const labelHaloColor = rootStyles.getPropertyValue('--fuente-snow-0').trim() || '#D8DEE9';
+            const labelTextColor = rootStyles.getPropertyValue('--fuente-polar-0').trim() || '#2E3440';
 
             const dpr = window.devicePixelRatio || 1;
             const width = canvas.parentElement.clientWidth || 800;
@@ -3266,11 +3410,20 @@
             canvas.width = width * dpr;
             canvas.height = height * dpr;
 
-            let nodes = data.nodes || [];
+            let nodes = [...(data.nodes || [])]
+                .sort((a, b) => String(a.id).localeCompare(String(b.id)));
             let links = data.links || [];
 
             if (nodesCountEl) nodesCountEl.innerText = nodes.length;
-            if (linksCountEl) linksCountEl.innerText = links.length;
+            let wikilinkCount = 0;
+            let originCount = 0;
+            links.forEach(link => {
+                const relation = link.relation || 'wikilink';
+                if (relation === 'wikilink') wikilinkCount += 1;
+                if (relation === 'origin') originCount += 1;
+            });
+            if (wikilinksCountEl) wikilinksCountEl.innerText = wikilinkCount;
+            if (originsCountEl) originsCountEl.innerText = originCount;
 
             if (nodes.length === 0) {
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -3292,11 +3445,12 @@
             const centerX = width / 2;
             const centerY = height / 2;
             const radius = Math.min(width, height) * 0.3;
+            const layoutPadding = 28;
 
             nodes.forEach((n, idx) => {
                 const angle = (idx / nodes.length) * 2 * Math.PI;
-                n.x = centerX + radius * Math.cos(angle) + (Math.random() - 0.5) * 30;
-                n.y = centerY + radius * Math.sin(angle) + (Math.random() - 0.5) * 30;
+                n.x = centerX + radius * Math.cos(angle);
+                n.y = centerY + radius * Math.sin(angle);
                 n.radius = 6;
             });
 
@@ -3307,12 +3461,17 @@
             links.forEach(l => {
                 const s = typeof l.source === 'string' ? nodeMap[l.source] : l.source;
                 const t = typeof l.target === 'string' ? nodeMap[l.target] : l.target;
-                if (s && t) activeLinks.push({ source: s, target: t });
+                if (s && t) activeLinks.push({
+                    source: s,
+                    target: t,
+                    relation: l.relation || 'wikilink'
+                });
             });
 
             let draggedNode = null;
             let hoveredNode = null;
             let dragMoved = false;
+            let physicsFramesRemaining = 180;
 
             function getMousePos(e) {
                 const rect = canvas.getBoundingClientRect();
@@ -3363,6 +3522,7 @@
                     draggedNode.x = wx;
                     draggedNode.y = wy;
                     dragMoved = true;
+                    physicsFramesRemaining = Math.max(physicsFramesRemaining, 60);
                 } else if (isPanning) {
                     panX = sx - panStartX;
                     panY = sy - panStartY;
@@ -3438,13 +3598,23 @@
                         n.x += (centerX - n.x) * 0.005;
                         n.y += (centerY - n.y) * 0.005;
                     }
+                    const labelAllowance = Math.min(
+                        width * 0.45,
+                        16 + String(n.label || '').length * 7
+                    );
+                    const maxX = Math.max(layoutPadding, width - layoutPadding - labelAllowance);
+                    n.x = Math.max(layoutPadding, Math.min(maxX, n.x));
+                    n.y = Math.max(layoutPadding, Math.min(height - layoutPadding, n.y));
                 });
             }
 
             if (obsidianGraphEngine) cancelAnimationFrame(obsidianGraphEngine);
 
             function render() {
-                stepPhysics();
+                if (physicsFramesRemaining > 0) {
+                    stepPhysics();
+                    physicsFramesRemaining -= 1;
+                }
 
                 ctx.save();
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -3455,40 +3625,67 @@
                 // Dibujar enlaces
                 activeLinks.forEach(l => {
                     const isHighlighted = hoveredNode && (hoveredNode === l.source || hoveredNode === l.target);
+                    const isOriginRelation = l.relation === 'origin';
                     ctx.beginPath();
                     ctx.moveTo(l.source.x, l.source.y);
                     ctx.lineTo(l.target.x, l.target.y);
-                    ctx.strokeStyle = isHighlighted ? '#161411' : '#BFB4A3';
-                    ctx.lineWidth = (isHighlighted ? 2.5 : 1.2) / zoom;
-                    ctx.globalAlpha = isHighlighted ? 0.95 : 0.6;
+                    ctx.strokeStyle = isHighlighted ? highlightedLinkColor : (isOriginRelation ? originColor : linkColor);
+                    ctx.lineWidth = (isHighlighted ? 2.8 : 1.8) / zoom;
+                    ctx.globalAlpha = isHighlighted ? 1.0 : 0.85;
+                    ctx.setLineDash(isOriginRelation ? [7 / zoom, 5 / zoom] : []);
                     ctx.stroke();
+                    ctx.setLineDash([]);
                     ctx.globalAlpha = 1.0;
                 });
 
                 // Dibujar nodos y texto con alta definición (HiDPI / Retina) y halo de contraste
                 nodes.forEach(n => {
                     const isHovered = (hoveredNode === n);
+                    const isCanonicalOrigin = n.node_type === 'canonical_origin';
+                    const isCanonicalMoc = n.node_type === 'canonical_moc';
                     const drawRadius = (isHovered ? n.radius + 3 : n.radius) / zoom;
                     ctx.beginPath();
                     ctx.arc(n.x, n.y, Math.max(3, drawRadius), 0, 2 * Math.PI);
-                    ctx.fillStyle = isHovered ? '#161411' : '#2E2B25';
+                    ctx.fillStyle = isHovered
+                        ? hoveredNodeColor
+                        : (isCanonicalMoc ? mocColor : (isCanonicalOrigin ? originColor : nodeColor));
                     ctx.fill();
                     ctx.lineWidth = 1.5 / zoom;
-                    ctx.strokeStyle = '#DCD4C7';
+                    ctx.strokeStyle = nodeBorderColor;
                     ctx.stroke();
 
                     const fontSize = Math.max(10, Math.min(18, 12 / zoom));
                     ctx.font = (isHovered ? '700 ' : '600 ') + fontSize + 'px "JetBrains Mono", "Courier New", monospace';
 
+                    // Keep long note titles inside the bounded graph pane.  The
+                    // native window is often Retina-scaled, so pixel positions
+                    // must be constrained using the canvas' CSS dimensions.
+                    const labelOnRight = n.x < width * 0.60;
+                    const labelX = labelOnRight ? n.x + 10 / zoom : n.x - 10 / zoom;
+                    const availableWidth = Math.max(
+                        90 / zoom,
+                        labelOnRight ? width - labelX - 8 / zoom : labelX - 8 / zoom
+                    );
+                    let visibleLabel = String(n.label || '');
+                    while (
+                        visibleLabel.length > 1
+                        && ctx.measureText(visibleLabel + '…').width > availableWidth
+                    ) {
+                        visibleLabel = visibleLabel.slice(0, -1);
+                    }
+                    if (visibleLabel !== String(n.label || '')) visibleLabel += '…';
+                    ctx.textAlign = labelOnRight ? 'left' : 'right';
+
                     // Stroke / Halo pergamino detrás del texto para que no se mezcle con las líneas
                     ctx.lineWidth = 3.5 / zoom;
-                    ctx.strokeStyle = '#DCD4C7';
+                    ctx.strokeStyle = labelHaloColor;
                     ctx.lineJoin = 'round';
-                    ctx.strokeText(n.label, n.x + 10 / zoom, n.y + 4 / zoom);
+                    ctx.strokeText(visibleLabel, labelX, n.y + 4 / zoom);
 
                     // Relleno de texto oscuro de alto contraste
-                    ctx.fillStyle = isHovered ? '#000000' : '#161411';
-                    ctx.fillText(n.label, n.x + 10 / zoom, n.y + 4 / zoom);
+                    ctx.fillStyle = labelTextColor;
+                    ctx.fillText(visibleLabel, labelX, n.y + 4 / zoom);
+                    ctx.textAlign = 'start';
                 });
 
                 ctx.restore();
@@ -4253,12 +4450,18 @@
         ];
 
         function loadObsidianGraphView() {
-            if (window.pywebview && window.pywebview.api) {
-                window.pywebview.api.get_graph_data().then(function(data) {
+            if (!isExplicitPreviewMode()) {
+                callNativeRequest('get_graph_data', function() {
+                    return window.pywebview.api.get_graph_data();
+                }).then(function(data) {
                     initObsidianGraphCanvas(data);
+                }).catch(function(err) {
+                    log('No se pudo cargar el grafo: ' + String(err || nativeBackendUnavailableMessage()));
                 });
-            } else {
-                const demoData = {
+                return;
+            }
+
+            const demoData = {
                     nodes: [
                         { id: "_Indice_MOC", label: "Índice MOC", path: "_Indice_MOC.md" },
                         { id: "Nota_Arquitectura_Fuente", label: "Arquitectura General", path: "Nota_Arquitectura_Fuente.md" },
@@ -4301,17 +4504,48 @@
                         { source: "Nota_Manual_Usuario_Avanzado", target: "Nota_Seguridad_y_Privacidad" },
                         { source: "Nota_Manual_Usuario_Avanzado", target: "Nota_Integracion_Obsidian" }
                     ]
-                };
-                initObsidianGraphCanvas(demoData);
+            };
+            initObsidianGraphCanvas(demoData);
+        }
+
+        function renderReaderLoadError(message) {
+            const ul = document.getElementById('reader-note-list');
+            const text = 'No se pudieron cargar las notas: ' + (message || 'respuesta inválida');
+            if (ul) {
+                ul.replaceChildren();
+                const error = document.createElement('li');
+                error.className = 'reader-note-item';
+                error.setAttribute('role', 'alert');
+                error.textContent = text;
+                ul.appendChild(error);
             }
+            log(text);
+        }
+
+        function renderReaderContentError(message) {
+            const text = message || 'No se pudo cargar el contenido de la nota.';
+            currentSelectedNoteTitle = 'Error al cargar la nota';
+            currentSelectedNotePath = '';
+            renderNoteDocument(currentSelectedNoteTitle, [
+                {"type": "heading", "level": 3, "text": currentSelectedNoteTitle},
+                {"type": "paragraph", "text": text}
+            ]);
+            log('Error cargando contenido de nota: ' + text);
+            updateReaderBackButton();
+        }
+
+        function renderExplicitPreviewNotesNotice() {
+            const ul = document.getElementById('reader-note-list');
+            if (!ul) return;
+            const notice = document.createElement('li');
+            notice.className = 'reader-note-item';
+            notice.setAttribute('role', 'status');
+            notice.textContent = 'VISTA PREVIA EXPLÍCITA — LAS NOTAS SIGUIENTES SON DATOS DEMO';
+            ul.prepend(notice);
         }
 
         function loadReaderNotes() {
-            if (window.pywebview && window.pywebview.api) {
-                window.pywebview.api.get_notes_list().then(function(notes) {
-                    renderNoteList(notes);
-                });
-            } else {
+            if (isExplicitPreviewMode()) {
                 renderNoteList(LOCAL_MOCK_NOTES.map(function(n, index) {
                     return {
                         title: n.title,
@@ -4322,7 +4556,23 @@
                         is_moc: n.path.indexOf('_Indice_MOC') !== -1
                     };
                 }));
+                renderExplicitPreviewNotesNotice();
+                return;
             }
+
+            callNativeRequest('get_notes_list', function() {
+                return window.pywebview.api.get_notes_list();
+            }).then(function(notes) {
+                if (!Array.isArray(notes)) {
+                    renderReaderLoadError(notes && notes.message);
+                    return;
+                }
+                renderNoteList(notes);
+            }).catch(function(err) {
+                const message = String(err || nativeBackendUnavailableMessage());
+                renderReaderLoadError(message);
+                renderNativeBackendStatusError(message);
+            });
         }
 
         function highlightSidebarNote(documentId) {
@@ -4427,34 +4677,7 @@
 
             let displayTitle = 'Nota';
 
-            if (window.pywebview && window.pywebview.api) {
-                window.pywebview.api.get_note_content(documentId).then(function(res) {
-                    if (res && res.error === 'note_not_found') {
-                        currentSelectedNoteTitle = 'Nota no encontrada';
-                        currentSelectedNotePath = '';
-                        renderNoteDocument(currentSelectedNoteTitle, res.document || [
-                            {"type": "heading", "level": 3, "text": "Nota no encontrada"}
-                        ]);
-                        updateReaderBackButton();
-                        return;
-                    }
-                    if (res && res.error) {
-                        currentSelectedNoteTitle = 'Error';
-                        currentSelectedNotePath = '';
-                        renderNoteDocument('Error', [
-                            {"type": "heading", "level": 3, "text": res.message || 'No se pudo cargar la nota'}
-                        ]);
-                        updateReaderBackButton();
-                        return;
-                    }
-                    if (res && res.title) displayTitle = res.title;
-                    if (res && res.path) currentSelectedNotePath = res.path;
-                    if (res && res.document_id) currentSelectedDocumentId = res.document_id;
-                    currentSelectedNoteTitle = displayTitle;
-                    renderNoteDocument(displayTitle, res ? res.document : []);
-                    updateReaderBackButton();
-                });
-            } else {
+            if (isExplicitPreviewMode()) {
                 const found = LOCAL_MOCK_NOTES.find(function(n, index) {
                     return ('mock-' + index) === documentId || n.path === documentId;
                 });
@@ -4475,7 +4698,45 @@
                     ]);
                 }
                 updateReaderBackButton();
+                return;
             }
+
+            callNativeRequest('get_note_content', function() {
+                return window.pywebview.api.get_note_content(documentId);
+            }).then(function(res) {
+                if (res && res.error === 'note_not_found') {
+                    currentSelectedNoteTitle = 'Nota no encontrada';
+                    currentSelectedNotePath = '';
+                    renderNoteDocument(currentSelectedNoteTitle, res.document || [
+                        {"type": "heading", "level": 3, "text": "Nota no encontrada"}
+                    ]);
+                    updateReaderBackButton();
+                    return;
+                }
+                if (res && res.error) {
+                    currentSelectedNoteTitle = 'Error';
+                    currentSelectedNotePath = '';
+                    renderNoteDocument('Error', [
+                        {"type": "heading", "level": 3, "text": res.message || 'No se pudo cargar la nota'}
+                    ]);
+                    updateReaderBackButton();
+                    return;
+                }
+                if (!res || typeof res !== 'object' || Array.isArray(res) || !Array.isArray(res.document)) {
+                    renderReaderContentError((res && res.message) || 'respuesta inválida');
+                    return;
+                }
+                if (res.title) displayTitle = res.title;
+                if (res.path) currentSelectedNotePath = res.path;
+                if (res.document_id) currentSelectedDocumentId = res.document_id;
+                currentSelectedNoteTitle = displayTitle;
+                renderNoteDocument(displayTitle, res.document);
+                updateReaderBackButton();
+            }).catch(function(err) {
+                const message = String(err || nativeBackendUnavailableMessage());
+                renderReaderContentError(message);
+                renderNativeBackendStatusError(message);
+            });
         }
 
         function loadCategoryData(category) {
@@ -4596,6 +4857,13 @@
             if (healthSnapshotReceived && stats.line !== undefined) document.getElementById('bottom-status-line').innerText = stats.line;
         }
 
+        function isValidSettingsSaveResponse(res) {
+            return !!res && typeof res === 'object' && !Array.isArray(res) && !res.error && (
+                (typeof res.log === 'string' && res.log.trim().length > 0) ||
+                res.status === 'saved'
+            );
+        }
+
         function saveSettings() {
             const model = document.getElementById('setting-ollama-model').value;
             const ollamaUrl = document.getElementById('setting-ollama-url') ? document.getElementById('setting-ollama-url').value : 'http://localhost:11434';
@@ -4611,21 +4879,34 @@
                 whisper_model_path: (document.getElementById('setting-whisper-model-path') || {}).value || null,
                 output_connected_folders: linkedOutputFolders
             };
-            if (window.pywebview && window.pywebview.api) {
-                window.pywebview.api.save_settings(settings).then(function(res) {
-                    if (res && res.error) {
-                        log('Error guardando ajustes: ' + res.message);
-                    } else if (res && res.log) {
-                        log(res.log);
-                        if (res.warning) log('Advertencia: ' + res.warning);
-                        if (res.offline_mode) applyOfflineModeState(res.offline_mode);
-                        if (res.stats) updateDashboardStats(res.stats);
-                    }
-                });
-            } else {
-                log('Ajustes actualizados (vista previa).');
+            if (isExplicitPreviewMode()) {
+                const previewStatus = document.getElementById('settings-save-status');
+                if (previewStatus) {
+                    previewStatus.textContent = 'Vista previa explícita: los cambios demo no se guardan.';
+                }
+                log('Vista previa explícita: no se guardaron ajustes en ningún Vault.');
+                return;
             }
-            closeModal('modal-settings');
+
+            callNativeRequest('save_settings', function() {
+                return window.pywebview.api.save_settings(settings);
+            }).then(function(res) {
+                if (!isValidSettingsSaveResponse(res)) {
+                    renderSettingsSaveError(res && res.message);
+                    return;
+                }
+                if (res.log) log(res.log);
+                if (res.warning) log('Advertencia: ' + res.warning);
+                if (res.offline_mode) applyOfflineModeState(res.offline_mode);
+                if (res.stats) updateDashboardStats(res.stats);
+                const statusEl = document.getElementById('settings-save-status');
+                if (statusEl) statusEl.textContent = 'Ajustes guardados correctamente.';
+                closeModal('modal-settings');
+            }).catch(function(err) {
+                const message = String(err || nativeBackendUnavailableMessage());
+                renderSettingsSaveError(message);
+                renderNativeBackendStatusError(message);
+            });
         }
 
         function resetDefaultSettings() {
@@ -4638,7 +4919,10 @@
         window.addEventListener('pywebviewready', function() {
             log('Conexión nativa PyWebView establecida con la Consola Fuente');
             if (window.pywebview && window.pywebview.api) {
-                window.pywebview.api.get_initial_state().then(function(state) {
+                recoverNativeModalLoads();
+                callNativeRequest('get_initial_state', function() {
+                    return window.pywebview.api.get_initial_state();
+                }).then(function(state) {
                     updateDashboardStats(state.stats);
                     if (state.vault_path) {
                         document.getElementById('setting-vault-path').value = state.vault_path;
@@ -4649,12 +4933,26 @@
                     if (state.onboarding) {
                         renderOnboarding(state.onboarding);
                     }
+                }).catch(function(err) {
+                    renderNativeBackendStatusError(String(err || nativeBackendUnavailableMessage()));
                 });
                 loadThemes();
             }
         });
 
         document.addEventListener('DOMContentLoaded', function() {
+            if (isExplicitPreviewMode()) {
+                markExplicitPreviewMode();
+            } else {
+                const status = document.getElementById('bottom-status-line');
+                if (status) status.textContent = 'Conectando con el backend de Fuente...';
+                setTimeout(function() {
+                    const api = window.pywebview && window.pywebview.api;
+                    if (!api || typeof api.get_initial_state !== 'function') {
+                        renderNativeBackendStatusError(nativeBackendUnavailableMessage());
+                    }
+                }, NATIVE_REQUEST_TIMEOUT_MS);
+            }
             loadThemes();
             document.addEventListener('click', function(event) {
                 const themeControl = document.getElementById('theme-select');

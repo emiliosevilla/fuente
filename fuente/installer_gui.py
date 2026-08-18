@@ -481,7 +481,7 @@ class FuenteInstallerWizard(tk.Tk):
     def _render_step4_cloud_sync(self):
         title = tk.Label(
             self.content_frame,
-            text="Conexión de Fuentes Nube — SharePoint & OneDrive",
+            text="Conexión de entradas — SharePoint y OneDrive",
             font=("Helvetica", 15, "bold"),
             fg="#1F2937",
             bg="#F5F5F7",

@@ -2330,15 +2330,16 @@ class FuenteConsoleBackend:
         nodes = []
         for note in discovered:
             vault_relative = self._vault_relative_identity(out_dir / note.relative_path)
-            nodes.append(
-                {
-                    "id": note.link_target,
-                    "label": note.stem,
-                    "path": vault_relative,
-                    "document_id": note.document_id,
-                    "origins": list(note.origins),
-                }
-            )
+            node = {
+                "id": note.link_target,
+                "label": note.stem,
+                "path": vault_relative,
+                "document_id": note.document_id,
+                "origins": list(note.origins),
+            }
+            if note.relative_path == CANONICAL_MOC_FILENAME:
+                node["node_type"] = "canonical_moc"
+            nodes.append(node)
 
         links = []
         seen_links: set[tuple[str, str, str]] = set()

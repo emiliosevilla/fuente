@@ -416,6 +416,28 @@ def test_reader_graph_matches_list_and_extracts_wikilinks(temp_vault_path):
     } in graph["links"]
 
 
+def test_reader_graph_marks_the_canonical_moc_without_changing_its_identity(
+    temp_vault_path,
+):
+    backend = FuenteConsoleBackend(temp_vault_path)
+    bridge = FuentePyWebViewApi(backend)
+    moc_path = backend.vault.output_dir / "_Indice_MOC.md"
+    moc_path.write_text("# Índice MOC\n", encoding="utf-8")
+
+    listed_moc = next(note for note in bridge.get_notes_list() if note["is_moc"])
+    graph = bridge.get_graph_data()
+    graph_moc = next(
+        node
+        for node in graph["nodes"]
+        if node["document_id"] == listed_moc["document_id"]
+    )
+
+    assert graph_moc["node_type"] == "canonical_moc"
+    assert graph_moc["document_id"] == listed_moc["document_id"]
+    assert graph_moc["path"] == listed_moc["path"] == "4_salida/_Indice_MOC.md"
+    assert bridge.get_note_content(graph_moc["document_id"])["path"] == graph_moc["path"]
+
+
 def test_reader_graph_adds_approved_canonical_origin_node_and_link(temp_vault_path):
     backend = FuenteConsoleBackend(temp_vault_path)
     bridge = FuentePyWebViewApi(backend)

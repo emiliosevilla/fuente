@@ -70,3 +70,16 @@ def test_graph_draws_canonical_origins_and_provenance_edges_visibly():
     assert "ctx.setLineDash" in renderer
     assert "n.node_type === 'canonical_origin'" in renderer
     assert "Línea discontinua: procedencia" in CONSOLE
+
+
+def test_graph_layout_and_edges_are_stable_visible_and_bounded():
+    renderer = _between(
+        CONSOLE, "function initObsidianGraphCanvas", "function renderReaderLoadError"
+    )
+
+    assert ".sort((a, b) => String(a.id).localeCompare(String(b.id)))" in renderer
+    assert "Math.random()" not in renderer
+    assert "const linkColor = rootStyles.getPropertyValue('--fuente-snow-0')" in renderer
+    assert "ctx.globalAlpha = isHighlighted ? 1.0 : 0.85" in renderer
+    assert "physicsFramesRemaining" in renderer
+    assert "Math.max(layoutPadding" in renderer

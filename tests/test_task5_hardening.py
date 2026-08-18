@@ -243,6 +243,81 @@ def test_direct_graph_reflow_excludes_pending_before_any_write(tmp_path):
     assert "derivada" not in moc.read_text(encoding="utf-8")
 
 
+def test_moc_keeps_publicable_notes_when_an_approved_sibling_has_invalid_origins(
+    tmp_path,
+):
+    output = tmp_path / "4_salida"
+    issue = output / "Issue-A"
+    issue.mkdir(parents=True)
+    publicable_id = "89a2f4fb-1d7b-4aa1-9793-119970502a01"
+    blocked_id = "89a2f4fb-1d7b-4aa1-9793-119970502a02"
+
+    def markdown(note_id: str, title: str, origins: list[dict]) -> str:
+        metadata = {
+            "schema_version": 3,
+            "note_id": note_id,
+            "note_type": "summary" if origins else "concept",
+            "title": title,
+            "date": "2026-08-18",
+            "author": "Fuente",
+            "tags": [],
+            "issue": "Issue-A",
+            "status": "approved",
+            "origins": origins,
+            "history": [],
+        }
+        if origins:
+            metadata["origin_kind"] = "official_document"
+        return serialize_frontmatter(metadata) + f"# {title}\n\nContenido.\n"
+
+    publicable_path = issue / "Publicable.md"
+    publicable_path.write_text(
+        markdown(publicable_id, "Publicable", [ORIGIN]).replace(
+            "Contenido.", "Referencia a Sin procedencia."
+        ),
+        encoding="utf-8",
+    )
+    (issue / "Sin procedencia.md").write_text(
+        markdown(blocked_id, "Sin procedencia", []), encoding="utf-8"
+    )
+
+    def require_publicable(target) -> None:
+        if target.document_id == blocked_id:
+            raise CanonicalEligibilityError()
+
+    result = OptimizadoGraphLoop(
+        output,
+        vault_root=tmp_path,
+        eligibility_guard=require_publicable,
+    ).refine_knowledge_graph()
+
+    assert result["status"] == "success"
+    assert result["excluded_notes"] == [
+        {"document_id": blocked_id, "reason": "origin_not_approved"}
+    ]
+    moc_markdown = (output / "_Indice_MOC.md").read_text(encoding="utf-8")
+    assert "- [[Publicable]]" in moc_markdown
+    assert "[[Sin procedencia]]" not in moc_markdown
+    assert "[[Sin procedencia]]" not in publicable_path.read_text(encoding="utf-8")
+
+    from fuente.control_console import FuenteConsoleBackend
+
+    graph = FuenteConsoleBackend(tmp_path).get_graph_data()
+    nodes_by_document_id = {
+        node["document_id"]: node for node in graph["nodes"]
+    }
+    moc_node = next(
+        node
+        for node in graph["nodes"]
+        if node["path"] == "4_salida/_Indice_MOC.md"
+    )
+    assert {
+        "source": moc_node["id"],
+        "target": nodes_by_document_id[publicable_id]["id"],
+        "relation": "wikilink",
+    } in graph["links"]
+
+
 def test_lifecycle_flush_automatic_graph_blocks_before_writing(tmp_path):
     class Pipeline:
         def __init__(self, config):

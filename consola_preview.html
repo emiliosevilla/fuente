@@ -3389,6 +3389,8 @@
             const linksCountEl = document.getElementById('graph-links-count');
             const rootStyles = getComputedStyle(document.documentElement);
             const originColor = rootStyles.getPropertyValue('--fuente-frost-2').trim() || '#5E81AC';
+            const linkColor = rootStyles.getPropertyValue('--fuente-snow-0').trim() || '#D8DEE9';
+            const highlightedLinkColor = rootStyles.getPropertyValue('--fuente-snow-2').trim() || '#ECEFF4';
 
             const dpr = window.devicePixelRatio || 1;
             const width = canvas.parentElement.clientWidth || 800;
@@ -3397,7 +3399,8 @@
             canvas.width = width * dpr;
             canvas.height = height * dpr;
 
-            let nodes = data.nodes || [];
+            let nodes = [...(data.nodes || [])]
+                .sort((a, b) => String(a.id).localeCompare(String(b.id)));
             let links = data.links || [];
 
             if (nodesCountEl) nodesCountEl.innerText = nodes.length;
@@ -3423,11 +3426,12 @@
             const centerX = width / 2;
             const centerY = height / 2;
             const radius = Math.min(width, height) * 0.3;
+            const layoutPadding = 28;
 
             nodes.forEach((n, idx) => {
                 const angle = (idx / nodes.length) * 2 * Math.PI;
-                n.x = centerX + radius * Math.cos(angle) + (Math.random() - 0.5) * 30;
-                n.y = centerY + radius * Math.sin(angle) + (Math.random() - 0.5) * 30;
+                n.x = centerX + radius * Math.cos(angle);
+                n.y = centerY + radius * Math.sin(angle);
                 n.radius = 6;
             });
 
@@ -3448,6 +3452,7 @@
             let draggedNode = null;
             let hoveredNode = null;
             let dragMoved = false;
+            let physicsFramesRemaining = 180;
 
             function getMousePos(e) {
                 const rect = canvas.getBoundingClientRect();
@@ -3498,6 +3503,7 @@
                     draggedNode.x = wx;
                     draggedNode.y = wy;
                     dragMoved = true;
+                    physicsFramesRemaining = Math.max(physicsFramesRemaining, 60);
                 } else if (isPanning) {
                     panX = sx - panStartX;
                     panY = sy - panStartY;
@@ -3573,13 +3579,23 @@
                         n.x += (centerX - n.x) * 0.005;
                         n.y += (centerY - n.y) * 0.005;
                     }
+                    const labelAllowance = Math.min(
+                        width * 0.45,
+                        16 + String(n.label || '').length * 7
+                    );
+                    const maxX = Math.max(layoutPadding, width - layoutPadding - labelAllowance);
+                    n.x = Math.max(layoutPadding, Math.min(maxX, n.x));
+                    n.y = Math.max(layoutPadding, Math.min(height - layoutPadding, n.y));
                 });
             }
 
             if (obsidianGraphEngine) cancelAnimationFrame(obsidianGraphEngine);
 
             function render() {
-                stepPhysics();
+                if (physicsFramesRemaining > 0) {
+                    stepPhysics();
+                    physicsFramesRemaining -= 1;
+                }
 
                 ctx.save();
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -3594,9 +3610,9 @@
                     ctx.beginPath();
                     ctx.moveTo(l.source.x, l.source.y);
                     ctx.lineTo(l.target.x, l.target.y);
-                    ctx.strokeStyle = isHighlighted ? '#161411' : (isOriginRelation ? originColor : '#BFB4A3');
-                    ctx.lineWidth = (isHighlighted ? 2.5 : 1.2) / zoom;
-                    ctx.globalAlpha = isHighlighted ? 0.95 : 0.6;
+                    ctx.strokeStyle = isHighlighted ? highlightedLinkColor : (isOriginRelation ? originColor : linkColor);
+                    ctx.lineWidth = (isHighlighted ? 2.8 : 1.8) / zoom;
+                    ctx.globalAlpha = isHighlighted ? 1.0 : 0.85;
                     ctx.setLineDash(isOriginRelation ? [7 / zoom, 5 / zoom] : []);
                     ctx.stroke();
                     ctx.setLineDash([]);

@@ -2317,8 +2317,11 @@ class FuenteConsoleBackend:
 
         discovered = GraphLinker(
             out_dir, vault_root=self.vault.config.vault_path
-        ).enumerate_notes()
-        node_ids = {note.link_target for note in discovered}
+        ).enumerate_reader_notes()
+        node_target_by_path = {
+            (out_dir / note.relative_path).resolve(): note.link_target
+            for note in discovered
+        }
         nodes = []
         for note in discovered:
             vault_relative = self._vault_relative_identity(out_dir / note.relative_path)
@@ -2335,6 +2338,7 @@ class FuenteConsoleBackend:
         links = []
         import re
         link_pattern = re.compile(r"\[\[(.*?)\]\]")
+        resolver = self._path_resolver()
 
         for note in discovered:
             note_file = out_dir / note.relative_path
@@ -2343,8 +2347,15 @@ class FuenteConsoleBackend:
                 content = note_file.read_text(encoding="utf-8", errors="ignore")
                 for target in link_pattern.findall(content):
                     clean_target = target.split("|")[0].split("#")[0].strip()
-                    if clean_target and clean_target in node_ids and clean_target != source:
-                        links.append({"source": source, "target": clean_target})
+                    if not clean_target:
+                        continue
+                    try:
+                        target_path = resolver.resolve_wikilink_target(clean_target)
+                    except PathAuthorizationError:
+                        continue
+                    target_id = node_target_by_path.get(target_path.resolve())
+                    if target_id and target_id != source:
+                        links.append({"source": source, "target": target_id})
             except OSError:
                 pass
 

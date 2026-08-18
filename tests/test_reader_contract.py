@@ -37,6 +37,36 @@ def _write_note(path: Path, title: str, issue: str, body: str) -> None:
     )
 
 
+def _write_canonical_note(
+    path: Path,
+    *,
+    note_id: str,
+    title: str,
+    body: str,
+    status: str = "approved",
+) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        serialize_frontmatter(
+            {
+                "schema_version": 3,
+                "note_id": note_id,
+                "note_type": "concept",
+                "title": title,
+                "date": "2026-08-18",
+                "author": "test",
+                "tags": ["reader"],
+                "issue": "_Sin_Cuestion",
+                "status": status,
+                "origins": [],
+                "history": [],
+            }
+        )
+        + body,
+        encoding="utf-8",
+    )
+
+
 def _seed_nested_vault(temp_vault_path: Path) -> FuenteConsoleBackend:
     backend = FuenteConsoleBackend(temp_vault_path)
     backend.vault.create_theme(THEME)
@@ -235,6 +265,135 @@ def test_resolve_note_id_matches_enumerate_documents(temp_vault_path):
     document_id, relative = listed[0]
     resolved = resolver.resolve_note_id(document_id)
     assert resolved == resolver.resolve_note(relative)
+
+
+def test_every_canonical_id_emitted_by_list_loads_its_markdown_without_catalog_row(
+    temp_vault_path,
+):
+    backend = FuenteConsoleBackend(temp_vault_path)
+    bridge = FuentePyWebViewApi(backend)
+    canonical_id = "87f7a10b-0000-4000-8000-000000000001"
+    note_path = backend.vault.output_dir / "_Sin_Cuestion" / "ESP - Sevilla.pdf.md"
+    _write_canonical_note(
+        note_path,
+        note_id=canonical_id,
+        title="ESP - Sevilla",
+        body="# ESP - Sevilla\n\nMarkdown real del lector.\n",
+    )
+
+    listed = next(
+        note for note in bridge.get_notes_list() if note["document_id"] == canonical_id
+    )
+    assert backend._job_store is not None
+    assert backend._job_store.get_note(canonical_id) is None
+
+    content = bridge.get_note_content(listed["document_id"])
+
+    assert "error" not in content
+    assert content["document_id"] == listed["document_id"]
+    assert content["path"] == listed["path"]
+    assert content["title"] == "ESP - Sevilla"
+    assert any(
+        block.get("text") == "Markdown real del lector."
+        for block in content["document"]
+    )
+
+
+def test_listed_canonical_id_loads_markdown_when_catalog_route_is_stale(
+    temp_vault_path,
+):
+    backend = FuenteConsoleBackend(temp_vault_path)
+    bridge = FuentePyWebViewApi(backend)
+    canonical_id = "87f7a10b-0000-4000-8000-000000000004"
+    current_path = backend.vault.output_dir / "_Sin_Cuestion" / "Ruta actual.md"
+    stale_path = backend.vault.output_dir / "_Sin_Cuestion" / "Ruta anterior.md"
+    _write_canonical_note(
+        current_path,
+        note_id=canonical_id,
+        title="Ruta actual",
+        body="# Ruta actual\n\nContenido vigente.\n",
+    )
+    _write_canonical_note(
+        stale_path,
+        note_id="87f7a10b-0000-4000-8000-000000000005",
+        title="Ruta anterior",
+        body="# Ruta anterior\n\nOtro documento.\n",
+    )
+    assert backend._job_store is not None
+    backend._job_store.register_note(
+        note_id=canonical_id,
+        relative_path="4_salida/_Sin_Cuestion/Ruta anterior.md",
+        revision=1,
+        content_hash="stale",
+        note_type="concept",
+        origin_kind=None,
+        theme="General",
+        issue="_Sin_Cuestion",
+        status="approved",
+    )
+    listed = next(
+        note for note in bridge.get_notes_list() if note["document_id"] == canonical_id
+    )
+
+    content = bridge.get_note_content(listed["document_id"])
+
+    assert "error" not in content
+    assert content["path"] == listed["path"]
+    assert content["title"] == "Ruta actual"
+
+
+def test_reader_graph_matches_list_and_extracts_wikilinks(temp_vault_path):
+    backend = FuenteConsoleBackend(temp_vault_path)
+    bridge = FuentePyWebViewApi(backend)
+    canonical_id = "87f7a10b-0000-4000-8000-000000000002"
+    source = backend.vault.output_dir / "_Sin_Cuestion" / "Fuente canónica.md"
+    target = backend.vault.output_dir / "_Sin_Cuestion" / "Nota de prueba.md"
+    _write_canonical_note(
+        source,
+        note_id=canonical_id,
+        title="Fuente canónica",
+        body="# Fuente canónica\n\nVer [[_Sin_Cuestion/Nota de prueba]].\n",
+    )
+    target.write_text("# Nota de prueba\n\nMarkdown sin frontmatter.\n", encoding="utf-8")
+    (backend.vault.output_dir / "_Indice_MOC.md").write_text(
+        "# Índice MOC\n", encoding="utf-8"
+    )
+
+    listed = bridge.get_notes_list()
+    listed_ids = {note["document_id"] for note in listed}
+    graph = bridge.get_graph_data()
+    graph_ids = {node["document_id"] for node in graph["nodes"]}
+
+    assert graph_ids == listed_ids
+    nodes_by_document_id = {
+        node["document_id"]: node for node in graph["nodes"]
+    }
+    target_entry = next(note for note in listed if note["title"] == "Nota de prueba")
+    assert {
+        "source": nodes_by_document_id[canonical_id]["id"],
+        "target": nodes_by_document_id[target_entry["document_id"]]["id"],
+    } in graph["links"]
+
+
+def test_unlisted_hidden_frontmatter_id_remains_unauthorized(temp_vault_path):
+    backend = FuenteConsoleBackend(temp_vault_path)
+    bridge = FuentePyWebViewApi(backend)
+    hidden_id = "87f7a10b-0000-4000-8000-000000000003"
+    hidden = backend.vault.output_dir / ".hidden-reader-note.md"
+    _write_canonical_note(
+        hidden,
+        note_id=hidden_id,
+        title="Nota oculta",
+        body="# Nota oculta\n",
+    )
+
+    assert hidden_id not in {
+        note["document_id"] for note in bridge.get_notes_list()
+    }
+    assert bridge.get_note_content(hidden_id) == {
+        "error": "path_not_authorized",
+        "message": "Path is not authorized",
+    }
 
 
 def test_native_reader_modal_loads_via_backend_document_ids(temp_vault_path, monkeypatch):

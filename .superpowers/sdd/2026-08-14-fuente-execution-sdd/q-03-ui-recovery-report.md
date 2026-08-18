@@ -367,3 +367,164 @@ salida anterior.
   excepción CSP queda limitada a `script-src`; no se añadieron scripts inline
   sin nonce, recursos remotos ni CDN.
 - Persiste la advertencia deprecada de ChromaDB, ajena a este cambio.
+
+## Informe de fix — identidad de lector y consistencia de grafo (Sol)
+
+Fecha: 2026-08-18
+Rama medida: `dev`
+HEAD inicial medido: `715fa3cae063e687227bc2abd65691d81e357409`
+
+### Evidencia humana
+
+La nueva captura corresponde a la ventana nativa PyWebView. La lista ya carga
+el MOC y las notas reales, pero al seleccionar la nota `ESP - Sevilla...` el
+backend devuelve `path_not_authorized`. Las propiedades conservan la ruta
+autorizada bajo `4_salida`; el grafo solo muestra un nodo y ningún enlace.
+
+### Causa
+
+La cadena de identidad tenía dos reglas incompatibles:
+
+1. `VaultManager.enumerate_documents()` —consumido por `get_notes_list()`—
+   prefiere el `note_id` canónico del frontmatter para notas v2/v3.
+2. `AuthorizedPathResolver.resolve_note_id()` consultaba primero el catálogo
+   SQLite. Si faltaba esa fila, su fallback solo comparaba el UUID derivado de
+   la ruta; si la fila existía pero apuntaba a una ruta antigua, se confiaba en
+   ella sin contrastar el `note_id` del Markdown actual.
+
+Por tanto, el mismo UUID opaco que Fuente acababa de emitir podía ser rechazado
+al volver desde la UI. No era una ruta enviada por el cliente ni un fallo de la
+promesa PyWebView: era drift entre el Markdown canónico y el catálogo local.
+
+El segundo desacople estaba en el grafo. `get_graph_data()` utilizaba
+`GraphLinker.enumerate_notes()`, cuyo alcance editorial excluye notas no
+aprobadas, Markdown legacy o inválido y el MOC. La lista del lector, en cambio,
+incluye todo Markdown visible del tema y añade el MOC fijado. De ahí que el
+contador del grafo no coincidiera con la lista.
+
+### Implementación
+
+- Cuando falta una fila de catálogo, el resolvedor recorre únicamente Markdown
+  autorizado y visible bajo el `4_salida` activo, valida el frontmatter y
+  acepta el `note_id` solicitado solo si hay una coincidencia única.
+- Cuando la fila existe, la ruta se acepta solo si el archivo sigue declarando
+  el mismo `note_id`. Una ruta ausente o que apunta a otro documento se trata
+  como drift y se contrasta con el Markdown visible actual, sin reparar SQLite.
+- Se siguen rechazando IDs vacíos, rutas absolutas o relativas, extensiones
+  `.md`, escapes, symlinks, archivos ocultos y artefactos de sistema. Una
+  regresión demuestra que un UUID válido dentro de un Markdown oculto no se
+  puede abrir.
+- Se conserva la compatibilidad histórica de IDs derivados de ruta para los
+  servicios internos que operan deliberadamente sin catálogo. Cuando sí hay
+  catálogo pero falta una fila v2/v3, no se acepta una ruta disfrazada de ID:
+  se exige el UUID canónico del frontmatter.
+- `GraphLinker.enumerate_notes()` mantiene sin cambios semánticos el grafo
+  editorial: solo notas válidas y aprobadas, sin MOC. Se añadió
+  `enumerate_reader_notes()` para la vista local, que enumera exactamente los
+  documentos que expone la lista, incluido `_Indice_MOC.md` pero no otros
+  artefactos con prefijo `_`.
+- Los wikilinks del grafo se resuelven con
+  `AuthorizedPathResolver.resolve_wikilink_target()`. Esto admite enlaces
+  Obsidian por basename o ruta autorizada y sigue rechazando destinos ambiguos
+  o fuera del Vault.
+- No se modificaron payloads del bridge, autorización de cliente, frontmatter,
+  catálogo SQLite, estados de aprobación, RAG, MOC editorial ni Vault real.
+
+### TDD y regresiones
+
+Primera ejecución roja, antes del cambio de producción:
+
+```text
+PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -q \
+  tests/test_reader_contract.py \
+  tests/contract/test_note_scope_contract.py \
+  tests/test_graph_engine.py
+4 failed, 17 passed, 1 warning
+```
+
+Los fallos reproducían: lista → contenido con UUID canónico sin fila SQLite,
+lista → grafo para Markdown legacy, nota pendiente ausente del grafo local y
+Markdown visible omitido por el grafo.
+
+Se añadió después un gate fail-closed y se comprobó rojo antes del
+endurecimiento:
+
+```text
+tests/test_reader_contract.py::test_unlisted_hidden_frontmatter_id_remains_unauthorized
+1 failed
+```
+
+También se elevó la regresión de wikilinks a una ruta Obsidian autorizada:
+
+```text
+tests/test_reader_contract.py::test_reader_graph_matches_list_and_extracts_wikilinks
+1 failed
+```
+
+Una regresión adicional demostró que una fila de catálogo existente podía
+apuntar a otro Markdown y abrir el documento equivocado:
+
+```text
+tests/test_reader_contract.py::test_listed_canonical_id_loads_markdown_when_catalog_route_is_stale
+1 failed
+```
+
+Tras resolver el destino mediante el autorizador y hacer literal la igualdad
+lista/grafo —incluido el MOC—, el foco quedó verde:
+
+```text
+23 passed, 1 warning in 1.52s
+```
+
+### Matriz relevante
+
+Identidad, rutas, payloads, lector, editor, grafo, temas y hardening:
+
+```text
+220 passed, 1 warning in 3.00s
+```
+
+Contrato de tema/alcance, ejecutado por separado para que pytest cargara su
+`tests/contract/conftest.py` local:
+
+```text
+3 passed, 1 warning in 0.73s
+```
+
+La primera combinación de ambos grupos produjo `1 failed, 218 passed,
+3 errors`: el fallo real detectó que un servicio interno sin catálogo aún
+necesita compatibilidad con el ID histórico derivado de ruta y se corrigió; los
+tres errores eran la fixture `bridge_backend` no cargada al mezclar los grupos.
+La repetición separada anterior es la matriz válida final.
+
+La advertencia sigue siendo la deprecación externa de
+`asyncio.iscoroutinefunction` emitida por ChromaDB.
+
+### Probe integral con Vault temporal
+
+Se creó una nota canónica con nombre equivalente a la captura, una nota legacy,
+un MOC y un wikilink con ruta. El bridge real devolvió:
+
+```json
+{"content_error": null, "content_has_real_markdown": true, "content_path": "4_salida/_Sin_Cuestion/ESP - Sevilla enero 2025 Aptis ESOL_87f7a10b_pdf.md", "graph_links": [{"source": "ESP - Sevilla enero 2025 Aptis ESOL_87f7a10b_pdf", "target": "Nota de prueba — lector Fuente"}], "graph_matches_list": true, "graph_nodes": 3, "listed": 3}
+```
+
+El probe se eliminó después y no accedió al Vault real.
+
+### Comprobaciones mecánicas
+
+```text
+python modules parsed: 3
+javascript script blocks parsed: 1
+git diff --check  # sin salida
+```
+
+### Preocupaciones
+
+- El lector tolera una fila SQLite ausente o una ruta obsoleta para no
+  contradecir el Markdown canónico, pero no repara el catálogo silenciosamente;
+  deja una advertencia y la reconciliación explícita sigue siendo necesaria.
+- El grafo local del lector muestra todos los documentos visibles y sus estados.
+  El grafo editorial, la generación de MOC y el corpus RAG conservan sus gates
+  de validez y aprobación.
+- Persiste la advertencia externa de ChromaDB descrita arriba.

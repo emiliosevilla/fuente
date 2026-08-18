@@ -192,10 +192,18 @@ _ALLOWED_NORMALIZED_DISTRIBUTION_NAMES = {
 def _distribution_name_from_filename(filename: str) -> str | None:
     if filename.endswith(".whl"):
         fields = filename[:-4].split("-")
-        if len(fields) < 5:
+        # PEP 427: distribution-version(-build)?-python-abi-platform.whl.
+        # Distribution names are escaped in wheel filenames, so they occupy
+        # one field; a build tag is the only optional field before the tags.
+        if len(fields) not in {5, 6}:
             return None
-        distribution = "-".join(fields[:-4])
-        version = fields[-4]
+        distribution, version = fields[:2]
+        if len(fields) == 6:
+            build_tag, python_tag, abi_tag, platform_tag = fields[2:]
+            if not build_tag or not build_tag[0].isdigit():
+                return None
+        else:
+            python_tag, abi_tag, platform_tag = fields[2:]
     elif filename.endswith(".tar.gz"):
         stem = filename[:-7]
         if "-" not in stem:
@@ -203,7 +211,12 @@ def _distribution_name_from_filename(filename: str) -> str | None:
         distribution, version = stem.rsplit("-", 1)
     else:
         return None
-    if not distribution or not version or not version[0].isdigit():
+    if (
+        not distribution
+        or not version
+        or not version[0].isdigit()
+        or (filename.endswith(".whl") and not all((python_tag, abi_tag, platform_tag)))
+    ):
         return None
     return _canonicalize_distribution_name(distribution)
 

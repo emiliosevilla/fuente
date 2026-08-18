@@ -187,6 +187,11 @@ fuente --flush --vault /ruta/al/Vault
 fuente --headless --vault /ruta/al/Vault
 ```
 
+`consola_preview.html` no inicia Fuente ni conecta un Vault por sí sola. El
+flujo normal debe arrancarse con `fuente --vault ...`; abrir o servir el HTML
+directamente muestra un error de conexión. Solo `?preview=mock` habilita la
+vista previa de diseño con datos demo, identificados expresamente como tales.
+
 Si no se indica Vault, la aplicación usa `~/Documents/Fuente_Vault`. En Linux,
 la consola gráfica necesita `DISPLAY` o `WAYLAND_DISPLAY`; en servidores,
 Docker y CI se debe usar `--headless` o `--flush`.

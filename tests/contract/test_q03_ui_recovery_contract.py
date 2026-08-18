@@ -4,7 +4,10 @@ from __future__ import annotations
 from pathlib import Path
 
 
-SOURCE = (Path(__file__).resolve().parents[2] / "consola_preview.html").read_text(
+ROOT = Path(__file__).resolve().parents[2]
+SOURCE = (ROOT / "consola_preview.html").read_text(encoding="utf-8")
+MAIN_SOURCE = (ROOT / "fuente" / "main.py").read_text(encoding="utf-8")
+LAUNCHER_SOURCE = (ROOT / "fuente" / "control_console.py").read_text(
     encoding="utf-8"
 )
 
@@ -39,6 +42,60 @@ def test_pywebview_ready_recovers_open_reader_and_settings_modals():
     assert "recoverNativeModalLoads();" in ready_listener
 
 
+def test_console_csp_allows_pywebview_62_to_build_native_api_methods():
+    csp = next(
+        line for line in SOURCE.splitlines() if "Content-Security-Policy" in line
+    )
+    script_policy = csp.split("script-src", 1)[1].split(";", 1)[0]
+
+    # PyWebView 6.2 creates js_api wrappers with new Function(...).
+    assert "'unsafe-eval'" in script_policy
+
+
+def test_static_preview_is_explicit_and_native_loads_fail_visibly():
+    preview_mode = _function_source(
+        "isExplicitPreviewMode", "nativeBackendUnavailableMessage"
+    )
+    native_request = _function_source("callNativeRequest", "recoverNativeModalLoads")
+    reader = _function_source("loadReaderNotes", "highlightSidebarNote")
+    content = _function_source("loadNoteContent", "loadCategoryData")
+    settings = _function_source("loadSettingsData", "showButtonFeedback")
+    graph = _function_source("loadObsidianGraphView", "renderReaderLoadError")
+
+    assert "new URLSearchParams(window.location.search)" in preview_mode
+    assert "params.get('preview') === 'mock'" in preview_mode
+    assert "typeof api[methodName] !== 'function'" in native_request
+    assert "Promise.resolve().then" in native_request
+    assert "Promise.race" in native_request
+    assert "setTimeout(function()" in native_request
+    assert reader.index("isExplicitPreviewMode()") < reader.index("LOCAL_MOCK_NOTES")
+    assert "callNativeRequest('get_notes_list'" in reader
+    assert content.index("isExplicitPreviewMode()") < content.index("LOCAL_MOCK_NOTES")
+    assert "callNativeRequest('get_note_content'" in content
+    assert "callNativeRequest('get_settings_info'" in settings
+    assert "callNativeRequest('get_sync_inputs'" in settings
+    assert "isExplicitPreviewMode()" in graph
+    assert "nativeBackendUnavailableMessage()" in reader
+    assert "nativeBackendUnavailableMessage()" in settings
+
+
+def test_normal_cli_routes_to_the_native_typed_bridge_not_a_static_server():
+    run_console = MAIN_SOURCE[
+        MAIN_SOURCE.index("def run_continuous_console") : MAIN_SOURCE.index(
+            "def main", MAIN_SOURCE.index("def run_continuous_console")
+        )
+    ]
+    launcher = LAUNCHER_SOURCE[
+        LAUNCHER_SOURCE.index("def launch_control_console") :
+    ]
+
+    assert "launch_control_console(vault_path)" in run_console
+    assert "FuentePyWebViewApi(backend)" in launcher
+    assert "js_api=api" in launcher
+    assert "http.server" not in MAIN_SOURCE
+    assert "http.server" not in LAUNCHER_SOURCE
+
+
 def test_note_content_rejection_and_malformed_payload_render_visible_error():
     loader = _function_source("loadNoteContent", "loadCategoryData")
 
@@ -51,8 +108,8 @@ def test_settings_and_mounted_inputs_load_independently_with_visible_errors():
     loader = _function_source("loadSettingsData", "showButtonFeedback")
 
     assert "Promise.all" not in loader
-    assert "get_settings_info().then" in loader
-    assert "get_sync_inputs().then" in loader
+    assert "callNativeRequest('get_settings_info'" in loader
+    assert "callNativeRequest('get_sync_inputs'" in loader
     assert "renderSettingsLoadError(" in loader
     assert "renderSyncInputsLoadError(" in loader
     assert loader.count(".catch(function(err)") >= 2

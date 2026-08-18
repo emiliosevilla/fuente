@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; base-uri 'none'; connect-src 'self'; font-src 'self'; img-src 'self' data:; object-src 'none'; script-src 'self' 'nonce-fuente-console'; style-src 'self'">
-    <title>Fuente Control Console — Estética Papiro (Vista Previa Definitiva)</title>
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; base-uri 'none'; connect-src 'self'; font-src 'self'; img-src 'self' data:; object-src 'none'; script-src 'self' 'nonce-fuente-console' 'unsafe-eval'; style-src 'self'">
+    <title>Fuente Control Console — Estética Papiro</title>
     <!-- Font stack remains local and is defined in console.css: 'Courier New', Courier, monospace. -->
     <link rel="stylesheet" data-fuente-tokens="true" href="fuente/ui/static/fuente_tokens.css">
     <link rel="stylesheet" href="fuente/ui/static/console.css">
@@ -1073,6 +1073,72 @@
             } else {
                 document.body.classList.remove('modal-open');
             }
+        }
+
+        const NATIVE_REQUEST_TIMEOUT_MS = 4000;
+        let nativeBackendErrorLogged = false;
+
+        function isExplicitPreviewMode() {
+            const params = new URLSearchParams(window.location.search);
+            return params.get('preview') === 'mock';
+        }
+
+        function nativeBackendUnavailableMessage() {
+            return 'La interfaz no está conectada al backend de Fuente. Iníciala con “fuente --vault /ruta/al/Vault”.';
+        }
+
+        function renderNativeBackendStatusError(message) {
+            const text = message || nativeBackendUnavailableMessage();
+            const status = document.getElementById('bottom-status-line');
+            if (status) status.textContent = 'ERROR DE CONEXIÓN: ' + text;
+            if (!nativeBackendErrorLogged) {
+                log(text);
+                nativeBackendErrorLogged = true;
+            }
+        }
+
+        function markExplicitPreviewMode() {
+            document.title = 'Fuente Control Console — Vista previa demo';
+            const status = document.getElementById('bottom-status-line');
+            if (status) {
+                status.textContent = 'VISTA PREVIA EXPLÍCITA · DATOS DEMO · Ningún Vault está conectado';
+            }
+        }
+
+        function callNativeRequest(methodName, invoke) {
+            const startedAt = Date.now();
+            const methodReady = new Promise(function(resolve, reject) {
+                function checkMethod() {
+                    const api = window.pywebview && window.pywebview.api;
+                    if (!api || typeof api[methodName] !== 'function') {
+                        if (Date.now() - startedAt >= NATIVE_REQUEST_TIMEOUT_MS) {
+                            reject(new Error(nativeBackendUnavailableMessage()));
+                            return;
+                        }
+                        setTimeout(checkMethod, 50);
+                        return;
+                    }
+                    resolve();
+                }
+                checkMethod();
+            });
+
+            return methodReady.then(function() {
+                let timeoutId = null;
+                const response = Promise.resolve().then(invoke);
+                const timeout = new Promise(function(_resolve, reject) {
+                    timeoutId = setTimeout(function() {
+                        reject(new Error('El backend de Fuente no respondió a ' + methodName + '.'));
+                    }, NATIVE_REQUEST_TIMEOUT_MS);
+                });
+                return Promise.race([response, timeout]).then(function(result) {
+                    clearTimeout(timeoutId);
+                    return result;
+                }, function(error) {
+                    clearTimeout(timeoutId);
+                    throw error;
+                });
+            });
         }
 
         function recoverNativeModalLoads() {
@@ -2490,48 +2556,63 @@
         }
 
         function loadSettingsData() {
-            if (window.pywebview && window.pywebview.api) {
-                window.pywebview.api.get_settings_info().then(function(info) {
-                    if (!info || typeof info !== 'object' || Array.isArray(info) || info.error) {
-                        renderSettingsLoadError(info && info.message);
-                        return;
-                    }
-                    if (info.vault_path) { document.getElementById('setting-vault-path').value = info.vault_path; }
-                    if (info.output_connected_folders) { linkedOutputFolders = info.output_connected_folders; }
-                    if (info.ollama_url) { document.getElementById('setting-ollama-url').value = info.ollama_url; }
-                    if (info.ram_margin) { document.getElementById('setting-ram-margin').value = info.ram_margin; }
-                    document.getElementById('setting-allow-non-loopback-ollama').checked = !!info.allow_non_loopback_ollama;
-                    if (info.resource_profile) { document.getElementById('setting-resource-profile').value = info.resource_profile; }
-                    if (info.audio_mode) { document.getElementById('setting-audio-mode').value = info.audio_mode; }
-                    if (info.whisper_model_path !== undefined && document.getElementById('setting-whisper-model-path')) {
-                        document.getElementById('setting-whisper-model-path').value = info.whisper_model_path || '';
-                    }
-                    if (info.offline_mode) { applyOfflineModeState(info.offline_mode); }
-                    renderLinkedFolders();
-                    populateOllamaModels(info.models, info.current_model);
-                }).catch(function(err) {
-                    renderSettingsLoadError(String(err || 'fallo del bridge'));
-                });
-
-                window.pywebview.api.get_sync_inputs().then(function(syncState) {
-                    if (!syncState || typeof syncState !== 'object' || Array.isArray(syncState) || syncState.error || !Array.isArray(syncState.inputs)) {
-                        renderSyncInputsLoadError(syncState && syncState.message);
-                        return;
-                    }
-                    linkedInputs = syncState.inputs;
-                    renderLinkedFolders();
-                    updateSyncInputs(syncState);
-                }).catch(function(err) {
-                    renderSyncInputsLoadError(String(err || 'fallo del bridge'));
-                });
-            } else {
+            const statusEl = document.getElementById('settings-load-status');
+            if (isExplicitPreviewMode()) {
                 if (!document.getElementById('setting-vault-path').value || !document.getElementById('setting-vault-path').value.startsWith('/')) {
                     document.getElementById('setting-vault-path').value = '/Users/emiliosevillaortego/Documents/Fuente_Vault';
+                }
+                if (statusEl) {
+                    statusEl.textContent = 'VISTA PREVIA EXPLÍCITA: valores demo; ningún Vault está conectado.';
                 }
                 renderLinkedFolders();
                 renderSyncStatus(null);
                 populateOllamaModels([], '');
+                return;
             }
+
+            if (statusEl) statusEl.textContent = 'Cargando ajustes desde el backend de Fuente...';
+            callNativeRequest('get_settings_info', function() {
+                return window.pywebview.api.get_settings_info();
+            }).then(function(info) {
+                if (!info || typeof info !== 'object' || Array.isArray(info) || info.error) {
+                    renderSettingsLoadError(info && info.message);
+                    return;
+                }
+                if (info.vault_path) { document.getElementById('setting-vault-path').value = info.vault_path; }
+                if (info.output_connected_folders) { linkedOutputFolders = info.output_connected_folders; }
+                if (info.ollama_url) { document.getElementById('setting-ollama-url').value = info.ollama_url; }
+                if (info.ram_margin) { document.getElementById('setting-ram-margin').value = info.ram_margin; }
+                document.getElementById('setting-allow-non-loopback-ollama').checked = !!info.allow_non_loopback_ollama;
+                if (info.resource_profile) { document.getElementById('setting-resource-profile').value = info.resource_profile; }
+                if (info.audio_mode) { document.getElementById('setting-audio-mode').value = info.audio_mode; }
+                if (info.whisper_model_path !== undefined && document.getElementById('setting-whisper-model-path')) {
+                    document.getElementById('setting-whisper-model-path').value = info.whisper_model_path || '';
+                }
+                if (info.offline_mode) { applyOfflineModeState(info.offline_mode); }
+                renderLinkedFolders();
+                populateOllamaModels(info.models, info.current_model);
+                if (statusEl) statusEl.textContent = 'Ajustes cargados desde el Vault conectado.';
+            }).catch(function(err) {
+                const message = String(err || nativeBackendUnavailableMessage());
+                renderSettingsLoadError(message);
+                renderNativeBackendStatusError(message);
+            });
+
+            callNativeRequest('get_sync_inputs', function() {
+                return window.pywebview.api.get_sync_inputs();
+            }).then(function(syncState) {
+                if (!syncState || typeof syncState !== 'object' || Array.isArray(syncState) || syncState.error || !Array.isArray(syncState.inputs)) {
+                    renderSyncInputsLoadError(syncState && syncState.message);
+                    return;
+                }
+                linkedInputs = syncState.inputs;
+                renderLinkedFolders();
+                updateSyncInputs(syncState);
+            }).catch(function(err) {
+                const message = String(err || nativeBackendUnavailableMessage());
+                renderSyncInputsLoadError(message);
+                renderNativeBackendStatusError(message);
+            });
         }
 
         function showButtonFeedback(btnEl, feedbackText) {
@@ -4301,12 +4382,18 @@
         ];
 
         function loadObsidianGraphView() {
-            if (window.pywebview && window.pywebview.api) {
-                window.pywebview.api.get_graph_data().then(function(data) {
+            if (!isExplicitPreviewMode()) {
+                callNativeRequest('get_graph_data', function() {
+                    return window.pywebview.api.get_graph_data();
+                }).then(function(data) {
                     initObsidianGraphCanvas(data);
+                }).catch(function(err) {
+                    log('No se pudo cargar el grafo: ' + String(err || nativeBackendUnavailableMessage()));
                 });
-            } else {
-                const demoData = {
+                return;
+            }
+
+            const demoData = {
                     nodes: [
                         { id: "_Indice_MOC", label: "Índice MOC", path: "_Indice_MOC.md" },
                         { id: "Nota_Arquitectura_Fuente", label: "Arquitectura General", path: "Nota_Arquitectura_Fuente.md" },
@@ -4349,9 +4436,8 @@
                         { source: "Nota_Manual_Usuario_Avanzado", target: "Nota_Seguridad_y_Privacidad" },
                         { source: "Nota_Manual_Usuario_Avanzado", target: "Nota_Integracion_Obsidian" }
                     ]
-                };
-                initObsidianGraphCanvas(demoData);
-            }
+            };
+            initObsidianGraphCanvas(demoData);
         }
 
         function renderReaderLoadError(message) {
@@ -4380,18 +4466,18 @@
             updateReaderBackButton();
         }
 
+        function renderExplicitPreviewNotesNotice() {
+            const ul = document.getElementById('reader-note-list');
+            if (!ul) return;
+            const notice = document.createElement('li');
+            notice.className = 'reader-note-item';
+            notice.setAttribute('role', 'status');
+            notice.textContent = 'VISTA PREVIA EXPLÍCITA — LAS NOTAS SIGUIENTES SON DATOS DEMO';
+            ul.prepend(notice);
+        }
+
         function loadReaderNotes() {
-            if (window.pywebview && window.pywebview.api) {
-                window.pywebview.api.get_notes_list().then(function(notes) {
-                    if (!Array.isArray(notes)) {
-                        renderReaderLoadError(notes && notes.message);
-                        return;
-                    }
-                    renderNoteList(notes);
-                }).catch(function(err) {
-                    renderReaderLoadError(String(err || 'fallo del bridge'));
-                });
-            } else {
+            if (isExplicitPreviewMode()) {
                 renderNoteList(LOCAL_MOCK_NOTES.map(function(n, index) {
                     return {
                         title: n.title,
@@ -4402,7 +4488,23 @@
                         is_moc: n.path.indexOf('_Indice_MOC') !== -1
                     };
                 }));
+                renderExplicitPreviewNotesNotice();
+                return;
             }
+
+            callNativeRequest('get_notes_list', function() {
+                return window.pywebview.api.get_notes_list();
+            }).then(function(notes) {
+                if (!Array.isArray(notes)) {
+                    renderReaderLoadError(notes && notes.message);
+                    return;
+                }
+                renderNoteList(notes);
+            }).catch(function(err) {
+                const message = String(err || nativeBackendUnavailableMessage());
+                renderReaderLoadError(message);
+                renderNativeBackendStatusError(message);
+            });
         }
 
         function highlightSidebarNote(documentId) {
@@ -4507,40 +4609,7 @@
 
             let displayTitle = 'Nota';
 
-            if (window.pywebview && window.pywebview.api) {
-                window.pywebview.api.get_note_content(documentId).then(function(res) {
-                    if (res && res.error === 'note_not_found') {
-                        currentSelectedNoteTitle = 'Nota no encontrada';
-                        currentSelectedNotePath = '';
-                        renderNoteDocument(currentSelectedNoteTitle, res.document || [
-                            {"type": "heading", "level": 3, "text": "Nota no encontrada"}
-                        ]);
-                        updateReaderBackButton();
-                        return;
-                    }
-                    if (res && res.error) {
-                        currentSelectedNoteTitle = 'Error';
-                        currentSelectedNotePath = '';
-                        renderNoteDocument('Error', [
-                            {"type": "heading", "level": 3, "text": res.message || 'No se pudo cargar la nota'}
-                        ]);
-                        updateReaderBackButton();
-                        return;
-                    }
-                    if (!res || typeof res !== 'object' || Array.isArray(res) || !Array.isArray(res.document)) {
-                        renderReaderContentError((res && res.message) || 'respuesta inválida');
-                        return;
-                    }
-                    if (res && res.title) displayTitle = res.title;
-                    if (res && res.path) currentSelectedNotePath = res.path;
-                    if (res && res.document_id) currentSelectedDocumentId = res.document_id;
-                    currentSelectedNoteTitle = displayTitle;
-                    renderNoteDocument(displayTitle, res ? res.document : []);
-                    updateReaderBackButton();
-                }).catch(function(err) {
-                    renderReaderContentError(String(err || 'fallo del bridge'));
-                });
-            } else {
+            if (isExplicitPreviewMode()) {
                 const found = LOCAL_MOCK_NOTES.find(function(n, index) {
                     return ('mock-' + index) === documentId || n.path === documentId;
                 });
@@ -4561,7 +4630,45 @@
                     ]);
                 }
                 updateReaderBackButton();
+                return;
             }
+
+            callNativeRequest('get_note_content', function() {
+                return window.pywebview.api.get_note_content(documentId);
+            }).then(function(res) {
+                if (res && res.error === 'note_not_found') {
+                    currentSelectedNoteTitle = 'Nota no encontrada';
+                    currentSelectedNotePath = '';
+                    renderNoteDocument(currentSelectedNoteTitle, res.document || [
+                        {"type": "heading", "level": 3, "text": "Nota no encontrada"}
+                    ]);
+                    updateReaderBackButton();
+                    return;
+                }
+                if (res && res.error) {
+                    currentSelectedNoteTitle = 'Error';
+                    currentSelectedNotePath = '';
+                    renderNoteDocument('Error', [
+                        {"type": "heading", "level": 3, "text": res.message || 'No se pudo cargar la nota'}
+                    ]);
+                    updateReaderBackButton();
+                    return;
+                }
+                if (!res || typeof res !== 'object' || Array.isArray(res) || !Array.isArray(res.document)) {
+                    renderReaderContentError((res && res.message) || 'respuesta inválida');
+                    return;
+                }
+                if (res.title) displayTitle = res.title;
+                if (res.path) currentSelectedNotePath = res.path;
+                if (res.document_id) currentSelectedDocumentId = res.document_id;
+                currentSelectedNoteTitle = displayTitle;
+                renderNoteDocument(displayTitle, res.document);
+                updateReaderBackButton();
+            }).catch(function(err) {
+                const message = String(err || nativeBackendUnavailableMessage());
+                renderReaderContentError(message);
+                renderNativeBackendStatusError(message);
+            });
         }
 
         function loadCategoryData(category) {
@@ -4704,26 +4811,34 @@
                 whisper_model_path: (document.getElementById('setting-whisper-model-path') || {}).value || null,
                 output_connected_folders: linkedOutputFolders
             };
-            if (window.pywebview && window.pywebview.api) {
-                window.pywebview.api.save_settings(settings).then(function(res) {
-                    if (!isValidSettingsSaveResponse(res)) {
-                        renderSettingsSaveError(res && res.message);
-                        return;
-                    }
-                    if (res.log) log(res.log);
-                    if (res.warning) log('Advertencia: ' + res.warning);
-                    if (res.offline_mode) applyOfflineModeState(res.offline_mode);
-                    if (res.stats) updateDashboardStats(res.stats);
-                    const statusEl = document.getElementById('settings-save-status');
-                    if (statusEl) statusEl.textContent = 'Ajustes guardados correctamente.';
-                    closeModal('modal-settings');
-                }).catch(function(err) {
-                    renderSettingsSaveError(String(err || 'fallo del bridge'));
-                });
-            } else {
-                log('Ajustes actualizados (vista previa).');
-                closeModal('modal-settings');
+            if (isExplicitPreviewMode()) {
+                const previewStatus = document.getElementById('settings-save-status');
+                if (previewStatus) {
+                    previewStatus.textContent = 'Vista previa explícita: los cambios demo no se guardan.';
+                }
+                log('Vista previa explícita: no se guardaron ajustes en ningún Vault.');
+                return;
             }
+
+            callNativeRequest('save_settings', function() {
+                return window.pywebview.api.save_settings(settings);
+            }).then(function(res) {
+                if (!isValidSettingsSaveResponse(res)) {
+                    renderSettingsSaveError(res && res.message);
+                    return;
+                }
+                if (res.log) log(res.log);
+                if (res.warning) log('Advertencia: ' + res.warning);
+                if (res.offline_mode) applyOfflineModeState(res.offline_mode);
+                if (res.stats) updateDashboardStats(res.stats);
+                const statusEl = document.getElementById('settings-save-status');
+                if (statusEl) statusEl.textContent = 'Ajustes guardados correctamente.';
+                closeModal('modal-settings');
+            }).catch(function(err) {
+                const message = String(err || nativeBackendUnavailableMessage());
+                renderSettingsSaveError(message);
+                renderNativeBackendStatusError(message);
+            });
         }
 
         function resetDefaultSettings() {
@@ -4737,7 +4852,9 @@
             log('Conexión nativa PyWebView establecida con la Consola Fuente');
             if (window.pywebview && window.pywebview.api) {
                 recoverNativeModalLoads();
-                window.pywebview.api.get_initial_state().then(function(state) {
+                callNativeRequest('get_initial_state', function() {
+                    return window.pywebview.api.get_initial_state();
+                }).then(function(state) {
                     updateDashboardStats(state.stats);
                     if (state.vault_path) {
                         document.getElementById('setting-vault-path').value = state.vault_path;
@@ -4748,12 +4865,26 @@
                     if (state.onboarding) {
                         renderOnboarding(state.onboarding);
                     }
+                }).catch(function(err) {
+                    renderNativeBackendStatusError(String(err || nativeBackendUnavailableMessage()));
                 });
                 loadThemes();
             }
         });
 
         document.addEventListener('DOMContentLoaded', function() {
+            if (isExplicitPreviewMode()) {
+                markExplicitPreviewMode();
+            } else {
+                const status = document.getElementById('bottom-status-line');
+                if (status) status.textContent = 'Conectando con el backend de Fuente...';
+                setTimeout(function() {
+                    const api = window.pywebview && window.pywebview.api;
+                    if (!api || typeof api.get_initial_state !== 'function') {
+                        renderNativeBackendStatusError(nativeBackendUnavailableMessage());
+                    }
+                }, NATIVE_REQUEST_TIMEOUT_MS);
+            }
             loadThemes();
             document.addEventListener('click', function(event) {
                 const themeControl = document.getElementById('theme-select');

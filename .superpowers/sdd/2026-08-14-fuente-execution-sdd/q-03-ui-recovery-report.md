@@ -209,3 +209,161 @@ payloads ni nombres de métodos.
 
 La única advertencia sigue siendo la deprecación externa de ChromaDB ya
 documentada. No se ejecutó `py_compile` porque no se modificó Python.
+
+## Informe de fix — ruta real de ejecución y preview explícito (Sol)
+
+Fecha: 2026-08-18
+Rama medida: `dev`
+HEAD inicial medido: `db2fff5a997184ea1912dc08c7f20545c3b0c2a0`
+
+### Evidencia nueva y causa real
+
+La pantalla comunicada por el usuario no era una ventana PyWebView: era Chrome
+en `http://127.0.0.1:8765/consola_preview.html`. El proceso de ese puerto había
+sido iniciado por Sol durante el diagnóstico mediante:
+
+```text
+python3 -m http.server 8765 --bind 127.0.0.1
+```
+
+No es un comando, servicio ni launcher de Fuente. La búsqueda completa del
+checkout no encontró `8765` ni `http.server` en código de ejecución. El servidor
+temporal fue detenido y se comprobó con `lsof` que no quedaron listeners en
+8765 ni en el segundo puerto temporal 8766.
+
+La ruta soportada y medida es:
+
+```text
+fuente --vault /ruta/al/Vault
+  -> fuente.main:main
+  -> run_continuous_console(vault_path)
+  -> launch_control_console(vault_path)
+  -> webview.create_window(..., js_api=FuentePyWebViewApi(backend))
+```
+
+Los instaladores y accesos directos usan `python -m fuente.main`; tampoco
+arrancan un servidor HTTP.
+
+Había dos defectos que convertían la confusión de ruta en una falsa apariencia
+de éxito:
+
+- `loadReaderNotes()` y `loadNoteContent()` usaban `LOCAL_MOCK_NOTES` siempre
+  que no existía el bridge. Servir el HTML directamente presentaba
+  “Arquitectura General de Fuente” y otras notas demo como si procedieran del
+  Vault.
+- La CSP impedía `unsafe-eval`, pero PyWebView 6.2 construye los wrappers de
+  `js_api` mediante `new Function(...)`. La medición del JavaScript instalado y
+  un probe de CSP reprodujeron `EvalError`; así podía no aparecer ningún método
+  nativo aunque la ventana sí fuera PyWebView.
+
+La función de apertura del modal sí invocaba `loadReaderNotes()`: no había un
+segundo cargador desconectado. La respuesta nativa tampoco queda pendiente en
+la versión instalada: el probe PyWebView final confirmó que el método se
+inyecta como función y que su promesa resuelve. El problema observado en la
+captura era la ruta HTTP estática; el problema adicional de la ventana nativa
+era la CSP y la dependencia del instante de readiness.
+
+### Implementación
+
+- Los mocks del lector, su contenido y el grafo asociado solo se habilitan con
+  el parámetro explícito `?preview=mock`.
+- El modo demo cambia el título y muestra avisos persistentes que indican
+  “DATOS DEMO” y que no existe un Vault conectado.
+- Abrir el HTML sin ese parámetro ya no muestra notas demo. Tras un timeout
+  acotado muestra un error de conexión con el comando correcto de arranque; el
+  lector y Ajustes muestran además su propio error visible.
+- `callNativeRequest()` espera la presencia del método concreto, captura
+  errores síncronos, normaliza la respuesta con `Promise.resolve()` y corta una
+  promesa nativa que no responda. Así las cargas no dependen exclusivamente de
+  que `pywebviewready` llegue en un instante concreto.
+- Se conserva la recuperación de modales abiertos al recibir
+  `pywebviewready`, así como los métodos, autorización y payloads existentes.
+- La CSP mantiene scripts locales y con nonce, y añade `unsafe-eval` únicamente
+  a `script-src`, requisito del bridge de PyWebView 6.2 medido localmente.
+- `saveSettings()` ya no simula un guardado fuera del bridge: en preview declara
+  que no persiste nada y en flujo normal muestra el error sin cerrar el modal.
+- `README.md` deja explícito que `consola_preview.html` no es un launcher y
+  documenta tanto el arranque nativo como el único modo demo permitido.
+- No se leyó ni modificó el Vault real. Todos los probes de backend usaron un
+  directorio temporal vacío.
+
+### Prueba focal ejecutable
+
+Antes de cambiar producción:
+
+```text
+PYTHONDONTWRITEBYTECODE=1 python3 -m pytest tests/contract/test_q03_ui_recovery_contract.py -q
+FFF.......                                                               [100%]
+3 failed, 7 passed
+```
+
+Los fallos exigían la CSP compatible con el bridge instalado, preview mock
+explícito con error visible fuera de él y la ruta CLI nativa sin servidor HTTP.
+
+Después del fix:
+
+```text
+PYTHONDONTWRITEBYTECODE=1 python3 -m pytest tests/contract/test_q03_ui_recovery_contract.py -q
+..........                                                               [100%]
+10 passed in 0.03s
+```
+
+### Verificación de ejecución
+
+Probe PyWebView 6.2 con ventana oculta y Vault temporal:
+
+```text
+{"method_type": "function", "notes": []}
+```
+
+Esto verifica conjuntamente la CSP, la inyección de `FuentePyWebViewApi`, el
+método `get_notes_list()` y la resolución de su promesa. La primera invocación
+del probe no llegó a la aplicación porque `/private/tmp` no incluía el checkout
+en `sys.path`; se repitió con `PYTHONPATH` explícito y produjo la salida anterior.
+
+Prueba en navegador sobre servidor temporal aislado:
+
+- Sin query: título normal, error global de conexión, error visible en Vista
+  Notas, error visible en Ajustes y ausencia de “Arquitectura General de
+  Fuente”.
+- Con `?preview=mock`: título “Vista previa demo”, dos avisos de datos demo y
+  presencia de las notas ficticias.
+
+El navegador y el servidor temporal se cerraron y sus artefactos se retiraron.
+
+### Matriz y comprobaciones
+
+```text
+PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -q \
+  tests/contract/test_q03_ui_recovery_contract.py \
+  tests/test_reader_contract.py \
+  tests/contract/test_reader_editor_contract.py \
+  tests/contract/test_reader_editor_deferred_contract.py \
+  tests/contract/test_bridge_frontend_contract.py \
+  tests/contract/test_settings_contract.py \
+  tests/test_job_queue_ui_contract.py \
+  tests/test_console_modal_close_contract.py \
+  tests/test_headless_entrypoint.py \
+  tests/test_console_ui3_contract.py \
+  tests/test_html_safety_contract.py
+135 passed, 1 warning in 3.19s
+```
+
+La advertencia es la deprecación externa de
+`asyncio.iscoroutinefunction` emitida por ChromaDB.
+
+```text
+javascript script blocks parsed: 1
+git diff --check  # sin salida
+```
+
+La primera invocación del parseo Node contenía una expresión regular
+sobreescapada y falló antes de leer el HTML; el comando corregido produjo la
+salida anterior.
+
+### Preocupaciones
+
+- PyWebView 6.2 exige evaluación dinámica para construir sus wrappers. La
+  excepción CSP queda limitada a `script-src`; no se añadieron scripts inline
+  sin nonce, recursos remotos ni CDN.
+- Persiste la advertencia deprecada de ChromaDB, ajena a este cambio.

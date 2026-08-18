@@ -15,7 +15,11 @@ from fuente.application.reflow import ReflowApplicationService, ReflowResult, Re
 from fuente.domain.documents import MarkdownDocument, NoteDocument, content_hash_for_markdown
 from fuente.domain.errors import NoteRevisionConflictError, PathAuthorizationError
 from fuente.domain.frontmatter import FrontmatterError
-from fuente.domain.paths import AuthorizedPathResolver, document_id_for_relative_path
+from fuente.domain.paths import (
+    REFLOW_REVIEW_DIR_NAME,
+    AuthorizedPathResolver,
+    document_id_for_relative_path,
+)
 from fuente.infrastructure.sqlite_store import JobStore
 
 
@@ -443,7 +447,7 @@ class ReflowJobService:
     def _candidate_relative_path(self, note: NoteDocument, request_id: str) -> str:
         source_path = self.notes_service.path_resolver.resolve_note_id(note.document_id)
         safe_stem = re.sub(r"[^A-Za-z0-9_-]+", "_", source_path.stem).strip("_") or "note"
-        candidate_path = source_path.parent / "_Reflow_Review" / (
+        candidate_path = source_path.parent / REFLOW_REVIEW_DIR_NAME / (
             f"_{safe_stem}_reflow_{request_id}.md"
         )
         return candidate_path.resolve().relative_to(

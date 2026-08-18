@@ -58,3 +58,48 @@ def test_reader_export_keeps_opaque_document_id_and_strict_csp():
     assert "object-src 'none'" in csp_line
     assert "script-src 'self' 'nonce-fuente-console'" in csp_line
     assert "unsafe-inline" not in csp_line
+
+
+def test_graph_draws_canonical_origins_and_provenance_edges_visibly():
+    renderer = _between(
+        CONSOLE, "function initObsidianGraphCanvas", "function renderReaderLoadError"
+    )
+
+    assert "relation: l.relation || 'wikilink'" in renderer
+    assert "l.relation === 'origin'" in renderer
+    assert "ctx.setLineDash" in renderer
+    assert "n.node_type === 'canonical_origin'" in renderer
+    assert "n.node_type === 'canonical_moc'" in renderer
+
+
+def test_graph_footer_separates_physical_wikilinks_from_validated_origins():
+    renderer = _between(
+        CONSOLE, "function initObsidianGraphCanvas", "function renderReaderLoadError"
+    )
+
+    assert 'id="graph-wikilinks-count"' in CONSOLE
+    assert 'id="graph-origins-count"' in CONSOLE
+    assert 'id="graph-links-count"' not in CONSOLE
+    assert "relation === 'wikilink'" in renderer
+    assert "relation === 'origin'" in renderer
+    assert "wikilinksCountEl.innerText = wikilinkCount" in renderer
+    assert "originsCountEl.innerText = originCount" in renderer
+    assert "Wikilinks físicos:" in CONSOLE
+    assert "Procedencias:" in CONSOLE
+    assert "Los wikilinks salen del texto Markdown/MOC" in CONSOLE
+    assert "las líneas discontinuas son origins validados" in CONSOLE
+
+
+def test_graph_layout_and_edges_are_stable_visible_and_bounded():
+    renderer = _between(
+        CONSOLE, "function initObsidianGraphCanvas", "function renderReaderLoadError"
+    )
+
+    assert ".sort((a, b) => String(a.id).localeCompare(String(b.id)))" in renderer
+    assert "Math.random()" not in renderer
+    assert "const linkColor = rootStyles.getPropertyValue('--fuente-snow-0')" in renderer
+    assert "ctx.globalAlpha = isHighlighted ? 1.0 : 0.85" in renderer
+    assert "physicsFramesRemaining" in renderer
+    assert "Math.max(layoutPadding" in renderer
+    assert "ctx.measureText(visibleLabel + '…')" in renderer
+    assert "ctx.textAlign = labelOnRight ? 'left' : 'right'" in renderer

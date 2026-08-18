@@ -13,6 +13,7 @@ from fuente.domain.frontmatter import FrontmatterError, parse_frontmatter
 
 
 RootName = Literal["vault", "output", "input", "dirty", "clean", "quarantine"]
+REFLOW_REVIEW_DIR_NAME = "_Reflow_Review"
 logger = logging.getLogger(__name__)
 
 
@@ -128,58 +129,227 @@ class AuthorizedPathResolver:
         if self.catalog is not None:
             record = self.catalog.resolve(document_id) or self.catalog.resolve_alias(document_id)
             if record is None:
-                output = self.roots["output"]
-                for candidate in output.rglob("*.md") if output.exists() else []:
-                    try:
-                        relative = self._vault_relative_identity(candidate)
-                    except PathAuthorizationError:
-                        continue
-                    if document_id_for_relative_path(relative) != document_id:
-                        continue
-                    try:
-                        metadata, _body = parse_frontmatter(
-                            candidate.read_text(encoding="utf-8")
-                        )
-                    except (FrontmatterError, OSError, UnicodeError):
-                        logger.warning(
-                            "Using unregistered legacy route identity for %s",
-                            relative,
-                        )
-                        return self.resolve_note(relative)
-                    if metadata.get("schema_version") == 1:
-                        logger.warning(
-                            "Using unregistered schema-v1 route identity for %s",
-                            relative,
-                        )
-                        return self.resolve_note(relative)
+                return self._resolve_unregistered_note_id(
+                    document_id,
+                    allow_canonical_route=False,
+                    allow_review_candidate=True,
+                )
+            canonical_id = record.get("note_id")
+            if not isinstance(canonical_id, str) or not canonical_id:
                 raise PathAuthorizationError()
             relative_path = record.get("relative_path")
             if not isinstance(relative_path, str) or not relative_path:
                 raise PathAuthorizationError()
-            path = self.resolve_note(relative_path)
-            if not path.is_file():
-                raise PathAuthorizationError()
-            return path
+            try:
+                path = self.resolve_note(relative_path)
+            except PathAuthorizationError:
+                path = None
+            if path is not None and self._catalog_path_matches_identity(
+                path, canonical_id
+            ):
+                return path
+            logger.warning(
+                "Catalog route is stale for note identity %s; validating Markdown",
+                canonical_id,
+            )
+            return self._resolve_unregistered_note_id(
+                canonical_id,
+                allow_canonical_route=False,
+                allow_review_candidate=True,
+            )
 
         logger.warning(
-            "Resolving route-derived legacy document id without a note catalog; "
+            "Resolving Markdown document identity without a note catalog; "
             "identity backfill is pending"
         )
+        return self._resolve_unregistered_note_id(
+            document_id,
+            allow_canonical_route=True,
+            allow_review_candidate=True,
+        )
+
+    def resolve_reader_note_id(self, document_id: str) -> Path:
+        """Resolve one reader-visible output or catalogued clean Markdown note."""
+        if not isinstance(document_id, str) or not document_id.strip():
+            raise PathAuthorizationError()
+        if "/" in document_id or "\\" in document_id or document_id.endswith(".md"):
+            raise PathAuthorizationError()
+
+        if self.catalog is not None:
+            record = self.catalog.resolve(document_id) or self.catalog.resolve_alias(
+                document_id
+            )
+            if record is not None:
+                canonical_id = record.get("note_id")
+                relative_path = record.get("relative_path")
+                if (
+                    not isinstance(canonical_id, str)
+                    or not canonical_id
+                    or not isinstance(relative_path, str)
+                    or not relative_path
+                ):
+                    raise PathAuthorizationError()
+                output_route = False
+                for root_name in ("output", "clean"):
+                    try:
+                        path = self.resolve(
+                            relative_path,
+                            root_name=root_name,
+                            allowed_extensions={".md"},
+                        )
+                    except PathAuthorizationError:
+                        continue
+                    if root_name == "output":
+                        output_route = True
+                        if self._is_reflow_review_path(path):
+                            continue
+                    if self._catalog_path_matches_identity(path, canonical_id):
+                        return path
+                if output_route:
+                    return self._resolve_unregistered_note_id(
+                        canonical_id,
+                        allow_canonical_route=False,
+                        allow_review_candidate=False,
+                    )
+                raise PathAuthorizationError()
+
+        return self._resolve_unregistered_note_id(
+            document_id,
+            allow_canonical_route=self.catalog is None,
+            allow_review_candidate=False,
+        )
+
+    def _resolve_unregistered_note_id(
+        self,
+        document_id: str,
+        *,
+        allow_canonical_route: bool,
+        allow_review_candidate: bool,
+    ) -> Path:
+        """Resolve one identity declared by an authorized output Markdown file."""
         output = self.roots["output"]
         if not output.exists():
             raise PathAuthorizationError()
 
-        for candidate in output.rglob("*.md"):
+        matches: list[Path] = []
+        for candidate in sorted(output.rglob("*.md")):
             if not candidate.is_file():
                 continue
             try:
                 relative = self._vault_relative_identity(candidate)
+                authorized = self.resolve_note(relative)
             except PathAuthorizationError:
                 continue
-            if document_id_for_relative_path(relative) != document_id:
+            is_review_candidate = self._is_reflow_review_candidate_path(authorized)
+            if not self._is_reader_visible_output_note(authorized) and not (
+                allow_review_candidate and is_review_candidate
+            ):
                 continue
-            return self.resolve_note(relative)
-        raise PathAuthorizationError()
+
+            route_matches = document_id_for_relative_path(relative) == document_id
+            is_canonical_moc = (
+                authorized == self.roots["output"] / "_Indice_MOC.md"
+            )
+            canonical_matches = False
+            schema_version: object = None
+            status: object = None
+            try:
+                metadata, _body = parse_frontmatter(
+                    authorized.read_text(encoding="utf-8")
+                )
+                canonical_matches = metadata.get("note_id") == document_id
+                schema_version = metadata.get("schema_version")
+                status = metadata.get("status")
+            except (FrontmatterError, OSError, UnicodeError):
+                pass
+
+            if is_review_candidate:
+                if (
+                    allow_review_candidate
+                    and route_matches
+                    and canonical_matches
+                    and schema_version == 3
+                    and status == "pending_review"
+                ):
+                    matches.append(authorized)
+                continue
+
+            if canonical_matches or (
+                route_matches
+                and (
+                    is_canonical_moc
+                    or allow_canonical_route
+                    or schema_version in {None, 1}
+                )
+            ):
+                matches.append(authorized)
+
+        if len(matches) != 1:
+            raise PathAuthorizationError()
+        logger.warning(
+            "Using Markdown identity without a current note catalog row for %s",
+            self._vault_relative_identity(matches[0]),
+        )
+        return matches[0]
+
+    def _catalog_path_matches_identity(self, path: Path, note_id: str) -> bool:
+        """Verify that a catalog route still points at its declared identity."""
+        if not path.is_file():
+            return False
+        try:
+            relative = self._vault_relative_identity(path)
+            metadata, _body = parse_frontmatter(path.read_text(encoding="utf-8"))
+        except (PathAuthorizationError, FrontmatterError, OSError, UnicodeError):
+            return False
+        declared_id = metadata.get("note_id")
+        if isinstance(declared_id, str):
+            return declared_id == note_id
+        return (
+            metadata.get("schema_version") == 1
+            and document_id_for_relative_path(relative) == note_id
+        )
+
+    def _is_reader_visible_output_note(self, path: Path) -> bool:
+        """Mirror reader-list exclusions while retaining its canonical MOC."""
+        try:
+            relative = path.relative_to(self.roots["output"])
+        except ValueError:
+            return False
+        if any(part.startswith(".") for part in relative.parts):
+            return False
+        if self._is_reflow_review_path(path):
+            return False
+        if path.name.startswith("_") and path.suffix.lower() == ".md":
+            return relative.as_posix() == "_Indice_MOC.md"
+        return True
+
+    def _is_reflow_review_candidate_path(self, path: Path) -> bool:
+        """Accept only the exact path shape emitted by the reflow job service."""
+        if not self._is_reflow_review_path(path):
+            return False
+        try:
+            relative = path.relative_to(self.roots["output"])
+        except ValueError:
+            return False
+        prefix, marker, request_id = path.stem.rpartition("_reflow_")
+        if (
+            relative.parent.name != REFLOW_REVIEW_DIR_NAME
+            or marker != "_reflow_"
+            or not prefix.startswith("_")
+        ):
+            return False
+        try:
+            uuid.UUID(request_id)
+        except (ValueError, AttributeError):
+            return False
+        return True
+
+    def _is_reflow_review_path(self, path: Path) -> bool:
+        try:
+            relative = path.relative_to(self.roots["output"])
+        except ValueError:
+            return False
+        return REFLOW_REVIEW_DIR_NAME in relative.parts
 
     def canonical_note_id(self, identifier: str) -> str:
         """Translate a canonical or legacy opaque identifier to ``note_id``."""

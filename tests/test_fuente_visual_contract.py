@@ -29,6 +29,34 @@ def _read(path: Path) -> str:
     return path.read_text(encoding="utf-8")
 
 
+def _hex_rgb(value: str) -> tuple[float, float, float]:
+    value = value.removeprefix("#")
+    return tuple(int(value[index : index + 2], 16) / 255 for index in (0, 2, 4))
+
+
+def _relative_luminance(value: str) -> float:
+    channels = tuple(
+        channel / 12.92
+        if channel <= 0.04045
+        else ((channel + 0.055) / 1.055) ** 2.4
+        for channel in _hex_rgb(value)
+    )
+    return 0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2]
+
+
+def _contrast_ratio(first: str, second: str) -> float:
+    light, dark = sorted(
+        (_relative_luminance(first), _relative_luminance(second)), reverse=True
+    )
+    return (light + 0.05) / (dark + 0.05)
+
+
+def _token_hex(tokens_css: str, token: str) -> str:
+    match = re.search(rf"{re.escape(token)}\s*:\s*(#[0-9A-Fa-f]{{6}})", tokens_css)
+    assert match is not None
+    return match.group(1)
+
+
 def test_fuente_tokens_file_declares_semantic_nord_tokens() -> None:
     tokens_css = _read(TOKENS_CSS_PATH)
 
@@ -109,3 +137,42 @@ def test_reader_views_keep_hidden_state_and_canvas_uses_a_semantic_token() -> No
     assert "reader-context-content #reader-view-list.is-hidden" in css
     assert "getPropertyValue('--fuente-snow-0')" in html
     assert "ctx.fillStyle = '#5E564B'" not in html
+
+
+def test_graph_legend_uses_semantic_tokens_with_readable_contrast() -> None:
+    css = _read(CONSOLE_CSS_PATH)
+    tokens = _read(TOKENS_CSS_PATH)
+    legend = re.search(r"\.console-layout-011\s*\{([^}]*)\}", css, re.DOTALL)
+
+    assert legend is not None
+    declarations = legend.group(1)
+    assert "background: var(--fuente-polar-0)" in declarations
+    assert "color: var(--fuente-snow-0)" in declarations
+
+    background = _token_hex(tokens, "--fuente-polar-0")
+    text_tokens = (
+        "--fuente-snow-0",
+        "--fuente-frost-1",
+        "--fuente-frost-2",
+    )
+    assert all(
+        _contrast_ratio(background, _token_hex(tokens, token)) >= 4.5
+        for token in text_tokens
+    )
+
+
+def test_graph_counters_use_high_contrast_tokens_on_the_dark_legend() -> None:
+    css = _read(CONSOLE_CSS_PATH)
+    tokens = _read(TOKENS_CSS_PATH)
+    background = _token_hex(tokens, "--fuente-polar-0")
+    counter_tokens = {
+        ".graph-counter-nodes": "--fuente-snow-2",
+        ".graph-counter-wikilinks": "--fuente-frost-1",
+        ".graph-counter-origins": "--fuente-warning",
+    }
+
+    for selector, token in counter_tokens.items():
+        rule = re.search(rf"{re.escape(selector)}\s*\{{([^}}]*)\}}", css, re.DOTALL)
+        assert rule is not None
+        assert f"color: var({token})" in rule.group(1)
+        assert _contrast_ratio(background, _token_hex(tokens, token)) >= 4.5

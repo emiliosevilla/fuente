@@ -93,6 +93,32 @@ class OptimizadoGraphLoop:
             grouped.setdefault(issue_name, []).append(note)
         return grouped
 
+    def _eligible_catalog(
+        self, catalog: tuple[NoteLinkTarget, ...]
+    ) -> tuple[list[NoteLinkTarget], list[dict[str, str]]]:
+        """Keep publishable notes without letting one invalid sibling stale the MOC."""
+        assert callable(self._eligibility_guard)
+        eligible: list[NoteLinkTarget] = []
+        excluded: list[dict[str, str]] = []
+        for note in catalog:
+            try:
+                self._eligibility_guard(note)
+            except (CanonicalEligibilityError, OutputApprovalRequiredError) as error:
+                excluded.append(
+                    {
+                        "document_id": note.document_id,
+                        "reason": error.code,
+                    }
+                )
+                logger.info(
+                    "Excluding non-publishable note from generated graph catalog: %s (%s)",
+                    note.relative_path,
+                    error.code,
+                )
+            else:
+                eligible.append(note)
+        return eligible, excluded
+
     def refine_knowledge_graph(
         self,
         target_issue: str = None,
@@ -163,12 +189,16 @@ class OptimizadoGraphLoop:
             }
 
         catalog = tuple(self.linker.enumerate_notes())
-        try:
-            for note in catalog:
-                self._eligibility_guard(note)
-        except (CanonicalEligibilityError, OutputApprovalRequiredError) as error:
-            return {"error": error.code, "message": str(error)}
-        all_notes = list(catalog)
+        all_notes, excluded_notes = self._eligible_catalog(catalog)
+        if catalog and not all_notes:
+            index_changed = self._update_moc_index([], {}, set(), {})
+            reason = excluded_notes[0]["reason"]
+            return {
+                "error": reason,
+                "message": reason,
+                "index_changed": index_changed,
+                "excluded_notes": excluded_notes,
+            }
         notes_by_issue = self._notes_by_issue(all_notes)
 
         processed_notes_count = 0
@@ -207,7 +237,7 @@ class OptimizadoGraphLoop:
                             content,
                             note.stem,
                             current_relative_path=note.relative_path,
-                            note_catalog=catalog,
+                            note_catalog=all_notes,
                         )
                         if updated_content != content:
                             atomic_write_text(note_path, updated_content)
@@ -273,6 +303,7 @@ class OptimizadoGraphLoop:
                 ]
             ),
             "orphans_count": len(orphans),
+            "excluded_notes": excluded_notes,
         }
 
     def _rebuild_catalog(self) -> dict:
@@ -292,12 +323,17 @@ class OptimizadoGraphLoop:
                 "orphans": [],
             }
 
-        catalog = tuple(self.linker.enumerate_notes())
-        try:
-            for note in catalog:
-                self._eligibility_guard(note)
-        except (CanonicalEligibilityError, OutputApprovalRequiredError) as error:
-            return {"error": error.code, "message": str(error)}
+        discovered = tuple(self.linker.enumerate_notes())
+        catalog, excluded_notes = self._eligible_catalog(discovered)
+        if discovered and not catalog:
+            index_changed = self._update_moc_index([], {}, set(), {})
+            reason = excluded_notes[0]["reason"]
+            return {
+                "error": reason,
+                "message": reason,
+                "index_changed": index_changed,
+                "excluded_notes": excluded_notes,
+            }
 
         notes_by_issue = self._notes_by_issue(list(catalog))
         note_contents: Dict[str, str] = {}
@@ -352,6 +388,7 @@ class OptimizadoGraphLoop:
             "orphans": sorted(orphans),
             "issues_processed": len(notes_by_issue),
             "orphans_count": len(orphans),
+            "excluded_notes": excluded_notes,
         }
 
     def _update_issue_master_note(
@@ -415,6 +452,7 @@ class OptimizadoGraphLoop:
         """Crea o actualiza el archivo canónico _Indice_MOC.md agrupando por Cuestiones."""
         moc_path = self.output_dir / CANONICAL_MOC_FILENAME
         now_str = self._existing_generated_date(moc_path)
+        emitted_targets: set[str] = set()
 
         lines = [
             serialize_human_frontmatter({
@@ -449,6 +487,9 @@ class OptimizadoGraphLoop:
                 if issue_name not in {"_Sin_Cuestion", "General"}:
                     lines.append(f"Nota Marco: [[_Cuestion_{issue_name}]]")
                 for target in sorted(note_targets, key=str.lower):
+                    if target in emitted_targets:
+                        continue
+                    emitted_targets.add(target)
                     lines.append(f"- [[{target}]]")
                 lines.append("")
 
@@ -456,12 +497,22 @@ class OptimizadoGraphLoop:
             lines.append("## ⚠️ Notas Huérfanas (Pendientes de Interconexión)")
             lines.append("")
             for orphan_target in sorted(orphans):
-                lines.append(f"- [[{orphan_target}]] ⚠️")
+                # The note already has one canonical link in its issue/catalog
+                # section. Keep this warning informational so it cannot create
+                # a second physical edge to the same target.
+                lines.append(f"- `{orphan_target}` — sin wikilink en el cuerpo ⚠️")
             lines.append("")
 
-        lines.append("## 📚 Catálogo Completo de Conocimiento")
-        lines.append("")
-        for note in sorted(notes, key=lambda n: n.link_target.lower()):
+        remaining_catalog = [
+            note
+            for note in sorted(notes, key=lambda n: n.link_target.lower())
+            if note.link_target not in emitted_targets
+        ]
+        if remaining_catalog:
+            lines.append("## 📚 Catálogo Completo de Conocimiento")
+            lines.append("")
+        for note in remaining_catalog:
+            emitted_targets.add(note.link_target)
             lines.append(f"- [[{note.link_target}]]")
 
         lines.append("")

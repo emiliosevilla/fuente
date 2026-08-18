@@ -945,12 +945,12 @@ class FolderSyncManager:
 
 
 class FolderSyncModal(tk.Toplevel):
-    """Diálogo modal GUI de Fuentes y Carpetas Compartidas (100% tipografía Courier de máquina de escribir)."""
+    """Diálogo modal GUI de Entradas y Carpetas Compartidas (100% tipografía Courier de máquina de escribir)."""
 
     def __init__(self, parent: tk.Tk, sync_manager: FolderSyncManager):
         super().__init__(parent)
         self.sync_manager = sync_manager
-        self.title("Conexión de Fuentes y Carpetas Compartidas — Fuente")
+        self.title("Entradas y carpetas compartidas — Fuente")
         self.configure(bg=THEME["bg_root"])
         self.geometry("640x480")
         self.resizable(False, False)
@@ -963,7 +963,7 @@ class FolderSyncModal(tk.Toplevel):
     def _setup_ui(self):
         header = tk.Label(
             self,
-            text="Carpetas de Origen Vinculadas a '1_entrada'",
+            text="Entradas vinculadas a '1_entrada'",
             font=(FONT_TYPEWRITER, 12, "bold"),
             bg=THEME["bg_card"],
             fg=THEME["paper"],

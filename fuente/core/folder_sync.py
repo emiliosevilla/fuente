@@ -963,7 +963,7 @@ class FolderSyncModal(tk.Toplevel):
     def _setup_ui(self):
         header = tk.Label(
             self,
-            text="Carpetas de Origen Vinculadas a '1_entrada'",
+            text="Entradas vinculadas a '1_entrada'",
             font=(FONT_TYPEWRITER, 12, "bold"),
             bg=THEME["bg_card"],
             fg=THEME["paper"],

@@ -1014,7 +1014,7 @@ Q-08 depende de las siete anteriores y P-08 depende del cierre de todas.
 
 | ID | Entregable verificable | Estado | Dependencias |
 |---|---|---|---|
-| Q-01 | DOCX byte a byte determinista | **NOT_STARTED** | Ninguna |
+| Q-01 | DOCX byte a byte determinista | **COMPLETE** | `34b1098`, `471d5c9` y `6cd417a`; Luna DONE, Terra APPROVED y Sol APPROVED; 28 pruebas focales verdes y tres gates READY medidos. |
 | Q-02 | Higiene y gate de artefactos activos | **NOT_STARTED** | P-05 |
 | Q-03 | Vocabulario visible coherente | **NOT_STARTED** | P-04 |
 | Q-04 | Contratos Wave 1 y limpieza de API | **NOT_STARTED** | Q-02 |
@@ -1041,7 +1041,7 @@ Q-08 depende de las siete anteriores y P-08 depende del cierre de todas.
 Añadir `from unittest.mock import patch` al test y `ZIP_DEFLATED`, `ZipFile` y
 `ZipInfo` desde `zipfile` al servicio.
 
-- [ ] **Step 1: Escribir la regresión roja de determinismo**
+- [x] **Step 1: Escribir la regresión roja de determinismo**
 
 ```python
 def test_docx_projection_is_byte_deterministic(export_stack):
@@ -1059,13 +1059,13 @@ En el smoke, conservar un único `docx_payload` y exigir que `write_export()`
 escriba exactamente esos bytes; la prueba debe fallar antes del cambio por las
 marcas temporales del ZIP.
 
-- [ ] **Step 2: Confirmar el fallo de forma aislada**
+- [x] **Step 2: Confirmar el fallo de forma aislada**
 
 Run: `PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -p no:cacheprovider tests/test_export_service.py::test_docx_projection_is_byte_deterministic tests/test_wave2_demo_smoke.py -q`
 
 Expected: FAIL por diferencia binaria entre dos DOCX válidos.
 
-- [ ] **Step 3: Canonicalizar el contenedor DOCX**
+- [x] **Step 3: Canonicalizar el contenedor DOCX**
 
 Después de `document.save(buffer)`, reescribir el ZIP con nombres ordenados y
 una fecha fija admitida por ZIP:
@@ -1091,25 +1091,37 @@ def _canonicalize_docx(raw: bytes) -> bytes:
 `_render_docx()` devuelve el resultado de `_canonicalize_docx`; no se cachean
 bytes entre notas ni se reutiliza estado mutable de `python-docx`.
 
-- [ ] **Step 4: Verificar contenido y determinismo**
+- [x] **Step 4: Verificar contenido y determinismo**
 
 Run: `PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -p no:cacheprovider tests/test_export_service.py tests/contract/test_export_contract.py tests/test_wave2_demo_smoke.py -q`
 
 Expected: PASS; `Document(BytesIO(...))` abre el archivo y las dos proyecciones
 son idénticas.
 
-- [ ] **Step 5: Repetir el gate que originó la deuda**
+- [x] **Step 5: Repetir el gate que originó la deuda**
 
 Run tres veces: `PYTHONDONTWRITEBYTECODE=1 python3 scripts/release_gate.py`
 
 Expected: tres `RESULT: READY` consecutivos, sin diferencia DOCX intermitente.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add fuente/application/export.py tests/test_export_service.py tests/test_wave2_demo_smoke.py tests/contract/test_export_contract.py
 git commit -m "fix: make DOCX exports deterministic"
 ```
+
+### Cierre Q-01 — 2026-08-18
+
+Q-01 queda cerrada con los commits `34b1098`, `471d5c9` y `6cd417a`.
+Luna implementó y corrigió la canonicalización; Terra revisó las dos rondas y
+Sol emitió `SPEC: APPROVED` y `QUALITY: APPROVED`. La matriz focal pasó `28`
+pruebas con un warning conocido de ChromaDB, y el gate devolvió `RESULT: READY`
+en tres ejecuciones posteriores al primer commit. La prueba fuerza una fecha y
+un sistema creador no canónicos y verifica fecha, Deflate, nivel 9, sistema
+creador y permisos en los objetos escritos y en el ZIP final. Los archivos del
+smoke y del contrato no requirieron cambios porque ya cubrían la reutilización
+del payload y la validez estructural del DOCX.
 
 ### Task Q-02: Higiene de artefactos activos
 

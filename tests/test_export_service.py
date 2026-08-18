@@ -6,11 +6,14 @@ import html
 import io
 import json
 from pathlib import Path
+from unittest.mock import patch
+from zipfile import ZIP_DEFLATED, ZipFile, ZipInfo
 
 from docx import Document
 import pytest
 
 from fuente.application.export import (
+    _DOCX_ZIP_TIMESTAMP,
     ExportApplicationService,
     ExportFileExistsError,
     UnsupportedExportFormatError,
@@ -108,6 +111,62 @@ def test_docx_export_is_real_docx_not_html_doc(export_stack):
     assert payload.filename.endswith(".docx")
     assert raw.startswith(b"PK")
     assert b"[Content_Types].xml" in raw or b"word/" in raw
+
+
+def test_docx_projection_is_byte_deterministic(export_stack):
+    export_service, _, vault_manager, _ = export_stack
+    document_id, _ = _write_note(vault_manager, body="# DOCX\n\nContenido.\n")
+    with patch(
+        "zipfile.time.localtime",
+        return_value=(2026, 8, 18, 10, 0, 0, 1, 230, 0),
+    ):
+        first = export_service.prepare_download(document_id, "docx")
+    with patch(
+        "zipfile.time.localtime",
+        return_value=(2026, 8, 18, 10, 0, 4, 1, 230, 0),
+    ):
+        second = export_service.prepare_download(document_id, "docx")
+    assert first.content_bytes == second.content_bytes
+    written_infos = []
+    original_writestr = ZipFile.writestr
+
+    def zip_info_factory(name, _date_time):
+        info = ZipInfo(name, (2001, 1, 1, 0, 0, 0))
+        info.create_system = 0
+        return info
+
+    def record_writestr(self, zinfo_or_arcname, data, compress_type=None):
+        written_infos.append(zinfo_or_arcname)
+        return original_writestr(self, zinfo_or_arcname, data, compress_type)
+
+    with patch(
+        "fuente.application.export.ZipInfo", side_effect=zip_info_factory
+    ):
+        with patch.object(
+            ZipFile, "writestr", autospec=True, side_effect=record_writestr
+        ):
+            canonical = ExportApplicationService._canonicalize_docx(
+                first.content_bytes or b""
+            )
+
+    with ZipFile(io.BytesIO(first.content_bytes or b"")) as archive:
+        entries = archive.infolist()
+    with ZipFile(io.BytesIO(canonical)) as canonical_archive:
+        canonical_entries = canonical_archive.infolist()
+    assert entries
+    assert len(written_infos) == len(entries)
+    assert all(info.date_time == _DOCX_ZIP_TIMESTAMP for info in written_infos)
+    assert all(info.compress_type == ZIP_DEFLATED for info in written_infos)
+    assert all(info.compress_level == 9 for info in written_infos)
+    assert all(info.create_system == 3 for info in written_infos)
+    assert all(info.external_attr == 0o600 << 16 for info in written_infos)
+    assert all(info.compress_type == ZIP_DEFLATED for info in canonical_entries)
+    assert all(
+        info.date_time == _DOCX_ZIP_TIMESTAMP for info in canonical_entries
+    )
+    assert all(info.create_system == 3 for info in canonical_entries)
+    assert all(info.external_attr == 0o600 << 16 for info in canonical_entries)
+    Document(io.BytesIO(first.content_bytes or b""))
 
 
 def test_docx_projects_canonical_metadata_and_body_structures(export_stack):

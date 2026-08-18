@@ -9,6 +9,7 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
+from zipfile import ZIP_DEFLATED, ZipFile, ZipInfo
 
 from docx import Document
 
@@ -35,6 +36,7 @@ _FORMAT_MIME: dict[ExportFormat, str] = {
 }
 
 _DOCX_FENCE_RE = re.compile(r"^\s*(`{3,}|~{3,})(.*)$")
+_DOCX_ZIP_TIMESTAMP = (1980, 1, 1, 0, 0, 0)
 
 
 class ExportProjectionError(Exception):
@@ -310,7 +312,24 @@ class ExportApplicationService:
             flush_code()
         buffer = io.BytesIO()
         document.save(buffer)
-        return buffer.getvalue()
+        return ExportApplicationService._canonicalize_docx(buffer.getvalue())
+
+    @staticmethod
+    def _canonicalize_docx(raw: bytes) -> bytes:
+        source = io.BytesIO(raw)
+        target = io.BytesIO()
+        with ZipFile(source, "r") as archive, ZipFile(
+            target, "w", compression=ZIP_DEFLATED, compresslevel=9
+        ) as canonical:
+            for name in sorted(archive.namelist()):
+                info = ZipInfo(name, _DOCX_ZIP_TIMESTAMP)
+                info.date_time = _DOCX_ZIP_TIMESTAMP
+                info.create_system = 3
+                info.compress_type = ZIP_DEFLATED
+                info.compress_level = 9
+                info.external_attr = 0o600 << 16
+                canonical.writestr(info, archive.read(name))
+        return target.getvalue()
 
     @staticmethod
     def _docx_metadata_value(value: object) -> str:

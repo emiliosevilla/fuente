@@ -37,6 +37,7 @@ def test_active_artifact_gate_rejects_non_fuente_build_outputs(gate_module, tmp_
     "fuente.other-0.1.tar.gz",
     "fuente-other-0.1-1-py3-none-any.whl",
     "fuente-0.1-build-py3-none-any.whl",
+    "fuente-0.1-\u0661abc-py3-none-any.whl",
 ])
 def test_active_artifact_gate_rejects_distribution_names_not_exactly_fuente(
     gate_module, tmp_path, filename

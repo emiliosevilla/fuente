@@ -200,7 +200,7 @@ def _distribution_name_from_filename(filename: str) -> str | None:
         distribution, version = fields[:2]
         if len(fields) == 6:
             build_tag, python_tag, abi_tag, platform_tag = fields[2:]
-            if not build_tag or not build_tag[0].isdigit():
+            if not build_tag or build_tag[0] not in "0123456789":
                 return None
         else:
             python_tag, abi_tag, platform_tag = fields[2:]
@@ -214,7 +214,7 @@ def _distribution_name_from_filename(filename: str) -> str | None:
     if (
         not distribution
         or not version
-        or not version[0].isdigit()
+        or version[0] not in "0123456789"
         or (filename.endswith(".whl") and not all((python_tag, abi_tag, platform_tag)))
     ):
         return None

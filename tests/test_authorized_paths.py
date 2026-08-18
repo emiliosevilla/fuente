@@ -91,6 +91,37 @@ def test_resolver_uses_canonical_catalog_id_and_legacy_alias_after_move(
         store.close()
 
 
+def test_candidate_identity_outside_reflow_review_remains_rejected(
+    resolver, temp_vault_path
+):
+    relative = "4_salida/_Other_Review/_candidate.md"
+    document_id = document_id_for_relative_path(relative)
+    candidate = temp_vault_path / relative
+    candidate.parent.mkdir(parents=True)
+    candidate.write_text(
+        serialize_frontmatter(
+            {
+                "schema_version": 3,
+                "note_id": document_id,
+                "note_type": "concept",
+                "title": "Not a reflow candidate",
+                "date": "2026-08-18",
+                "author": "test",
+                "tags": [],
+                "issue": "_Sin_Cuestion",
+                "status": "pending_review",
+                "origins": [],
+                "history": [],
+            }
+        )
+        + "# Not a reflow candidate\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(PathAuthorizationError):
+        resolver.resolve_note_id(document_id)
+
+
 def test_path_qualified_wikilink_disambiguates_duplicate_basenames(resolver, temp_vault_path):
     first = temp_vault_path / "4_salida" / "tema-a" / "nota.md"
     second = temp_vault_path / "4_salida" / "tema-b" / "nota.md"

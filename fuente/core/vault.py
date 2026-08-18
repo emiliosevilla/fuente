@@ -11,7 +11,11 @@ from fuente.config import DEFAULT_ISSUE, VaultConfig
 from fuente.domain.documents import MarkdownDocument
 from fuente.domain.frontmatter import FrontmatterError, serialize_frontmatter
 from fuente.domain.errors import PathAuthorizationError
-from fuente.domain.paths import AuthorizedPathResolver, document_id_for_relative_path
+from fuente.domain.paths import (
+    REFLOW_REVIEW_DIR_NAME,
+    AuthorizedPathResolver,
+    document_id_for_relative_path,
+)
 from fuente.extractors.base import enrich_extraction_metadata
 from fuente.domain.quarantine import QuarantineService
 from fuente.infrastructure.atomic_files import atomic_write_json, atomic_write_text
@@ -156,6 +160,8 @@ class VaultManager:
         if any(part.startswith(".") for part in relative.parts):
             return True
         if SYSTEM_DIR_NAME in relative.parts:
+            return True
+        if REFLOW_REVIEW_DIR_NAME in relative.parts:
             return True
 
         try:

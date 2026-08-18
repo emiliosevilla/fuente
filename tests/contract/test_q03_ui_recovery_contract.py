@@ -54,3 +54,22 @@ def test_save_settings_reports_failure_and_closes_only_after_success():
     assert saver.index("closeModal('modal-settings')") > saver.index(
         "Ajustes guardados"
     )
+
+
+def test_save_settings_rejects_empty_success_response():
+    validator = _function_source("isValidSettingsSaveResponse", "saveSettings")
+
+    assert "!!res" in validator
+    assert "!res.error" in validator
+    assert "res.log.trim().length > 0" in validator
+    assert "res.status === 'saved'" in validator
+
+
+def test_save_settings_accepts_existing_success_response_shapes():
+    validator = _function_source("isValidSettingsSaveResponse", "saveSettings")
+
+    assert "typeof res.log === 'string'" in validator
+    assert "res.status === 'saved'" in validator
+    assert "isValidSettingsSaveResponse(res)" in _function_source(
+        "saveSettings", "resetDefaultSettings"
+    )

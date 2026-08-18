@@ -323,7 +323,9 @@ class ExportApplicationService:
         ) as canonical:
             for name in sorted(archive.namelist()):
                 info = ZipInfo(name, _DOCX_ZIP_TIMESTAMP)
+                info.create_system = 3
                 info.compress_type = ZIP_DEFLATED
+                info.compress_level = 9
                 info.external_attr = 0o600 << 16
                 canonical.writestr(info, archive.read(name))
         return target.getvalue()

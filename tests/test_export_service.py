@@ -7,6 +7,7 @@ import io
 import json
 from pathlib import Path
 from unittest.mock import patch
+from zipfile import ZIP_DEFLATED, ZipFile
 
 from docx import Document
 import pytest
@@ -125,6 +126,31 @@ def test_docx_projection_is_byte_deterministic(export_stack):
     ):
         second = export_service.prepare_download(document_id, "docx")
     assert first.content_bytes == second.content_bytes
+    written_infos = []
+    original_writestr = ZipFile.writestr
+
+    def record_writestr(self, zinfo_or_arcname, data, compress_type=None):
+        written_infos.append(zinfo_or_arcname)
+        return original_writestr(self, zinfo_or_arcname, data, compress_type)
+
+    with patch.object(ZipFile, "writestr", autospec=True, side_effect=record_writestr):
+        canonical = ExportApplicationService._canonicalize_docx(
+            first.content_bytes or b""
+        )
+
+    with ZipFile(io.BytesIO(first.content_bytes or b"")) as archive:
+        entries = archive.infolist()
+    with ZipFile(io.BytesIO(canonical)) as canonical_archive:
+        canonical_entries = canonical_archive.infolist()
+    assert entries
+    assert len(written_infos) == len(entries)
+    assert all(info.compress_type == ZIP_DEFLATED for info in written_infos)
+    assert all(info.compress_level == 9 for info in written_infos)
+    assert all(info.create_system == 3 for info in written_infos)
+    assert all(info.external_attr == 0o600 << 16 for info in written_infos)
+    assert all(info.compress_type == ZIP_DEFLATED for info in canonical_entries)
+    assert all(info.create_system == 3 for info in canonical_entries)
+    assert all(info.external_attr == 0o600 << 16 for info in canonical_entries)
     Document(io.BytesIO(first.content_bytes or b""))
 
 

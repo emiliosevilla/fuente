@@ -4668,6 +4668,13 @@
             if (healthSnapshotReceived && stats.line !== undefined) document.getElementById('bottom-status-line').innerText = stats.line;
         }
 
+        function isValidSettingsSaveResponse(res) {
+            return !!res && typeof res === 'object' && !Array.isArray(res) && !res.error && (
+                (typeof res.log === 'string' && res.log.trim().length > 0) ||
+                res.status === 'saved'
+            );
+        }
+
         function saveSettings() {
             const model = document.getElementById('setting-ollama-model').value;
             const ollamaUrl = document.getElementById('setting-ollama-url') ? document.getElementById('setting-ollama-url').value : 'http://localhost:11434';
@@ -4685,7 +4692,7 @@
             };
             if (window.pywebview && window.pywebview.api) {
                 window.pywebview.api.save_settings(settings).then(function(res) {
-                    if (!res || typeof res !== 'object' || Array.isArray(res) || res.error) {
+                    if (!isValidSettingsSaveResponse(res)) {
                         renderSettingsSaveError(res && res.message);
                         return;
                     }

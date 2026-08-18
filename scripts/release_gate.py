@@ -30,7 +30,6 @@ _ARTIFACT_SCAN_EXCLUDED_DIRS = {
     ".ruff_cache",
     ".tox",
     "__pycache__",
-    "docs/history",
 }
 
 # Git porcelain paths ignored after test runs (noise, not production drift).
@@ -175,14 +174,42 @@ def check_source_tree_clean(repo_root: Path = REPO_ROOT) -> GateCheck:
 
 def _is_excluded_artifact_path(path: Path, repo_root: Path) -> bool:
     relative_parts = path.relative_to(repo_root).parts
-    if "docs" in relative_parts and "history" in relative_parts:
+    if relative_parts[:2] == ("docs", "history"):
         return True
     return any(part in _ARTIFACT_SCAN_EXCLUDED_DIRS for part in relative_parts)
 
 
+def _canonicalize_distribution_name(value: str) -> str:
+    return re.sub(r"[-_.]+", "-", value).lower()
+
+
+_ALLOWED_NORMALIZED_DISTRIBUTION_NAMES = {
+    _canonicalize_distribution_name(prefix.rstrip("-."))
+    for prefix in ALLOWED_DISTRIBUTION_PREFIXES
+}
+
+
+def _distribution_name_from_filename(filename: str) -> str | None:
+    if filename.endswith(".whl"):
+        fields = filename[:-4].split("-")
+        if len(fields) < 5:
+            return None
+        distribution = "-".join(fields[:-4])
+        version = fields[-4]
+    elif filename.endswith(".tar.gz"):
+        stem = filename[:-7]
+        if "-" not in stem:
+            return None
+        distribution, version = stem.rsplit("-", 1)
+    else:
+        return None
+    if not distribution or not version or not version[0].isdigit():
+        return None
+    return _canonicalize_distribution_name(distribution)
+
+
 def _distribution_name_is_allowed(filename: str) -> bool:
-    lowered = filename.lower()
-    return any(lowered.startswith(prefix) for prefix in ALLOWED_DISTRIBUTION_PREFIXES)
+    return _distribution_name_from_filename(filename) in _ALLOWED_NORMALIZED_DISTRIBUTION_NAMES
 
 
 def check_active_artifact_hygiene(repo_root: Path = REPO_ROOT) -> GateCheck:
@@ -202,10 +229,11 @@ def check_active_artifact_hygiene(repo_root: Path = REPO_ROOT) -> GateCheck:
 
     for pattern in distribution_patterns:
         pattern_path = Path(pattern)
-        artifact_dir = repo_root / pattern_path.parent
-        if _is_excluded_artifact_path(artifact_dir, repo_root):
-            continue
-        for path in artifact_dir.glob(pattern_path.name):
+        for path in repo_root.rglob(pattern_path.name):
+            if path.parent.name != pattern_path.parent.name:
+                continue
+            if _is_excluded_artifact_path(path, repo_root):
+                continue
             if not _distribution_name_is_allowed(path.name):
                 offenders.append(path.relative_to(repo_root).as_posix())
 

@@ -14,7 +14,7 @@ import threading
 import tkinter as tk
 import urllib.request
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, Sequence
 
 from fuente.application.chat import ChatApplicationService, OllamaChatProvider
 from fuente.application.notes import NotesApplicationService
@@ -49,6 +49,10 @@ except ImportError:
     FONT_TYPEWRITER = "Courier"
 
 ChatHandler = Callable[[str, Optional[Dict[str, Any]]], Dict[str, Any]]
+
+
+def format_chat_origins(labels: Sequence[str]) -> str:
+    return "Orígenes: " + ", ".join(labels)
 
 
 def _display_text(value: str) -> str:
@@ -499,7 +503,7 @@ class FuenteChatModal(tk.Toplevel):
                     tk.END, f"Modo de recuperación: {retrieval_mode}\n", "meta"
                 )
             if sources:
-                src_str = "Fuentes: " + ", ".join(sources)
+                src_str = format_chat_origins(sources)
                 self.txt_chat.insert(tk.END, f"{src_str}\n", "sources")
 
         self.txt_chat.see(tk.END)

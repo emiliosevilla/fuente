@@ -24,6 +24,21 @@ def test_reader_list_rejection_and_malformed_payload_render_visible_error():
     assert "log(" in _function_source("renderReaderLoadError", "renderReaderContentError")
 
 
+def test_pywebview_ready_recovers_open_reader_and_settings_modals():
+    recovery = _function_source("recoverNativeModalLoads", "openModal")
+    ready_start = SOURCE.index("window.addEventListener('pywebviewready'")
+    ready_end = SOURCE.index("document.addEventListener('DOMContentLoaded'", ready_start)
+    ready_listener = SOURCE[ready_start:ready_end]
+
+    assert "window.pywebview.api" in recovery
+    assert "modal-reader" in recovery
+    assert "modal-settings" in recovery
+    assert recovery.count("classList.contains('is-open')") == 2
+    assert "loadReaderNotes();" in recovery
+    assert "loadSettingsData();" in recovery
+    assert "recoverNativeModalLoads();" in ready_listener
+
+
 def test_note_content_rejection_and_malformed_payload_render_visible_error():
     loader = _function_source("loadNoteContent", "loadCategoryData")
 

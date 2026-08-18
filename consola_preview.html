@@ -1075,6 +1075,20 @@
             }
         }
 
+        function recoverNativeModalLoads() {
+            if (!window.pywebview || !window.pywebview.api) return;
+
+            const readerModal = document.getElementById('modal-reader');
+            if (readerModal && readerModal.classList.contains('is-open')) {
+                loadReaderNotes();
+            }
+
+            const settingsModal = document.getElementById('modal-settings');
+            if (settingsModal && settingsModal.classList.contains('is-open')) {
+                loadSettingsData();
+            }
+        }
+
         function openModal(id) {
             const el = document.getElementById(id);
             if (el) {
@@ -4722,6 +4736,7 @@
         window.addEventListener('pywebviewready', function() {
             log('Conexión nativa PyWebView establecida con la Consola Fuente');
             if (window.pywebview && window.pywebview.api) {
+                recoverNativeModalLoads();
                 window.pywebview.api.get_initial_state().then(function(state) {
                     updateDashboardStats(state.stats);
                     if (state.vault_path) {

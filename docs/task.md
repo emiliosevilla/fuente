@@ -1,7 +1,7 @@
 # Fuente — Tablero de estado (task.md)
 
 > **Índice de planificación:** [`docs/planning-index.md`](planning-index.md) separa el plan vigente, los planes cerrados y la evidencia histórica.
-> **Checkout medido (2026-08-16):** rama activa `dev` y `origin/dev` en `3e93092`; `main` y `origin/main` en `edfbc41`; el PR #17 está fusionado. La corrección de seguridad actual deja cambios locales pendientes de publicación.
+> **Evidencia documental actual:** [`docs/evidence/current-sdd.json`](evidence/current-sdd.json) contiene la rama, el commit base, el digest de fuentes, la suite medida, el resultado del gate y los IDs P/Q. Se regenera después de terminar código y pruebas.
 > **Estado del producto:** hardening, Wave 1, Wave 2, fuentes montadas, base editorial, renombrado del producto a Fuente, sistema visual Nord y correctivos OCR están implementados y publicados.
 > **Estado OCR:** Tesseract se instala como paso explícito con `eng` y `spa`; la extracción automática genera candidatos sin intervención posterior de Codex y reconstruye tablas por geometría genérica.
 > **Siguiente ciclo vigente:** promover y registrar formalmente la aprobación de las tres candidatas OCR en `3_limpio` y cerrar los checkpoints humanos de Vault/UI. La selección del LLM se gobierna automáticamente por RAM en setup y se vuelve a comprobar al inicio de cada ciclo ETL; no depende del material del Vault ni de su ledger.
@@ -10,7 +10,7 @@
 
 ---
 
-## Seguridad — ChromaDB CVE-2026-45829 (2026-08-16)
+## Histórico — Seguridad ChromaDB CVE-2026-45829 (2026-08-16)
 
 - **Resuelto localmente:** `chromadb==1.5.9` fue sustituido por `0.6.3`, fuera
   del rango vulnerable `>=1.0.0, <=1.5.9`.
@@ -53,7 +53,7 @@ pendiente. Esa condición no participa en la selección del LLM.
 > repositorio, paquete, remoto y carpeta local de Fuente a Fuente ya está hecha;
 > el Vault conserva su nombre físico hasta una decisión específica.
 
-### Estado medido actual — SDD Fuente (2026-08-15)
+### Estado vigente — SDD Fuente
 
 - Tareas 1–9 tienen implementación y cobertura automatizada; P-06/Q-03 ya
   tienen además revisión visual nativa cerrada en macOS. P-07 queda cerrado
@@ -69,16 +69,11 @@ pendiente. Esa condición no participa en la selección del LLM.
 - La Tarea 10 mantiene el cierre formal abierto por Q-04–Q-08 y P-08;
   P-06/Q-03 ya están registrados con evidencia humana actual.
 
-### Revalidación actual del Vault — 2026-08-15
+### Evidencia actual del Vault
 
-- El Vault medido es `/Users/emiliosevillaortego/Documents/Fuente_Vault`.
-- `3_limpio/` contiene **3 Markdown**, todos con `schema_version: 3` y
-  `status: pending_review`; no hay todavía una nota canónica aprobada.
-- `4_salida/` contiene únicamente `_Indice_MOC.md`; no existe
-  `4_salida/Fuentes/Sin_clasificar/` ni hay 14 notas actuales allí.
-- La cifra de 14 notas corresponde a la migración histórica del 2026-08-14,
-  no al estado actual del Vault. El benchmark comparativo no forma parte de la
-  arquitectura activa y no se ejecuta.
+El estado medible del checkout se mantiene en
+[`docs/evidence/current-sdd.json`](evidence/current-sdd.json). Este tablero no
+duplica conteos ni hashes que puedan quedar obsoletos.
 
 | Eje | Definición operativa |
 |-----|----------------------|
@@ -248,7 +243,7 @@ El cierre de Fuente queda documentado así:
 
 La sincronización no implementa OAuth, Graph API, credenciales ni escritura de vuelta al proveedor. El cliente oficial debe montar primero la carpeta; Fuente solo lee esa entrada y la copia al `1_entrada` del tema activo.
 
-### Base editorial estable — implementación medida (2026-08-14)
+### Histórico — Base editorial estable — implementación medida (2026-08-14)
 
 Se ha implementado el primer bloque de la nueva arquitectura editorial, sin
 mover físicamente notas:
@@ -296,7 +291,7 @@ Evidencia de ejecución:
   `4_salida/Fuentes/Sin_clasificar`; su clasificación editorial fina no debe
   tratarse como inventario actual.
 
-### Medición final del checkout (2026-08-13)
+### Histórico — Medición final del checkout (2026-08-13)
 
 - **Duplicados locales:** resueltos de forma reversible; los cuatro ficheros se conservan fuera del checkout en `/private/tmp/fuente-untracked-review-20260813/` para una decisión posterior de procedencia. No bloquean el loader ni el gate.
 - **Task 5:** completada en dominio, sincronizador, backend, bridge y consola; la suite focalizada de fuentes/UI pasó.

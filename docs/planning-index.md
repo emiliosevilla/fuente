@@ -11,6 +11,10 @@ explica decisiones o evidencia anterior.
 3. [SDD de ejecución Fuente](superpowers/plans/2026-08-14-fuente-execution-sdd.md) — única lista detallada de tareas para implementar el siguiente ciclo.
 4. [Plan de migración Fuente](superpowers/plans/2026-08-14-fuente-canonical-record-rename-and-nord.md) — hoja de ruta breve que fundamenta el SDD.
 
+La evidencia documental actual y comprobable se mantiene en
+[`docs/evidence/current-sdd.json`](evidence/current-sdd.json); los conteos y
+hashes fechados de los documentos históricos no se repiten como estado actual.
+
 ## Estado de los documentos de planificación
 
 | Estado | Documento | Uso correcto |

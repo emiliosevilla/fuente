@@ -2,6 +2,18 @@
 
 Fuente ships a **fail-closed release gate** that must pass before tagging or publishing a build. The gate encodes the completed hardening, residual-security, and productization checks.
 
+## Current documentation evidence
+
+The current branch, source digest, measured suite, gate result, and SDD IDs are
+recorded in [`docs/evidence/current-sdd.json`](evidence/current-sdd.json).
+Generate it after code/tests and before the documentary commit:
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 python3 scripts/update_sdd_evidence.py \
+  --suite-file /private/tmp/fuente-final-pytest.txt \
+  --gate-file /private/tmp/fuente-final-gate.txt
+```
+
 ## Run the gate
 
 From the repository root (with test extras installed):
@@ -39,6 +51,7 @@ Exit code `0` means **READY**; any failure prints `BLOCKED` and returns non-zero
 | Migration tooling | `migration` | `pytest tests/test_vault_migration.py` + `docs/migration-guide.md` |
 | Mounted-source sync contracts | `sync` | `pytest` folder sync, recursive/reconciliation/discovery, UI bridge, and idempotency matrices |
 | Gate self-tests | `release_gate` | `pytest tests/test_release_gate.py` |
+| Current documentation evidence | `documentation_freshness` | Branch, ancestor, source digest, P/Q IDs, and current-section labels |
 | Source tree clean after tests | `source_tree_clean` | `git status --porcelain` ignoring `__pycache__`, `*.pyc`, `fuente.egg-info`, `.pytest_cache` |
 | Active build-artifact hygiene | `active_artifact_hygiene` | Read-only scan rejects non-`fuente` `*.egg-info` and `dist/*.whl`/`dist/*.tar.gz`; `docs/history/`, `.git`, and caches are excluded |
 | No open P0/P1 security findings | `security_residuals` | `docs/security-residual-findings.md` has no open P0/P1 rows |

@@ -30,6 +30,15 @@ class InvalidModelOutputError(ValueError):
     code = "invalid_model_output"
 
 
+class QuarantineRestoreError(ValueError):
+    """A quarantine item needs human review before it can be restored."""
+
+    code = "manual_review_required"
+
+    def __init__(self, quarantine_id: str) -> None:
+        super().__init__(f"Item {quarantine_id} requires manual review")
+
+
 class QuarantineService:
     """Moves failed Vault files into one canonical, durable quarantine.
 
@@ -191,6 +200,8 @@ class QuarantineService:
     ) -> Path:
         """Restore by opaque ID to an AuthorizedPathResolver-approved destination."""
         item = self._item_for_id(quarantine_id)
+        if item.get("status") == "failed_for_review":
+            raise QuarantineRestoreError(quarantine_id)
         if item.get("status") != "quarantined":
             raise ValueError("Only quarantined items can be restored")
         source = self._contained_quarantine_file(item["stored_filename"])

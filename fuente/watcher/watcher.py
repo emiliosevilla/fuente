@@ -12,6 +12,7 @@ from fuente.application.ingestion import (
 )
 from fuente.config import AppConfig
 from fuente.core.vault import VaultManager
+from fuente.core.folder_sync import TEMPORARY_SUFFIXES, is_hidden_or_temporary_file
 from fuente.domain.errors import PathAuthorizationError
 from fuente.domain.runtime_policy import RuntimePolicy, resolve_runtime_policy
 from fuente.domain.jobs import (
@@ -41,7 +42,9 @@ except ImportError:
     HAS_WATCHDOG = False
 
 IGNORE_PREFIXES = (".", "~$", ".~", "desktop.ini", "Thumbs.db", ".DS_Store")
-IGNORE_SUFFIXES = (".tmp", ".lock", ".crdownload", ".part", ".githistory", ".swp", ".tmp_proj")
+IGNORE_SUFFIXES = TEMPORARY_SUFFIXES | {
+    ".lock", ".crdownload", ".githistory", ".swp", ".tmp_proj"
+}
 
 
 def retry_on_io_error(
@@ -71,6 +74,8 @@ def retry_on_io_error(
 def is_temporary_or_system_file(file_path: Path) -> bool:
     """Detecta archivos temporales de SharePoint, OneDrive, Word o del sistema operativo."""
     name_lower = file_path.name.lower()
+    if is_hidden_or_temporary_file(file_path):
+        return True
     if any(name_lower.startswith(prefix.lower()) for prefix in IGNORE_PREFIXES):
         return True
     if any(name_lower.endswith(suffix.lower()) for suffix in IGNORE_SUFFIXES):

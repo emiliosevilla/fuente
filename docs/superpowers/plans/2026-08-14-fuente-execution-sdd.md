@@ -1068,7 +1068,7 @@ Q-08 depende de las siete anteriores y P-08 depende del cierre de todas.
 | Q-02 | Higiene y gate de artefactos activos | **COMPLETE** | `0712782`, `96cd085`, `673934a` y `a328c17`; Terra implementó y corrigió, Luna APPROVED y Sol APPROVED; 25 pruebas focales y gate READY. |
 | Q-03 | Vocabulario visible coherente | **COMPLETE** | P-04; revisión visual nativa cerrada el 2026-08-19; 87 pruebas focales verdes. |
 | Q-04 | Contratos Wave 1 y limpieza de API | **COMPLETE** | `30` pruebas focales y `7` de servicio; Terra APPROVED; `get_default_config` preservada y rechazo de restauración visible. |
-| Q-05 | Cobertura de cuarentena e ingesta | **NOT_STARTED** | Q-04 |
+| Q-05 | Cobertura de cuarentena e ingesta | **COMPLETE** | `89` pruebas focales; Terra APPROVED; error estable de revisión manual, filtros compartidos y gate `readme_honesty` verificados. |
 | Q-06 | Mutaciones por identidad opaca | **NOT_STARTED** | Tasks 3–5 |
 | Q-07 | Cola sin N+1 y transiciones de política cubiertas | **NOT_STARTED** | Q-06 |
 | Q-08 | Evidencia documental actual y comprobable | **NOT_STARTED** | Q-01–Q-07, P-06 |

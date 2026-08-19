@@ -43,6 +43,34 @@ def test_bridge_get_quarantine_returns_items(tmp_path):
     assert "quarantine_id" in notes[0] or "stored_filename" in notes[0]
 
 
+def test_forced_failed_for_review_restore_returns_stable_manual_review_error(tmp_path):
+    from fuente.config import VaultConfig
+    from fuente.control_console import FuenteConsoleBackend
+    from fuente.core.vault import VaultManager
+    from fuente.domain.quarantine import InvalidModelOutputError
+
+    vault_root = tmp_path / "Vault"
+    manager = VaultManager(VaultConfig(vault_path=vault_root))
+    source = manager.input_dir / "model.md"
+    source.write_text("invalid", encoding="utf-8")
+    item = manager.quarantine_service.handle_failure(
+        source,
+        InvalidModelOutputError("invalid generated markdown"),
+        attempt_count=1,
+    )
+    backend = FuenteConsoleBackend(vault_root)
+
+    result = backend.handle_action(
+        "restore_note",
+        {"filename": item["quarantine_id"], "target_issue": "Research"},
+    )
+
+    assert result == {
+        "error": "manual_review_required",
+        "message": "Item requires manual review before restoration",
+    }
+
+
 @dataclass
 class _RecordingWidget:
     kind: str

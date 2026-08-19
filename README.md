@@ -108,9 +108,9 @@ El flujo editorial usa Markdown con `frontmatter` como fuente canónica y
 protege las ediciones mediante `compare-and-swap` (CAS). El `reflow` y el
 enriquecimiento son jobs `durable` y recuperables; la detección de `candidate`
 es determinista; la `fusion` usa `preview-then-commit` y es
-`source-preserving`. El editor WYSIWYG forma parte del alcance previsto; la
-integración nativa con Graph API/OAuth y las credenciales cloud quedan fuera
-del alcance actual.
+`source-preserving`. El editor WYSIWYG forma parte del alcance previsto. Quedan
+fuera de alcance actual la integración nativa con Graph API/OAuth y las
+credenciales cloud.
 
 ### Carpetas montadas
 
@@ -173,6 +173,54 @@ accesos directos correspondientes. Si eliges los extras completos, también
 ofrecen instalar Tesseract con los idiomas `eng` y `spa`, y verifican el motor
 antes de habilitar OCR. La instalación básica no descarga el motor OCR. No
 descargan modelos de Ollama durante el arranque normal.
+
+Para una instalación guiada, abre el instalador correspondiente desde la
+carpeta de Fuente. El instalador comprueba Python 3.10 o superior, crea el
+entorno virtual `venv`, instala Fuente y sus dependencias, y ofrece instalar
+Obsidian, Ollama y los componentes opcionales. Si el sistema no dispone de un
+gestor compatible, abrirá la página oficial de descarga y pedirá repetir el
+instalador después.
+
+La instalación editable también puede hacerse desde una terminal:
+
+```bash
+python3 -m venv venv
+venv/bin/python -m pip install -e .
+```
+
+En Windows, usa `py -3 -m venv venv` y
+`venv\Scripts\python.exe -m pip install -e .`.
+
+## Desinstalación
+
+Antes de desinstalar, cierra Fuente y cualquier proceso que esté usando el
+Vault. La desinstalación de la aplicación no debe borrar las notas ni el Vault.
+
+1. Elimina los accesos directos `Fuente` y `La Memoria de Fuente` del
+   Escritorio, si fueron creados.
+2. Desde la carpeta de instalación, desinstala el paquete y elimina el
+   entorno virtual:
+
+   ```bash
+   venv/bin/python -m pip uninstall fuente
+   rm -rf venv
+   ```
+
+   En Windows:
+
+   ```bat
+   venv\Scripts\python.exe -m pip uninstall fuente
+   rmdir /s /q venv
+   ```
+
+3. Si ya no necesitas los archivos de la aplicación, elimina la carpeta de
+   instalación de Fuente. Conserva aparte el Vault y sus carpetas
+   `1_entrada/`, `2_sucio/`, `3_limpio/` y `4_salida/`.
+
+Python, Obsidian, Ollama y Tesseract no se eliminan automáticamente porque
+pueden ser utilizados por otras aplicaciones. Si quieres quitarlos, usa el
+gestor de paquetes del sistema y comprueba primero que no los necesites fuera
+de Fuente.
 
 ## Uso
 

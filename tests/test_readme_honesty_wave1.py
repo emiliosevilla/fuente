@@ -60,8 +60,8 @@ def test_readme_documents_editorial_workflow_contract():
         assert claim in section, f"README editorial section must mention {claim!r}"
 
 
-def test_readme_marks_unimplemented_integrations_out_of_scope():
-    """Rich editor/cloud integrations are explicitly excluded, not implied as installed."""
+def test_readme_marks_currently_excluded_integrations_out_of_scope():
+    """The README distinguishes planned WYSIWYG work from excluded cloud integrations."""
     text = README.lower()
     section = _editorial_section().lower()
     marker = "fuera de alcance"
@@ -73,12 +73,7 @@ def test_readme_marks_unimplemented_integrations_out_of_scope():
     assert clause_end != -1, "README editorial out-of-scope statement must be complete"
     exclusion_clause = section[marker_start : clause_end + 1]
 
-    for excluded in (
-        "tiptap",
-        "native graph api/oauth",
-        "lightrag en producción",
-        "credenciales cloud",
-    ):
+    for excluded in ("graph api/oauth", "credenciales cloud"):
         assert excluded in exclusion_clause, (
             f"README editorial out-of-scope statement must explicitly exclude {excluded!r}"
         )

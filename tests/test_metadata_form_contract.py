@@ -191,7 +191,7 @@ def test_bridge_validate_note_metadata_returns_field_errors(temp_vault_path):
     assert "tags" in result["field_errors"]
 
 
-def test_approve_with_metadata_validates_before_transition(
+def test_approve_rejects_metadata_and_keeps_editing_separate(
     notes_service, temp_vault_manager
 ):
     document_id, note_path = _write_pending_note(
@@ -213,8 +213,7 @@ def test_approve_with_metadata_validates_before_transition(
         },
     )
 
-    assert result["error"] == "invalid_metadata"
-    assert "tags" in result["field_errors"]
+    assert result == {"error": "invalid_payload"}
     metadata, body = parse_frontmatter(note_path.read_text(encoding="utf-8"))
     assert body == "# Aprobar\n"
     assert metadata["status"] == "pending_review"
@@ -242,6 +241,17 @@ def test_approval_html_uses_typed_controls_not_raw_yaml_editor():
     assert "frontmatter YAML" in approval_section
     assert 'value="approved"' not in approval_section
     assert 'value="rejected"' not in approval_section
+
+
+def test_approval_metadata_save_preserves_later_edits_during_async_response():
+    source = (Path(__file__).resolve().parent.parent / "consola_preview.html").read_text(
+        encoding="utf-8"
+    )
+
+    assert "approvalMetadataEditGeneration" in source
+    assert "const saveGeneration = approvalMetadataEditGeneration" in source
+    assert "approvalMetadataEditGeneration === saveGeneration" in source
+    assert "approvalSelectedNoteId !== saveDocumentId" in source
 
 
 def test_frontend_metadata_methods_are_exposed_by_bridge():

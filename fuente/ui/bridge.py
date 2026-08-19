@@ -631,7 +631,7 @@ class FuentePyWebViewApi:
             return self._error("invalid_payload", str(error))
 
     def preview_fusion(
-        self, document_ids: object, title: object, target_issue: object
+        self, document_ids: object, title: object, issue_id: object
     ) -> dict[str, Any] | ErrorResult:
         """Build a read-only fusion preview from opaque source IDs."""
         if not isinstance(document_ids, list):
@@ -645,7 +645,7 @@ class FuentePyWebViewApi:
                 return normalized
             normalized_ids.append(normalized)
         normalized_title = self._text(title, "title")
-        normalized_issue = self._text(target_issue, "target_issue")
+        normalized_issue = self._text(issue_id, "issue_id")
         if isinstance(normalized_title, dict):
             return normalized_title
         if isinstance(normalized_issue, dict):
@@ -662,15 +662,15 @@ class FuentePyWebViewApi:
             return self._error("invalid_payload", str(error))
 
     def commit_fusion(
-        self, preview_id: object, expected_revisions: object
+        self, preview_id: object, source_revisions: object
     ) -> dict[str, Any] | ErrorResult:
         """Commit a preview only with the exact source revision map it recorded."""
         normalized_preview_id = self._text(preview_id, "preview_id")
         if isinstance(normalized_preview_id, dict):
             return normalized_preview_id
-        if not isinstance(expected_revisions, Mapping):
-            return self._error("invalid_payload", "expected_revisions must be an object")
-        revisions = dict(expected_revisions)
+        if not isinstance(source_revisions, Mapping):
+            return self._error("invalid_payload", "source_revisions must be an object")
+        revisions = dict(source_revisions)
         if not all(isinstance(key, str) for key in revisions):
             return self._error("invalid_payload", "source revision keys must be strings")
         for document_id, revision in revisions.items():
@@ -831,33 +831,26 @@ class FuentePyWebViewApi:
 
     def approve_note(
         self,
-        note_id: object,
-        expected_revision: object = None,
-        metadata: object = None,
+        document_id: object,
+        expected_revision: object,
     ) -> dict[str, Any]:
-        note = self._text(note_id, "note_id")
-        if isinstance(note, dict):
-            return note
-        if "/" in note or "\\" in note or note.endswith(".md"):
-            return self._error("path_not_authorized", "Path is not authorized")
-        payload: dict[str, Any] = {"path": note}
-        if expected_revision is not None:
-            if isinstance(expected_revision, bool) or not isinstance(
-                expected_revision, (int, float)
-            ):
-                return self._error("invalid_payload", "expected_revision must be a number")
-            payload["expected_revision"] = int(expected_revision)
-        if metadata is not None:
-            parsed = self._payload(metadata)
-            if isinstance(parsed, dict) and "error" in parsed:
-                return parsed
-            assert isinstance(parsed, dict)
-            normalized = self._metadata_write_payload(parsed)
-            if "error" in normalized:
-                return normalized
-            payload["metadata"] = normalized
+        document = self._editor_note_id(document_id)
+        if isinstance(document, dict):
+            return document
+        if isinstance(expected_revision, bool) or not isinstance(
+            expected_revision, int
+        ):
+            return self._error(
+                "invalid_payload", "expected_revision must be an integer"
+            )
         try:
-            return self.backend.handle_action("approve_note", payload)
+            return self.backend.handle_action(
+                "approve_note",
+                {
+                    "document_id": document,
+                    "expected_revision": expected_revision,
+                },
+            )
         except PathAuthorizationError as error:
             return {"error": error.code, "message": str(error)}
 
@@ -904,33 +897,6 @@ class FuentePyWebViewApi:
             return self._error("path_not_authorized", "Path is not authorized")
         return self.backend.handle_action(
             "move_note", {"document_id": note, "target_issue": issue}
-        )
-
-    def merge_notes(
-        self, note_ids: object, title: object, issue_id: object = "_Sin_Cuestion"
-    ) -> dict[str, Any]:
-        if not isinstance(note_ids, list) or len(note_ids) < 2:
-            return self._error("invalid_payload", "note_ids must contain at least two IDs")
-        if not all(isinstance(note_id, str) and note_id.strip() for note_id in note_ids):
-            return self._error("invalid_payload", "note_ids must contain strings")
-        if any(
-            "/" in note_id or "\\" in note_id or note_id.strip().endswith(".md")
-            for note_id in note_ids
-        ):
-            return self._error("path_not_authorized", "Path is not authorized")
-        merged_title = self._text(title, "title")
-        issue = self._text(issue_id, "issue_id")
-        if isinstance(merged_title, dict):
-            return merged_title
-        if isinstance(issue, dict):
-            return issue
-        return self.backend.handle_action(
-            "merge_notes",
-            {
-                "note_paths": note_ids,
-                "merged_title": merged_title,
-                "target_issue": issue,
-            },
         )
 
     def get_quarantine(self) -> dict[str, Any]:

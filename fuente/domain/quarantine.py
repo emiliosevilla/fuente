@@ -62,7 +62,7 @@ class QuarantineService:
         return self._read_items()
 
     def list_active_items(self) -> list[dict[str, Any]]:
-        """Return entries whose quarantined file is still awaiting action."""
+        """Return active entries with status ``quarantined`` or ``failed_for_review``."""
         return [
             item
             for item in self._read_items()

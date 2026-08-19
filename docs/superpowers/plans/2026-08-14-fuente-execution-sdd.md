@@ -1067,7 +1067,7 @@ Q-08 depende de las siete anteriores y P-08 depende del cierre de todas.
 | Q-01 | DOCX byte a byte determinista | **COMPLETE** | `34b1098`, `471d5c9` y `6cd417a`; Luna DONE, Terra APPROVED y Sol APPROVED; 28 pruebas focales verdes y tres gates READY medidos. |
 | Q-02 | Higiene y gate de artefactos activos | **COMPLETE** | `0712782`, `96cd085`, `673934a` y `a328c17`; Terra implementó y corrigió, Luna APPROVED y Sol APPROVED; 25 pruebas focales y gate READY. |
 | Q-03 | Vocabulario visible coherente | **COMPLETE** | P-04; revisión visual nativa cerrada el 2026-08-19; 87 pruebas focales verdes. |
-| Q-04 | Contratos Wave 1 y limpieza de API | **NOT_STARTED** | Q-02 |
+| Q-04 | Contratos Wave 1 y limpieza de API | **COMPLETE** | `30` pruebas focales y `7` de servicio; Terra APPROVED; `get_default_config` preservada y rechazo de restauración visible. |
 | Q-05 | Cobertura de cuarentena e ingesta | **NOT_STARTED** | Q-04 |
 | Q-06 | Mutaciones por identidad opaca | **NOT_STARTED** | Tasks 3–5 |
 | Q-07 | Cola sin N+1 y transiciones de política cubiertas | **NOT_STARTED** | Q-06 |

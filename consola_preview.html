@@ -2215,6 +2215,10 @@
                     });
                 }
                 loadQuarantineData();
+            }).catch(function(error) {
+                if (typeof log === 'function') {
+                    log('No se pudo restaurar' + (error ? ': ' + error : ''));
+                }
             });
         }
 

@@ -380,13 +380,15 @@ def test_bridge_preview_and_commit_are_document_id_only(fusion_harness):
     assert bridge.commit_fusion(preview["preview_id"], preview["source_revisions"])["status"] == "pending_review"
 
 
-def test_legacy_path_based_merge_action_is_rejected(fusion_harness):
+def test_legacy_merge_alias_is_removed(fusion_harness):
     vault, _service, _notes, _store, _origin = fusion_harness
     bridge = FuentePyWebViewApi(FuenteConsoleBackend(vault.config.vault_path))
 
-    result = bridge.merge_notes(["4_salida/Issue-A/alpha.md", "4_salida/Issue-A/beta.md"], "Legacy", "Issue-A")
-
-    assert result == {"error": "path_not_authorized", "message": "Path is not authorized"}
+    assert not hasattr(bridge, "merge_notes")
+    assert bridge.backend.handle_action("merge_notes", {}) == {
+        "error": "action_not_allowed",
+        "message": "Acción no permitida",
+    }
 
 
 def test_fusion_does_not_write_when_one_origin_is_unapproved(fusion_harness):

@@ -42,7 +42,7 @@ def test_bridge_rejects_path_shaped_note_identifiers(temp_vault_path):
     for method, args in (
         ("get_note_content", ("4_salida/evil.md",)),
         ("get_note_metadata", ("../outside.md",)),
-        ("approve_note", ("4_salida/evil.md",)),
+        ("approve_note", ("4_salida/evil.md", 1)),
         ("export_note", ("4_salida/evil.md", "markdown")),
     ):
         result = getattr(bridge, method)(*args)
@@ -50,6 +50,15 @@ def test_bridge_rejects_path_shaped_note_identifiers(temp_vault_path):
             "error": "path_not_authorized",
             "message": "Path is not authorized",
         }
+
+
+@pytest.mark.parametrize("legacy_key", ["path", "file_path"])
+def test_backend_approve_rejects_legacy_path_payloads(temp_vault_path, legacy_key):
+    backend = FuenteConsoleBackend(temp_vault_path)
+
+    assert backend.handle_action(
+        "approve_note", {legacy_key: "3_limpio/a.md", "expected_revision": 1}
+    ) == {"error": "invalid_payload"}
 
 
 def test_editor_bridge_rejects_path_and_legacy_payloads_before_backend_access(

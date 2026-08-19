@@ -1,6 +1,7 @@
 """Release gate tests — offline fail-closed behaviour and sample Vault smoke (Task 8.5)."""
 from __future__ import annotations
 
+import json
 import subprocess
 import sys
 from pathlib import Path
@@ -200,3 +201,75 @@ def test_active_artifact_hygiene_is_registered_in_release_gate(gate_module):
     )
 
     assert [check.id for check in checks] == ["active_artifact_hygiene"]
+
+
+def test_documentation_freshness_fails_closed_when_evidence_is_missing(gate_module, tmp_path):
+    result = gate_module.check_documentation_freshness(tmp_path)
+
+    assert result.id == "documentation_freshness"
+    assert result.passed is False
+    assert "current-sdd.json" in result.detail
+
+
+def test_documentation_freshness_is_registered_in_release_gate(gate_module):
+    checks = gate_module.run_all_checks(
+        skip_pytest=True,
+        repo_root=REPO_ROOT,
+        only=["documentation_freshness"],
+    )
+
+    assert [check.id for check in checks] == ["documentation_freshness"]
+
+
+def test_documentation_freshness_rejects_status_discrepancy(gate_module, tmp_path, monkeypatch):
+    plan = (
+        tmp_path
+        / "docs"
+        / "superpowers"
+        / "plans"
+        / "2026-08-14-fuente-execution-sdd.md"
+    )
+    plan.parent.mkdir(parents=True)
+    plan.write_text(
+        "\n".join(
+            [
+                *[f"- [x] **P-{number:02d} — gate**" for number in range(1, 9)],
+                *[
+                    f"| Q-{number:02d} | Entrega | **COMPLETE** |"
+                    for number in range(1, 9)
+                ],
+            ]
+        ),
+        encoding="utf-8",
+    )
+    evidence_path = tmp_path / "docs" / "evidence" / "current-sdd.json"
+    evidence_path.parent.mkdir(parents=True)
+    evidence = {
+        "measured_at": "2026-08-19T00:00:00Z",
+        "branch": "dev",
+        "base_head": "abc123",
+        "source_tree_digest": "digest",
+        "suite": "7 passed",
+        "gate": "RESULT: BLOCKED",
+        "p_status": {f"P-{number:02d}": "COMPLETE" for number in range(1, 9)},
+        "q_status": {
+            **{f"Q-{number:02d}": "COMPLETE" for number in range(1, 8)},
+            "Q-08": "IMPLEMENTED / REVIEW OPEN",
+        },
+    }
+    evidence_path.write_text(json.dumps(evidence), encoding="utf-8")
+    monkeypatch.setattr(gate_module, "calculate_source_tree_digest", lambda _root: "digest")
+
+    def fake_git(command, **_kwargs):
+        if command[1:] == ["branch", "--show-current"]:
+            return subprocess.CompletedProcess(command, 0, stdout="dev\n", stderr="")
+        if command[1:3] == ["merge-base", "--is-ancestor"]:
+            return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
+        raise AssertionError(command)
+
+    monkeypatch.setattr(gate_module.subprocess, "run", fake_git)
+    result = gate_module.check_documentation_freshness(tmp_path)
+
+    assert result.passed is False
+    assert "Q-08" in result.detail
+    assert "status" in result.detail.lower()

@@ -34,7 +34,7 @@ alcanzó cada cierre.
 | 7 | `Fuentes`→`Sumarios` | **COMPLETE — NO-OP REAL** | P-04 cerró con manifiesto vacío, apply/rollback en copia y dictámenes Terra/Sol favorables. |
 | 8 | Identidad y estado local Fuente | **COMPLETE** | P-05 cerró la normalización, el historial recuperable y la retirada de restos operativos del namespace anterior. |
 | 9 | Nord y lector de tres regiones | **COMPLETE — P-06 CLOSED** | Contratos, pruebas, remediación técnica y revisión visual nativa cerrados; la evidencia final confirma lector, foco, contraste, ancho mínimo y grafo/MOC. |
-| 10 | Cierre y release | **IN PROGRESS** | Falta Q-04–Q-08 y P-08 con gate final y dictamen independiente; P-07 queda cerrado como no aplicable por decisión arquitectónica. |
+| 10 | Cierre y release | **IN PROGRESS** | Q-01–Q-08 están cerradas; P-08 permanece abierto y exige gate final y dictamen independiente; P-07 queda cerrado como no aplicable. El gate global sigue bloqueado por siete fallos ajenos a Q-08. |
 
 ### Estado canónico registrado
 
@@ -1073,7 +1073,7 @@ Para extraer sus briefs se debe usar la clave explícita del encabezado (`Q-01`
 | Q-05 | Cobertura de cuarentena e ingesta | **COMPLETE** | `89` pruebas focales; Terra APPROVED; error estable de revisión manual, filtros compartidos y gate `readme_honesty` verificados. |
 | Q-06 | Mutaciones por identidad opaca | **COMPLETE** | `aaf3257`; matriz focal `136 passed, 1 warning`; Terra APPROVED en la reconciliación final; PR #36 merged en `889a5e3`. |
 | Q-07 | Cola sin N+1 y transiciones de política cubiertas | **COMPLETE** | `70` pruebas Wave 2 y `24` regresiones focales; medición constante de `1` consulta para 1 y 50 jobs; Terra APPROVED tras re-revisión. |
-| Q-08 | Evidencia documental actual y comprobable | **NOT_STARTED** | Q-01–Q-07, P-06 |
+| Q-08 | Evidencia documental actual y comprobable | **COMPLETE** | `23` pruebas focales; `documentation_freshness` `READY`; Terra APPROVED tras re-revisión. El gate global conserva `RESULT: BLOCKED` por siete fallos ajenos; P-08 no se cierra. |
 
 ### Task Q-01: Exportación DOCX determinista
 
@@ -1842,6 +1842,45 @@ Expected: PASS, `RESULT: READY` y diff sin errores. Si el gate devuelve
 git add docs/evidence/current-sdd.json scripts/update_sdd_evidence.py tests/test_documentation_freshness.py docs/task.md docs/release-gate.md docs/security-residual-findings.md docs/planning-index.md docs/superpowers/plans/2026-08-14-fuente-execution-sdd.md scripts/release_gate.py tests/test_release_gate.py
 git commit -m "docs: make SDD evidence current and verifiable"
 ```
+
+### Cierre Q-08 — 2026-08-19
+
+Q-08 queda cerrada con evidencia documental actual y verificable. La matriz
+focal pasó **23 pruebas** y el check aislado `documentation_freshness` devolvió
+`RESULT: READY`. `current-sdd.json` conserva mapas ID→estado para P/Q, el
+`base_head` ancestral y el digest reproducible del árbol fuente; el SDD
+versionado registra Q-08 como `COMPLETE` y mantiene P-08 abierto.
+
+La suite completa medida queda en **7 failed, 1193 passed, 1 skipped, 1
+warning**; Terra verificó que los siete fallos son ajenos a Q-08. Por ello el
+release gate global y P-08 siguen `BLOCKED` y no se presentan como cerrados.
+
+### Ejecución real Q-08 — 2026-08-19
+
+Luna implementó Q-08 y aplicó la corrección solicitada por Terra: `p_status` y
+`q_status` son mapas `ID → estado` leídos del ledger P y de la tabla Q de este
+SDD. Q-08 queda **IMPLEMENTED / REVIEW OPEN**. P-08 permanece abierto porque
+el release gate global sigue bloqueado; esta sección no constituye un cierre de
+P-08 ni una aprobación de Terra.
+
+Comandos y resultados de esta ronda:
+
+```text
+PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -p no:cacheprovider tests/test_documentation_freshness.py tests/test_release_gate.py -q
+23 passed in 0.84s
+
+PYTHONDONTWRITEBYTECODE=1 python3 scripts/release_gate.py --skip-pytest --only documentation_freshness
+RESULT: READY
+
+git diff --check
+exit 0
+```
+
+La regresión de discrepancia de estado verifica que el gate devuelve `FAIL`
+cuando el JSON declara `Q-08: COMPLETE` pero la tabla Q del SDD declara
+`Q-08: IMPLEMENTED / REVIEW OPEN`. La evidencia regenerada mantiene el último
+resultado global medido: suite `7 failed, 1193 passed, 1 skipped, 1 warning`
+y gate `RESULT: BLOCKED`; no se intentaron corregir esos siete fallos ajenos.
 
 ## Definition of Done de las tareas Q
 

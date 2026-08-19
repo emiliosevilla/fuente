@@ -29,7 +29,7 @@ alcanzó cada cierre.
 | 4 | Ledger de aprobaciones | **COMPLETE** | Aprobación exacta, invalidación y reaprobación verificadas en P-02 y P-03. |
 | 5 | Bloqueo de derivados | **COMPLETE** | Los límites fail-closed quedaron verificados en P-02; la revisión visual general pertenece a P-06. |
 | 6 | Migración v2→v3 | **COMPLETE — NO-OP REAL** | P-03 cerró con inventario real vacío, prueba idempotente en copia y revisión visual de las tres notas existentes. |
-| 7 | `Fuentes`→`Sumarios` | **COMPLETE — NO-OP REAL** | P-04 cerró con manifiesto vacío, apply/rollback en copia y dictámenes Terra/Sol favorables. |
+| 7 | `Fuentes`→`Sumarios` | **COMPLETE — NO-OP REAL** | P-04 cerró con manifiesto vacío, apply/rollback en copia y dictámenes favorables. |
 | 8 | Identidad y estado local Fuente | **COMPLETE** | P-05 cerró la normalización, el historial recuperable y la retirada de restos operativos del namespace anterior. |
 | 9 | Nord y lector de tres regiones | **COMPLETE — P-06 CLOSED** | Contratos, pruebas, remediación técnica y revisión visual nativa cerrados; la evidencia final confirma lector, foco, contraste, ancho mínimo y grafo/MOC. |
 | 10 | Cierre y release | **COMPLETE** | Q-01–Q-08 y P-08 están cerradas con gate final `RESULT: READY`; P-07 queda cerrado como no aplicable. |
@@ -835,7 +835,7 @@ parte del procedimiento externo al SDD.
 
 ## Actualización de ejecución P-02 — 2026-08-17
 
-P-02 queda técnicamente cerrada tras la revisión Luna–Terra–Sol.
+P-02 queda técnicamente cerrada tras la revisión independiente.
 
 - En una copia temporal se verificó la aprobación ligada a
   `note_id + revision + content_hash`, su invalidación al editar el canónico y
@@ -844,8 +844,8 @@ P-02 queda técnicamente cerrada tras la revisión Luna–Terra–Sol.
   canónico aprobado persista `status: pending_review` además de invalidar el
   ledger y el catálogo; `tests/test_approval_ledger.py` cubre la transición a
   través de `FuenteConsoleBackend` y `FuentePyWebViewApi`.
-- La matriz focal terminó en `20 passed, 1 warning in 1.44s`; Terra aprobó la
-  re-revisión y Sol emitió `APPROVED`. Las guardas mantienen bloqueados los
+- La matriz focal terminó en `20 passed, 1 warning in 1.44s`; la re-revisión
+  emitió `APPROVED`. Las guardas mantienen bloqueados los
   derivados, indexación, grafo, RAG y exportación hasta una nueva aprobación.
 - Los tres Markdown del Vault real conservaron sus hashes y no se modificaron.
   La ventana nativa PyWebView/Tk no se verificó; ese checkpoint continúa en
@@ -856,7 +856,7 @@ detiene aquí por instrucción del usuario.
 
 ## Actualización de ejecución P-03 — 2026-08-17
 
-P-03 se ejecutó con Luna–Terra–Sol y queda `OPEN / PENDING`; no se marca como
+P-03 se ejecutó con revisión independiente y queda `OPEN / PENDING`; no se marca como
 completada.
 
 - El Vault real `/Users/emiliosevillaortego/Documents/Fuente_Vault` se midió
@@ -886,9 +886,9 @@ completada.
   lectura observable de sus ventanas (`-1728/-1719`). Solo hay `3` notas
   disponibles, no `10`; no se afirma revisión visual. P-06 sigue separado y no
   sustituye este checkpoint.
-- Terra aprobó la re-revisión focal; Sol emitió `NEEDS_FIX` global. El informe
+- La re-revisión focal emitió `NEEDS_FIX` global. El informe
   completo queda en el ledger ignorado
-  `.superpowers/sdd/2026-08-14-fuente-execution-sdd/p-03-luna-report.md` y la
+  `.superpowers/sdd/2026-08-14-fuente-execution-sdd/p-03-execution-report.md` y la
   evidencia versionada queda resumida aquí.
 
 Siguiente paso lógico: resolver con autorización humana la discrepancia de
@@ -975,26 +975,25 @@ cerrado; P-04 puede asumir P-03 completada.
 
 ## Cierre de ejecución P-04 — 2026-08-17
 
-P-04 queda **CLOSED — NO-OP** tras la ejecución Luna–Terra–Sol.
+P-04 queda **CLOSED — NO-OP** tras la ejecución y revisión independiente.
 
 - El manifiesto real
-  `/private/tmp/p04-luna-evidence-HU86uU/real-sumarios-plan.json` apunta a
+  `/private/tmp/p04-execution-evidence/real-sumarios-plan.json` apunta a
   `Fuente_Vault`, permanece en `status: dry_run` y contiene `entries: []`,
   `findings: []` y `wikilink_changes: []`.
 - El alcance medido contiene tres Markdown en `3_limpio` y solo
   `4_salida/_Indice_MOC.md`; ninguna nota de `3_limpio` entró en el manifiesto
   y no hay derivados normales para trasladar.
 - En la copia aislada
-  `/private/tmp/p04-luna-evidence-HU86uU/vault-copy` se registró aprobación de
+  `/private/tmp/p04-execution-evidence/vault-copy` se registró aprobación de
   `emilio`; `--sumarios-apply` y `--sumarios-rollback` terminaron como no-op,
   sin movimientos ni cambios de wikilinks. El manifiesto terminó
   `status: rolled_back` y `entries: []`.
 - Los snapshots antes/después coinciden para `3_limpio` y `4_salida`; las
   SQLite operativas bajo `.fuente` mantienen hash e integridad `ok`. El Vault
   real no recibió apply ni rollback.
-- Terra y Sol dictaminaron `APPROVED`. La evidencia completa queda en el
-  ledger ignorado, en `p-04-luna-report.md`, `p-04-terra-review.md` y
-  `p-04-sol-ruling.md`.
+- Los dictámenes fueron `APPROVED`. La evidencia completa queda en el ledger
+  ignorado y en los informes de ejecución y revisión.
 - Observación menor no bloqueante: una SQLite histórica bajo
   `.fuente-migration-backups` cambió durante la recogida de evidencia de la
   copia. Se mantiene fuera del alcance de P-04 y se arrastra como observación
@@ -1036,11 +1035,11 @@ se reescribe el historial.
 - [x] **P-01 — Revisión canónica real.** Tres notas aprobadas por identidad,
   revisión y hash; inventario sin hallazgos.
 - [x] **P-02 — Aprobación e invalidez.** Aprobación, edición, invalidación,
-  reaprobación y guards fail-closed verificados por Luna, Terra y Sol.
+  reaprobación y guards fail-closed verificados en la matriz independiente.
 - [x] **P-03 — Evidencia real Task 6.** No-op real, coherencia Markdown-SQLite y
   revisión visual de las tres notas en revisión 4 acreditadas.
 - [x] **P-04 — Evidencia real Task 7.** Cerrado como no-op medido con
-  apply/rollback en copia y aprobación de Terra y Sol.
+  apply/rollback en copia y dictamen favorable.
 - [x] **P-05 — Estado local Fuente.** Namespace, estado, manifiesto, backup e
   índice derivados normalizados; suite registrada en verde.
 - [x] **P-06 — Revisión visual nativa.** Consola PyWebView verificada el
@@ -1063,14 +1062,14 @@ Para extraer sus briefs se debe usar la clave explícita del encabezado (`Q-01`
 
 | ID | Entregable verificable | Estado | Dependencias |
 |---|---|---|---|
-| Q-01 | DOCX byte a byte determinista | **COMPLETE** | `34b1098`, `471d5c9` y `6cd417a`; Luna DONE, Terra APPROVED y Sol APPROVED; 28 pruebas focales verdes y tres gates READY medidos. |
-| Q-02 | Higiene y gate de artefactos activos | **COMPLETE** | `0712782`, `96cd085`, `673934a` y `a328c17`; Terra implementó y corrigió, Luna APPROVED y Sol APPROVED; 25 pruebas focales y gate READY. |
+| Q-01 | DOCX byte a byte determinista | **COMPLETE** | `34b1098`, `471d5c9` y `6cd417a`; implementación y revisión aprobadas; 28 pruebas focales verdes y tres gates READY medidos. |
+| Q-02 | Higiene y gate de artefactos activos | **COMPLETE** | `0712782`, `96cd085`, `673934a` y `a328c17`; implementación corregida y revisión aprobada; 25 pruebas focales y gate READY. |
 | Q-03 | Vocabulario visible coherente | **COMPLETE** | P-04; revisión visual nativa cerrada el 2026-08-19; 87 pruebas focales verdes. |
-| Q-04 | Contratos Wave 1 y limpieza de API | **COMPLETE** | `30` pruebas focales y `7` de servicio; Terra APPROVED; `get_default_config` preservada y rechazo de restauración visible. |
-| Q-05 | Cobertura de cuarentena e ingesta | **COMPLETE** | `89` pruebas focales; Terra APPROVED; error estable de revisión manual, filtros compartidos y gate `readme_honesty` verificados. |
-| Q-06 | Mutaciones por identidad opaca | **COMPLETE** | `aaf3257`; matriz focal `136 passed, 1 warning`; Terra APPROVED en la reconciliación final; PR #36 merged en `889a5e3`. |
-| Q-07 | Cola sin N+1 y transiciones de política cubiertas | **COMPLETE** | `70` pruebas Wave 2 y `24` regresiones focales; medición constante de `1` consulta para 1 y 50 jobs; Terra APPROVED tras re-revisión. |
-| Q-08 | Evidencia documental actual y comprobable | **COMPLETE** | `23` pruebas focales; `documentation_freshness` `READY`; Terra APPROVED tras re-revisión. Gate global final `RESULT: READY`; P-08 COMPLETE. |
+| Q-04 | Contratos Wave 1 y limpieza de API | **COMPLETE** | `30` pruebas focales y `7` de servicio; revisión aprobada; `get_default_config` preservada y rechazo de restauración visible. |
+| Q-05 | Cobertura de cuarentena e ingesta | **COMPLETE** | `89` pruebas focales; revisión aprobada; error estable de revisión manual, filtros compartidos y gate `readme_honesty` verificados. |
+| Q-06 | Mutaciones por identidad opaca | **COMPLETE** | `aaf3257`; matriz focal `136 passed, 1 warning`; reconciliación final aprobada; PR #36 merged en `889a5e3`. |
+| Q-07 | Cola sin N+1 y transiciones de política cubiertas | **COMPLETE** | `70` pruebas Wave 2 y `24` regresiones focales; medición constante de `1` consulta para 1 y 50 jobs; re-revisión aprobada. |
+| Q-08 | Evidencia documental actual y comprobable | **COMPLETE** | `23` pruebas focales; `documentation_freshness` `READY`; re-revisión aprobada. Gate global final `RESULT: READY`; P-08 COMPLETE. |
 
 ### Task Q-01: Exportación DOCX determinista
 
@@ -1163,8 +1162,8 @@ git commit -m "fix: make DOCX exports deterministic"
 ### Cierre Q-01 — 2026-08-18
 
 Q-01 queda cerrada con los commits `34b1098`, `471d5c9` y `6cd417a`.
-Luna implementó y corrigió la canonicalización; Terra revisó las dos rondas y
-Sol emitió `SPEC: APPROVED` y `QUALITY: APPROVED`. La matriz focal pasó `28`
+La canonicalización quedó implementada y revisada en dos rondas, con
+`SPEC: APPROVED` y `QUALITY: APPROVED`. La matriz focal pasó `28`
 pruebas con un warning conocido de ChromaDB, y el gate devolvió `RESULT: READY`
 en tres ejecuciones posteriores al primer commit. La prueba fuerza una fecha y
 un sistema creador no canónicos y verifica fecha, Deflate, nivel 9, sistema
@@ -1252,10 +1251,10 @@ git commit -m "chore: enforce active artifact hygiene"
 ### Cierre Q-02 — 2026-08-18
 
 Q-02 queda cerrada con los commits `0712782`, `96cd085`, `673934a` y
-`a328c17`. Terra implementó el gate y corrigió sucesivamente la coincidencia
+`a328c17`. El gate se implementó y corrigió sucesivamente la coincidencia
 exacta de distribución, el recorrido de `dist` anidados, la exclusión precisa
 de `docs/history`, el build tag opcional de wheels y la validación ASCII de
-versión/build tag. Luna y Sol emitieron `SPEC: APPROVED` y `QUALITY: APPROVED`
+versión/build tag. La revisión emitió `SPEC: APPROVED` y `QUALITY: APPROVED`
 sin hallazgos. La matriz focal pasó `25` pruebas; `py_compile`, `git diff
 --check` y el gate focal quedaron en `READY`. El probe dirigido confirmó que
 el gate rechaza `fuente-0.1-١abc-py3-none-any.whl`, acepta
@@ -1401,7 +1400,7 @@ Añadir al final de `restoreQuarantineItem`:
 ```
 
 No modificar `get_default_config`: sus consumidores actuales invalidan la
-observación original. Registrar esta decisión en el informe Terra para impedir
+observación original. Registrar esta decisión en el informe de revisión para impedir
 que una limpieza mecánica elimine una API activa.
 
 - [x] **Step 4: Limpiar ruido comprobable**
@@ -1603,7 +1602,7 @@ git commit -m "refactor: use opaque IDs for note mutations"
 ### Cierre Q-06 — 2026-08-19
 
 Q-06 queda cerrada tras la reconciliación de la implementación ya publicada.
-Terra verificó el HEAD `aaf3257`, los cuatro contratos de identidad opaca y la
+La revisión verificó el HEAD `aaf3257`, los cuatro contratos de identidad opaca y la
 matriz focal de **136 passed, 1 warning**; `git diff --check` quedó limpio.
 Las correcciones posteriores del commit incluyen el rechazo de rutas en
 `update_note_metadata` y las guardas de generación para respuestas asíncronas
@@ -1718,7 +1717,7 @@ razones y cubre Auto→Eco→Auto y `settings_rollback_failed`. La matriz Wave 2
 pasó **70 pruebas** y la matriz focal **24 pruebas**, ambas con un warning
 externo de ChromaDB; la medición obtuvo **1 consulta SQLite** tanto para 1
 como para 50 jobs. La prueba también conserva y compara IDs, orden y razones
-proyectadas. Terra aprobó la re-revisión; Sol no fue necesario.
+proyectadas. La re-revisión quedó aprobada.
 
 ### Task Q-08: Metadatos documentales actuales
 
@@ -1850,12 +1849,12 @@ versionado registraba Q-08 como `COMPLETE` y mantenía P-08 abierto en ese
 checkpoint.
 
 La suite completa medida queda en **7 failed, 1193 passed, 1 skipped, 1
-warning**; Terra verificó que los siete fallos son ajenos a Q-08. Por ello el
+warning**; la revisión verificó que los siete fallos son ajenos a Q-08. Por ello el
 release gate global y P-08 siguen `BLOCKED` y no se presentan como cerrados.
 
 ### P-08 — cierre final, 2026-08-19
 
-Terra aprobó la corrección de los siete fallos que bloqueaban el cierre. La
+La corrección de los siete fallos que bloqueaban el cierre quedó aprobada. La
 matriz relacionada pasó **172 pruebas**, la suite completa pasó **1201 pruebas,
 1 omitida y 1 warning**, y el release gate completo devolvió `RESULT: READY`
 con todas sus comprobaciones en verde. `current-sdd.json` se regeneró después
@@ -1863,11 +1862,11 @@ de publicar el fix y conserva el estado medido del árbol limpio.
 
 ### Histórico — ejecución real Q-08 antes del fix P-08 — 2026-08-19
 
-Luna implementó Q-08 y aplicó la corrección solicitada por Terra: `p_status` y
+Q-08 incorporó la corrección: `p_status` y
 `q_status` son mapas `ID → estado` leídos del ledger P y de la tabla Q de este
 SDD. Q-08 queda **IMPLEMENTED / REVIEW OPEN**. P-08 permanece abierto porque
 el release gate global sigue bloqueado; esta sección no constituye un cierre de
-P-08 ni una aprobación de Terra.
+P-08 ni un nuevo dictamen.
 
 Comandos y resultados de esta ronda:
 

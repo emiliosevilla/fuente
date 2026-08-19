@@ -1187,6 +1187,7 @@
         let approvalLegacyOriginIds = [];
         let approvalMetadataDirty = false;
         let approvalMetadataEditGeneration = 0;
+        let approvalMetadataLoadGeneration = 0;
         let failedApprovalExportDocumentId = null;
         let failedApprovalExportFormat = null;
         const metadataFieldIds = ['title', 'tags', 'issue', 'date', 'origins', 'status'];
@@ -1197,7 +1198,10 @@
             panel.dataset.diagnosticBound = 'true';
             panel.addEventListener('toggle', function(event) {
                 if (!event.target.open || !approvalSelectedNoteId) return;
-                window.pywebview.api.get_note_metadata(approvalSelectedNoteId, true).then(function(res) {
+                const diagnosticDocumentId = approvalSelectedNoteId;
+                const diagnosticGeneration = approvalMetadataLoadGeneration;
+                window.pywebview.api.get_note_metadata(diagnosticDocumentId, true).then(function(res) {
+                    if (approvalSelectedNoteId !== diagnosticDocumentId || approvalMetadataLoadGeneration !== diagnosticGeneration) return;
                     if (res && res.raw_frontmatter) {
                         document.getElementById('metadata-raw-frontmatter').textContent = res.raw_frontmatter;
                     }
@@ -1970,6 +1974,9 @@
         }
 
         function selectApprovalNote(documentId, revision, itemEl, approvalScope) {
+            const loadGeneration = ++approvalMetadataLoadGeneration;
+            approvalMetadataEditGeneration += 1;
+            approvalMetadataDirty = false;
             approvalSelectedNoteId = documentId;
             approvalSelectedRevision = revision;
             setApprovalScope(approvalScope);
@@ -1982,6 +1989,7 @@
             document.getElementById('metadata-raw-frontmatter').textContent = '';
 
             window.pywebview.api.get_note_metadata(documentId, false).then(function(res) {
+                if (approvalSelectedNoteId !== documentId || approvalMetadataLoadGeneration !== loadGeneration) return;
                 if (res && res.error) {
                     document.getElementById('approval-form-status').textContent = res.message || res.error;
                     return;
@@ -1996,6 +2004,7 @@
             if (!approvalSelectedNoteId || approvalSelectedRevision === null) return;
             const saveDocumentId = approvalSelectedNoteId;
             const saveGeneration = approvalMetadataEditGeneration;
+            const saveLoadGeneration = approvalMetadataLoadGeneration;
             const metadata = collectMetadataFormValues();
             document.getElementById('approval-form-status').textContent = 'Guardando...';
             window.pywebview.api.update_note_metadata(
@@ -2003,7 +2012,7 @@
                 metadata,
                 approvalSelectedRevision
             ).then(function(res) {
-                if (approvalSelectedNoteId !== saveDocumentId) return;
+                if (approvalSelectedNoteId !== saveDocumentId || approvalMetadataLoadGeneration !== saveLoadGeneration) return;
                 if (res && res.field_errors) {
                     showMetadataFieldErrors(res.field_errors);
                     document.getElementById('approval-form-status').textContent = res.message || 'Metadatos inválidos';

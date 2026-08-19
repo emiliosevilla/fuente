@@ -61,6 +61,16 @@ def test_backend_approve_rejects_legacy_path_payloads(temp_vault_path, legacy_ke
     ) == {"error": "invalid_payload"}
 
 
+@pytest.mark.parametrize("legacy_key", ["path", "file_path"])
+def test_backend_update_metadata_rejects_legacy_path_payloads(temp_vault_path, legacy_key):
+    backend = FuenteConsoleBackend(temp_vault_path)
+
+    assert backend.handle_action(
+        "update_note_metadata",
+        {legacy_key: "3_limpio/a.md", "metadata": {}, "expected_revision": 1},
+    ) == {"error": "invalid_payload"}
+
+
 def test_editor_bridge_rejects_path_and_legacy_payloads_before_backend_access(
     temp_vault_path,
 ):

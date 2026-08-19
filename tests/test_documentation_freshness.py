@@ -39,7 +39,7 @@ def test_current_evidence_matches_branch_and_source_tree():
         "P-05": "COMPLETE",
         "P-06": "COMPLETE",
         "P-07": "COMPLETE",
-        "P-08": "OPEN",
+        "P-08": "COMPLETE",
     }
     assert evidence["q_status"] == {
         "Q-01": "COMPLETE",

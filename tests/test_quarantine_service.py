@@ -19,7 +19,7 @@ def quarantine_service(tmp_path):
     return QuarantineService(vault_root)
 
 
-def test_list_active_items_includes_failed_for_review(quarantine_service, tmp_path):
+def test_list_active_items_includes_failed_for_review(quarantine_service):
     vault_root = quarantine_service.vault_root
     quarantined_source = vault_root / "1_entrada" / "broken.pdf"
     quarantined_source.parent.mkdir(parents=True)

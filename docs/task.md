@@ -55,16 +55,15 @@ benchmark siguen bloqueados hasta ejecutar esa promoción.
 
 ### Estado medido actual — SDD Fuente (2026-08-15)
 
-- Tareas 1–7 y 9 tienen implementación y cobertura automatizada; las Tareas 6,
-  7 y 9 constan como aprobadas por Sol en el ledger. Las Tareas 1–5 conservan
-  checkpoints humanos y dictamen final de Sol pendientes.
+- Tareas 1–9 tienen implementación y cobertura automatizada; P-06/Q-03 ya
+  tienen además revisión visual nativa cerrada en macOS. P-07 conserva abierto
+  el benchmark real y P-08 el cierre documental final.
 - La Tarea 2 mantiene `qwen3.5:0.8b` como candidato; el benchmark real sigue
   bloqueado hasta disponer de casos aprobados en `3_limpio`.
 - La Tarea 8 está implementada técnicamente: paquete, entry point, instaladores,
-  estado `.fuente`, remoto GitHub y carpeta local ya usan Fuente. El ledger
-  histórico aún necesita reflejar este cierre.
-- La Tarea 10 tiene gate verde (`RESULT: READY`), pero el cierre formal requiere
-  registrar la evidencia actual y completar la comprobación humana de Vault/UI.
+  estado `.fuente`, remoto GitHub y carpeta local ya usan Fuente.
+- La Tarea 10 mantiene el cierre formal abierto por P-07, Q-04–Q-08 y P-08;
+  P-06/Q-03 ya están registrados con evidencia humana actual.
 
 ### Revalidación actual del Vault — 2026-08-15
 
@@ -302,7 +301,10 @@ Evidencia de ejecución:
 - **Release gate completo:** todas las suites funcionales pasan: unit `732 passed, 1 skipped`, integration `19 passed`, security `35 passed`, contract `106 passed, 1 warning`, offline `7 passed`, installer `21 passed`, headless `10 passed`, migration `19 passed`, sync `52 passed` y release gate `13 passed`.
 - **Última medición limpia:** todas las comprobaciones pasaron, incluido `source_tree_clean`; resultado: `RESULT: READY`.
 
-No queda un bloqueo funcional de código en este ciclo. Quedan el benchmark real condicionado a documentos aprobados, los checkpoints humanos del Vault/UI y la actualización del ledger SDD. La medición actual del checkout es `1094 passed, 1 skipped` y `RESULT: READY`.
+No queda un bloqueo funcional de código en este ciclo. Quedan el benchmark real
+condicionado a documentos aprobados, Q-04–Q-08 y el cierre final del ledger SDD.
+La revisión visual nativa P-06/Q-03 quedó cerrada el 2026-08-19; la matriz
+focal actual pasó `87 passed`.
 
 ### Observaciones no bloqueantes trasladadas desde los SDD
 

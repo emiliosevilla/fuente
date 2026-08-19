@@ -537,7 +537,7 @@ def step_install_model(ctx: InstallationContext) -> InstallStepResult:
 
     log = ctx.log or _default_log
     log(f"[step:ollama_model] Downloading model {model} via Ollama...")
-    ok = governor.ensure_model_available(model)
+    ok = governor.ensure_model_available(model, authorize_download=True)
     if not ok:
         return InstallStepResult(
             name="ollama_model",

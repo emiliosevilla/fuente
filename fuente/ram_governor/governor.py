@@ -74,16 +74,11 @@ class MEMORYSTATUSEX(ctypes.Structure):
 class RAMGovernor:
     """Administra la memoria RAM del sistema y selecciona dinámicamente el modelo LLM adecuado."""
 
-    def __init__(self, ollama_url: str = "http://localhost:11434", safety_margin_pct: float = 0.35, benchmark_verdict: object | None = None):
+    def __init__(self, ollama_url: str = "http://localhost:11434", safety_margin_pct: float = 0.35):
         self.ollama_url = ollama_url.rstrip("/")
         self.safety_margin_pct = safety_margin_pct
         self._last_budget_decision: Optional[BudgetDecision] = None
         self._last_ollama_state_error: Optional[str] = None
-        self._benchmark_verdict = benchmark_verdict
-
-    def set_benchmark_verdict(self, verdict: object | None) -> None:
-        """Set reviewed benchmark evidence used by the next Auto selection."""
-        self._benchmark_verdict = verdict
 
     def get_top_resource_hogs(self, limit: int = 5) -> List[Dict[str, Any]]:
         """Obtiene la lista de los N procesos de usuario que más RAM consumen, excluyendo la whitelist del SO."""
@@ -270,9 +265,7 @@ class RAMGovernor:
 
     def recommend_model_decision(self) -> BudgetDecision:
         """Select an LLM and return the full budget decision + reason."""
-        decision = select_optimal_model(
-            self.measure_memory(), benchmark_verdict=self._benchmark_verdict
-        )
+        decision = select_optimal_model(self.measure_memory())
         self._last_budget_decision = decision
         logger.info(
             "Modelo seleccionado por RAMGovernor: '%s' (%s)",
@@ -383,6 +376,16 @@ class RAMGovernor:
                 "error": message,
             }
 
+    def get_installed_model_names(self) -> tuple[str, ...]:
+        """Return exact model names installed in Ollama, without loading or pulling."""
+        data = self._http_json("GET", "/api/tags", timeout=3)
+        names = {
+            str(item.get("name")).strip()
+            for item in (data.get("models") or [])
+            if isinstance(item, dict) and str(item.get("name") or "").strip()
+        }
+        return tuple(sorted(names))
+
     def purge_model(self, model_name: str) -> Dict[str, Any]:
         """Unload a model using documented ``keep_alive=0`` (policy purge, not force-kill)."""
         meta = get_model_metadata(model_name)
@@ -426,21 +429,25 @@ class RAMGovernor:
                 "error": message,
             }
 
-    def ensure_model_available(self, model_name: str) -> bool:
-        """Comprueba si el modelo está descargado en Ollama. Si no, solicita el pull."""
+    def ensure_model_available(
+        self, model_name: str, *, authorize_download: bool = False
+    ) -> bool:
+        """Check an exact installed model and pull only after explicit authorization."""
         if not self.check_ollama_status():
             logger.warning(f"Ollama no está respondiendo en {self.ollama_url}")
             return False
 
         try:
-            if HAS_REQUESTS:
-                resp = requests.get(f"{self.ollama_url}/api/tags", timeout=5)
-                if resp.status_code == 200:
-                    models = [m.get("name") for m in resp.json().get("models", [])]
-                    if any(model_name in m for m in models):
-                        return True
+            if model_name in self.get_installed_model_names():
+                return True
+            if not authorize_download:
+                logger.info(
+                    "Model %s is not installed; download requires explicit authorization",
+                    model_name,
+                )
+                return False
 
-                logger.info(f"Descargando modelo '{model_name}' en Ollama...")
+            if HAS_REQUESTS:
                 pull_resp = requests.post(
                     f"{self.ollama_url}/api/pull",
                     json={"name": model_name, "stream": False},
@@ -448,19 +455,183 @@ class RAMGovernor:
                 )
                 return pull_resp.status_code == 200
 
-            req = urllib.request.Request(f"{self.ollama_url}/api/tags")
-            with urllib.request.urlopen(req, timeout=5) as resp:
-                data = json.loads(resp.read().decode("utf-8"))
-                models = [m.get("name") for m in data.get("models", [])]
-                if any(model_name in m for m in models):
-                    return True
-            return True
+            req = urllib.request.Request(
+                f"{self.ollama_url}/api/pull",
+                data=json.dumps({"name": model_name, "stream": False}).encode("utf-8"),
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            with urllib.request.urlopen(req, timeout=600) as resp:
+                return resp.status == 200
         except Exception as e:
             logger.error(f"Error comprobando disponibilidad del modelo '{model_name}': {e}")
             return False
 
+    def check_cycle_model(
+        self,
+        model_name: Optional[str] = None,
+        *,
+        authorize_model_load: bool = False,
+    ) -> Dict[str, Any]:
+        """Re-measure RAM before an ETL LLM stage and return a user-action contract.
+
+        The selected model comes from the setup/configuration. Installed-model
+        state is used only to verify availability; it never selects a model.
+        """
+        snapshot = self.measure_memory()
+        target = (model_name or "").strip() or None
+        if target is None:
+            setup_decision = select_optimal_model(snapshot)
+            target = setup_decision.model_id
+
+        if not snapshot.is_measured:
+            instruction = (
+                "No se pudo medir la RAM disponible con precisión. El ciclo queda "
+                "en espera; cierra aplicaciones y vuelve a reanudar cuando la medición "
+                "esté disponible. No se descargará ningún modelo automáticamente."
+            )
+            return {
+                "allowed": False,
+                "model_id": target,
+                "compatible_model": None,
+                "installed_models": [],
+                "requires_user_confirmation": False,
+                "authorization_used": False,
+                "instruction": instruction,
+                "reason": f"measurement_unavailable; {instruction}",
+                "snapshot": snapshot.to_dict(),
+            }
+
+        try:
+            installed = self.get_installed_model_names()
+        except Exception as exc:
+            instruction = (
+                "No se pudo comprobar el modelo local. Inicia Ollama y vuelve a "
+                "reanudar el ciclo; no se descargará ningún modelo automáticamente."
+            )
+            return {
+                "allowed": False,
+                "model_id": target,
+                "compatible_model": None,
+                "installed_models": [],
+                "requires_user_confirmation": False,
+                "authorization_used": False,
+                "instruction": instruction,
+                "reason": f"llm_model_inventory_unavailable: {exc}; {instruction}",
+                "snapshot": snapshot.to_dict(),
+            }
+
+        target_fit = (
+            evaluate_resource(ResourceKind.LLM_INFERENCE, snapshot, model_id=target)
+            if target
+            else None
+        )
+        compatible = select_optimal_model(snapshot)
+        compatible_model = compatible.model_id if compatible.allowed else None
+        target_is_installed = bool(target and target in installed)
+        if target_is_installed and target_fit is not None and target_fit.allowed:
+            return {
+                "allowed": True,
+                "model_id": target,
+                "compatible_model": target,
+                "installed_models": list(installed),
+                "requires_user_confirmation": False,
+                "authorization_used": False,
+                "instruction": "",
+                "reason": target_fit.reason,
+                "snapshot": snapshot.to_dict(),
+            }
+
+        if compatible_model is None:
+            instruction = (
+                "La RAM disponible no permite ningún modelo compatible. Cierra "
+                "aplicaciones y vuelve a reanudar el ciclo; Fuente permanecerá en espera."
+            )
+            return {
+                "allowed": False,
+                "model_id": target,
+                "compatible_model": None,
+                "installed_models": list(installed),
+                "requires_user_confirmation": False,
+                "authorization_used": False,
+                "instruction": instruction,
+                "reason": f"no_compatible_model; {instruction}",
+                "snapshot": snapshot.to_dict(),
+            }
+
+        instruction = (
+            "La RAM disponible no encaja con el modelo configurado. Cierra "
+            "aplicaciones y vuelve a reanudar, o confirma cargar el mayor modelo "
+            f"compatible ({compatible_model}). Fuente no cerrará procesos ni "
+            "descargará modelos sin esa confirmación."
+        )
+        if not authorize_model_load:
+            return {
+                "allowed": False,
+                "model_id": target,
+                "compatible_model": compatible_model,
+                "installed_models": list(installed),
+                "requires_user_confirmation": True,
+                "authorization_used": False,
+                "instruction": instruction,
+                "reason": f"llm_waiting_for_memory_or_authorization; {instruction}",
+                "snapshot": snapshot.to_dict(),
+            }
+
+        if compatible_model not in installed and not self.ensure_model_available(
+            compatible_model, authorize_download=True
+        ):
+            return {
+                "allowed": False,
+                "model_id": target,
+                "compatible_model": compatible_model,
+                "installed_models": list(installed),
+                "requires_user_confirmation": False,
+                "authorization_used": True,
+                "instruction": (
+                    f"No se pudo cargar {compatible_model}. Instálalo manualmente "
+                    "y vuelve a reanudar el ciclo."
+                ),
+                "reason": f"authorized_model_load_failed; {instruction}",
+                "snapshot": snapshot.to_dict(),
+            }
+
+        installed_after_load = tuple(
+            sorted(set(installed) | {compatible_model})
+        )
+        final_snapshot = self.measure_memory()
+        final_fit = evaluate_resource(
+            ResourceKind.LLM_INFERENCE, final_snapshot, model_id=compatible_model
+        )
+        if not final_fit.allowed:
+            return {
+                "allowed": False,
+                "model_id": target,
+                "compatible_model": compatible_model,
+                "installed_models": list(installed_after_load),
+                "requires_user_confirmation": False,
+                "authorization_used": True,
+                "instruction": (
+                    "La RAM sigue siendo insuficiente después de la confirmación. "
+                    "Cierra aplicaciones y vuelve a reanudar; el ciclo queda en espera."
+                ),
+                "reason": f"authorized_model_still_does_not_fit; {final_fit.reason}",
+                "snapshot": final_snapshot.to_dict(),
+            }
+        return {
+            "allowed": True,
+            "model_id": compatible_model,
+            "compatible_model": compatible_model,
+            "installed_models": list(installed_after_load),
+            "requires_user_confirmation": False,
+            "authorization_used": True,
+            "instruction": "",
+            "reason": final_fit.reason,
+            "snapshot": final_snapshot.to_dict(),
+        }
+
     def setup_optimal_model(self) -> str:
-        """Detecta la RAM del sistema, selecciona el modelo Qwen óptimo manteniendo la holgura del 35% y asegura su descarga."""
+        """Select the setup model from installed RAM without downloading it."""
         ram_info = self.get_system_ram_info()
         print("\n=======================================================")
         print("    CONFIGURACION DE MODELO IA SEGÚN RAM DISPONIBLE")
@@ -493,36 +664,18 @@ class RAMGovernor:
             print("[!] Ollama no está respondiendo en http://localhost:11434. Asegúrate de iniciarlo.")
             return model
 
-        already_installed = False
         try:
-            tags = self._http_json("GET", "/api/tags", timeout=5)
-            models = [m.get("name") for m in tags.get("models", [])]
-            if any(model in (m or "") for m in models):
-                already_installed = True
-        except Exception:
-            pass
-
-        if already_installed:
-            print(f"[+] El modelo '{model}' ya está instalado y listo en Ollama.")
+            installed = self.get_installed_model_names()
+        except Exception as exc:
+            print(f"[!] No se pudo comprobar Ollama: {exc}")
             return model
-
-        print(f"[*] Descargando modelo '{model}' en Ollama (esto puede tardar unos minutos)...")
-        import shutil
-        import subprocess
-        ollama_bin = shutil.which("ollama")
-        if ollama_bin:
-            try:
-                res = subprocess.run([ollama_bin, "pull", model])
-                if res.returncode == 0:
-                    print(f"[+] Modelo '{model}' instalado exitosamente.")
-                    return model
-            except Exception as e:
-                logger.debug(f"CLI pull error: {e}")
-
-        if self.ensure_model_available(model):
-            print(f"[+] Modelo '{model}' descargado e instalado correctamente.")
+        if model in installed:
+            print(f"[+] El modelo '{model}' ya está instalado y listo en Ollama.")
         else:
-            print(f"[!] No se pudo descargar automáticamente '{model}'. Puedes descargarlo con 'ollama pull {model}'.")
+            print(
+                f"[!] El modelo '{model}' no está instalado. La instalación queda "
+                "a la espera de una confirmación explícita del usuario."
+            )
 
         return model
 

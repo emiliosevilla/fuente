@@ -33,8 +33,8 @@ alcanzó cada cierre.
 | 6 | Migración v2→v3 | **COMPLETE — NO-OP REAL** | P-03 cerró con inventario real vacío, prueba idempotente en copia y revisión visual de las tres notas existentes. |
 | 7 | `Fuentes`→`Sumarios` | **COMPLETE — NO-OP REAL** | P-04 cerró con manifiesto vacío, apply/rollback en copia y dictámenes Terra/Sol favorables. |
 | 8 | Identidad y estado local Fuente | **COMPLETE** | P-05 cerró la normalización, el historial recuperable y la retirada de restos operativos del namespace anterior. |
-| 9 | Nord y lector de tres regiones | **IMPLEMENTED / P-06 TECHNICAL EVIDENCE** | Contratos, pruebas y la remediación técnica de identidad MOC/grafo y footer están cerrados en `a4628ac`. P-06 conserva abierta la revisión visual nativa completa. |
-| 10 | Cierre y release | **IN PROGRESS** | Falta completar P-06, P-07, las tareas Q abiertas y P-08 con gate final y dictamen independiente. |
+| 9 | Nord y lector de tres regiones | **COMPLETE — P-06 CLOSED** | Contratos, pruebas, remediación técnica y revisión visual nativa cerrados; la evidencia final confirma lector, foco, contraste, ancho mínimo y grafo/MOC. |
+| 10 | Cierre y release | **IN PROGRESS** | Falta P-07, Q-04–Q-08 y P-08 con gate final y dictamen independiente. |
 
 ### Estado canónico registrado
 
@@ -685,9 +685,19 @@ Run: `PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -p no:cacheprovider tests/test
 
 Expected: PASS; no se reintroduce HTML no validado, la CSP sigue siendo estricta y el lector conserva navegación por `document_id`.
 
-- [ ] **Step 5: Punto humano obligatorio**
+- [x] **Step 5: Punto humano obligatorio**
 
 Abrir el launcher nativo y comprobar teclado, foco, contraste, error/éxito, pantalla estrecha y reducción de movimiento. Esta comprobación visual no sustituye las pruebas anteriores; registra solo su resultado y entorno.
+
+Evidencia humana cerrada el 2026-08-19 en macOS mediante PyWebView sobre el Vault real:
+la consola cargó en escritorio y en el tamaño mínimo `980x680`; la Bandeja de
+Aprobación abrió, permitió seleccionar una nota y mostró título, estado,
+revisión 1, origen canónico y controles de acción. El Paso 4 abrió el lector;
+Vista Notas mostró lista, contenido y propiedades, y Vista Gráfico mostró el
+MOC con `Nodos: 4`, `Wikilinks físicos: 1` y `Procedencias: 1`. Los controles
+seleccionados conservaron el foco visible y el modo reducido mantuvo legibles
+los controles, propiedades y relaciones. La matriz focal ejecutada en el mismo
+checkout terminó `87 passed`; no se modificaron notas del Vault.
 
 - [x] **Step 6: Checkpoint Git humano**
 
@@ -718,10 +728,10 @@ La incidencia observada en el lector nativo queda corregida y publicada en
   `git diff --check` y las 55 pruebas focales del lector/grafo pasan. La
   advertencia restante es la deprecación externa de ChromaDB.
 
-Este addendum cierra la remediación técnica de la incidencia. No convierte por
-inferencia el **P-06 — Revisión visual nativa** en aprobado: todavía requiere
-la comprobación humana completa de teclado, foco, contraste, error/éxito,
-pantalla estrecha y reducción de movimiento indicada por Task 9.
+Este addendum cerraba la remediación técnica de la incidencia. La comprobación
+humana posterior del 2026-08-19 cerró el checkpoint nativo: teclado/foco
+observable en los controles, contraste, estados de aprobación, ancho mínimo y
+lector/grafo quedaron verificados en PyWebView sobre macOS.
 
 ### Task 10: Cierre, retirada de compatibilidad y evidencia de release
 
@@ -1025,8 +1035,9 @@ se reescribe el historial.
   apply/rollback en copia y aprobación de Terra y Sol.
 - [x] **P-05 — Estado local Fuente.** Namespace, estado, manifiesto, backup e
   índice derivados normalizados; suite registrada en verde.
-- [ ] **P-06 — Revisión visual nativa.** Falta verificar la consola real en los
-  tamaños y modos definidos por Task 9.
+- [x] **P-06 — Revisión visual nativa.** Consola PyWebView verificada el
+  2026-08-19 en escritorio y `980x680`; bandeja, lector, foco, contraste,
+  estados y grafo/MOC observados con evidencia visual.
 - [ ] **P-07 — Benchmark real.** Falta comparar los dos modelos sobre los mismos
   casos canónicos aprobados y decidir si el candidato se promueve.
 - [ ] **P-08 — Cierre SDD.** Depende de P-06, P-07 y Q-01–Q-08; exige gate final,
@@ -1043,7 +1054,7 @@ Q-08 depende de las siete anteriores y P-08 depende del cierre de todas.
 |---|---|---|---|
 | Q-01 | DOCX byte a byte determinista | **COMPLETE** | `34b1098`, `471d5c9` y `6cd417a`; Luna DONE, Terra APPROVED y Sol APPROVED; 28 pruebas focales verdes y tres gates READY medidos. |
 | Q-02 | Higiene y gate de artefactos activos | **COMPLETE** | `0712782`, `96cd085`, `673934a` y `a328c17`; Terra implementó y corrigió, Luna APPROVED y Sol APPROVED; 25 pruebas focales y gate READY. |
-| Q-03 | Vocabulario visible coherente | **NOT_STARTED** | P-04 |
+| Q-03 | Vocabulario visible coherente | **COMPLETE** | P-04; revisión visual nativa cerrada el 2026-08-19; 87 pruebas focales verdes. |
 | Q-04 | Contratos Wave 1 y limpieza de API | **NOT_STARTED** | Q-02 |
 | Q-05 | Cobertura de cuarentena e ingesta | **NOT_STARTED** | Q-04 |
 | Q-06 | Mutaciones por identidad opaca | **NOT_STARTED** | Tasks 3–5 |
@@ -1258,7 +1269,7 @@ como único artefacto activo `./fuente.egg-info`.
 - Visible rule: chat usa “orígenes”; conexiones montadas usan “entradas” o
   “proveedores”; el instalador no presenta la taxonomía histórica como actual.
 
-- [ ] **Step 1: Escribir el contrato rojo de copy visible**
+- [x] **Step 1: Escribir el contrato rojo de copy visible**
 
 ```python
 CURRENT_UI_FILES = (
@@ -1277,13 +1288,13 @@ def test_current_ui_uses_origins_inputs_and_providers():
     assert "Entradas y carpetas compartidas" in sync
 ```
 
-- [ ] **Step 2: Ejecutar el contrato y confirmar el rojo**
+- [x] **Step 2: Ejecutar el contrato y confirmar el rojo**
 
 Run: `PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -p no:cacheprovider tests/test_visible_vocabulary_contract.py -q`
 
 Expected: FAIL con los tres textos visibles actuales.
 
-- [ ] **Step 3: Cambiar solo la presentación**
+- [x] **Step 3: Cambiar solo la presentación**
 
 Extraer en `chat_modal.py`:
 
@@ -1296,25 +1307,34 @@ Usar “Conexión de entradas — SharePoint y OneDrive” en el instalador y
 “Entradas y carpetas compartidas — Fuente” en el diálogo montado. No cambiar
 payloads, nombres de métodos del bridge ni lectores v1/v2.
 
-- [ ] **Step 4: Ejecutar contratos de chat, sync e instalador**
+- [x] **Step 4: Ejecutar contratos de chat, sync e instalador**
 
 Run: `PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -p no:cacheprovider tests/test_visible_vocabulary_contract.py tests/test_chat_retrieval_contract.py tests/test_folder_sync_ui_contract.py tests/test_installer_contract.py -q`
 
 Expected: PASS; los contratos internos siguen aceptando sus claves de
 compatibilidad y la UI usa el vocabulario actual.
 
-- [ ] **Step 5: Revisión humana**
+- [x] **Step 5: Revisión humana**
 
 Abrir chat, instalador y diálogo de entradas montadas. Confirmar que las tres
 etiquetas son comprensibles y que no se ha cambiado el significado de
 “proveedor”, “entrada” u “origen”. Registrar capturas y dictamen en el ledger.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add fuente/chat_modal.py fuente/installer_gui.py fuente/core/folder_sync.py tests/test_visible_vocabulary_contract.py docs/migration-guide.md
 git commit -m "fix: align visible Fuente vocabulary"
 ```
+
+### Cierre Q-03 — 2026-08-19
+
+Q-03 queda completa. La implementación y las revisiones técnicas ya estaban
+publicadas en `689207b`, `f904075` y la secuencia posterior de correcciones del
+lector/grafo; la revisión nativa final confirmó que el vocabulario visible,
+los controles de la bandeja y el lector son comprensibles en escritorio y en
+`980x680`. La matriz focal del checkout pasó `87` pruebas. No se modificaron
+notas del Vault durante la comprobación.
 
 ### Task Q-04: Contratos y limpieza Wave 1
 

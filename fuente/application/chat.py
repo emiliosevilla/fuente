@@ -16,8 +16,6 @@ from typing import Any, Callable, Mapping, Optional, Protocol
 from fuente.ram_governor.budget import (
     BM25_ONLY_POLICY,
     BudgetDecision,
-    get_model_metadata,
-    is_verified_benchmark_verdict,
     llm_inference_mode,
 )
 
@@ -185,13 +183,11 @@ class ChatApplicationService:
         ollama_url: str = "",
         system_prompt: str = CHAT_SYSTEM_PROMPT,
         budget_decision_resolver: Optional[BudgetDecisionResolver] = None,
-        benchmark_verdict: object | None = None,
     ) -> None:
         self.retrieval = retrieval
         self.provider = provider
         self._model_resolver = model_resolver
         self._budget_decision_resolver = budget_decision_resolver
-        self._benchmark_verdict = benchmark_verdict
         self.ollama_url = ollama_url
         self.system_prompt = system_prompt
 
@@ -283,14 +279,6 @@ class ChatApplicationService:
             if not model:
                 raise ChatProviderError(
                     "No model configured for chat", code=ERROR_OLLAMA
-                )
-            metadata = get_model_metadata(model)
-            if metadata is not None and metadata.candidate_only and not is_verified_benchmark_verdict(
-                self._benchmark_verdict
-            ):
-                raise ChatProviderError(
-                    "Candidate model requires a verified benchmark verdict",
-                    code=ERROR_OLLAMA,
                 )
             answer = self.provider.generate(
                 model=model,

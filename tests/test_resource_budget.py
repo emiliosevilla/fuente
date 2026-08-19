@@ -43,23 +43,13 @@ class TestResourceBudgets(unittest.TestCase):
             self.assertGreater(entry.context_size, 0)
             self.assertGreaterEqual(entry.concurrency_limit, 1)
 
-    def test_candidate_model_is_not_selected_without_a_verified_benchmark(self):
+    def test_candidate_model_is_selected_from_ram_without_a_benchmark(self):
         candidate = next(item for item in MODEL_CATALOG if item.id == "qwen3.5:0.8b")
-        self.assertTrue(candidate.candidate_only)
         self.assertEqual(candidate.context_size, 4096)
         self.assertEqual(candidate.concurrency_limit, 1)
-        snap = measured_snapshot(total_gb=4.0, available_gb=2.2, safety_margin_pct=0.35)
+        snap = measured_snapshot(total_gb=6.0, available_gb=3.5, safety_margin_pct=0.35)
         decision = select_optimal_model(snap)
-        self.assertNotEqual(decision.model_id, "qwen3.5:0.8b")
-
-    def test_candidate_model_is_selected_only_with_verified_benchmark(self):
-        class LookalikeBenchmark:
-            def is_verifiable_promotion(self) -> bool:
-                return True
-
-        snap = measured_snapshot(total_gb=4.0, available_gb=2.2, safety_margin_pct=0.35)
-        decision = select_optimal_model(snap, benchmark_verdict=LookalikeBenchmark())
-        self.assertNotEqual(decision.model_id, "qwen3.5:0.8b")
+        self.assertEqual(decision.model_id, "qwen3.5:0.8b")
 
     def test_unavailable_snapshot_never_invents_available_gb(self):
         snap = unavailable_snapshot(0.35, error="test", total_gb=16.0)
@@ -218,6 +208,76 @@ class TestRAMGovernorBudgets(unittest.TestCase):
         self.assertTrue(state["ok"])
         self.assertEqual(len(state["models"]), 1)
         self.assertIsNone(state["error"])
+
+    def test_cycle_waits_with_instruction_when_downloaded_model_no_longer_fits(self):
+        gov = RAMGovernor()
+        constrained = measured_snapshot(
+            total_gb=32.0, available_gb=4.0, safety_margin_pct=0.35
+        )
+        with mock.patch.object(
+            gov, "measure_memory", side_effect=[constrained, constrained]
+        ):
+            with mock.patch.object(
+                gov,
+                "_http_json",
+                return_value={
+                    "models": [
+                        {"name": "qwen2.5:7b"},
+                        {"name": "qwen2.5:1.5b"},
+                    ]
+                },
+            ):
+                waiting = gov.check_cycle_model("qwen2.5:7b")
+
+        self.assertFalse(waiting["allowed"])
+        self.assertTrue(waiting["requires_user_confirmation"])
+        self.assertEqual(waiting["compatible_model"], "qwen2.5:1.5b")
+        self.assertIn("Cierra aplicaciones", waiting["instruction"])
+        self.assertIn("confirm", waiting["instruction"].lower())
+
+    def test_cycle_authorization_can_use_installed_compatible_model(self):
+        gov = RAMGovernor()
+        constrained = measured_snapshot(
+            total_gb=32.0, available_gb=4.0, safety_margin_pct=0.35
+        )
+        with mock.patch.object(
+            gov, "measure_memory", side_effect=[constrained, constrained]
+        ):
+            with mock.patch.object(
+                gov,
+                "_http_json",
+                return_value={
+                    "models": [
+                        {"name": "qwen2.5:7b"},
+                        {"name": "qwen2.5:1.5b"},
+                    ]
+                },
+            ):
+                resumed = gov.check_cycle_model(
+                    "qwen2.5:7b", authorize_model_load=True
+                )
+
+        self.assertTrue(resumed["allowed"])
+        self.assertTrue(resumed["authorization_used"])
+        self.assertEqual(resumed["model_id"], "qwen2.5:1.5b")
+
+    def test_cycle_reports_no_compatible_model_without_confirmation(self):
+        gov = RAMGovernor()
+        tiny = measured_snapshot(
+            total_gb=3.0, available_gb=0.8, safety_margin_pct=0.35
+        )
+        with mock.patch.object(gov, "measure_memory", return_value=tiny):
+            with mock.patch.object(
+                gov,
+                "_http_json",
+                return_value={"models": [{"name": "qwen2.5:7b"}]},
+            ):
+                waiting = gov.check_cycle_model("qwen2.5:7b")
+
+        self.assertFalse(waiting["allowed"])
+        self.assertEqual(waiting["reason"].split(";", 1)[0], "no_compatible_model")
+        self.assertFalse(waiting["requires_user_confirmation"])
+        self.assertEqual(waiting["compatible_model"], None)
 
     def test_purge_model_uses_keep_alive_zero_not_force_kill(self):
         gov = RAMGovernor()

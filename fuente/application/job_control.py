@@ -203,13 +203,23 @@ class JobControlService:
         job = self.job_store.get_job(job_id)
         return self._detail(job)
 
-    def resume(self, job_id: str, expected_revision: int) -> JobRecord:
+    def resume(
+        self,
+        job_id: str,
+        expected_revision: int,
+        *,
+        authorize_model_load: bool = False,
+    ) -> JobRecord:
         _validate_mutation(job_id, expected_revision)
         job = self.job_store.get_job(job_id)
         _require_revision(job, expected_revision)
         if self.ingestion is None:
             raise JobControlError("resume requires an ingestion service")
-        return self.ingestion.resume(job_id, expected_revision=expected_revision)
+        return self.ingestion.resume(
+            job_id,
+            expected_revision=expected_revision,
+            authorize_model_load=authorize_model_load,
+        )
 
     def request_cancel(
         self, job_id: str, expected_revision: int, reason: str

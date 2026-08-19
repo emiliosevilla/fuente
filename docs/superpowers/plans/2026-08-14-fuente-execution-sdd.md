@@ -26,7 +26,7 @@ alcanzó cada cierre.
 | Task | Entregable | Estado reconciliado | Evidencia vinculante o trabajo restante |
 |---|---|---|---|
 | 1 | Inventario reproducible | **COMPLETE** | Implementación, pruebas, inventario real y revisión canónica cerrados en P-01. |
-| 2 | Benchmark Qwen ultra-ligero | **IMPLEMENTED / CHECKPOINT OPEN** | Runner y bloqueo seguro están implementados. Falta P-07: benchmark real y decisión humana; `qwen3.5:0.8b` sigue siendo solo candidato. |
+| 2 | Selección automática de LLM por RAM | **COMPLETE — RAM GOVERNED** | `RAMGovernor` selecciona en setup según la RAM instalada y el margen de seguridad; al inicio de cada ciclo ETL vuelve a comprobar la RAM disponible frente al modelo descargado y detiene el ciclo si deja de ser compatible. |
 | 3 | Schema v3 y procedencia | **COMPLETE** | Contratos v3 y escritura canónica cerrados; la coherencia Markdown-SQLite quedó acreditada en P-03. |
 | 4 | Ledger de aprobaciones | **COMPLETE** | Aprobación exacta, invalidación y reaprobación verificadas en P-02 y P-03. |
 | 5 | Bloqueo de derivados | **COMPLETE** | Los límites fail-closed quedaron verificados en P-02; la revisión visual general pertenece a P-06. |
@@ -34,7 +34,7 @@ alcanzó cada cierre.
 | 7 | `Fuentes`→`Sumarios` | **COMPLETE — NO-OP REAL** | P-04 cerró con manifiesto vacío, apply/rollback en copia y dictámenes Terra/Sol favorables. |
 | 8 | Identidad y estado local Fuente | **COMPLETE** | P-05 cerró la normalización, el historial recuperable y la retirada de restos operativos del namespace anterior. |
 | 9 | Nord y lector de tres regiones | **COMPLETE — P-06 CLOSED** | Contratos, pruebas, remediación técnica y revisión visual nativa cerrados; la evidencia final confirma lector, foco, contraste, ancho mínimo y grafo/MOC. |
-| 10 | Cierre y release | **IN PROGRESS** | Falta P-07, Q-04–Q-08 y P-08 con gate final y dictamen independiente. |
+| 10 | Cierre y release | **IN PROGRESS** | Falta Q-04–Q-08 y P-08 con gate final y dictamen independiente; P-07 queda cerrado como no aplicable por decisión arquitectónica. |
 
 ### Estado canónico registrado
 
@@ -50,8 +50,9 @@ esta descripción histórica.
   evidencia de ejecución.
 - Una Task con checkpoint abierto no está cerrada aunque su código y sus tests
   estén implementados.
-- P-01–P-08 son gates de cierre; Q-01–Q-08 son desde esta reconciliación tareas
-  SDD reales, con prueba y revisión propias, no simples observaciones.
+- P-01–P-08 son gates de cierre; P-07 queda cerrado como no aplicable por
+  decisión arquitectónica. Q-01–Q-08 son desde esta reconciliación tareas SDD
+  reales, con prueba y revisión propias, no simples observaciones.
 
 ## Global Constraints
 
@@ -61,8 +62,16 @@ esta descripción histórica.
 - El código nuevo usa `summary`, `origin_kind` y `origins`; la lectura temporal acepta `source`, `source_kind` y `sources`, pero no los vuelve a escribir.
 - `4_salida/Fuentes` se convierte en `4_salida/Sumarios` solo mediante manifiesto aprobado, reanudable y reversible en notas sin edición posterior.
 - No se mantiene un alias permanente de paquete, comando ni directorio entre Fuente y Fuente. El cambio de repositorio/remoto lo realiza una persona responsable después de aprobar la simulación.
-- Ollama queda en loopback salvo opt-in explícito. No se descargan modelos automáticamente, no se aceptan URL, repositorios ni `trust_remote_code` desde entradas de usuario, y ChromaDB no se expone por red.
-- `qwen3.5:0.8b` es candidato Auto para equipos de menos de 8 GB, no la selección efectiva, hasta superar el benchmark con `num_ctx=4096`, concurrencia uno y un margen de RAM del 35 %.
+- Ollama queda en loopback salvo opt-in explícito. No se aceptan URL,
+  repositorios ni `trust_remote_code` desde entradas de usuario, y ChromaDB no
+  se expone por red.
+- La selección del LLM no depende del material del Vault, su contenido, tamaño,
+  revisión, aprobación ni procedencia. En el setup se selecciona
+  automáticamente según la RAM instalada con margen de seguridad.
+- Al inicio de cada ciclo ETL, `RAMGovernor` vuelve a comprobar la RAM realmente
+  disponible frente al modelo ya descargado. Si es compatible, el ciclo puede
+  iniciar; si no, se detiene y solicita cerrar aplicaciones y/o confirmar la
+  carga del modelo más grande compatible.
 - `Eco estricto` sigue siendo BM25 sin LLM y sin inicializar Chroma.
 - La consola usa tokens `--fuente-*`; no copia el repositorio Nord. Si se reutiliza un archivo de Nord, se conserva su licencia Apache-2.0 y atribución.
 - Las pruebas y el gate se ejecutan con `PYTHONDONTWRITEBYTECODE=1`. El agente no ejecuta operaciones Git de escritura; los checkpoints Git del plan los realiza una persona.
@@ -74,7 +83,7 @@ esta descripción histórica.
 | `fuente/domain/frontmatter.py` admite schema v1 y v2; v2 ya tiene `note_id`, `note_type` y `source_kind`. | Schema v3 será una migración aditiva con lectura v1/v2 temporal, no una reescritura desde cero. |
 | `fuente/infrastructure/sqlite_store.py` y la migración `009_note_catalog.sql` ya guardan catálogo, aliases, tombstones y CAS. | El ledger de aprobaciones se añade como migración nueva con claves foráneas; no se crean copias paralelas del Markdown. |
 | `fuente/infrastructure/taxonomy_migration.py` ya calcula, aplica y revierte movimientos con hash, fases y protección frente a ediciones humanas. | El traslado Fuentes → Sumarios extiende ese mecanismo; no usa sustitución textual masiva. |
-| `fuente/ram_governor/budget.py` ya tiene catálogo, margen y degradación BM25. | El benchmark añade evidencia y el candidato; no cambia el modelo efectivo antes de la revisión humana. |
+| `fuente/ram_governor/budget.py` ya tiene catálogo, margen y degradación BM25. | La selección efectiva depende de la RAM medida; el material del Vault y el ledger no participan en la elección. |
 | `fuente/ui/static/console.css` es la única hoja de estilo de la consola y Nord está disponible localmente bajo Apache-2.0. | Se introducen tokens propios y una migración visual incremental; no se añade una dependencia de frontend. |
 
 ## Fuentes oficiales consultadas
@@ -91,7 +100,7 @@ esta descripción histórica.
 | Identidad, aprobación y SQLite | `fuente/domain/note_catalog.py`, `fuente/infrastructure/sqlite_store.py`, `fuente/infrastructure/migrations/009_note_catalog.sql` | `fuente/domain/approvals.py`, `fuente/application/approval.py`, `fuente/infrastructure/migrations/010_approval_ledger.sql` |
 | Generación y recuperación | `fuente/application/notes.py`, `fuente/application/fusion.py`, `fuente/application/reflow*.py`, `fuente/application/review_export.py`, `fuente/rag/vault_corpus.py`, `fuente/rag/hybrid_search.py`, `fuente/graph_engine/linker.py` | validadores de elegibilidad y propagación de `origins` en esos límites |
 | Migración de Vault | `fuente/infrastructure/vault_migration.py`, `fuente/infrastructure/taxonomy_migration.py`, `scripts/migrate_vault.py` | `fuente/infrastructure/fuente_migration.py`, extensión explícita del CLI |
-| IA de poca RAM | `fuente/ram_governor/budget.py`, `fuente/application/health.py`, `fuente/application/chat.py` | `fuente/benchmarking/ultralight.py`, `scripts/benchmark_ultralight_models.py` |
+| IA de poca RAM | `fuente/ram_governor/budget.py`, `fuente/ram_governor/governor.py`, `fuente/application/ingestion.py` | selección por RAM en setup y comprobación de compatibilidad al inicio de cada ciclo ETL |
 | Consola | `fuente/consola_preview.html`, `fuente/ui/static/console.css`, `fuente/ui/bridge.py`, `fuente/control_console.py`, `fuente/reader_modal.py` | tokens CSS Fuente, contrato del lector de tres paneles y textos v3 |
 | Renombre de producto | `pyproject.toml`, `README.md`, instaladores y árbol `fuente/` | `fuente/infrastructure/product_rename_migration.py`, migración a `.fuente`, paquete `fuente/` y comandos Fuente |
 | Evidencia y documentación | `docs/task.md`, `docs/migration-guide.md`, `docs/rollback-plan.md`, `docs/release-gate.md`, `scripts/release_gate.py` | guía de migración Fuente, prueba de documentación y controles del gate |
@@ -162,71 +171,69 @@ git add fuente/infrastructure/fuente_migration.py scripts/migrate_vault.py tests
 git commit -m "feat: inventory Fuente migration"
 ```
 
-### Task 2: Benchmark reproducible de Qwen ultra-ligero
+### Task 2: Selección automática del LLM por RAM
 
 **Files:**
-- Create: `fuente/benchmarking/__init__.py`
-- Create: `fuente/benchmarking/ultralight.py`
-- Create: `scripts/benchmark_ultralight_models.py`
+- Modify: `fuente/ram_governor/governor.py`
 - Modify: `fuente/ram_governor/budget.py`
-- Modify: `fuente/application/chat.py`
-- Create: `tests/test_ultralight_benchmark.py`
+- Modify: `fuente/application/ingestion.py`
+- Modify: `fuente/watcher/watcher.py`
 - Modify: `tests/test_resource_budget.py`
-- Modify: `docs/dependency-matrix.md`
+- Modify: `tests/test_ingestion_recovery.py`
 
 **Interfaces:**
-- Produces: `BenchmarkCase`, `BenchmarkMeasurement`, `BenchmarkVerdict`, `run_benchmark(cases, provider, snapshot_reader) -> BenchmarkVerdict`.
-- Consumes: `ModelMetadata(id, estimated_ram_gb, context_size, concurrency_limit, min_ram_gb)` y la validación local de nombres de modelo existente.
-- Rule: `BenchmarkVerdict.promoted` solo es `True` cuando ambos modelos están instalados, las ejecuciones son válidas, la holgura es al menos 35 % y `qwen3.5:0.8b` no empeora fidelidad ni estructura frente a `qwen2.5:0.5b`.
+- Produces: `RAMGovernor.recommend_model_decision()`,
+  `RAMGovernor.setup_optimal_model()` y la comprobación de presupuesto que
+  admite o detiene un ciclo ETL.
+- Consumes: la medición real de RAM, el catálogo local de modelos y el modelo
+  descargado; no consume Markdown, Vault, SQLite de aprobaciones ni ledger.
+- Rule: el setup selecciona automáticamente por RAM instalada con margen de
+  seguridad. Cada ciclo ETL vuelve a medir la RAM disponible frente al modelo
+  descargado; si no es compatible, se detiene y solicita cerrar aplicaciones
+  y/o confirmar la carga del modelo más grande compatible.
 
 - [x] **Step 1: Escribir las pruebas que fallen**
 
-```python
-def test_benchmark_rejects_a_model_not_installed() -> None:
-    verdict = run_benchmark(CASES, provider=FakeProvider(installed={"qwen2.5:0.5b"}), snapshot_reader=_snapshot)
-    assert verdict.promoted is False
-    assert verdict.reason == "candidate_not_installed"
-
-def test_benchmark_promotes_only_when_quality_and_margin_pass() -> None:
-    verdict = run_benchmark(CASES, provider=PassingFakeProvider(), snapshot_reader=_safe_snapshot)
-    assert verdict.promoted is True
-    assert verdict.options == {"num_ctx": 4096, "num_predict": 512, "seed": 42}
-```
+Las regresiones cubren la selección por RAM medida, la negativa conservadora
+cuando no hay presupuesto y la permanencia de jobs en espera cuando el
+presupuesto no admite generación.
 
 - [x] **Step 2: Ejecutar la prueba y confirmar el estado rojo**
 
-Run: `PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -p no:cacheprovider tests/test_ultralight_benchmark.py tests/test_resource_budget.py -q`
+Run: `PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -p no:cacheprovider tests/test_resource_budget.py tests/test_ingestion_recovery.py -q`
 
-Expected: error de importación de `fuente.benchmarking.ultralight`.
+Expected: las pruebas cubren selección por RAM y bloqueo por presupuesto antes
+de iniciar la generación.
 
-- [x] **Step 3: Implementar el runner y mantener el candidato aislado**
+- [x] **Step 3: Implementar la selección y el doble control de RAM**
 
-`run_benchmark` usa solo los documentos que el ledger de Task 4 marque como aprobados; hasta entonces, su CLI responde `blocked:no_approved_cases`. Para cada ejecución registra memoria antes/durante/después, tiempos de Ollama, longitud, validación estructural, frases exigidas y citas a `origins`. El proveedor real llama a Ollama en loopback con `stream: false` y `options: {"num_ctx": 4096, "num_predict": 512, "seed": 42}`; las pruebas usan un fake, nunca una red real.
-
-Añadir `qwen3.5:0.8b` al catálogo como `candidate_only=True`, `context_size=4096` y `concurrency_limit=1`. `select_optimal_model` debe ignorar `candidate_only` salvo que reciba un `BenchmarkVerdict.promoted` verificable. Conservar `qwen2.5:0.5b` y BM25 como alternativas.
+La selección se realiza automáticamente en el setup a partir de la RAM
+instalada y el margen de seguridad. Al iniciar cada ciclo ETL, el scheduler
+vuelve a medir la RAM disponible y aplica el presupuesto al modelo descargado.
+Si el modelo sigue siendo compatible, el ciclo inicia; si no, se detiene y
+solicita cerrar aplicaciones y/o confirmar la carga del modelo más grande
+compatible. Ningún dato del Vault, su revisión, aprobación, procedencia o
+ledger interviene en esta decisión.
 
 - [x] **Step 4: Ejecutar las pruebas unitarias**
 
-Run: `PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -p no:cacheprovider tests/test_ultralight_benchmark.py tests/test_resource_budget.py tests/test_settings_service.py -q`
+Run: `PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -p no:cacheprovider tests/test_resource_budget.py tests/test_ingestion_recovery.py tests/test_scheduler_limits.py -q`
 
-Expected: PASS; una referencia URL, repositorio o `trust_remote_code` sigue siendo rechazada por los ajustes.
+Expected: PASS; la selección sigue dependiendo de la medición de RAM y el ciclo
+ETL no avanza cuando el modelo descargado deja de ser compatible.
 
-- [ ] **Step 5: Ejecutar el benchmark real y revisarlo**
+- [x] **Step 5: Cerrar el benchmark como no aplicable**
 
-```bash
-PYTHONDONTWRITEBYTECODE=1 python3 scripts/benchmark_ultralight_models.py \
-  --vault /ruta/al/Vault \
-  --models qwen3.5:0.8b,qwen2.5:0.5b \
-  --output /ruta/benchmark-ultralight.json
-```
-
-La persona responsable revisa el JSON y decide promoción. Si no supera todos los criterios, se conserva `candidate_only=True`; no hay degradación del funcionamiento actual.
+La comparación de modelos queda retirada por decisión arquitectónica: el LLM
+se selecciona por RAM en setup y se vuelve a comprobar al inicio de cada ciclo
+ETL. No se ejecuta benchmark comparativo ni se usa el ledger o el material del
+Vault para elegir modelo.
 
 - [x] **Step 6: Checkpoint Git humano**
 
 ```bash
-git add fuente/benchmarking fuente/ram_governor/budget.py fuente/application/chat.py scripts/benchmark_ultralight_models.py tests/test_ultralight_benchmark.py tests/test_resource_budget.py docs/dependency-matrix.md
-git commit -m "feat: benchmark ultra-light local models"
+git add fuente/ram_governor/governor.py fuente/ram_governor/budget.py fuente/application/ingestion.py fuente/watcher/watcher.py tests/test_resource_budget.py tests/test_ingestion_recovery.py
+git commit -m "fix: govern LLM selection by RAM"
 ```
 
 ### Task 3: Schema v3 y objetos de procedencia compatibles
@@ -771,7 +778,7 @@ Expected: el gate actual no conoce la suite Fuente y los documentos vigentes aú
 
 - [ ] **Step 3: Actualizar gate, guías y criterios de retirada**
 
-Añadir una suite `fuente` a `PYTEST_SUITES` con los tests de aprobación, procedencia, migración v3, Sumarios, renombre y visual. Documentar comandos de inventario, benchmark, migración, rollback y ubicación de manifiestos. El detector de términos antiguos permite solo el manifiesto de compatibilidad y secciones marcadas `Histórico de migración`; no permite valores nuevos, comandos ni rutas `.fuente`/`Fuentes`.
+Añadir una suite `fuente` a `PYTEST_SUITES` con los tests de aprobación, procedencia, migración v3, Sumarios, renombre y visual. Documentar comandos de inventario, gobernanza de RAM, migración, rollback y ubicación de manifiestos. El detector de términos antiguos permite solo el manifiesto de compatibilidad y secciones marcadas `Histórico de migración`; no permite valores nuevos, comandos ni rutas `.fuente`/`Fuentes`.
 
 - [ ] **Step 4: Ejecutar evidencia final completa**
 
@@ -788,7 +795,7 @@ Expected: suite y gate terminan en PASS/`RESULT: READY`; `git diff --check` no i
 
 - [ ] **Step 5: Punto humano final**
 
-Revisar: manifiesto de inventario, resultado de benchmark, manifiestos v3/Sumarios, prueba de actualización desde un Vault Fuente, rollback y comprobación visual nativa. Solo tras esa revisión se elimina la compatibilidad medida como vacía.
+Revisar: manifiesto de inventario, evidencia de selección y comprobación de RAM, manifiestos v3/Sumarios, prueba de actualización desde un Vault Fuente, rollback y comprobación visual nativa. Solo tras esa revisión se elimina la compatibilidad medida como vacía.
 
 - [ ] **Step 6: Checkpoint Git humano**
 
@@ -806,15 +813,19 @@ git commit -m "docs: close Fuente migration evidence"
 | Sumarios y estructura física del Vault | Tasks 6 y 7 |
 | Fuente → Fuente completo, sin alias permanente | Task 8 |
 | Paleta Nord, lector de tres paneles y accesibilidad | Task 9 |
-| Qwen 3.5 0.8B condicionado a benchmark | Task 2 |
+| Selección LLM por RAM y doble control setup/ETL | Task 2 |
 | Gate, documentación, recuperación y retirada de compatibilidad | Task 10 |
 
 ## Autorrevisión del SDD
 
 - Cobertura: los ocho apartados de la especificación se asignan a una tarea y cada cambio con riesgo de pérdida tiene prueba, manifiesto y punto humano.
 - Coherencia: `OriginRef` es el único formato de procedencia nuevo; `ApprovalLedger.is_current` es la única decisión de elegibilidad; `TaxonomyManifest` mantiene los movimientos físicos; y el renombre solo ocurre después de las migraciones editoriales.
-- Sin atajos: no se infiere aprobación por ruta, no se auto-descargan modelos, no se exponen bases locales y no se mantiene un alias Fuente permanente.
-- Alcance deliberadamente separado: el benchmark, la migración editorial, el movimiento físico, el renombre y el diseño se pueden aceptar o rechazar por separado y dejan una aplicación probada al final de cada tarea.
+- Sin atajos: no se infiere aprobación por ruta, la selección del LLM no usa el
+  Vault ni su ledger, no se exponen bases locales y no se mantiene un alias
+  Fuente permanente.
+- Alcance deliberadamente separado: la gobernanza por RAM, la migración
+  editorial, el movimiento físico, el renombre y el diseño se pueden aceptar o
+  rechazar por separado y dejan una aplicación probada al final de cada tarea.
 
 ## Execution Handoff
 
@@ -1038,9 +1049,10 @@ se reescribe el historial.
 - [x] **P-06 — Revisión visual nativa.** Consola PyWebView verificada el
   2026-08-19 en escritorio y `980x680`; bandeja, lector, foco, contraste,
   estados y grafo/MOC observados con evidencia visual.
-- [ ] **P-07 — Benchmark real.** Falta comparar los dos modelos sobre los mismos
-  casos canónicos aprobados y decidir si el candidato se promueve.
-- [ ] **P-08 — Cierre SDD.** Depende de P-06, P-07 y Q-01–Q-08; exige gate final,
+- [x] **P-07 — Cierre de selección del modelo.** No aplicable y cerrado por
+  decisión arquitectónica: la selección del LLM se gobierna por RAM y no por benchmark,
+  Vault, contenido, revisión, aprobación o procedencia.
+- [ ] **P-08 — Cierre SDD.** Depende de P-06 y Q-01–Q-08; exige gate final,
   dictamen independiente y actualización documental con mediciones actuales.
 
 ## Tareas de deuda incorporadas al SDD — Q-01–Q-08
@@ -1059,7 +1071,7 @@ Q-08 depende de las siete anteriores y P-08 depende del cierre de todas.
 | Q-05 | Cobertura de cuarentena e ingesta | **NOT_STARTED** | Q-04 |
 | Q-06 | Mutaciones por identidad opaca | **NOT_STARTED** | Tasks 3–5 |
 | Q-07 | Cola sin N+1 y transiciones de política cubiertas | **NOT_STARTED** | Q-06 |
-| Q-08 | Evidencia documental actual y comprobable | **NOT_STARTED** | Q-01–Q-07, P-06, P-07 |
+| Q-08 | Evidencia documental actual y comprobable | **NOT_STARTED** | Q-01–Q-07, P-06 |
 
 ### Task Q-01: Exportación DOCX determinista
 

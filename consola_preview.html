@@ -1344,15 +1344,39 @@
             });
         }
 
-        function resumeQueueJob(jobId, expectedRevision) {
+        function resumeQueueJob(jobId, expectedRevision, authorizeModelLoad) {
             if (!queueApiAvailable()) {
                 queueStatus('Bridge no conectado; no se ha reanudado el trabajo.', true);
                 return;
             }
-            window.pywebview.api.resume_job(jobId, expectedRevision).then(function(result) {
+            window.pywebview.api.resume_job(
+                jobId,
+                expectedRevision,
+                authorizeModelLoad === true
+            ).then(function(result) {
                 if (result && result.error) {
                     queueStatus(result.message || result.error, true);
                     return;
+                }
+                if (
+                    result &&
+                    result.error_code === 'llm_unavailable_under_policy' &&
+                    result.llm_readiness &&
+                    result.llm_readiness.requires_user_confirmation === true &&
+                    typeof result.llm_readiness.compatible_model === 'string' &&
+                    result.llm_readiness.compatible_model.trim() !== '' &&
+                    authorizeModelLoad !== true &&
+                    window.confirm(
+                        (result.llm_readiness.instruction || result.error_message) +
+                        '\n\n¿Confirmas cargar el modelo compatible ' +
+                        result.llm_readiness.compatible_model + '?'
+                    )
+                ) {
+                    resumeQueueJob(jobId, result.revision, true);
+                    return;
+                }
+                if (result && result.error_message) {
+                    queueStatus(result.error_message, true);
                 }
                 queueStatus('Trabajo enviado a reanudación.');
                 refreshJobQueue();

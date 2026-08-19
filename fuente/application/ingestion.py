@@ -215,6 +215,7 @@ class _RunContext:
     candidate: Optional[str] = None
     validated: Optional[str] = None
     approved_origin: OriginRef | None = None
+    authorize_model_load: bool = False
 
 
 class IngestionApplicationService:
@@ -355,6 +356,7 @@ class IngestionApplicationService:
         *,
         expected_revision: int | None = None,
         respect_scheduler: bool = True,
+        authorize_model_load: bool = False,
     ) -> JobRecord:
         """Advance one job from its last durable stage to a terminal stage.
 
@@ -369,8 +371,11 @@ class IngestionApplicationService:
             return job
         if job.stage in TERMINAL_STAGES:
             raise JobNotResumableError(job.job_id, job.stage)
-        if self._llm_unavailable_under_policy(job):
-            return self._wait_for_unavailable_llm(job)
+        readiness = self._llm_readiness(
+            job, authorize_model_load=authorize_model_load
+        )
+        if readiness is not None and not readiness["allowed"]:
+            return self._wait_for_unavailable_llm(job, readiness)
         if job.cancel_requested_at:
             return self.cancel_requested(
                 job.job_id, expected_revision=job.revision
@@ -394,7 +399,7 @@ class IngestionApplicationService:
         if respect_scheduler:
             self.scheduler.release_stale_for_job(job.job_id)
 
-        context = _RunContext()
+        context = _RunContext(authorize_model_load=authorize_model_load)
         while job.stage not in TERMINAL_STAGES:
             # A worker may have received a request while the previous safe
             # stage completed. Reloading here makes the next boundary the
@@ -403,8 +408,11 @@ class IngestionApplicationService:
             cancelled = self._cancel_if_requested(job)
             if cancelled is not None:
                 return cancelled
-            if self._llm_unavailable_under_policy(job):
-                return self._wait_for_unavailable_llm(job)
+            readiness = self._llm_readiness(
+                job, authorize_model_load=authorize_model_load
+            )
+            if readiness is not None and not readiness["allowed"]:
+                return self._wait_for_unavailable_llm(job, readiness)
             if job.stage == "saved_clean":
                 approved_origin = self._approved_clean_origin(job)
                 if approved_origin is None:
@@ -561,21 +569,51 @@ class IngestionApplicationService:
             results.append(self.resume(job.job_id, respect_scheduler=True))
         return results
 
-    def _llm_unavailable_under_policy(self, job: JobRecord) -> bool:
+    def _llm_readiness(
+        self, job: JobRecord, *, authorize_model_load: bool = False
+    ) -> dict[str, Any] | None:
         policy = self.runtime_policy
-        return bool(
-            policy is not None
-            and job.stage == "indexed_chunks"
-            and not policy.llm_available
+        if policy is None or job.stage != "indexed_chunks":
+            return None
+        governor = self.ram_governor
+        checker = getattr(governor, "check_cycle_model", None)
+        if callable(checker):
+            model_name = (
+                policy.selected_model
+                or getattr(self.config, "custom_model_override", None)
+                or None
+            )
+            return checker(
+                model_name, authorize_model_load=authorize_model_load
+            )
+        if policy.llm_available:
+            return {"allowed": True, "reason": policy.reason, "instruction": ""}
+        instruction = (
+            "El modelo local no está disponible bajo la política actual. "
+            "Cierra aplicaciones o instala el modelo de forma autorizada y vuelve a reanudar."
         )
+        return {
+            "allowed": False,
+            "requires_user_confirmation": True,
+            "instruction": instruction,
+            "reason": f"llm_unavailable_under_policy; {instruction}",
+        }
 
-    def _wait_for_unavailable_llm(self, job: JobRecord) -> JobRecord:
-        reason = "llm_unavailable_under_policy"
+    def _wait_for_unavailable_llm(
+        self, job: JobRecord, readiness: dict[str, Any]
+    ) -> JobRecord:
+        reason = str(readiness.get("reason") or "llm_unavailable_under_policy")
+        instruction = str(readiness.get("instruction") or reason)
         decision = ScheduleDecision(
             job=job,
             task_class=TaskClass.LLM_GENERATION,
             action=ScheduleAction.WAIT,
             reason=reason,
+            model_id=(
+                str(readiness.get("compatible_model"))
+                if readiness.get("compatible_model")
+                else None
+            ),
         )
         persist = getattr(self.scheduler, "_persist", None)
         if callable(persist):
@@ -586,13 +624,24 @@ class IngestionApplicationService:
                 task_class=decision.task_class.value,
                 action=decision.action.value,
                 reason=decision.reason,
+                model_id=decision.model_id,
             )
         if job.status == DEFAULT_STATUS:
-            return job
+            if job.error_code == "llm_unavailable_under_policy" and job.error_message == instruction:
+                return job
+            return self.job_store.update_job(
+                job.job_id,
+                expected_revision=job.revision,
+                status=DEFAULT_STATUS,
+                error_code="llm_unavailable_under_policy",
+                error_message=instruction,
+            )
         return self.job_store.update_job(
             job.job_id,
             expected_revision=job.revision,
             status=DEFAULT_STATUS,
+            error_code="llm_unavailable_under_policy",
+            error_message=instruction,
         )
 
     def path_resolver(self) -> AuthorizedPathResolver:
@@ -1174,7 +1223,9 @@ class IngestionApplicationService:
     def _generate_candidate(self, job: JobRecord, context: _RunContext) -> None:
         generated = self.atomic_generator.generate_atomic_note(
             clean_md_content=self._content(job, context),
-            model_name=self._selected_model(job),
+            model_name=self._selected_model(
+                job, authorize_model_load=context.authorize_model_load
+            ),
             file_name=self._source_name(job),
         )
         origin = context.approved_origin or self._approved_clean_origin(job)
@@ -1355,11 +1406,21 @@ class IngestionApplicationService:
             error_message="Awaiting exact human approval of canonical 3_limpio Markdown",
         )
 
-    def _selected_model(self, job: Optional[JobRecord] = None) -> str:
+    def _selected_model(
+        self,
+        job: Optional[JobRecord] = None,
+        *,
+        authorize_model_load: bool = False,
+    ) -> str:
         """Pick a model under the scheduler's authoritative ``evaluate_resource`` gate."""
         from fuente.ram_governor.budget import ResourceKind, evaluate_resource
 
-        if self.runtime_policy is not None and not self.runtime_policy.llm_available:
+        checker = getattr(self.ram_governor, "check_cycle_model", None)
+        if (
+            self.runtime_policy is not None
+            and not self.runtime_policy.llm_available
+            and not callable(checker)
+        ):
             raise ModelUnavailableError("llm_unavailable_under_policy")
 
         model_name = (
@@ -1383,9 +1444,23 @@ class IngestionApplicationService:
             raise ModelUnavailableError(gate.reason)
         if not model_name:
             raise ModelUnavailableError("No model configured for note generation")
-        if self.ram_governor is not None and (
-            self.runtime_policy is None or self.runtime_policy.allow_model_download
-        ):
+        if callable(checker):
+            readiness = checker(
+                model_name, authorize_model_load=authorize_model_load
+            )
+            if not readiness.get("allowed"):
+                if job is not None:
+                    raise BudgetDeferredError(
+                        job.job_id,
+                        str(readiness.get("reason") or readiness.get("instruction")),
+                        task_class=TaskClass.LLM_GENERATION,
+                    )
+                raise ModelUnavailableError(
+                    str(readiness.get("reason") or readiness.get("instruction"))
+                )
+            model_name = str(readiness.get("model_id") or model_name)
+        elif self.ram_governor is not None:
+            # Keep small injected test doubles compatible with the legacy seam.
             self.ram_governor.ensure_model_available(model_name)
         return model_name
 

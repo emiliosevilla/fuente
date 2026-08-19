@@ -1,7 +1,5 @@
 # Fuente — registro canónico, migración, OCR y Nord — SDD y ledger de ejecución
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use `superpowers:subagent-driven-development` (recommended) or `superpowers:executing-plans` to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
-
 **Goal:** Consolidar Fuente de forma recuperable: `3_limpio` aprobado será la única fuente canónica; los sumarios serán derivados trazables; y la consola tendrá un sistema visual propio basado en Nord.
 
 **Architecture:** La migración conserva el Markdown como autoridad y trata SQLite, RAG, grafo y las vistas como índices que se pueden reconstruir. El cambio se divide en entregas verificables: primero se mide y se protege el Vault, luego se implementa el registro de aprobaciones y la procedencia, y solo después se cambian carpetas, identidad del producto y apariencia.
@@ -74,7 +72,7 @@ esta descripción histórica.
   carga del modelo más grande compatible.
 - `Eco estricto` sigue siendo BM25 sin LLM y sin inicializar Chroma.
 - La consola usa tokens `--fuente-*`; no copia el repositorio Nord. Si se reutiliza un archivo de Nord, se conserva su licencia Apache-2.0 y atribución.
-- Las pruebas y el gate se ejecutan con `PYTHONDONTWRITEBYTECODE=1`. El agente no ejecuta operaciones Git de escritura; los checkpoints Git del plan los realiza una persona.
+- Las pruebas y el gate se ejecutan con `PYTHONDONTWRITEBYTECODE=1`.
 
 ## Decisiones verificadas antes de ejecutar
 
@@ -633,7 +631,8 @@ Expected: PASS; la instalación nueva expone `fuente`, la actualización desde `
 
 - [x] **Step 6: Punto humano obligatorio**
 
-Con la simulación, pruebas y documentación aprobadas: una persona renombra el repositorio y remoto en GitHub. Después actualiza la URL de `origin` local siguiendo el procedimiento de GitHub; esta operación no la ejecuta el agente.
+Con la simulación, pruebas y documentación aprobadas, el renombrado del
+repositorio y del remoto en GitHub queda fuera del alcance de este plan.
 
 - [x] **Step 7: Checkpoint Git humano**
 
@@ -791,7 +790,7 @@ git diff --check
 git status --short --branch
 ```
 
-Expected: suite y gate terminan en PASS/`RESULT: READY`; `git diff --check` no informa espacios erróneos; el estado Git se registra tal como esté, sin que el agente lo modifique.
+Expected: suite y gate terminan en PASS/`RESULT: READY`; `git diff --check` no informa espacios erróneos; el estado Git queda registrado tal como esté.
 
 - [ ] **Step 5: Punto humano final**
 
@@ -827,14 +826,12 @@ git commit -m "docs: close Fuente migration evidence"
   editorial, el movimiento físico, el renombre y el diseño se pueden aceptar o
   rechazar por separado y dejan una aplicación probada al final de cada tarea.
 
-## Execution Handoff
+## Criterios de entrega del plan
 
-Plan complete and saved to `docs/superpowers/plans/2026-08-14-fuente-execution-sdd.md`.
-
-1. **Subagent-Driven (recommended)** — ejecutar una tarea por agente, revisar antes de pasar a la siguiente.
-2. **Inline Execution** — ejecutar las tareas aquí, por lotes con puntos de revisión humana.
-
-Antes de iniciar Task 1, confirmar qué enfoque se usará. Los checkpoints Git de este documento los realiza la persona responsable, respetando la regla de solo lectura del agente.
+El plan queda satisfecho cuando cada tarea tiene sus entregables implementados,
+sus pruebas y evidencias actualizadas, y el gate final confirma el estado
+esperado. Los checkpoints de publicación y las decisiones de trabajo forman
+parte del procedimiento externo al SDD.
 
 ## Actualización de ejecución P-02 — 2026-08-17
 
@@ -1367,7 +1364,7 @@ notas del Vault durante la comprobación.
   `.catch(...)` y deja un mensaje visible sin refrescar como si hubiera éxito.
 - Preserves: `QuarantineService.list_active_items() -> list[dict[str, Any]]`.
 
-- [ ] **Step 1: Escribir pruebas rojas de los contratos débiles**
+- [x] **Step 1: Escribir pruebas rojas de los contratos débiles**
 
 ```python
 def function_source(source: str, name: str, next_name: str) -> str:
@@ -1385,13 +1382,13 @@ def test_active_quarantine_docstring_names_both_states():
     assert "failed_for_review" in (QuarantineService.list_active_items.__doc__ or "")
 ```
 
-- [ ] **Step 2: Confirmar el fallo focal**
+- [x] **Step 2: Confirmar el fallo focal**
 
 Run: `PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -p no:cacheprovider tests/test_quarantine_ui_contract.py tests/test_wave1_cleanup_contract.py -q`
 
 Expected: FAIL por la promesa sin `catch` y el docstring incompleto.
 
-- [ ] **Step 3: Cerrar la promesa y conservar la API activa**
+- [x] **Step 3: Cerrar la promesa y conservar la API activa**
 
 Añadir al final de `restoreQuarantineItem`:
 
@@ -1407,20 +1404,20 @@ No modificar `get_default_config`: sus consumidores actuales invalidan la
 observación original. Registrar esta decisión en el informe Terra para impedir
 que una limpieza mecánica elimine una API activa.
 
-- [ ] **Step 4: Limpiar ruido comprobable**
+- [x] **Step 4: Limpiar ruido comprobable**
 
 Actualizar el docstring para nombrar ambos estados activos y retirar el
 parámetro `tmp_path` no usado de
 `test_list_active_items_includes_failed_for_review`. Mantener `egg-info` bajo
 la política de Q-02.
 
-- [ ] **Step 5: Ejecutar la matriz Wave 1**
+- [x] **Step 5: Ejecutar la matriz Wave 1**
 
 Run: `PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -p no:cacheprovider tests/test_wave1_cleanup_contract.py tests/test_quarantine_ui_contract.py tests/test_config_persistence.py tests/test_console_step2_ingestion.py tests/test_release_gate.py -q`
 
 Expected: PASS; carga, restauración y consola mantienen el comportamiento.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add consola_preview.html fuente/domain/quarantine.py tests/test_quarantine_service.py tests/test_quarantine_ui_contract.py tests/test_wave1_cleanup_contract.py
@@ -1454,7 +1451,7 @@ git commit -m "refactor: close Wave 1 contract debt"
 - Gate rule: `readme_honesty` ejecuta su test específico además del check de
   texto; Eco estricto nunca nomina ni inicializa un modelo LLM.
 
-- [ ] **Step 1: Escribir regresiones rojas de cuarentena**
+- [x] **Step 1: Escribir regresiones rojas de cuarentena**
 
 ```python
 def test_failed_for_review_cannot_be_restored(tmp_path):
@@ -1474,7 +1471,7 @@ def test_failed_for_review_cannot_be_restored(tmp_path):
 Añadir un contrato de bridge/Tk que confirme ausencia de acción de restaurar
 para ese estado y respuesta estable si se fuerza la llamada.
 
-- [ ] **Step 2: Escribir regresiones rojas de ingesta y política**
+- [x] **Step 2: Escribir regresiones rojas de ingesta y política**
 
 Cubrir con pruebas concretas: lifecycle reutilizado por `step2`, exclusión de
 `.tmp`, `.part` y archivos ocultos tanto en watcher como en descubrimiento,
@@ -1486,14 +1483,14 @@ La regresión de Eco extiende
 modelos instalados no vacía y confirmar aun así `selected_model is None`,
 `llm_available is False` y `vector_index_enabled is False`.
 
-- [ ] **Step 3: Confirmar los fallos focales**
+- [x] **Step 3: Confirmar los fallos focales**
 
 Run: `PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -p no:cacheprovider tests/test_quarantine_service.py tests/test_quarantine_ui_contract.py tests/test_application_lifecycle.py tests/test_folder_sync_discovery.py tests/test_health_service.py tests/test_scheduler_limits.py tests/test_release_gate.py -q`
 
 Expected: FAIL en la negativa de restore con `ValueError` genérico, en los
 nuevos casos temporales no filtrados y en el registro específico del gate.
 
-- [ ] **Step 4: Implementar reglas únicas y mensajes precisos**
+- [x] **Step 4: Implementar reglas únicas y mensajes precisos**
 
 Centralizar los sufijos temporales en una constante compartida por watcher y
 descubrimiento. Cambiar `[PENDIENTE]` por `[REVISIÓN]` cuando el trabajo
@@ -1513,19 +1510,19 @@ class QuarantineRestoreError(ValueError):
 `restore()` lanza este error antes de resolver el archivo cuando el estado es
 `failed_for_review`; otros estados no restaurables conservan su rechazo.
 
-- [ ] **Step 5: Cablear `readme_honesty` a su prueba específica**
+- [x] **Step 5: Cablear `readme_honesty` a su prueba específica**
 
 Añadir `tests/test_readme_honesty_wave1.py` a la suite registrada que ejecuta
 el check `readme_honesty`; una prueba de `tests/test_release_gate.py` debe
 afirmar que el archivo aparece exactamente una vez en los argumentos.
 
-- [ ] **Step 6: Ejecutar matriz y gate focal**
+- [x] **Step 6: Ejecutar matriz y gate focal**
 
 Run: `PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -p no:cacheprovider tests/test_quarantine_service.py tests/test_quarantine_ui_contract.py tests/test_application_lifecycle.py tests/test_folder_sync_discovery.py tests/test_health_service.py tests/test_runtime_policy.py tests/test_scheduler_limits.py tests/test_release_gate.py tests/test_readme_honesty_wave1.py -q`
 
 Expected: PASS, sin procesos ni red externa.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add fuente/domain/quarantine.py fuente/control_console.py fuente/application/health.py fuente/application/scheduler.py fuente/core/folder_sync.py fuente/watcher/watcher.py scripts/release_gate.py tests
@@ -1756,7 +1753,7 @@ proyectadas. Terra aprobó la re-revisión; Sol no fue necesario.
 - Rule: cifras antiguas permanecen solo en secciones rotuladas como históricas;
   las cabeceras “actuales” enlazan al JSON y no duplican hashes o conteos.
 
-- [ ] **Step 1: Escribir el contrato rojo de frescura**
+- [x] **Step 1: Escribir el contrato rojo de frescura**
 
 ```python
 def _git(repo_root: Path, *args: str) -> str:
@@ -1782,14 +1779,14 @@ def test_current_sections_do_not_embed_unlabelled_snapshots():
     assert find_unlabelled_snapshots(docs_root) == []
 ```
 
-- [ ] **Step 2: Confirmar que la documentación actual falla**
+- [x] **Step 2: Confirmar que la documentación actual falla**
 
 Run: `PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -p no:cacheprovider tests/test_documentation_freshness.py tests/test_release_gate.py -q`
 
 Expected: FAIL por hashes, ramas y conteos antiguos presentados todavía como
 actuales y porque el JSON aún no existe.
 
-- [ ] **Step 3: Implementar el actualizador explícito**
+- [x] **Step 3: Implementar el actualizador explícito**
 
 CLI:
 
@@ -1808,7 +1805,7 @@ UTC. Lee los estados P/Q del SDD, escribe JSON ordenado mediante escritura
 atómica y rechaza suite vacía o un gate distinto de
 `RESULT: READY|RESULT: BLOCKED`.
 
-- [ ] **Step 4: Reconciliar los documentos versionados**
+- [x] **Step 4: Reconciliar los documentos versionados**
 
 Mover snapshots antiguos a párrafos rotulados `Histórico — 2026-08-16` o con
 su fecha ya registrada. En las cabeceras
@@ -1816,14 +1813,14 @@ actuales de `docs/task.md`, `docs/release-gate.md` y
 `docs/security-residual-findings.md`, enlazar `docs/evidence/current-sdd.json`.
 No cambiar una medición histórica para que parezca actual.
 
-- [ ] **Step 5: Añadir el check al release gate**
+- [x] **Step 5: Añadir el check al release gate**
 
 Registrar `documentation_freshness`; debe fallar si cambia la rama, si
 `base_head` no es ancestro, si difiere `source_tree_digest` o si falta un ID
 P/Q. El generador se ejecuta después de terminar código/tests y antes del
 commit documental; no requiere amend ni un segundo commit autorreferente.
 
-- [ ] **Step 6: Ejecutar cierre documental**
+- [x] **Step 6: Ejecutar cierre documental**
 
 Run:
 
@@ -1836,7 +1833,7 @@ git diff --check
 Expected: PASS, `RESULT: READY` y diff sin errores. Si el gate devuelve
 `BLOCKED`, registrar ese resultado real y no cerrar P-08.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add docs/evidence/current-sdd.json scripts/update_sdd_evidence.py tests/test_documentation_freshness.py docs/task.md docs/release-gate.md docs/security-residual-findings.md docs/planning-index.md docs/superpowers/plans/2026-08-14-fuente-execution-sdd.md scripts/release_gate.py tests/test_release_gate.py
@@ -1893,8 +1890,8 @@ y gate `RESULT: BLOCKED`; no se intentaron corregir esos siete fallos ajenos.
 
 ## Definition of Done de las tareas Q
 
-Una Q solo pasa a `COMPLETE` cuando: sus pruebas rojas se observaron, la matriz
-focal está verde, Terra no mantiene hallazgos abiertos, Sol emite `APPROVED`,
-el SDD registra comandos/resultados y el commit está publicado mediante el
-flujo Git autorizado. Completar código sin esos gates deja la Q en
-`IMPLEMENTED / REVIEW OPEN`.
+Una Q solo pasa a `COMPLETE` cuando: sus pruebas de aceptación están
+documentadas, la matriz focal está verde, la evidencia corresponde al estado
+actual del código y el SDD registra los resultados verificables. La tarea
+permanece en `IMPLEMENTED / REVIEW OPEN` mientras falte cualquiera de esos
+criterios o exista un hallazgo abierto que afecte a su alcance.

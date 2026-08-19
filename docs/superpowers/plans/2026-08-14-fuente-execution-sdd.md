@@ -1061,6 +1061,8 @@ Desde esta fecha las Q dejan de ser observaciones no bloqueantes: son tareas
 SDD auténticas. Cada una debe ejecutarse con TDD, revisión independiente y un
 commit propio. Q-01–Q-07 pueden trabajarse de forma independiente sobre `dev`;
 Q-08 depende de las siete anteriores y P-08 depende del cierre de todas.
+Para extraer sus briefs se debe usar la clave explícita del encabezado (`Q-01`
+… `Q-08`), no el número ordinal de las tareas históricas `Task 1` … `Task 10`.
 
 | ID | Entregable verificable | Estado | Dependencias |
 |---|---|---|---|
@@ -1070,7 +1072,7 @@ Q-08 depende de las siete anteriores y P-08 depende del cierre de todas.
 | Q-04 | Contratos Wave 1 y limpieza de API | **COMPLETE** | `30` pruebas focales y `7` de servicio; Terra APPROVED; `get_default_config` preservada y rechazo de restauración visible. |
 | Q-05 | Cobertura de cuarentena e ingesta | **COMPLETE** | `89` pruebas focales; Terra APPROVED; error estable de revisión manual, filtros compartidos y gate `readme_honesty` verificados. |
 | Q-06 | Mutaciones por identidad opaca | **COMPLETE** | `aaf3257`; matriz focal `136 passed, 1 warning`; Terra APPROVED en la reconciliación final; PR #36 merged en `889a5e3`. |
-| Q-07 | Cola sin N+1 y transiciones de política cubiertas | **NOT_STARTED** | Q-06 |
+| Q-07 | Cola sin N+1 y transiciones de política cubiertas | **COMPLETE** | `70` pruebas Wave 2 y `24` regresiones focales; medición constante de `1` consulta para 1 y 50 jobs; Terra APPROVED tras re-revisión. |
 | Q-08 | Evidencia documental actual y comprobable | **NOT_STARTED** | Q-01–Q-07, P-06 |
 
 ### Task Q-01: Exportación DOCX determinista
@@ -1630,7 +1632,7 @@ la Task 6 de migración v3 y no bloquea Q-06.
 - Covers: transiciones runtime Auto→Eco y Eco→Auto; error público
   `settings_rollback_failed` cuando falla aplicar y también restaurar.
 
-- [ ] **Step 1: Escribir la regresión roja del N+1**
+- [x] **Step 1: Escribir la regresión roja del N+1**
 
 ```python
 def test_queue_page_loads_schedule_reasons_in_one_bulk_call(tmp_path, monkeypatch):
@@ -1656,7 +1658,7 @@ La prueba debe prohibir llamadas a `list_schedule_decisions(job_id)` durante
 la construcción de una página; el detalle de un job puede seguir cargando su
 historial completo.
 
-- [ ] **Step 2: Implementar la consulta masiva**
+- [x] **Step 2: Implementar la consulta masiva**
 
 Usar una sola consulta con `MAX(decision_id)` agrupado por `job_id` y parámetros
 `?` para las identidades solicitadas. Lista vacía devuelve `{}` sin consultar.
@@ -1679,7 +1681,7 @@ def latest_schedule_reasons(self, job_ids: Sequence[str]) -> dict[str, str]:
     return {str(row["job_id"]): str(row["reason"]) for row in rows}
 ```
 
-- [ ] **Step 3: Escribir transiciones rojas de ajustes**
+- [x] **Step 3: Escribir transiciones rojas de ajustes**
 
 ```python
 def test_live_settings_transition_auto_eco_auto_rebuilds_policy(backend):
@@ -1692,24 +1694,34 @@ def test_apply_and_restore_failure_returns_stable_rollback_error(backend, monkey
     assert backend.save_settings({"resource_profile": "eco_strict"})["error"] == "settings_rollback_failed"
 ```
 
-- [ ] **Step 4: Ejecutar la matriz Wave 2**
+- [x] **Step 4: Ejecutar la matriz Wave 2**
 
 Run: `PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -p no:cacheprovider tests/test_job_control.py tests/test_job_queue_ui_contract.py tests/contract/test_settings_contract.py tests/test_settings_service.py -q`
 
 Expected: PASS y ninguna consulta por fila al listar la cola.
 
-- [ ] **Step 5: Medir la mejora**
+- [x] **Step 5: Medir la mejora**
 
 Añadir una prueba con 50 jobs y un contador de consultas SQLite. Expected:
 cantidad constante para 1 y 50 filas; el contenido y orden de la página no
 cambian.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add fuente/infrastructure/sqlite_store.py fuente/application/job_control.py fuente/control_console.py tests/test_job_control.py tests/test_job_queue_ui_contract.py tests/contract/test_settings_contract.py tests/test_settings_service.py
 git commit -m "perf: batch queue schedule reasons"
 ```
+
+### Cierre Q-07 — 2026-08-19
+
+Q-07 queda cerrada tras corregir el extractor de briefs y ejecutar la tarea
+desde `task-Q-07-brief.md`. La implementación añade la consulta masiva de
+razones y cubre Auto→Eco→Auto y `settings_rollback_failed`. La matriz Wave 2
+pasó **70 pruebas** y la matriz focal **24 pruebas**, ambas con un warning
+externo de ChromaDB; la medición obtuvo **1 consulta SQLite** tanto para 1
+como para 50 jobs. La prueba también conserva y compara IDs, orden y razones
+proyectadas. Terra aprobó la re-revisión; Sol no fue necesario.
 
 ### Task Q-08: Metadatos documentales actuales
 

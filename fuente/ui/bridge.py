@@ -800,15 +800,13 @@ class FuentePyWebViewApi:
 
     def update_note_metadata(
         self,
-        note_id: object,
+        document_id: object,
         metadata: object,
         expected_revision: object,
     ) -> dict[str, Any]:
-        note = self._text(note_id, "note_id")
+        note = self._editor_note_id(document_id)
         if isinstance(note, dict):
             return note
-        if "/" in note or "\\" in note or note.endswith(".md"):
-            return self._error("path_not_authorized", "Path is not authorized")
         parsed = self._payload(metadata)
         if isinstance(parsed, dict) and "error" in parsed:
             return parsed

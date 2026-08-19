@@ -252,6 +252,9 @@ def test_approval_metadata_save_preserves_later_edits_during_async_response():
     assert "const saveGeneration = approvalMetadataEditGeneration" in source
     assert "approvalMetadataEditGeneration === saveGeneration" in source
     assert "approvalSelectedNoteId !== saveDocumentId" in source
+    assert "approvalMetadataLoadGeneration" in source
+    assert "approvalMetadataLoadGeneration !== loadGeneration" in source
+    assert "approvalMetadataLoadGeneration !== saveLoadGeneration" in source
 
 
 def test_frontend_metadata_methods_are_exposed_by_bridge():

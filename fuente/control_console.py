@@ -1483,12 +1483,20 @@ class FuenteConsoleBackend:
             }
 
         elif action_name == "update_note_metadata":
-            identifier = payload.get("document_id") or payload.get("path")
-            if not identifier:
-                return {"error": "document_id is required"}
+            allowed_fields = {"document_id", "metadata", "expected_revision"}
+            if (
+                set(payload) - allowed_fields
+                or not isinstance(payload.get("document_id"), str)
+                or not payload.get("document_id", "").strip()
+                or "expected_revision" not in payload
+            ):
+                return {"error": "invalid_payload"}
+            identifier = payload["document_id"].strip()
+            if "/" in identifier or "\\" in identifier or identifier.endswith(".md"):
+                return {"error": "invalid_payload"}
             try:
                 notes = self.get_notes_service()
-                document_id = notes.resolve_document_id(str(identifier))
+                document_id = identifier
                 expected_revision = payload.get("expected_revision")
                 if expected_revision is None:
                     return {"error": "expected_revision is required"}

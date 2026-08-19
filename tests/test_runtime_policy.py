@@ -32,7 +32,11 @@ def _llm_budget(*, allowed=True, model_id="qwen2.5:1.5b"):
 def test_eco_strict_derives_one_non_contradictory_policy(config):
     config.resource_profile = "eco_strict"
 
-    policy = resolve_runtime_policy(config, budget=None, installed_models=())
+    policy = resolve_runtime_policy(
+        config,
+        budget=_llm_budget(),
+        installed_models=("qwen2.5:1.5b", "llama3.2"),
+    )
 
     assert policy.profile is ExecutionProfile.ECO_STRICT
     assert policy.vector_index_enabled is False
@@ -91,4 +95,3 @@ def test_runtime_policy_is_immutable(config):
 
     with pytest.raises(FrozenInstanceError):
         policy.llm_available = True
-

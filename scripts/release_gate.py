@@ -351,7 +351,23 @@ def check_readme_honesty(repo_root: Path = REPO_ROOT) -> GateCheck:
             False,
             "README must reference docs/release-gate.md or release gate command",
         )
-    return GateCheck("readme_honesty", True, "README avoids stale test-count claims")
+    wave1 = run_pytest_suite(
+        "readme_honesty_wave1",
+        ["tests/test_readme_honesty_wave1.py", "-q", "--tb=line"],
+        repo_root=repo_root,
+    )
+    if not wave1.passed:
+        return GateCheck(
+            "readme_honesty",
+            False,
+            "README text check passed, but the Wave 1 honesty test failed: "
+            + wave1.detail,
+        )
+    return GateCheck(
+        "readme_honesty",
+        True,
+        "README text check and tests/test_readme_honesty_wave1.py passed",
+    )
 
 
 def sample_vault_smoke(vault_path: Path) -> tuple[bool, str]:

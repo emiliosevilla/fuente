@@ -199,3 +199,17 @@ def test_no_argument_api_uses_real_platform_and_home_without_path_regression(
     assert isinstance(detected, list)
     assert detected == [_connection(SyncProvider.ONEDRIVE_MOUNT, onedrive)]
     assert all(isinstance(folder, ConnectedFolder) for folder in detected)
+
+
+def test_scan_connection_excludes_hidden_and_temporary_suffixes(tmp_path):
+    root = tmp_path / "provider"
+    root.mkdir()
+    for name in ("good.txt", ".hidden.txt", "draft.tmp", "draft.part"):
+        (root / name).write_text(name, encoding="utf-8")
+
+    manager = FolderSyncManager(tmp_path / "vault")
+    manager._is_supported = lambda _path: True
+
+    found = manager.scan_connection(_connection(SyncProvider.LOCAL, root))
+
+    assert [item.source_relative_path for item in found] == ["good.txt"]

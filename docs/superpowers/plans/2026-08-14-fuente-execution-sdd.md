@@ -34,7 +34,7 @@ alcanzó cada cierre.
 | 7 | `Fuentes`→`Sumarios` | **COMPLETE — NO-OP REAL** | P-04 cerró con manifiesto vacío, apply/rollback en copia y dictámenes Terra/Sol favorables. |
 | 8 | Identidad y estado local Fuente | **COMPLETE** | P-05 cerró la normalización, el historial recuperable y la retirada de restos operativos del namespace anterior. |
 | 9 | Nord y lector de tres regiones | **COMPLETE — P-06 CLOSED** | Contratos, pruebas, remediación técnica y revisión visual nativa cerrados; la evidencia final confirma lector, foco, contraste, ancho mínimo y grafo/MOC. |
-| 10 | Cierre y release | **IN PROGRESS** | Q-01–Q-08 están cerradas; P-08 permanece abierto y exige gate final y dictamen independiente; P-07 queda cerrado como no aplicable. El gate global sigue bloqueado por siete fallos ajenos a Q-08. |
+| 10 | Cierre y release | **COMPLETE** | Q-01–Q-08 y P-08 están cerradas con gate final `RESULT: READY`; P-07 queda cerrado como no aplicable. |
 
 ### Estado canónico registrado
 
@@ -1052,7 +1052,7 @@ se reescribe el historial.
 - [x] **P-07 — Cierre de selección del modelo.** No aplicable y cerrado por
   decisión arquitectónica: la selección del LLM se gobierna por RAM y no por benchmark,
   Vault, contenido, revisión, aprobación o procedencia.
-- [ ] **P-08 — Cierre SDD.** Depende de P-06 y Q-01–Q-08; exige gate final,
+- [x] **P-08 — Cierre SDD.** Depende de P-06 y Q-01–Q-08; exige gate final,
   dictamen independiente y actualización documental con mediciones actuales.
 
 ## Tareas de deuda incorporadas al SDD — Q-01–Q-08
@@ -1073,7 +1073,7 @@ Para extraer sus briefs se debe usar la clave explícita del encabezado (`Q-01`
 | Q-05 | Cobertura de cuarentena e ingesta | **COMPLETE** | `89` pruebas focales; Terra APPROVED; error estable de revisión manual, filtros compartidos y gate `readme_honesty` verificados. |
 | Q-06 | Mutaciones por identidad opaca | **COMPLETE** | `aaf3257`; matriz focal `136 passed, 1 warning`; Terra APPROVED en la reconciliación final; PR #36 merged en `889a5e3`. |
 | Q-07 | Cola sin N+1 y transiciones de política cubiertas | **COMPLETE** | `70` pruebas Wave 2 y `24` regresiones focales; medición constante de `1` consulta para 1 y 50 jobs; Terra APPROVED tras re-revisión. |
-| Q-08 | Evidencia documental actual y comprobable | **COMPLETE** | `23` pruebas focales; `documentation_freshness` `READY`; Terra APPROVED tras re-revisión. El gate global conserva `RESULT: BLOCKED` por siete fallos ajenos; P-08 no se cierra. |
+| Q-08 | Evidencia documental actual y comprobable | **COMPLETE** | `23` pruebas focales; `documentation_freshness` `READY`; Terra APPROVED tras re-revisión. Gate global final `RESULT: READY`; P-08 COMPLETE. |
 
 ### Task Q-01: Exportación DOCX determinista
 
@@ -1843,28 +1843,28 @@ git add docs/evidence/current-sdd.json scripts/update_sdd_evidence.py tests/test
 git commit -m "docs: make SDD evidence current and verifiable"
 ```
 
-### Cierre Q-08 — 2026-08-19
+### Histórico — cierre Q-08 previo al fix P-08 — 2026-08-19
 
 Q-08 queda cerrada con evidencia documental actual y verificable. La matriz
 focal pasó **23 pruebas** y el check aislado `documentation_freshness` devolvió
 `RESULT: READY`. `current-sdd.json` conserva mapas ID→estado para P/Q, el
 `base_head` ancestral y el digest reproducible del árbol fuente; el SDD
-versionado registra Q-08 como `COMPLETE` y mantiene P-08 abierto.
+versionado registraba Q-08 como `COMPLETE` y mantenía P-08 abierto en ese
+checkpoint.
 
 La suite completa medida queda en **7 failed, 1193 passed, 1 skipped, 1
 warning**; Terra verificó que los siete fallos son ajenos a Q-08. Por ello el
 release gate global y P-08 siguen `BLOCKED` y no se presentan como cerrados.
 
-### P-08 — corrección de bloqueos funcionales, 2026-08-19
+### P-08 — cierre final, 2026-08-19
 
-Terra aprobó la corrección de los siete fallos que bloqueaban el cierre: la
-matriz relacionada pasó **172 pruebas** y la suite completa quedó en
-**1 fallo documental, 1200 pasadas, 1 omitida y 1 warning**. El único fallo
-restante es el digest de `docs/evidence/current-sdd.json`, que debe regenerarse
-después de publicar estos cambios. P-08 sigue abierto hasta medir de nuevo el
-gate con el árbol limpio.
+Terra aprobó la corrección de los siete fallos que bloqueaban el cierre. La
+matriz relacionada pasó **172 pruebas**, la suite completa pasó **1201 pruebas,
+1 omitida y 1 warning**, y el release gate completo devolvió `RESULT: READY`
+con todas sus comprobaciones en verde. `current-sdd.json` se regeneró después
+de publicar el fix y conserva el estado medido del árbol limpio.
 
-### Ejecución real Q-08 — 2026-08-19
+### Histórico — ejecución real Q-08 antes del fix P-08 — 2026-08-19
 
 Luna implementó Q-08 y aplicó la corrección solicitada por Terra: `p_status` y
 `q_status` son mapas `ID → estado` leídos del ledger P y de la tabla Q de este

@@ -646,6 +646,7 @@ def test_unavailable_policy_llm_waits_at_indexed_chunks_without_fake_success(tmp
         assert result.status == "pending"
         decisions = store.list_schedule_decisions(job.job_id)
         assert decisions[-1]["action"] == ScheduleAction.WAIT.value
-        assert decisions[-1]["reason"] == "llm_unavailable_under_policy"
+        assert decisions[-1]["reason"].startswith("llm_unavailable_under_policy;")
+        assert "Cierra aplicaciones" in result.error_message
     finally:
         store.close()

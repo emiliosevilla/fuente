@@ -253,22 +253,16 @@ def test_chat_skips_ollama_when_budget_denies_llm(grounded_service):
     assert result["has_context"] is True
 
 
-def test_chat_refuses_unreviewed_benchmark_candidate(grounded_service):
+def test_chat_accepts_ram_selected_candidate_without_benchmark(grounded_service):
     service, provider, _store = grounded_service
     service._model_resolver = lambda: "qwen3.5:0.8b"  # type: ignore[attr-defined]
 
-    class LookalikeBenchmark:
-        def is_verifiable_promotion(self) -> bool:
-            return True
-
-    service._benchmark_verdict = LookalikeBenchmark()  # type: ignore[attr-defined]
-
     result = service.ask("¿Qué garantiza la fianza?")
 
-    assert result["ok"] is False
-    assert result["error"]["code"] == ERROR_OLLAMA
-    assert "verified benchmark" in result["error"]["message"]
-    assert not provider.calls
+    assert result["ok"] is True
+    assert result["error"] is None
+    assert result["model"] == "qwen3.5:0.8b"
+    assert provider.calls
 
 
 def test_console_process_chat_bm25_only_on_tiny_ram(temp_vault_path, monkeypatch):

@@ -4,7 +4,7 @@
 > **Checkout medido (2026-08-16):** rama activa `dev` y `origin/dev` en `3e93092`; `main` y `origin/main` en `edfbc41`; el PR #17 está fusionado. La corrección de seguridad actual deja cambios locales pendientes de publicación.
 > **Estado del producto:** hardening, Wave 1, Wave 2, fuentes montadas, base editorial, renombrado del producto a Fuente, sistema visual Nord y correctivos OCR están implementados y publicados.
 > **Estado OCR:** Tesseract se instala como paso explícito con `eng` y `spa`; la extracción automática genera candidatos sin intervención posterior de Codex y reconstruye tablas por geometría genérica.
-> **Siguiente ciclo vigente:** promover y registrar formalmente la aprobación de las tres candidatas OCR en `3_limpio`, cerrar los checkpoints humanos de Vault/UI y ejecutar el benchmark real de `qwen3.5:0.8b` solo después de disponer de fuentes canónicas aprobadas.
+> **Siguiente ciclo vigente:** promover y registrar formalmente la aprobación de las tres candidatas OCR en `3_limpio` y cerrar los checkpoints humanos de Vault/UI. La selección del LLM se gobierna automáticamente por RAM en setup y se vuelve a comprobar al inicio de cada ciclo ETL; no depende del material del Vault ni de su ledger.
 > **Histórico SDD:** la [evidencia versionada de la base v2](history/2026-08-13-editorial-foundation-evidence.md) resume el trabajo cerrado; `.superpowers/sdd/` conserva informes locales ignorados por Git. Ninguno contiene trabajo pendiente.
 > **Gate:** `PYTHONDONTWRITEBYTECODE=1 python3 scripts/release_gate.py`
 
@@ -36,8 +36,8 @@
 La aceptación de las tres candidatas es una decisión editorial sobre la muestra,
 no una afirmación de que el Vault ya esté actualizado. La medición actual de
 `/Users/emiliosevillaortego/Documents/Fuente_Vault/3_limpio/` encuentra las tres
-notas con `status: pending_review`; por tanto, el ledger de aprobación y el
-benchmark siguen bloqueados hasta ejecutar esa promoción.
+notas con `status: pending_review`; por tanto, la aprobación editorial sigue
+pendiente. Esa condición no participa en la selección del LLM.
 
 ---
 
@@ -56,13 +56,17 @@ benchmark siguen bloqueados hasta ejecutar esa promoción.
 ### Estado medido actual — SDD Fuente (2026-08-15)
 
 - Tareas 1–9 tienen implementación y cobertura automatizada; P-06/Q-03 ya
-  tienen además revisión visual nativa cerrada en macOS. P-07 conserva abierto
-  el benchmark real y P-08 el cierre documental final.
-- La Tarea 2 mantiene `qwen3.5:0.8b` como candidato; el benchmark real sigue
-  bloqueado hasta disponer de casos aprobados en `3_limpio`.
+  tienen además revisión visual nativa cerrada en macOS. P-07 queda cerrado
+  como no aplicable por decisión arquitectónica y P-08 conserva el cierre
+  documental final.
+- La Tarea 2 selecciona el modelo automáticamente según la RAM instalada con
+  margen de seguridad. Al iniciar cada ciclo ETL, `RAMGovernor` vuelve a
+  comprobar la RAM disponible frente al modelo descargado; si no es compatible,
+  detiene el ciclo y solicita cerrar aplicaciones y/o confirmar la carga del
+  modelo más grande compatible.
 - La Tarea 8 está implementada técnicamente: paquete, entry point, instaladores,
   estado `.fuente`, remoto GitHub y carpeta local ya usan Fuente.
-- La Tarea 10 mantiene el cierre formal abierto por P-07, Q-04–Q-08 y P-08;
+- La Tarea 10 mantiene el cierre formal abierto por Q-04–Q-08 y P-08;
   P-06/Q-03 ya están registrados con evidencia humana actual.
 
 ### Revalidación actual del Vault — 2026-08-15
@@ -73,8 +77,8 @@ benchmark siguen bloqueados hasta ejecutar esa promoción.
 - `4_salida/` contiene únicamente `_Indice_MOC.md`; no existe
   `4_salida/Fuentes/Sin_clasificar/` ni hay 14 notas actuales allí.
 - La cifra de 14 notas corresponde a la migración histórica del 2026-08-14,
-  no al estado actual del Vault. El benchmark real sigue bloqueado porque no
-  hay casos canónicos aprobados.
+  no al estado actual del Vault. El benchmark comparativo no forma parte de la
+  arquitectura activa y no se ejecuta.
 
 | Eje | Definición operativa |
 |-----|----------------------|
@@ -301,8 +305,9 @@ Evidencia de ejecución:
 - **Release gate completo:** todas las suites funcionales pasan: unit `732 passed, 1 skipped`, integration `19 passed`, security `35 passed`, contract `106 passed, 1 warning`, offline `7 passed`, installer `21 passed`, headless `10 passed`, migration `19 passed`, sync `52 passed` y release gate `13 passed`.
 - **Última medición limpia:** todas las comprobaciones pasaron, incluido `source_tree_clean`; resultado: `RESULT: READY`.
 
-No queda un bloqueo funcional de código en este ciclo. Quedan el benchmark real
-condicionado a documentos aprobados, Q-04–Q-08 y el cierre final del ledger SDD.
+No queda un bloqueo funcional de código en este ciclo. Quedan Q-04–Q-08 y el
+cierre final del ledger SDD; el benchmark comparativo fue retirado como no
+aplicable por decisión arquitectónica.
 La revisión visual nativa P-06/Q-03 quedó cerrada el 2026-08-19; la matriz
 focal actual pasó `87 passed`.
 

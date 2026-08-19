@@ -65,17 +65,27 @@ cannot be opened by 0.6.3 must be rebuilt from approved Markdown.
 
 `pyproject.toml` sigue declarando `chromadb` dentro del conjunto core. Esa declaración de empaquetado no significa que todos los perfiles inicialicen la capa vectorial:
 
-- **Auto** conserva el camino híbrido/vectorial y solo usa un modelo LLM local exacto si la medición de recursos y el catálogo instalado lo autorizan. La política no descarga automáticamente el LLM elegido.
+- **Auto** conserva el camino híbrido/vectorial y selecciona el modelo LLM
+  local automáticamente en el setup según la RAM instalada con margen de
+  seguridad. La selección no depende del material del Vault, su contenido,
+  tamaño, revisión, aprobación ni procedencia.
 - **Eco estricto** usa BM25 sobre el corpus Markdown autorizado del Vault. No construye, lee, consulta ni escribe Chroma, aunque el paquete esté instalado en el entorno core.
 - El estado efectivo se obtiene de la política medida y del panel Health; la configuración guardada (`Auto`/`Eco estricto`) no sustituye esa medición.
+- Al iniciar cada ciclo ETL, `RAMGovernor` vuelve a comprobar la RAM realmente
+  disponible frente al modelo ya descargado. Si es compatible, el ciclo inicia;
+  si no, se detiene y solicita cerrar aplicaciones y/o confirmar la carga del
+  modelo más grande compatible.
 
 El extra `audio` es opcional. En Eco el audio se omite por defecto (`skip`), sin importar `faster-whisper`; `tiny_cpu` requiere que el usuario proporcione un `whisper_model_path` que apunte a archivos locales existentes. No se descarga el modelo `tiny` durante el arranque o la ejecución.
 
-### Benchmark local ultra-ligero
+### Selección de modelo y control del ciclo ETL
 
-`qwen3.5:0.8b` figura en el catálogo como candidato, no como modelo Auto. Solo puede usarlo el gobernador de RAM si recibe un resultado verificable del benchmark reproducible contra `qwen2.5:0.5b`: ambos modelos instalados, respuestas válidas con estructura, frases y citas a `origins`, y al menos 35 % de RAM disponible antes, durante y después de cada ejecución. El benchmark usa únicamente Ollama en loopback, `stream: false` y las opciones fijas `num_ctx=4096`, `num_predict=512`, `seed=42`; no añade paquetes, repositorios ni descargas.
-
-Hasta que Task 4 cree el ledger de aprobaciones, `scripts/benchmark_ultralight_models.py` responde `blocked:no_approved_cases` y no contacta Ollama. Un campo `status: approved` en el Markdown no es evidencia suficiente.
+La comparación de modelos no forma parte de la arquitectura activa. La
+selección se hace automáticamente en el setup según la RAM instalada con
+margen de seguridad. Al iniciar cada ciclo ETL, `RAMGovernor` vuelve a medir la
+RAM disponible frente al modelo descargado; si no es compatible, detiene el
+ciclo y solicita cerrar aplicaciones y/o confirmar la carga del modelo más
+grande compatible. El Vault y su ledger no participan en la selección.
 
 ### Demo empaquetado e integraciones externas
 

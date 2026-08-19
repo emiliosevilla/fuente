@@ -111,6 +111,11 @@ def test_approve_note_signature_has_no_metadata_argument():
     assert tuple(parameters) == ("self", "document_id", "expected_revision")
 
 
+def test_update_note_metadata_signature_uses_document_id():
+    parameters = inspect.signature(FuentePyWebViewApi.update_note_metadata).parameters
+    assert tuple(parameters) == ("self", "document_id", "metadata", "expected_revision")
+
+
 def test_legacy_merge_action_is_not_registered(temp_vault_path):
     bridge = FuentePyWebViewApi(FuenteConsoleBackend(temp_vault_path))
 

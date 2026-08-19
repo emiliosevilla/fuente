@@ -77,8 +77,9 @@ Los jobs son durables, reanudables y tienen estados y razones explícitos.
   un modelo.
 - Perfil `Eco estricto`, que usa BM25, no inicializa Chroma y omite audio por
   defecto.
-- `qwen3.5:0.8b` permanece como candidato hasta disponer de un benchmark real
-  sobre documentos canónicos aprobados.
+- La selección del modelo depende de la RAM instalada y de la RAM disponible
+  al iniciar cada ciclo ETL; no depende del contenido, tamaño, revisión o
+  aprobación del Vault.
 
 ### Consola y operación
 
@@ -107,8 +108,9 @@ El flujo editorial usa Markdown con `frontmatter` como fuente canónica y
 protege las ediciones mediante `compare-and-swap` (CAS). El `reflow` y el
 enriquecimiento son jobs `durable` y recuperables; la detección de `candidate`
 es determinista; la `fusion` usa `preview-then-commit` y es
-`source-preserving`. Quedan **fuera de alcance: TipTap, native Graph API/OAuth,
-LightRAG en producción y credenciales cloud**.
+`source-preserving`. El editor WYSIWYG forma parte del alcance previsto; la
+integración nativa con Graph API/OAuth y las credenciales cloud quedan fuera
+del alcance actual.
 
 ### Carpetas montadas
 
@@ -157,9 +159,9 @@ Extras disponibles:
 | `dev` | `pip install -e ".[dev]"` | PyInstaller para empaquetado. |
 | `test` | `pip install -e ".[test]"` | Pytest. |
 
-Los binarios de sistema no los instala pip. Consulta
-[`docs/dependency-matrix.md`](docs/dependency-matrix.md) para Tesseract,
-FFmpeg, Ollama y las comprobaciones de entorno.
+Los binarios de sistema no los instala pip. Para Tesseract, FFmpeg y Ollama,
+comprueba las herramientas disponibles en el entorno antes de activar sus
+extras; ninguna de ellas es obligatoria para el núcleo.
 
 ### Instaladores
 
@@ -225,17 +227,20 @@ PYTHONDONTWRITEBYTECODE=1 python3 scripts/release_gate.py
 ```
 
 `RESULT: READY` significa que el conjunto de comprobaciones del gate pasó.
-Consulta [`docs/release-gate.md`](docs/release-gate.md) para el mapa de
-condiciones, [`docs/headless-operation.md`](docs/headless-operation.md) para
-Docker/NAS/CI y [`docs/migration-guide.md`](docs/migration-guide.md) para
-migraciones del Vault.
+Las migraciones y la operación sin interfaz se describen en los comandos y
+contratos del propio repositorio; no requieren documentación adicional para
+ejecutar la suite o el gate.
 
 ## Límites actuales
 
-Fuente no pretende ser un servicio cloud, un cliente de Graph API, un editor
-WYSIWYG ni una integración de LightRAG en producción. La fuente de verdad es
-el Markdown aprobado; la base SQLite, el grafo, los índices RAG y la interfaz
-son capas derivadas y reconstruibles.
+Fuente no pretende ser un servicio cloud ni un cliente de Graph API. El editor
+WYSIWYG forma parte de la evolución prevista del producto. La fuente de verdad
+es el Markdown aprobado; la base SQLite, el grafo, los índices RAG y la
+interfaz son capas derivadas y reconstruibles.
+
+## Licencia
+
+Fuente se distribuye bajo la licencia MIT. Consulta [LICENSE.md](LICENSE.md).
 
 ## Autor
 

@@ -7,6 +7,7 @@ Exits 0 only when all required checks pass.
 from __future__ import annotations
 
 import argparse
+import json
 import re
 import subprocess
 import sys
@@ -18,6 +19,12 @@ from typing import Callable, Sequence
 REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
+
+from scripts.update_sdd_evidence import (
+    calculate_source_tree_digest,
+    find_unlabelled_snapshots,
+    read_sdd_statuses,
+)
 
 DEFAULT_PYTEST_TIMEOUT = 600
 
@@ -331,6 +338,140 @@ def check_required_docs(repo_root: Path = REPO_ROOT) -> GateCheck:
             "Missing docs: " + ", ".join(missing),
         )
     return GateCheck("required_docs", True, "All required operator docs present")
+
+
+def check_documentation_freshness(repo_root: Path = REPO_ROOT) -> GateCheck:
+    """Fail closed when current SDD evidence no longer describes this tree."""
+    evidence_path = repo_root / "docs" / "evidence" / "current-sdd.json"
+    if not evidence_path.is_file():
+        return GateCheck(
+            "documentation_freshness",
+            False,
+            f"Missing {evidence_path.relative_to(repo_root)}",
+        )
+    try:
+        evidence = json.loads(evidence_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        return GateCheck("documentation_freshness", False, f"Invalid evidence JSON: {exc}")
+
+    expected_keys = {
+        "measured_at",
+        "branch",
+        "base_head",
+        "source_tree_digest",
+        "suite",
+        "gate",
+        "p_status",
+        "q_status",
+    }
+    if set(evidence) != expected_keys:
+        return GateCheck(
+            "documentation_freshness",
+            False,
+            "Evidence keys differ from the Q-08 contract",
+        )
+
+    branch = subprocess.run(
+        ["git", "branch", "--show-current"],
+        cwd=repo_root,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if branch.returncode != 0:
+        return GateCheck("documentation_freshness", False, "Unable to measure current branch")
+    current_branch = branch.stdout.strip()
+    if evidence["branch"] != current_branch:
+        return GateCheck(
+            "documentation_freshness",
+            False,
+            f"Evidence branch {evidence['branch']!r} differs from {current_branch!r}",
+        )
+
+    ancestor = subprocess.run(
+        ["git", "merge-base", "--is-ancestor", str(evidence["base_head"]), "HEAD"],
+        cwd=repo_root,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if ancestor.returncode != 0:
+        return GateCheck(
+            "documentation_freshness",
+            False,
+            f"Evidence base_head {evidence['base_head']!r} is not an ancestor of HEAD",
+        )
+
+    current_digest = calculate_source_tree_digest(repo_root)
+    if evidence["source_tree_digest"] != current_digest:
+        return GateCheck(
+            "documentation_freshness",
+            False,
+            "Evidence source_tree_digest differs from the current source tree",
+        )
+
+    if not isinstance(evidence["p_status"], dict) or not isinstance(evidence["q_status"], dict):
+        return GateCheck(
+            "documentation_freshness",
+            False,
+            "Evidence P/Q status values must be ID-to-state objects",
+        )
+    try:
+        current_p, current_q = read_sdd_statuses(repo_root)
+    except (OSError, ValueError) as exc:
+        return GateCheck("documentation_freshness", False, f"Unable to read SDD statuses: {exc}")
+
+    expected_p = {f"P-{number:02d}" for number in range(1, 9)}
+    expected_q = {f"Q-{number:02d}" for number in range(1, 9)}
+    actual_p = set(evidence["p_status"])
+    actual_q = set(evidence["q_status"])
+    missing = sorted((expected_p - actual_p) | (expected_q - actual_q))
+    if missing:
+        return GateCheck(
+            "documentation_freshness",
+            False,
+            "Evidence is missing SDD IDs: " + ", ".join(missing),
+        )
+    if actual_p != expected_p or actual_q != expected_q:
+        unexpected = sorted((actual_p - expected_p) | (actual_q - expected_q))
+        return GateCheck(
+            "documentation_freshness",
+            False,
+            "Evidence contains unexpected SDD IDs: " + ", ".join(unexpected),
+        )
+    if evidence["p_status"] != current_p or evidence["q_status"] != current_q:
+        discrepancies = []
+        for identifier in sorted(expected_p):
+            if evidence["p_status"].get(identifier) != current_p.get(identifier):
+                discrepancies.append(
+                    f"{identifier}: evidence={evidence['p_status'].get(identifier)!r}, "
+                    f"sdd={current_p.get(identifier)!r}"
+                )
+        for identifier in sorted(expected_q):
+            if evidence["q_status"].get(identifier) != current_q.get(identifier):
+                discrepancies.append(
+                    f"{identifier}: evidence={evidence['q_status'].get(identifier)!r}, "
+                    f"sdd={current_q.get(identifier)!r}"
+                )
+        return GateCheck(
+            "documentation_freshness",
+            False,
+            "Evidence status differs from the SDD source of truth: "
+            + "; ".join(discrepancies),
+        )
+
+    snapshots = find_unlabelled_snapshots(repo_root / "docs")
+    if snapshots:
+        return GateCheck(
+            "documentation_freshness",
+            False,
+            "Unlabelled snapshots in current documentation:\n" + "\n".join(snapshots[:8]),
+        )
+    return GateCheck(
+        "documentation_freshness",
+        True,
+        "Current evidence matches branch, ancestor, source digest, SDD IDs, and documentation labels",
+    )
 
 
 def check_readme_honesty(repo_root: Path = REPO_ROOT) -> GateCheck:
@@ -733,6 +874,7 @@ def run_all_checks(
 
     maybe("source_tree_clean", lambda: check_source_tree_clean(repo_root))
     maybe("active_artifact_hygiene", lambda: check_active_artifact_hygiene(repo_root))
+    maybe("documentation_freshness", lambda: check_documentation_freshness(repo_root))
     maybe("security_residuals", lambda: check_security_residuals(repo_root))
     maybe("required_docs", lambda: check_required_docs(repo_root))
     maybe("readme_honesty", lambda: check_readme_honesty(repo_root))

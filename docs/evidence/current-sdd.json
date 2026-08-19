@@ -1,0 +1,28 @@
+{
+  "base_head": "db4152425b436946635fbab3a924afac67e6e824",
+  "branch": "dev",
+  "gate": "RESULT: BLOCKED",
+  "measured_at": "2026-08-19T18:52:46Z",
+  "p_status": {
+    "P-01": "COMPLETE",
+    "P-02": "COMPLETE",
+    "P-03": "COMPLETE",
+    "P-04": "COMPLETE",
+    "P-05": "COMPLETE",
+    "P-06": "COMPLETE",
+    "P-07": "COMPLETE",
+    "P-08": "OPEN"
+  },
+  "q_status": {
+    "Q-01": "COMPLETE",
+    "Q-02": "COMPLETE",
+    "Q-03": "COMPLETE",
+    "Q-04": "COMPLETE",
+    "Q-05": "COMPLETE",
+    "Q-06": "COMPLETE",
+    "Q-07": "COMPLETE",
+    "Q-08": "COMPLETE"
+  },
+  "source_tree_digest": "b7ed0905f35c3f0dca93168f29995e8d216e26aefad4ca4da501687a8b1ad20d",
+  "suite": "7 failed, 1193 passed, 1 skipped, 1 warning in 52.17s"
+}

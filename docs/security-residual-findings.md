@@ -4,6 +4,11 @@ Open **P0** and **P1** findings with status **open** block release. The release 
 
 All items below are **P2 or lower** residuals. They remain listed for auditability with either resolution evidence or the documented controls that limit an accepted exception; no P0/P1 item is open.
 
+## Current documentation evidence
+
+The current measured checkout evidence is [`docs/evidence/current-sdd.json`](evidence/current-sdd.json).
+The dated counts and gate snapshots below are historical records, not current claims.
+
 | ID | Severity | Area | Status | Rationale |
 |----|----------|------|--------|-----------|
 | SEC-001 | P2 | Wikilinks | resolved | Path-qualified wikilinks resolve through the authorized vault-relative resolver; regressions passed in `tests/test_authorized_paths.py` and `tests/test_recursive_graph_scope.py` |
@@ -11,7 +16,7 @@ All items below are **P2 or lower** residuals. They remain listed for auditabili
 | SEC-003 | P2 | Bridge | resolved | Typed frontend inventory and fail-closed payload regressions passed in `tests/contract/test_bridge_frontend_contract.py` and `tests/security/test_bridge_payloads.py` |
 | SEC-004 | P2 | AnythingLLM | resolved | Console lifecycle and no-browser/offline fallback regressions passed in `tests/test_console_step2_ingestion.py`, `tests/test_console_graph_lifecycle.py`, and `tests/test_installer_contract.py` |
 | SEC-005 | P2 | Quarantine UI | resolved | `list_active_items()` now includes `failed_for_review`; regression in `test_list_active_items_includes_failed_for_review` |
-| SEC-006 | P2 | Tooling | resolved (not reproducible) | `PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -p no:cacheprovider --collect-only -q` collected 733 tests; the canonical Unicode-path-safe command is `python3 -m pytest` |
+| SEC-006 | P2 | Tooling | resolved (not reproducible) | The canonical Unicode-path-safe command is `python3 -m pytest`; the older collection snapshot is historical. |
 | SEC-007 | P2 | Indexing | resolved | Chunk identity/default-issue and explicit Chroma field regressions passed in `tests/test_index_reconciliation.py` and `tests/test_rag.py` |
 | SEC-008 | P2 | Graph | resolved | Vault-relative linking, catalog reuse, and one-enumeration-per-pass regressions passed in `tests/test_recursive_graph_scope.py` |
 | SEC-009 | P2 | ETL | resolved | Lifecycle-owned step-2 and graph-action regressions passed in `tests/test_console_step2_ingestion.py` and `tests/test_console_graph_lifecycle.py` |
@@ -19,7 +24,7 @@ All items below are **P2 or lower** residuals. They remain listed for auditabili
 | SEC-011 | P2 | Migration | resolved | Rollback flag-combination regressions passed in `tests/test_vault_migration.py`; operator documentation remains aligned |
 | SEC-012 | P2 | ChromaDB / CVE-2026-45829 | resolved | The affected `chromadb==1.5.9` dependency was replaced with `chromadb==0.6.3`, the latest pre-1.0 release outside the advisory range. Embedded-client controls remain as defense in depth; evidence: [`docs/security-exceptions.md`](security-exceptions.md) and `tests/security/test_dependency_policy.py`. |
 
-## Verification
+## Histórico — Verification
 
 Subtask 9A residual evidence: the focused matrix passed **167 tests** with one external Chroma deprecation warning. Later hardening and Wave 2 work closed the global `RAMGovernor` failures without weakening the BM25-only policy; the current suite reports **732 passed, 1 skipped**, with **733 collected**.
 

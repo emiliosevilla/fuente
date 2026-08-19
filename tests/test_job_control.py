@@ -15,6 +15,91 @@ from fuente.domain.jobs import JobConflictError
 from fuente.infrastructure.sqlite_store import JobStore
 
 
+def test_queue_page_loads_schedule_reasons_in_one_bulk_call(tmp_path, monkeypatch):
+    store = JobStore(tmp_path / "vault")
+    try:
+        seeded_jobs = [
+            store.create_job(
+                source_hash=f"hash-{index}",
+                source_relative_path=f"1_entrada/{index}.txt",
+            )
+            for index in range(3)
+        ]
+        calls = []
+        original = store.latest_schedule_reasons
+        monkeypatch.setattr(
+            store,
+            "latest_schedule_reasons",
+            lambda ids: calls.append(tuple(ids)) or original(ids),
+        )
+        monkeypatch.setattr(
+            store,
+            "list_schedule_decisions",
+            lambda *_args, **_kwargs: pytest.fail(
+                "queue pages must not load schedule decisions one job at a time"
+            ),
+        )
+
+        page = JobControlService(store).list_jobs(limit=50)
+
+        assert len(page.items) == len(seeded_jobs)
+        assert calls == [tuple(item.job_id for item in page.items)]
+    finally:
+        store.close()
+
+
+def test_queue_page_uses_constant_schedule_reason_queries_for_one_or_fifty_jobs(
+    tmp_path,
+):
+    store = JobStore(tmp_path / "vault")
+    try:
+        jobs = [
+            store.create_job(
+                source_hash=f"hash-{index}",
+                source_relative_path=f"1_entrada/{index}.txt",
+            )
+            for index in range(50)
+        ]
+        for index, job in enumerate(jobs):
+            store.record_schedule_decision(
+                job_id=job.job_id,
+                task_class="llm_generation",
+                action="wait",
+                reason=f"reason-{index}",
+            )
+
+        statements = []
+        store._connection.set_trace_callback(statements.append)
+        service = JobControlService(store)
+        page_one = service.list_jobs(limit=1)
+        one_job_queries = sum("SELECT d.job_id" in sql for sql in statements)
+        statements.clear()
+        page_fifty = service.list_jobs(limit=50)
+        fifty_job_queries = sum("SELECT d.job_id" in sql for sql in statements)
+
+        assert one_job_queries == 1
+        assert fifty_job_queries == 1
+        expected_jobs = sorted(
+            jobs,
+            key=lambda job: (job.updated_at, job.job_id),
+            reverse=True,
+        )
+        expected_ids = [job.job_id for job in expected_jobs]
+        expected_reasons = {
+            job.job_id: f"reason-{index}" for index, job in enumerate(jobs)
+        }
+        assert [item.job_id for item in page_fifty.items] == expected_ids
+        assert [item.reason for item in page_fifty.items] == [
+            expected_reasons[job_id] for job_id in expected_ids
+        ]
+        assert [item.job_id for item in page_one.items] == expected_ids[:1]
+        assert [item.reason for item in page_one.items] == [
+            expected_reasons[expected_ids[0]]
+        ]
+    finally:
+        store.close()
+
+
 def test_job_page_and_detail_expose_durable_reason_and_events(tmp_path: Path):
     store = JobStore(tmp_path / "vault")
     try:

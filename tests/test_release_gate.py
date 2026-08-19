@@ -120,6 +120,30 @@ def test_readme_honesty_rejects_stale_counts(gate_module, tmp_path):
     assert not result.passed
 
 
+def test_readme_honesty_runs_wave1_once_in_addition_to_text_check(gate_module, tmp_path):
+    (tmp_path / "README.md").write_text(
+        "Use the release gate command.\n",
+        encoding="utf-8",
+    )
+    calls = []
+
+    def fake_run_pytest_suite(suite_id, args, **kwargs):
+        calls.append((suite_id, list(args)))
+        return gate_module.GateCheck(suite_id, True, "1 passed")
+
+    with patch.object(gate_module, "run_pytest_suite", side_effect=fake_run_pytest_suite):
+        result = gate_module.check_readme_honesty(tmp_path)
+
+    wave1_paths = [
+        arg
+        for _suite_id, args in calls
+        for arg in args
+        if arg == "tests/test_readme_honesty_wave1.py"
+    ]
+    assert wave1_paths == ["tests/test_readme_honesty_wave1.py"]
+    assert result.passed
+
+
 def test_sample_vault_smoke_offline(gate_module, tmp_path):
     vault = tmp_path / "vault"
     vault.mkdir()

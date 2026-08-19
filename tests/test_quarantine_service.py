@@ -8,6 +8,7 @@ from fuente.core.vault import VaultManager
 from fuente.domain.errors import PathAuthorizationError
 from fuente.domain.quarantine import (
     InvalidModelOutputError,
+    QuarantineRestoreError,
     QuarantineService,
 )
 
@@ -120,6 +121,22 @@ def test_invalid_model_output_preserves_source_for_review(tmp_path):
     assert source.exists()
     assert service.list_items()[0]["status"] == "failed_for_review"
     assert service.list_items()[0]["original_relative_path"] == "1_entrada/model-input.pdf"
+
+
+def test_failed_for_review_cannot_be_restored(tmp_path):
+    manager = VaultManager(VaultConfig(vault_path=tmp_path / "vault"))
+    source = manager.input_dir / "bad.md"
+    source.write_text("invalid", encoding="utf-8")
+    item = manager.quarantine_service.handle_failure(
+        source,
+        InvalidModelOutputError("model schema mismatch"),
+        attempt_count=1,
+    )
+
+    with pytest.raises(QuarantineRestoreError) as captured:
+        manager.restore_from_quarantine(item["quarantine_id"])
+
+    assert captured.value.code == "manual_review_required"
 
 
 def test_migrates_legacy_console_and_theme_quarantine_once(tmp_path):

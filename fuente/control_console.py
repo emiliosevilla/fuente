@@ -88,7 +88,7 @@ from fuente.domain.metadata_form import (
     validate_metadata_save_fields,
 )
 from fuente.domain.paths import AuthorizedPathResolver, document_id_for_relative_path
-from fuente.domain.quarantine import QuarantineService
+from fuente.domain.quarantine import QuarantineRestoreError, QuarantineService
 from fuente.domain.runtime_policy import resolve_runtime_policy
 from fuente.infrastructure.atomic_files import atomic_write_json, atomic_write_text
 from fuente.infrastructure.sqlite_store import JobStore
@@ -102,7 +102,11 @@ from fuente.core.anythingllm_config import (
     launch_anythingllm,
     configure_anythingllm_integration
 )
-from fuente.core.folder_sync import FolderSyncManager, FolderSyncModal
+from fuente.core.folder_sync import (
+    FolderSyncManager,
+    FolderSyncModal,
+    is_hidden_or_temporary_file,
+)
 from fuente.domain.sync import ConnectedFolder, SyncProvider
 from fuente.watcher.watcher import ETLPipeline
 from fuente.graph_engine.linker import CANONICAL_MOC_FILENAME, GraphLinker
@@ -1689,6 +1693,11 @@ class FuenteConsoleBackend:
                     }
                 except PathAuthorizationError as error:
                     return self._path_error(error)
+                except QuarantineRestoreError:
+                    return {
+                        "error": "manual_review_required",
+                        "message": "Item requires manual review before restoration",
+                    }
                 except Exception as e:
                     return {"error": f"Error al restaurar: {e}"}
             return {"error": "Nombre de archivo de cuarentena no especificado"}
@@ -1869,7 +1878,7 @@ class FuenteConsoleBackend:
                     [
                         f
                         for f in input_dir.glob("*")
-                        if f.is_file() and not f.name.startswith(".")
+                        if f.is_file() and not is_hidden_or_temporary_file(f)
                     ]
                     if input_dir.exists()
                     else []
@@ -1885,7 +1894,7 @@ class FuenteConsoleBackend:
                             log_lines.append(f"[OK] {file_path.name}")
                         else:
                             log_lines.append(
-                                f"[PENDIENTE] {file_path.name}: "
+                                f"[REVISIÓN] {file_path.name}: "
                                 f"stage={job.stage} code={job.error_code}"
                             )
                     except SourceNotStableError:

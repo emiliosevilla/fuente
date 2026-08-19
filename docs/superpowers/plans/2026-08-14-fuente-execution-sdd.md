@@ -1069,7 +1069,7 @@ Q-08 depende de las siete anteriores y P-08 depende del cierre de todas.
 | Q-03 | Vocabulario visible coherente | **COMPLETE** | P-04; revisión visual nativa cerrada el 2026-08-19; 87 pruebas focales verdes. |
 | Q-04 | Contratos Wave 1 y limpieza de API | **COMPLETE** | `30` pruebas focales y `7` de servicio; Terra APPROVED; `get_default_config` preservada y rechazo de restauración visible. |
 | Q-05 | Cobertura de cuarentena e ingesta | **COMPLETE** | `89` pruebas focales; Terra APPROVED; error estable de revisión manual, filtros compartidos y gate `readme_honesty` verificados. |
-| Q-06 | Mutaciones por identidad opaca | **NOT_STARTED** | Tasks 3–5 |
+| Q-06 | Mutaciones por identidad opaca | **COMPLETE** | `aaf3257`; matriz focal `136 passed, 1 warning`; Terra APPROVED en la reconciliación final; PR #36 merged en `889a5e3`. |
 | Q-07 | Cola sin N+1 y transiciones de política cubiertas | **NOT_STARTED** | Q-06 |
 | Q-08 | Evidencia documental actual y comprobable | **NOT_STARTED** | Q-01–Q-07, P-06 |
 
@@ -1551,7 +1551,7 @@ git commit -m "test: close quarantine and ingestion coverage gaps"
 - `step2_transcribe` sigue obteniendo pipeline y `JobStore` del lifecycle; el
   backend solo empaqueta la respuesta pública.
 
-- [ ] **Step 1: Escribir contratos rojos de payload**
+- [x] **Step 1: Escribir contratos rojos de payload**
 
 ```python
 @pytest.mark.parametrize("legacy_key", ["path", "file_path"])
@@ -1566,40 +1566,51 @@ def test_legacy_merge_alias_is_removed(temp_vault_path):
     assert result == {"error": "action_not_allowed", "message": "Acción no permitida"}
 ```
 
-- [ ] **Step 2: Confirmar el fallo y el fallback actual**
+- [x] **Step 2: Confirmar el fallo y el fallback actual**
 
 Run: `PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -p no:cacheprovider tests/test_bridge_contract.py tests/test_note_state_transitions.py tests/test_fusion_flow.py tests/security/test_bridge_payloads.py -q`
 
 Expected: FAIL porque backend todavía traduce claves de ruta y el alias
 `merge_notes` todavía existe.
 
-- [ ] **Step 3: Migrar aprobación y fusión**
+- [x] **Step 3: Migrar aprobación y fusión**
 
 En `control_console.py`, validar presencia exacta de `document_id` y
 `expected_revision`. Eliminar el método `merge_notes` del bridge y el branch
 homónimo de `handle_action`; preview/commit ya reciben identidades opacas.
 Mantener rutas solo dentro de `NoteDocument` y del resolver.
 
-- [ ] **Step 4: Fijar la responsabilidad de `step2`**
+- [x] **Step 4: Fijar la responsabilidad de `step2`**
 
 Añadir a `get_job_control_service()` y `_resolve_step2_ingestion()` un contrato
 probado: ambos devuelven las instancias propiedad de `ApplicationLifecycle`.
 Una prueba monkeypatcha los constructores y falla si la acción crea otro
 pipeline, otro scheduler o otro `JobStore`.
 
-- [ ] **Step 5: Ejecutar contratos y seguridad**
+- [x] **Step 5: Ejecutar contratos y seguridad**
 
 Run: `PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -p no:cacheprovider tests/test_bridge_contract.py tests/test_note_state_transitions.py tests/test_fusion_flow.py tests/test_console_step2_ingestion.py tests/security/test_bridge_payloads.py tests/security/test_path_authorization.py -q`
 
 Expected: PASS; payloads de ruta fallan cerrados y las identidades opacas
 mantienen aprobación y fusión funcionales.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add fuente/control_console.py fuente/ui/bridge.py fuente/application/fusion.py tests/test_bridge_contract.py tests/test_note_state_transitions.py tests/test_fusion_flow.py tests/test_console_step2_ingestion.py tests/security/test_bridge_payloads.py
 git commit -m "refactor: use opaque IDs for note mutations"
 ```
+
+### Cierre Q-06 — 2026-08-19
+
+Q-06 queda cerrada tras la reconciliación de la implementación ya publicada.
+Terra verificó el HEAD `aaf3257`, los cuatro contratos de identidad opaca y la
+matriz focal de **136 passed, 1 warning**; `git diff --check` quedó limpio.
+Las correcciones posteriores del commit incluyen el rechazo de rutas en
+`update_note_metadata` y las guardas de generación para respuestas asíncronas
+obsoletas. El cambio está publicado por PR #36, fusionado en `main` mediante
+el merge commit `889a5e3`. La revisión manual del Vault/Obsidian pertenece a
+la Task 6 de migración v3 y no bloquea Q-06.
 
 ### Task Q-07: Rendimiento y cobertura Wave 2
 

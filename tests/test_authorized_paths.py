@@ -312,30 +312,15 @@ def test_save_note_creation_preserves_complete_v3_origins(temp_vault_path):
     assert "sources" not in metadata
 
 
-def test_merge_notes_rejects_escaping_issue_symlink(temp_vault_path):
+def test_legacy_merge_alias_is_removed_and_fails_closed(temp_vault_path):
     backend = FuenteConsoleBackend(temp_vault_path)
-    first = backend.vault.output_dir / "primera.md"
-    second = backend.vault.output_dir / "segunda.md"
-    first.write_text("first", encoding="utf-8")
-    second.write_text("second", encoding="utf-8")
-    external_dir = temp_vault_path.parent / "external_notes"
-    external_dir.mkdir()
-    (backend.vault.output_dir / "Escaping").symlink_to(external_dir, target_is_directory=True)
 
-    result = backend.handle_action(
-        "merge_notes",
-        {
-            "note_paths": ["4_salida/primera.md", "4_salida/segunda.md"],
-            "merged_title": "fusion",
-            "target_issue": "Escaping",
-        },
-    )
+    result = backend.handle_action("merge_notes", {})
 
     assert result == {
-        "error": "path_not_authorized",
-        "message": "Path is not authorized",
+        "error": "action_not_allowed",
+        "message": "Acción no permitida",
     }
-    assert not (external_dir / "fusion.md").exists()
 
 
 def test_move_rejects_escaping_destination_symlink_with_stable_error(temp_vault_path):

@@ -60,7 +60,7 @@ def test_eco_ingestion_skips_vectors_and_waits_without_fake_llm(temp_vault_path)
             for decision in decisions
         )
         assert any(
-            decision["reason"] == "llm_unavailable_under_policy"
+            decision["reason"].startswith("llm_unavailable_under_policy;")
             and decision["action"] == "wait"
             for decision in decisions
         )

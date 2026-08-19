@@ -31,6 +31,12 @@ def patch_abundant_ram(governor) -> None:
     )
 
 
+def patch_test_model_inventory(governor, *model_names: str) -> None:
+    """Declare the exact local models used by deterministic ETL test doubles."""
+    installed = tuple(model_names or ("test-model",))
+    governor.get_installed_model_names = lambda: list(installed)
+
+
 def explicit_test_runtime_policy() -> RuntimePolicy:
     """Provide a measured-independent policy for legacy generation tests."""
     return RuntimePolicy(

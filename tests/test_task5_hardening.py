@@ -216,7 +216,9 @@ def test_export_and_public_approval_return_stable_origin_error(tmp_path):
                 CanonicalEligibilityError()
             ),
         )
-        assert backend.handle_action("approve_note", {"document_id": "blocked-note"}) == {
+        assert backend.handle_action(
+            "approve_note", {"document_id": "blocked-note", "expected_revision": 1}
+        ) == {
             "error": "origin_not_approved",
             "message": "origin_not_approved",
         }

@@ -32,11 +32,16 @@ class TestAdversarial(unittest.TestCase):
 
     def _legacy_pipeline(self):
         if self.pipeline is None:
-            from tests.conftest import explicit_test_runtime_policy, patch_abundant_ram
+            from tests.conftest import (
+                explicit_test_runtime_policy,
+                patch_abundant_ram,
+                patch_test_model_inventory,
+            )
 
             self.pipeline = ETLPipeline(self.config)
             self.pipeline.set_runtime_policy(explicit_test_runtime_policy())
             patch_abundant_ram(self.pipeline.ram_governor)
+            patch_test_model_inventory(self.pipeline.ram_governor, "test-model")
         return self.pipeline
 
     def tearDown(self):

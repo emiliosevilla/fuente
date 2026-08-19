@@ -1855,6 +1855,15 @@ La suite completa medida queda en **7 failed, 1193 passed, 1 skipped, 1
 warning**; Terra verificó que los siete fallos son ajenos a Q-08. Por ello el
 release gate global y P-08 siguen `BLOCKED` y no se presentan como cerrados.
 
+### P-08 — corrección de bloqueos funcionales, 2026-08-19
+
+Terra aprobó la corrección de los siete fallos que bloqueaban el cierre: la
+matriz relacionada pasó **172 pruebas** y la suite completa quedó en
+**1 fallo documental, 1200 pasadas, 1 omitida y 1 warning**. El único fallo
+restante es el digest de `docs/evidence/current-sdd.json`, que debe regenerarse
+después de publicar estos cambios. P-08 sigue abierto hasta medir de nuevo el
+gate con el árbol limpio.
+
 ### Ejecución real Q-08 — 2026-08-19
 
 Luna implementó Q-08 y aplicó la corrección solicitada por Terra: `p_status` y

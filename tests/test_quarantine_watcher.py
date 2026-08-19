@@ -6,7 +6,12 @@ from fuente.config import get_default_config
 from fuente.domain.quarantine import InvalidModelOutputError
 from fuente.graph_engine.atomic_generator import AtomicNoteGenerator
 from fuente.watcher.watcher import ETLPipeline
-from tests.conftest import approve_saved_clean_job, explicit_test_runtime_policy, patch_abundant_ram
+from tests.conftest import (
+    approve_saved_clean_job,
+    explicit_test_runtime_policy,
+    patch_abundant_ram,
+    patch_test_model_inventory,
+)
 
 
 def test_watcher_quarantines_exhausted_io_with_actual_attempt_count(tmp_path):
@@ -14,6 +19,7 @@ def test_watcher_quarantines_exhausted_io_with_actual_attempt_count(tmp_path):
     pipeline = ETLPipeline(config)
     pipeline.set_runtime_policy(explicit_test_runtime_policy())
     patch_abundant_ram(pipeline.ram_governor)
+    patch_test_model_inventory(pipeline.ram_governor, "test-model")
     source = config.vault.input_dir / "network.txt"
     source.write_text("input", encoding="utf-8")
     pipeline.vault.copy_to_dirty = Mock(side_effect=OSError("network unavailable"))
@@ -34,6 +40,7 @@ def test_watcher_retries_corrupt_content_before_quarantining(tmp_path):
     pipeline = ETLPipeline(config)
     pipeline.set_runtime_policy(explicit_test_runtime_policy())
     patch_abundant_ram(pipeline.ram_governor)
+    patch_test_model_inventory(pipeline.ram_governor, "test-model")
     source = config.vault.input_dir / "corrupt.txt"
     source.write_text("input", encoding="utf-8")
     pipeline.vault.copy_to_dirty = Mock(return_value=source)
@@ -64,6 +71,7 @@ def test_watcher_preserves_source_when_model_output_is_invalid(tmp_path):
     pipeline = ETLPipeline(config)
     pipeline.set_runtime_policy(explicit_test_runtime_policy())
     patch_abundant_ram(pipeline.ram_governor)
+    patch_test_model_inventory(pipeline.ram_governor, "test-model")
     source = config.vault.input_dir / "model-input.txt"
     source.write_text("input", encoding="utf-8")
     pipeline.vault.copy_to_dirty = Mock(return_value=source)

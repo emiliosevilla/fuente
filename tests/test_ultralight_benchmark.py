@@ -18,7 +18,7 @@ from fuente.benchmarking.ultralight import (
     OllamaBenchmarkProvider,
     run_benchmark,
 )
-from fuente.ram_governor.budget import measured_snapshot, select_optimal_model
+from fuente.ram_governor.budget import measured_snapshot
 
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -143,11 +143,6 @@ def test_benchmark_promotes_only_when_quality_and_margin_pass() -> None:
     assert all(measurement.memory_after for measurement in verdict.measurements)
     assert all(measurement.memory_during for measurement in verdict.measurements)
     assert all(measurement.memory_during_samples for measurement in verdict.measurements)
-    decision = select_optimal_model(
-        measured_snapshot(total_gb=4.0, available_gb=2.2, safety_margin_pct=0.35),
-        benchmark_verdict=verdict,
-    )
-    assert decision.model_id == CANDIDATE_MODEL_ID
 
 
 def test_benchmark_keeps_candidate_isolated_when_margin_is_below_35_percent() -> None:

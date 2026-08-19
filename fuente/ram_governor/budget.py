@@ -40,7 +40,6 @@ class ModelMetadata:
     context_size: int
     concurrency_limit: int
     min_ram_gb: float
-    candidate_only: bool = False
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
@@ -122,12 +121,11 @@ class BudgetDecision:
 MODEL_CATALOG: Sequence[ModelMetadata] = (
     ModelMetadata(
         id="qwen3.5:0.8b",
-        name="Qwen 3.5 0.8B (Candidato - requiere benchmark)",
+        name="Qwen 3.5 0.8B (Ultraligero)",
         estimated_ram_gb=1.2,
         context_size=4096,
         concurrency_limit=1,
         min_ram_gb=2.0,
-        candidate_only=True,
     ),
     ModelMetadata(
         id="qwen2.5:0.5b",
@@ -214,7 +212,6 @@ RESOURCE_BUDGETS: Mapping[ResourceKind, ResourceBudget] = {
 
 _ECO_MODEL = next(m for m in MODEL_CATALOG if m.id == "qwen2.5:1.5b")
 _ULTRA_ECO_MODEL = next(m for m in MODEL_CATALOG if m.id == "qwen2.5:0.5b")
-_BENCHMARK_CANDIDATE = next(m for m in MODEL_CATALOG if m.id == "qwen3.5:0.8b")
 
 
 def llm_inference_mode(decision: BudgetDecision) -> str:
@@ -362,24 +359,8 @@ def evaluate_resource(
     )
 
 
-def is_verified_benchmark_verdict(benchmark_verdict: object | None) -> bool:
-    """Accept only a real, internally verified benchmark verdict."""
-    if benchmark_verdict is None:
-        return False
-    # Local import prevents a module cycle: the benchmark reads MemorySnapshot.
-    from fuente.benchmarking.ultralight import BenchmarkVerdict
-
-    return (
-        isinstance(benchmark_verdict, BenchmarkVerdict)
-        and benchmark_verdict.is_verifiable_promotion()
-    )
-
-
-def select_optimal_model(
-    snapshot: MemorySnapshot, *, benchmark_verdict: object | None = None
-) -> BudgetDecision:
-    """Pick an LLM while keeping benchmark candidates out of Auto by default."""
-    candidate_promoted = is_verified_benchmark_verdict(benchmark_verdict)
+def select_optimal_model(snapshot: MemorySnapshot) -> BudgetDecision:
+    """Pick an LLM from the measured RAM snapshot and safety margin only."""
     if not snapshot.is_measured:
         eco = _ECO_MODEL
         return BudgetDecision(
@@ -401,13 +382,12 @@ def select_optimal_model(
     total = snapshot.total_gb
     assert available is not None and total is not None
 
-    # The candidate is considered only after a reproducible, verifiable verdict.
-    if candidate_promoted and total < 8.0:
-        chosen = _BENCHMARK_CANDIDATE
-        tier_reason = f"verified ultra-light candidate tier (total_gb={total}, available_gb={available})"
-    elif total < 4.5 or available < 2.0:
+    if total < 4.5 or available < 2.0:
         chosen = _ULTRA_ECO_MODEL
         tier_reason = f"ultra-eco tier (total_gb={total}, available_gb={available})"
+    elif total < 8.0:
+        chosen = next(m for m in MODEL_CATALOG if m.id == "qwen3.5:0.8b")
+        tier_reason = f"ultra-light tier (total_gb={total}, available_gb={available})"
     elif total <= 8.0 or available <= 3.5:
         chosen = _ECO_MODEL
         tier_reason = f"eco tier (total_gb={total}, available_gb={available})"
@@ -427,13 +407,12 @@ def select_optimal_model(
     headroom = usable_headroom_gb(snapshot)
     fit = evaluate_resource(ResourceKind.LLM_INFERENCE, snapshot, model_id=chosen.id)
     if not fit.allowed:
-        # Walk down the stable catalog; candidates remain excluded unless verified.
+        # Walk down the stable catalog using only the current RAM snapshot.
         selectable = tuple(
-            item for item in MODEL_CATALOG
-            if not item.candidate_only or candidate_promoted
+            sorted(MODEL_CATALOG, key=lambda item: item.estimated_ram_gb, reverse=True)
         )
         chosen_index = next((i for i, entry in enumerate(selectable) if entry.id == chosen.id), 0)
-        for candidate in selectable[chosen_index::-1]:
+        for candidate in selectable[chosen_index:]:
             candidate_fit = evaluate_resource(
                 ResourceKind.LLM_INFERENCE, snapshot, model_id=candidate.id
             )
@@ -498,7 +477,7 @@ def viable_models(snapshot: MemorySnapshot) -> List[Dict[str, Any]]:
     viable = [
         m.to_dict()
         for m in MODEL_CATALOG
-        if not m.candidate_only and m.min_ram_gb <= max_safe_ram
+        if m.min_ram_gb <= max_safe_ram
     ]
     if not viable:
         viable = [_ECO_MODEL.to_dict()]

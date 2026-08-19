@@ -421,7 +421,10 @@ class FuentePyWebViewApi:
             return self._job_error(error)
 
     def resume_job(
-        self, job_id: object, expected_revision: object
+        self,
+        job_id: object,
+        expected_revision: object,
+        authorize_model_load: object = False,
     ) -> dict[str, Any] | ErrorResult:
         """Resume a job with an opaque ID and optimistic revision."""
         valid_job_id = self._job_id(job_id)
@@ -430,8 +433,16 @@ class FuentePyWebViewApi:
         revision_error = self._revision(expected_revision)
         if revision_error is not None:
             return revision_error
+        if not isinstance(authorize_model_load, bool):
+            return self._error(
+                "invalid_payload", "authorize_model_load must be a boolean"
+            )
         try:
-            return self.backend.resume_job(valid_job_id, expected_revision)
+            return self.backend.resume_job(
+                valid_job_id,
+                expected_revision,
+                authorize_model_load=authorize_model_load,
+            )
         except (JobConflictError, JobNotFoundError) as error:
             return self._job_error(error)
         except (TypeError, ValueError) as error:

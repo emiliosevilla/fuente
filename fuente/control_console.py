@@ -632,22 +632,62 @@ class FuenteConsoleBackend:
         """Return a JSON-safe job detail and its durable history."""
         validate_job_id(job_id)
         detail = self.get_job_control_service().get_job(job_id)
+        readiness = self._llm_readiness_projection(
+            detail.job, detail.schedule_decisions
+        )
         return {
             "job": asdict(detail.job),
             "events": [asdict(event) for event in detail.events],
             "schedule_decisions": [dict(decision) for decision in detail.schedule_decisions],
             "reason": detail.reason,
+            "llm_readiness": readiness,
         }
 
-    def resume_job(self, job_id: str, expected_revision: int) -> Dict[str, Any]:
+    @staticmethod
+    def _llm_readiness_projection(
+        job: Any, decisions: list[dict[str, Any]] | tuple[dict[str, Any], ...]
+    ) -> dict[str, Any]:
+        """Project the durable wait decision into the bridge/UI contract."""
+        latest = next(
+            (
+                decision
+                for decision in reversed(decisions)
+                if decision.get("task_class") == "llm_generation"
+                and decision.get("action") == "wait"
+            ),
+            None,
+        )
+        reason = str((latest or {}).get("reason") or "")
+        reason_code = reason.split(";", 1)[0]
+        compatible_model = str((latest or {}).get("model_id") or "")
+        return {
+            "reason_code": reason_code,
+            "requires_user_confirmation": (
+                reason_code == "llm_waiting_for_memory_or_authorization"
+                and bool(compatible_model)
+            ),
+            "compatible_model": compatible_model,
+            "instruction": str(getattr(job, "error_message", None) or reason),
+        }
+
+    def resume_job(
+        self,
+        job_id: str,
+        expected_revision: int,
+        authorize_model_load: bool = False,
+    ) -> Dict[str, Any]:
         """Resume one job through the lifecycle-owned ingestion service."""
         validate_job_id(job_id)
         validate_expected_revision(expected_revision)
-        return asdict(
-            self.get_job_control_service().resume(
-                job_id, expected_revision=expected_revision
-            )
+        job = self.get_job_control_service().resume(
+            job_id,
+            expected_revision=expected_revision,
+            authorize_model_load=authorize_model_load,
         )
+        decisions = self.get_job_control_service().get_job(job_id).schedule_decisions
+        payload = asdict(job)
+        payload["llm_readiness"] = self._llm_readiness_projection(job, decisions)
+        return payload
 
     def cancel_job(
         self, job_id: str, expected_revision: int, reason: str

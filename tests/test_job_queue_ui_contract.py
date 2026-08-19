@@ -66,6 +66,15 @@ def test_queue_rows_use_safe_dom_sinks_and_resume_is_action_gated():
     assert re.search(r"if\s*\(\s*isResumeAvailable\(job\)\s*\)", renderer)
 
 
+def test_low_ram_confirmation_requires_explicit_readiness_projection():
+    source = _console_source()
+    resume = _function_source(source, "resumeQueueJob", "renderJobQueue")
+
+    assert "requires_user_confirmation === true" in resume
+    assert "compatible_model.trim() !== ''" in resume
+    assert "llm_readiness.compatible_model" in resume
+
+
 def test_settings_html_sends_measured_runtime_policy_fields():
     source = _console_source()
     settings = _function_source(source, "saveSettings", "resetDefaultSettings")
@@ -147,7 +156,13 @@ class _IngestionStub:
     def __init__(self, store: JobStore) -> None:
         self.store = store
 
-    def resume(self, job_id: str, *, expected_revision: int):
+    def resume(
+        self,
+        job_id: str,
+        *,
+        expected_revision: int,
+        authorize_model_load: bool = False,
+    ):
         return self.store.get_job(job_id)
 
     def cancel_requested(self, job_id: str, *, expected_revision: int):
@@ -211,6 +226,47 @@ def test_queue_mutations_return_json_safe_job_records(queue_bridge):
     json.dumps(cancel_result)
 
 
+def test_resume_projects_durable_llm_readiness_for_bridge(queue_bridge):
+    bridge, backend, store = queue_bridge
+    waiting = store.create_job(
+        source_hash="hash-llm-wait",
+        source_relative_path="1_entrada/wait.txt",
+    )
+    store.record_schedule_decision(
+        job_id=waiting.job_id,
+        task_class="llm_generation",
+        action="wait",
+        reason="llm_waiting_for_memory_or_authorization; close apps",
+        model_id="qwen2.5:1.5b",
+    )
+
+    result = bridge.resume_job(waiting.job_id, waiting.revision)
+
+    assert result["llm_readiness"] == {
+        "reason_code": "llm_waiting_for_memory_or_authorization",
+        "requires_user_confirmation": True,
+        "compatible_model": "qwen2.5:1.5b",
+        "instruction": "llm_waiting_for_memory_or_authorization; close apps",
+    }
+
+    no_model = store.create_job(
+        source_hash="hash-llm-none",
+        source_relative_path="1_entrada/no-model.txt",
+    )
+    store.record_schedule_decision(
+        job_id=no_model.job_id,
+        task_class="llm_generation",
+        action="wait",
+        reason="no_compatible_model; inform user",
+        model_id=None,
+    )
+    result = backend.resume_job(no_model.job_id, no_model.revision)
+
+    assert result["llm_readiness"]["reason_code"] == "no_compatible_model"
+    assert result["llm_readiness"]["requires_user_confirmation"] is False
+    assert result["llm_readiness"]["compatible_model"] == ""
+
+
 @pytest.mark.parametrize(
     "filters,limit,cursor",
     [
@@ -266,7 +322,7 @@ def test_queue_mutations_reject_malformed_payload_before_backend(
 def test_queue_mutations_map_stale_revision_to_stable_error(queue_bridge):
     bridge, backend, _store = queue_bridge
     conflict = JobConflictError("job-opaque")
-    backend.resume_job = lambda *_args: (_ for _ in ()).throw(conflict)
+    backend.resume_job = lambda *_args, **_kwargs: (_ for _ in ()).throw(conflict)
     backend.cancel_job = lambda *_args: (_ for _ in ()).throw(conflict)
 
     assert bridge.resume_job("job-opaque", 1)["error"] == "job_revision_conflict"

@@ -199,6 +199,36 @@ class _FakeGovernor:
         return {"ok": True, "models": [], "error": None}
 
 
+class _CycleGovernor(_FakeGovernor):
+    def __init__(self) -> None:
+        super().__init__()
+        self.allow_cycle = False
+        self.readiness_calls: list[bool] = []
+
+    def check_cycle_model(
+        self, model_name: str | None = None, *, authorize_model_load: bool = False
+    ) -> dict[str, object]:
+        self.readiness_calls.append(authorize_model_load)
+        if self.allow_cycle:
+            return {
+                "allowed": True,
+                "model_id": "test-model",
+                "reason": "test model fits current RAM",
+                "instruction": "",
+            }
+        instruction = (
+            "La RAM disponible no encaja. Cierra aplicaciones o confirma cargar "
+            "el modelo compatible y vuelve a reanudar."
+        )
+        return {
+            "allowed": False,
+            "requires_user_confirmation": True,
+            "compatible_model": "test-model",
+            "instruction": instruction,
+            "reason": f"llm_waiting_for_memory_or_authorization; {instruction}",
+        }
+
+
 @dataclass
 class _Harness:
     service: IngestionApplicationService
@@ -230,6 +260,7 @@ def _build_harness(
     crash_stage: Optional[str] = None,
     source_text: str = SOURCE_TEXT,
     source_name: str = SOURCE_NAME,
+    ram_governor: Any = None,
 ) -> _Harness:
     config = get_default_config(vault_path)
     vault = VaultManager(config.vault)
@@ -249,7 +280,7 @@ def _build_harness(
         chroma=chroma,
         atomic_generator=generator,
         linker=_RecordingLinker(vault.output_dir),
-        ram_governor=_FakeGovernor(),
+        ram_governor=ram_governor if ram_governor is not None else _FakeGovernor(),
         # The real stabilizer polls the file size for seconds; ingestion only
         # needs to know the file is present and non-empty.
         stabilize=lambda path: path.is_file() and path.stat().st_size > 0,
@@ -685,6 +716,56 @@ def test_process_pending_resumes_submitted_jobs_oldest_first(harness):
     assert {job.job_id for job in completed} == {first.job_id, second.job_id}
     assert all(job.stage == "completed" for job in completed)
     assert len(harness.notes()) == 2
+
+
+def test_low_ram_wait_exposes_instruction_and_authorized_resume_rechecks_cycle(
+    temp_vault_path,
+):
+    governor = _CycleGovernor()
+    harness = _build_harness(temp_vault_path, ram_governor=governor)
+    harness.service.set_runtime_policy(
+        RuntimePolicy(
+            profile=ExecutionProfile.AUTO,
+            retrieval_mode="hybrid",
+            vector_index_enabled=True,
+            audio_mode=AudioMode.AUTO,
+            whisper_model_path=None,
+            allow_model_download=False,
+            selected_model="test-model",
+            llm_available=False,
+            reason="test low RAM",
+        )
+    )
+    try:
+        submitted = harness.service.submit(SOURCE_IDENTITY)
+        clean = harness.service.resume(submitted.job_id)
+        assert clean.stage == "saved_clean"
+        _approve_waiting_clean(harness, clean)
+
+        waiting = harness.service.resume(clean.job_id)
+
+        assert waiting.stage == "indexed_chunks"
+        assert waiting.error_code == "llm_unavailable_under_policy"
+        assert "Cierra aplicaciones" in waiting.error_message
+        assert "confirma" in waiting.error_message
+        assert governor.readiness_calls == [False]
+        decision = harness.store.list_schedule_decisions(waiting.job_id)[-1]
+        assert decision["reason"].startswith(
+            "llm_waiting_for_memory_or_authorization;"
+        )
+        assert decision["model_id"] == "test-model"
+
+        governor.allow_cycle = True
+        completed = harness.service.resume(
+            waiting.job_id,
+            expected_revision=waiting.revision,
+            authorize_model_load=True,
+        )
+
+        assert completed.stage == "completed"
+        assert governor.readiness_calls[-2:] == [True, True]
+    finally:
+        harness.store.close()
 
 
 def test_published_note_index_artifact_is_recorded_for_the_document(harness):

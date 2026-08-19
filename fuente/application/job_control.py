@@ -183,10 +183,17 @@ class JobControlService:
         )
         has_more = len(jobs) > limit
         visible = jobs[:limit]
+        schedule_reasons = self.job_store.latest_schedule_reasons(
+            [job.job_id for job in visible]
+        )
         summaries = tuple(
             JobSummary.from_job(
                 job,
-                reason=self._reason_for(job),
+                reason=self._reason_for(
+                    job,
+                    decisions=(),
+                    schedule_reason=schedule_reasons.get(job.job_id),
+                ),
                 resume_available=self._resume_available(job),
             )
             for job in visible
@@ -263,12 +270,18 @@ class JobControlService:
         )
 
     def _reason_for(
-        self, job: JobRecord, *, decisions: tuple[dict, ...] | None = None
+        self,
+        job: JobRecord,
+        *,
+        decisions: tuple[dict, ...] | None = None,
+        schedule_reason: str | None = None,
     ) -> str | None:
         if job.cancel_reason:
             return job.cancel_reason
         if job.error_message:
             return job.error_message
+        if schedule_reason:
+            return schedule_reason
         if decisions is None:
             decisions = tuple(self.job_store.list_schedule_decisions(job.job_id))
         if decisions:

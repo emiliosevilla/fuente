@@ -158,7 +158,11 @@ def test_control_console_approve_uses_notes_service(temp_vault_manager):
         store=backend.get_notes_service().job_store,
     )
 
-    result = backend.handle_action("approve_note", {"path": document_id})
+    revision = backend.get_notes_service().get_note(document_id).revision
+    result = backend.handle_action(
+        "approve_note",
+        {"document_id": document_id, "expected_revision": revision},
+    )
 
     assert result.get("status") == "approved"
     assert result.get("document_id") == document_id
@@ -195,7 +199,7 @@ def test_inbox_pending_path_approves_successfully(temp_vault_manager):
     result = backend.handle_action(
         "approve_note",
         {
-            "path": pending["path"],
+            "document_id": pending["document_id"],
             "expected_revision": pending["revision"],
         },
     )

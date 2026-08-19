@@ -1185,6 +1185,8 @@
         let approvalSelectedOrigins = [];
         let approvalSelectedOriginKind = null;
         let approvalLegacyOriginIds = [];
+        let approvalMetadataDirty = false;
+        let approvalMetadataEditGeneration = 0;
         let failedApprovalExportDocumentId = null;
         let failedApprovalExportFormat = null;
         const metadataFieldIds = ['title', 'tags', 'issue', 'date', 'origins', 'status'];
@@ -1632,9 +1634,13 @@
             diagnosticPanel.classList.toggle('is-hidden', !visible);
             diagnosticPanel.classList.toggle('is-visible', visible);
             document.getElementById('btn-save-metadata').disabled = !visible;
-            document.getElementById('btn-approve-note').disabled = !visible;
-            document.getElementById('btn-approve-export').disabled = !visible || approvalSelectedScope === 'clean';
+            updateApprovalActionButtons(visible);
             setApprovalScope(approvalSelectedScope);
+        }
+
+        function updateApprovalActionButtons(visible) {
+            document.getElementById('btn-approve-note').disabled = !visible || approvalMetadataDirty;
+            document.getElementById('btn-approve-export').disabled = !visible || approvalSelectedScope === 'clean' || approvalMetadataDirty;
         }
 
         function setApprovalScope(scope) {
@@ -1648,7 +1654,7 @@
             if (reviewerInput && !isClean) reviewerInput.value = '';
             if (reviewerError) reviewerError.textContent = '';
             const exportButton = document.getElementById('btn-approve-export');
-            if (exportButton) exportButton.disabled = !approvalSelectedNoteId || approvalSelectedScope !== 'output';
+            if (exportButton) exportButton.disabled = !approvalSelectedNoteId || approvalSelectedScope !== 'output' || approvalMetadataDirty;
             if (exportButton && isClean) exportButton.title = 'La nota canónica se aprueba antes de generar sumarios; no se exporta desde aquí.';
             if (exportButton && !isClean) exportButton.removeAttribute('title');
         }
@@ -1685,9 +1691,9 @@
             document.getElementById('metadata-status').value = metadata.status || 'pending_review';
             populateIssueOptions(window.approvalIssueOptions || ['_Sin_Cuestion'], metadata.issue || '_Sin_Cuestion');
             const blocked = metadata.migration_status === 'pending_origins' || approvalLegacyOriginIds.length > 0;
+            approvalMetadataDirty = false;
             document.getElementById('btn-save-metadata').disabled = blocked;
-            document.getElementById('btn-approve-note').disabled = blocked;
-            document.getElementById('btn-approve-export').disabled = blocked;
+            updateApprovalActionButtons(!blocked);
             setApprovalScope(approvalSelectedScope);
             clearMetadataFieldErrors();
         }
@@ -1887,6 +1893,19 @@
                 const button = document.getElementById('fusion-commit-button');
                 if (button) button.disabled = !fusionPreview || !event.target.checked;
             }
+            if (event.target && metadataFieldIds.indexOf(event.target.id.replace('metadata-', '')) !== -1) {
+                approvalMetadataEditGeneration += 1;
+                approvalMetadataDirty = true;
+                updateApprovalActionButtons(true);
+            }
+        });
+
+        document.addEventListener('input', function(event) {
+            if (event.target && metadataFieldIds.indexOf(event.target.id.replace('metadata-', '')) !== -1) {
+                approvalMetadataEditGeneration += 1;
+                approvalMetadataDirty = true;
+                updateApprovalActionButtons(true);
+            }
         });
 
         function openApprovalInbox() {
@@ -1906,6 +1925,7 @@
             const listEl = document.getElementById('approval-pending-list');
             approvalSelectedNoteId = null;
             approvalSelectedRevision = null;
+            approvalMetadataDirty = false;
             setApprovalScope(null);
             if (!preserveRetry) {
                 failedApprovalExportDocumentId = null;
@@ -1974,6 +1994,8 @@
 
         function saveApprovalMetadata() {
             if (!approvalSelectedNoteId || approvalSelectedRevision === null) return;
+            const saveDocumentId = approvalSelectedNoteId;
+            const saveGeneration = approvalMetadataEditGeneration;
             const metadata = collectMetadataFormValues();
             document.getElementById('approval-form-status').textContent = 'Guardando...';
             window.pywebview.api.update_note_metadata(
@@ -1981,6 +2003,7 @@
                 metadata,
                 approvalSelectedRevision
             ).then(function(res) {
+                if (approvalSelectedNoteId !== saveDocumentId) return;
                 if (res && res.field_errors) {
                     showMetadataFieldErrors(res.field_errors);
                     document.getElementById('approval-form-status').textContent = res.message || 'Metadatos inválidos';
@@ -1991,15 +2014,24 @@
                     return;
                 }
                 approvalSelectedRevision = res.revision;
-                fillMetadataForm(res.metadata || metadata);
-                document.getElementById('approval-form-status').textContent = 'Metadatos guardados (rev. ' + res.revision + ')';
+                if (approvalMetadataEditGeneration === saveGeneration) {
+                    fillMetadataForm(res.metadata || metadata);
+                    document.getElementById('approval-form-status').textContent = 'Metadatos guardados (rev. ' + res.revision + ')';
+                } else {
+                    approvalMetadataDirty = true;
+                    updateApprovalActionButtons(true);
+                    document.getElementById('approval-form-status').textContent = 'Metadatos guardados; quedan cambios posteriores sin guardar (rev. ' + res.revision + ').';
+                }
                 if (res.log) log(res.log);
             });
         }
 
         function approveSelectedNote() {
             if (!approvalSelectedNoteId || approvalSelectedRevision === null) return;
-            const metadata = collectMetadataFormValues();
+            if (approvalMetadataDirty) {
+                document.getElementById('approval-form-status').textContent = 'Guarda los metadatos antes de aprobar.';
+                return;
+            }
             document.getElementById('approval-form-status').textContent = 'Aprobando...';
             let approvalRequest;
             if (approvalSelectedScope === 'clean') {
@@ -2017,8 +2049,7 @@
             } else {
                 approvalRequest = window.pywebview.api.approve_note(
                     approvalSelectedNoteId,
-                    approvalSelectedRevision,
-                    metadata
+                    approvalSelectedRevision
                 );
             }
             approvalRequest.then(function(res) {

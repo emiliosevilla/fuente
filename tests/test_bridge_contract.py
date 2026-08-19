@@ -79,8 +79,9 @@ def test_note_mutation_methods_use_identifiers_not_absolute_path_parameters():
         "delete_note",
         "restore_note",
         "move_note",
-        "merge_notes",
     )
+
+    assert not hasattr(FuentePyWebViewApi, "merge_notes")
 
     for method_name in mutation_methods:
         parameter_names = inspect.signature(
@@ -88,6 +89,35 @@ def test_note_mutation_methods_use_identifiers_not_absolute_path_parameters():
         ).parameters
         assert "path" not in parameter_names
         assert "file_path" not in parameter_names
+
+
+def test_approve_note_requires_opaque_id_and_revision(temp_vault_path):
+    bridge = FuentePyWebViewApi(FuenteConsoleBackend(temp_vault_path))
+
+    assert bridge.approve_note("opaque-note", None) == {
+        "error": "invalid_payload",
+        "message": "expected_revision must be an integer",
+    }
+    assert bridge.backend.handle_action(
+        "approve_note", {"path": "3_limpio/a.md"}
+    ) == {"error": "invalid_payload"}
+    assert bridge.backend.handle_action(
+        "approve_note", {"file_path": "3_limpio/a.md", "expected_revision": 1}
+    ) == {"error": "invalid_payload"}
+
+
+def test_approve_note_signature_has_no_metadata_argument():
+    parameters = inspect.signature(FuentePyWebViewApi.approve_note).parameters
+    assert tuple(parameters) == ("self", "document_id", "expected_revision")
+
+
+def test_legacy_merge_action_is_not_registered(temp_vault_path):
+    bridge = FuentePyWebViewApi(FuenteConsoleBackend(temp_vault_path))
+
+    assert bridge.backend.handle_action("merge_notes", {}) == {
+        "error": "action_not_allowed",
+        "message": "Acción no permitida",
+    }
 
 
 def test_bridge_rejects_absolute_note_identifier_without_mutation(temp_vault_path):

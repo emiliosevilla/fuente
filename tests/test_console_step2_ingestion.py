@@ -1,5 +1,6 @@
 """Console step2_transcribe must route through durable ingestion jobs (Task 3)."""
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -70,3 +71,37 @@ def test_step2_without_lifecycle_does_not_construct_pipeline(tmp_path, monkeypat
     )
 
     assert result["error"] == "ingestion_service_unavailable"
+
+
+def test_step2_resolution_and_job_control_use_lifecycle_owned_instances(
+    tmp_path, monkeypatch
+):
+    vault_root = tmp_path / "Vault"
+    backend = FuenteConsoleBackend(vault_root)
+    ingestion, store = _build_offline_ingestion(vault_root)
+    pipeline = SimpleNamespace(
+        ingestion=ingestion,
+        job_store=store,
+        vault=backend.vault,
+        chroma=None,
+        runtime_policy=backend.runtime_policy,
+    )
+    lifecycle = SimpleNamespace(is_running=True, pipeline=pipeline)
+    backend.lifecycle = lifecycle
+    backend._ingestion_service = None
+    backend._ingestion_job_store = None
+
+    monkeypatch.setattr(
+        "fuente.control_console.ETLPipeline",
+        lambda *_: pytest.fail("Q-06 must not construct a parallel pipeline"),
+    )
+    monkeypatch.setattr(
+        "fuente.control_console.JobStore",
+        lambda *_: pytest.fail("Q-06 must not construct a parallel JobStore"),
+    )
+
+    assert backend._resolve_step2_ingestion() == (ingestion, store)
+    control = backend.get_job_control_service()
+    assert control.ingestion is ingestion
+    assert control.job_store is store
+    store.close()

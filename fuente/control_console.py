@@ -864,18 +864,18 @@ class FuenteConsoleBackend:
         }
 
     def preview_fusion(
-        self, document_ids: list[str], title: str, target_issue: str
+        self, document_ids: list[str], title: str, issue_id: str
     ) -> Dict[str, Any]:
         return self.get_fusion_service().preview(
             document_ids,
             title,
-            target_issue,
+            issue_id,
         ).as_dict()
 
     def commit_fusion(
-        self, preview_id: str, expected_revisions: dict[str, int]
+        self, preview_id: str, source_revisions: dict[str, int]
     ) -> Dict[str, Any]:
-        note = self.get_fusion_service().commit(preview_id, expected_revisions)
+        note = self.get_fusion_service().commit(preview_id, source_revisions)
         return {
             "document_id": note.document_id,
             "path": note.relative_path,
@@ -1441,42 +1441,29 @@ class FuenteConsoleBackend:
             return {"pending_notes": pending, "count": len(pending)}
 
         elif action_name == "approve_note":
-            identifier = (
-                payload.get("document_id")
-                or payload.get("path")
-                or payload.get("file_path")
-            )
-            if not identifier:
-                return {"error": "Ruta de nota no proporcionada"}
+            allowed_fields = {"document_id", "expected_revision"}
+            if (
+                set(payload) - allowed_fields
+                or not isinstance(payload.get("document_id"), str)
+                or not payload.get("document_id", "").strip()
+                or isinstance(payload.get("expected_revision"), bool)
+                or not isinstance(payload.get("expected_revision"), int)
+            ):
+                return {"error": "invalid_payload"}
+            document_id = payload["document_id"].strip()
+            if "/" in document_id or "\\" in document_id or document_id.endswith(".md"):
+                return {"error": "invalid_payload"}
             try:
                 notes = self.get_notes_service()
-                document_id = notes.resolve_document_id(str(identifier))
-                expected_revision = payload.get("expected_revision")
-                if expected_revision is None:
-                    expected_revision = notes.get_note(document_id).revision
-                metadata_patch = None
-                if "metadata" in payload:
-                    raw_metadata = dict(payload["metadata"])
-                    raw_metadata.pop("status", None)
-                    metadata_patch = validate_metadata_fields(
-                        raw_metadata,
-                        allowed_issues=self.vault.get_issues_in_theme(),
-                    )
+                expected_revision = payload["expected_revision"]
                 approved = notes.approve(
                     document_id,
                     int(expected_revision),
-                    metadata_patch=metadata_patch,
                 )
             except LegacyOriginsMigrationRequiredError:
                 return {
                     "error": "legacy_origins_unmigrated",
                     "message": "Legacy origins require complete OriginRef identity",
-                }
-            except MetadataValidationError as error:
-                return {
-                    "error": error.code,
-                    "message": str(error),
-                    "field_errors": error.field_errors,
                 }
             except NoteRevisionConflictError as error:
                 return {"error": error.code, "message": str(error)}
@@ -1615,19 +1602,6 @@ class FuenteConsoleBackend:
                 }
 
             return {"error": "Datos insuficientes para guardar nota"}
-
-        elif action_name == "merge_notes":
-            note_paths = payload.get("note_paths", [])
-            if isinstance(note_paths, list) and any(
-                isinstance(note_path, str)
-                and ("/" in note_path or "\\" in note_path or note_path.endswith(".md"))
-                for note_path in note_paths
-            ):
-                return self._path_error(PathAuthorizationError())
-            return {
-                "error": "fusion_preview_required",
-                "message": "Use preview_fusion and commit_fusion with document IDs",
-            }
 
         elif action_name == "move_note":
             identifier = (

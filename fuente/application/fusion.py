@@ -156,7 +156,7 @@ class FusionApplicationService:
         return preview
 
     def commit(
-        self, preview_id: str, expected_revisions: dict[str, int]
+        self, preview_id: str, source_revisions: dict[str, int]
     ) -> NoteDocument:
         """Commit one preview after revalidating every source under its CAS lock."""
         if not isinstance(preview_id, str) or not preview_id.strip() or "/" in preview_id:
@@ -164,13 +164,13 @@ class FusionApplicationService:
         preview = self._previews.get(preview_id)
         if preview is None:
             raise ValueError("fusion preview was not found")
-        if not isinstance(expected_revisions, dict):
-            raise ValueError("expected_revisions must be an object")
-        if expected_revisions != preview.source_revisions:
+        if not isinstance(source_revisions, dict):
+            raise ValueError("source_revisions must be an object")
+        if source_revisions != preview.source_revisions:
             raise NoteRevisionConflictError(preview.source_ids[0])
         if any(
             not isinstance(revision, int) or isinstance(revision, bool) or revision < 1
-            for revision in expected_revisions.values()
+            for revision in source_revisions.values()
         ):
             raise ValueError("source revisions must be positive integers")
 

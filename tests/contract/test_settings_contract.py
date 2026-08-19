@@ -164,6 +164,80 @@ def test_live_settings_failure_restores_config_policy_and_pipeline_state(
     assert lifecycle_calls[-1] == ("policy", previous_policy)
 
 
+def test_live_settings_transition_auto_eco_auto_rebuilds_policy(
+    temp_vault_path, monkeypatch
+):
+    backend = FuenteConsoleBackend(temp_vault_path)
+    auto_policy = _configured_model_test_policy()
+    eco_policy = RuntimePolicy(
+        profile=ExecutionProfile.ECO_STRICT,
+        retrieval_mode="bm25_vault",
+        vector_index_enabled=False,
+        audio_mode=AudioMode.SKIP,
+        whisper_model_path=None,
+        allow_model_download=False,
+        selected_model=None,
+        llm_available=False,
+        reason="test Eco policy",
+    )
+    lifecycle_calls = []
+    backend.lifecycle = SimpleNamespace(
+        is_running=True,
+        pipeline=SimpleNamespace(chroma=None),
+        set_config=lambda _config: None,
+        set_runtime_policy=lambda policy: lifecycle_calls.append(policy),
+    )
+    monkeypatch.setattr(
+        backend,
+        "_measure_policy_for_config",
+        lambda config: (object(), eco_policy if config.resource_profile == "eco_strict" else auto_policy),
+    )
+    monkeypatch.setattr(backend, "get_retrieval_service", lambda: object())
+    monkeypatch.setattr(backend, "get_chat_service", lambda: object())
+    monkeypatch.setattr(backend, "get_notes_service", lambda: object())
+    monkeypatch.setattr(backend, "get_health", lambda: {"status": "ok"})
+    monkeypatch.setattr(backend, "get_jobs", lambda **_kwargs: {"items": []})
+
+    eco_result = backend.save_settings({"resource_profile": "eco_strict"})
+    auto_result = backend.save_settings({"resource_profile": "auto"})
+
+    assert eco_result["policy"]["retrieval_mode"] == "bm25_vault"
+    assert auto_result["policy"]["profile"] == "auto"
+    assert [policy.profile for policy in lifecycle_calls] == [
+        ExecutionProfile.ECO_STRICT,
+        ExecutionProfile.AUTO,
+    ]
+
+
+def test_live_settings_apply_and_restore_failure_returns_public_rollback_error(
+    temp_vault_path, monkeypatch
+):
+    backend = FuenteConsoleBackend(temp_vault_path)
+    backend.lifecycle = SimpleNamespace(
+        is_running=True,
+        pipeline=SimpleNamespace(chroma=None),
+    )
+    monkeypatch.setattr(
+        backend,
+        "_measure_policy_for_config",
+        lambda _config: (object(), _configured_model_test_policy()),
+    )
+    monkeypatch.setattr(
+        backend,
+        "get_retrieval_service",
+        lambda: (_ for _ in ()).throw(RuntimeError("apply failed")),
+    )
+    monkeypatch.setattr(
+        backend,
+        "_restore_live_settings",
+        lambda *_args: (_ for _ in ()).throw(RuntimeError("restore failed")),
+    )
+
+    result = backend.save_settings({"resource_profile": "auto"})
+
+    assert result["error"] == "settings_rollback_failed"
+
+
 def test_bridge_get_settings_info_reflects_persisted_values(temp_vault_path):
     backend = FuenteConsoleBackend(temp_vault_path)
     bridge = FuentePyWebViewApi(backend)

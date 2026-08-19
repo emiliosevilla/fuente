@@ -24,7 +24,7 @@ import json
 from contextlib import contextmanager, suppress
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Iterable, Optional
+from typing import Any, Iterable, Optional, Sequence
 
 from fuente.domain.jobs import (
     CLAIMED_STATUS,
@@ -1450,6 +1450,21 @@ class JobStore:
                 (job_id, limit),
             ).fetchall()
         return [dict(row) for row in rows]
+
+    def latest_schedule_reasons(self, job_ids: Sequence[str]) -> dict[str, str]:
+        """Return the latest scheduler reason for each requested job in one query."""
+        ids = tuple(dict.fromkeys(job_ids))
+        if not ids:
+            return {}
+        placeholders = ", ".join("?" for _ in ids)
+        rows = self._connection.execute(
+            "SELECT d.job_id, d.reason FROM schedule_decisions d "
+            "JOIN (SELECT job_id, MAX(decision_id) AS latest_id "
+            f"FROM schedule_decisions WHERE job_id IN ({placeholders}) GROUP BY job_id) latest "
+            "ON d.decision_id = latest.latest_id",
+            ids,
+        ).fetchall()
+        return {str(row["job_id"]): str(row["reason"]) for row in rows}
 
     def count_resource_leases(
         self, resource_key: str, *, exclude_job_id: Optional[str] = None

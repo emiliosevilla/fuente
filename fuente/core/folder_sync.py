@@ -23,6 +23,13 @@ from fuente.infrastructure.sqlite_store import JobStore
 
 logger = logging.getLogger(__name__)
 
+TEMPORARY_SUFFIXES = frozenset({".tmp", ".part"})
+
+
+def is_hidden_or_temporary_file(path: Path) -> bool:
+    """Return whether one source file is hidden or still being written."""
+    return path.name.startswith(".") or path.suffix.lower() in TEMPORARY_SUFFIXES
+
 THEME = {
     "bg_root": "#DCD4C7",
     "bg_card": "#EAE2D5",
@@ -371,6 +378,8 @@ class FolderSyncManager:
                 try:
                     relative = candidate.relative_to(root)
                     if any(part.startswith(".") for part in relative.parts):
+                        continue
+                    if is_hidden_or_temporary_file(candidate):
                         continue
                     if candidate.is_symlink():
                         continue

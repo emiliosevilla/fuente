@@ -1698,6 +1698,204 @@
 .quarantine-status.status-error { color: var(--muted); }
 .clipboard-buffer { position: fixed; opacity: 0; pointer-events: none; }
 
+/* Modern glass layer: progressive enhancement over the existing semantic UI. */
+body {
+    background-color: var(--bg-root);
+    background-image: var(--fuente-app-gradient);
+    background-attachment: fixed;
+}
+
+.masthead-container {
+    border-bottom: 1px solid color-mix(in srgb, var(--border-accent) 62%, transparent);
+    padding: 12px 4px 18px;
+}
+
+.masthead-title {
+    letter-spacing: 0.18em;
+    text-shadow: 0 10px 28px color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+.status-strip,
+.stat-card,
+.graph-section,
+.log-section,
+.bottom-status-bar,
+.modal-container,
+.reader-sidebar,
+.reader-properties-pane,
+.reader-relations-pane,
+.subgraph-box,
+.node-card {
+    background: var(--fuente-glass);
+    border-color: var(--fuente-glass-border);
+    box-shadow: var(--fuente-shadow-glass), inset 0 1px 0 rgba(255, 255, 255, 0.54);
+    backdrop-filter: blur(18px) saturate(125%);
+    -webkit-backdrop-filter: blur(18px) saturate(125%);
+}
+
+.status-strip,
+.graph-section,
+.log-section,
+.modal-container {
+    border-radius: 22px;
+}
+
+.stat-card,
+.subgraph-box,
+.node-card,
+.reader-sidebar,
+.reader-properties-pane,
+.reader-relations-pane {
+    border-radius: 16px;
+}
+
+.toolbar-bar {
+    padding: 8px 10px;
+    border: 1px solid var(--fuente-glass-border);
+    border-radius: 18px;
+    background: var(--fuente-glass);
+    box-shadow: 0 14px 38px rgba(31, 41, 55, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.58);
+    backdrop-filter: blur(16px) saturate(120%);
+    -webkit-backdrop-filter: blur(16px) saturate(120%);
+}
+
+.btn-secondary,
+.btn-primary,
+.btn-small,
+.theme-select-trigger,
+.console-layout-018,
+.console-layout-023,
+.console-layout-044,
+.console-layout-045,
+.console-layout-036 {
+    border-radius: 12px;
+    border-color: color-mix(in srgb, var(--border-accent) 58%, transparent);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5);
+    transition: transform 180ms ease, box-shadow 180ms ease, background-color 180ms ease, border-color 180ms ease;
+}
+
+.btn-secondary:hover,
+.btn-primary:hover,
+.btn-small:hover,
+.theme-select-trigger:hover,
+.stat-card:hover,
+.node-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 16px 30px rgba(31, 41, 55, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.64);
+}
+
+.btn-primary {
+    background: var(--fuente-glass-strong);
+    border-color: var(--accent);
+}
+
+.graph-title {
+    padding-bottom: 14px;
+    border-bottom-color: color-mix(in srgb, var(--border) 58%, transparent);
+    letter-spacing: 0.12em;
+}
+
+.subgraphs-container {
+    gap: 16px;
+}
+
+.subgraph-box {
+    position: relative;
+    padding: 16px;
+    border-color: color-mix(in srgb, var(--border) 72%, var(--fuente-glass-border));
+}
+
+.subgraph-header {
+    border-bottom-color: color-mix(in srgb, var(--border) 54%, transparent);
+    padding-bottom: 10px;
+}
+
+.arrow-connector {
+    position: relative;
+    width: clamp(34px, 4vw, 64px);
+    height: 32px;
+    color: var(--accent);
+    opacity: 0.82;
+}
+
+.arrow-connector::before {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 2px;
+    right: 7px;
+    height: 2px;
+    border-radius: 999px;
+    background: var(--accent);
+    transform: translateY(-50%);
+    box-shadow: 0 0 12px color-mix(in srgb, var(--accent) 38%, transparent);
+    animation: flowPulse 2.4s ease-in-out infinite;
+}
+
+.arrow-connector::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    right: 1px;
+    width: 11px;
+    height: 11px;
+    border-top: 2px solid var(--accent);
+    border-right: 2px solid var(--accent);
+    transform: translateY(-50%) rotate(45deg);
+    filter: drop-shadow(0 0 6px color-mix(in srgb, var(--accent) 32%, transparent));
+}
+
+@keyframes flowPulse {
+    0%, 100% { opacity: 0.48; transform: translateY(-50%) scaleX(0.92); transform-origin: right center; }
+    50% { opacity: 1; transform: translateY(-50%) scaleX(1); }
+}
+
+.node-card {
+    padding: 14px;
+    border-color: color-mix(in srgb, var(--accent) 48%, var(--fuente-glass-border));
+}
+
+.node-tag,
+.subgraph-title,
+.log-header {
+    letter-spacing: 0.08em;
+}
+
+.log-console {
+    border-radius: 14px;
+    background: color-mix(in srgb, var(--bg-root) 58%, transparent);
+    border-color: color-mix(in srgb, var(--border) 62%, transparent);
+}
+
+.modal-overlay {
+    background: color-mix(in srgb, var(--fuente-polar-0) 42%, rgba(17, 24, 39, 0.42));
+    backdrop-filter: blur(12px) saturate(125%);
+    -webkit-backdrop-filter: blur(12px) saturate(125%);
+}
+
+.modal-header,
+.modal-footer {
+    background: var(--fuente-glass-strong);
+    border-color: color-mix(in srgb, var(--border) 58%, transparent);
+}
+
+.modal-header {
+    padding: 18px 22px;
+}
+
+.modal-body {
+    padding: 22px;
+}
+
+.close-btn:hover {
+    color: var(--accent);
+    transform: rotate(8deg) scale(1.08);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .arrow-connector::before { animation: none; }
+}
+
 @media (max-width: 900px) {
     #modal-reader .modal-body {
         overflow-y: auto;

@@ -222,7 +222,10 @@ conjunto de tokens activo.
   forma o posición.
 - El foco de teclado debe ser visible en ambos modos y no puede eliminarse por
   razones estéticas.
-- No usar degradados, neón, transparencias excesivas ni animaciones continuas.
+- Se permite un efecto glass controlado para separar superficies: translucencia
+  moderada, desenfoque progresivo y sombras suaves. No usar neón ni efectos que
+  reduzcan el contraste; el movimiento debe ser sutil y respetar
+  `prefers-reduced-motion`.
 - La consola y sus modales usan Arial; los logs y el código pueden conservar
   una tipografía monoespaciada cuando el contexto lo requiera.
 - El cambio de estilo no modifica datos, rutas, temas del Vault, jobs ni

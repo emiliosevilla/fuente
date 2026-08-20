@@ -143,21 +143,15 @@ def test_build_receipt_serializes_connected_folder_roots_as_json_safe(tmp_path):
     json.dumps(receipt)
 
 
-def test_gui_auto_detect_regression_accepts_connected_folder_records(tmp_path):
-    detected = ConnectedFolder("onedrive_mount", str(tmp_path), "OneDrive", True)
-    wizard = object.__new__(installer_gui.FuenteInstallerWizard)
-    wizard.cloud_folders = []
-    wizard._refresh_cloud_listbox = MagicMock()
+def test_gui_keeps_location_configuration_out_of_installer():
+    source = Path(installer_gui.__file__).read_text(encoding="utf-8")
 
-    with patch.object(
-        installer_gui.FolderSyncManager,
-        "detect_cloud_folders",
-        return_value=[detected],
-    ):
-        installer_gui.FuenteInstallerWizard._on_detect_cloud_installer(wizard, silent=True)
-
-    assert wizard.cloud_folders == [detected]
-    wizard._refresh_cloud_listbox.assert_called_once_with()
+    assert "filedialog" not in source
+    assert "_render_step2_vault_selection" not in source
+    assert "_render_step4_cloud_sync" not in source
+    assert "_on_detect_cloud_installer" not in source
+    assert "cloud_folders=[]" in source
+    assert "modal 'Ajustes'" in source
 
 
 def test_receipt_roundtrip(tmp_path):

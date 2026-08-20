@@ -4,21 +4,18 @@ import subprocess
 import threading
 from pathlib import Path
 import tkinter as tk
-from tkinter import ttk, filedialog, messagebox
+from tkinter import ttk, messagebox
 
 base_dir = Path(__file__).resolve().parent.parent
 if str(base_dir) not in sys.path:
     sys.path.insert(0, str(base_dir))
 
-from fuente.core.folder_sync import FolderSyncManager
-from fuente.domain.sync import ConnectedFolder, SyncProvider
 from fuente.installer_contract import (
     InstallationContext,
     detect_prerequisites,
     failed_steps,
     installation_succeeded,
     load_receipt,
-    merge_connected_folder_lists,
     resolve_vault_path,
     run_installation,
 )
@@ -56,7 +53,6 @@ class FuenteInstallerWizard(tk.Tk):
         self.ocr_status_var = tk.StringVar(value="Comprobando...")
         self.anythingllm_status_var = tk.StringVar(value="Opcional, no configurado")
 
-        self.cloud_folders: list[ConnectedFolder] = []
         self.anythingllm_opt_in_var = tk.BooleanVar(value=False)
         self.ocr_opt_in_var = tk.BooleanVar(
             value=os.environ.get("FUENTE_INSTALL_OCR", "0") == "1"
@@ -64,10 +60,14 @@ class FuenteInstallerWizard(tk.Tk):
         self.run_first_flush_var = tk.BooleanVar(value=True)
 
         self.current_step = 1
-        self.total_steps = 6
+        self.total_steps = 4
         self.install_steps = []
         self.install_had_failures = False
         self._existing_receipt = load_receipt(self.base_dir)
+        if self._existing_receipt and self._existing_receipt.get("vault_path"):
+            self.vault_path_var.set(
+                str(Path(self._existing_receipt["vault_path"]).resolve())
+            )
 
         # Construir la interfaz base
         self._setup_ui()
@@ -149,26 +149,20 @@ class FuenteInstallerWizard(tk.Tk):
         self.clear_content()
 
         # Ajustar botones según el paso
-        self.btn_back.config(state="normal" if step_num in (2, 3, 4) else "disabled")
-        self.btn_cancel.config(state="normal" if step_num != 5 else "disabled")
+        self.btn_back.config(state="normal" if step_num in (2, 3) else "disabled")
+        self.btn_cancel.config(state="normal" if step_num != 3 else "disabled")
 
         if step_num == 1:
             self._render_step1_welcome()
             self.btn_next.config(text="Siguiente >", state="normal")
         elif step_num == 2:
-            self._render_step2_vault_selection()
-            self.btn_next.config(text="Siguiente >", state="normal")
-        elif step_num == 3:
             self._render_step3_requirements()
             self.btn_next.config(text="Siguiente >", state="normal")
-        elif step_num == 4:
-            self._render_step4_cloud_sync()
-            self.btn_next.config(text="Instalar >", state="normal")
-        elif step_num == 5:
+        elif step_num == 3:
             self._render_step5_installation()
             self.btn_next.config(text="Instalando...", state="disabled")
             self.btn_back.config(state="disabled")
-        elif step_num == 6:
+        elif step_num == 4:
             self._render_step6_complete()
             self.btn_next.config(text="Finalizar", state="normal", bg="#059669")
 
@@ -189,10 +183,10 @@ class FuenteInstallerWizard(tk.Tk):
             "Transforma automáticamente tus documentos (PDFs, archivos Word, imágenes, audio "
             "y notas) en notas atómicas interconectadas en Obsidian mediante Inteligencia Artificial Local (100% privada).\n\n"
             "Este asistente te guiará paso a paso para configurar tu entorno:\n\n"
-            "  1. Explicación y selección de tu carpeta de Vault en Obsidian.\n"
-            "  2. Comprobación de aplicaciones locales necesarias (Obsidian y Ollama).\n"
-            "  3. Configuración automática del modelo de IA óptimo para la memoria RAM de tu equipo.\n"
-            "  4. Creación del botón de acceso directo en tu Escritorio para realizar el Flush bajo demanda.\n\n"
+            "  1. Comprobación de aplicaciones locales necesarias (Obsidian y Ollama).\n"
+            "  2. Configuración automática del modelo de IA óptimo para la memoria RAM de tu equipo.\n"
+            "  3. Creación del botón de acceso directo en tu Escritorio para realizar el Flush bajo demanda.\n\n"
+            "La ubicación del Vault y las carpetas conectadas se configuran después desde el modal 'Ajustes'.\n\n"
             "Haz clic en 'Siguiente' para comenzar la configuración."
         )
 
@@ -210,81 +204,7 @@ class FuenteInstallerWizard(tk.Tk):
         )
         msg_box.pack(fill="x", pady=10)
 
-    # --- PASO 2: Selección del Vault con Explicación ---
-    def _render_step2_vault_selection(self):
-        title = tk.Label(
-            self.content_frame,
-            text="¿Dónde deseas guardar tu Base de Conocimiento?",
-            font=("Helvetica", 15, "bold"),
-            fg="#1F2937",
-            bg="#F5F5F7",
-            anchor="w"
-        )
-        title.pack(fill="x", pady=(0, 10))
-
-        explanation = (
-            "📌 Explicación importante sobre la ubicación:\n\n"
-            "Obsidian organiza las notas en carpetas llamadas 'Vaults' (Bóvedas). Fuente guardará en esta "
-            "carpeta tus notas atómicas, índice MOC e imágenes extraídas.\n\n"
-            "• Si ya utilizas Obsidian, haz clic en 'Examinar...' y selecciona tu carpeta Vault habitual.\n"
-            "• Si eres un nuevo usuario o no estás seguro, deja la ruta por defecto y Fuente creará una carpeta "
-            "Vault lista para usar en tus Documentos."
-        )
-
-        exp_box = tk.Label(
-            self.content_frame,
-            text=explanation,
-            font=("Helvetica", 10),
-            fg="#1E40AF",
-            bg="#EFF6FF",
-            justify="left",
-            anchor="w",
-            relief="solid",
-            bd=1,
-            padx=12,
-            pady=10
-        )
-        exp_box.pack(fill="x", pady=(0, 20))
-
-        lbl_path = tk.Label(
-            self.content_frame,
-            text="Carpeta Vault de Obsidian:",
-            font=("Helvetica", 11, "bold"),
-            fg="#374151",
-            bg="#F5F5F7",
-            anchor="w"
-        )
-        lbl_path.pack(fill="x", pady=(5, 5))
-
-        entry_frame = tk.Frame(self.content_frame, bg="#F5F5F7")
-        entry_frame.pack(fill="x", pady=5)
-
-        entry = tk.Entry(
-            entry_frame,
-            textvariable=self.vault_path_var,
-            font=("Helvetica", 11),
-            bd=2,
-            relief="groove"
-        )
-        entry.pack(side="left", fill="x", expand=True, padx=(0, 10))
-
-        btn_browse = tk.Button(
-            entry_frame,
-            text="Examinar...",
-            font=("Helvetica", 10),
-            command=self._browse_vault_folder
-        )
-        btn_browse.pack(side="right")
-
-    def _browse_vault_folder(self):
-        selected = filedialog.askdirectory(
-            title="Selecciona la carpeta Vault de Obsidian para Fuente",
-            initialdir=self.vault_path_var.get()
-        )
-        if selected:
-            self.vault_path_var.set(str(Path(selected).resolve()))
-
-    # --- PASO 3: Verificación de Requisitos ---
+    # --- PASO 2: Verificación de Requisitos ---
     def _render_step3_requirements(self):
         title = tk.Label(
             self.content_frame,
@@ -477,154 +397,7 @@ class FuenteInstallerWizard(tk.Tk):
                     + f" | Reinstalación segura (vault: {Path(vault).name})"
                 )
 
-    # --- PASO 4: Sincronización SharePoint & OneDrive ---
-    def _render_step4_cloud_sync(self):
-        title = tk.Label(
-            self.content_frame,
-            text="Conexión de entradas — SharePoint y OneDrive",
-            font=("Helvetica", 15, "bold"),
-            fg="#1F2937",
-            bg="#F5F5F7",
-            anchor="w"
-        )
-        title.pack(fill="x", pady=(0, 5))
-
-        sub = tk.Label(
-            self.content_frame,
-            text="Vincular carpetas de OneDrive o SharePoint a '1_entrada' para procesar documentos de tu equipo.",
-            font=("Helvetica", 10),
-            fg="#4B5563",
-            bg="#F5F5F7",
-            anchor="w"
-        )
-        sub.pack(fill="x", pady=(0, 10))
-
-        frame_list = tk.LabelFrame(
-            self.content_frame,
-            text=" Carpetas Nube Vinculadas ",
-            font=("Helvetica", 10, "bold"),
-            bg="#F5F5F7",
-            fg="#1F2937",
-            padx=10,
-            pady=8
-        )
-        frame_list.pack(fill="both", expand=True, pady=(0, 10))
-
-        self.cloud_listbox = tk.Listbox(frame_list, font=("Helvetica", 9), height=4)
-        self.cloud_listbox.pack(side="left", fill="both", expand=True)
-
-        sc = tk.Scrollbar(frame_list, orient="vertical", command=self.cloud_listbox.yview)
-        sc.pack(side="right", fill="y")
-        self.cloud_listbox.config(yscrollcommand=sc.set)
-
-        self._refresh_cloud_listbox()
-
-        btn_bar = tk.Frame(self.content_frame, bg="#F5F5F7")
-        btn_bar.pack(fill="x", pady=(0, 10))
-
-        btn_detect = tk.Button(
-            btn_bar,
-            text="🔍 Auto-detectar Nube",
-            font=("Helvetica", 10, "bold"),
-            bg="#4F46E5",
-            fg="white",
-            command=lambda: self._on_detect_cloud_installer(silent=False)
-        )
-        btn_detect.pack(side="left", padx=(0, 8))
-
-        btn_add = tk.Button(
-            btn_bar,
-            text="📂 Examinar carpeta...",
-            font=("Helvetica", 10),
-            bg="#2563EB",
-            fg="white",
-            command=self._on_add_cloud_folder_installer
-        )
-        btn_add.pack(side="left", padx=(0, 8))
-
-        btn_clear = tk.Button(
-            btn_bar,
-            text="Eliminar Selección",
-            font=("Helvetica", 10),
-            fg="#DC2626",
-            command=self._on_remove_cloud_folder_installer
-        )
-        btn_clear.pack(side="left")
-
-        guide_box = tk.Label(
-            self.content_frame,
-            text="💡 ¿Cómo conectar SharePoint?\n"
-                 "1. Ve a tu SharePoint corporativo en el navegador y haz clic en 'Sincronizar'.\n"
-                 "2. Pulsa '🔍 Auto-detectar Nube' arriba para importar la carpeta automáticamente.\n"
-                 "3. Si prefieres, haz clic en 'Examinar carpeta...' para seleccionarla manualmente.",
-            font=("Helvetica", 9),
-            fg="#1E40AF",
-            bg="#EFF6FF",
-            justify="left",
-            anchor="w",
-            relief="solid",
-            bd=1,
-            padx=10,
-            pady=8
-        )
-        guide_box.pack(fill="x")
-
-        # Auto-detectar silenciosamente si la lista está vacía al cargar
-        if not self.cloud_folders:
-            self._on_detect_cloud_installer(silent=True)
-
-    def _refresh_cloud_listbox(self):
-        if hasattr(self, "cloud_listbox"):
-            self.cloud_listbox.delete(0, tk.END)
-            for folder in self.cloud_folders:
-                self.cloud_listbox.insert(
-                    tk.END,
-                    f"{folder.display_name} [{folder.provider}] — {folder.root}",
-                )
-
-    def _on_detect_cloud_installer(self, silent=False):
-        try:
-            detected = FolderSyncManager.detect_cloud_folders()
-            before = len(self.cloud_folders)
-            self.cloud_folders = merge_connected_folder_lists(self.cloud_folders, detected)
-            added = len(self.cloud_folders) - before
-            self._refresh_cloud_listbox()
-            if not silent:
-                if added > 0:
-                    messagebox.showinfo("Detección Nube", f"Se detectaron y agregaron {added} carpetas de OneDrive/SharePoint.")
-                else:
-                    messagebox.showinfo("Detección Nube", "No se encontraron nuevas carpetas sincronizadas en el sistema.")
-        except Exception as e:
-            if not silent:
-                messagebox.showwarning("Aviso", f"Error escaneando carpetas de la nube: {e}")
-
-    def _on_add_cloud_folder_installer(self):
-        sel = filedialog.askdirectory(title="Selecciona la carpeta de SharePoint o OneDrive")
-        if sel:
-            p = Path(sel).resolve()
-            manual = ConnectedFolder(
-                provider=SyncProvider.LOCAL.value,
-                root=str(p),
-                display_name=p.name or str(p),
-                enabled=True,
-            )
-            before = len(self.cloud_folders)
-            self.cloud_folders = merge_connected_folder_lists(
-                self.cloud_folders, [manual]
-            )
-            if len(self.cloud_folders) != before:
-                self._refresh_cloud_listbox()
-
-    def _on_remove_cloud_folder_installer(self):
-        if hasattr(self, "cloud_listbox"):
-            try:
-                idx = self.cloud_listbox.curselection()[0]
-                del self.cloud_folders[idx]
-                self._refresh_cloud_listbox()
-            except IndexError:
-                pass
-
-    # --- PASO 5: Progreso de Instalación ---
+    # --- PASO 3: Progreso de Instalación ---
     def _render_step5_installation(self):
         title = tk.Label(
             self.content_frame,
@@ -713,7 +486,7 @@ class FuenteInstallerWizard(tk.Tk):
             ctx = InstallationContext(
                 base_dir=self.base_dir,
                 vault_path=vault,
-                cloud_folders=list(self.cloud_folders),
+                cloud_folders=[],
                 confirm=self._confirm_on_main_thread,
                 log=self._log,
                 install_ocr=self.ocr_opt_in_var.get(),
@@ -724,7 +497,7 @@ class FuenteInstallerWizard(tk.Tk):
 
             step_labels = {
                 "vault_structure": ("2. Verificando estructura del Vault...", 25),
-                "cloud_folders": ("3. Vinculando carpetas de la nube...", 40),
+                "cloud_folders": ("3. Dejando las conexiones para el modal Ajustes...", 40),
                 "ocr_runtime": ("4. Comprobando OCR Tesseract...", 50),
                 "ollama_model": ("5. Evaluando modelo LLM recomendado...", 60),
                 "anythingllm_install": ("Opcional: verificando AnythingLLM Desktop...", 70),
@@ -771,7 +544,7 @@ class FuenteInstallerWizard(tk.Tk):
                 f"Ocurrió un error inesperado:\n{err}",
             )
 
-    # --- PASO 6: Instalación Completada ---
+    # --- PASO 4: Instalación Completada ---
     def _render_step6_complete(self):
         had_failures = self.install_had_failures
         title = tk.Label(
@@ -817,6 +590,7 @@ class FuenteInstallerWizard(tk.Tk):
             use_instructions = (
                 "📌 Tu entorno ha sido configurado por completo:\n\n"
                 "• Vault de Obsidian: 'La Memoria de Fuente' preparado.\n"
+                "• Ubicación del Vault y carpetas conectadas: se configuran desde 'Ajustes'.\n"
                 "• Ollama AI: Modelo configurado según tu memoria RAM.\n"
                 f"{anythingllm_summary}\n"
                 "• Acceso Directo: Se ha creado el botón 'Fuente' en tu Escritorio.\n\n"
@@ -852,7 +626,7 @@ class FuenteInstallerWizard(tk.Tk):
 
     # --- Manejadores de Botones Navegación ---
     def _on_next(self):
-        if self.current_step == 6:
+        if self.current_step == 4:
             # Finalizar
             if self.run_first_flush_var.get():
                 self.destroy()

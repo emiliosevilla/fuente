@@ -86,7 +86,7 @@ Los jobs son durables, reanudables y tienen estados y razones explícitos.
 - Consola central con Health, configuración, cola de jobs, revisión,
   búsqueda, lector, editor, exportación y acciones de grafo.
 - Bridge tipado entre la interfaz y el backend.
-- Selección nativa de Vault y de carpetas montadas.
+- Configuración del Vault y de las carpetas montadas desde el modal `Ajustes`.
 - Modo continuo con interfaz gráfica.
 - Modo `--headless` sin Tkinter ni PyWebView.
 - Modo `--flush` para una pasada determinista sin hilos persistentes.
@@ -180,6 +180,13 @@ entorno virtual `venv`, instala Fuente y sus dependencias, y ofrece instalar
 Obsidian, Ollama y los componentes opcionales. Si el sistema no dispone de un
 gestor compatible, abrirá la página oficial de descarga y pedirá repetir el
 instalador después.
+
+El instalador no solicita la ubicación del Vault ni las carpetas conectadas de
+entrada o salida. Se limita a preparar la aplicación y la estructura inicial;
+usa `~/Documents/Fuente_Vault` en una instalación nueva y conserva el Vault de
+un recibo de instalación anterior cuando existe. Después de iniciar Fuente,
+configura o cambia esas ubicaciones desde el modal `Ajustes` de la consola.
+Cambiar el Vault mientras la consola está funcionando requiere reiniciarla.
 
 La instalación editable también puede hacerse desde una terminal:
 

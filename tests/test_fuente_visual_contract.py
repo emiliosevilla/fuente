@@ -102,6 +102,34 @@ def test_console_consumes_fuente_tokens_instead_of_literal_nord_palette() -> Non
     assert not any(value in css.upper() for value in nord_hex_values)
 
 
+def test_console_exposes_independent_zen_energy_visual_style_toggle() -> None:
+    html = _read(HTML_PATH)
+
+    assert '<html lang="es" data-fuente-style="zen">' in html
+    assert 'id="style-toggle"' in html
+    assert 'class="masthead-link masthead-style-button"' in html
+    assert '>Energy</button>' in html
+    assert "const nextStyle = activeStyle === 'energy' ? 'zen' : 'energy'" in html
+    assert "styleToggle.textContent = nextStyle === 'energy' ? 'Energy' : 'Zen'" in html
+    assert "styleToggle.setAttribute('aria-pressed'" not in html
+    assert "FUENTE_STYLE_STORAGE_KEY = 'fuente.visual-style'" in html
+    assert "document.documentElement.dataset.fuenteStyle = activeStyle" in html
+    assert "localStorage.setItem(FUENTE_STYLE_STORAGE_KEY, activeStyle)" in html
+    assert "function toggleVisualStyle()" in html
+    assert "'toggleVisualStyle()': toggleVisualStyle" in html
+
+
+def test_visual_style_toggle_does_not_reuse_vault_theme_bridge() -> None:
+    html = _read(HTML_PATH)
+
+    style_change = html.index("function toggleVisualStyle()")
+    vault_theme_bridge = html.index("set_theme(themeName)")
+    assert style_change < vault_theme_bridge
+    assert "applyVisualStyle(currentStyle === 'energy' ? 'zen' : 'energy')" in html
+    assert 'id="style-select"' not in html
+    assert 'id="settings-style-select"' not in html
+
+
 def test_reader_exposes_content_properties_and_relations_regions() -> None:
     html = _read(HTML_PATH)
 

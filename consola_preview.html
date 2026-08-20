@@ -1,11 +1,11 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="es" data-fuente-style="zen">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; base-uri 'none'; connect-src 'self'; font-src 'self'; img-src 'self' data:; object-src 'none'; script-src 'self' 'nonce-fuente-console' 'unsafe-eval'; style-src 'self'">
     <title>Fuente Control Console — Estética Papiro</title>
-    <!-- Font stack remains local and is defined in console.css: 'Courier New', Courier, monospace. -->
+    <!-- La tipografía global de la consola y sus modales se define en console.css: Arial, sans-serif. -->
     <link rel="stylesheet" data-fuente-tokens="true" href="fuente/ui/static/fuente_tokens.css">
     <link rel="stylesheet" href="fuente/ui/static/console.css">
 </head>
@@ -15,13 +15,15 @@
     <div class="masthead-container">
         <div class="masthead-main">
             <div>
-                <h1 class="masthead-title">F U N E S</h1>
+                <h1 class="masthead-title">FUENTE</h1>
                 <div class="masthead-tagline">Formateo Universal de Notas, Estructuración y Síntesis</div>
             </div>
             <div class="console-layout-001">
                 <span class="masthead-link" data-onclick-command="triggerAction('quick_help')">Guía Rápida</span>
                 <span class="console-text-001">|</span>
                 <span class="masthead-link" data-onclick-command="openModal('modal-settings')">Ajustes</span>
+                <span class="console-text-001">|</span>
+                <button id="style-toggle" type="button" class="masthead-link masthead-style-button" data-onclick-command="toggleVisualStyle()" aria-label="Activar estilo visual Energy">Energy</button>
             </div>
         </div>
 
@@ -863,6 +865,7 @@
             const handlers = {
                 'promptCreateTheme()': promptCreateTheme,
                 'toggleThemeMenu()': toggleThemeMenu,
+                'toggleVisualStyle()': toggleVisualStyle,
                 'triggerOptimizedCycle()': triggerOptimizedCycle,
                 'clearLogView()': clearLogView,
                 'openMOCNote()': openMOCNote,
@@ -3005,6 +3008,40 @@
             }, 3800);
         }
 
+        const FUENTE_STYLE_STORAGE_KEY = 'fuente.visual-style';
+        const FUENTE_STYLES = new Set(['zen', 'energy']);
+
+        function readVisualStyle() {
+            try {
+                const stored = window.localStorage.getItem(FUENTE_STYLE_STORAGE_KEY);
+                return FUENTE_STYLES.has(stored) ? stored : 'zen';
+            } catch (error) {
+                return 'zen';
+            }
+        }
+
+        function applyVisualStyle(styleName) {
+            const activeStyle = FUENTE_STYLES.has(styleName) ? styleName : 'zen';
+            document.documentElement.dataset.fuenteStyle = activeStyle;
+            const styleToggle = document.getElementById('style-toggle');
+            if (styleToggle) {
+                const nextStyle = activeStyle === 'energy' ? 'zen' : 'energy';
+                styleToggle.textContent = nextStyle === 'energy' ? 'Energy' : 'Zen';
+                styleToggle.setAttribute('aria-label', 'Activar estilo visual ' + styleToggle.textContent);
+            }
+            try {
+                window.localStorage.setItem(FUENTE_STYLE_STORAGE_KEY, activeStyle);
+            } catch (error) {
+                // The webview may disable storage; the active style still applies.
+            }
+            return activeStyle;
+        }
+
+        function toggleVisualStyle() {
+            const currentStyle = document.documentElement.dataset.fuenteStyle || readVisualStyle();
+            applyVisualStyle(currentStyle === 'energy' ? 'zen' : 'energy');
+        }
+
         let availableThemes = ['General'];
         let currentActiveTheme = 'General';
         let themeChangeRequest = 0;
@@ -3497,7 +3534,7 @@
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
                 ctx.fillStyle = getComputedStyle(document.documentElement)
                     .getPropertyValue('--fuente-snow-0').trim() || '#888';
-                ctx.font = '14px "JetBrains Mono", Courier, monospace';
+                ctx.font = '14px Arial, sans-serif';
                 ctx.fillText('No hay notas en 4_salida para construir el gráfico', width / 2 - 160, height / 2);
                 return;
             }
@@ -3723,7 +3760,7 @@
                     ctx.stroke();
 
                     const fontSize = Math.max(10, Math.min(18, 12 / zoom));
-                    ctx.font = (isHovered ? '700 ' : '600 ') + fontSize + 'px "JetBrains Mono", "Courier New", monospace';
+                    ctx.font = (isHovered ? '700 ' : '600 ') + fontSize + 'px Arial, sans-serif';
 
                     // Keep long note titles inside the bounded graph pane.  The
                     // native window is often Retina-scaled, so pixel positions
@@ -5009,6 +5046,7 @@
         });
 
         document.addEventListener('DOMContentLoaded', function() {
+            applyVisualStyle(readVisualStyle());
             if (isExplicitPreviewMode()) {
                 markExplicitPreviewMode();
             } else {

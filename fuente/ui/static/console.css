@@ -1,4 +1,4 @@
-        /* DESIGN SYSTEM ESTÉTICA PAPIRO - TIPOGRAFÍA MÁQUINA DE ESCRIBIR EN TODO EL TEXTO */
+        /* Fuente visual global de la consola y sus modales. */
         :root {
             --bg-root: var(--fuente-polar-0);
             --bg-card: var(--fuente-polar-1);
@@ -14,7 +14,7 @@
             --green: var(--fuente-success);
             --amber: var(--fuente-warning);
             --red: var(--fuente-danger);
-            --font-mono: 'Courier New', Courier, monospace;
+            --font-mono: Arial, sans-serif;
             --card-radius: 6px;
             --border-width: 1px;
             --shadow: 0 4px 18px rgba(0,0,0,0.06);
@@ -1086,6 +1086,8 @@
 .theme-select-menu.is-open { display: grid; gap: 2px; }
 .theme-select-option { width: 100%; padding: 8px 10px; border: 1px solid transparent; border-radius: 4px; background: transparent; color: var(--paper); font: inherit; text-align: left; cursor: pointer; }
 .theme-select-option:hover, .theme-select-option.active { background: var(--bg-card-hover); border-color: var(--border-accent); color: var(--gold); }
+.masthead-style-button { border: 0; padding: 0; background: transparent; }
+.masthead-style-button:focus-visible { outline: 2px solid var(--fuente-focus); outline-offset: 3px; border-radius: 2px; }
 
 .console-layout-004 {
     border-left:1px solid var(--border); height:18px; margin:0 4px;

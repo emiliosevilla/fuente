@@ -13,6 +13,11 @@ html[data-fuente-style="zen"] {
     --fuente-danger: #B33A3A;
     --fuente-selection: #B9D1F5;
     --fuente-focus: #1E4FA0;
+    --fuente-glass: rgba(244, 245, 247, 0.62);
+    --fuente-glass-strong: rgba(255, 255, 255, 0.78);
+    --fuente-glass-border: rgba(255, 255, 255, 0.72);
+    --fuente-app-gradient: radial-gradient(circle at 12% 0%, rgba(255, 255, 255, 0.72), transparent 34%), radial-gradient(circle at 100% 20%, rgba(185, 209, 245, 0.32), transparent 38%);
+    --fuente-shadow-glass: 0 24px 64px rgba(30, 79, 160, 0.13);
 }
 
 html[data-fuente-style="energy"] {
@@ -28,4 +33,9 @@ html[data-fuente-style="energy"] {
     --fuente-danger: #B33A3A;
     --fuente-selection: #F3C2AE;
     --fuente-focus: #8B3A26;
+    --fuente-glass: rgba(245, 241, 234, 0.64);
+    --fuente-glass-strong: rgba(255, 251, 245, 0.82);
+    --fuente-glass-border: rgba(255, 255, 255, 0.76);
+    --fuente-app-gradient: radial-gradient(circle at 10% 0%, rgba(255, 255, 255, 0.74), transparent 34%), radial-gradient(circle at 100% 22%, rgba(243, 194, 174, 0.3), transparent 38%);
+    --fuente-shadow-glass: 0 24px 64px rgba(139, 58, 38, 0.14);
 }

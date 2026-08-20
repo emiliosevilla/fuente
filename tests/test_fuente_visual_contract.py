@@ -102,6 +102,21 @@ def test_console_consumes_fuente_tokens_instead_of_literal_nord_palette() -> Non
     assert not any(value in css.upper() for value in nord_hex_values)
 
 
+def test_workflow_uses_css_arrow_connectors_and_modern_motion_layer() -> None:
+    html = _read(HTML_PATH)
+    css = _read(CONSOLE_CSS_PATH)
+    tokens = _read(TOKENS_CSS_PATH)
+
+    assert 'class="arrow-connector" aria-hidden="true"></div>' in html
+    assert "═►" not in html
+    assert "--fuente-glass:" in tokens
+    assert "--fuente-shadow-glass:" in tokens
+    assert ".arrow-connector::before" in css
+    assert ".arrow-connector::after" in css
+    assert "@keyframes flowPulse" in css
+    assert "prefers-reduced-motion" in css
+
+
 def test_console_exposes_independent_zen_energy_visual_style_toggle() -> None:
     html = _read(HTML_PATH)
 

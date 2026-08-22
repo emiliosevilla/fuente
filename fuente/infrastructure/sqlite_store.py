@@ -212,14 +212,27 @@ class JobStore:
         sha256: str,
         status: str,
         timestamp: str,
+        destination_device: int | None = None,
+        destination_inode: int | None = None,
     ) -> None:
         self._connection.execute(
             """
             INSERT INTO vault_layout_migration_items
-                (plan_id, source, destination, relative_path, sha256, status, timestamp)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+                (plan_id, source, destination, relative_path, sha256, status, timestamp,
+                 destination_device, destination_inode)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            (plan_id, source, destination, relative_path, sha256, status, timestamp),
+            (
+                plan_id,
+                source,
+                destination,
+                relative_path,
+                sha256,
+                status,
+                timestamp,
+                destination_device,
+                destination_inode,
+            ),
         )
 
     def get_vault_layout_migration(self, plan_id: str) -> dict[str, Any] | None:
@@ -234,10 +247,32 @@ class JobStore:
         ).fetchall()
         return {"plan": dict(plan), "items": [dict(item) for item in items]}
 
-    def update_vault_layout_migration_item(self, plan_id: str, source: str, *, status: str, timestamp: str) -> None:
+    def update_vault_layout_migration_item(
+        self,
+        plan_id: str,
+        source: str,
+        *,
+        status: str,
+        timestamp: str,
+        destination_device: int | None = None,
+        destination_inode: int | None = None,
+    ) -> None:
         self._connection.execute(
-            "UPDATE vault_layout_migration_items SET status = ?, timestamp = ? WHERE plan_id = ? AND source = ?",
-            (status, timestamp, plan_id, source),
+            """
+            UPDATE vault_layout_migration_items
+            SET status = ?, timestamp = ?,
+                destination_device = COALESCE(?, destination_device),
+                destination_inode = COALESCE(?, destination_inode)
+            WHERE plan_id = ? AND source = ?
+            """,
+            (
+                status,
+                timestamp,
+                destination_device,
+                destination_inode,
+                plan_id,
+                source,
+            ),
         )
 
     # -- migrations ------------------------------------------------------

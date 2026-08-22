@@ -156,6 +156,8 @@ class VaultConfig:
     dirty_dir_name: str = "2_sucio"
     clean_dir_name: str = "3_limpio"
     output_dir_name: str = "4_salida"
+    processed_dir_name: str = "4_procesado"
+    shared_dir_name: str = "5_salida"
     system_dir_name: str = ".fuente"
 
     @property
@@ -173,6 +175,14 @@ class VaultConfig:
     @property
     def output_dir(self) -> Path:
         return self.vault_path / self.output_dir_name
+
+    @property
+    def processed_dir(self) -> Path:
+        return self.vault_path / self.processed_dir_name
+
+    @property
+    def shared_dir(self) -> Path:
+        return self.vault_path / self.shared_dir_name
 
     @property
     def system_dir(self) -> Path:
@@ -203,6 +213,8 @@ class AppConfig:
             "dirty_dir_name": self.vault.dirty_dir_name,
             "clean_dir_name": self.vault.clean_dir_name,
             "output_dir_name": self.vault.output_dir_name,
+            "processed_dir_name": self.vault.processed_dir_name,
+            "shared_dir_name": self.vault.shared_dir_name,
             "system_dir_name": self.vault.system_dir_name,
             "ollama_url": self.ollama_url,
             "custom_model_override": self.custom_model_override,
@@ -260,6 +272,8 @@ class AppConfig:
             dirty_dir_name=data.get("dirty_dir_name", "2_sucio"),
             clean_dir_name=data.get("clean_dir_name", "3_limpio"),
             output_dir_name=data.get("output_dir_name", "4_salida"),
+            processed_dir_name=data.get("processed_dir_name", "4_procesado"),
+            shared_dir_name=data.get("shared_dir_name", "5_salida"),
             system_dir_name=data.get("system_dir_name", ".fuente"),
         )
         return cls(

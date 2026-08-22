@@ -38,7 +38,7 @@ Current gate: F03.2 pinned MiniRAG adapter is in progress. F03.1 is implemented 
 | F02.3 | F01.1,F02.1 | meeting artifact/session contracts | yes | yes — `e2e507a`, `013644e`, `a1ea751`, `3d48d8f` | `34 + 28 passed` | yes — Terra APPROVE; no findings | no | F02.4 may start |
 | F02.4 | F00.2,F02.3 | pinned Meetily local bridge and importer | yes | yes — `0927c1c`, `e37df26`, `61bf6bf` | `39 + 43 passed, 1 warning` after fix | yes — Terra APPROVE; no findings | no | F03.1 may start |
 | F03.1 | F01.1,F02.2 | retrieval contracts/router | yes | yes — `5c85989` | `22` focal; `108` regression | yes — Terra APPROVE; no findings after score fallback | no | F03.2 may start |
-| F03.2 | F00.2,F03.1 | pinned MiniRAG adapter | yes | yes — pending commit | `50 passed` adapter/router/RAG/resource suite | yes — Terra APPROVE; no findings | no | F03.3 may start |
+| F03.2 | F00.2,F03.1 | pinned MiniRAG adapter | yes | yes — `57ba971` | `50 passed` adapter/router/RAG/resource suite; freshness `6 passed` | yes — Terra APPROVE; no findings | no | F03.3 may start |
 | F03.3 | F03.1 | Chroma refinement role | yes | no | no | no | no | Luna |
 | F04.1 | F03.1 | verdict persistence | yes | no | no | no | no | Luna |
 | F04.2 | F03.2,F03.3,F04.1 | positive-only verifier | yes | no | no | no | no | Terra |
@@ -350,7 +350,7 @@ At task end, update only that row with a commit, exact test command/result, revi
 - D-01 exact MiniRAG revision verified against official `main`: `e204d239421f45004852953679927fdf6733f236`.
 - Official `LICENSE` is MIT; the revision and license are now recorded in the SDD and README.
 - Added the local-only adapter surface, `.fuente/minirag` provenance sidecar, lazy client loading and optional `rag` dependency.
-- Verification so far: `46 passed` across MiniRAG adapter, router, retrieval, origins and resource-budget tests; Terra review pending.
+- Initial verification: `46 passed` across MiniRAG adapter, router, retrieval, origins and resource-budget tests; later expanded for real API edge cases.
 
 ### F03.2 completion — 2026-08-23
 
@@ -359,3 +359,4 @@ At task end, update only that row with a commit, exact test command/result, revi
 - Verification: `50 passed`; `git diff --check` clean.
 - Terra re-review: APPROVE; no findings.
 - F03.2 is complete. F03.3 may start.
+- Commit: `57ba971` (`feat: add local minirag primary backend`). Evidence snapshot regenerated at `base_head=57ba971`, `RESULT: READY`.

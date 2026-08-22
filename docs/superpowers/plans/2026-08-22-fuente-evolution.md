@@ -610,7 +610,7 @@ git add fuente/rag/minirag_store.py fuente/config.py pyproject.toml requirements
 git commit -m "feat: add local minirag primary backend"
 ~~~
 
-Status: COMPLETE — D-01 fixed to `e204d239421f45004852953679927fdf6733f236` with MIT license; Terra approved; `50` tests passed.
+Status: COMPLETE — commit `57ba971`; D-01 fixed to `e204d239421f45004852953679927fdf6733f236` with MIT license; Terra approved; `50` tests passed; documentation freshness `6` passed.
 
 ### Task F03.3: Restrict ChromaDB to refinement
 

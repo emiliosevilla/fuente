@@ -483,7 +483,7 @@ def test_migrations_are_recorded_and_not_reapplied(tmp_path):
             row[0]
             for row in raw_connection.execute("SELECT version FROM schema_migrations")
         ]
-        assert versions == [1, 2, 3, 4, 5, 6, 7, 9, 10, 11]
+        assert versions == [1, 2, 3, 4, 5, 6, 7, 9, 10, 11, 12, 13]
     finally:
         raw_connection.close()
 
@@ -496,7 +496,7 @@ def test_migrations_are_recorded_and_not_reapplied(tmp_path):
             for row in raw_connection.execute("SELECT version FROM schema_migrations")
         ]
         raw_connection.close()
-        assert versions == [1, 2, 3, 4, 5, 6, 7, 9, 10, 11]
+        assert versions == [1, 2, 3, 4, 5, 6, 7, 9, 10, 11, 12, 13]
     finally:
         reopened.close()
 
@@ -525,6 +525,8 @@ def test_migration_003_preserves_legacy_rows_and_adds_nullable_fields(tmp_path):
             9,
             10,
             11,
+            12,
+            13,
         }
         columns = {
             row[1]: row[3]

@@ -33,6 +33,19 @@ Las regresiones cubren el symlink interno de origen y el reemplazo del destino p
 
 No se modificaron consumidores ETL/UI/sync/RAG. No se hizo push ni se tocó el Vault real. Permanecen sin tocar dos archivos no rastreados ajenos: `fuente/domain/vault_layout 2.py` y `tests/test_vault_layout 2.py`.
 
+## Integración F01.2
+
+- Actualizadas las expectativas de `tests/test_job_store.py` para incluir las migraciones `012` y `013` sin omitirlas del registro.
+- `scripts/update_sdd_evidence.py` usa únicamente rutas rastreadas por Git bajo `fuente`, `tests`, `scripts` y metadata de paquete cuando recibe un checkout Git real. En directorios temporales sin `.git` conserva el inventario completo.
+- Suite completa: `PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -p no:cacheprovider tests -q` — `1231 passed, 1 skipped, 1 warning in 61.48s`.
+- Frescura: `PYTHONDONTWRITEBYTECODE=1 python3 scripts/release_gate.py --skip-pytest --only documentation_freshness` — `RESULT: READY`.
+- Evidencia regenerada desde los resultados medidos: `docs/evidence/current-sdd.json`, branch `dev`, HEAD base `865899e8bdc4dc901e99304a4912fb8dd3200183`, digest `49f31eabbe87166d5e41e848cc57f1b0e19c6151e7b77fac32f66e00a645806c`.
+- `git diff --check` — correcto. Los dos no rastreados ajenos permanecieron intactos y el Vault real no fue tocado.
+
 ## Commit
 
 `fix: bind vault migration rollback to file identity`
+
+## Commit de integración
+
+`test: reconcile vault migration evidence and expectations` (commit local creado y verificado al cierre).

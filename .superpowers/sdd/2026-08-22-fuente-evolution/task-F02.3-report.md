@@ -2,10 +2,10 @@
 
 ## Resultado
 
-Fix round 2 completado sin bridge F02.4, sin tocar F02.2, sin push y sin acceso
-al Vault real. La escritura del manifest con `status=imported` queda después de
-validar todos los destinos; un conflicto de grabación deja el manifest ausente
-y no crea transcript ni notas parciales.
+Fix round 3 completado sin bridge F02.4, sin tocar F02.2, sin push y sin acceso
+al Vault real. El manifest sólo publica `status=imported` después de escribir
+artefactos y persistir la sesión; cualquier fallo revierte artefactos, la sesión
+recién creada y restaura los bytes previos del manifest.
 
 ## Archivos
 
@@ -18,27 +18,28 @@ y no crea transcript ni notas parciales.
 - `fuente/core/vault.py`: importación coordinada y segura a `2_sucio`, `3_limpio`
   y `4_procesado`; importación idéntica idempotente por contenido, manifest
   recuperable con estado, rutas, hashes, revisión, plantilla y timestamps, y
-  rollback conservado en caso de fallo.
+  rollback atómico en caso de fallo de artefactos, persistencia o manifest.
 - `tests/test_meeting_artifact_contract.py` y
   `tests/test_meeting_session_store.py`: contratos, rutas, hashes, procedencia,
   bloqueo de notas, rollback, persistencia, doble importación, recuperación de
-  manifest incompleto y conflicto de grabación sin estado `imported` falso.
+  manifest incompleto, conflicto de grabación y fallo forzado de persistencia
+  sin estado `imported` falso ni artefactos parciales.
 
 ## Pruebas
 
 - Orden exacta del brief: no ejecutable porque no existe
   `tests/test_approval_service.py` en este checkout. Se documenta y se usa la
   suite equivalente existente `tests/test_approval_ledger.py`.
-- Suite corregida del brief, incluida la regresión de conflicto:
+- Suite corregida del brief, incluida la regresión de conflicto y persistencia:
   `PYTHONDONTWRITEBYTECODE=1 python3 -m pytest tests/test_meeting_artifact_contract.py
   tests/test_meeting_session_store.py tests/test_approval_ledger.py
-  tests/security/test_path_authorization.py -q` — `32 passed`.
+  tests/security/test_path_authorization.py -q` — `34 passed`.
 - Suite JobStore afectada:
   `PYTHONDONTWRITEBYTECODE=1 python3 -m pytest tests/test_job_store.py -q` —
   `28 passed`.
 - `PYTHONDONTWRITEBYTECODE=1 python3 -m py_compile fuente/domain/meetings.py fuente/infrastructure/sqlite_store.py fuente/core/vault.py`: PASS.
 - `git diff --check`: PASS.
-- Commit local: `fix: prevent false meeting import manifests`.
+- Commit local: `fix: make meeting import manifest recovery atomic`.
 
 ## Fix round 2
 
@@ -47,6 +48,16 @@ y no crea transcript ni notas parciales.
 - Se añadió regresión para el mismo `session_id` con una grabación distinta:
   lanza conflicto, conserva el destino previo y no deja manifest `imported` ni
   artefactos de transcript/notas.
+
+## Fix round 3
+
+- Se retrasó la publicación del manifest hasta completar artefactos y
+  `create_meeting_session`.
+- Si falla la persistencia o la publicación final, se eliminan los artefactos y
+  la sesión recién creada; el manifest previo se conserva byte a byte y, si no
+  existía, permanece ausente.
+- Se añadió regresión parametrizada para fallo forzado con manifest ausente y
+  preexistente.
 
 ## Ruling del ledger
 

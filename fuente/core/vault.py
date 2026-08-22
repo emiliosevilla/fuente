@@ -674,16 +674,26 @@ class MeetingImportApplicationService:
         ]
         if notes_path is not None and notes_markdown is not None:
             files.append((notes_path, notes_markdown.encode("utf-8")))
+        self._validate_existing_manifest(manifest_path, manifest)
         files_to_write = self._validate_existing_targets(files)
-        self._write_manifest_once(manifest_path, manifest)
+        previous_manifest = (
+            manifest_path.read_bytes() if manifest_path.exists() else None
+        )
         created_targets: list[Path] = []
         created_directories: list[Path] = []
+        session_created = False
         try:
             self._write_import_files(files_to_write, created_targets, created_directories)
             if self.store is not None:
+                session_was_absent = self.store.get_meeting_session(session_id) is None
                 self.store.create_meeting_session(session)
+                session_created = session_was_absent
+            self._write_manifest_once(manifest_path, manifest)
         except BaseException:
             self._rollback_files(created_targets, created_directories)
+            if session_created:
+                self.store.delete_meeting_session(session_id)
+            self._restore_manifest(manifest_path, previous_manifest)
             raise
 
         return MeetingImportResult(
@@ -915,6 +925,13 @@ class MeetingImportApplicationService:
         path.parent.mkdir(parents=True, exist_ok=True)
         atomic_write_json(path, payload, sort_keys=True)
         return payload
+
+    @staticmethod
+    def _restore_manifest(path: Path, previous: bytes | None) -> None:
+        if previous is None:
+            path.unlink(missing_ok=True)
+            return
+        atomic_write_text(path, previous.decode("utf-8"))
 
     def _validate_existing_targets(
         self, files: list[tuple[Path, bytes]]

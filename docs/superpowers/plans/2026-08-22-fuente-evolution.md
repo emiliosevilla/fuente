@@ -4,7 +4,7 @@
 
 Goal: Convert Fuente into a local-first knowledge workspace with MarkItDown/MiniRAG primary cycles, evidence-gated refinement, filesystem collaboration, and an accessible document experience.
 
-Architecture: Preserve 3_limpio as approved canonical Markdown. Add adapters around extraction and retrieval, migrate the Vault to six roots, retain SharePoint as mounted folders, and model collaboration as approved shared files. UI consumes domain contracts and does not create business rules.
+Architecture: Preserve 3_limpio as approved canonical Markdown. Add adapters around extraction and retrieval, migrate the current flat Vault into the `General` theme with six roots, retain user-selected local folders for collaboration, and model collaboration as approved shared files. UI consumes domain contracts and does not create business rules.
 
 Tech Stack: Python >= 3.10, pytest, SQLite, PyWebView/HTML/CSS, Ollama loopback, MarkItDown, Docling, MiniRAG via an owned adapter, ChromaDB PersistentClient and OneDrive-mounted folders.
 
@@ -230,7 +230,7 @@ git add fuente/infrastructure/vault_layout_migration.py fuente/infrastructure/mi
 git commit -m "feat: migrate vault to processed and shared roots"
 ~~~
 
-### Task F01.3: Split common-input and shared-output sync
+### Task F01.3: Split common-input and shared-output local folders
 
 Files:
 - Modify: fuente/core/folder_sync.py
@@ -240,7 +240,7 @@ Files:
 - Test: tests/test_folder_sync_ui_contract.py
 
 Interfaces:
-- Produces SyncDirection.INPUT_COMMON, SyncDirection.OUTPUT_SHARED and FolderSyncManager.sync_connection.
+- Produces SyncDirection.INPUT_COMMON, SyncDirection.OUTPUT_SHARED and FolderSyncManager.sync_connection over a local path selected by the user in Ajustes.
 
 - [ ] Step 1: Write failing directional sync tests.
 
@@ -273,7 +273,7 @@ def sync_connection(self, connection: ConnectedFolder, *, direction: SyncDirecti
 - [ ] Step 4: Verify.
 
 Run: PYTHONDONTWRITEBYTECODE=1 python3 -m pytest tests/test_folder_sync*.py tests/security/test_path_authorization.py tests/contract/test_bridge_frontend_contract.py -q
-Expected: PASS; sync never writes 3_limpio or 4_procesado.
+Expected: PASS; sync never writes 3_limpio or 4_procesado, and no provider credential or remote provisioning is introduced.
 
 - [ ] Step 5: Commit.
 

@@ -51,7 +51,7 @@ Excluido:
 | Id | Capacidad | Responsabilidad | Depende de |
 |---|---|---|---|
 | C00 | contrato-y-migración | Nueva topología, compatibilidad y reversión | — |
-| C01 | vault-y-sincronización | Seis raíces y carpetas OneDrive montadas | C00 |
+| C01 | vault-y-sincronización | Seis raíces y rutas locales elegidas por usuario | C00 |
 | C02 | extracción-por-calidad | MarkItDown, Docling, OCR y nativo con evidencia | C00 |
 | C02M | captura-de-reuniones | Puente Meetily y promoción trazable de grabación, transcripción y notas | C01, C02 |
 | C03 | recuperación-primaria | MiniRAG, BM25 y procedencia | C01, C02 |
@@ -108,7 +108,10 @@ Reglas:
 4. 4_procesado puede recibir edición manual o propuestas de IA, pero es privado.
 5. Compartir mueve una revisión aprobada de 4_procesado a 5_salida de forma atómica. SQLite guarda un recibo con revisión, hash, autor, origen y destino.
 6. Una nueva edición nace como una nueva revisión en 4_procesado; la salida ya compartida permanece como registro de la revisión publicada.
-7. Sólo 5_salida se replica hacia destinos OneDrive montados.
+7. Sólo 5_salida se copia hacia destinos locales seleccionados por el usuario; OneDrive y SharePoint sincronizan esas carpetas fuera de Fuente.
+8. Cada usuario configura esas rutas desde Ajustes. Fuente no descubre, crea ni administra sincronizaciones remotas.
+
+El Vault existente usa las raíces antiguas directamente bajo su raíz. La migración inicial las ubicará bajo `<vault>/General/`; nuevos temas serán carpetas hermanas de `General` con el mismo contrato de raíces.
 
 ### Reuniones
 
@@ -290,6 +293,28 @@ Zen y Energy siguen siendo la única fuente cromática. No se añaden hexadecima
 | D-03 | Discusión | eventos JSON bajo 5_salida/_fuente_discussion | humano |
 | D-04 | Métrica | epsilon inicial 0.10 tras corpus calibrado | humano |
 | D-05 | Meetily | revisión `0281737d87d26352fb0adc78c8c0975f691b23d1`, MIT, plantilla `standard_meeting`, artefactos `reunion` y consentimiento de grabación | humano |
+
+### Registro de aprobación F00.2
+
+Las cinco decisiones siguientes fueron aprobadas por `Emilio Sevilla Ortego`
+el `2026-08-22T15:55:40+02:00`. La evidencia común es el commit Git
+`98cc0b25fbccb565fc1762281d5b508bafad2d59`
+(`docs: approve Fuente evolution decisions`). El hash se conserva como
+referencia inmutable del registro de decisión; no implica que las decisiones
+técnicas posteriores ya estén implementadas.
+
+| Id | Estado | Valor aprobado | Revisor | Timestamp ISO-8601 | Evidencia |
+|---|---|---|---|---|---|
+| D-01 | APPROVED | MiniRAG usará una revisión inmutable y una licencia MIT revisada. Su revisión exacta queda como entrada obligatoria, separada y pendiente de registro en F03.2. | Emilio Sevilla Ortego | 2026-08-22T15:55:40+02:00 | `98cc0b25fbccb565fc1762281d5b508bafad2d59` |
+| D-02 | APPROVED | `4_salida` se renombra a `4_procesado` y se crea `5_salida`; la compatibilidad heredada será temporal. | Emilio Sevilla Ortego | 2026-08-22T15:55:40+02:00 | `98cc0b25fbccb565fc1762281d5b508bafad2d59` |
+| D-03 | APPROVED | Los eventos de discusión serán JSON inmutables bajo `5_salida/_fuente_discussion`; SharePoint gobierna su visibilidad. | Emilio Sevilla Ortego | 2026-08-22T15:55:40+02:00 | `98cc0b25fbccb565fc1762281d5b508bafad2d59` |
+| D-04 | APPROVED | La ganancia normalizada inicial de refinamiento será `0.10` después de la calibración. | Emilio Sevilla Ortego | 2026-08-22T15:55:40+02:00 | `98cc0b25fbccb565fc1762281d5b508bafad2d59` |
+| D-05 | APPROVED | El puente usará la revisión Meetily `0281737d87d26352fb0adc78c8c0975f691b23d1`, MIT, la plantilla Tauri `standard_meeting`, rutas visibles `reunion` y consentimiento explícito de grabación. | Emilio Sevilla Ortego | 2026-08-22T15:55:40+02:00 | `98cc0b25fbccb565fc1762281d5b508bafad2d59` |
+
+Este registro cierra la evidencia humana de F00.2 y permite comenzar F01.1.
+No autoriza una migración real del Vault, la incorporación de dependencias ni
+la selección de la revisión exacta de MiniRAG: esa revisión debe quedar
+documentada y verificada por separado antes de F03.2.
 
 ## Criterios de éxito
 

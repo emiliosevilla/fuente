@@ -24,23 +24,51 @@ _PACKAGE_METADATA = ("pyproject.toml", "requirements.txt", "requirements-test.tx
 
 
 def _iter_source_files(repo_root: Path) -> Iterable[Path]:
-    candidates: list[Path] = []
-    for relative_root in _SOURCE_ROOTS:
-        root = repo_root / relative_root
-        if root.is_dir():
-            candidates.extend(path for path in root.rglob("*") if path.is_file())
-    candidates.extend(
-        repo_root / relative_path
-        for relative_path in _PACKAGE_METADATA
-        if (repo_root / relative_path).is_file()
-    )
+    tracked = _git_tracked_source_files(repo_root)
+    if tracked is None:
+        candidates: Iterable[Path] = (
+            path
+            for relative_root in _SOURCE_ROOTS
+            for path in (repo_root / relative_root).rglob("*")
+            if path.is_file()
+        )
+        candidates = (*candidates, *(repo_root / relative_path for relative_path in _PACKAGE_METADATA))
+    else:
+        candidates = tracked
     for path in sorted(candidates, key=lambda item: item.relative_to(repo_root).as_posix()):
+        if not path.is_file():
+            continue
         relative_parts = path.relative_to(repo_root).parts
         if any(part in _EXCLUDED_PARTS for part in relative_parts):
             continue
         if path.suffix in {".pyc", ".pyo"}:
             continue
         yield path
+
+
+def _git_tracked_source_files(repo_root: Path) -> set[Path] | None:
+    """Return tracked source paths, or None when repo_root is not a Git checkout."""
+    top_level = subprocess.run(
+        ["git", "rev-parse", "--show-toplevel"],
+        cwd=repo_root,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if top_level.returncode != 0 or Path(top_level.stdout.strip()).resolve() != repo_root.resolve():
+        return None
+
+    tracked = subprocess.run(
+        ["git", "ls-files", "-z", "--", *_SOURCE_ROOTS, *_PACKAGE_METADATA],
+        cwd=repo_root,
+        capture_output=True,
+        check=True,
+    )
+    return {
+        repo_root / relative
+        for relative in tracked.stdout.decode().split("\0")
+        if relative
+    }
 
 
 def calculate_source_tree_digest(repo_root: Path) -> str:

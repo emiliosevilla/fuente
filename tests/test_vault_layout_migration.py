@@ -1,0 +1,307 @@
+import hashlib
+import os
+from pathlib import Path
+
+import pytest
+
+from fuente.infrastructure.vault_layout_migration import VaultLayoutMigrator
+
+
+def _setup(tmp_path: Path) -> tuple[Path, Path]:
+    vault = tmp_path / "vault"
+    (vault / "Tema" / "4_salida").mkdir(parents=True)
+    (vault / "Tema" / "4_procesado").mkdir()
+    return vault, vault / "Tema" / "4_salida" / "nota.md"
+
+
+def test_plan_apply_preserves_hash(tmp_path):
+    vault, source = _setup(tmp_path)
+    source.write_bytes(b"nota")
+    migrator = VaultLayoutMigrator(vault, theme="Tema")
+    plan = migrator.plan()
+    report = migrator.apply(plan.plan_id)
+    destination = vault / "Tema" / "4_procesado" / "nota.md"
+    assert report.status == "applied"
+    assert not source.exists() and destination.read_bytes() == b"nota"
+    assert plan.items[0].sha256 == hashlib.sha256(b"nota").hexdigest()
+
+
+def test_rollback_restores_exact_hash_and_removes_only_created_destination(tmp_path):
+    vault, source = _setup(tmp_path)
+    source.write_bytes(b"nota")
+    migrator = VaultLayoutMigrator(vault, theme="Tema")
+    plan = migrator.plan()
+    destination = vault / "Tema" / "4_procesado" / "nota.md"
+    unrelated = destination.parent / "unrelated.md"
+    unrelated.write_bytes(b"keep")
+
+    migrator.apply(plan.plan_id)
+    report = migrator.rollback(plan.plan_id)
+
+    assert report.status == "rolled_back"
+    assert source.read_bytes() == b"nota"
+    assert not destination.exists()
+    assert unrelated.read_bytes() == b"keep"
+
+
+def test_preexisting_destination_with_same_hash_is_a_conflict(tmp_path):
+    vault, source = _setup(tmp_path)
+    source.write_bytes(b"nota")
+    destination = vault / "Tema" / "4_procesado" / "nota.md"
+    destination.write_bytes(b"nota")
+    migrator = VaultLayoutMigrator(vault, theme="Tema")
+    plan = migrator.plan()
+
+    with pytest.raises(RuntimeError, match="destination conflict"):
+        migrator.apply(plan.plan_id)
+
+    assert source.read_bytes() == b"nota"
+    assert destination.read_bytes() == b"nota"
+
+
+def test_root_symlink_replacement_aborts_apply_and_rollback(tmp_path):
+    vault, source = _setup(tmp_path)
+    source.write_bytes(b"nota")
+    migrator = VaultLayoutMigrator(vault, theme="Tema")
+    plan = migrator.plan()
+    processed = vault / "Tema" / "4_procesado"
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    processed.rmdir()
+    processed.symlink_to(outside, target_is_directory=True)
+
+    with pytest.raises(ValueError, match="processed root"):
+        migrator.apply(plan.plan_id)
+    assert source.read_bytes() == b"nota"
+    assert not (outside / "nota.md").exists()
+
+    processed.unlink()
+    processed.mkdir()
+    migrator.apply(plan.plan_id)
+    processed.rename(tmp_path / "processed-backup")
+    processed.symlink_to(outside, target_is_directory=True)
+
+    with pytest.raises(ValueError, match="processed root"):
+        migrator.rollback(plan.plan_id)
+    assert not (outside / "nota.md").exists()
+
+
+@pytest.mark.parametrize("theme", [".", ".."])
+def test_dot_themes_are_rejected(tmp_path, theme):
+    vault, _source = _setup(tmp_path)
+    with pytest.raises(ValueError, match="theme must be one directory name"):
+        VaultLayoutMigrator(vault, theme=theme)
+
+
+def test_changed_source_aborts_before_moving_any_file(tmp_path):
+    vault, source = _setup(tmp_path)
+    source.write_text("old")
+    (source.parent / "other.md").write_text("other")
+    migrator = VaultLayoutMigrator(vault, theme="Tema")
+    plan = migrator.plan()
+    source.write_text("changed")
+    with pytest.raises(RuntimeError, match="hash mismatch"):
+        migrator.apply(plan.plan_id)
+    assert source.read_text() == "changed"
+    assert not (vault / "Tema" / "4_procesado" / "other.md").exists()
+
+
+def test_apply_rejects_internal_source_symlink_before_mutating(tmp_path):
+    vault, source = _setup(tmp_path)
+    source.write_text("note")
+    internal_target = source.parent / "internal.md"
+    internal_target.write_text("note")
+    migrator = VaultLayoutMigrator(vault, theme="Tema")
+    plan = migrator.plan()
+    source.unlink()
+    source.symlink_to(internal_target)
+
+    with pytest.raises(RuntimeError, match="unsafe source path"):
+        migrator.apply(plan.plan_id)
+
+    assert source.is_symlink()
+    assert internal_target.read_text() == "note"
+    assert not (vault / "Tema" / "4_procesado" / "nota.md").exists()
+
+
+def test_apply_rejects_source_replacement_between_preflight_and_link(tmp_path, monkeypatch):
+    vault, source = _setup(tmp_path)
+    source.write_text("trusted")
+    external = tmp_path / "external.md"
+    external.write_text("external")
+    migrator = VaultLayoutMigrator(vault, theme="Tema")
+    plan = migrator.plan()
+    real_link = os.link
+
+    def replace_source_before_link(source_name, destination_name, *, src_dir_fd, dst_dir_fd, follow_symlinks):
+        os.unlink(source_name, dir_fd=src_dir_fd)
+        os.symlink(external, source_name, dir_fd=src_dir_fd)
+        return real_link(
+            source_name,
+            destination_name,
+            src_dir_fd=src_dir_fd,
+            dst_dir_fd=dst_dir_fd,
+            follow_symlinks=follow_symlinks,
+        )
+
+    monkeypatch.setattr("fuente.infrastructure.vault_layout_migration.os.link", replace_source_before_link)
+
+    report = migrator.apply(plan.plan_id)
+
+    assert report.status == "conflict"
+    assert report.conflicts == ("nota.md",)
+    assert source.is_symlink()
+    assert source.resolve() == external
+    assert external.read_text() == "external"
+    assert not (vault / "Tema" / "4_procesado" / "nota.md").exists()
+
+
+def test_rollback_and_conflict_are_safe(tmp_path):
+    vault, source = _setup(tmp_path)
+    source.write_text("note")
+    migrator = VaultLayoutMigrator(vault, theme="Tema")
+    plan = migrator.plan()
+    migrator.apply(plan.plan_id)
+    destination = vault / "Tema" / "4_procesado" / "nota.md"
+    destination.write_text("changed")
+    report = migrator.rollback(plan.plan_id)
+    assert report.status == "conflict" and destination.read_text() == "changed"
+
+
+def test_rollback_rejects_same_content_replacement_with_new_identity(tmp_path):
+    vault, source = _setup(tmp_path)
+    source.write_text("note")
+    migrator = VaultLayoutMigrator(vault, theme="Tema")
+    plan = migrator.plan()
+    migrator.apply(plan.plan_id)
+    destination = vault / "Tema" / "4_procesado" / "nota.md"
+    original_identity = os.stat(destination)
+    replacement = destination.with_name("replacement.md")
+    replacement.write_text("note")
+    os.replace(replacement, destination)
+    assert (os.stat(destination).st_dev, os.stat(destination).st_ino) != (
+        original_identity.st_dev,
+        original_identity.st_ino,
+    )
+
+    report = migrator.rollback(plan.plan_id)
+
+    assert report.status == "conflict"
+    assert report.conflicts == ("nota.md",)
+    assert destination.read_text() == "note"
+    assert not source.exists()
+    assert migrator._load(plan.plan_id)[1][0].status == "applied"
+
+
+def test_rollback_rechecks_destination_identity_after_preflight(tmp_path, monkeypatch):
+    vault, source = _setup(tmp_path)
+    source.write_text("note")
+    migrator = VaultLayoutMigrator(vault, theme="Tema")
+    plan = migrator.plan()
+    migrator.apply(plan.plan_id)
+    destination = vault / "Tema" / "4_procesado" / "nota.md"
+    replacement = tmp_path / "replacement.md"
+    real_preflight = migrator._preflight_rollback
+
+    def replace_after_preflight(items, source_root_fd, destination_root_fd):
+        conflicts = real_preflight(items, source_root_fd, destination_root_fd)
+        destination.unlink()
+        replacement.write_text("note")
+        replacement.rename(destination)
+        return conflicts
+
+    monkeypatch.setattr(migrator, "_preflight_rollback", replace_after_preflight)
+
+    report = migrator.rollback(plan.plan_id)
+
+    assert report.status == "conflict"
+    assert report.conflicts == ("nota.md",)
+    assert destination.read_text() == "note"
+    assert not source.exists()
+    assert migrator._load(plan.plan_id)[1][0].status == "applied"
+
+
+@pytest.mark.parametrize("destination_kind", ["missing", "dangling_symlink"])
+def test_rollback_missing_destination_is_a_conflict_without_side_effects(tmp_path, destination_kind):
+    vault, source = _setup(tmp_path)
+    source.write_text("note")
+    migrator = VaultLayoutMigrator(vault, theme="Tema")
+    plan = migrator.plan()
+    migrator.apply(plan.plan_id)
+    destination = vault / "Tema" / "4_procesado" / "nota.md"
+    if destination_kind == "missing":
+        destination.unlink()
+    else:
+        destination.unlink()
+        destination.symlink_to(tmp_path / "does-not-exist.md")
+
+    report = migrator.rollback(plan.plan_id)
+
+    assert report.status == "conflict"
+    assert report.conflicts == ("nota.md",)
+    assert not source.exists()
+    assert destination.is_symlink() is (destination_kind == "dangling_symlink")
+    assert migrator._load(plan.plan_id)[1][0].status == "applied"
+
+
+@pytest.mark.parametrize("target_kind", ["directory", "dangling"])
+def test_rollback_source_parent_symlink_is_a_conflict_without_writing_outside_vault(tmp_path, target_kind):
+    vault, source = _setup(tmp_path)
+    source.parent.joinpath("nested").mkdir()
+    source = source.parent / "nested" / "nota.md"
+    source.write_text("note")
+    migrator = VaultLayoutMigrator(vault, theme="Tema")
+    plan = migrator.plan()
+    migrator.apply(plan.plan_id)
+
+    source_parent = vault / "Tema" / "4_salida" / "nested"
+    outside = tmp_path / "outside"
+    if target_kind == "directory":
+        outside.mkdir()
+    source_parent.rmdir()
+    source_parent.symlink_to(
+        outside if target_kind == "directory" else tmp_path / "missing",
+        target_is_directory=True,
+    )
+
+    report = migrator.rollback(plan.plan_id)
+
+    assert report.status == "conflict"
+    assert report.conflicts == ("nested/nota.md",)
+    assert source_parent.is_symlink()
+    assert (vault / "Tema" / "4_procesado" / "nested" / "nota.md").read_text() == "note"
+    assert target_kind != "directory" or not (outside / "nota.md").exists()
+    assert migrator._load(plan.plan_id)[1][0].status == "applied"
+
+
+def test_apply_is_idempotent_and_does_not_overwrite(tmp_path):
+    vault, source = _setup(tmp_path)
+    source.write_text("note")
+    migrator = VaultLayoutMigrator(vault, theme="Tema")
+    plan = migrator.plan()
+    migrator.apply(plan.plan_id)
+    repeated = migrator.apply(plan.plan_id)
+    assert repeated.status == "applied"
+    assert (vault / "Tema" / "4_procesado" / "nota.md").read_text() == "note"
+
+
+def test_interrupted_link_is_resumable(tmp_path, monkeypatch):
+    vault, source = _setup(tmp_path)
+    source.write_text("note")
+    migrator = VaultLayoutMigrator(vault, theme="Tema")
+    plan = migrator.plan()
+    original_unlink = __import__("os").unlink
+    calls = {"count": 0}
+
+    def interrupt(path, **kwargs):
+        calls["count"] += 1
+        if calls["count"] == 1:
+            raise RuntimeError("interrupted")
+        return original_unlink(path, **kwargs)
+
+    monkeypatch.setattr("fuente.infrastructure.vault_layout_migration.os.unlink", interrupt)
+    with pytest.raises(RuntimeError, match="interrupted"):
+        migrator.apply(plan.plan_id)
+    assert migrator._load(plan.plan_id)[1][0].status == "linked"
+    monkeypatch.setattr("fuente.infrastructure.vault_layout_migration.os.unlink", original_unlink)
+    assert migrator.apply(plan.plan_id).status == "applied"

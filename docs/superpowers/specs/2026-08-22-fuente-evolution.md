@@ -110,16 +110,16 @@ Reglas:
 6. Una nueva edición nace como una nueva revisión en 4_procesado; la salida ya compartida permanece como registro de la revisión publicada.
 7. Sólo 5_salida se replica hacia destinos OneDrive montados.
 
-### Reuniones Meetily
+### Reuniones
 
 ```
-2_sucio/meetily/<session_id>/recording.<format>       # grabación original
-3_limpio/meetily/<session_id>.md                      # transcripción canónica, pendiente de aprobación
-4_procesado/meetily/<session_id>.md                   # notas de reunión candidatas, no compartibles aún
-.fuente/meetily/<session_id>/manifest.json            # estado local, hashes y rutas relativas
+2_sucio/reunion/<session_id>/recording.<format>       # grabación original
+3_limpio/reunion/<session_id>.md                      # transcripción canónica, pendiente de aprobación
+4_procesado/reunion/<session_id>.md                   # notas de reunión candidatas, no compartibles aún
+.fuente/reunion/<session_id>/manifest.json            # estado local, hashes y rutas relativas
 ```
 
-El modal crea una sesión sólo después de consentimiento explícito de grabación. El puente entrega grabación, transcripción y resumen como artefactos de sólo lectura; el importador verifica `session_id`, tipo, hash, tamaño y ruta relativa antes de escribir. La transcripción se aprueba igual que cualquier documento de `3_limpio`. Las notas en `4_procesado` conservan un `OriginRef` a esa transcripción y quedan bloqueadas para indexación, refinamiento o compartir mientras su origen no esté aprobado y vigente. Parar o cerrar el modal no borra una grabación: el usuario recibe su estado recuperable.
+El modal crea una sesión sólo después de consentimiento explícito de grabación. El puente de proveedor `meetily` solicita la plantilla Tauri `standard_meeting` de la revisión fijada; Fuente no duplica su JSON, sino que valida el Markdown resultante con las secciones `Summary`, `Key Decisions`, `Action Items` y `Discussion Highlights`. `Action Items` conserva responsable, tarea, plazo, segmento y marca temporal de la transcripción. El puente entrega grabación, transcripción y resumen como artefactos de sólo lectura; el importador verifica `session_id`, tipo, hash, tamaño y ruta relativa antes de escribir. La transcripción se aprueba igual que cualquier documento de `3_limpio`. Las notas en `4_procesado` conservan un `OriginRef` a esa transcripción y quedan bloqueadas para indexación, refinamiento o compartir mientras su origen no esté aprobado y vigente. Parar o cerrar el modal no borra una grabación: el usuario recibe su estado recuperable.
 
 ## Contratos de dominio
 
@@ -158,6 +158,9 @@ class MeetingCaptureRequest:
 @dataclass(frozen=True)
 class MeetingArtifacts:
     session_id: str
+    provider: Literal["meetily"]
+    provider_revision: str
+    template_id: Literal["standard_meeting"]
     recording_path: Path
     transcript_markdown: str
     notes_markdown: str | None
@@ -174,7 +177,7 @@ class MeetingImportApplicationService:
     ) -> MeetingImportResult: ...
 ~~~
 
-`MeetilyGateway` se implementa mediante un proceso local de puente, extraído y fijado a una revisión aprobada del núcleo Tauri de Meetily. Sólo escucha loopback o socket local autenticado con un token efímero creado por Fuente; no utiliza el directorio `backend/` archivado ni una API de red de terceros. El puente configura su carpeta de captura temporal dentro de `.fuente/meetily`, y el importador es el único escritor de las tres rutas del Vault. Los permisos de micrófono/captura del sistema se solicitan en la acción explícita de iniciar, no al abrir el modal.
+`MeetilyGateway` se implementa mediante un proceso local de puente, extraído y fijado a la revisión `0281737d87d26352fb0adc78c8c0975f691b23d1` del núcleo Tauri de Meetily. Solicita `standard_meeting`, conserva proveedor, revisión y plantilla en el manifiesto, y sólo escucha loopback o socket local autenticado con un token efímero creado por Fuente; no utiliza el directorio `backend/` archivado ni una API de red de terceros. El puente configura su carpeta de captura temporal dentro de `.fuente/reunion`, y el importador es el único escritor de las tres rutas del Vault. Los permisos de micrófono/captura del sistema se solicitan en la acción explícita de iniciar, no al abrir el modal.
 
 ### Recuperación
 
@@ -209,7 +212,7 @@ class RefinementApplicationService:
     def evaluate(self, candidate_id: str, expected_revision: int) -> RefinementVerdict: ...
 ~~~
 
-Aceptar exige: procedencia válida, citas obligatorias presentes, candidate_score > baseline_score + epsilon, graph_delta >= 0, retrieval_delta >= 0 y respuesta Ollama válida. El epsilon inicial es 0.05 y se calibra con corpus de referencia. Si Ollama falla, tarda demasiado o entrega JSON inválido, el resultado es needs_human_review, nunca accepted.
+Aceptar exige: procedencia válida, citas obligatorias presentes, candidate_score > baseline_score + epsilon, graph_delta >= 0, retrieval_delta >= 0 y respuesta Ollama válida. El epsilon inicial es 0.10 y se calibra con corpus de referencia. Si Ollama falla, tarda demasiado o entrega JSON inválido, el resultado es needs_human_review, nunca accepted.
 
 ### Compartir y discusión
 
@@ -265,7 +268,7 @@ Zen y Energy siguen siendo la única fuente cromática. No se añaden hexadecima
 - MarkItDown: utilidad ligera de conversión a Markdown, con soporte de PDF, Office, imagen y otros formatos; la propia documentación recomienda limitar la conversión a entrada local de confianza. https://github.com/microsoft/markitdown
 - MiniRAG: recuperación ligera basada en grafo para escenarios on-device; la instalación publicada desde fuente justifica encapsular una revisión inmutable. https://github.com/HKUDS/MiniRAG
 - alphaXiv-open: referencia útil de flujo descargar → Markdown → limpiar → fragmentar → índice/grafo → chat; su despliegue separado con Gemini/OpenAI no se adopta porque Fuente debe permanecer local. https://github.com/AsyncFuncAI/alphaxiv-open
-- Meetily: aplicación local Tauri (Rust + Next.js), con captura/transcripción/resúmenes locales y carpeta de grabaciones configurable. Su backend FastAPI es histórico y no soportado para instalaciones nuevas. https://github.com/Zackriya-Solutions/meetily
+- Meetily: aplicación local Tauri (Rust + Next.js), con captura/transcripción/resúmenes locales y carpeta de grabaciones configurable. Fuente usa la plantilla Tauri `standard_meeting` de la revisión `0281737d87d26352fb0adc78c8c0975f691b23d1`; su backend FastAPI es histórico y no soportado para instalaciones nuevas. https://github.com/Zackriya-Solutions/meetily/blob/0281737d87d26352fb0adc78c8c0975f691b23d1/frontend/src-tauri/templates/standard_meeting.json
 - Docling: conversión enriquecida de documentos para IA. https://github.com/docling-project/docling
 - Chroma: almacenamiento vectorial; se conserva el cliente persistente local de Fuente. https://docs.trychroma.com/docs/overview/introduction
 - Ollama: API local para generación/verificación. https://docs.ollama.com/api/introduction
@@ -285,14 +288,14 @@ Zen y Energy siguen siendo la única fuente cromática. No se añaden hexadecima
 | D-01 | MiniRAG | commit inmutable y licencia revisada | humano |
 | D-02 | Topología | 4_salida pasa a 4_procesado; se crea 5_salida | humano |
 | D-03 | Discusión | eventos JSON bajo 5_salida/_fuente_discussion | humano |
-| D-04 | Métrica | epsilon inicial 0.05 tras corpus calibrado | humano |
-| D-05 | Meetily | revisión inmutable/licencia del puente, formato de artefactos y consentimiento de grabación | humano |
+| D-04 | Métrica | epsilon inicial 0.10 tras corpus calibrado | humano |
+| D-05 | Meetily | revisión `0281737d87d26352fb0adc78c8c0975f691b23d1`, MIT, plantilla `standard_meeting`, artefactos `reunion` y consentimiento de grabación | humano |
 
 ## Criterios de éxito
 
 - Un documento Office normal se convierte con MarkItDown sin iniciar Docling y explica qué motor ganó.
 - Un PDF escaneado o complejo puede escalar a Docling y conserva ambos intentos.
-- Una reunión iniciada desde el modal produce una grabación con hash en `2_sucio`, una transcripción revisable en `3_limpio` y unas notas candidatas trazables en `4_procesado`; el cierre inesperado se recupera sin pérdida silenciosa.
+- Una reunión iniciada desde el modal produce una grabación con hash en `2_sucio/reunion`, una transcripción revisable en `3_limpio/reunion` y unas notas candidatas trazables en `4_procesado/reunion` que respetan `standard_meeting`; el cierre inesperado se recupera sin pérdida silenciosa.
 - MiniRAG devuelve citas con identidad y hash correctos sobre contenido aprobado; Chroma sólo aparece en refinamiento.
 - Una propuesta sin mejora cuantificada no cambia nota ni índice primario.
 - Sólo una nota aprobada de 4_procesado se mueve a 5_salida y se replica por OneDrive montado.

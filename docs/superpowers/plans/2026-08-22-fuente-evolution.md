@@ -110,7 +110,7 @@ Interfaces:
 | MiniRAG revision | immutable revision and reviewed license | yes |
 | Layout migration | 4_salida to 4_procesado; create 5_salida | yes |
 | Discussion storage | one immutable JSON event per file | yes |
-| Refinement epsilon | normalized gain above 0.05 | yes |
+| Refinement epsilon | normalized gain above 0.10 | yes |
 ~~~
 
 - [ ] Step 2: Record reviewer, ISO-8601 time and evidence link for every approved decision.
@@ -402,7 +402,8 @@ Files:
 - Test: tests/test_meeting_session_store.py
 
 Interfaces:
-- Produces `MeetingSession`, `MeetingArtifacts`, `MeetingImportResult` and an immutable session manifest below `.fuente/meetily/<session_id>/`.
+- Produces `MeetingSession`, `MeetingArtifacts`, `MeetingImportResult` and an immutable session manifest below `.fuente/reunion/<session_id>/`.
+- Requires provider `meetily` at revision `0281737d87d26352fb0adc78c8c0975f691b23d1` and its Tauri template `standard_meeting`; the imported notes must retain `Summary`, `Key Decisions`, `Action Items` and `Discussion Highlights`.
 - Requires the six-root layout; accepts no absolute path from the UI or from a bridge response.
 
 - [ ] Step 1: Write failing path and provenance tests.
@@ -410,9 +411,10 @@ Interfaces:
 ~~~python
 def test_meeting_import_writes_only_expected_vault_roots(tmp_path):
     result = importer.import_artifacts(artifacts(tmp_path), expected_session_id="m-1")
-    assert result.recording_relative_path == "2_sucio/meetily/m-1/recording.m4a"
-    assert result.transcript_relative_path == "3_limpio/meetily/m-1.md"
-    assert result.notes_relative_path == "4_procesado/meetily/m-1.md"
+    assert result.recording_relative_path == "2_sucio/reunion/m-1/recording.m4a"
+    assert result.transcript_relative_path == "3_limpio/reunion/m-1.md"
+    assert result.notes_relative_path == "4_procesado/reunion/m-1.md"
+    assert result.template_id == "standard_meeting"
 
 def test_meeting_notes_are_blocked_until_transcript_approval(tmp_path):
     result = importer.import_artifacts(artifacts(tmp_path), expected_session_id="m-1")
@@ -433,7 +435,7 @@ class MeetingImportApplicationService:
     ) -> MeetingImportResult: ...
 ~~~
 
-Validate exact `session_id`, SHA-256, permitted media extension, bounded size, UTF-8 Markdown and a bridge-preparation path under `.fuente/meetily`. Copy the recording atomically to `2_sucio`; create `3_limpio` with `pending_review`; create the optional `4_procesado` notes with an `OriginRef` to the transcript and `blocked_by_clean_approval`. On any failure, retain the bridge manifest and write no partial Vault artifact.
+Validate exact `session_id`, provider revision, template id `standard_meeting`, SHA-256, permitted media extension, bounded size, UTF-8 Markdown and a bridge-preparation path under `.fuente/reunion`. Validate that generated notes retain the four standard sections, including the action-item attribution and timestamp columns. Copy the recording atomically to `2_sucio/reunion`; create `3_limpio/reunion` with `pending_review`; create the optional `4_procesado/reunion` notes with an `OriginRef` to the transcript and `blocked_by_clean_approval`. On any failure, retain the bridge manifest and write no partial Vault artifact.
 
 - [ ] Step 4: Verify approval and recovery boundaries.
 
@@ -459,7 +461,7 @@ Files:
 - Test: tests/test_meeting_import_recovery.py
 
 Interfaces:
-- Consumes approved D-05, `MeetingCaptureRequest` and a bridge command with a token created for one session.
+- Consumes approved D-05, provider revision `0281737d87d26352fb0adc78c8c0975f691b23d1`, template id `standard_meeting`, `MeetingCaptureRequest` and a bridge command with a token created for one session.
 - Produces only `start`, `status`, `stop` and `recover` operations plus a read-only artifact manifest; never returns a filesystem path to the UI.
 
 - [ ] Step 1: Write failing bridge contract tests.
@@ -484,7 +486,7 @@ Expected: FAIL because the bridge client and recovery state do not exist.
 
 - [ ] Step 3: Implement the minimal supported bridge.
 
-Create a small, auditable process from a D-05-pinned Meetily revision that exposes the Tauri recording/transcript/summary capabilities through a loopback port or local socket. Bind it to one `session_id`, an ephemeral token and a preparation folder; deny non-loopback peers, shell arguments, arbitrary output paths and cloud providers. `MeetilyGatewayClient` launches it only after the user requests recording and shuts it down after a terminal import/recovery result. Its process command must be allow-listed in `AppConfig`; it never starts Meetily's archived FastAPI backend.
+Create a small, auditable process from the D-05-pinned Meetily revision that requests the Tauri `standard_meeting` template and exposes recording/transcript/summary capabilities through a loopback port or local socket. Bind it to one `session_id`, an ephemeral token and a preparation folder; deny non-loopback peers, shell arguments, arbitrary output paths and cloud providers. `MeetilyGatewayClient` launches it only after the user requests recording and shuts it down after a terminal import/recovery result. Its process command must be allow-listed in `AppConfig`; it never starts Meetily's archived FastAPI backend.
 
 - [ ] Step 4: Verify controlled failure handling.
 
@@ -717,7 +719,7 @@ Interfaces:
 def test_evaluator_rejects_candidate_without_strict_score_gain(service):
     verdict = service.evaluate("candidate-1", expected_revision=2)
     assert verdict.decision == "rejected"
-    assert verdict.candidate_score <= verdict.baseline_score + 0.05
+    assert verdict.candidate_score <= verdict.baseline_score + 0.10
 
 def test_unavailable_ollama_requires_human_review(service):
     assert service.evaluate("candidate-1", 2).decision == "needs_human_review"
@@ -1266,7 +1268,7 @@ fuente --vault /absolute/path --theme "Tema" --migrate-layout verify --plan-id <
 fuente --vault /absolute/path --theme "Tema" --migrate-layout rollback --plan-id <plan-id>
 ~~~
 
-The document names the inventory, abort and rollback evidence. It documents the Meetily private-artifact mapping and recovery rule. It never migrates a real user Vault automatically.
+The document names the inventory, abort and rollback evidence. `README.md` documents the MiniRAG revision and MIT notice, the temporary `4_salida` compatibility window, the SharePoint-governed discussion visibility, and the Meetily revision, MIT notice, `standard_meeting` template and `reunion` artifact mapping. It never migrates a real user Vault automatically.
 
 - [ ] Step 4: Verify.
 

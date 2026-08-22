@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 from pathlib import Path
 
 import pytest
@@ -105,6 +106,57 @@ def test_meeting_notes_keep_origin_and_remain_blocked(tmp_path: Path) -> None:
     assert notes_metadata["origins"][0]["path"] == result.transcript_relative_path
     assert notes_metadata["origins"][0]["content_hash"] == result.transcript_sha256
     assert "## Action Items" in notes_body
+
+
+def test_identical_meeting_import_reuses_persisted_result(tmp_path: Path) -> None:
+    vault = VaultManager(VaultConfig(vault_path=tmp_path / "vault"))
+    first = vault.import_meeting_artifacts(
+        _artifacts(vault.config.vault_path), expected_session_id=SESSION_ID
+    )
+    manifest = vault.config.vault_path / first.manifest_relative_path
+    persisted_manifest = manifest.read_bytes()
+
+    second = vault.import_meeting_artifacts(
+        _artifacts(vault.config.vault_path), expected_session_id=SESSION_ID
+    )
+
+    assert second == first
+    assert manifest.read_bytes() == persisted_manifest
+    assert len([path for path in (vault.dirty_dir / "reunion").rglob("*") if path.is_file()]) == 1
+    assert len([path for path in (vault.clean_dir / "reunion").rglob("*") if path.is_file()]) == 1
+    assert len([path for path in (vault.processed_dir / "reunion").rglob("*") if path.is_file()]) == 1
+
+
+def test_incomplete_manifest_is_completed_atomically(tmp_path: Path) -> None:
+    vault = VaultManager(VaultConfig(vault_path=tmp_path / "vault"))
+    manifest = vault.config.vault_path / ".fuente/reunion/m-1/manifest.json"
+    manifest.parent.mkdir(parents=True, exist_ok=True)
+    manifest.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "session_id": SESSION_ID,
+                "provider": "meetily",
+                "provider_revision": MEETING_PROVIDER_REVISION,
+                "template_id": MEETING_TEMPLATE_ID,
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = vault.import_meeting_artifacts(
+        _artifacts(vault.config.vault_path), expected_session_id=SESSION_ID
+    )
+    payload = json.loads(manifest.read_text(encoding="utf-8"))
+
+    assert payload["status"] == "imported"
+    assert payload["recording"]["relative_path"] == result.recording_relative_path
+    assert payload["transcript"]["sha256"] == result.transcript_sha256
+    assert payload["notes"]["relative_path"] == result.notes_relative_path
+    assert payload["provider_revision"] == MEETING_PROVIDER_REVISION
+    assert payload["template_id"] == MEETING_TEMPLATE_ID
+    assert payload["created_at"]
+    assert payload["updated_at"]
 
 
 @pytest.mark.parametrize(

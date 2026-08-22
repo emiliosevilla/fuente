@@ -555,6 +555,8 @@ git add fuente/rag/backend.py fuente/rag/router.py fuente/application/retrieval.
 git commit -m "refactor: route primary and refinement retrieval"
 ~~~
 
+Status: COMPLETE — commit `5c85989`; Terra approved after the typed-score fallback; `22` focal tests and `108` regressions passed.
+
 ### Task F03.2: Add approved-pinned MiniRAG adapter
 
 Files:
@@ -607,6 +609,8 @@ Expected: PASS; Eco falls back to BM25 if MiniRAG is unavailable.
 git add fuente/rag/minirag_store.py fuente/config.py pyproject.toml requirements.txt tests/test_minirag_store.py tests/test_resource_budget.py
 git commit -m "feat: add local minirag primary backend"
 ~~~
+
+Status: COMPLETE — D-01 fixed to `e204d239421f45004852953679927fdf6733f236` with MIT license; Terra approved; `50` tests passed.
 
 ### Task F03.3: Restrict ChromaDB to refinement
 

@@ -41,6 +41,9 @@ office = [
     "markitdown~=0.1.7",
     "docling~=2.118.0",
 ]
+rag = [
+    "minirag-hku @ git+https://github.com/HKUDS/MiniRAG.git@e204d239421f45004852953679927fdf6733f236",
+]
 dev = [
     "pyinstaller~=6.21.0",
 ]
@@ -54,6 +57,7 @@ all = [
     "pytesseract~=0.3.13",
     "markitdown~=0.1.7",
     "docling~=2.118.0",
+    "minirag-hku @ git+https://github.com/HKUDS/MiniRAG.git@e204d239421f45004852953679927fdf6733f236",
 ]
 
 [tool.setuptools.packages.find]

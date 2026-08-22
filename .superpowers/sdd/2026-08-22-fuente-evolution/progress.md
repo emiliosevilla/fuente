@@ -4,7 +4,7 @@ Status: DRAFT / planning only
 Spec: docs/superpowers/specs/2026-08-22-fuente-evolution.md
 Plan: docs/superpowers/plans/2026-08-22-fuente-evolution.md
 Created: 2026-08-22
-Current gate: F01.3 directional local sync is in progress. F01.2 is implemented and Terra-approved; migrations 013 and 014 remain reserved for F02.1 and F02.3, while migration 015 stores layout identity. D-01's exact MiniRAG revision remains a required, separately recorded input before F03.2.
+Current gate: F03.2 pinned MiniRAG adapter is in progress. F03.1 is implemented and Terra-approved; D-01 revision `e204d239421f45004852953679927fdf6733f236` and MIT license are verified and recorded before adapter implementation.
 
 ## Evidence vocabulary
 
@@ -18,7 +18,7 @@ Current gate: F01.3 directional local sync is in progress. F01.2 is implemented 
 
 | Id | Decision | Required evidence | Status |
 |---|---|---|---|
-| D-01 | Pin MiniRAG revision and license | reviewer, immutable revision, license note in README | APPROVED — exact SHA selected and documented before F03.2 |
+| D-01 | Pin MiniRAG revision and license | reviewer, immutable revision, license note in README | APPROVED — `e204d239421f45004852953679927fdf6733f236`, MIT, verified 2026-08-23 |
 | D-02 | Rename 4_salida to 4_procesado and create 5_salida | reviewer and migration window documented in README | APPROVED — new writes use the new layout; compatibility is temporary |
 | D-03 | Discussion events in 5_salida/_fuente_discussion | reviewer, SharePoint visibility confirmation, README explanation | APPROVED — visibility is governed by SharePoint and must be measured before F05.3 |
 | D-04 | Refinement epsilon 0.10 after calibration | reviewer and benchmark record | APPROVED — require a normalized gain of at least 0.10 |
@@ -37,8 +37,8 @@ Current gate: F01.3 directional local sync is in progress. F01.2 is implemented 
 | F02.2 | F02.1 | MarkItDown default/Docling escalation | yes | yes — `b2386d5`, `275adaf` | `87 passed` review suite; prior offline evidence retained | yes — Terra APPROVE; no findings | no | F03.1 may start after F02.3/F02.4 path decisions |
 | F02.3 | F01.1,F02.1 | meeting artifact/session contracts | yes | yes — `e2e507a`, `013644e`, `a1ea751`, `3d48d8f` | `34 + 28 passed` | yes — Terra APPROVE; no findings | no | F02.4 may start |
 | F02.4 | F00.2,F02.3 | pinned Meetily local bridge and importer | yes | yes — `0927c1c`, `e37df26`, `61bf6bf` | `39 + 43 passed, 1 warning` after fix | yes — Terra APPROVE; no findings | no | F03.1 may start |
-| F03.1 | F01.1,F02.2 | retrieval contracts/router | yes | no | no | no | no | Luna |
-| F03.2 | F00.2,F03.1 | pinned MiniRAG adapter | yes | no | no | no | no | Terra |
+| F03.1 | F01.1,F02.2 | retrieval contracts/router | yes | yes — `5c85989` | `22` focal; `108` regression | yes — Terra APPROVE; no findings after score fallback | no | F03.2 may start |
+| F03.2 | F00.2,F03.1 | pinned MiniRAG adapter | yes | yes — pending commit | `50 passed` adapter/router/RAG/resource suite | yes — Terra APPROVE; no findings | no | F03.3 may start |
 | F03.3 | F03.1 | Chroma refinement role | yes | no | no | no | no | Luna |
 | F04.1 | F03.1 | verdict persistence | yes | no | no | no | no | Luna |
 | F04.2 | F03.2,F03.3,F04.1 | positive-only verifier | yes | no | no | no | no | Terra |
@@ -336,3 +336,26 @@ At task end, update only that row with a commit, exact test command/result, revi
 - Terra re-review: APPROVE; no findings.
 - The bridge is restricted to the fixed absolute executable, with historical configuration normalization and PATH-homonym regression coverage.
 - F02.4 is complete. F03.1 may start; real microphone/UI validation remains a later F06.5 gate.
+
+### F03.1 completion — 2026-08-23
+
+- Added backend-neutral `RetrievalBackend`, `RetrievalHit`, `IndexBuildResult` and explicit primary/refinement router.
+- Preserved approval/scope filtering after backend calls and kept historical score precedence with a typed-hit fallback.
+- Verification: `22` focal tests; `108` retrieval/ingestion/approval regressions; `git diff --check` clean.
+- Terra re-review: APPROVE; no findings.
+- Commit: `5c85989` (`refactor: route primary and refinement retrieval`). F03.2 may start.
+
+### F03.2 implementation checkpoint — 2026-08-23
+
+- D-01 exact MiniRAG revision verified against official `main`: `e204d239421f45004852953679927fdf6733f236`.
+- Official `LICENSE` is MIT; the revision and license are now recorded in the SDD and README.
+- Added the local-only adapter surface, `.fuente/minirag` provenance sidecar, lazy client loading and optional `rag` dependency.
+- Verification so far: `46 passed` across MiniRAG adapter, router, retrieval, origins and resource-budget tests; Terra review pending.
+
+### F03.2 completion — 2026-08-23
+
+- Adapter now targets the official MiniRAG API: `ainsert(..., ids=...)`, real chunk IDs, `chunks_vdb.query(top_k=...)` and async `text_chunks` reads.
+- Sidecar supports multiple origins for one content-hash chunk, split records via `full_doc_id`, and staged deletion that removes the vector only after its last origin is gone.
+- Verification: `50 passed`; `git diff --check` clean.
+- Terra re-review: APPROVE; no findings.
+- F03.2 is complete. F03.3 may start.

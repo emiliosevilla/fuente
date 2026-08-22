@@ -33,6 +33,7 @@ last durable stage, which is exactly what `resume()` picks up.
 from __future__ import annotations
 
 import logging
+import json
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -1626,13 +1627,13 @@ class IngestionApplicationService:
             connection.execute(
                 """
                 INSERT INTO extraction_attempts
-                (job_id, source_relative_path, engine, outcome, score,
-                 printable_ratio, expected_structure, reason, created_at)
+                (job_id, source_relative_path, engine, outcome, result,
+                 quality_score, reasons, duration_ms, created_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (job.job_id, job.source_relative_path, attempt.engine,
-                 attempt.outcome, attempt.score, attempt.printable_ratio,
-                 int(attempt.expected_structure), attempt.reason, now),
+                 attempt.outcome, attempt.result, attempt.quality_score,
+                 json.dumps(attempt.reasons), attempt.duration_ms, now),
             )
 
     @staticmethod

@@ -1,8 +1,8 @@
 {
-  "base_head": "bd65fb7e11cf505a7b7af27bbb9ebeacab778f6b",
+  "base_head": "18010956c09579b9c055d44fc346c00dec047c52",
   "branch": "dev",
-  "gate": "RESULT: READY",
-  "measured_at": "2026-08-19T19:31:13Z",
+  "gate": "RESULT: BLOCKED",
+  "measured_at": "2026-08-22T00:31:00Z",
   "p_status": {
     "P-01": "COMPLETE",
     "P-02": "COMPLETE",
@@ -23,6 +23,6 @@
     "Q-07": "COMPLETE",
     "Q-08": "COMPLETE"
   },
-  "source_tree_digest": "2c3391fe82dfe7ccce2ee43ab166fc8b9330bb76d31074fbd36654347bfa83e0",
-  "suite": "1201 passed, 1 skipped, 1 warning in 59.74s"
+  "source_tree_digest": "8897702b3dba15c389d93636ecfac60fbc1c3f2846a23061fc6fd53d1a823a22",
+  "suite": "996 passed, 1 skipped, 1 warning in 52.78s"
 }

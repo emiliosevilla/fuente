@@ -258,18 +258,18 @@ class MeetilyGatewayClient:
     close = shutdown
 
     def _launch(self, session_id: str, token: str) -> None:
-        command = validate_meetily_bridge_command(self.config.meetily_bridge_command)
+        executable = validate_meetily_bridge_command(self.config.meetily_bridge_command)
         port = self._port_factory()
         endpoint = f"http://127.0.0.1:{port}"
         self.last_command = MeetilyBridgeCommand(
             endpoint=endpoint,
-            executable=command[0],
+            executable=executable,
             token=token,
             session_id=session_id,
             port=port,
         )
         argv = [
-            *command,
+            executable,
             "--host",
             "127.0.0.1",
             "--port",

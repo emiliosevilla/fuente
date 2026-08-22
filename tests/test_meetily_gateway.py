@@ -6,7 +6,12 @@ from pathlib import Path
 import pytest
 
 from fuente.application.meetings import MeetingCaptureRequest
-from fuente.config import AppConfig, VaultConfig, validate_meetily_bridge_command
+from fuente.config import (
+    DEFAULT_MEETILY_BRIDGE_COMMAND,
+    AppConfig,
+    VaultConfig,
+    validate_meetily_bridge_command,
+)
 from fuente.integrations.meetily import (
     MeetingBridgePermissionError,
     MeetingBridgeProtocolError,
@@ -31,7 +36,7 @@ class FakeProcess:
         self.terminated = True
 
 
-def config(tmp_path: Path, command=("meetily-bridge",)) -> AppConfig:
+def config(tmp_path: Path, command=DEFAULT_MEETILY_BRIDGE_COMMAND) -> AppConfig:
     return AppConfig(
         vault=VaultConfig(vault_path=tmp_path),
         meetily_bridge_command=command,
@@ -78,7 +83,7 @@ def test_bridge_uses_one_time_loopback_token_and_never_legacy_backend(tmp_path):
         return process
 
     gateway = MeetilyGatewayClient(
-        config(tmp_path, ("/opt/meetily-bridge",)),
+        config(tmp_path, "/opt/meetily-bridge"),
         transport=lambda endpoint, operation, payload, token: {
             "session_id": payload["session_id"],
             "status": "recording",
@@ -97,6 +102,9 @@ def test_bridge_uses_one_time_loopback_token_and_never_legacy_backend(tmp_path):
     assert "127.0.0.1" in processes[0].argv
     assert "--preparation-dir" in processes[0].argv
     assert str(tmp_path) not in processes[0].argv
+    assert processes[0].argv[0] == "/opt/meetily-bridge"
+    assert "--output" not in processes[0].argv
+    assert "/tmp/outside" not in processes[0].argv
     assert session_id == gateway.last_command.session_id
 
 
@@ -116,16 +124,52 @@ def test_bridge_requires_consent_before_launch(tmp_path):
 
 @pytest.mark.parametrize(
     "command",
-    [("/tmp/backend/meetily",), ("meetily;touch /tmp/out",)],
+    [
+        ("/tmp/backend/meetily",),
+        ("meetily;touch /tmp/out",),
+        ("meetily-local-bridge", "--cloud"),
+        ("meetily-local-bridge", "--preparation-dir", "/tmp/outside"),
+        ("meetily-local-bridge", "--output", "/tmp/outside"),
+        ("https://cloud.example/meetily",),
+    ],
 )
 def test_bridge_command_is_allow_listed(command):
     with pytest.raises(ValueError):
         validate_meetily_bridge_command(command)
 
 
+def test_legacy_single_item_setting_is_normalized_but_arguments_are_not_accepted(
+    tmp_path,
+):
+    config_from_legacy = AppConfig.from_dict(
+        {
+            "vault_path": str(tmp_path),
+            "meetily_bridge_command": ["/opt/meetily-bridge"],
+        }
+    )
+    assert config_from_legacy.meetily_bridge_command == "/opt/meetily-bridge"
+    assert config_from_legacy.to_dict()["meetily_bridge_command"] == "/opt/meetily-bridge"
+
+    unsafe_config = AppConfig.from_dict(
+        {
+            "vault_path": str(tmp_path),
+            "meetily_bridge_command": ["meetily-local-bridge", "--output", "/tmp/out"],
+        }
+    )
+    assert unsafe_config.meetily_bridge_command == DEFAULT_MEETILY_BRIDGE_COMMAND
+
+
+def test_app_config_rejects_arbitrary_bridge_arguments(tmp_path):
+    with pytest.raises(ValueError):
+        AppConfig(
+            vault=VaultConfig(vault_path=tmp_path),
+            meetily_bridge_command=("meetily-local-bridge", "--preparation-dir", "/tmp/out"),
+        )
+
+
 def test_missing_executable_creates_recoverable_session(tmp_path):
     gateway = MeetilyGatewayClient(
-        config(tmp_path, ("missing-meetily",)), port_factory=lambda: 18080
+        config(tmp_path, "/opt/meetily-bridge"), port_factory=lambda: 18080
     )
 
     with pytest.raises(MeetingBridgeUnavailable):

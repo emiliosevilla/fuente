@@ -19,22 +19,33 @@ VALID_AUDIO_MODES = ("auto", "skip", "tiny_cpu")
 LOCAL_OLLAMA_MODEL_NAME = re.compile(
     r"^[A-Za-z0-9][A-Za-z0-9._-]*(?::[A-Za-z0-9][A-Za-z0-9._-]*)?$"
 )
-DEFAULT_MEETILY_BRIDGE_COMMAND = ("meetily-local-bridge",)
-_COMMAND_UNSAFE = re.compile(r"[\x00;&|`$<>]")
+DEFAULT_MEETILY_BRIDGE_COMMAND = "meetily-local-bridge"
+ALLOWED_MEETILY_BRIDGE_LOCATIONS = frozenset(
+    {
+        DEFAULT_MEETILY_BRIDGE_COMMAND,
+        "/opt/meetily-bridge",
+    }
+)
 
 
-def validate_meetily_bridge_command(value: Sequence[str]) -> tuple[str, ...]:
-    """Validate the fixed executable command used by the local Meetily bridge."""
-    if isinstance(value, (str, bytes)) or not isinstance(value, (list, tuple)):
-        raise ValueError("meetily_bridge_command must be a non-empty command list")
-    command = tuple(value)
-    if not command or any(not isinstance(part, str) or not part for part in command):
-        raise ValueError("meetily_bridge_command must contain non-empty strings")
-    for part in command:
-        normalized = part.replace("\\", "/").lower()
-        if _COMMAND_UNSAFE.search(part) or "/backend/" in normalized or normalized.endswith("/backend"):
-            raise ValueError("meetily_bridge_command is not an allowed local command")
-    return command
+def validate_meetily_bridge_command(value: str | os.PathLike[str] | Sequence[str]) -> str:
+    """Return the single D-05-approved local Meetily bridge executable.
+
+    A one-item list remains readable for old settings files. It is not a
+    command-line extension point: every other list shape is rejected.
+    """
+    if isinstance(value, (list, tuple)):
+        if len(value) != 1:
+            raise ValueError("meetily_bridge_command accepts one executable only")
+        value = value[0]
+    if isinstance(value, os.PathLike):
+        value = os.fspath(value)
+    if not isinstance(value, str):
+        raise ValueError("meetily_bridge_command must identify the local bridge")
+    candidate = value.strip()
+    if candidate not in ALLOWED_MEETILY_BRIDGE_LOCATIONS:
+        raise ValueError("meetily_bridge_command is not an allowed Meetily bridge")
+    return candidate
 
 
 def validate_local_ollama_model_name(value: str) -> str:
@@ -221,7 +232,12 @@ class AppConfig:
     resource_profile: str = "auto"
     audio_mode: str = "auto"
     whisper_model_path: str | None = None
-    meetily_bridge_command: tuple[str, ...] = DEFAULT_MEETILY_BRIDGE_COMMAND
+    meetily_bridge_command: str = DEFAULT_MEETILY_BRIDGE_COMMAND
+
+    def __post_init__(self) -> None:
+        self.meetily_bridge_command = validate_meetily_bridge_command(
+            self.meetily_bridge_command
+        )
 
     def to_dict(self) -> dict:
         return {
@@ -242,7 +258,7 @@ class AppConfig:
             "resource_profile": self.resource_profile,
             "audio_mode": self.audio_mode,
             "whisper_model_path": self.whisper_model_path,
-            "meetily_bridge_command": list(self.meetily_bridge_command),
+            "meetily_bridge_command": self.meetily_bridge_command,
         }
 
     @classmethod

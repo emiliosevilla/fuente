@@ -1,4 +1,19 @@
-# Informe F01.2 — ronda de reparación 4
+# Informe F01.2 — ronda de reparación 5
+
+## Decisión de esta ronda
+
+Se reserva la versión `013` para la migración futura `013_extraction_attempts.sql` de F02.1. La migración de identidad del destino de F01.2 se renombra a `014_vault_layout_identity.sql` manteniendo exactamente su SQL. También se actualizan las expectativas del registro de migraciones para reflejar `[1,2,3,4,5,6,7,9,10,11,12,14]`.
+
+El motivo es evitar una colisión de versiones antes de incorporar F02.1; no cambia el esquema ni el comportamiento de la migración de F01.2.
+
+## Verificación de la ronda 5
+
+- `PYTHONDONTWRITEBYTECODE=1 python3 -m pytest tests/test_job_store.py tests/test_vault_layout_migration.py tests/test_vault_migration.py tests/test_atomic_files.py -q` — `70 passed in 1.37s`.
+- `PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -p no:cacheprovider tests -q` — `1230 passed, 1 skipped, 1 warning in 61.76s (0:01:01)`.
+- `PYTHONDONTWRITEBYTECODE=1 python3 -m pytest tests/test_documentation_freshness.py -q` — `6 passed in 0.16s`.
+- `PYTHONDONTWRITEBYTECODE=1 python3 scripts/release_gate.py --skip-pytest --only documentation_freshness` — `RESULT: READY`.
+- `git diff --check` — correcto.
+- Evidencia regenerada en `docs/evidence/current-sdd.json`: `base_head=0dce892c083857f6e18f256391f7c0b361b9487b`, digest `1fda1237722e59d8cfe95857e622f23abbf9f9a7f6dc45a6369ffa0ba320574d`.
 
 ## Archivos modificados
 

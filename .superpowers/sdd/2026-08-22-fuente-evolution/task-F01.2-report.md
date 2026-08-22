@@ -1,3 +1,46 @@
+# Informe F01.2 — ronda de reparación 6
+
+## Decisión de esta ronda
+
+`apply()` y `rollback()` operan con descriptores de directorio abiertos con
+`O_DIRECTORY|O_NOFOLLOW`, abren los orígenes con `O_RDONLY|O_NOFOLLOW`,
+comprueban que sean ficheros regulares y conservan `st_dev`/`st_ino` del
+descriptor. Los enlaces y borrados usan `src_dir_fd`/`dst_dir_fd` y
+`dir_fd`; el origen se vuelve a validar antes de borrarlo. Un reemplazo entre
+el preflight y `link()` devuelve conflicto y no deja el origen externo
+enlazado en `4_procesado`. `fcntl.flock` serializa `apply()` y `rollback()`.
+
+Las columnas `destination_device` y `destination_inode` quedan directamente
+en `012_vault_layout.sql`. Se elimina `014_vault_layout_identity.sql`; `013`
+y `014` quedan libres. `_run_migrations()` valida todos los prefijos y rechaza
+duplicados antes de crear o aplicar el esquema.
+
+## Verificación medida
+
+- Focal F01.2: `PYTHONDONTWRITEBYTECODE=1 python3 -m pytest tests/test_job_store.py tests/test_vault_layout_migration.py tests/test_vault_migration.py tests/test_atomic_files.py -q` — `72 passed in 1.42s`.
+- Suite completa: `PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -p no:cacheprovider tests -q` — `1233 passed, 1 skipped, 1 warning in 60.50s`.
+- Frescura: `PYTHONDONTWRITEBYTECODE=1 python3 -m pytest tests/test_documentation_freshness.py -q` — `6 passed in 0.83s`.
+- Release gate: `PYTHONDONTWRITEBYTECODE=1 python3 scripts/release_gate.py --skip-pytest --only documentation_freshness` — `RESULT: READY`.
+- `git diff --check` — correcto.
+- Evidencia regenerada en `docs/evidence/current-sdd.json`: branch `dev`, base HEAD `4a7d0c3056ff031455902a8b5cbae536f9cf402d`, digest `3dcd8ffa19cfe1839914f207f8f0b1abe042200d9b2ad054d9512b4c367a1845`.
+
+## Regresiones adversariales
+
+- Sustitución del origen por un symlink externo justo antes de `link()`: conflicto, origen externo conservado y ningún destino enlazado.
+- Sustitución de un destino por contenido idéntico con otra identidad: rollback en conflicto sin borrar el destino.
+- Symlinks en raíces, padres de origen o destino: abortan sin escribir fuera del Vault.
+- Prefijos de migración duplicados: rechazo antes de ejecutar SQL.
+
+## Límites y entrega
+
+No se hizo push, no se tocó el Vault real ni se modificó el plan SDD. Los dos
+ficheros no rastreados ajenos permanecen sin tocar:
+`fuente/domain/vault_layout 2.py` y `tests/test_vault_layout 2.py`.
+
+Commit indicado: `fix: secure vault migration with directory descriptors`.
+
+---
+
 # Informe F01.2 — ronda de reparación 5
 
 ## Decisión de esta ronda

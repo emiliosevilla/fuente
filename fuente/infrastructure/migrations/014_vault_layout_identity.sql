@@ -1,2 +1,0 @@
-ALTER TABLE vault_layout_migration_items ADD COLUMN destination_device INTEGER;
-ALTER TABLE vault_layout_migration_items ADD COLUMN destination_inode INTEGER;

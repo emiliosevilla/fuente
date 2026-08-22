@@ -192,9 +192,109 @@ class JobStore:
         ).fetchall()
         return [SyncManifestEntry.from_row(row) for row in rows]
 
+    # -- Vault layout migration -----------------------------------------
+
+    def create_vault_layout_migration(
+        self, plan_id: str, vault_root: str, theme: str, created_at: str
+    ) -> None:
+        self._connection.execute(
+            "INSERT INTO vault_layout_migrations(plan_id, vault_root, theme, created_at) VALUES (?, ?, ?, ?)",
+            (plan_id, vault_root, theme, created_at),
+        )
+
+    def add_vault_layout_migration_item(
+        self,
+        plan_id: str,
+        *,
+        source: str,
+        destination: str,
+        relative_path: str,
+        sha256: str,
+        status: str,
+        timestamp: str,
+        destination_device: int | None = None,
+        destination_inode: int | None = None,
+    ) -> None:
+        self._connection.execute(
+            """
+            INSERT INTO vault_layout_migration_items
+                (plan_id, source, destination, relative_path, sha256, status, timestamp,
+                 destination_device, destination_inode)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                plan_id,
+                source,
+                destination,
+                relative_path,
+                sha256,
+                status,
+                timestamp,
+                destination_device,
+                destination_inode,
+            ),
+        )
+
+    def get_vault_layout_migration(self, plan_id: str) -> dict[str, Any] | None:
+        plan = self._connection.execute(
+            "SELECT * FROM vault_layout_migrations WHERE plan_id = ?", (plan_id,)
+        ).fetchone()
+        if plan is None:
+            return None
+        items = self._connection.execute(
+            "SELECT * FROM vault_layout_migration_items WHERE plan_id = ? ORDER BY source",
+            (plan_id,),
+        ).fetchall()
+        return {"plan": dict(plan), "items": [dict(item) for item in items]}
+
+    def update_vault_layout_migration_item(
+        self,
+        plan_id: str,
+        source: str,
+        *,
+        status: str,
+        timestamp: str,
+        destination_device: int | None = None,
+        destination_inode: int | None = None,
+    ) -> None:
+        self._connection.execute(
+            """
+            UPDATE vault_layout_migration_items
+            SET status = ?, timestamp = ?,
+                destination_device = COALESCE(?, destination_device),
+                destination_inode = COALESCE(?, destination_inode)
+            WHERE plan_id = ? AND source = ?
+            """,
+            (
+                status,
+                timestamp,
+                destination_device,
+                destination_inode,
+                plan_id,
+                source,
+            ),
+        )
+
     # -- migrations ------------------------------------------------------
 
     def _run_migrations(self) -> None:
+        migration_paths = sorted(MIGRATIONS_DIR.glob("*.sql"))
+        versions: dict[int, Path] = {}
+        for migration_path in migration_paths:
+            try:
+                version = int(migration_path.name.split("_", 1)[0])
+            except (ValueError, IndexError) as error:
+                raise RuntimeError(
+                    f"migration filename must start with a numeric prefix: {migration_path.name}"
+                ) from error
+            previous = versions.get(version)
+            if previous is not None:
+                raise RuntimeError(
+                    f"duplicate migration prefix {version:03d}: "
+                    f"{previous.name}, {migration_path.name}"
+                )
+            versions[version] = migration_path
+
         self._connection.execute(
             "CREATE TABLE IF NOT EXISTS schema_migrations ("
             "version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL)"
@@ -202,8 +302,7 @@ class JobStore:
         applied = {
             row[0] for row in self._connection.execute("SELECT version FROM schema_migrations")
         }
-        for migration_path in sorted(MIGRATIONS_DIR.glob("*.sql")):
-            version = int(migration_path.name.split("_", 1)[0])
+        for version, migration_path in sorted(versions.items()):
             if version in applied:
                 continue
             self._connection.executescript(migration_path.read_text(encoding="utf-8"))

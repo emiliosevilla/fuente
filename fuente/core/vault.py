@@ -18,6 +18,7 @@ from fuente.domain.paths import (
 )
 from fuente.extractors.base import enrich_extraction_metadata
 from fuente.domain.quarantine import QuarantineService
+from fuente.domain.vault_layout import VaultLayout
 from fuente.infrastructure.atomic_files import atomic_write_json, atomic_write_text
 
 logger = logging.getLogger(__name__)
@@ -74,6 +75,18 @@ class VaultManager:
     @property
     def output_dir(self) -> Path:
         return self.current_theme_dir / self.config.output_dir_name
+
+    @property
+    def layout(self) -> VaultLayout:
+        return VaultLayout(self.current_theme_dir)
+
+    @property
+    def processed_dir(self) -> Path:
+        return self.layout.processed_dir
+
+    @property
+    def shared_dir(self) -> Path:
+        return self.layout.shared_dir
 
     @property
     def quarantine_dir(self) -> Path:
@@ -242,10 +255,11 @@ class VaultManager:
         return self.current_theme_dir
 
     def create_theme(self, theme_name: str) -> Path:
-        """Crea un nuevo Tema con sus 4 carpetas de pipeline y Cuestión _Sin_Cuestion."""
+        """Crea un Tema nuevo con layout actual y superficie legacy compatible."""
         safe_theme = self.sanitize_filename(theme_name)
         theme_dir = self.config.vault_path / safe_theme
         theme_dir.mkdir(parents=True, exist_ok=True)
+        VaultLayout(theme_dir).ensure()
         (theme_dir / self.config.input_dir_name).mkdir(exist_ok=True)
         (theme_dir / self.config.dirty_dir_name).mkdir(exist_ok=True)
         (theme_dir / self.config.clean_dir_name).mkdir(exist_ok=True)

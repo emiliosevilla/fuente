@@ -13,6 +13,7 @@ from typing import Any, Callable
 from fuente.application.notes import NotesApplicationService
 from fuente.application.reflow import ReflowApplicationService, ReflowResult, ReflowScope
 from fuente.domain.documents import MarkdownDocument, NoteDocument, content_hash_for_markdown
+from fuente.domain.refinement import RefinementCandidate
 from fuente.domain.errors import NoteRevisionConflictError, PathAuthorizationError
 from fuente.domain.frontmatter import FrontmatterError
 from fuente.domain.paths import (
@@ -358,6 +359,18 @@ class ReflowJobService:
             )
             if self.request_store.record_candidate(request_id, claim_token, persisted) is None:
                 raise _LostClaim()
+            self.request_store.job_store.save_refinement_candidate(
+                RefinementCandidate(
+                    candidate_id=persisted.document_id,
+                    document_id=note.document_id,
+                    revision=claimed.expected_revision,
+                    content_hash=persisted.content_hash,
+                    baseline_revision=note.revision,
+                    baseline_content_hash=note.content_hash,
+                    baseline_path=note.relative_path,
+                    candidate_path=persisted.relative_path,
+                )
+            )
             result = ReflowResult(
                 status="completed",
                 processed_notes=1,

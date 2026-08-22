@@ -4,7 +4,7 @@ Status: IMPLEMENTATION IN PROGRESS
 Spec: docs/superpowers/specs/2026-08-22-fuente-evolution.md
 Plan: docs/superpowers/plans/2026-08-22-fuente-evolution.md
 Created: 2026-08-22
-Current gate: F04.2 positive-only verifier is in progress. F04.1 identity/verdict persistence is implemented and Terra-approved.
+Current gate: F04.3 accepted-candidate promotion is in progress. F04.2 positive-only verification is implemented, tested, reviewed, and committed.
 
 ## Evidence vocabulary
 
@@ -40,8 +40,8 @@ Current gate: F04.2 positive-only verifier is in progress. F04.1 identity/verdic
 | F03.1 | F01.1,F02.2 | retrieval contracts/router | yes | yes — `5c85989` | `22` focal; `108` regression | yes — Terra APPROVE; no findings after score fallback | no | F03.2 may start |
 | F03.2 | F00.2,F03.1 | pinned MiniRAG adapter | yes | yes — `57ba971` | `50 passed` adapter/router/RAG/resource suite; freshness `6 passed` | yes — Terra APPROVE; no findings | no | F03.3 may start |
 | F03.3 | F03.1 | Chroma refinement role | yes | yes — `71b2869` | `87 passed` RAG/ingestion/security suite | yes — Terra APPROVE; no findings | no | F04.1 may start |
-| F04.1 | F03.1 | verdict persistence | yes | yes — pending commit | `35 passed` focal identity/store suite | yes — Terra APPROVE; no findings after atomicity fix | no | F04.2 may start |
-| F04.2 | F03.2,F03.3,F04.1 | positive-only verifier | yes | no | no | no | no | Terra |
+| F04.1 | F03.1 | verdict persistence | yes | yes — `49f87fe` | `35 passed` focal identity/store suite | yes — Terra APPROVE; no findings after atomicity fix | no | F04.2 may start |
+| F04.2 | F03.2,F03.3,F04.1 | positive-only verifier | yes | yes — pending commit | `154 passed` focal; full `1301 passed, 1 skipped, 1 warning` | yes — Terra APPROVE after baseline CAS and MiniRAG read fallback fixes | no | F04.3 may start |
 | F04.3 | F04.2 | processed promotion | yes | no | no | no | no | Sol |
 | F05.1 | F01.1,F04.3 | output approval | yes | no | no | no | no | Human |
 | F05.2 | F05.1 | atomic sharing | yes | no | no | no | no | Terra |
@@ -374,4 +374,14 @@ At task end, update only that row with a commit, exact test command/result, revi
 - `save_refinement_verdict` now uses one `BEGIN IMMEDIATE` transaction for candidate creation and verdict insertion; invalid verdicts roll back the candidate.
 - Verification: `PYTHONPATH=. pytest -q tests/test_refinement_store.py tests/test_job_store.py tests/test_invariants.py` — `35 passed`; `git diff --check` clean.
 - Terra re-review: APPROVE; no findings. F04.2 may start.
-- Commit: pending in this checkpoint; next commit records F04.1 plus this ledger update.
+- Commit: `49f87fe` (`feat: persist refinement verdicts`).
+
+### F04.2 completion — 2026-08-23
+
+- Added strict positive-only refinement evaluation with Ollama JSON validation, epsilon `0.10`, non-negative graph/retrieval deltas, provenance/citation gates, and `needs_human_review` for unavailable or malformed verifier output. Rejected candidates never write Markdown.
+- Persisted candidate baseline CAS (`baseline_revision`, `baseline_content_hash`) in migration `019`; evaluation rejects a changed baseline before scoring. Added accepted-verdict guards to reflow and chat.
+- Made MiniRAG the primary index and Chroma the refinement index for both writes and reads; missing MiniRAG falls back to Chroma deterministically. Added direct tests for MiniRAG key/chunk/document deletion and read fallback.
+- Fixed extraction retry compatibility: public registry replacement now reaches the quality policy; corrupt content receives two attempts, permanent extractor errors one.
+- Verification: focal `154 passed, 1 warning`; full suite `1301 passed, 1 skipped, 1 warning`; `git diff --check` clean.
+- Terra re-review: APPROVE; no findings.
+- Commit: pending in this checkpoint; commit immediately before F04.3.

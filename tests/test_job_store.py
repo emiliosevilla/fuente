@@ -484,7 +484,7 @@ def test_migrations_are_recorded_and_not_reapplied(tmp_path):
             row[0]
             for row in raw_connection.execute("SELECT version FROM schema_migrations")
         ]
-        assert versions == [1, 2, 3, 4, 5, 6, 7, 9, 10, 11, 12, 13, 14, 15, 17, 18]
+        assert versions == [1, 2, 3, 4, 5, 6, 7, 9, 10, 11, 12, 13, 14, 15, 17, 18, 19]
         extraction_columns = {
             row[1] for row in raw_connection.execute("PRAGMA table_info(extraction_attempts)")
         }
@@ -508,7 +508,7 @@ def test_migrations_are_recorded_and_not_reapplied(tmp_path):
             for row in raw_connection.execute("SELECT version FROM schema_migrations")
         ]
         raw_connection.close()
-        assert versions == [1, 2, 3, 4, 5, 6, 7, 9, 10, 11, 12, 13, 14, 15, 17, 18]
+        assert versions == [1, 2, 3, 4, 5, 6, 7, 9, 10, 11, 12, 13, 14, 15, 17, 18, 19]
     finally:
         reopened.close()
 
@@ -735,10 +735,11 @@ def test_migration_003_preserves_legacy_rows_and_adds_nullable_fields(tmp_path):
             12,
             13,
             14,
-            15,
-                17,
-                18,
-        }
+                    15,
+                    17,
+                    18,
+                    19,
+            }
         columns = {
             row[1]: row[3]
             for row in store._connection.execute("PRAGMA table_info(jobs)")

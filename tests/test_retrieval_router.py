@@ -36,6 +36,25 @@ def test_router_uses_primary_for_chat_and_refinement_for_evaluation():
     assert router.refinement().name == "chroma"
 
 
+def test_primary_minirag_failure_reads_from_refinement_chroma():
+    class MissingMiniRAG(FakeBackend):
+        def search(self, query, limit):
+            raise RuntimeError("MiniRAG is not installed; use BM25 fallback")
+
+    router = RetrievalRouter(
+        primary=MissingMiniRAG("minirag"),
+        refinement=HitBackend("chroma"),
+    )
+    service = RetrievalApplicationService(
+        object(), router=router, eligibility_guard=lambda hit: True
+    )
+
+    context = service.build_context("contenido", "all_notes")
+
+    assert context["has_context"] is True
+    assert context["chunks"][0]["metadata"]["document_id"] == "doc-1"
+
+
 def test_retrieval_hit_score_survives_service_bounding():
     backend = HitBackend("minirag")
     router = RetrievalRouter(primary=backend, refinement=HitBackend("chroma"))

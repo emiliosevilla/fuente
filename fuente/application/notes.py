@@ -26,6 +26,7 @@ from fuente.infrastructure.atomic_files import atomic_write_text, document_file_
 from fuente.infrastructure.sqlite_store import JobStore
 from fuente.domain.runtime_policy import RuntimePolicy
 from fuente.rag.chroma_store import ChromaStore
+from fuente.rag.minirag_store import MiniRAGStore
 from fuente.rag.semantic_chunker import SemanticChunker
 from fuente.ui.markdown_projection import project_note_document
 
@@ -62,6 +63,7 @@ class NotesApplicationService:
         self.path_resolver = path_resolver
         self.job_store = job_store
         self.chroma = chroma_store
+        self.minirag = MiniRAGStore(vault.config.minirag_dir)
         self.chunker = chunker or SemanticChunker()
         self._index_notifier = index_notifier
         self.runtime_policy = runtime_policy
@@ -808,6 +810,10 @@ class NotesApplicationService:
         origins = [origin.to_dict() for origin in note.origins]
         for chunk in chunks:
             metadata = dict(chunk.get("metadata") or {})
+            metadata.setdefault("document_id", note.document_id)
+            metadata.setdefault("revision", note.revision)
+            metadata.setdefault("content_hash", note.content_hash)
+            metadata.setdefault("relative_path", note.relative_path)
             metadata["origins_json"] = json.dumps(origins, sort_keys=True)
             chunk["metadata"] = metadata
         chunk_ids = [chunk["id"] for chunk in chunks]
@@ -818,16 +824,27 @@ class NotesApplicationService:
         }
 
         obsolete = sorted(published - set(chunk_ids))
-        if chunks and not self.chroma.add_chunks(
-            [chunk["content"] for chunk in chunks],
-            [chunk["metadata"] for chunk in chunks],
-            chunk_ids,
-        ):
-            logger.warning(
-                "Chunk index unavailable for approved note %s",
-                note.document_id,
+        indexed_with = self.minirag
+        try:
+            result = self.minirag.rebuild(chunks)
+        except RuntimeError as error:
+            if "MiniRAG is not installed" not in str(error):
+                raise
+            indexed_with = self.chroma
+            result = self.chroma.add_chunks(
+                [chunk["content"] for chunk in chunks],
+                [chunk["metadata"] for chunk in chunks],
+                chunk_ids,
             )
+        if not result:
+            logger.warning("Chunk index unavailable for approved note %s", note.document_id)
             return
+
+        def delete_index(ids: list[str]) -> bool:
+            delete = getattr(indexed_with, "delete", None)
+            if callable(delete):
+                return delete(ids) is not False
+            return bool(indexed_with.delete_chunks(ids))
 
         # New vectors are durable before the published artifact set changes.
         # If SQLite rejects the artifact publish, compensate only the newly
@@ -848,7 +865,7 @@ class NotesApplicationService:
                 )
         except Exception:
             rollback_errors = []
-            if new_chunk_ids and not self.chroma.delete_chunks(new_chunk_ids):
+            if new_chunk_ids and not delete_index(new_chunk_ids):
                 rollback_errors.append("chroma")
             try:
                 self.job_store.delete_index_artifacts(
@@ -878,7 +895,7 @@ class NotesApplicationService:
                 note.document_id,
                 len(obsolete),
             )
-            if self.chroma.delete_chunks(obsolete):
+            if delete_index(obsolete):
                 self.job_store.delete_index_artifacts(
                     note.document_id, artifact_ids=obsolete
                 )

@@ -59,6 +59,17 @@ def test_current_sections_do_not_embed_unlabelled_snapshots():
     assert find_unlabelled_snapshots(docs_root) == []
 
 
+def test_evolution_baseline_names_active_sdd():
+    repo_root = Path(__file__).resolve().parents[1]
+    evidence = json.loads(
+        (repo_root / "docs/evidence/fuente-evolution-baseline.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert evidence["spec"] == "docs/superpowers/specs/2026-08-22-fuente-evolution.md"
+    assert evidence["plan"] == "docs/superpowers/plans/2026-08-22-fuente-evolution.md"
+
+
 def test_digest_is_stable_and_excludes_current_evidence(tmp_path: Path):
     for directory in ("fuente", "tests", "scripts"):
         (tmp_path / directory).mkdir()

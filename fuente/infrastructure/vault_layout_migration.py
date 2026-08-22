@@ -217,6 +217,18 @@ class VaultLayoutMigrator:
                 self._validate_destination_parent(Path(item.destination).parent)
         restored: list[str] = []
         conflicts: list[str] = []
+        for item in items:
+            if item.status != "applied":
+                continue
+            source, destination = Path(item.source), Path(item.destination)
+            if not os.path.lexists(destination):
+                conflicts.append(item.relative_path)
+            elif destination.is_symlink() or not destination.is_file() or _sha256(destination) != item.sha256:
+                conflicts.append(item.relative_path)
+            elif os.path.lexists(source):
+                conflicts.append(item.relative_path)
+        if conflicts:
+            return LayoutMigrationReport(plan_id, "conflict", conflicts=tuple(conflicts))
         with JobStore(self.vault_root) as store:
             for item in items:
                 if item.status != "applied":

@@ -1,4 +1,4 @@
-# Informe F01.2 — ronda de reparación
+# Informe F01.2 — ronda de reparación 2
 
 ## Archivos modificados
 
@@ -13,11 +13,15 @@ La transición persistida es `planned -> linked -> applied -> rolled_back`. Tras
 
 La idempotencia de `apply(plan_id)` sólo se conserva para estados ya persistidos como `applied` o `rolled_back`; un destino preexistente en `planned` no se adopta.
 
+Esta ronda corrige `rollback()`: un destino ausente o un symlink colgante se trata como conflicto mediante `lexists()`. El rollback hace primero ese preflight para todos los items `applied`; si encuentra un conflicto, devuelve `status="conflict"`, incluye `relative_path`, no crea ni borra nada y conserva el estado SQLite `applied`.
+
+La regresión cubre tanto la ruta ausente como el symlink colgante y verifica que no haya efectos laterales.
+
 ## Comandos y resultados
 
-- `PYTHONDONTWRITEBYTECODE=1 python3 -m pytest tests/test_vault_layout_migration.py tests/test_vault_migration.py tests/test_atomic_files.py -q` — `38 passed in 1.12s`.
+- `PYTHONDONTWRITEBYTECODE=1 python3 -m pytest tests/test_vault_layout_migration.py tests/test_vault_migration.py tests/test_atomic_files.py -q` — `40 passed in 1.11s`.
 - `git diff --check` — correcto.
-- Self-review — correcto; sólo se modifican la implementación y sus pruebas dentro del alcance, además de este informe.
+- Self-review — correcto; sólo se modifican la implementación, su regresión y este informe dentro del alcance.
 
 ## Límites
 
@@ -25,4 +29,4 @@ No se modificaron consumidores ETL/UI/sync/RAG. No se hizo push y no se accedió
 
 ## Commit
 
-`fix: harden vault layout migration rollback`
+`fix: report missing migration destination conflict`

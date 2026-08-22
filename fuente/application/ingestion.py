@@ -78,6 +78,8 @@ from fuente.extractors.policy import ExtractionDecision, ExtractionPolicy
 from fuente.infrastructure.atomic_files import atomic_write_text
 from fuente.infrastructure.sqlite_store import JobStore
 from fuente.ram_governor.budget import unavailable_snapshot
+from fuente.rag.backend import IndexBuildResult
+from fuente.rag.router import RetrievalRouter
 
 logger = logging.getLogger(__name__)
 
@@ -188,6 +190,34 @@ class ModelUnavailableError(RuntimeError):
     code = "model_unavailable"
 
 
+class _ChromaRefinementBackend:
+    """Keep the current Chroma index behind the explicit refinement role."""
+
+    name = "chroma-refinement"
+
+    def __init__(self, chroma: Any) -> None:
+        self.chroma = chroma
+
+    def rebuild(self, records) -> IndexBuildResult:
+        records = list(records)
+        ok = self.chroma.add_chunks(
+            [record["content"] for record in records],
+            [record["metadata"] for record in records],
+            [record["id"] for record in records],
+        )
+        return IndexBuildResult(
+            backend=self.name,
+            indexed_count=len(records) if ok else 0,
+            success=bool(ok),
+        )
+
+    def search(self, query: str, limit: int):
+        raise NotImplementedError("ingestion does not retrieve from its index")
+
+    def delete(self, document_ids):
+        return self.chroma.delete_chunks(list(document_ids))
+
+
 def document_id_for_source(source_relative_path: str) -> str:
     """Stable, opaque document id for a Vault-relative source path.
 
@@ -240,6 +270,7 @@ class IngestionApplicationService:
         scheduler: Optional[ResourceScheduler] = None,
         copy_to_dirty: Optional[Callable[[Path], Path]] = None,
         stabilize: Optional[Callable[[Path], bool]] = None,
+        router: RetrievalRouter | None = None,
     ) -> None:
         self.config = config
         self.vault = vault
@@ -253,6 +284,10 @@ class IngestionApplicationService:
         self.extraction_policy = ExtractionPolicy(engines)
         self.chunker = chunker
         self.chroma = chroma
+        self.router = router or RetrievalRouter(
+            primary=_ChromaRefinementBackend(chroma),
+            refinement=_ChromaRefinementBackend(chroma),
+        )
         self.atomic_generator = atomic_generator
         self.linker = linker
         self.runtime_policy = runtime_policy
@@ -288,6 +323,10 @@ class IngestionApplicationService:
     def _vector_index_enabled(self) -> bool:
         """Legacy harnesses remain Auto; an injected policy is authoritative."""
         return self.runtime_policy is None or self.runtime_policy.vector_index_enabled
+
+    def _delete_refinement_chunks(self, chunk_ids) -> bool:
+        """Treat the contract's ``None`` delete result as successful."""
+        return self.router.refinement().delete(chunk_ids) is not False
 
     def _build_scheduler(self) -> ResourceScheduler:
         governor = self.ram_governor
@@ -768,12 +807,9 @@ class IngestionApplicationService:
                 document_id,
                 len(obsolete),
             )
-            self.chroma.delete_chunks(obsolete)
-        if not self.chroma.add_chunks(
-            [chunk["content"] for chunk in chunks],
-            [chunk["metadata"] for chunk in chunks],
-            chunk_ids,
-        ):
+            self._delete_refinement_chunks(obsolete)
+        result = self.router.refinement().rebuild(chunks)
+        if not result.success:
             logger.warning(
                 "Chunk index unavailable for job %s; continuing without vectors",
                 job.job_id,
@@ -1037,13 +1073,12 @@ class IngestionApplicationService:
                 for artifact in artifacts
                 if artifact["kind"] in doomed_kinds
             ]
-            if plan.invalidate_chunk_index and not self.chroma.delete_chunks(
-                [
-                    artifact["artifact_id"]
-                    for artifact in artifacts
-                    if artifact["kind"] == CHUNK_ARTIFACT_KIND
-                ]
-            ):
+            chunk_ids = [
+                artifact["artifact_id"]
+                for artifact in artifacts
+                if artifact["kind"] == CHUNK_ARTIFACT_KIND
+            ]
+            if plan.invalidate_chunk_index and not self._delete_refinement_chunks(chunk_ids):
                 return False
             self.job_store.delete_index_artifacts(document_id, artifact_ids=doomed)
             return True
@@ -1378,7 +1413,7 @@ class IngestionApplicationService:
                 if artifact["kind"] == CHUNK_ARTIFACT_KIND
             ]
             if chunk_ids and self._vector_index_enabled():
-                if not self.chroma.delete_chunks(chunk_ids):
+                if not self._delete_refinement_chunks(chunk_ids):
                     raise RuntimeError("could not remove stale chunk index entries")
             if artifacts:
                 self.job_store.delete_index_artifacts(document_id)

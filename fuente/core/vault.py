@@ -4,6 +4,7 @@ import shutil
 import hashlib
 import json
 import tempfile
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Literal
 import logging
@@ -590,7 +591,6 @@ class MeetingImportApplicationService:
 
         session_id = artifacts.session_id
         manifest_path = self._preparation_path(session_id, "manifest.json")
-        self._validate_existing_manifest(manifest_path, artifacts)
         recording_path = self._vault_path(
             self.vault.dirty_dir / "reunion" / session_id / "recording.m4a"
         )
@@ -604,11 +604,6 @@ class MeetingImportApplicationService:
             if notes_body is not None
             else None
         )
-        targets = [recording_path, transcript_path]
-        if notes_path is not None:
-            targets.append(notes_path)
-        self._assert_new_targets(targets)
-
         recording_relative = self._relative_to_vault(recording_path)
         transcript_relative = self._relative_to_vault(transcript_path)
         notes_relative = self._relative_to_vault(notes_path) if notes_path else None
@@ -639,6 +634,8 @@ class MeetingImportApplicationService:
             "provider_revision": MEETING_PROVIDER_REVISION,
             "template_id": MEETING_TEMPLATE_ID,
             "status": "imported",
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "updated_at": datetime.now(timezone.utc).isoformat(),
             "recording": {
                 "source_relative_path": artifacts.recording_path.as_posix(),
                 "relative_path": recording_relative,
@@ -679,10 +676,12 @@ class MeetingImportApplicationService:
         ]
         if notes_path is not None and notes_markdown is not None:
             files.append((notes_path, notes_markdown.encode("utf-8")))
+        files_to_write = self._validate_existing_targets(files)
+        self._write_manifest_once(manifest_path, manifest)
         created_targets: list[Path] = []
         created_directories: list[Path] = []
         try:
-            self._write_import_files(files, created_targets, created_directories)
+            self._write_import_files(files_to_write, created_targets, created_directories)
             if self.store is not None:
                 self.store.create_meeting_session(session)
         except BaseException:
@@ -849,11 +848,9 @@ class MeetingImportApplicationService:
             }
         ) + body
 
-    def _validate_existing_manifest(
-        self, path: Path, artifacts: MeetingArtifacts
-    ) -> None:
+    def _validate_existing_manifest(self, path: Path, expected: dict) -> dict | None:
         if not path.exists():
-            return
+            return None
         if path.is_symlink() or not path.is_file():
             raise MeetingContractError("meeting manifest is not a regular file")
         try:
@@ -862,31 +859,89 @@ class MeetingImportApplicationService:
             raise MeetingContractError("meeting manifest is invalid") from error
         if not isinstance(payload, dict):
             raise MeetingContractError("meeting manifest must be a JSON object")
-        expected = {
-            "session_id": artifacts.session_id,
-            "provider": MEETING_PROVIDER,
-            "provider_revision": MEETING_PROVIDER_REVISION,
-            "template_id": MEETING_TEMPLATE_ID,
-        }
-        for key, value in expected.items():
-            if key in payload and payload[key] != value:
-                raise MeetingContractError(
-                    f"meeting manifest {key} does not match artifacts"
-                )
+        self._assert_manifest_compatible(payload, expected)
+        return payload
 
-    def _write_manifest_once(self, path: Path, payload: dict) -> None:
-        if path.exists():
-            return
+    @classmethod
+    def _assert_manifest_compatible(
+        cls, existing: dict, expected: dict, prefix: str = "meeting manifest"
+    ) -> None:
+        for key, value in expected.items():
+            if key in {"created_at", "updated_at"} or key not in existing:
+                continue
+            current = existing[key]
+            if isinstance(value, dict):
+                if not isinstance(current, dict):
+                    raise MeetingContractError(f"{prefix} {key} does not match artifacts")
+                cls._assert_manifest_compatible(current, value, f"{prefix} {key}")
+            elif current != value:
+                raise MeetingContractError(f"{prefix} {key} does not match artifacts")
+
+    @classmethod
+    def _manifest_is_complete(
+        cls, manifest: dict, expected: dict, *, root: bool = False
+    ) -> bool:
+        for key, value in expected.items():
+            if key not in manifest:
+                return False
+            current = manifest[key]
+            if isinstance(value, dict):
+                if not isinstance(current, dict) or not cls._manifest_is_complete(current, value):
+                    return False
+        return not root or all(
+            isinstance(manifest.get(key), str) and manifest[key]
+            for key in ("created_at", "updated_at")
+        )
+
+    @classmethod
+    def _complete_manifest(cls, existing: dict, expected: dict) -> dict:
+        completed = dict(existing)
+        for key, value in expected.items():
+            if isinstance(value, dict):
+                current = existing.get(key)
+                completed[key] = cls._complete_manifest(
+                    current if isinstance(current, dict) else {}, value
+                )
+            else:
+                completed[key] = value
+        if isinstance(existing.get("created_at"), str) and existing["created_at"]:
+            completed["created_at"] = existing["created_at"]
+        return completed
+
+    def _write_manifest_once(self, path: Path, payload: dict) -> dict:
+        existing = self._validate_existing_manifest(path, payload)
+        if existing is not None:
+            if self._manifest_is_complete(existing, payload, root=True):
+                return existing
+            payload = self._complete_manifest(existing, payload)
         path.parent.mkdir(parents=True, exist_ok=True)
         atomic_write_json(path, payload, sort_keys=True)
+        return payload
 
-    def _assert_new_targets(self, targets: list[Path]) -> None:
-        for target in targets:
+    def _validate_existing_targets(
+        self, files: list[tuple[Path, bytes]]
+    ) -> list[tuple[Path, bytes]]:
+        missing: list[tuple[Path, bytes]] = []
+        for target, expected in files:
             self._vault_path(target)
-            if target.exists() or target.is_symlink():
+            if not target.exists() and not target.is_symlink():
+                missing.append((target, expected))
+                continue
+            if target.is_symlink() or not target.is_file():
                 raise MeetingContractError(
                     f"meeting artifact target already exists: {target.name}"
                 )
+            try:
+                current = target.read_bytes()
+            except OSError as error:
+                raise MeetingContractError(
+                    f"meeting artifact target cannot be read: {target.name}"
+                ) from error
+            if current != expected:
+                raise MeetingContractError(
+                    f"meeting artifact target conflicts with imported content: {target.name}"
+                )
+        return missing
 
     @staticmethod
     def _write_import_files(

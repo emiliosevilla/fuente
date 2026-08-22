@@ -2,9 +2,10 @@
 
 ## Resultado
 
-Implementación local completada sin bridge F02.4, sin push y sin acceso al Vault real.
-Se corrigieron las expectativas de `schema_migrations` para registrar también la
-migración `014_meeting_sessions.sql` y queda creado el commit local solicitado.
+Fix round 1 completado sin bridge F02.4, sin push y sin acceso al Vault real.
+La importación idéntica reutiliza los artefactos y el resultado persistido; los
+conflictos de contenido, hashes, rutas o procedencia siguen bloqueados. Un
+manifest parcial compatible se completa mediante reemplazo atómico.
 
 ## Archivos
 
@@ -15,11 +16,13 @@ migración `014_meeting_sessions.sql` y queda creado el commit local solicitado.
 - `fuente/infrastructure/sqlite_store.py`: alta idempotente, consulta, listado y
   eliminación de sesiones.
 - `fuente/core/vault.py`: importación coordinada y segura a `2_sucio`, `3_limpio`
-  y `4_procesado`; manifest de preparación sólo se crea una vez y se conserva en
-  caso de fallo.
+  y `4_procesado`; importación idéntica idempotente por contenido, manifest
+  recuperable con estado, rutas, hashes, revisión, plantilla y timestamps, y
+  rollback conservado en caso de fallo.
 - `tests/test_meeting_artifact_contract.py` y
   `tests/test_meeting_session_store.py`: contratos, rutas, hashes, procedencia,
-  bloqueo de notas, rollback y persistencia.
+  bloqueo de notas, rollback, persistencia, doble importación y recuperación de
+  manifest incompleto.
 
 ## Pruebas
 
@@ -29,12 +32,13 @@ migración `014_meeting_sessions.sql` y queda creado el commit local solicitado.
 - Suite corregida del brief:
   `PYTHONDONTWRITEBYTECODE=1 python3 -m pytest tests/test_meeting_artifact_contract.py
   tests/test_meeting_session_store.py tests/test_approval_ledger.py
-  tests/security/test_path_authorization.py -q` — `29 passed`.
+  tests/security/test_path_authorization.py -q` — `31 passed`.
 - Suite JobStore afectada:
   `PYTHONDONTWRITEBYTECODE=1 python3 -m pytest tests/test_job_store.py -q` —
   `28 passed`.
 - `PYTHONDONTWRITEBYTECODE=1 python3 -m py_compile fuente/domain/meetings.py fuente/infrastructure/sqlite_store.py fuente/core/vault.py`: PASS.
 - `git diff --check`: PASS.
+- Commit local: `fix: make meeting import recovery idempotent`.
 
 ## Ruling del ledger
 

@@ -15,6 +15,8 @@ from typing import Any, Callable, Mapping, Optional, Protocol, Sequence
 
 from fuente.rag.hybrid_search import HybridSearcher, docs_from_chroma_store
 from fuente.rag.index_records import query_result_source_fields
+from fuente.rag.backend import IndexBuildResult, RetrievalHit
+from fuente.rag.router import RetrievalRouter
 from fuente.domain.runtime_policy import RuntimePolicy
 
 logger = logging.getLogger(__name__)
@@ -57,6 +59,52 @@ class _ChromaCorpusProvider:
 
     def load(self) -> list[dict[str, object]]:
         return list(docs_from_chroma_store(self.chroma_store))
+
+
+class _EmptyCorpusProvider:
+    def load(self) -> list[dict[str, object]]:
+        return []
+
+
+class _ServiceRetrievalBackend:
+    """Compatibility adapter until concrete primary/refinement stores exist."""
+
+    def __init__(self, service: "RetrievalApplicationService", name: str) -> None:
+        self.service = service
+        self.name = name
+
+    def rebuild(self, records: Sequence[Mapping[str, Any]]) -> IndexBuildResult:
+        raise NotImplementedError("retrieval service does not build indexes")
+
+    def search(self, query: str, limit: int) -> list[RetrievalHit]:
+        hits = self.service._legacy_search(query, candidate_limit=limit)
+        converted: list[RetrievalHit] = []
+        for hit in hits:
+            metadata = dict(hit.get("metadata") or {})
+            content_hash = str(
+                metadata.get("content_hash") or metadata.get("source_hash") or ""
+            )
+            converted.append(
+                RetrievalHit(
+                    document_id=str(metadata.get("document_id") or ""),
+                    revision=int(metadata.get("revision", 1)),
+                    content_hash=content_hash,
+                    content=str(hit.get("content") or ""),
+                    score=float(
+                        hit.get(
+                            "score",
+                            hit.get("rrf_score", hit.get("bm25_score", 0.0)),
+                        )
+                    ),
+                    backend=self.name,
+                    relative_path=str(metadata.get("relative_path") or ""),
+                    metadata={**metadata, "id": hit.get("id")},
+                )
+            )
+        return converted
+
+    def delete(self, document_ids: Sequence[str]) -> None:
+        raise NotImplementedError("retrieval service does not delete indexes")
 
 
 def _empty_context(
@@ -160,18 +208,23 @@ class RetrievalApplicationService:
         max_chars: int = DEFAULT_MAX_CHARS,
         max_sources: int = DEFAULT_MAX_SOURCES,
         snippet_chars: int = DEFAULT_SNIPPET_CHARS,
+        router: RetrievalRouter | None = None,
     ) -> None:
         self.chroma_store = chroma_store
         self.runtime_policy = runtime_policy
         selected_mode = getattr(runtime_policy, "retrieval_mode", MODE_HYBRID)
         self._uses_vault_corpus = selected_mode == MODE_BM25_VAULT
         self._retrieval_mode = MODE_BM25_VAULT if self._uses_vault_corpus else MODE_HYBRID
-        if self._uses_vault_corpus:
+        if self._uses_vault_corpus and router is None:
             if corpus_provider is None:
                 raise ValueError("corpus_provider is required for bm25_vault retrieval")
-        elif chroma_store is None:
+        elif chroma_store is None and router is None:
             raise ValueError("chroma_store is required for hybrid retrieval")
-        self.corpus_provider = corpus_provider or _ChromaCorpusProvider(chroma_store)
+        self.corpus_provider = corpus_provider or (
+            _ChromaCorpusProvider(chroma_store)
+            if chroma_store is not None
+            else _EmptyCorpusProvider()
+        )
         self._ram_governor = ram_governor
         # Prefer the store's process-local searcher so add/delete invalidation
         # (ChromaStore.invalidate_bm25_cache) keeps chat retrieval warm/coherent.
@@ -189,6 +242,10 @@ class RetrievalApplicationService:
         self.max_chars = max(1, int(max_chars))
         self.max_sources = max(1, int(max_sources))
         self.snippet_chars = max(32, int(snippet_chars))
+        self.router = router or RetrievalRouter(
+            primary=_ServiceRetrievalBackend(self, "primary"),
+            refinement=_ServiceRetrievalBackend(self, "refinement"),
+        )
 
     def notify_index_changed(self) -> None:
         """Invalidate the BM25 cache after ingestion add/delete."""
@@ -207,6 +264,7 @@ class RetrievalApplicationService:
         document_id: Optional[str] = None,
         issue: Optional[str] = None,
         theme: Optional[str] = None,
+        role: str = "primary",
     ) -> list[dict]:
         """Return bounded, scoped hit dicts (sources + snippets always present)."""
         context = self.build_context(
@@ -216,6 +274,7 @@ class RetrievalApplicationService:
             document_id=document_id,
             issue=issue,
             theme=theme,
+            role=role,
         )
         return list(context["chunks"])
 
@@ -228,6 +287,7 @@ class RetrievalApplicationService:
         document_id: Optional[str] = None,
         issue: Optional[str] = None,
         theme: Optional[str] = None,
+        role: str = "primary",
     ) -> dict:
         """Build an LLM-ready context payload (or a clear no-context result)."""
         try:
@@ -242,6 +302,7 @@ class RetrievalApplicationService:
         if not q:
             return _empty_context(query=query or "", scope=scope_kind)
 
+        backend = self._backend_for_role(role)
         limit = max(1, int(limit))
         degraded = False
         degradation_reason: Optional[str] = None
@@ -252,14 +313,14 @@ class RetrievalApplicationService:
             degradation_reason = str(
                 getattr(self.runtime_policy, "reason", "bm25_vault policy selected")
             )
-            raw_hits = self._bm25_search(q, candidate_limit=limit)
+            raw_hits = self._search_backend(backend, q, candidate_limit=limit)
         elif self._ram_fallback_active():
             degraded = True
             degradation_reason = DEGRADATION_RAM
             mode = MODE_BM25
-            raw_hits = self._bm25_search(q, candidate_limit=limit)
+            raw_hits = self._search_backend(backend, q, candidate_limit=limit)
         else:
-            raw_hits = self._hybrid_search(q, candidate_limit=limit)
+            raw_hits = self._search_backend(backend, q, candidate_limit=limit)
 
         scoped = [
             hit
@@ -298,6 +359,42 @@ class RetrievalApplicationService:
     # ------------------------------------------------------------------
     # Internals
     # ------------------------------------------------------------------
+
+    def _backend_for_role(self, role: str):
+        if role == "primary":
+            return self.router.primary()
+        if role == "refinement":
+            return self.router.refinement()
+        raise ValueError("retrieval role must be 'primary' or 'refinement'")
+
+    def _search_backend(
+        self, backend: Any, query: str, *, candidate_limit: int
+    ) -> list[dict]:
+        return [self._hit_as_dict(hit) for hit in backend.search(query, candidate_limit)]
+
+    @staticmethod
+    def _hit_as_dict(hit: Any) -> dict:
+        if isinstance(hit, Mapping):
+            return dict(hit)
+        if not isinstance(hit, RetrievalHit):
+            raise TypeError("retrieval backend returned an unsupported hit")
+        metadata = dict(hit.metadata)
+        metadata.setdefault("document_id", hit.document_id)
+        metadata.setdefault("revision", hit.revision)
+        metadata.setdefault("source_hash", hit.content_hash)
+        metadata.setdefault("relative_path", hit.relative_path)
+        return {
+            "id": metadata.get("id") or hit.document_id,
+            "content": hit.content,
+            "metadata": metadata,
+            "score": hit.score,
+            "backend": hit.backend,
+        }
+
+    def _legacy_search(self, query: str, *, candidate_limit: int) -> list[dict]:
+        if self._uses_vault_corpus or self._ram_fallback_active():
+            return self._bm25_search(query, candidate_limit=candidate_limit)
+        return self._hybrid_search(query, candidate_limit=candidate_limit)
 
     def _ram_fallback_active(self) -> bool:
         if self._should_fallback is not None:
@@ -433,7 +530,11 @@ class RetrievalApplicationService:
             score = (
                 hit.get("rrf_score")
                 if hit.get("rrf_score") is not None
-                else hit.get("bm25_score")
+                else (
+                    hit.get("bm25_score")
+                    if hit.get("bm25_score") is not None
+                    else hit.get("score")
+                )
             )
             selected.append(
                 {

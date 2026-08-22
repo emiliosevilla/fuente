@@ -193,6 +193,34 @@ def test_rollback_rejects_same_content_replacement_with_new_identity(tmp_path):
     assert migrator._load(plan.plan_id)[1][0].status == "applied"
 
 
+def test_rollback_rechecks_destination_identity_after_preflight(tmp_path, monkeypatch):
+    vault, source = _setup(tmp_path)
+    source.write_text("note")
+    migrator = VaultLayoutMigrator(vault, theme="Tema")
+    plan = migrator.plan()
+    migrator.apply(plan.plan_id)
+    destination = vault / "Tema" / "4_procesado" / "nota.md"
+    replacement = tmp_path / "replacement.md"
+    real_preflight = migrator._preflight_rollback
+
+    def replace_after_preflight(items, source_root_fd, destination_root_fd):
+        conflicts = real_preflight(items, source_root_fd, destination_root_fd)
+        destination.unlink()
+        replacement.write_text("note")
+        replacement.rename(destination)
+        return conflicts
+
+    monkeypatch.setattr(migrator, "_preflight_rollback", replace_after_preflight)
+
+    report = migrator.rollback(plan.plan_id)
+
+    assert report.status == "conflict"
+    assert report.conflicts == ("nota.md",)
+    assert destination.read_text() == "note"
+    assert not source.exists()
+    assert migrator._load(plan.plan_id)[1][0].status == "applied"
+
+
 @pytest.mark.parametrize("destination_kind", ["missing", "dangling_symlink"])
 def test_rollback_missing_destination_is_a_conflict_without_side_effects(tmp_path, destination_kind):
     vault, source = _setup(tmp_path)

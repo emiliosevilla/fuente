@@ -1,3 +1,56 @@
+# Informe F01.2 — ronda de reparación 7
+
+## Decisión de esta ronda
+
+`rollback()` vuelve a comprobar, después de abrir cada destino con
+`O_RDONLY | O_NOFOLLOW`, que `st_dev`/`st_ino` coinciden con la identidad
+persistida antes de enlazarlo. Si el destino se reemplaza después del
+preflight, devuelve conflicto sin restaurar, borrar ni cambiar el estado
+`applied`.
+
+`012_vault_layout.sql` conserva exactamente el esquema original sin columnas
+de identidad. `015_vault_layout_identity.sql` añade
+`destination_device`/`destination_inode` mediante dos `ALTER TABLE`; `013` y
+`014` siguen libres. Se mantiene el rechazo de prefijos de migración
+duplicados.
+
+## Verificación medida
+
+- Regresión adversarial y focal F01.2:
+  `PYTHONDONTWRITEBYTECODE=1 python3 -m pytest tests/test_job_store.py tests/test_vault_layout_migration.py tests/test_vault_migration.py tests/test_atomic_files.py -q`
+  — `73 passed in 1.90s`.
+- Suite completa:
+  `PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -p no:cacheprovider tests -q`
+  — `1234 passed, 1 skipped, 1 warning in 58.81s`.
+- Frescura:
+  `PYTHONDONTWRITEBYTECODE=1 python3 -m pytest tests/test_documentation_freshness.py -q`
+  — `6 passed in 0.16s`.
+- Release gate:
+  `PYTHONDONTWRITEBYTECODE=1 python3 scripts/release_gate.py --skip-pytest --only documentation_freshness`
+  — `RESULT: READY`.
+- `git diff --check` — correcto.
+- Evidencia regenerada en `docs/evidence/current-sdd.json` con la suite final y
+  `RESULT: READY`.
+
+## Regresiones adversariales
+
+- Reemplazo del destino por contenido idéntico después del preflight y antes
+  de abrirlo: conflicto, destino conservado, origen ausente y estado SQLite
+  `applied` intacto.
+- Reemplazo del destino por contenido idéntico con otra identidad durante el
+  rollback: conflicto sin borrar ni restaurar.
+- Prefijos de migración duplicados: rechazo antes de ejecutar SQL.
+
+## Límites y entrega
+
+No se hizo push, no se tocó el Vault real y no se modificó el plan SDD. Los dos
+ficheros no rastreados ajenos permanecen sin tocar:
+`fuente/domain/vault_layout 2.py` y `tests/test_vault_layout 2.py`.
+
+Commit indicado: `fix: preserve migration compatibility and rollback identity`.
+
+---
+
 # Informe F01.2 — ronda de reparación 6
 
 ## Decisión de esta ronda

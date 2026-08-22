@@ -571,7 +571,13 @@ class VaultLayoutMigrator:
                         )
                         try:
                             destination_identity, digest = self._inspect_fd(destination_fd)
-                            if digest != item.sha256:
+                            if (
+                                digest != item.sha256
+                                or item.destination_device is None
+                                or item.destination_inode is None
+                                or (destination_identity.st_dev, destination_identity.st_ino)
+                                != (item.destination_device, item.destination_inode)
+                            ):
                                 conflicts.append(item.relative_path)
                                 continue
                             os.link(

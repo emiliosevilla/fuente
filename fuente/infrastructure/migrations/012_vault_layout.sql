@@ -13,8 +13,6 @@ CREATE TABLE IF NOT EXISTS vault_layout_migration_items (
     sha256 TEXT NOT NULL,
     status TEXT NOT NULL,
     timestamp TEXT NOT NULL,
-    destination_device INTEGER,
-    destination_inode INTEGER,
     PRIMARY KEY (plan_id, source)
 );
 

@@ -2,10 +2,10 @@
 
 ## Resultado
 
-Fix round 1 completado sin bridge F02.4, sin push y sin acceso al Vault real.
-La importación idéntica reutiliza los artefactos y el resultado persistido; los
-conflictos de contenido, hashes, rutas o procedencia siguen bloqueados. Un
-manifest parcial compatible se completa mediante reemplazo atómico.
+Fix round 2 completado sin bridge F02.4, sin tocar F02.2, sin push y sin acceso
+al Vault real. La escritura del manifest con `status=imported` queda después de
+validar todos los destinos; un conflicto de grabación deja el manifest ausente
+y no crea transcript ni notas parciales.
 
 ## Archivos
 
@@ -21,24 +21,32 @@ manifest parcial compatible se completa mediante reemplazo atómico.
   rollback conservado en caso de fallo.
 - `tests/test_meeting_artifact_contract.py` y
   `tests/test_meeting_session_store.py`: contratos, rutas, hashes, procedencia,
-  bloqueo de notas, rollback, persistencia, doble importación y recuperación de
-  manifest incompleto.
+  bloqueo de notas, rollback, persistencia, doble importación, recuperación de
+  manifest incompleto y conflicto de grabación sin estado `imported` falso.
 
 ## Pruebas
 
 - Orden exacta del brief: no ejecutable porque no existe
   `tests/test_approval_service.py` en este checkout. Se documenta y se usa la
   suite equivalente existente `tests/test_approval_ledger.py`.
-- Suite corregida del brief:
+- Suite corregida del brief, incluida la regresión de conflicto:
   `PYTHONDONTWRITEBYTECODE=1 python3 -m pytest tests/test_meeting_artifact_contract.py
   tests/test_meeting_session_store.py tests/test_approval_ledger.py
-  tests/security/test_path_authorization.py -q` — `31 passed`.
+  tests/security/test_path_authorization.py -q` — `32 passed`.
 - Suite JobStore afectada:
   `PYTHONDONTWRITEBYTECODE=1 python3 -m pytest tests/test_job_store.py -q` —
   `28 passed`.
 - `PYTHONDONTWRITEBYTECODE=1 python3 -m py_compile fuente/domain/meetings.py fuente/infrastructure/sqlite_store.py fuente/core/vault.py`: PASS.
 - `git diff --check`: PASS.
-- Commit local: `fix: make meeting import recovery idempotent`.
+- Commit local: `fix: prevent false meeting import manifests`.
+
+## Fix round 2
+
+- Se eliminó la escritura prematura del manifest antes de validar conflictos
+  de contenido/ruta/hash.
+- Se añadió regresión para el mismo `session_id` con una grabación distinta:
+  lanza conflicto, conserva el destino previo y no deja manifest `imported` ni
+  artefactos de transcript/notas.
 
 ## Ruling del ledger
 

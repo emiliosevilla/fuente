@@ -159,6 +159,25 @@ def test_incomplete_manifest_is_completed_atomically(tmp_path: Path) -> None:
     assert payload["updated_at"]
 
 
+def test_conflicting_recording_does_not_publish_imported_manifest(tmp_path: Path) -> None:
+    vault = VaultManager(VaultConfig(vault_path=tmp_path / "vault"))
+    artifacts = _artifacts(vault.config.vault_path)
+    conflicting_recording = vault.dirty_dir / "reunion" / SESSION_ID / "recording.m4a"
+    conflicting_recording.parent.mkdir(parents=True, exist_ok=True)
+    conflicting_recording.write_bytes(b"recording from another import")
+    manifest = vault.config.vault_path / ".fuente/reunion/m-1/manifest.json"
+
+    with pytest.raises(MeetingContractError, match="conflicts with imported content"):
+        MeetingImportApplicationService(vault).import_artifacts(
+            artifacts, expected_session_id=SESSION_ID
+        )
+
+    assert not manifest.exists()
+    assert conflicting_recording.read_bytes() == b"recording from another import"
+    assert not (vault.clean_dir / "reunion").exists()
+    assert not (vault.processed_dir / "reunion").exists()
+
+
 @pytest.mark.parametrize(
     "mutator",
     [

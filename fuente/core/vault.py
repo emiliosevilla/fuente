@@ -657,8 +657,6 @@ class MeetingImportApplicationService:
                 else None
             ),
         }
-        self._write_manifest_once(manifest_path, manifest)
-
         session = MeetingSession(
             session_id=session_id,
             status="imported",

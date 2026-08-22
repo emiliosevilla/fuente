@@ -37,6 +37,7 @@ from fuente.domain.jobs import (
     JobStoreBusyError,
     StageEvent,
 )
+from fuente.domain.meetings import MeetingSession
 from fuente.domain.note_catalog import IdentityCollisionError
 from fuente.domain.sync import SyncManifestEntry
 
@@ -191,6 +192,84 @@ class JobStore:
             "SELECT * FROM sync_manifest ORDER BY source_key ASC"
         ).fetchall()
         return [SyncManifestEntry.from_row(row) for row in rows]
+
+    # -- meeting sessions --------------------------------------------------
+
+    def create_meeting_session(self, session: MeetingSession) -> dict[str, Any]:
+        """Persist one meeting identity without replacing an existing one."""
+        if not isinstance(session, MeetingSession):
+            raise TypeError("session must be a MeetingSession")
+        values = (
+            session.session_id,
+            session.provider,
+            session.provider_revision,
+            session.template_id,
+            session.status,
+            session.manifest_relative_path or f".fuente/reunion/{session.session_id}/manifest.json",
+            session.recording_relative_path or "",
+            session.transcript_relative_path or "",
+            session.notes_relative_path,
+            session.recording_sha256.lower() if session.recording_sha256 else None,
+            session.transcript_sha256.lower() if session.transcript_sha256 else None,
+            session.notes_sha256.lower() if session.notes_sha256 else None,
+            session.created_at,
+            session.updated_at,
+        )
+        try:
+            self._connection.execute(
+                """
+                INSERT INTO meeting_sessions (
+                    session_id, provider, provider_revision, template_id, status,
+                    manifest_relative_path, recording_relative_path,
+                    transcript_relative_path, notes_relative_path,
+                    recording_sha256, transcript_sha256, notes_sha256,
+                    created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                values,
+            )
+        except sqlite3.IntegrityError as error:
+            existing = self.get_meeting_session(session.session_id)
+            if existing is None:
+                raise
+            immutable_values = {
+                "provider": session.provider,
+                "provider_revision": session.provider_revision,
+                "template_id": session.template_id,
+                "manifest_relative_path": values[5],
+                "recording_relative_path": values[6],
+                "transcript_relative_path": values[7],
+                "notes_relative_path": values[8],
+                "recording_sha256": values[9],
+                "transcript_sha256": values[10],
+                "notes_sha256": values[11].lower() if values[11] else None,
+            }
+            if any(existing[field] != value for field, value in immutable_values.items()):
+                raise ValueError("meeting session identity already exists with different artifacts") from error
+            return existing
+        stored = self.get_meeting_session(session.session_id)
+        assert stored is not None
+        return stored
+
+    record_meeting_session = create_meeting_session
+    save_meeting_session = create_meeting_session
+
+    def get_meeting_session(self, session_id: str) -> dict[str, Any] | None:
+        row = self._connection.execute(
+            "SELECT * FROM meeting_sessions WHERE session_id = ?", (session_id,)
+        ).fetchone()
+        return dict(row) if row is not None else None
+
+    def list_meeting_sessions(self) -> list[dict[str, Any]]:
+        rows = self._connection.execute(
+            "SELECT * FROM meeting_sessions ORDER BY created_at ASC, session_id ASC"
+        ).fetchall()
+        return [dict(row) for row in rows]
+
+    def delete_meeting_session(self, session_id: str) -> None:
+        self._connection.execute(
+            "DELETE FROM meeting_sessions WHERE session_id = ?", (session_id,)
+        )
 
     # -- Vault layout migration -----------------------------------------
 

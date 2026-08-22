@@ -24,6 +24,10 @@
     {
       "command": "PYTHONDONTWRITEBYTECODE=1 python3 -m pytest tests/test_documentation_freshness.py::test_evolution_baseline_names_active_sdd -q",
       "result": "PASS: 1 passed"
+    },
+    {
+      "command": "PYTHONDONTWRITEBYTECODE=1 python3 -m pytest tests/test_documentation_freshness.py -q",
+      "result": "PASS: 6 passed in 0.79s"
     }
   ]
 }

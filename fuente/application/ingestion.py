@@ -35,6 +35,7 @@ from __future__ import annotations
 import logging
 import uuid
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Optional
 
@@ -72,6 +73,7 @@ from fuente.domain.quarantine import InvalidModelOutputError
 from fuente.domain.runtime_policy import RuntimePolicy
 from fuente.extractors.audio import AudioModelUnavailableError
 from fuente.extractors.base import ExtractionResult
+from fuente.extractors.policy import ExtractionDecision, ExtractionPolicy
 from fuente.infrastructure.atomic_files import atomic_write_text
 from fuente.infrastructure.sqlite_store import JobStore
 from fuente.ram_governor.budget import unavailable_snapshot
@@ -242,6 +244,12 @@ class IngestionApplicationService:
         self.vault = vault
         self.job_store = job_store
         self.extractors = extractors
+        engines = list(getattr(extractors, "extractors", ()))
+        if engines:
+            engines.append(extractors)
+        else:
+            engines = [extractors]
+        self.extraction_policy = ExtractionPolicy(engines)
         self.chunker = chunker
         self.chroma = chroma
         self.atomic_generator = atomic_generator
@@ -1560,12 +1568,20 @@ class IngestionApplicationService:
         max_attempts = max_attempts_for_error_class(ErrorClass.CORRUPT_OR_UNSUPPORTED)
         for attempt in range(1, max_attempts + 1):
             try:
-                result = self.extractors.extract(dirty_path)
-                if isinstance(result, ExtractionResult):
-                    extracted = result
-                else:
-                    content, metadata = result
-                    extracted = ExtractionResult(content, dict(metadata))
+                decision = self.extraction_policy.extract(dirty_path)
+                self._persist_extraction_attempts(job, decision)
+                if decision.status == "skipped":
+                    return job, ExtractionResult(
+                        content=None,
+                        metadata={"original_file": dirty_path.name},
+                        status="skipped",
+                        reason=decision.reason,
+                    )
+                if decision.selected_engine is None:
+                    raise ExtractionFailedError(decision.reason or "extraction_quality: no accepted extraction")
+                extracted = ExtractionResult(
+                    decision.content, dict(decision.metadata or {})
+                )
                 return job, extracted
             except AudioModelUnavailableError as error:
                 return job, ExtractionResult(
@@ -1598,6 +1614,26 @@ class IngestionApplicationService:
         raise ContentRetryExhaustedError(
             last_error, error_code, max_attempts
         ) from last_error
+
+    def _persist_extraction_attempts(
+        self, job: JobRecord, decision: ExtractionDecision
+    ) -> None:
+        connection = getattr(self.job_store, "_connection", None)
+        if connection is None:
+            raise RuntimeError("job store does not expose extraction persistence")
+        now = datetime.now(timezone.utc).isoformat()
+        for attempt in decision.attempts:
+            connection.execute(
+                """
+                INSERT INTO extraction_attempts
+                (job_id, source_relative_path, engine, outcome, score,
+                 printable_ratio, expected_structure, reason, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (job.job_id, job.source_relative_path, attempt.engine,
+                 attempt.outcome, attempt.score, attempt.printable_ratio,
+                 int(attempt.expected_structure), attempt.reason, now),
+            )
 
     @staticmethod
     def _content_error_code(error: Exception) -> str:

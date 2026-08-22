@@ -1,4 +1,5 @@
 import hashlib
+import os
 from pathlib import Path
 
 import pytest
@@ -105,6 +106,24 @@ def test_changed_source_aborts_before_moving_any_file(tmp_path):
     assert not (vault / "Tema" / "4_procesado" / "other.md").exists()
 
 
+def test_apply_rejects_internal_source_symlink_before_mutating(tmp_path):
+    vault, source = _setup(tmp_path)
+    source.write_text("note")
+    internal_target = source.parent / "internal.md"
+    internal_target.write_text("note")
+    migrator = VaultLayoutMigrator(vault, theme="Tema")
+    plan = migrator.plan()
+    source.unlink()
+    source.symlink_to(internal_target)
+
+    with pytest.raises(RuntimeError, match="unsafe source path"):
+        migrator.apply(plan.plan_id)
+
+    assert source.is_symlink()
+    assert internal_target.read_text() == "note"
+    assert not (vault / "Tema" / "4_procesado" / "nota.md").exists()
+
+
 def test_rollback_and_conflict_are_safe(tmp_path):
     vault, source = _setup(tmp_path)
     source.write_text("note")
@@ -115,6 +134,31 @@ def test_rollback_and_conflict_are_safe(tmp_path):
     destination.write_text("changed")
     report = migrator.rollback(plan.plan_id)
     assert report.status == "conflict" and destination.read_text() == "changed"
+
+
+def test_rollback_rejects_same_content_replacement_with_new_identity(tmp_path):
+    vault, source = _setup(tmp_path)
+    source.write_text("note")
+    migrator = VaultLayoutMigrator(vault, theme="Tema")
+    plan = migrator.plan()
+    migrator.apply(plan.plan_id)
+    destination = vault / "Tema" / "4_procesado" / "nota.md"
+    original_identity = os.stat(destination)
+    replacement = destination.with_name("replacement.md")
+    replacement.write_text("note")
+    os.replace(replacement, destination)
+    assert (os.stat(destination).st_dev, os.stat(destination).st_ino) != (
+        original_identity.st_dev,
+        original_identity.st_ino,
+    )
+
+    report = migrator.rollback(plan.plan_id)
+
+    assert report.status == "conflict"
+    assert report.conflicts == ("nota.md",)
+    assert destination.read_text() == "note"
+    assert not source.exists()
+    assert migrator._load(plan.plan_id)[1][0].status == "applied"
 
 
 @pytest.mark.parametrize("destination_kind", ["missing", "dangling_symlink"])

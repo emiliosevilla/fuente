@@ -31,6 +31,8 @@ class LayoutMigrationItem:
     status: str
     timestamp: str
     relative_path: str
+    destination_device: int | None = None
+    destination_inode: int | None = None
 
     @property
     def origin(self) -> str:
@@ -178,8 +180,12 @@ class VaultLayoutMigrator:
         for item in items:
             source, destination = Path(item.source), Path(item.destination)
             self._validate_destination_parent(destination.parent)
+            if not self._source_parent_is_safe(source):
+                raise RuntimeError(f"unsafe source path: {item.relative_path}")
             if item.status == "planned":
-                if not self._safe_file(source, source_root) or _sha256(source) != item.sha256:
+                if source.is_symlink() or not self._safe_file(source, source_root):
+                    raise RuntimeError(f"unsafe source path: {item.relative_path}")
+                if _sha256(source) != item.sha256:
                     raise RuntimeError(f"hash mismatch: {item.relative_path}")
                 if os.path.lexists(destination):
                     raise RuntimeError(f"destination conflict: {item.relative_path}")
@@ -191,6 +197,10 @@ class VaultLayoutMigrator:
                     or not os.path.samefile(source, destination)
                     or _sha256(source) != item.sha256
                     or _sha256(destination) != item.sha256
+                    or item.destination_device is None
+                    or item.destination_inode is None
+                    or destination.stat().st_dev != item.destination_device
+                    or destination.stat().st_ino != item.destination_inode
                 ):
                     raise RuntimeError(f"incomplete linked item: {item.relative_path}")
             elif item.status not in {"applied", "rolled_back"}:
@@ -216,8 +226,14 @@ class VaultLayoutMigrator:
                 if item.status == "planned":
                     self._ensure_destination_parent(destination.parent)
                     os.link(source, destination)
+                    identity = destination.stat()
                     store.update_vault_layout_migration_item(
-                        plan_id, item.source, status="linked", timestamp=_now()
+                        plan_id,
+                        item.source,
+                        status="linked",
+                        timestamp=_now(),
+                        destination_device=identity.st_dev,
+                        destination_inode=identity.st_ino,
                     )
                     os.unlink(source)
                     store.update_vault_layout_migration_item(
@@ -255,7 +271,15 @@ class VaultLayoutMigrator:
             source, destination = Path(item.source), Path(item.destination)
             if not os.path.lexists(destination):
                 conflicts.append(item.relative_path)
-            elif destination.is_symlink() or not destination.is_file() or _sha256(destination) != item.sha256:
+            elif (
+                destination.is_symlink()
+                or not destination.is_file()
+                or _sha256(destination) != item.sha256
+                or item.destination_device is None
+                or item.destination_inode is None
+                or destination.stat().st_dev != item.destination_device
+                or destination.stat().st_ino != item.destination_inode
+            ):
                 conflicts.append(item.relative_path)
             elif os.path.lexists(source):
                 conflicts.append(item.relative_path)
@@ -268,7 +292,15 @@ class VaultLayoutMigrator:
                 source, destination = Path(item.source), Path(item.destination)
                 if not destination.exists():
                     continue
-                if destination.is_symlink() or not destination.is_file() or _sha256(destination) != item.sha256:
+                if (
+                    destination.is_symlink()
+                    or not destination.is_file()
+                    or _sha256(destination) != item.sha256
+                    or item.destination_device is None
+                    or item.destination_inode is None
+                    or destination.stat().st_dev != item.destination_device
+                    or destination.stat().st_ino != item.destination_inode
+                ):
                     conflicts.append(item.relative_path)
                     continue
                 if os.path.lexists(source):

@@ -38,6 +38,7 @@ from fuente.domain.jobs import (
     StageEvent,
 )
 from fuente.domain.meetings import MeetingSession
+from fuente.domain.refinement import RefinementCandidate, RefinementVerdict
 from fuente.domain.note_catalog import IdentityCollisionError
 from fuente.domain.sync import SyncManifestEntry
 
@@ -108,6 +109,117 @@ class JobStore:
 
     def close(self) -> None:
         self._connection.close()
+
+    # -- refinement identity and verdicts --------------------------------
+
+    def save_refinement_candidate(self, candidate: RefinementCandidate) -> dict[str, Any]:
+        if not isinstance(candidate, RefinementCandidate):
+            raise TypeError("candidate must be a RefinementCandidate")
+        values = candidate.to_record()
+        try:
+            self._connection.execute(
+                """
+                INSERT INTO refinement_candidates
+                (candidate_id, document_id, revision, content_hash, baseline_path, candidate_path, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                tuple(values[field] for field in (
+                    "candidate_id", "document_id", "revision", "content_hash",
+                    "baseline_path", "candidate_path", "created_at",
+                )),
+            )
+        except sqlite3.IntegrityError:
+            existing = self.get_refinement_candidate(candidate.candidate_id)
+            if existing is None or any(
+                existing[field] != values[field]
+                for field in ("document_id", "revision", "content_hash", "baseline_path", "candidate_path")
+            ):
+                raise ValueError("refinement candidate identity conflict")
+        return self.get_refinement_candidate(candidate.candidate_id) or values
+
+    def get_refinement_candidate(self, candidate_id: str) -> dict[str, Any] | None:
+        row = self._connection.execute(
+            "SELECT * FROM refinement_candidates WHERE candidate_id = ?", (candidate_id,)
+        ).fetchone()
+        return dict(row) if row is not None else None
+
+    def save_refinement_verdict(
+        self,
+        document_id: str,
+        revision: int,
+        content_hash: str,
+        verdict: RefinementVerdict,
+    ) -> None:
+        if not isinstance(verdict, RefinementVerdict):
+            raise TypeError("verdict must be a RefinementVerdict")
+        values = verdict.to_record()
+        with self._immediate_transaction(verdict.candidate_id) as connection:
+            candidate = connection.execute(
+                "SELECT * FROM refinement_candidates WHERE candidate_id = ?",
+                (verdict.candidate_id,),
+            ).fetchone()
+            if candidate is None:
+                candidate_values = RefinementCandidate(
+                    candidate_id=verdict.candidate_id,
+                    document_id=document_id,
+                    revision=revision,
+                    content_hash=content_hash,
+                ).to_record()
+                connection.execute(
+                    """
+                    INSERT INTO refinement_candidates
+                    (candidate_id, document_id, revision, content_hash, baseline_path, candidate_path, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    tuple(candidate_values[field] for field in (
+                        "candidate_id", "document_id", "revision", "content_hash",
+                        "baseline_path", "candidate_path", "created_at",
+                    )),
+                )
+                candidate = connection.execute(
+                    "SELECT * FROM refinement_candidates WHERE candidate_id = ?",
+                    (verdict.candidate_id,),
+                ).fetchone()
+            assert candidate is not None
+            if (candidate["document_id"], candidate["revision"], candidate["content_hash"]) != (
+                document_id, revision, content_hash
+            ):
+                raise ValueError("refinement verdict does not match candidate identity")
+            try:
+                connection.execute(
+                    """
+                    INSERT INTO refinement_verdicts
+                    (candidate_id, decision, baseline_score, candidate_score, graph_delta,
+                     retrieval_delta, verifier_reason, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    tuple(values[field] for field in (
+                        "candidate_id", "decision", "baseline_score", "candidate_score",
+                        "graph_delta", "retrieval_delta", "verifier_reason", "created_at",
+                    )),
+                )
+            except sqlite3.IntegrityError:
+                existing = connection.execute(
+                    "SELECT * FROM refinement_verdicts WHERE candidate_id = ?",
+                    (verdict.candidate_id,),
+                ).fetchone()
+                if existing is None or any(
+                    existing[field] != values[field]
+                    for field in ("decision", "baseline_score", "candidate_score", "graph_delta", "retrieval_delta", "verifier_reason")
+                ):
+                    raise ValueError("refinement verdict already exists with different values")
+
+    def get_refinement_verdict(self, candidate_id: str) -> dict[str, Any] | None:
+        row = self._connection.execute(
+            """
+            SELECT v.*, c.document_id, c.revision, c.content_hash
+            FROM refinement_verdicts AS v
+            JOIN refinement_candidates AS c ON c.candidate_id = v.candidate_id
+            WHERE v.candidate_id = ?
+            """,
+            (candidate_id,),
+        ).fetchone()
+        return dict(row) if row is not None else None
 
     def __enter__(self) -> "JobStore":
         return self

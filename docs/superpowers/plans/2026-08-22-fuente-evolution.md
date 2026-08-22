@@ -664,7 +664,7 @@ Status: COMPLETE — Terra approved; `87` RAG/ingestion/security tests passed; d
 
 ## Phase 4 — verified refinement
 
-### Task F04.1: Persist candidate baselines and verdicts
+### Task F04.1: Persist candidate baselines and verdicts — COMPLETE
 
 Files:
 - Create: fuente/domain/refinement.py
@@ -675,7 +675,7 @@ Files:
 Interfaces:
 - Produces RefinementCandidate, RefinementVerdict and atomic verdict storage.
 
-- [ ] Step 1: Write failing verdict identity test.
+- [x] Step 1: Write failing verdict identity test.
 
 ~~~python
 def test_verdict_binds_candidate_to_exact_revision_and_hash(store):
@@ -684,31 +684,33 @@ def test_verdict_binds_candidate_to_exact_revision_and_hash(store):
     assert store.get_refinement_verdict("candidate-1")["content_hash"] == "sha256:abc"
 ~~~
 
-- [ ] Step 2: Run test.
+- [x] Step 2: Run test.
 
 Run: PYTHONDONTWRITEBYTECODE=1 python3 -m pytest tests/test_refinement_store.py -q
 Expected: FAIL because schema and methods do not exist.
 
-- [ ] Step 3: Implement storage methods.
+- [x] Step 3: Implement storage methods.
 
 ~~~python
 def save_refinement_verdict(self, document_id: str, revision: int, content_hash: str, verdict: RefinementVerdict) -> None: ...
 def get_refinement_verdict(self, candidate_id: str) -> dict[str, object] | None: ...
 ~~~
 
-- [ ] Step 4: Verify migration and invariants.
+- [x] Step 4: Verify migration and invariants.
 
 Run: PYTHONDONTWRITEBYTECODE=1 python3 -m pytest tests/test_refinement_store.py tests/test_job_store.py tests/test_invariants.py -q
 Expected: PASS; conflicting revisions do not overwrite verdicts.
 
-- [ ] Step 5: Commit.
+- [x] Step 5: Commit. Implemented in `018_refinement_verdicts.sql` because `015` and `017` were already occupied.
+
+Status: COMPLETE — Terra approved atomic identity/verdict persistence; `35 passed`.
 
 ~~~bash
 git add fuente/domain/refinement.py fuente/infrastructure/migrations/015_refinement_verdicts.sql fuente/infrastructure/sqlite_store.py tests/test_refinement_store.py
 git commit -m "feat: persist refinement verdicts"
 ~~~
 
-### Task F04.2: Reject non-positive changes
+### Task F04.2: Reject non-positive changes — IN PROGRESS
 
 Files:
 - Create: fuente/application/refinement.py

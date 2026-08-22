@@ -1,10 +1,10 @@
 # Ledger — Fuente evolution
 
-Status: DRAFT / planning only
+Status: IMPLEMENTATION IN PROGRESS
 Spec: docs/superpowers/specs/2026-08-22-fuente-evolution.md
 Plan: docs/superpowers/plans/2026-08-22-fuente-evolution.md
 Created: 2026-08-22
-Current gate: F03.2 pinned MiniRAG adapter is in progress. F03.1 is implemented and Terra-approved; D-01 revision `e204d239421f45004852953679927fdf6733f236` and MIT license are verified and recorded before adapter implementation.
+Current gate: F04.2 positive-only verifier is in progress. F04.1 identity/verdict persistence is implemented and Terra-approved.
 
 ## Evidence vocabulary
 
@@ -39,8 +39,8 @@ Current gate: F03.2 pinned MiniRAG adapter is in progress. F03.1 is implemented 
 | F02.4 | F00.2,F02.3 | pinned Meetily local bridge and importer | yes | yes — `0927c1c`, `e37df26`, `61bf6bf` | `39 + 43 passed, 1 warning` after fix | yes — Terra APPROVE; no findings | no | F03.1 may start |
 | F03.1 | F01.1,F02.2 | retrieval contracts/router | yes | yes — `5c85989` | `22` focal; `108` regression | yes — Terra APPROVE; no findings after score fallback | no | F03.2 may start |
 | F03.2 | F00.2,F03.1 | pinned MiniRAG adapter | yes | yes — `57ba971` | `50 passed` adapter/router/RAG/resource suite; freshness `6 passed` | yes — Terra APPROVE; no findings | no | F03.3 may start |
-| F03.3 | F03.1 | Chroma refinement role | yes | yes — pending commit | `87 passed` RAG/ingestion/security suite | yes — Terra APPROVE; no findings | no | F04.1 may start |
-| F04.1 | F03.1 | verdict persistence | yes | no | no | no | no | Luna |
+| F03.3 | F03.1 | Chroma refinement role | yes | yes — `71b2869` | `87 passed` RAG/ingestion/security suite | yes — Terra APPROVE; no findings | no | F04.1 may start |
+| F04.1 | F03.1 | verdict persistence | yes | yes — pending commit | `35 passed` focal identity/store suite | yes — Terra APPROVE; no findings after atomicity fix | no | F04.2 may start |
 | F04.2 | F03.2,F03.3,F04.1 | positive-only verifier | yes | no | no | no | no | Terra |
 | F04.3 | F04.2 | processed promotion | yes | no | no | no | no | Sol |
 | F05.1 | F01.1,F04.3 | output approval | yes | no | no | no | no | Human |
@@ -367,3 +367,11 @@ At task end, update only that row with a commit, exact test command/result, revi
 - Kept Chroma on local `PersistentClient`; propagated `False` through the typed `bool | None` delete contract so compensation cannot report a failed cleanup as successful.
 - Verification: `87 passed`; `git diff --check` clean.
 - Terra re-review: APPROVE; no findings. F04.1 may start.
+
+### F04.1 completion — 2026-08-23
+
+- Added immutable `RefinementCandidate` identity (`document_id`, `revision`, `content_hash`) and allow-listed `RefinementVerdict` persistence in migration `018`; migrations `015` and `017` were already occupied.
+- `save_refinement_verdict` now uses one `BEGIN IMMEDIATE` transaction for candidate creation and verdict insertion; invalid verdicts roll back the candidate.
+- Verification: `PYTHONPATH=. pytest -q tests/test_refinement_store.py tests/test_job_store.py tests/test_invariants.py` — `35 passed`; `git diff --check` clean.
+- Terra re-review: APPROVE; no findings. F04.2 may start.
+- Commit: pending in this checkpoint; next commit records F04.1 plus this ledger update.

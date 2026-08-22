@@ -1,0 +1,41 @@
+{
+  "spec": "docs/superpowers/specs/2026-08-22-fuente-evolution.md",
+  "plan": "docs/superpowers/plans/2026-08-22-fuente-evolution.md",
+  "git_head": "98cc0b25fbccb565fc1762281d5b508bafad2d59",
+  "vault_inventory_sha256": "219dc05cf275a3fbe6b673651ad9c58c06cb6d6ae673c1d881e7ca9a5882ea91",
+  "vault_inventory_status": "measured_read_only",
+  "vault_inventory_summary": {
+    "legacy_layout": "flat_roots",
+    "clean_notes": 3,
+    "derived_notes": 2,
+    "is_safe_to_apply": false,
+    "finding_kinds": ["duplicate_note_id"],
+    "migration_theme": "General"
+  },
+  "dependency_versions": {
+    "python": "3.14.6",
+    "pytest": "9.1.1"
+  },
+  "command_results": [
+    {
+      "command": "PYTHONDONTWRITEBYTECODE=1 python3 -m pytest tests/test_documentation_freshness.py::test_evolution_baseline_names_active_sdd -q",
+      "result": "FAIL: 1 failed; evidence file absent"
+    },
+    {
+      "command": "PYTHONDONTWRITEBYTECODE=1 python3 -m pytest tests/test_documentation_freshness.py -q",
+      "result": "FAIL: 1 failed, 5 passed; current-sdd source_tree_digest is stale after the scoped test change"
+    },
+    {
+      "command": "git diff --check",
+      "result": "PASS"
+    },
+    {
+      "command": "PYTHONDONTWRITEBYTECODE=1 python3 -m pytest tests/test_documentation_freshness.py::test_evolution_baseline_names_active_sdd -q",
+      "result": "PASS: 1 passed"
+    },
+    {
+      "command": "PYTHONDONTWRITEBYTECODE=1 python3 -m pytest tests/test_documentation_freshness.py -q",
+      "result": "PASS: 6 passed in 0.79s"
+    }
+  ]
+}

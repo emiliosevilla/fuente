@@ -1,5 +1,24 @@
 # Informe F02.1
 
+## Fix round 4
+
+- Corregida la regresión falsa de newline: la razón histórica del test usa un salto de línea real en el valor Python, no los dos caracteres `\\n`.
+- Conservada la aserción `json.loads(row.reasons)` y la comprobación de equivalencia.
+
+### Pruebas de fix round 4
+
+```text
+PYTHONDONTWRITEBYTECODE=1 python3 -m pytest tests/test_job_store.py tests/test_extraction_policy.py tests/test_ingestion_recovery.py tests/integration/test_pipeline_recovery.py -q
+72 passed in 2.40s
+
+git diff --check
+OK
+```
+
+Commit local solicitado: `test: cover multiline extraction reasons`.
+
+No se usa el Vault real ni se hace push.
+
 ## Fix round 3
 
 - Normalizada la conversión de `reason` histórica en `017_extraction_attempt_audit.sql`: `NULL` pasa a `[]` y el texto pasa a una lista JSON de un elemento mediante `json_quote`, sin dejar texto plano.

@@ -610,7 +610,7 @@ def test_migration_017_upgrades_old_013_and_preserves_attempts(tmp_path):
                 0.4,
                 0.8,
                 0,
-                'quality "below" threshold\\nwith slash',
+                'quality "below" threshold\nwith slash',
                 "2026-01-01T00:00:02+00:00",
             ),
         )
@@ -664,7 +664,7 @@ def test_migration_017_upgrades_old_013_and_preserves_attempts(tmp_path):
             0.4,
         )
         assert rows[0][6] == 0
-        assert json.loads(rows[0][5]) == ['quality "below" threshold\\nwith slash']
+        assert json.loads(rows[0][5]) == ['quality "below" threshold\nwith slash']
         assert json.loads(rows[1][5]) == []
         store._connection.execute(
             """

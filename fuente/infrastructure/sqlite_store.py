@@ -278,6 +278,23 @@ class JobStore:
     # -- migrations ------------------------------------------------------
 
     def _run_migrations(self) -> None:
+        migration_paths = sorted(MIGRATIONS_DIR.glob("*.sql"))
+        versions: dict[int, Path] = {}
+        for migration_path in migration_paths:
+            try:
+                version = int(migration_path.name.split("_", 1)[0])
+            except (ValueError, IndexError) as error:
+                raise RuntimeError(
+                    f"migration filename must start with a numeric prefix: {migration_path.name}"
+                ) from error
+            previous = versions.get(version)
+            if previous is not None:
+                raise RuntimeError(
+                    f"duplicate migration prefix {version:03d}: "
+                    f"{previous.name}, {migration_path.name}"
+                )
+            versions[version] = migration_path
+
         self._connection.execute(
             "CREATE TABLE IF NOT EXISTS schema_migrations ("
             "version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL)"
@@ -285,8 +302,7 @@ class JobStore:
         applied = {
             row[0] for row in self._connection.execute("SELECT version FROM schema_migrations")
         }
-        for migration_path in sorted(MIGRATIONS_DIR.glob("*.sql")):
-            version = int(migration_path.name.split("_", 1)[0])
+        for version, migration_path in sorted(versions.items()):
             if version in applied:
                 continue
             self._connection.executescript(migration_path.read_text(encoding="utf-8"))

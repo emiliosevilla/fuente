@@ -124,6 +124,38 @@ def test_apply_rejects_internal_source_symlink_before_mutating(tmp_path):
     assert not (vault / "Tema" / "4_procesado" / "nota.md").exists()
 
 
+def test_apply_rejects_source_replacement_between_preflight_and_link(tmp_path, monkeypatch):
+    vault, source = _setup(tmp_path)
+    source.write_text("trusted")
+    external = tmp_path / "external.md"
+    external.write_text("external")
+    migrator = VaultLayoutMigrator(vault, theme="Tema")
+    plan = migrator.plan()
+    real_link = os.link
+
+    def replace_source_before_link(source_name, destination_name, *, src_dir_fd, dst_dir_fd, follow_symlinks):
+        os.unlink(source_name, dir_fd=src_dir_fd)
+        os.symlink(external, source_name, dir_fd=src_dir_fd)
+        return real_link(
+            source_name,
+            destination_name,
+            src_dir_fd=src_dir_fd,
+            dst_dir_fd=dst_dir_fd,
+            follow_symlinks=follow_symlinks,
+        )
+
+    monkeypatch.setattr("fuente.infrastructure.vault_layout_migration.os.link", replace_source_before_link)
+
+    report = migrator.apply(plan.plan_id)
+
+    assert report.status == "conflict"
+    assert report.conflicts == ("nota.md",)
+    assert source.is_symlink()
+    assert source.resolve() == external
+    assert external.read_text() == "external"
+    assert not (vault / "Tema" / "4_procesado" / "nota.md").exists()
+
+
 def test_rollback_and_conflict_are_safe(tmp_path):
     vault, source = _setup(tmp_path)
     source.write_text("note")
@@ -233,11 +265,11 @@ def test_interrupted_link_is_resumable(tmp_path, monkeypatch):
     original_unlink = __import__("os").unlink
     calls = {"count": 0}
 
-    def interrupt(path):
+    def interrupt(path, **kwargs):
         calls["count"] += 1
         if calls["count"] == 1:
             raise RuntimeError("interrupted")
-        return original_unlink(path)
+        return original_unlink(path, **kwargs)
 
     monkeypatch.setattr("fuente.infrastructure.vault_layout_migration.os.unlink", interrupt)
     with pytest.raises(RuntimeError, match="interrupted"):

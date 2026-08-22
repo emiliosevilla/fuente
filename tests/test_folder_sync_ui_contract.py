@@ -99,6 +99,28 @@ def test_backend_sync_sources_uses_selected_connection_ids_without_browser_paths
     ]
 
 
+def test_bridge_sync_inputs_routes_to_common_folder_without_other_pipeline_writes(
+    temp_vault_path,
+):
+    source = temp_vault_path.parent / "provider"
+    source.mkdir()
+    (source / "shared.md").write_text("common input", encoding="utf-8")
+    backend = FuenteConsoleBackend(temp_vault_path)
+    connection = ConnectedFolder("local", str(source), "Provider", True)
+    assert backend.sync_manager.save_connections([connection])
+
+    result = FuentePyWebViewApi(backend).sync_inputs({"connection_ids": []})
+
+    common = backend.vault.input_dir / "común"
+    input_root = backend.vault.input_dir
+    assert result["status"] == "completed"
+    assert result["copied"] == 1
+    assert (common / "shared.md").read_text(encoding="utf-8") == "common input"
+    assert not (input_root / "shared.md").exists()
+    assert not (backend.vault.clean_dir / "shared.md").exists()
+    assert not (backend.vault.output_dir / "shared.md").exists()
+
+
 def test_bridge_save_settings_does_not_accept_browser_supplied_input_paths(
     temp_vault_path,
 ):

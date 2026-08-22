@@ -51,7 +51,7 @@ Excluido:
 | Id | Capacidad | Responsabilidad | Depende de |
 |---|---|---|---|
 | C00 | contrato-y-migración | Nueva topología, compatibilidad y reversión | — |
-| C01 | vault-y-sincronización | Seis raíces y carpetas OneDrive montadas | C00 |
+| C01 | vault-y-sincronización | Seis raíces y rutas locales elegidas por usuario | C00 |
 | C02 | extracción-por-calidad | MarkItDown, Docling, OCR y nativo con evidencia | C00 |
 | C02M | captura-de-reuniones | Puente Meetily y promoción trazable de grabación, transcripción y notas | C01, C02 |
 | C03 | recuperación-primaria | MiniRAG, BM25 y procedencia | C01, C02 |
@@ -108,7 +108,10 @@ Reglas:
 4. 4_procesado puede recibir edición manual o propuestas de IA, pero es privado.
 5. Compartir mueve una revisión aprobada de 4_procesado a 5_salida de forma atómica. SQLite guarda un recibo con revisión, hash, autor, origen y destino.
 6. Una nueva edición nace como una nueva revisión en 4_procesado; la salida ya compartida permanece como registro de la revisión publicada.
-7. Sólo 5_salida se replica hacia destinos OneDrive montados.
+7. Sólo 5_salida se copia hacia destinos locales seleccionados por el usuario; OneDrive y SharePoint sincronizan esas carpetas fuera de Fuente.
+8. Cada usuario configura esas rutas desde Ajustes. Fuente no descubre, crea ni administra sincronizaciones remotas.
+
+El Vault existente usa las raíces antiguas directamente bajo su raíz. La migración inicial las ubicará bajo `<vault>/General/`; nuevos temas serán carpetas hermanas de `General` con el mismo contrato de raíces.
 
 ### Reuniones
 

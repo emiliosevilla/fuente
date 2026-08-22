@@ -178,6 +178,37 @@ def test_conflicting_recording_does_not_publish_imported_manifest(tmp_path: Path
     assert not (vault.processed_dir / "reunion").exists()
 
 
+@pytest.mark.parametrize("previous_manifest", [None, b'{"session_id":"m-1","status":"imported"}'])
+def test_persistence_failure_restores_manifest_and_leaves_no_partial_artifacts(
+    tmp_path: Path, previous_manifest: bytes | None
+) -> None:
+    vault = VaultManager(VaultConfig(vault_path=tmp_path / "vault"))
+    artifacts = _artifacts(vault.config.vault_path)
+    manifest = vault.config.vault_path / ".fuente/reunion/m-1/manifest.json"
+    if previous_manifest is not None:
+        manifest.write_bytes(previous_manifest)
+
+    class FailingStore:
+        def get_meeting_session(self, session_id: str) -> None:
+            return None
+
+        def create_meeting_session(self, session) -> None:
+            raise RuntimeError("forced persistence failure")
+
+        def delete_meeting_session(self, session_id: str) -> None:
+            raise AssertionError("a failed persistence must not need store cleanup")
+
+    with pytest.raises(RuntimeError, match="forced persistence failure"):
+        MeetingImportApplicationService(vault, store=FailingStore()).import_artifacts(
+            artifacts, expected_session_id=SESSION_ID
+        )
+
+    assert (manifest.read_bytes() if previous_manifest is not None else None) == previous_manifest
+    assert not (vault.dirty_dir / "reunion" / SESSION_ID / "recording.m4a").exists()
+    assert not (vault.clean_dir / "reunion" / f"{SESSION_ID}.md").exists()
+    assert not (vault.processed_dir / "reunion" / f"{SESSION_ID}.md").exists()
+
+
 @pytest.mark.parametrize(
     "mutator",
     [

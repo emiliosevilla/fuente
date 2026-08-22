@@ -9,7 +9,6 @@ from fuente.extractors.base import ExtractionResult
 from fuente.extractors.office_pdf import TextAndOfficeExtractor
 from fuente.extractors.tex_tm import TeXAndTeXmacsExtractor
 from fuente.extractors.audio import AudioExtractor
-from fuente.extractors.ocr_image import ImageOCRExtractor
 from fuente.extractors.extended_formats import ExtendedFormatsExtractor
 from fuente.extractors.macos_vision import MacOSVisionOCR
 from fuente.extractors.ocr_runtime import FallbackOCR, TesseractOCR
@@ -40,7 +39,6 @@ class ExtractorRegistry:
             TextAndOfficeExtractor(ocr_backend=ocr_backend),
             TeXAndTeXmacsExtractor(),
             AudioExtractor(self.policy),
-            ImageOCRExtractor(ocr_backend=ocr_backend),
             ExtendedFormatsExtractor(),
         ]
 

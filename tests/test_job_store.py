@@ -483,7 +483,7 @@ def test_migrations_are_recorded_and_not_reapplied(tmp_path):
             row[0]
             for row in raw_connection.execute("SELECT version FROM schema_migrations")
         ]
-        assert versions == [1, 2, 3, 4, 5, 6, 7, 9, 10, 11, 12, 13, 15]
+        assert versions == [1, 2, 3, 4, 5, 6, 7, 9, 10, 11, 12, 13, 15, 17]
         extraction_columns = {
             row[1] for row in raw_connection.execute("PRAGMA table_info(extraction_attempts)")
         }
@@ -507,7 +507,7 @@ def test_migrations_are_recorded_and_not_reapplied(tmp_path):
             for row in raw_connection.execute("SELECT version FROM schema_migrations")
         ]
         raw_connection.close()
-        assert versions == [1, 2, 3, 4, 5, 6, 7, 9, 10, 11, 12, 13, 15]
+        assert versions == [1, 2, 3, 4, 5, 6, 7, 9, 10, 11, 12, 13, 15, 17]
     finally:
         reopened.close()
 
@@ -534,6 +534,155 @@ def test_duplicate_migration_prefix_is_rejected_before_sql_runs(tmp_path, monkey
         ).fetchone() is None
     finally:
         connection.close()
+
+
+def test_migration_017_upgrades_old_013_and_preserves_attempts(tmp_path):
+    vault_root = tmp_path / "legacy-vault"
+    db_path = vault_root / ".fuente" / "state.db"
+    db_path.parent.mkdir(parents=True)
+    connection = sqlite3.connect(db_path)
+    try:
+        connection.execute(
+            "CREATE TABLE schema_migrations (version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL)"
+        )
+        migrations_dir = Path(__file__).resolve().parents[1] / "fuente" / "infrastructure" / "migrations"
+        connection.executescript((migrations_dir / "001_jobs.sql").read_text(encoding="utf-8"))
+        connection.execute(
+            "INSERT INTO schema_migrations (version, applied_at) VALUES (1, ?)",
+            ("2026-01-01T00:00:01+00:00",),
+        )
+        connection.executescript(
+            """
+            CREATE TABLE extraction_attempts (
+                attempt_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                job_id TEXT NOT NULL REFERENCES jobs(job_id) ON DELETE CASCADE,
+                source_relative_path TEXT NOT NULL,
+                engine TEXT NOT NULL,
+                outcome TEXT NOT NULL CHECK (outcome IN ('rejected', 'accepted')),
+                score REAL NOT NULL,
+                printable_ratio REAL NOT NULL,
+                expected_structure INTEGER NOT NULL CHECK (expected_structure IN (0, 1)),
+                reason TEXT,
+                created_at TEXT NOT NULL
+            );
+            CREATE INDEX idx_extraction_attempts_job_id
+                ON extraction_attempts (job_id, attempt_id);
+            """
+        )
+        connection.execute(
+            "INSERT INTO schema_migrations (version, applied_at) VALUES (13, ?)",
+            ("2026-01-01T00:00:13+00:00",),
+        )
+        job_id = "legacy-extraction-job"
+        connection.execute(
+            """
+            INSERT INTO jobs (
+                job_id, source_hash, source_relative_path, stage, attempt_count,
+                status, created_at, updated_at, pipeline_version, revision
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                job_id,
+                "legacy-hash",
+                "1_entrada/legacy.pdf",
+                "discovered",
+                1,
+                "pending",
+                "2026-01-01T00:00:00+00:00",
+                "2026-01-01T00:00:00+00:00",
+                "1",
+                1,
+            ),
+        )
+        connection.execute(
+            """
+            INSERT INTO extraction_attempts (
+                job_id, source_relative_path, engine, outcome, score,
+                printable_ratio, expected_structure, reason, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                job_id,
+                "1_entrada/legacy.pdf",
+                "legacy_engine",
+                "rejected",
+                0.4,
+                0.8,
+                0,
+                "quality_below_threshold",
+                "2026-01-01T00:00:02+00:00",
+            ),
+        )
+        connection.commit()
+    finally:
+        connection.close()
+
+    store = JobStore(vault_root)
+    try:
+        columns = {
+            row[1] for row in store._connection.execute("PRAGMA table_info(extraction_attempts)")
+        }
+        assert {
+            "result",
+            "quality_score",
+            "reasons",
+            "duration_ms",
+        }.issubset(columns)
+        row = store._connection.execute(
+            """
+            SELECT attempt_id, job_id, outcome, result, quality_score,
+                   reasons, duration_ms
+            FROM extraction_attempts
+            """
+        ).fetchone()
+        assert tuple(row) == (
+            1,
+            "legacy-extraction-job",
+            "rejected",
+            None,
+            0.4,
+            "quality_below_threshold",
+            0,
+        )
+        store._connection.execute(
+            """
+            INSERT INTO extraction_attempts (
+                job_id, source_relative_path, engine, outcome, result,
+                quality_score, reasons, duration_ms, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "legacy-extraction-job",
+                "1_entrada/legacy.pdf",
+                "new_engine",
+                "failed",
+                None,
+                0.0,
+                '["engine unavailable"]',
+                12,
+                "2026-01-01T00:00:03+00:00",
+            ),
+        )
+        inserted = store._connection.execute(
+            "SELECT outcome, result, quality_score, reasons, duration_ms "
+            "FROM extraction_attempts WHERE engine = 'new_engine'"
+        ).fetchone()
+        assert tuple(inserted) == (
+            "failed",
+            None,
+            0.0,
+            '["engine unavailable"]',
+            12,
+        )
+        assert store._connection.execute(
+            "SELECT COUNT(*) FROM extraction_attempts WHERE job_id = ?",
+            ("legacy-extraction-job",),
+        ).fetchone()[0] == 2
+        assert store._connection.execute(
+            "SELECT 1 FROM schema_migrations WHERE version = 17"
+        ).fetchone() is not None
+    finally:
+        store.close()
 
 
 def test_migration_003_preserves_legacy_rows_and_adds_nullable_fields(tmp_path):
@@ -563,6 +712,7 @@ def test_migration_003_preserves_legacy_rows_and_adds_nullable_fields(tmp_path):
             12,
             13,
             15,
+            17,
         }
         columns = {
             row[1]: row[3]

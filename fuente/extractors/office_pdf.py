@@ -196,8 +196,10 @@ class TextAndOfficeExtractor(BaseExtractor):
         return {
             "engine": engine,
             "outcome": outcome,
+            "result": content,
             "quality_score": quality_score,
             "reason": reason,
+            "reasons": [reason] if reason else [],
             "duration_ms": round((time.perf_counter() - started_at) * 1000),
             "has_content": bool(content and content.strip()),
         }

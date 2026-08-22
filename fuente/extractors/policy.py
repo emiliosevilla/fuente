@@ -6,7 +6,7 @@ import string
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable
+from typing import Any, Iterable
 
 from .base import ExtractionResult
 
@@ -44,6 +44,35 @@ def _engine_name(engine: object) -> str:
     return re.sub(r"(?<!^)(?=[A-Z])", "_", name).lower()
 
 
+def _metadata_attempts(metadata: dict[str, Any] | None) -> tuple[ExtractionAttempt, ...] | None:
+    raw_attempts = (metadata or {}).get("extraction_attempts")
+    if not raw_attempts:
+        return None
+    attempts: list[ExtractionAttempt] = []
+    for raw in raw_attempts:
+        if isinstance(raw, ExtractionAttempt):
+            attempts.append(raw)
+            continue
+        if not isinstance(raw, dict):
+            return None
+        raw_reasons = raw.get("reasons", raw.get("reason"))
+        if raw_reasons is None:
+            reasons = ()
+        elif isinstance(raw_reasons, str):
+            reasons = (raw_reasons,)
+        else:
+            reasons = tuple(str(reason) for reason in raw_reasons)
+        attempts.append(ExtractionAttempt(
+            engine=str(raw["engine"]),
+            outcome=str(raw["outcome"]),
+            result=raw.get("result"),
+            quality_score=float(raw.get("quality_score", 0.0)),
+            reasons=reasons,
+            duration_ms=int(raw.get("duration_ms", 0)),
+        ))
+    return tuple(attempts)
+
+
 class ExtractionPolicy:
     """Try engines in order and accept the first result above the quality gate."""
 
@@ -69,15 +98,23 @@ class ExtractionPolicy:
                     status, reason = "completed", None
                 score, _, _ = self._score(path, content)
                 accepted = status == "completed" and score >= self.minimum_score
-                outcome = "accepted" if accepted else "rejected"
-                reasons = () if accepted else (reason or "quality_below_threshold",)
-                attempts.append(ExtractionAttempt(
-                    engine=name, outcome=outcome, result=content,
-                    quality_score=score, reasons=reasons,
-                    duration_ms=round((time.perf_counter() - started_at) * 1000),
-                ))
+                metadata_attempts = _metadata_attempts(metadata)
+                if metadata_attempts is None:
+                    outcome = "accepted" if accepted else "rejected"
+                    reasons = () if accepted else (reason or "quality_below_threshold",)
+                    attempts.append(ExtractionAttempt(
+                        engine=name, outcome=outcome, result=content,
+                        quality_score=score, reasons=reasons,
+                        duration_ms=round((time.perf_counter() - started_at) * 1000),
+                    ))
+                else:
+                    attempts.extend(metadata_attempts)
                 if accepted:
-                    return ExtractionDecision(tuple(attempts), name, content, dict(metadata or {}), "completed")
+                    selected_engine = (metadata or {}).get("extraction_method") or name
+                    return ExtractionDecision(
+                        tuple(attempts), str(selected_engine), content,
+                        dict(metadata or {}), "completed"
+                    )
             except Exception as error:
                 attempts.append(ExtractionAttempt(
                     engine=name, outcome="failed", result=None, quality_score=0.0,

@@ -1,9 +1,9 @@
-# Informe F02.4
+# Informe F02.4 — fix round 1
 
 ## Resultado
 
-F02.4 completado en `dev`: bridge Meetily local mínimo, allow-listed y sólo
-loopback, con token efímero por sesión, preparación bajo
+F02.4 completado en `dev`: bridge Meetily local mínimo, command-pinned,
+allow-listed y sólo loopback, con token efímero por sesión, preparación bajo
 `.fuente/reunion/<session_id>`, consentimiento explícito, operaciones
 `start/status/stop/recover` y manifest sin tokens ni rutas para la futura UI.
 
@@ -17,16 +17,19 @@ no se hizo push.
   terminal y estado recuperable atómico.
 - `fuente/application/meetings.py`: `MeetingCaptureRequest` y servicio que
   exige consentimiento y publica sólo una proyección sin rutas.
-- `fuente/config.py`: comando del bridge persistente y validado.
+- `fuente/config.py`: identidad/ubicación única del bridge persistida y
+  allow-listed; settings antiguos sólo se aceptan con un único elemento.
 - `fuente/application/lifecycle.py`: ownership y cierre del servicio de
   reuniones, sin inicializar SQLite hasta importar una captura.
 - `tests/test_meetily_gateway.py` y `tests/test_meeting_import_recovery.py`:
-  tokens, allow-list, consentimiento, ejecutable ausente, micrófono denegado,
-  bridge perdido, manifest inválido, recuperación e importación sin rutas.
+  tokens, command pinning, rechazo de ejecutables cloud/ajenos, argumentos,
+  `--preparation-dir` externo y opciones de salida, consentimiento, ejecutable
+  ausente, micrófono denegado, bridge perdido, manifest inválido, recuperación
+  e importación sin rutas.
 
 ## Verificación
 
-- `PYTHONDONTWRITEBYTECODE=1 python3 -m pytest tests/test_meetily_gateway.py tests/test_meeting_import_recovery.py tests/test_offline_mode.py tests/security/test_bridge_payloads.py -q` — `31 passed`.
+- `PYTHONDONTWRITEBYTECODE=1 python3 -m pytest tests/test_meetily_gateway.py tests/test_meeting_import_recovery.py tests/test_offline_mode.py tests/security/test_bridge_payloads.py -q` — `37 passed`.
 - `PYTHONDONTWRITEBYTECODE=1 python3 -m pytest tests/test_config_persistence.py tests/test_settings_service.py tests/test_application_lifecycle.py tests/security/test_command_inputs.py -q` — `43 passed, 1 warning`.
 - `PYTHONDONTWRITEBYTECODE=1 python3 -m py_compile fuente/config.py fuente/integrations/meetily.py fuente/application/meetings.py fuente/application/lifecycle.py` — PASS.
 - `git diff --check` — PASS.
@@ -37,10 +40,22 @@ tests usan un puerto inyectado; producción conserva el puerto loopback efímero
 La advertencia restante procede de ChromaDB (`asyncio.iscoroutinefunction`),
 fuera del alcance de F02.4.
 
+## Fix aplicado
+
+- `AppConfig.meetily_bridge_command` ya no es una lista de argv: sólo admite el
+  identificador `meetily-local-bridge` o la ubicación allow-listed
+  `/opt/meetily-bridge`.
+- Se conserva compatibilidad mínima con settings antiguos de una sola entrada;
+  flags arbitrarios, ejecutables ajenos/cloud, rutas externas y opciones de
+  salida vuelven al bridge fijado o fallan en la construcción directa de
+  `AppConfig`.
+- `MeetilyGatewayClient` construye internamente todo el argv autorizado:
+  loopback, puerto, token, sesión, plantilla, revisión y preparación relativa.
+
 ## Límites
 
 El proceso real Meetily no se lanzó y no se escribió ningún Vault real. La
 integración queda preparada para el ejecutable configurado; la UI y la
 verificación manual con permisos de micrófono pertenecen a F06.5.
 
-Commit local: `feat: add local meetily capture bridge`.
+Commit local: `fix: pin meetily bridge command`.

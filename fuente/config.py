@@ -19,13 +19,9 @@ VALID_AUDIO_MODES = ("auto", "skip", "tiny_cpu")
 LOCAL_OLLAMA_MODEL_NAME = re.compile(
     r"^[A-Za-z0-9][A-Za-z0-9._-]*(?::[A-Za-z0-9][A-Za-z0-9._-]*)?$"
 )
-DEFAULT_MEETILY_BRIDGE_COMMAND = "meetily-local-bridge"
-ALLOWED_MEETILY_BRIDGE_LOCATIONS = frozenset(
-    {
-        DEFAULT_MEETILY_BRIDGE_COMMAND,
-        "/opt/meetily-bridge",
-    }
-)
+DEFAULT_MEETILY_BRIDGE_COMMAND = "/opt/meetily-bridge"
+_LEGACY_MEETILY_BRIDGE_COMMAND = "meetily-local-bridge"
+ALLOWED_MEETILY_BRIDGE_LOCATIONS = frozenset({DEFAULT_MEETILY_BRIDGE_COMMAND})
 
 
 def validate_meetily_bridge_command(value: str | os.PathLike[str] | Sequence[str]) -> str:
@@ -287,6 +283,15 @@ class AppConfig:
         raw_bridge_command = data.get(
             "meetily_bridge_command", DEFAULT_MEETILY_BRIDGE_COMMAND
         )
+        if (
+            raw_bridge_command == _LEGACY_MEETILY_BRIDGE_COMMAND
+            or (
+                isinstance(raw_bridge_command, (list, tuple))
+                and len(raw_bridge_command) == 1
+                and raw_bridge_command[0] == _LEGACY_MEETILY_BRIDGE_COMMAND
+            )
+        ):
+            raw_bridge_command = DEFAULT_MEETILY_BRIDGE_COMMAND
         try:
             meetily_bridge_command = validate_meetily_bridge_command(raw_bridge_command)
         except ValueError:

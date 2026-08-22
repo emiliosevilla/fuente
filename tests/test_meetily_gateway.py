@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
+import subprocess
+import sys
 
 import pytest
 
@@ -125,6 +128,7 @@ def test_bridge_requires_consent_before_launch(tmp_path):
 @pytest.mark.parametrize(
     "command",
     [
+        "meetily-local-bridge",
         ("/tmp/backend/meetily",),
         ("meetily;touch /tmp/out",),
         ("meetily-local-bridge", "--cloud"),
@@ -150,6 +154,14 @@ def test_legacy_single_item_setting_is_normalized_but_arguments_are_not_accepted
     assert config_from_legacy.meetily_bridge_command == "/opt/meetily-bridge"
     assert config_from_legacy.to_dict()["meetily_bridge_command"] == "/opt/meetily-bridge"
 
+    relative_config = AppConfig.from_dict(
+        {
+            "vault_path": str(tmp_path),
+            "meetily_bridge_command": "meetily-local-bridge",
+        }
+    )
+    assert relative_config.meetily_bridge_command == DEFAULT_MEETILY_BRIDGE_COMMAND
+
     unsafe_config = AppConfig.from_dict(
         {
             "vault_path": str(tmp_path),
@@ -165,6 +177,45 @@ def test_app_config_rejects_arbitrary_bridge_arguments(tmp_path):
             vault=VaultConfig(vault_path=tmp_path),
             meetily_bridge_command=("meetily-local-bridge", "--preparation-dir", "/tmp/out"),
         )
+
+
+def test_legacy_path_setting_does_not_invoke_homonymous_path_binary(tmp_path, monkeypatch):
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    marker = tmp_path / "homonym-invoked"
+    homonym = bin_dir / "meetily-local-bridge"
+    homonym.write_text(
+        f"#!{sys.executable}\n"
+        "from pathlib import Path\n"
+        f"Path({str(marker)!r}).write_text('invoked', encoding='utf-8')\n",
+        encoding="utf-8",
+    )
+    homonym.chmod(0o755)
+    monkeypatch.setenv("PATH", str(bin_dir))
+    commands = []
+
+    def process_factory(argv, **kwargs):
+        commands.append(argv)
+        if not Path(argv[0]).is_absolute():
+            subprocess.run(argv, cwd=kwargs["cwd"], env=os.environ.copy(), check=False)
+        raise FileNotFoundError(argv[0])
+
+    gateway = MeetilyGatewayClient(
+        AppConfig.from_dict(
+            {
+                "vault_path": str(tmp_path),
+                "meetily_bridge_command": "meetily-local-bridge",
+            }
+        ),
+        process_factory=process_factory,
+        port_factory=lambda: 18080,
+    )
+
+    with pytest.raises(MeetingBridgeUnavailable):
+        gateway.start(request())
+
+    assert commands[0][0] == DEFAULT_MEETILY_BRIDGE_COMMAND
+    assert not marker.exists()
 
 
 def test_missing_executable_creates_recoverable_session(tmp_path):

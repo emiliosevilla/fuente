@@ -120,11 +120,13 @@ class JobStore:
             self._connection.execute(
                 """
                 INSERT INTO refinement_candidates
-                (candidate_id, document_id, revision, content_hash, baseline_path, candidate_path, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                (candidate_id, document_id, revision, content_hash, baseline_revision,
+                 baseline_content_hash, baseline_path, candidate_path, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 tuple(values[field] for field in (
                     "candidate_id", "document_id", "revision", "content_hash",
+                    "baseline_revision", "baseline_content_hash",
                     "baseline_path", "candidate_path", "created_at",
                 )),
             )
@@ -132,7 +134,8 @@ class JobStore:
             existing = self.get_refinement_candidate(candidate.candidate_id)
             if existing is None or any(
                 existing[field] != values[field]
-                for field in ("document_id", "revision", "content_hash", "baseline_path", "candidate_path")
+                for field in ("document_id", "revision", "content_hash", "baseline_revision",
+                              "baseline_content_hash", "baseline_path", "candidate_path")
             ):
                 raise ValueError("refinement candidate identity conflict")
         return self.get_refinement_candidate(candidate.candidate_id) or values
@@ -168,11 +171,13 @@ class JobStore:
                 connection.execute(
                     """
                     INSERT INTO refinement_candidates
-                    (candidate_id, document_id, revision, content_hash, baseline_path, candidate_path, created_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    (candidate_id, document_id, revision, content_hash, baseline_revision,
+                     baseline_content_hash, baseline_path, candidate_path, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     tuple(candidate_values[field] for field in (
                         "candidate_id", "document_id", "revision", "content_hash",
+                        "baseline_revision", "baseline_content_hash",
                         "baseline_path", "candidate_path", "created_at",
                     )),
                 )

@@ -33,6 +33,11 @@ from tkinter import ttk, messagebox, filedialog
 
 from fuente.application.approval import ApprovalApplicationService
 from fuente.application.chat import ChatApplicationService, OllamaChatProvider
+from fuente.application.refinement import (
+    OllamaVerifier,
+    RefinementApplicationService,
+    RefinementSnapshot,
+)
 from fuente.application.ingestion import IngestionApplicationService, SourceNotStableError
 from fuente.application.lifecycle import ApplicationLifecycle
 from fuente.application.export import (
@@ -56,6 +61,9 @@ from fuente.application.notes import NotesApplicationService
 from fuente.application.onboarding import OnboardingService
 from fuente.application.review_export import ReviewExportApplicationService
 from fuente.application.retrieval import RetrievalApplicationService
+from fuente.rag.chroma_store import ChromaRetrievalBackend
+from fuente.rag.minirag_store import MiniRAGStore
+from fuente.rag.router import RetrievalRouter
 from fuente.application.reflow import ReflowApplicationService, ReflowScope
 from fuente.application.settings import SettingsService, SettingsValidationError
 from fuente.config import (
@@ -452,7 +460,7 @@ class FuenteConsoleBackend:
         if isinstance(scope_payload, ReflowScope):
             scope = scope_payload
         elif isinstance(scope_payload, Mapping):
-            allowed = {"document_id", "theme", "issue"}
+            allowed = {"document_id", "theme", "issue", "candidate_id", "candidate_revision"}
             if set(scope_payload) - allowed:
                 return {"error": "invalid_payload", "message": "Unsupported scope field"}
             values = {
@@ -460,12 +468,18 @@ class FuenteConsoleBackend:
                 for key in allowed
                 if key in scope_payload
             }
-            if any(value is not None and not isinstance(value, str) for value in values.values()):
+            if any(
+                value is not None
+                and not isinstance(value, int if key == "candidate_revision" else str)
+                for key, value in values.items()
+            ):
                 return {"error": "invalid_payload", "message": "Scope values must be strings"}
             scope = ReflowScope(
                 document_id=values.get("document_id"),
                 theme=values.get("theme"),
                 issue=values.get("issue"),
+                candidate_id=values.get("candidate_id"),
+                candidate_revision=values.get("candidate_revision"),
             )
         else:
             return {"error": "invalid_payload", "message": "Scope must be an object"}
@@ -482,6 +496,7 @@ class FuenteConsoleBackend:
             eligibility_guard=lambda document_id: self.get_notes_service().require_published_output(
                 document_id
             ),
+            refinement_guard=self._require_accepted_refinement,
         )
         self._reflow_service = service
         try:
@@ -720,11 +735,16 @@ class FuenteConsoleBackend:
         """Shared retrieval service (hybrid searcher reused from Chroma when possible)."""
         if self._retrieval_service is None:
             if self.runtime_policy.vector_index_enabled:
+                chroma = self._get_chroma_store()
                 self._retrieval_service = RetrievalApplicationService(
-                    self._get_chroma_store(),
+                    chroma,
                     runtime_policy=self.runtime_policy,
                     ram_governor=self.ram_governor,
                     eligibility_guard=self._is_retrieval_hit_eligible,
+                    router=RetrievalRouter(
+                        primary=MiniRAGStore(self.config.vault.minirag_dir),
+                        refinement=ChromaRetrievalBackend(chroma),
+                    ),
                 )
             else:
                 corpus = VaultCorpusProvider(
@@ -791,6 +811,7 @@ class FuenteConsoleBackend:
                     else self.ram_governor.recommend_model_decision
                 ),
                 ollama_url=self.config.ollama_url,
+                refinement_guard=self._require_accepted_refinement,
             )
         return self._chat_service
 
@@ -812,6 +833,102 @@ class FuenteConsoleBackend:
                 runtime_policy=self.runtime_policy,
             )
         return self._notes_service
+
+    def _require_accepted_refinement(self, candidate_id: str, expected_revision: int) -> None:
+        verdict = self.get_notes_service().job_store.get_refinement_verdict(candidate_id)
+        if (
+            verdict is None
+            or verdict.get("decision") != "accepted"
+            or int(verdict.get("revision", -1)) != expected_revision
+        ):
+            raise ValueError("refinement candidate is not accepted for this revision")
+
+    def evaluate_refinement(self, candidate_id: str, expected_revision: int) -> dict[str, Any]:
+        """Evaluate one stored reflow candidate and persist only its verdict."""
+        notes = self.get_notes_service()
+        row = notes.job_store.get_refinement_candidate(candidate_id)
+        if row is None or int(row["revision"]) != expected_revision:
+            raise ValueError("refinement candidate identity is missing or stale")
+        baseline_id = document_id_for_relative_path(str(row["baseline_path"]))
+        baseline = notes.get_note(baseline_id)
+        if (
+            int(row.get("baseline_revision", 0)) != baseline.revision
+            or str(row.get("baseline_content_hash") or "") != baseline.content_hash
+        ):
+            raise ValueError("refinement baseline is stale")
+        candidate = notes.get_note(candidate_id)
+        chroma = self._get_chroma_store()
+        chroma.add_chunks(
+            [baseline.to_markdown(), candidate.to_markdown()],
+            [
+                {"document_id": candidate_id, "revision": baseline.revision, "content_hash": baseline.content_hash},
+                {"document_id": candidate_id, "revision": expected_revision, "content_hash": candidate.content_hash},
+            ],
+            [f"{candidate_id}:baseline", f"{candidate_id}:candidate"],
+        )
+
+        def snapshot(note, revision: int, *, candidate_note: bool) -> RefinementSnapshot:
+            try:
+                notes.require_eligible_origins(note)
+                approved_origins = 1.0
+            except (TypeError, ValueError, CanonicalEligibilityError):
+                approved_origins = 0.0
+            citations_valid = bool(
+                note.frontmatter.get("sources")
+                or note.frontmatter.get("citations")
+                or note.origins
+            )
+            markdown = note.to_markdown()
+            open_links = markdown.count("[[")
+            close_links = markdown.count("]]" )
+            link_validity = 1.0 if open_links == close_links else 0.0
+            query = (note.title or note.body_markdown[:160]).strip()
+            retrieval = self.get_retrieval_service()
+
+            def retrieval_probe(role: str) -> float:
+                try:
+                    backend = retrieval.router.refinement() if role == "refinement" else retrieval.router.primary()
+                    hits = backend.search(query, 3)
+                except (OSError, RuntimeError, TypeError, ValueError):
+                    return 0.0
+                try:
+                    return min(1.0, len(hits) / 3.0)
+                except (TypeError, ValueError):
+                    return 0.0
+
+            return RefinementSnapshot(
+                document_id=(candidate_id if candidate_note else note.document_id),
+                revision=revision,
+                content_hash=note.content_hash,
+                markdown=markdown,
+                approved_origins=approved_origins,
+                citations_valid=citations_valid,
+                link_validity=link_validity,
+                primary_retrieval=retrieval_probe("primary"),
+                refinement_retrieval=retrieval_probe("refinement"),
+            )
+
+        service = RefinementApplicationService(
+            job_store=notes.job_store,
+            loader=lambda _candidate_id: (
+                snapshot(baseline, baseline.revision, candidate_note=False),
+                snapshot(candidate, expected_revision, candidate_note=True),
+            ),
+            verifier=OllamaVerifier(
+                OllamaChatProvider(self.config.ollama_url, timeout=12.0),
+                model=(self.config.custom_model_override or self.ram_governor.recommend_model()),
+            ),
+        )
+        verdict = service.evaluate(candidate_id, expected_revision)
+        return {
+            "candidate_id": verdict.candidate_id,
+            "decision": verdict.decision,
+            "baseline_score": verdict.baseline_score,
+            "candidate_score": verdict.candidate_score,
+            "graph_delta": verdict.graph_delta,
+            "retrieval_delta": verdict.retrieval_delta,
+            "verifier_reason": verdict.verifier_reason,
+        }
 
     def get_approval_service(self) -> ApprovalApplicationService:
         """Return the approval ledger facade for canonical clean notes."""
@@ -1754,6 +1871,17 @@ class FuenteConsoleBackend:
                 **result,
                 "refresh": bool(result.get("changed_markdown")),
             }
+
+        elif action_name == "evaluate_refinement":
+            candidate_id = payload.get("candidate_id")
+            expected_revision = payload.get("expected_revision")
+            if not isinstance(candidate_id, str) or not isinstance(expected_revision, int):
+                return {"error": "invalid_payload", "message": "candidate_id and expected_revision are required"}
+            try:
+                result = self.evaluate_refinement(candidate_id, expected_revision)
+            except (TypeError, ValueError, OSError) as error:
+                return {"error": "refinement_evaluation_failed", "message": str(error)}
+            return {"status": "success", "result": result, **result}
 
         # --- ACCIONES ANTERIORES DE CONSOLA ---
         elif action_name == "flush_sources":

@@ -96,6 +96,17 @@ def test_minirag_store_delete_removes_provenance(tmp_path: Path):
     assert store._load_manifest() == {}
 
 
+def test_minirag_store_delete_accepts_chunk_key_chunk_id_and_document_id(tmp_path: Path):
+    for target in ("chunk-content-hash", "note-1:chunk:0", "note-1"):
+        client = RealApiShapeFake()
+        store = MiniRAGStore(tmp_path / target.replace(":", "-"), client=client)
+        store.rebuild([record()])
+
+        store.delete([target])
+
+        assert store._load_manifest() == {}
+
+
 def test_minirag_store_supports_official_api_shape(tmp_path: Path):
     store = MiniRAGStore(tmp_path / "minirag", client=RealApiShapeFake())
     store.rebuild([record()])

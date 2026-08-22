@@ -50,6 +50,7 @@ class FuentePyWebViewApi:
         "step2_transcribe": {},
         "step3_structure": {},
         "reflow_links": {},
+        "evaluate_refinement": {"candidate_id": str, "expected_revision": int},
         "reindex_notes": {},
         "stat_ram": {},
         "stat_input": {},
@@ -152,11 +153,15 @@ class FuentePyWebViewApi:
             if set(payload) != {"scope"} or not isinstance(payload["scope"], Mapping):
                 return cls._error("invalid_payload", "scope must be an object")
             scope_payload = dict(payload["scope"])
-        allowed = {"document_id", "theme", "issue"}
+        allowed = {"document_id", "theme", "issue", "candidate_id", "candidate_revision"}
         if set(scope_payload) - allowed:
             return cls._error("invalid_payload", "Unsupported scope field")
         for field, value in scope_payload.items():
             if value is None:
+                continue
+            if field == "candidate_revision":
+                if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+                    return cls._error("invalid_payload", "candidate_revision must be a positive integer")
                 continue
             if not isinstance(value, str):
                 return cls._error("invalid_payload", "Scope values must be strings")

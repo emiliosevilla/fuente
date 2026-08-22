@@ -710,18 +710,27 @@ git add fuente/domain/refinement.py fuente/infrastructure/migrations/015_refinem
 git commit -m "feat: persist refinement verdicts"
 ~~~
 
-### Task F04.2: Reject non-positive changes — IN PROGRESS
+### Task F04.2: Reject non-positive changes — COMPLETE
 
 Files:
 - Create: fuente/application/refinement.py
+- Create: fuente/infrastructure/migrations/019_refinement_baseline_cas.sql
 - Modify: fuente/application/reflow.py
 - Modify: fuente/application/chat.py
+- Modify: fuente/control_console.py
+- Modify: fuente/application/retrieval.py
+- Modify: fuente/application/ingestion.py
+- Modify: fuente/application/notes.py
+- Modify: fuente/application/reflow_jobs.py
 - Test: tests/test_refinement_service.py
+- Test: tests/test_minirag_store.py
+- Test: tests/test_retrieval_router.py
+- Test: tests/test_refinement_store.py
 
 Interfaces:
 - Produces RefinementApplicationService.evaluate and schema-validated verifier response.
 
-- [ ] Step 1: Write acceptance/rejection tests.
+- [x] Step 1: Write acceptance/rejection tests.
 
 ~~~python
 def test_evaluator_rejects_candidate_without_strict_score_gain(service):
@@ -733,12 +742,12 @@ def test_unavailable_ollama_requires_human_review(service):
     assert service.evaluate("candidate-1", 2).decision == "needs_human_review"
 ~~~
 
-- [ ] Step 2: Run test.
+- [x] Step 2: Run test.
 
 Run: PYTHONDONTWRITEBYTECODE=1 python3 -m pytest tests/test_refinement_service.py -q
 Expected: FAIL with missing service.
 
-- [ ] Step 3: Implement deterministic score and strict verifier.
+- [x] Step 3: Implement deterministic score and strict verifier.
 
 ~~~python
 class RefinementApplicationService:
@@ -749,17 +758,19 @@ class RefinementApplicationService:
 
 Score link validity, approved origins, MiniRAG probes and Chroma refinement probes. Parse an allow-listed JSON schema. Malformed, timed-out or missing Ollama yields needs_human_review.
 
-- [ ] Step 4: Verify no rejected change alters content.
+- [x] Step 4: Verify no rejected change alters content.
 
 Run: PYTHONDONTWRITEBYTECODE=1 python3 -m pytest tests/test_refinement_service.py tests/test_ram_governor_resilience.py tests/test_retry_policy.py tests/test_chat_retrieval_contract.py -q
 Expected: PASS.
 
-- [ ] Step 5: Commit.
+- [x] Step 5: Commit.
 
 ~~~bash
 git add fuente/application/refinement.py fuente/application/reflow.py fuente/application/chat.py tests/test_refinement_service.py
 git commit -m "feat: verify refinements before promotion"
 ~~~
+
+Status: COMPLETE — Terra approved after baseline CAS and MiniRAG read fallback fixes; focal `154 passed, 1 warning`; full suite `1301 passed, 1 skipped, 1 warning` before evidence refresh.
 
 ### Task F04.3: Promote accepted candidate only into 4_procesado
 

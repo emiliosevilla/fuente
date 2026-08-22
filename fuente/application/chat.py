@@ -183,6 +183,7 @@ class ChatApplicationService:
         ollama_url: str = "",
         system_prompt: str = CHAT_SYSTEM_PROMPT,
         budget_decision_resolver: Optional[BudgetDecisionResolver] = None,
+        refinement_guard: Optional[Callable[[str, int], None]] = None,
     ) -> None:
         self.retrieval = retrieval
         self.provider = provider
@@ -190,6 +191,7 @@ class ChatApplicationService:
         self._budget_decision_resolver = budget_decision_resolver
         self.ollama_url = ollama_url
         self.system_prompt = system_prompt
+        self._refinement_guard = refinement_guard
 
     def ask(
         self,
@@ -209,6 +211,11 @@ class ChatApplicationService:
                 model="",
                 ok=False,
             )
+
+        candidate_id = str(ctx.get("candidate_id") or "").strip()
+        if candidate_id and self._refinement_guard is not None:
+            revision = int(ctx.get("candidate_revision") or 0)
+            self._refinement_guard(candidate_id, revision)
 
         scope, scope_kwargs = _normalize_scope(ctx)
         retrieval_ctx = self.retrieval.build_context(query, scope, **scope_kwargs)

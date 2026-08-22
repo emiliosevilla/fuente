@@ -16,6 +16,8 @@ class RefinementCandidate:
     document_id: str
     revision: int
     content_hash: str
+    baseline_revision: int = 0
+    baseline_content_hash: str = ""
     baseline_path: str = ""
     candidate_path: str = ""
     created_at: str = ""

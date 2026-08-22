@@ -35,6 +35,23 @@ def test_candidate_conflict_and_verdict_conflict_do_not_overwrite(tmp_path):
         store.close()
 
 
+def test_candidate_persists_baseline_cas_identity(tmp_path):
+    store = JobStore(tmp_path)
+    try:
+        store.save_refinement_candidate(
+            RefinementCandidate(
+                "candidate-1", "note-1", 4, "candidate-hash",
+                baseline_revision=3,
+                baseline_content_hash="baseline-hash",
+            )
+        )
+        stored = store.get_refinement_candidate("candidate-1")
+        assert stored["baseline_revision"] == 3
+        assert stored["baseline_content_hash"] == "baseline-hash"
+    finally:
+        store.close()
+
+
 def test_invalid_verdict_rolls_back_new_candidate(tmp_path):
     store = JobStore(tmp_path)
     try:

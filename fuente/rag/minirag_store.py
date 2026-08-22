@@ -102,9 +102,13 @@ class MiniRAGStore:
         chunk_ids = []
         kept = {}
         for key, value in manifest.items():
+            if key in doomed:
+                chunk_ids.append(key)
+                continue
             remaining = [
                 item for item in self._manifest_records(value)
                 if str(item.get("document_id") or key) not in doomed
+                and str(item.get("id") or "") not in doomed
             ]
             if remaining:
                 kept[key] = remaining

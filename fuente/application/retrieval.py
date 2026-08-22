@@ -302,7 +302,6 @@ class RetrievalApplicationService:
         if not q:
             return _empty_context(query=query or "", scope=scope_kind)
 
-        backend = self._backend_for_role(role)
         limit = max(1, int(limit))
         degraded = False
         degradation_reason: Optional[str] = None
@@ -313,14 +312,14 @@ class RetrievalApplicationService:
             degradation_reason = str(
                 getattr(self.runtime_policy, "reason", "bm25_vault policy selected")
             )
-            raw_hits = self._search_backend(backend, q, candidate_limit=limit)
+            raw_hits = self._search_role(role, q, limit)
         elif self._ram_fallback_active():
             degraded = True
             degradation_reason = DEGRADATION_RAM
             mode = MODE_BM25
-            raw_hits = self._search_backend(backend, q, candidate_limit=limit)
+            raw_hits = self._search_role(role, q, limit)
         else:
-            raw_hits = self._search_backend(backend, q, candidate_limit=limit)
+            raw_hits = self._search_role(role, q, limit)
 
         scoped = [
             hit
@@ -371,6 +370,18 @@ class RetrievalApplicationService:
         self, backend: Any, query: str, *, candidate_limit: int
     ) -> list[dict]:
         return [self._hit_as_dict(hit) for hit in backend.search(query, candidate_limit)]
+
+    def _search_role(self, role: str, query: str, limit: int) -> list[dict]:
+        backend = self._backend_for_role(role)
+        try:
+            return self._search_backend(backend, query, candidate_limit=limit)
+        except RuntimeError as error:
+            if role != "primary" or "MiniRAG is not installed" not in str(error):
+                raise
+            logger.warning("MiniRAG unavailable; reading from Chroma refinement index")
+            return self._search_backend(
+                self.router.refinement(), query, candidate_limit=limit
+            )
 
     @staticmethod
     def _hit_as_dict(hit: Any) -> dict:

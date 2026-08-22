@@ -110,3 +110,50 @@ def test_bridge_save_settings_does_not_accept_browser_supplied_input_paths(
         "error": "invalid_payload",
         "message": "input_connected_folders is managed by the sync API",
     }
+
+
+def test_bridge_sync_connection_requires_opaque_id_and_explicit_direction(
+    temp_vault_path, monkeypatch
+):
+    source = temp_vault_path / "provider"
+    source.mkdir()
+    backend = FuenteConsoleBackend(temp_vault_path)
+    connection = ConnectedFolder("local", str(source), "Provider", True)
+    assert backend.sync_manager.save_connections([connection])
+    bridge = FuentePyWebViewApi(backend)
+    calls = []
+
+    def fake_sync(selected, *, direction):
+        calls.append((selected, direction.value))
+        return type(
+            "Report",
+            (),
+            {
+                "copied": 1,
+                "unchanged": 0,
+                "scanned": 1,
+                "manifest_updates": 1,
+                "conflicts": [],
+                "diagnostics": [],
+            },
+        )()
+
+    monkeypatch.setattr(backend.sync_manager, "sync_connection", fake_sync)
+
+    result = bridge.sync_connection(
+        {"connection_id": connection.connection_id, "direction": "input_common"}
+    )
+
+    assert result["status"] == "completed"
+    assert result["direction"] == "input_common"
+    assert calls == [(connection, "input_common")]
+    assert bridge.sync_connection(
+        {
+            "connection_id": connection.connection_id,
+            "direction": "output_shared",
+            "path": "x",
+        }
+    ) == {
+        "error": "invalid_payload",
+        "message": "Unsupported sync field",
+    }

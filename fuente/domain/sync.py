@@ -18,6 +18,13 @@ class SyncProvider(str, Enum):
     SHAREPOINT_MOUNT = "sharepoint_mount"
 
 
+class SyncDirection(str, Enum):
+    """Allowed one-way transfers for a configured local folder."""
+
+    INPUT_COMMON = "input_common"
+    OUTPUT_SHARED = "output_shared"
+
+
 class SyncRecordValidationError(ValueError):
     """Raised when persisted sync data does not match the contract."""
 

@@ -31,6 +31,7 @@ from fuente.domain.errors import (
     NoteRevisionConflictError,
     PathAuthorizationError,
 )
+from fuente.domain.sync import SyncDirection
 
 if TYPE_CHECKING:
     from fuente.control_console import FuenteConsoleBackend
@@ -202,6 +203,48 @@ class FuentePyWebViewApi:
     def get_sync_inputs(self) -> dict[str, Any]:
         """Return the canonical provider/input projection without filesystem roots."""
         return self.backend.get_sync_inputs()
+
+    def sync_connection(self, payload: object) -> dict[str, Any] | ErrorResult:
+        """Run one explicit directional sync using a persisted opaque ID."""
+        parsed = self._payload(payload)
+        if isinstance(parsed, dict) and "error" in parsed:
+            return parsed
+        assert isinstance(parsed, dict)
+        if set(parsed) != {"connection_id", "direction"}:
+            return self._error("invalid_payload", "Unsupported sync field")
+        connection_id = self._sync_connection_id(parsed["connection_id"])
+        if isinstance(connection_id, dict):
+            return connection_id
+        try:
+            direction = SyncDirection(parsed["direction"])
+        except (TypeError, ValueError):
+            return self._error("invalid_payload", "direction is not supported")
+        connection = next(
+            (
+                item
+                for item in self.backend.sync_manager.load_connections()
+                if item.connection_id == connection_id
+            ),
+            None,
+        )
+        if connection is None:
+            return self._error("sync_connection_not_found", "Sync connection was not found")
+        try:
+            report = self.backend.sync_manager.sync_connection(
+                connection, direction=direction
+            )
+        except PathAuthorizationError as error:
+            return {"error": error.code, "message": str(error)}
+        except ValueError as error:
+            return self._error("sync_failed", str(error))
+        return {
+            "status": "completed",
+            "active_theme": self.backend.vault.active_theme,
+            "direction": direction.value,
+            "last_run_at": self.backend.sync_manager.get_last_sync_status()["last_run_at"],
+            **self.backend.sync_manager.public_sync_report(report),
+            "refresh": True,
+        }
 
     def select_sync_folder(self, title: object = "Vincular carpeta de sincronización") -> dict[str, Any] | ErrorResult:
         valid_title = self._text(title, "title", required=False)

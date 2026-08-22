@@ -483,7 +483,11 @@ def test_migrations_are_recorded_and_not_reapplied(tmp_path):
             row[0]
             for row in raw_connection.execute("SELECT version FROM schema_migrations")
         ]
-        assert versions == [1, 2, 3, 4, 5, 6, 7, 9, 10, 11, 12, 15]
+        assert versions == [1, 2, 3, 4, 5, 6, 7, 9, 10, 11, 12, 13, 15]
+        extraction_columns = {
+            row[1] for row in raw_connection.execute("PRAGMA table_info(extraction_attempts)")
+        }
+        assert {"result", "quality_score", "reasons", "duration_ms"} <= extraction_columns
         columns = {
             row[1]
             for row in raw_connection.execute(
@@ -503,7 +507,7 @@ def test_migrations_are_recorded_and_not_reapplied(tmp_path):
             for row in raw_connection.execute("SELECT version FROM schema_migrations")
         ]
         raw_connection.close()
-        assert versions == [1, 2, 3, 4, 5, 6, 7, 9, 10, 11, 12, 15]
+        assert versions == [1, 2, 3, 4, 5, 6, 7, 9, 10, 11, 12, 13, 15]
     finally:
         reopened.close()
 
@@ -557,6 +561,7 @@ def test_migration_003_preserves_legacy_rows_and_adds_nullable_fields(tmp_path):
             10,
             11,
             12,
+            13,
             15,
         }
         columns = {
@@ -600,6 +605,7 @@ def test_schema_has_required_tables_and_indexes(tmp_path):
             "resource_leases",
             "document_locks",
             "sync_manifest",
+            "extraction_attempts",
         }.issubset(tables)
 
         manifest_columns = {

@@ -3,9 +3,10 @@ from __future__ import annotations
 
 import re
 import string
+import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Iterable
 
 from .base import ExtractionResult
 
@@ -14,12 +15,10 @@ from .base import ExtractionResult
 class ExtractionAttempt:
     engine: str
     outcome: str
-    score: float
-    content: str | None = None
-    metadata: dict[str, Any] | None = None
-    reason: str | None = None
-    printable_ratio: float = 0.0
-    expected_structure: bool = False
+    result: str | None
+    quality_score: float
+    reasons: tuple[str, ...]
+    duration_ms: int
 
     @property
     def engine_name(self) -> str:
@@ -59,6 +58,7 @@ class ExtractionPolicy:
             if callable(can_handle) and not can_handle(path):
                 continue
             name = _engine_name(engine)
+            started_at = time.perf_counter()
             try:
                 result = engine.extract(path)
                 if isinstance(result, ExtractionResult):
@@ -67,21 +67,22 @@ class ExtractionPolicy:
                 else:
                     content, metadata = result
                     status, reason = "completed", None
-                score, printable_ratio, expected = self._score(path, content)
+                score, _, _ = self._score(path, content)
                 accepted = status == "completed" and score >= self.minimum_score
                 outcome = "accepted" if accepted else "rejected"
+                reasons = () if accepted else (reason or "quality_below_threshold",)
                 attempts.append(ExtractionAttempt(
-                    engine=name, outcome=outcome, score=score,
-                    content=content, metadata=dict(metadata or {}),
-                    reason=reason or (None if accepted else "quality_below_threshold"),
-                    printable_ratio=printable_ratio, expected_structure=expected,
+                    engine=name, outcome=outcome, result=content,
+                    quality_score=score, reasons=reasons,
+                    duration_ms=round((time.perf_counter() - started_at) * 1000),
                 ))
                 if accepted:
                     return ExtractionDecision(tuple(attempts), name, content, dict(metadata or {}), "completed")
             except Exception as error:
                 attempts.append(ExtractionAttempt(
-                    engine=name, outcome="rejected", score=0.0,
-                    reason=f"{type(error).__name__}: {error}",
+                    engine=name, outcome="failed", result=None, quality_score=0.0,
+                    reasons=(f"{type(error).__name__}: {error}",),
+                    duration_ms=round((time.perf_counter() - started_at) * 1000),
                 ))
                 if getattr(error, "code", None) == "audio_model_unavailable":
                     return ExtractionDecision(

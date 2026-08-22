@@ -60,9 +60,12 @@ class VaultLayoutMigrator:
         self.vault_root = Path(vault_root).expanduser().absolute()
         self.theme = theme
         self._validate_theme()
+        self.theme_dir = self.vault_root / theme
+        self._validate_vault_layout()
+
+    def _validate_vault_layout(self) -> None:
         if self.vault_root.is_symlink() or not self.vault_root.is_dir():
             raise ValueError("vault_root must be an existing non-symlink directory")
-        self.theme_dir = self.vault_root / theme
         if self.theme_dir.is_symlink() or not self.theme_dir.is_dir():
             raise ValueError("theme must be an existing directory inside the Vault")
         try:
@@ -135,7 +138,10 @@ class VaultLayoutMigrator:
         ]
 
     def _validate_destination_parent(self, parent: Path) -> None:
-        _source_root, destination_root = self._validate_roots()
+        self._validate_vault_layout()
+        destination_root = self._roots()[1]
+        if destination_root.is_symlink() or not destination_root.is_dir():
+            raise ValueError("processed root must be a non-symlink directory")
         try:
             relative_parts = parent.relative_to(destination_root).parts
         except ValueError as error:
@@ -147,6 +153,25 @@ class VaultLayoutMigrator:
                 raise ValueError("destination path contains a symlink")
             if current.exists() and not current.is_dir():
                 raise ValueError("destination path contains a non-directory")
+
+    def _source_parent_is_safe(self, source: Path) -> bool:
+        source_root = self._roots()[0]
+        try:
+            relative_parts = source.parent.relative_to(source_root).parts
+            vault_root = self.vault_root.resolve(strict=False)
+        except (OSError, RuntimeError, ValueError):
+            return False
+
+        current = self.vault_root
+        for part in (self.theme, "4_salida", *relative_parts):
+            current /= part
+            if not os.path.lexists(current) or current.is_symlink() or not current.is_dir():
+                return False
+            try:
+                current.resolve(strict=False).relative_to(vault_root)
+            except (OSError, RuntimeError, ValueError):
+                return False
+        return True
 
     def _preflight(self, items: list[LayoutMigrationItem]) -> list[str]:
         source_root, _destination_root = self._validate_roots()
@@ -211,7 +236,14 @@ class VaultLayoutMigrator:
 
     def rollback(self, plan_id: str) -> LayoutMigrationReport:
         _plan, items = self._load(plan_id)
-        self._validate_roots()
+        self._validate_vault_layout()
+        source_conflicts = [
+            item.relative_path
+            for item in items
+            if item.status == "applied" and not self._source_parent_is_safe(Path(item.source))
+        ]
+        if source_conflicts:
+            return LayoutMigrationReport(plan_id, "conflict", conflicts=tuple(source_conflicts))
         for item in items:
             if item.status == "applied":
                 self._validate_destination_parent(Path(item.destination).parent)

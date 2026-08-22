@@ -140,6 +140,36 @@ def test_rollback_missing_destination_is_a_conflict_without_side_effects(tmp_pat
     assert migrator._load(plan.plan_id)[1][0].status == "applied"
 
 
+@pytest.mark.parametrize("target_kind", ["directory", "dangling"])
+def test_rollback_source_parent_symlink_is_a_conflict_without_writing_outside_vault(tmp_path, target_kind):
+    vault, source = _setup(tmp_path)
+    source.parent.joinpath("nested").mkdir()
+    source = source.parent / "nested" / "nota.md"
+    source.write_text("note")
+    migrator = VaultLayoutMigrator(vault, theme="Tema")
+    plan = migrator.plan()
+    migrator.apply(plan.plan_id)
+
+    source_parent = vault / "Tema" / "4_salida" / "nested"
+    outside = tmp_path / "outside"
+    if target_kind == "directory":
+        outside.mkdir()
+    source_parent.rmdir()
+    source_parent.symlink_to(
+        outside if target_kind == "directory" else tmp_path / "missing",
+        target_is_directory=True,
+    )
+
+    report = migrator.rollback(plan.plan_id)
+
+    assert report.status == "conflict"
+    assert report.conflicts == ("nested/nota.md",)
+    assert source_parent.is_symlink()
+    assert (vault / "Tema" / "4_procesado" / "nested" / "nota.md").read_text() == "note"
+    assert target_kind != "directory" or not (outside / "nota.md").exists()
+    assert migrator._load(plan.plan_id)[1][0].status == "applied"
+
+
 def test_apply_is_idempotent_and_does_not_overwrite(tmp_path):
     vault, source = _setup(tmp_path)
     source.write_text("note")

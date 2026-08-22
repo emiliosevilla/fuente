@@ -39,7 +39,7 @@ Current gate: F03.2 pinned MiniRAG adapter is in progress. F03.1 is implemented 
 | F02.4 | F00.2,F02.3 | pinned Meetily local bridge and importer | yes | yes — `0927c1c`, `e37df26`, `61bf6bf` | `39 + 43 passed, 1 warning` after fix | yes — Terra APPROVE; no findings | no | F03.1 may start |
 | F03.1 | F01.1,F02.2 | retrieval contracts/router | yes | yes — `5c85989` | `22` focal; `108` regression | yes — Terra APPROVE; no findings after score fallback | no | F03.2 may start |
 | F03.2 | F00.2,F03.1 | pinned MiniRAG adapter | yes | yes — `57ba971` | `50 passed` adapter/router/RAG/resource suite; freshness `6 passed` | yes — Terra APPROVE; no findings | no | F03.3 may start |
-| F03.3 | F03.1 | Chroma refinement role | yes | no | no | no | no | Luna |
+| F03.3 | F03.1 | Chroma refinement role | yes | yes — pending commit | `87 passed` RAG/ingestion/security suite | yes — Terra APPROVE; no findings | no | F04.1 may start |
 | F04.1 | F03.1 | verdict persistence | yes | no | no | no | no | Luna |
 | F04.2 | F03.2,F03.3,F04.1 | positive-only verifier | yes | no | no | no | no | Terra |
 | F04.3 | F04.2 | processed promotion | yes | no | no | no | no | Sol |
@@ -360,3 +360,10 @@ At task end, update only that row with a commit, exact test command/result, revi
 - Terra re-review: APPROVE; no findings.
 - F03.2 is complete. F03.3 may start.
 - Commit: `57ba971` (`feat: add local minirag primary backend`). Evidence snapshot regenerated at `base_head=57ba971`, `RESULT: READY`.
+
+### F03.3 completion — 2026-08-23
+
+- Added `ChromaRetrievalBackend` as the sole explicit `chroma-refinement` adapter and removed the duplicate ingestion implementation.
+- Kept Chroma on local `PersistentClient`; propagated `False` through the typed `bool | None` delete contract so compensation cannot report a failed cleanup as successful.
+- Verification: `87 passed`; `git diff --check` clean.
+- Terra re-review: APPROVE; no findings. F04.1 may start.

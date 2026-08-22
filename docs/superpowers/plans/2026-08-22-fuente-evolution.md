@@ -660,6 +660,8 @@ git add fuente/rag/chroma_store.py fuente/application/retrieval.py fuente/applic
 git commit -m "refactor: reserve chroma for refinement"
 ~~~
 
+Status: COMPLETE — Terra approved; `87` RAG/ingestion/security tests passed; delete failure propagation is covered.
+
 ## Phase 4 — verified refinement
 
 ### Task F04.1: Persist candidate baselines and verdicts

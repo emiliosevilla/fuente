@@ -78,7 +78,7 @@ from fuente.extractors.policy import ExtractionDecision, ExtractionPolicy
 from fuente.infrastructure.atomic_files import atomic_write_text
 from fuente.infrastructure.sqlite_store import JobStore
 from fuente.ram_governor.budget import unavailable_snapshot
-from fuente.rag.backend import IndexBuildResult
+from fuente.rag.chroma_store import ChromaRetrievalBackend
 from fuente.rag.router import RetrievalRouter
 
 logger = logging.getLogger(__name__)
@@ -190,34 +190,6 @@ class ModelUnavailableError(RuntimeError):
     code = "model_unavailable"
 
 
-class _ChromaRefinementBackend:
-    """Keep the current Chroma index behind the explicit refinement role."""
-
-    name = "chroma-refinement"
-
-    def __init__(self, chroma: Any) -> None:
-        self.chroma = chroma
-
-    def rebuild(self, records) -> IndexBuildResult:
-        records = list(records)
-        ok = self.chroma.add_chunks(
-            [record["content"] for record in records],
-            [record["metadata"] for record in records],
-            [record["id"] for record in records],
-        )
-        return IndexBuildResult(
-            backend=self.name,
-            indexed_count=len(records) if ok else 0,
-            success=bool(ok),
-        )
-
-    def search(self, query: str, limit: int):
-        raise NotImplementedError("ingestion does not retrieve from its index")
-
-    def delete(self, document_ids):
-        return self.chroma.delete_chunks(list(document_ids))
-
-
 def document_id_for_source(source_relative_path: str) -> str:
     """Stable, opaque document id for a Vault-relative source path.
 
@@ -285,8 +257,8 @@ class IngestionApplicationService:
         self.chunker = chunker
         self.chroma = chroma
         self.router = router or RetrievalRouter(
-            primary=_ChromaRefinementBackend(chroma),
-            refinement=_ChromaRefinementBackend(chroma),
+            primary=ChromaRetrievalBackend(chroma),
+            refinement=ChromaRetrievalBackend(chroma),
         )
         self.atomic_generator = atomic_generator
         self.linker = linker

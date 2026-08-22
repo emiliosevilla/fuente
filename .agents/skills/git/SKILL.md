@@ -22,12 +22,15 @@ comandos Git manuales.
 6. Detenerse en el primer fallo, salvo el bloqueo del merge normal cubierto por
    la regla siguiente. Si el PR queda bloqueado por revisiones, checks o
    políticas ajenas a ese caso, dejarlo abierto y comunicar la URL y el motivo.
-7. El usuario es el propietario del código y, al solicitar la ejecución de
-   esta skill, autoriza por defecto el uso de `--admin` en los PR de este
-   repositorio (`dev -> main`). `--admin` puede aplicarse siempre que la
-   cascada lo necesite, sin pedir una confirmación adicional. Usarlo siempre
-   después del preflight, verificando el PR, su motivo de bloqueo y los cambios
-   que se van a promocionar.
+7. Al invocar `$git`, escribir `git` exactamente o solicitar inequívocamente
+   la cascada completa, el usuario autoriza de forma explícita: `git add .`,
+   crear el commit de los cambios comprobados en el preflight, hacer push de
+   `dev`, crear o reutilizar el PR `dev -> main` y fusionarlo con
+   `gh pr merge --admin --merge` cuando sea necesario. Esta autorización debe
+   reflejarse literalmente en la solicitud de escalado de la herramienta. No
+   hace falta pedir una segunda confirmación humana, salvo que una política
+   externa la exija. Usar `--admin` solo después del preflight, verificando el
+   PR, su motivo de bloqueo y los cambios que se van a promocionar.
 8. No borrar `dev` después del merge y conservarla como rama de trabajo activa.
 9. Derivar el repositorio desde `origin`; no hardcodear propietario ni nombre.
 
@@ -40,6 +43,9 @@ Activar solo cuando el usuario:
 - o pida inequívocamente ejecutar la publicación completa.
 
 Las operaciones Git normales no activan esta skill.
+
+La activación constituye la autorización explícita descrita en la regla 7 para
+la operación completa de publicación.
 
 ## Preflight obligatorio
 

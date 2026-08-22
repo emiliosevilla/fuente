@@ -107,7 +107,7 @@ from fuente.core.folder_sync import (
     FolderSyncModal,
     is_hidden_or_temporary_file,
 )
-from fuente.domain.sync import ConnectedFolder, SyncProvider
+from fuente.domain.sync import ConnectedFolder, SyncDirection, SyncProvider
 from fuente.watcher.watcher import ETLPipeline
 from fuente.graph_engine.linker import CANONICAL_MOC_FILENAME, GraphLinker
 from fuente.graph_engine.optimized_loop import OptimizadoGraphLoop
@@ -1322,9 +1322,53 @@ class FuenteConsoleBackend:
 
     def sync_inputs(self, connection_ids: list[str]) -> Dict[str, Any]:
         """Canonical inbound sync; the browser supplies opaque IDs only."""
-        result = self._canonical_input_sync_result(
-            self.sync_sources(connection_ids)
-        )
+        try:
+            connections = self.sync_manager.load_connections()
+            if connection_ids:
+                requested_ids = set(connection_ids)
+                known_ids = {connection.connection_id for connection in connections}
+                if unknown_ids := requested_ids - known_ids:
+                    raise ValueError("unknown sync connection ID")
+                connections = [
+                    connection
+                    for connection in connections
+                    if connection.connection_id in requested_ids
+                ]
+
+            reports = [
+                FolderSyncManager.public_sync_report(
+                    self.sync_manager.sync_connection(
+                        connection, direction=SyncDirection.INPUT_COMMON
+                    )
+                )
+                for connection in connections
+            ]
+            combined = {
+                key: sum(report[key] for report in reports)
+                for key in ("copied", "unchanged", "scanned", "manifest_updates")
+            }
+            combined["conflicts"] = [
+                conflict for report in reports for conflict in report["conflicts"]
+            ]
+            combined["diagnostics"] = [
+                diagnostic for report in reports for diagnostic in report["diagnostics"]
+            ]
+            result = {
+                "status": "completed",
+                "active_theme": self.vault.active_theme,
+                "last_run_at": self.sync_manager.get_last_sync_status()["last_run_at"],
+                **combined,
+                "refresh": True,
+                "stats": self.get_stats_dict(),
+            }
+        except ValueError as error:
+            result = {"error": "sync_source_not_found", "message": str(error)}
+        except PathAuthorizationError as error:
+            result = self._path_error(error)
+        except Exception:
+            logger.exception("Error sincronizando entradas desde la UI")
+            result = {"error": "sync_failed", "message": "Sync failed"}
+        result = self._canonical_input_sync_result(result)
         if "error" not in result:
             result["inputs"] = self.sync_manager.get_sync_sources()
         return result

@@ -15,6 +15,7 @@ from typing import Callable, Optional
 
 from fuente.application.reflow import AuthorizedReflowTarget
 from fuente.application.notes import NotesApplicationService
+from fuente.application.meetings import MeetingCaptureApplicationService
 from fuente.config import AppConfig
 from fuente.domain.runtime_policy import RuntimePolicy
 from fuente.graph_engine.optimized_loop import OptimizadoGraphLoop
@@ -59,6 +60,7 @@ class ApplicationLifecycle:
         pipeline_factory: Optional[PipelineFactory] = None,
         monitor_factory: Optional[MonitorFactory] = None,
         graph_loop_factory: Optional[GraphLoopFactory] = None,
+        meeting_service: Optional[MeetingCaptureApplicationService] = None,
     ) -> None:
         if mode not in VALID_MODES:
             raise ValueError(f"Modo de lifecycle desconocido: {mode!r}")
@@ -74,6 +76,7 @@ class ApplicationLifecycle:
                 vault_root=config.vault.vault_path,
             )
         )
+        self.meeting_service = meeting_service or MeetingCaptureApplicationService(config)
 
         self.pipeline: Optional[ETLPipeline] = None
         self.monitor: Optional[FolderMonitor] = None
@@ -146,6 +149,7 @@ class ApplicationLifecycle:
             or self.pipeline is not None
         )
         if not self._started and not has_partial:
+            self.meeting_service.close()
             return
 
         if self.monitor is not None:
@@ -159,6 +163,8 @@ class ApplicationLifecycle:
         if self.pipeline is not None:
             self.pipeline.close()
             self.pipeline = None
+
+        self.meeting_service.close()
 
         self._started = False
         logger.info("ApplicationLifecycle detenido (modo '%s').", self.mode)

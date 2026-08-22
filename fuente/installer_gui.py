@@ -204,6 +204,16 @@ class FuenteInstallerWizard(tk.Tk):
         )
         msg_box.pack(fill="x", pady=10)
 
+        connected_inputs_title = tk.Label(
+            self.content_frame,
+            text="Conexión de entradas — SharePoint y OneDrive",
+            font=("Helvetica", 11, "bold"),
+            fg="#1F2937",
+            bg="#F5F5F7",
+            anchor="w",
+        )
+        connected_inputs_title.pack(fill="x", pady=(8, 0))
+
     # --- PASO 2: Verificación de Requisitos ---
     def _render_step3_requirements(self):
         title = tk.Label(

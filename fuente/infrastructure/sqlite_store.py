@@ -192,6 +192,54 @@ class JobStore:
         ).fetchall()
         return [SyncManifestEntry.from_row(row) for row in rows]
 
+    # -- Vault layout migration -----------------------------------------
+
+    def create_vault_layout_migration(
+        self, plan_id: str, vault_root: str, theme: str, created_at: str
+    ) -> None:
+        self._connection.execute(
+            "INSERT INTO vault_layout_migrations(plan_id, vault_root, theme, created_at) VALUES (?, ?, ?, ?)",
+            (plan_id, vault_root, theme, created_at),
+        )
+
+    def add_vault_layout_migration_item(
+        self,
+        plan_id: str,
+        *,
+        source: str,
+        destination: str,
+        relative_path: str,
+        sha256: str,
+        status: str,
+        timestamp: str,
+    ) -> None:
+        self._connection.execute(
+            """
+            INSERT INTO vault_layout_migration_items
+                (plan_id, source, destination, relative_path, sha256, status, timestamp)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (plan_id, source, destination, relative_path, sha256, status, timestamp),
+        )
+
+    def get_vault_layout_migration(self, plan_id: str) -> dict[str, Any] | None:
+        plan = self._connection.execute(
+            "SELECT * FROM vault_layout_migrations WHERE plan_id = ?", (plan_id,)
+        ).fetchone()
+        if plan is None:
+            return None
+        items = self._connection.execute(
+            "SELECT * FROM vault_layout_migration_items WHERE plan_id = ? ORDER BY source",
+            (plan_id,),
+        ).fetchall()
+        return {"plan": dict(plan), "items": [dict(item) for item in items]}
+
+    def update_vault_layout_migration_item(self, plan_id: str, source: str, *, status: str, timestamp: str) -> None:
+        self._connection.execute(
+            "UPDATE vault_layout_migration_items SET status = ?, timestamp = ? WHERE plan_id = ? AND source = ?",
+            (status, timestamp, plan_id, source),
+        )
+
     # -- migrations ------------------------------------------------------
 
     def _run_migrations(self) -> None:

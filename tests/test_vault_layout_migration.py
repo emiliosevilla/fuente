@@ -117,6 +117,29 @@ def test_rollback_and_conflict_are_safe(tmp_path):
     assert report.status == "conflict" and destination.read_text() == "changed"
 
 
+@pytest.mark.parametrize("destination_kind", ["missing", "dangling_symlink"])
+def test_rollback_missing_destination_is_a_conflict_without_side_effects(tmp_path, destination_kind):
+    vault, source = _setup(tmp_path)
+    source.write_text("note")
+    migrator = VaultLayoutMigrator(vault, theme="Tema")
+    plan = migrator.plan()
+    migrator.apply(plan.plan_id)
+    destination = vault / "Tema" / "4_procesado" / "nota.md"
+    if destination_kind == "missing":
+        destination.unlink()
+    else:
+        destination.unlink()
+        destination.symlink_to(tmp_path / "does-not-exist.md")
+
+    report = migrator.rollback(plan.plan_id)
+
+    assert report.status == "conflict"
+    assert report.conflicts == ("nota.md",)
+    assert not source.exists()
+    assert destination.is_symlink() is (destination_kind == "dangling_symlink")
+    assert migrator._load(plan.plan_id)[1][0].status == "applied"
+
+
 def test_apply_is_idempotent_and_does_not_overwrite(tmp_path):
     vault, source = _setup(tmp_path)
     source.write_text("note")

@@ -1,23 +1,23 @@
-# Informe F01.2
+# Informe F01.2 — ronda de reparación
 
 ## Archivos modificados
 
 - `fuente/infrastructure/vault_layout_migration.py`
-- `fuente/infrastructure/migrations/012_vault_layout.sql`
-- `fuente/infrastructure/sqlite_store.py`
 - `tests/test_vault_layout_migration.py`
 
 ## Comportamiento
 
-`VaultLayoutMigrator` inventaría de forma determinista los archivos regulares de `<Vault>/<tema>/4_salida`, guarda origen, destino, SHA-256, estado y timestamp en SQLite, y aplica movimientos hacia `4_procesado` sin sobrescribir. La aplicación valida todos los hashes antes de mover, protege las rutas contra enlaces simbólicos y puede reanudar un corte entre la creación del destino y la eliminación del origen. El rollback sólo revierte elementos marcados como aplicados y conserva cualquier destino cuyo hash haya cambiado.
+`VaultLayoutMigrator` inventaría de forma determinista los archivos regulares de `<Vault>/<tema>/4_salida`, guarda origen, destino, SHA-256, estado y timestamp en SQLite, y aplica movimientos hacia `4_procesado` sin sobrescribir. Esta ronda endurece la propiedad: un destino existente en estado `planned` siempre es conflicto, incluso con el mismo SHA, y el preflight aborta antes de modificar ningún archivo.
 
-Ambigüedad resuelta según el SDD: “idempotente” se interpreta como idempotencia de `apply(plan_id)`; un destino ya existente con el hash inventariado se trata como movimiento ya completado, nunca como permiso para sobrescribir.
+La transición persistida es `planned -> linked -> applied -> rolled_back`. Tras crear el enlace duro se persiste `linked` antes de eliminar el origen; la recuperación sólo acepta ese estado si ambos nombres son el mismo archivo y conservan el SHA inventariado. `4_procesado` y todos sus padres se validan como directorios no simbólicos antes de escribir o borrar. También se rechazan `theme='.'` y `theme='..'`.
+
+La idempotencia de `apply(plan_id)` sólo se conserva para estados ya persistidos como `applied` o `rolled_back`; un destino preexistente en `planned` no se adopta.
 
 ## Comandos y resultados
 
-- `PYTHONDONTWRITEBYTECODE=1 python3 -m pytest tests/test_vault_layout_migration.py tests/test_vault_migration.py tests/test_atomic_files.py -q` — `33 passed in 0.90s`.
+- `PYTHONDONTWRITEBYTECODE=1 python3 -m pytest tests/test_vault_layout_migration.py tests/test_vault_migration.py tests/test_atomic_files.py -q` — `38 passed in 1.12s`.
 - `git diff --check` — correcto.
-- Self-review — correcto; staging limitado a los cuatro archivos de F01.2.
+- Self-review — correcto; sólo se modifican la implementación y sus pruebas dentro del alcance, además de este informe.
 
 ## Límites
 
@@ -25,4 +25,4 @@ No se modificaron consumidores ETL/UI/sync/RAG. No se hizo push y no se accedió
 
 ## Commit
 
-`59fbf46162daefaf41c2c6c327f25adf7abba90f` — `feat: migrate vault to processed and shared roots`
+`fix: harden vault layout migration rollback`

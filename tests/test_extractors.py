@@ -2,10 +2,12 @@ import json
 import unittest
 import tempfile
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 from fuente.extractors.tex_tm import TeXAndTeXmacsExtractor
 from fuente.extractors.audio import AudioExtractor
+from fuente.extractors.base import ExtractionResult
 from fuente.extractors.macos_vision import OCRUnavailableError
 from fuente.extractors.ocr_image import ImageOCRExtractor
 from fuente.extractors.office_pdf import TextAndOfficeExtractor
@@ -160,6 +162,98 @@ Fin del documento.
         extracted, meta = extractor.extract(txt_file)
         self.assertEqual(extracted.strip(), "Contenido simple de nota")
         self.assertEqual(meta["format"], ".txt")
+
+    def test_markitdown_wins_before_docling_for_docx(self):
+        extractor = TextAndOfficeExtractor()
+        docx_file = self.temp_path / "nota.docx"
+
+        with patch.object(extractor, "_try_markitdown", return_value="# rápido"), patch.object(
+            extractor,
+            "_try_docling",
+            side_effect=AssertionError("Docling no debe ejecutarse para DOCX bueno"),
+        ):
+            result = extractor.extract(docx_file)
+
+        self.assertEqual(result.content, "# rápido")
+        self.assertEqual(result.metadata["extraction_method"], "markitdown")
+        self.assertEqual([item["engine"] for item in result.metadata["extraction_attempts"]], ["markitdown"])
+
+    def test_markitdown_uses_local_api_without_plugins(self):
+        calls = []
+
+        class FakeMarkItDown:
+            def __init__(self, **kwargs):
+                calls.append(("init", kwargs))
+
+            def convert_local(self, path):
+                calls.append(("convert_local", path))
+                return SimpleNamespace(text_content="# local")
+
+        extractor = TextAndOfficeExtractor()
+        docx_file = self.temp_path / "nota.docx"
+        fake_module = SimpleNamespace(MarkItDown=FakeMarkItDown)
+
+        with patch.dict("sys.modules", {"markitdown": fake_module}):
+            self.assertEqual(extractor._try_markitdown(docx_file), "# local")
+
+        self.assertEqual(calls[0], ("init", {"enable_plugins": False}))
+        self.assertEqual(calls[1], ("convert_local", docx_file))
+
+    def test_low_quality_pdf_escalates_to_docling(self):
+        extractor = TextAndOfficeExtractor()
+        pdf_file = self.temp_path / "escaneado.pdf"
+        pdf_file.write_bytes(b"pdf")
+
+        with patch.object(extractor, "_try_markitdown", return_value="\x00\x01"), patch.object(
+            extractor,
+            "_extract_pdf",
+            return_value=ExtractionResult(
+                None,
+                {"extraction_method": "pdf_text", "extraction_status": "failed"},
+                "failed",
+                "ocr_empty",
+            ),
+        ), patch.object(extractor, "_try_docling", return_value="# Docling\n\nTexto recuperado") as docling:
+            result = extractor.extract(pdf_file)
+
+        docling.assert_called_once_with(pdf_file)
+        self.assertEqual(result.content, "# Docling\n\nTexto recuperado")
+        self.assertEqual(result.metadata["extraction_method"], "docling")
+        self.assertEqual(result.metadata["extraction_escalation"], "docling")
+        self.assertEqual(
+            [item["engine"] for item in result.metadata["extraction_attempts"]],
+            ["markitdown", "native", "docling"],
+        )
+
+    def test_optional_markitdown_degradation_uses_native_without_false_success(self):
+        extractor = TextAndOfficeExtractor()
+        docx_file = self.temp_path / "nota.docx"
+
+        with patch.object(extractor, "_try_markitdown", return_value=None), patch.object(
+            extractor, "_extract_docx", return_value="# Nativo\n\nTexto local"
+        ), patch.object(
+            extractor,
+            "_try_docling",
+            side_effect=AssertionError("Docling no aplica a DOCX"),
+        ):
+            result = extractor.extract(docx_file)
+
+        self.assertEqual(result.status, "completed")
+        self.assertEqual(result.metadata["extraction_method"], "native")
+        self.assertIn("markitdown_unavailable_or_failed", result.metadata["extraction_degradations"])
+
+    def test_csv_stays_native_without_optional_engines(self):
+        csv_file = self.temp_path / "datos.csv"
+        csv_file.write_text("Nombre,Valor\nFuente,2\n", encoding="utf-8")
+        extractor = TextAndOfficeExtractor()
+
+        with patch.object(extractor, "_try_markitdown", side_effect=AssertionError("CSV es nativo")), patch.object(
+            extractor, "_try_docling", side_effect=AssertionError("CSV no escala"),
+        ):
+            result = extractor.extract(csv_file)
+
+        self.assertEqual(result.metadata["extraction_method"], "native")
+        self.assertIn("| Fuente | 2 |", result.content)
 
     # ------------------------------------------------------------------
     # 5. ExtendedFormatsExtractor (.ipynb, .epub, .eml)

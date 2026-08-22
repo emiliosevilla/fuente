@@ -1,5 +1,22 @@
 # Informe F02.1
 
+## Fix round 3
+
+- Normalizada la conversión de `reason` histórica en `017_extraction_attempt_audit.sql`: `NULL` pasa a `[]` y el texto pasa a una lista JSON de un elemento mediante `json_quote`, sin dejar texto plano.
+- Actualizada la regresión para validar `json.loads(row.reasons)` con texto que contiene comillas, barra y salto de línea; también valida `NULL` y una inserción nueva.
+
+### Pruebas de fix round 3
+
+```text
+PYTHONDONTWRITEBYTECODE=1 python3 -m pytest tests/test_job_store.py tests/test_extraction_policy.py tests/test_ingestion_recovery.py tests/integration/test_pipeline_recovery.py -q
+72 passed in 2.38s
+
+git diff --check
+OK
+```
+
+No se usa el Vault real ni se hace push.
+
 ## Fix round 2
 
 - Restaurada `013_extraction_attempts.sql` al contrato publicado por `f4fb9a7`; una migración aplicada no se edita.

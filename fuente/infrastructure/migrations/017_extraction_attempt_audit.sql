@@ -36,7 +36,10 @@ SELECT
     outcome,
     NULL,
     score,
-    COALESCE(reason, '[]'),
+    CASE
+        WHEN reason IS NULL THEN '[]'
+        ELSE '[' || json_quote(reason) || ']'
+    END,
     0,
     created_at
 FROM extraction_attempts;

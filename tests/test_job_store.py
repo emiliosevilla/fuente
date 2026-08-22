@@ -1,4 +1,5 @@
 """Tests for the Vault-local SQLite job store (Task 2.1)."""
+import json
 import sqlite3
 import threading
 from pathlib import Path
@@ -609,8 +610,27 @@ def test_migration_017_upgrades_old_013_and_preserves_attempts(tmp_path):
                 0.4,
                 0.8,
                 0,
-                "quality_below_threshold",
+                'quality "below" threshold\\nwith slash',
                 "2026-01-01T00:00:02+00:00",
+            ),
+        )
+        connection.execute(
+            """
+            INSERT INTO extraction_attempts (
+                job_id, source_relative_path, engine, outcome, score,
+                printable_ratio, expected_structure, reason, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                job_id,
+                "1_entrada/legacy.pdf",
+                "legacy_engine",
+                "accepted",
+                0.9,
+                1.0,
+                1,
+                None,
+                "2026-01-01T00:00:03+00:00",
             ),
         )
         connection.commit()
@@ -628,22 +648,24 @@ def test_migration_017_upgrades_old_013_and_preserves_attempts(tmp_path):
             "reasons",
             "duration_ms",
         }.issubset(columns)
-        row = store._connection.execute(
+        rows = store._connection.execute(
             """
             SELECT attempt_id, job_id, outcome, result, quality_score,
                    reasons, duration_ms
             FROM extraction_attempts
+            ORDER BY attempt_id
             """
-        ).fetchone()
-        assert tuple(row) == (
+        ).fetchall()
+        assert tuple(rows[0][:5]) == (
             1,
             "legacy-extraction-job",
             "rejected",
             None,
             0.4,
-            "quality_below_threshold",
-            0,
         )
+        assert rows[0][6] == 0
+        assert json.loads(rows[0][5]) == ['quality "below" threshold\\nwith slash']
+        assert json.loads(rows[1][5]) == []
         store._connection.execute(
             """
             INSERT INTO extraction_attempts (
@@ -674,10 +696,11 @@ def test_migration_017_upgrades_old_013_and_preserves_attempts(tmp_path):
             '["engine unavailable"]',
             12,
         )
+        assert json.loads(inserted[3]) == ["engine unavailable"]
         assert store._connection.execute(
             "SELECT COUNT(*) FROM extraction_attempts WHERE job_id = ?",
             ("legacy-extraction-job",),
-        ).fetchone()[0] == 2
+        ).fetchone()[0] == 3
         assert store._connection.execute(
             "SELECT 1 FROM schema_migrations WHERE version = 17"
         ).fetchone() is not None

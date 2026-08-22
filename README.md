@@ -10,13 +10,24 @@ El proyecto funciona sin servicios cloud obligatorios. Ollama, Chroma,
 Tesseract, FFmpeg y los convertidores opcionales se usan sólo cuando están
 instalados y la política de ejecución los permite.
 
+## Dependencias de terceros fijadas
+
+La ruta primaria de RAG usa MiniRAG HKUDS mediante el adaptador local de
+Fuente. La revisión fijada es
+`e204d239421f45004852953679927fdf6733f236` y su licencia declarada es MIT:
+[LICENSE oficial de MiniRAG](https://github.com/HKUDS/MiniRAG/blob/e204d239421f45004852953679927fdf6733f236/LICENSE).
+El estado de MiniRAG se guarda bajo `.fuente/minirag`; si no está instalado o
+el presupuesto local no permite usarlo, Fuente degrada a BM25. ChromaDB no es
+la ruta primaria: se conserva para refinamiento explícito y evaluado.
+
 ## Qué hace
 
 - Ingresa archivos desde `1_entrada/`, conserva una copia de auditoría en
   `2_sucio/` y genera la transcripción Markdown en `3_limpio/`.
 - Trata `3_limpio/` como registro canónico. Cada documento tiene identidad,
   revisión y hash para ligar la aprobación a unos bytes concretos.
-- Genera resultados derivados en `4_salida/` sólo después de superar las
+- Genera resultados de trabajo en `4_procesado/` y publica copias compartidas en
+  `5_salida/` sólo después de superar las
   comprobaciones de aprobación y revisión editorial.
 - Mantiene el estado de jobs, configuración, cuarentena y catálogos en
   `.fuente/`, fuera del contenido editorial.
@@ -30,8 +41,8 @@ instalados y la política de ejecución los permite.
 ## Flujo del Vault
 
 ```text
-1_entrada  →  2_sucio  →  3_limpio  →  aprobación  →  4_salida
-   entrada      auditoría      canónico       humana       derivados
+1_entrada  →  2_sucio  →  3_limpio  →  4_procesado  →  aprobación  →  5_salida
+   entrada      auditoría      canónico       edición             compartido
 ```
 
 La aprobación no se deduce por estar en una carpeta. Se valida con el
@@ -70,7 +81,10 @@ Los jobs son durables, reanudables y tienen estados y razones explícitos.
 ### Búsqueda, RAG y recursos
 
 - BM25 sobre el Markdown autorizado del Vault.
-- Búsqueda híbrida con Chroma local cuando el perfil lo permite.
+- MiniRAG local como backend primario de recuperación; Chroma queda reservado
+  para ciclos explícitos de refinamiento evaluado.
+- Búsqueda híbrida/BM25 como degradación local cuando el presupuesto o MiniRAG
+  no están disponibles.
 - Chunk IDs deterministas y reconciliación del índice.
 - Ollama por loopback (`http://localhost:11434`) como ruta predeterminada.
 - RAM Governor que mide memoria, catálogo local y presupuesto antes de elegir
@@ -155,6 +169,7 @@ Extras disponibles:
 | `audio` | `pip install -e ".[audio]"` | Faster-Whisper local. |
 | `ocr` | `pip install -e ".[ocr]"` | Pillow, pytesseract y OCR de imágenes. |
 | `office` | `pip install -e ".[office]"` | MarkItDown y Docling como convertidores opcionales. |
+| `rag` | `pip install -e ".[rag]"` | MiniRAG HKUDS fijado para la ruta primaria. |
 | `all` | `pip install -e ".[all]"` | Todos los extras de usuario. |
 | `dev` | `pip install -e ".[dev]"` | PyInstaller para empaquetado. |
 | `test` | `pip install -e ".[test]"` | Pytest. |

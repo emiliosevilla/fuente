@@ -215,6 +215,10 @@ class VaultConfig:
     def chroma_dir(self) -> Path:
         return self.system_dir / "chroma"
 
+    @property
+    def minirag_dir(self) -> Path:
+        return self.system_dir / "minirag"
+
 
 @dataclass
 class AppConfig:

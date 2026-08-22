@@ -305,16 +305,15 @@ técnicas posteriores ya estén implementadas.
 
 | Id | Estado | Valor aprobado | Revisor | Timestamp ISO-8601 | Evidencia |
 |---|---|---|---|---|---|
-| D-01 | APPROVED | MiniRAG usará una revisión inmutable y una licencia MIT revisada. Su revisión exacta queda como entrada obligatoria, separada y pendiente de registro en F03.2. | Emilio Sevilla Ortego | 2026-08-22T15:55:40+02:00 | `98cc0b25fbccb565fc1762281d5b508bafad2d59` |
+| D-01 | APPROVED | MiniRAG usará la revisión inmutable `e204d239421f45004852953679927fdf6733f236`, con licencia MIT revisada en su `LICENSE` oficial. | Emilio Sevilla Ortego | 2026-08-22T15:55:40+02:00 | `98cc0b25fbccb565fc1762281d5b508bafad2d59`; revisión verificada contra `git ls-remote` el 2026-08-23 |
 | D-02 | APPROVED | `4_salida` se renombra a `4_procesado` y se crea `5_salida`; la compatibilidad heredada será temporal. | Emilio Sevilla Ortego | 2026-08-22T15:55:40+02:00 | `98cc0b25fbccb565fc1762281d5b508bafad2d59` |
 | D-03 | APPROVED | Los eventos de discusión serán JSON inmutables bajo `5_salida/_fuente_discussion`; SharePoint gobierna su visibilidad. | Emilio Sevilla Ortego | 2026-08-22T15:55:40+02:00 | `98cc0b25fbccb565fc1762281d5b508bafad2d59` |
 | D-04 | APPROVED | La ganancia normalizada inicial de refinamiento será `0.10` después de la calibración. | Emilio Sevilla Ortego | 2026-08-22T15:55:40+02:00 | `98cc0b25fbccb565fc1762281d5b508bafad2d59` |
 | D-05 | APPROVED | El puente usará la revisión Meetily `0281737d87d26352fb0adc78c8c0975f691b23d1`, MIT, la plantilla Tauri `standard_meeting`, rutas visibles `reunion` y consentimiento explícito de grabación. | Emilio Sevilla Ortego | 2026-08-22T15:55:40+02:00 | `98cc0b25fbccb565fc1762281d5b508bafad2d59` |
 
 Este registro cierra la evidencia humana de F00.2 y permite comenzar F01.1.
-No autoriza una migración real del Vault, la incorporación de dependencias ni
-la selección de la revisión exacta de MiniRAG: esa revisión debe quedar
-documentada y verificada por separado antes de F03.2.
+La revisión exacta de MiniRAG queda documentada y verificada antes de F03.2;
+no autoriza una migración real del Vault.
 
 ## Criterios de éxito
 

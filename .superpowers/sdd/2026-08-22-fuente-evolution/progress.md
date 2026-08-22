@@ -41,7 +41,7 @@ Current gate: F04.3 accepted-candidate promotion is in progress. F04.2 positive-
 | F03.2 | F00.2,F03.1 | pinned MiniRAG adapter | yes | yes — `57ba971` | `50 passed` adapter/router/RAG/resource suite; freshness `6 passed` | yes — Terra APPROVE; no findings | no | F03.3 may start |
 | F03.3 | F03.1 | Chroma refinement role | yes | yes — `71b2869` | `87 passed` RAG/ingestion/security suite | yes — Terra APPROVE; no findings | no | F04.1 may start |
 | F04.1 | F03.1 | verdict persistence | yes | yes — `49f87fe` | `35 passed` focal identity/store suite | yes — Terra APPROVE; no findings after atomicity fix | no | F04.2 may start |
-| F04.2 | F03.2,F03.3,F04.1 | positive-only verifier | yes | yes — pending commit | `154 passed` focal; full `1301 passed, 1 skipped, 1 warning` | yes — Terra APPROVE after baseline CAS and MiniRAG read fallback fixes | no | F04.3 may start |
+| F04.2 | F03.2,F03.3,F04.1 | positive-only verifier | yes | yes — `85dcb9e` | `154 passed` focal; full `1301 passed, 1 skipped, 1 warning` | yes — Terra APPROVE after baseline CAS and MiniRAG read fallback fixes | no | F04.3 may start |
 | F04.3 | F04.2 | processed promotion | yes | no | no | no | no | Sol |
 | F05.1 | F01.1,F04.3 | output approval | yes | no | no | no | no | Human |
 | F05.2 | F05.1 | atomic sharing | yes | no | no | no | no | Terra |
@@ -384,4 +384,4 @@ At task end, update only that row with a commit, exact test command/result, revi
 - Fixed extraction retry compatibility: public registry replacement now reaches the quality policy; corrupt content receives two attempts, permanent extractor errors one.
 - Verification: focal `154 passed, 1 warning`; full suite `1301 passed, 1 skipped, 1 warning`; `git diff --check` clean.
 - Terra re-review: APPROVE; no findings.
-- Commit: pending in this checkpoint; commit immediately before F04.3.
+- Commit: `85dcb9e` (`feat: verify refinements before promotion`).

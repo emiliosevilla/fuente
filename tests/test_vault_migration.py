@@ -178,6 +178,30 @@ def test_scan_reports_findings(vault_tree: Path):
     assert "malformed_frontmatter" in kinds
 
 
+def test_scan_blocks_real_like_duplicate_note_ids(vault_tree: Path):
+    duplicate_id = "3e8052a3-46d6-50cb-96cb-13a901dde3ec"
+    note = _eligible_derived_markdown(
+        note_id=duplicate_id,
+        title="ESP - Sevilla enero 2025 Aptis ESOL",
+        body="# Nota\n",
+        origin={
+            "note_id": APPROVED_ORIGIN_ID,
+            "revision": 1,
+            "content_hash": "a" * 64,
+            "path": "1_entrada/ESP - Sevilla enero 2025 Aptis ESOL.pdf",
+        },
+    )
+    _write_note(vault_tree, "4_salida/General/ESP - Sevilla enero 2025.md", note)
+    _write_note(vault_tree, "4_salida/General/copia-ESP - Sevilla enero 2025.md", note)
+
+    report = VaultMigrator(vault_tree).dry_run()
+
+    duplicate_findings = [item for item in report.findings if item.kind == "duplicate_note_id"]
+    assert len(duplicate_findings) == 2
+    with pytest.raises(MigrationBlockedError, match="duplicate_note_id"):
+        VaultMigrator(vault_tree).apply(rebuild_index=False, rebuild_moc=False)
+
+
 def test_scan_reports_unsafe_symlink(vault_tree: Path, tmp_path: Path):
     external = tmp_path / "outside.md"
     external.write_text("# fuera", encoding="utf-8")
@@ -562,3 +586,29 @@ def test_rollback_rebuilds_index_when_manifest_had_index(vault_tree: Path):
     assert note.read_text(encoding="utf-8") == LEGACY_NOTE
     assert set(chroma.vectors) != migrated_ids
     assert chroma.vectors
+
+
+def test_rollback_restores_runtime_state_snapshot(vault_tree: Path, monkeypatch: pytest.MonkeyPatch):
+    note = _write_note(vault_tree, "4_salida/_Sin_Cuestion/legacy.md", LEGACY_NOTE)
+    state_db = vault_tree / ".fuente" / "state.db"
+    state_db.write_bytes(b"state-before")
+    chroma_dir = vault_tree / ".fuente" / "chroma"
+    chroma_dir.mkdir(parents=True)
+    (chroma_dir / "index.bin").write_bytes(b"index-before")
+    chroma = FakeChroma()
+    migrator = VaultMigrator(vault_tree, chroma=chroma)
+    monkeypatch.setattr(migrator, "_chroma", None)
+    monkeypatch.setattr(migrator, "_chroma_store", lambda: chroma)
+
+    before_state = state_db.read_bytes()
+    before_index = (chroma_dir / "index.bin").read_bytes()
+    manifest = migrator.apply(rebuild_index=True, rebuild_moc=False)
+    assert (vault_tree / manifest.runtime_backup_dir / ".fuente/state.db").read_bytes() == before_state
+    state_db.write_bytes(b"state-after")
+    (chroma_dir / "index.bin").write_bytes(b"index-after")
+
+    migrator.rollback(migrator._manifest_file(manifest))
+
+    assert state_db.read_bytes() == before_state
+    assert (chroma_dir / "index.bin").read_bytes() == before_index
+    assert not (chroma_dir / "generated.bin").exists()

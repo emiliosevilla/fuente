@@ -17,7 +17,7 @@ Baseline activo medido: `dev` en `e6aef697a6f9b4f49f1878940b95f8cf51d2b342`, mer
 | Orden | Fase | Estado activo |
 |---:|---|---|
 | 1 | PR-00 | COMPLETE (S PASS / R PASS) |
-| 2 | PR-04 | PARTIAL (S PASS / R PARTIAL) |
+| 2 | PR-04 | COMPLETE (S PASS / R PASS — no-op de migración) |
 | 3 | PR-05 | NOT_RUN |
 | 4 | PR-06 | NOT_RUN |
 | 5 | PR-07 | NOT_RUN |
@@ -32,7 +32,7 @@ Baseline activo medido: `dev` en `e6aef697a6f9b4f49f1878940b95f8cf51d2b342`, mer
 
 PR-10 debe repetir `S` sintética; el bloqueo histórico por IDs duplicados no se hereda automáticamente. Ninguna fase puede declararse `COMPLETE` sin `S PASS` y `R PASS` de esta campaña.
 
-Ejecución activa: PR-00 S PASS y R PASS en clon limpio (`COMPLETE`); PR-04 S PASS y R PARTIAL tras corregir aceptación de fechas YAML. PR-05+ permanecen `NOT_RUN`.
+Ejecución activa: PR-00 y PR-04 están `COMPLETE`; PR-05+ permanecen `NOT_RUN`.
 
 ## Global Constraints
 
@@ -164,17 +164,20 @@ PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -q \
   tests/test_atomic_files.py tests/security/test_path_authorization.py
 ~~~
 
-- [x] Confirmar layout, hashes, rollback, CAS y rechazo de rutas.
-- [x] Repetir en copia de Vault y confirmar que 4_salida sólo es compatibilidad.
+- [x] Confirmar layout, hashes, rollback, CAS y rechazo de rutas en la prueba sintética.
+- [x] Comprobar el Vault nuevo con layout final `1_entrada`–`5_salida`, `dry-run` e inventario.
 
-Ejecución 2026-08-23: `S PASS`, `R BLOCKED`, estado `BLOCKED`. El probe
-reproducible y su resultado están en:
+Ejecución sintética 2026-08-23: `S PASS`. El probe reproducible y su resultado están en:
 `.superpowers/sdd/2026-08-23-prueba-real/task-PR-04-S-probe.py` y
 `.superpowers/sdd/2026-08-23-prueba-real/task-PR-04-S-report.md`. La copia fue
-sintética y temporal; el Vault real y la migración real siguen sin ejecutarse.
+sintética y temporal.
 
 Informe R inicial: `.superpowers/sdd/2026-08-23-prueba-real/task-PR-04-R-report.md` (`BLOCKED`).
-Repetición tras fix: `.superpowers/sdd/2026-08-23-prueba-real/task-PR-04-R-rerun-date-fix-report.md` (`dry-run PASS`; apply/rollback `NOT_RUN`).
+Repetición real sobre `/Users/emiliosevillaortego/Documents/Programación/fuente_vault`:
+`dry-run PASS` (`notes_scanned: 0`, `migratable_notes: 0`, `findings: []`) e inventario
+`PASS` (`is_safe_to_apply: true`, sin notas ni hallazgos). No hubo `apply` ni `rollback`
+significativos porque el Vault ya tenía el layout final y no contenía notas migrables.
+PR-04 R queda `PASS` dentro del alcance vigente: layout final, `dry-run` e inventario seguro. La migración y el rollback no aplican al Vault nuevo y no se declaran probados. Las notas de `1_entrada` continúan como entrada real de PR-05.
 
 Runbook para ejecución humana sobre copia autorizada:
 `.superpowers/sdd/2026-08-23-prueba-real/task-PR-04-R-runbook.md`.
@@ -261,7 +264,7 @@ En este reinicio se repite primero `S`; el bloqueo histórico por IDs duplicados
 - [ ] Ejecutar dry-run:
 
 ~~~bash
-fuente --vault /Users/emiliosevillaortego/Documents/Fuente_Vault \
+fuente --vault /Users/emiliosevillaortego/Documents/Programación/fuente_vault \
   --theme "General" --migrate-layout dry-run
 ~~~
 

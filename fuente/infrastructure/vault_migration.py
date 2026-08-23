@@ -4,6 +4,7 @@ from __future__ import annotations
 import hashlib
 import logging
 import re
+import shutil
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -36,7 +37,7 @@ logger = logging.getLogger(__name__)
 MANIFEST_SCHEMA_VERSION = 1
 MIGRATIONS_DIR_NAME = "migrations"
 BLOCKING_FINDING_KINDS = frozenset(
-    {"malformed_frontmatter", "unsafe_path", "unsupported_status"}
+    {"duplicate_note_id", "malformed_frontmatter", "unsafe_path", "unsupported_status"}
 )
 
 
@@ -114,6 +115,7 @@ class MigrationManifest:
     index_rebuilt: bool = False
     themes_processed: list[str] = field(default_factory=list)
     scan_summary: dict[str, int] = field(default_factory=dict)
+    runtime_backup_dir: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -128,6 +130,7 @@ class MigrationManifest:
             "index_rebuilt": self.index_rebuilt,
             "themes_processed": list(self.themes_processed),
             "scan_summary": dict(self.scan_summary),
+            "runtime_backup_dir": self.runtime_backup_dir,
         }
 
     @classmethod
@@ -145,6 +148,7 @@ class MigrationManifest:
             index_rebuilt=bool(payload.get("index_rebuilt", False)),
             themes_processed=list(payload.get("themes_processed", [])),
             scan_summary=dict(payload.get("scan_summary", {})),
+            runtime_backup_dir=str(payload.get("runtime_backup_dir", "")),
         )
 
 
@@ -236,6 +240,7 @@ class VaultMigrator:
         report.themes = list(themes)
 
         stem_locations: dict[str, list[str]] = {}
+        note_id_locations: dict[str, list[str]] = {}
         note_records: list[tuple[str, Path, str]] = []
 
         for theme, path, relative in _iter_theme_output_notes(self.vault):
@@ -293,7 +298,8 @@ class VaultMigrator:
                 )
 
             try:
-                canonical = MarkdownDocument.from_markdown(raw).to_markdown()
+                document = MarkdownDocument.from_markdown(raw)
+                canonical = document.to_markdown()
             except FrontmatterError as error:
                 report.findings.append(
                     ScanFinding(
@@ -307,6 +313,24 @@ class VaultMigrator:
 
             if canonical != raw:
                 report.migratable_notes += 1
+
+            note_id = str(document.metadata.get("note_id") or "").strip()
+            if note_id:
+                note_id_locations.setdefault(note_id, []).append(relative)
+
+        for note_id, locations in sorted(note_id_locations.items()):
+            if len(locations) < 2:
+                continue
+            message = f"note_id {note_id} appears at {', '.join(locations)}"
+            for location in locations:
+                report.findings.append(
+                    ScanFinding(
+                        kind="duplicate_note_id",
+                        vault_relative_path=location,
+                        message=message,
+                        theme=self._theme_for_relative(location, themes),
+                    )
+                )
 
         return report
 
@@ -340,6 +364,8 @@ class VaultMigrator:
 
         backup_root = self.vault_path / manifest.backup_dir
         backup_root.mkdir(parents=True, exist_ok=True)
+        if self._chroma is None:
+            self._snapshot_runtime_state(manifest)
         self._persist_manifest(manifest, manifest_path)
         with JobStore(self.vault_path) as store:
             for entry in manifest.entries:
@@ -433,6 +459,8 @@ class VaultMigrator:
 
         backup_root = self.vault_path / manifest.backup_dir
         backup_root.mkdir(parents=True, exist_ok=True)
+        if self._chroma is None:
+            self._snapshot_runtime_state(manifest)
         self._persist_manifest(manifest, manifest_path)
 
         for entry in manifest.entries:
@@ -527,11 +555,56 @@ class VaultMigrator:
 
         manifest.status = "rolled_back"
         self._persist_manifest(manifest, manifest_path)
+        if self._chroma is None and self._restore_runtime_state(manifest):
+            return manifest, restored_count
         if manifest.moc_rebuilt:
             self._refresh_moc_catalog()
         if manifest.index_rebuilt:
             self._rebuild_index(manifest.themes_processed or self.vault.get_available_themes())
         return manifest, restored_count
+
+    def _runtime_targets(self) -> tuple[Path, ...]:
+        state_dir = self.vault_path / self.config.vault.system_dir_name
+        return (
+            state_dir / "state.db",
+            state_dir / "state.db-wal",
+            state_dir / "state.db-shm",
+            self.vault.config.chroma_dir,
+        )
+
+    def _snapshot_runtime_state(self, manifest: MigrationManifest) -> None:
+        if not manifest.runtime_backup_dir:
+            return
+        root = self.vault_path / manifest.runtime_backup_dir
+        root.mkdir(parents=True, exist_ok=True)
+        for target in self._runtime_targets():
+            if not target.exists():
+                continue
+            backup = root / target.relative_to(self.vault_path)
+            backup.parent.mkdir(parents=True, exist_ok=True)
+            if target.is_dir():
+                shutil.copytree(target, backup, dirs_exist_ok=True)
+            else:
+                shutil.copy2(target, backup)
+
+    def _restore_runtime_state(self, manifest: MigrationManifest) -> bool:
+        if not manifest.runtime_backup_dir:
+            return False
+        root = self.vault_path / manifest.runtime_backup_dir
+        if not root.exists():
+            return False
+        for target in self._runtime_targets():
+            backup = root / target.relative_to(self.vault_path)
+            if target.is_dir():
+                shutil.rmtree(target)
+            elif target.exists():
+                target.unlink()
+            if backup.is_dir():
+                shutil.copytree(backup, target)
+            elif backup.is_file():
+                target.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(backup, target)
+        return True
 
     @staticmethod
     def _blocking_findings(scan: MigrationScanReport) -> list[ScanFinding]:
@@ -656,6 +729,12 @@ class VaultMigrator:
             entries=entries,
             themes_processed=list(scan.themes),
             scan_summary=scan.summary(),
+            runtime_backup_dir=(
+                Path(self.config.vault.system_dir_name)
+                / MIGRATIONS_DIR_NAME
+                / migration_id
+                / "runtime"
+            ).as_posix(),
         )
 
     def _load_or_create_identity_manifest(
@@ -697,6 +776,12 @@ class VaultMigrator:
             entries=entries,
             themes_processed=list(scan.themes),
             scan_summary=scan.summary(),
+            runtime_backup_dir=(
+                Path(self.config.vault.system_dir_name)
+                / MIGRATIONS_DIR_NAME
+                / f"identity-{migration_id}"
+                / "runtime"
+            ).as_posix(),
         )
 
     def _manifest_dir(self, manifest: MigrationManifest) -> Path:

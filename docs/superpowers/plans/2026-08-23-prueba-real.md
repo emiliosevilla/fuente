@@ -17,7 +17,7 @@ Baseline activo medido: `dev` en `e6aef697a6f9b4f49f1878940b95f8cf51d2b342`, mer
 | Orden | Fase | Estado activo |
 |---:|---|---|
 | 1 | PR-00 | COMPLETE (S PASS / R PASS) |
-| 2 | PR-04 | PARTIAL (S PASS / R NOT_RUN) |
+| 2 | PR-04 | PARTIAL (S PASS / R PARTIAL) |
 | 3 | PR-05 | NOT_RUN |
 | 4 | PR-06 | NOT_RUN |
 | 5 | PR-07 | NOT_RUN |
@@ -32,7 +32,7 @@ Baseline activo medido: `dev` en `e6aef697a6f9b4f49f1878940b95f8cf51d2b342`, mer
 
 PR-10 debe repetir `S` sintética; el bloqueo histórico por IDs duplicados no se hereda automáticamente. Ninguna fase puede declararse `COMPLETE` sin `S PASS` y `R PASS` de esta campaña.
 
-Ejecución activa: PR-00 S PASS y R PASS en clon limpio (`COMPLETE`); PR-04 S PASS en copia temporal sintética, R NOT_RUN y estado `PARTIAL`. PR-05+ permanecen `NOT_RUN`.
+Ejecución activa: PR-00 S PASS y R PASS en clon limpio (`COMPLETE`); PR-04 S PASS y R PARTIAL tras corregir aceptación de fechas YAML. PR-05+ permanecen `NOT_RUN`.
 
 ## Global Constraints
 
@@ -99,7 +99,7 @@ Esperado: suite verde y RESULT: READY.
 
 Antecedente histórico PR-00: se conserva el resultado anterior en el ledger; no es resultado activo. Estado actual: `COMPLETE`.
 
-Ejecución actual: `task-PR-00-S-rerun-report.md` registra S PASS y `task-PR-00-R-report.md` registra R PASS. Estado actual: `COMPLETE`; PR-04+ permanecen `NOT_RUN`.
+Ejecución actual: `task-PR-00-S-rerun-report.md` registra S PASS y `task-PR-00-R-report.md` registra R PASS. Estado actual PR-00: `COMPLETE`; PR-04: `BLOCKED`; PR-05+ permanecen `NOT_RUN`.
 
 ## Fase 1 — artefactos
 
@@ -167,11 +167,14 @@ PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -q \
 - [x] Confirmar layout, hashes, rollback, CAS y rechazo de rutas.
 - [x] Repetir en copia de Vault y confirmar que 4_salida sólo es compatibilidad.
 
-Ejecución 2026-08-23: `S PASS`, `R NOT_RUN`, estado `PARTIAL`. El probe
+Ejecución 2026-08-23: `S PASS`, `R BLOCKED`, estado `BLOCKED`. El probe
 reproducible y su resultado están en:
 `.superpowers/sdd/2026-08-23-prueba-real/task-PR-04-S-probe.py` y
 `.superpowers/sdd/2026-08-23-prueba-real/task-PR-04-S-report.md`. La copia fue
 sintética y temporal; el Vault real y la migración real siguen sin ejecutarse.
+
+Informe R inicial: `.superpowers/sdd/2026-08-23-prueba-real/task-PR-04-R-report.md` (`BLOCKED`).
+Repetición tras fix: `.superpowers/sdd/2026-08-23-prueba-real/task-PR-04-R-rerun-date-fix-report.md` (`dry-run PASS`; apply/rollback `NOT_RUN`).
 
 Runbook para ejecución humana sobre copia autorizada:
 `.superpowers/sdd/2026-08-23-prueba-real/task-PR-04-R-runbook.md`.

@@ -601,5 +601,14 @@ class RetrievalApplicationService:
         parts: list[str] = []
         for index, chunk in enumerate(chunks, start=1):
             label = chunk.get("relative_path") or chunk.get("document_id") or chunk.get("id")
-            parts.append(f"[{index}] ({label})\n{chunk.get('content', '')}")
+            metadata = dict(chunk.get("metadata") or {})
+            semantic = []
+            for key in ("title", "date", "tags", "issue"):
+                value = metadata.get(key)
+                if value not in (None, "", []):
+                    semantic.append(f"{key}: {value}")
+            header = f"[{index}] ({label})"
+            if semantic:
+                header += "\n" + " | ".join(semantic)
+            parts.append(f"{header}\n{chunk.get('content', '')}")
         return "\n\n".join(parts)

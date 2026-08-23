@@ -146,7 +146,13 @@ class VaultCorpusProvider:
             )
         origins = [origin.to_dict() for origin in document.origins]
         for chunk in chunks:
-            chunk["metadata"] = {**dict(chunk["metadata"]), "origins": origins}
+            chunk["metadata"] = {
+                **dict(chunk["metadata"]),
+                "title": str(metadata.get("title") or ""),
+                "date": str(metadata.get("date") or ""),
+                "tags": list(metadata.get("tags") or []),
+                "origins": origins,
+            }
         return [dict(chunk) for chunk in chunks]
 
     def _is_canonical_path(self, path: Path) -> bool:

@@ -955,6 +955,9 @@ class NotesApplicationService:
             metadata.setdefault("revision", note.revision)
             metadata.setdefault("content_hash", note.content_hash)
             metadata.setdefault("relative_path", note.relative_path)
+            metadata["title"] = str(note.frontmatter.get("title") or "")
+            metadata["date"] = str(note.frontmatter.get("date") or "")
+            metadata["tags"] = list(note.frontmatter.get("tags") or [])
             metadata["origins_json"] = json.dumps(origins, sort_keys=True)
             chunk["metadata"] = metadata
         chunk_ids = [chunk["id"] for chunk in chunks]

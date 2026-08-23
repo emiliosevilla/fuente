@@ -46,7 +46,7 @@ Current gate: F04.3 accepted-candidate promotion is in progress. F04.2 positive-
 | F05.1 | F01.1,F04.3 | output approval | yes | yes — `1c71e83` | `34 passed` focal; Terra focal `31 passed` | yes — Terra APPROVE after real-byte hash remediation | no | F05.2 may start |
 | F05.2 | F05.1 | atomic sharing | yes | yes — pending commit | `54 passed` focal | yes — Terra APPROVE after symlink, migration and rollback remediation | no | F05.3 may start |
 | F05.3 | F05.2,D-03 | discussion files | yes | yes — pending commit | `11 passed` focal | yes — Terra APPROVE after receipt containment, symlink and schema validation | no | F06.1 may start |
-| F06.1 | F05.2,F05.3 | bridge contracts | yes | in progress | compile check only | pending | no | Terra |
+| F06.1 | F05.2,F05.3 | bridge contracts | yes | yes — pending commit | `64 passed` local; Terra `36 passed` focal, `153 passed` expanded | yes — Terra APPROVE after ID and parent UUID validation | no | F06.2 may start |
 | F06.2 | F06.1 | reader workspace | yes | no | no | no | no | Terra |
 | F06.3 | F06.1 | editor/share/discussion UI | yes | no | no | no | no | Terra |
 | F06.4 | F03.2,F06.1 | grounded workspace chat | yes | no | no | no | no | Luna |
@@ -402,3 +402,4 @@ At task end, update only that row with a commit, exact test command/result, revi
 - Commit: `1c71e83` (`feat: require approval before sharing output`).
 - F05.2 implementation is complete and Terra-approved: sharing writes an atomic projection under `5_salida`, preserves `4_procesado`, and records `(note_id, revision, hash, publisher, source, destination)` in SQLite. Symlink traversal and receipt-failure rollback are covered.
 - F05.3 implementation is complete and Terra-approved: discussion events are immutable JSON under `5_salida/_fuente_discussion`, with one author-pinned event, validated reply lineage, safe receipts, and strict event schema parsing.
+- F06.1 implementation is complete and Terra-approved: the PyWebView bridge exposes path-free workspace, share, discussion read and reply operations with strict opaque-ID, revision and parent validation.

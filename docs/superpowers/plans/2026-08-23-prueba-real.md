@@ -116,8 +116,10 @@ PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -q \
   tests/test_atomic_files.py tests/security/test_path_authorization.py
 ~~~
 
-- [ ] Confirmar layout, hashes, rollback, CAS y rechazo de rutas.
-- [ ] Repetir en copia de Vault y confirmar que 4_salida sólo es compatibilidad.
+- [x] Confirmar layout, hashes, rollback, CAS y rechazo de rutas.
+- [x] Repetir en copia de Vault y confirmar que 4_salida sólo es compatibilidad.
+
+Resultado PR-04: `COMPLETE`; `55 passed in 0.79s`, copia temporal PASS y re-revisión Terra PASS tras dos rondas de evidencia. PASS limitado a checkout y copia temporal sintética; Vault real no probado. `PR-10` sigue bloqueado por IDs duplicados.
 
 ### PR-05: extracción ETL
 
@@ -232,4 +234,3 @@ fuente --vault /Users/emiliosevillaortego/Documents/Fuente_Vault \
 - Migración real queda bloqueada por IDs duplicados hasta decisión.
 - Windows queda separado de macOS.
 - Evidencia y privacidad tienen reglas explícitas.
-

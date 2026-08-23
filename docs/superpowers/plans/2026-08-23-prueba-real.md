@@ -10,6 +10,30 @@ Tech Stack: Python 3.10+, pytest, PyInstaller, ZIP, PyWebView, SQLite, Ollama, M
 
 Spec: docs/superpowers/specs/2026-08-23-prueba-real.md
 
+## Reinicio activo — 2026-08-23
+
+Baseline activo medido: `dev` en `e6aef697a6f9b4f49f1878940b95f8cf51d2b342`, merge de `main` `a44aa0a92f2231bad7a401be30bca159fec45910`, PR #64. Se conserva la evidencia anterior como antecedente, pero se resetean sus checks y resultados para esta campaña.
+
+| Orden | Fase | Estado activo |
+|---:|---|---|
+| 1 | PR-00 | COMPLETE (S PASS / R PASS) |
+| 2 | PR-04 | NOT_RUN |
+| 3 | PR-05 | NOT_RUN |
+| 4 | PR-06 | NOT_RUN |
+| 5 | PR-07 | NOT_RUN |
+| 6 | PR-01 | NOT_RUN |
+| 7 | PR-03 | NOT_RUN |
+| 8 | PR-08 | NOT_RUN |
+| 9 | PR-09 | NOT_RUN |
+| 10 | PR-10 | NOT_RUN |
+| 11 | PR-11 | NOT_RUN |
+| 12 | PR-02 | NOT_RUN |
+| 13 | PR-12 | NOT_RUN |
+
+PR-10 debe repetir `S` sintética; el bloqueo histórico por IDs duplicados no se hereda automáticamente. Ninguna fase puede declararse `COMPLETE` sin `S PASS` y `R PASS` de esta campaña.
+
+Ejecución activa: PR-00 S PASS y R PASS en clon limpio; PR-00 queda `COMPLETE` y no se continúa automáticamente a PR-04.
+
 ## Global Constraints
 
 - Probar primero con corpus sintético y copia de Vault.
@@ -73,7 +97,9 @@ Esperado: suite verde y RESULT: READY.
 - [x] Preparar corpus temporal con tema General y TXT, Markdown, DOCX, CSV, JSON e imagen no sensible.
 - [x] Registrar G0 con comandos, resultados, hashes y límites.
 
-Resultado PR-00: `COMPLETE` sólo como baseline del repositorio; G0 `PASS` en checkout limpio aislado fijado a `f538f16bccd2d92eea112e575938786ab14453e9`. La suite pasó con `1336 passed, 1 skipped, 1 warning`; `release_gate.py` devolvió `RESULT: READY` y código `0`. Esto no prueba instalación ni uso real. PR-01–PR-12 siguen pendientes, y PR-10 continúa bloqueado por IDs duplicados.
+Antecedente histórico PR-00: se conserva el resultado anterior en el ledger; no es resultado activo. Estado actual: `COMPLETE`.
+
+Ejecución actual: `task-PR-00-S-rerun-report.md` registra S PASS y `task-PR-00-R-report.md` registra R PASS. Estado actual: `COMPLETE`; PR-04+ permanecen `NOT_RUN`.
 
 ## Fase 1 — artefactos
 
@@ -138,10 +164,10 @@ PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -q \
   tests/test_atomic_files.py tests/security/test_path_authorization.py
 ~~~
 
-- [x] Confirmar layout, hashes, rollback, CAS y rechazo de rutas.
-- [x] Repetir en copia de Vault y confirmar que 4_salida sólo es compatibilidad.
+- [ ] Confirmar layout, hashes, rollback, CAS y rechazo de rutas.
+- [ ] Repetir en copia de Vault y confirmar que 4_salida sólo es compatibilidad.
 
-Resultado PR-04: `PARTIAL`; `55 passed in 0.79s`, copia temporal sintética PASS y re-revisión Terra PASS tras dos rondas de evidencia. No se probó el Vault autorizado real ni una migración real; por tanto no cierra la validación de layout, migración y aprobación. `PR-10` sigue bloqueado por IDs duplicados.
+Antecedente histórico PR-04: se conserva el resultado anterior en el ledger; no es resultado activo. Estado activo tras reinicio: `NOT_RUN`.
 
 ### PR-05: extracción ETL
 
@@ -153,11 +179,11 @@ PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -q \
   tests/test_ingestion_recovery.py tests/test_job_store.py
 ~~~
 
-- [x] Probar TXT, DOCX, CSV, JSON, PDF difícil e imagen en corpus de prueba.
-- [x] Comparar Markdown, motor elegido, hash y razones de auditoría.
-- [x] Verificar cuarentena y recuperación.
+- [ ] Probar TXT, DOCX, CSV, JSON, PDF difícil e imagen en corpus de prueba.
+- [ ] Comparar Markdown, motor elegido, hash y razones de auditoría.
+- [ ] Verificar cuarentena y recuperación.
 
-Resultado PR-05: `PARTIAL`; suite focal `75 passed in 2.16s` y probe sintético con hashes, auditoría, cuarentena y recuperación. No se validaron archivos reales, MarkItDown real, Docling real, OCR real, Vault real, audio ni transcripciones; por tanto no cierra la validación ETL real.
+Antecedente histórico PR-05: se conserva el resultado anterior en el ledger; no es resultado activo. Estado activo tras reinicio: `NOT_RUN`.
 
 ### PR-06: MiniRAG, Chroma y refinamiento
 
@@ -219,6 +245,8 @@ Secuencia: `S` puente y recuperación simulados → `R` Meetily, micrófono, con
 ### PR-10: Vault General
 
 Secuencia: `S` dry-run y apply sobre copia sintética → `R` dry-run y apply sobre copia autorizada del Vault real; nunca sobre el original sin autorización.
+
+En este reinicio se repite primero `S`; el bloqueo histórico por IDs duplicados no fija el estado activo.
 
 - [ ] Ejecutar dry-run:
 

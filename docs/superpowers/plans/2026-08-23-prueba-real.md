@@ -129,9 +129,11 @@ PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -q \
   tests/test_ingestion_recovery.py tests/test_job_store.py
 ~~~
 
-- [ ] Probar TXT, DOCX, CSV, JSON, PDF difícil e imagen en corpus de prueba.
-- [ ] Comparar Markdown, motor elegido, hash y razones de auditoría.
-- [ ] Verificar cuarentena y recuperación.
+- [x] Probar TXT, DOCX, CSV, JSON, PDF difícil e imagen en corpus de prueba.
+- [x] Comparar Markdown, motor elegido, hash y razones de auditoría.
+- [x] Verificar cuarentena y recuperación.
+
+Resultado PR-05: `PASS` limitado a corpus sintético temporal y checkout; suite focal `75 passed in 2.16s`. TXT/DOCX/CSV/JSON, PDF difícil e imagen quedaron medidos con hashes y auditoría; la cuarentena y recuperación pasaron. Límites: MarkItDown no produjo resultado, Docling y OCR se probaron con stubs, y no se usaron Vault, audio ni transcripciones reales.
 
 ### PR-06: MiniRAG, Chroma y refinamiento
 

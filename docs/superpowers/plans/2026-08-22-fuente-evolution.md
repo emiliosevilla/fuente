@@ -1,5 +1,11 @@
 # Fuente Evolution Implementation Plan
 
+Execution ledger status: COMPLETE locally on `dev` at the reconciled `HEAD`.
+The task recipes below are historical implementation records; their final
+status lines and the progress ledger are authoritative. Manual PyWebView,
+microphone, remote deployment and PR publication remain unmeasured; no
+deployment is inferred.
+
 > For agentic workers: REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox syntax for tracking.
 
 Goal: Convert Fuente into a local-first knowledge workspace with MarkItDown/MiniRAG primary cycles, evidence-gated refinement, filesystem collaboration, and an accessible document experience.
@@ -555,6 +561,8 @@ git add fuente/rag/backend.py fuente/rag/router.py fuente/application/retrieval.
 git commit -m "refactor: route primary and refinement retrieval"
 ~~~
 
+Status: COMPLETE — commit `5c85989`; Terra approved after the typed-score fallback; `22` focal tests and `108` regressions passed.
+
 ### Task F03.2: Add approved-pinned MiniRAG adapter
 
 Files:
@@ -608,6 +616,8 @@ git add fuente/rag/minirag_store.py fuente/config.py pyproject.toml requirements
 git commit -m "feat: add local minirag primary backend"
 ~~~
 
+Status: COMPLETE — commit `57ba971`; D-01 fixed to `e204d239421f45004852953679927fdf6733f236` with MIT license; Terra approved; `50` tests passed; documentation freshness `6` passed.
+
 ### Task F03.3: Restrict ChromaDB to refinement
 
 Files:
@@ -656,9 +666,11 @@ git add fuente/rag/chroma_store.py fuente/application/retrieval.py fuente/applic
 git commit -m "refactor: reserve chroma for refinement"
 ~~~
 
+Status: COMPLETE — Terra approved; `87` RAG/ingestion/security tests passed; delete failure propagation is covered.
+
 ## Phase 4 — verified refinement
 
-### Task F04.1: Persist candidate baselines and verdicts
+### Task F04.1: Persist candidate baselines and verdicts — COMPLETE
 
 Files:
 - Create: fuente/domain/refinement.py
@@ -669,7 +681,7 @@ Files:
 Interfaces:
 - Produces RefinementCandidate, RefinementVerdict and atomic verdict storage.
 
-- [ ] Step 1: Write failing verdict identity test.
+- [x] Step 1: Write failing verdict identity test.
 
 ~~~python
 def test_verdict_binds_candidate_to_exact_revision_and_hash(store):
@@ -678,42 +690,53 @@ def test_verdict_binds_candidate_to_exact_revision_and_hash(store):
     assert store.get_refinement_verdict("candidate-1")["content_hash"] == "sha256:abc"
 ~~~
 
-- [ ] Step 2: Run test.
+- [x] Step 2: Run test.
 
 Run: PYTHONDONTWRITEBYTECODE=1 python3 -m pytest tests/test_refinement_store.py -q
 Expected: FAIL because schema and methods do not exist.
 
-- [ ] Step 3: Implement storage methods.
+- [x] Step 3: Implement storage methods.
 
 ~~~python
 def save_refinement_verdict(self, document_id: str, revision: int, content_hash: str, verdict: RefinementVerdict) -> None: ...
 def get_refinement_verdict(self, candidate_id: str) -> dict[str, object] | None: ...
 ~~~
 
-- [ ] Step 4: Verify migration and invariants.
+- [x] Step 4: Verify migration and invariants.
 
 Run: PYTHONDONTWRITEBYTECODE=1 python3 -m pytest tests/test_refinement_store.py tests/test_job_store.py tests/test_invariants.py -q
 Expected: PASS; conflicting revisions do not overwrite verdicts.
 
-- [ ] Step 5: Commit.
+- [x] Step 5: Commit. Implemented in `018_refinement_verdicts.sql` because `015` and `017` were already occupied.
+
+Status: COMPLETE — Terra approved atomic identity/verdict persistence; `35 passed`.
 
 ~~~bash
 git add fuente/domain/refinement.py fuente/infrastructure/migrations/015_refinement_verdicts.sql fuente/infrastructure/sqlite_store.py tests/test_refinement_store.py
 git commit -m "feat: persist refinement verdicts"
 ~~~
 
-### Task F04.2: Reject non-positive changes
+### Task F04.2: Reject non-positive changes — COMPLETE
 
 Files:
 - Create: fuente/application/refinement.py
+- Create: fuente/infrastructure/migrations/019_refinement_baseline_cas.sql
 - Modify: fuente/application/reflow.py
 - Modify: fuente/application/chat.py
+- Modify: fuente/control_console.py
+- Modify: fuente/application/retrieval.py
+- Modify: fuente/application/ingestion.py
+- Modify: fuente/application/notes.py
+- Modify: fuente/application/reflow_jobs.py
 - Test: tests/test_refinement_service.py
+- Test: tests/test_minirag_store.py
+- Test: tests/test_retrieval_router.py
+- Test: tests/test_refinement_store.py
 
 Interfaces:
 - Produces RefinementApplicationService.evaluate and schema-validated verifier response.
 
-- [ ] Step 1: Write acceptance/rejection tests.
+- [x] Step 1: Write acceptance/rejection tests.
 
 ~~~python
 def test_evaluator_rejects_candidate_without_strict_score_gain(service):
@@ -725,12 +748,12 @@ def test_unavailable_ollama_requires_human_review(service):
     assert service.evaluate("candidate-1", 2).decision == "needs_human_review"
 ~~~
 
-- [ ] Step 2: Run test.
+- [x] Step 2: Run test.
 
 Run: PYTHONDONTWRITEBYTECODE=1 python3 -m pytest tests/test_refinement_service.py -q
 Expected: FAIL with missing service.
 
-- [ ] Step 3: Implement deterministic score and strict verifier.
+- [x] Step 3: Implement deterministic score and strict verifier.
 
 ~~~python
 class RefinementApplicationService:
@@ -741,19 +764,21 @@ class RefinementApplicationService:
 
 Score link validity, approved origins, MiniRAG probes and Chroma refinement probes. Parse an allow-listed JSON schema. Malformed, timed-out or missing Ollama yields needs_human_review.
 
-- [ ] Step 4: Verify no rejected change alters content.
+- [x] Step 4: Verify no rejected change alters content.
 
 Run: PYTHONDONTWRITEBYTECODE=1 python3 -m pytest tests/test_refinement_service.py tests/test_ram_governor_resilience.py tests/test_retry_policy.py tests/test_chat_retrieval_contract.py -q
 Expected: PASS.
 
-- [ ] Step 5: Commit.
+- [x] Step 5: Commit.
 
 ~~~bash
 git add fuente/application/refinement.py fuente/application/reflow.py fuente/application/chat.py tests/test_refinement_service.py
 git commit -m "feat: verify refinements before promotion"
 ~~~
 
-### Task F04.3: Promote accepted candidate only into 4_procesado
+Status: COMPLETE — Terra approved after baseline CAS and MiniRAG read fallback fixes; focal `154 passed, 1 warning`; full suite `1301 passed, 1 skipped, 1 warning` before evidence refresh.
+
+### Task F04.3: Promote accepted candidate only into 4_procesado — COMPLETE
 
 Files:
 - Modify: fuente/application/ingestion.py
@@ -765,7 +790,7 @@ Interfaces:
 - Consumes accepted RefinementVerdict.
 - Produces promote_refinement_candidate with revision fencing.
 
-- [ ] Step 1: Write failing promotion tests.
+- [x] Step 1: Write failing promotion tests.
 
 ~~~python
 def test_rejected_candidate_never_writes_processed_note(service):
@@ -777,12 +802,12 @@ def test_accepted_candidate_writes_private_processed_root(service):
     assert "/4_procesado/" in note.relative_path
 ~~~
 
-- [ ] Step 2: Run test.
+- [x] Step 2: Run test.
 
 Run: PYTHONDONTWRITEBYTECODE=1 python3 -m pytest tests/test_refinement_promotion.py -q
 Expected: FAIL because promotion does not exist.
 
-- [ ] Step 3: Implement atomic promotion.
+- [x] Step 3: Implement atomic promotion.
 
 ~~~python
 def promote_refinement_candidate(self, candidate_id: str, *, expected_revision: int) -> NoteDocument: ...
@@ -790,17 +815,19 @@ def promote_refinement_candidate(self, candidate_id: str, *, expected_revision: 
 
 Verify stored hash and verdict immediately before write; invalidate stale derived indexes; never copy a rejected candidate.
 
-- [ ] Step 4: Verify idempotency and approvals.
+- [x] Step 4: Verify idempotency and approvals.
 
 Run: PYTHONDONTWRITEBYTECODE=1 python3 -m pytest tests/test_refinement_promotion.py tests/test_approval_ledger.py tests/integration/test_pipeline_idempotency.py -q
 Expected: PASS.
 
-- [ ] Step 5: Commit.
+- [x] Step 5: Commit.
 
 ~~~bash
 git add fuente/application/ingestion.py fuente/application/notes.py fuente/core/vault.py tests/test_refinement_promotion.py
 git commit -m "feat: promote only verified processed candidates"
 ~~~
+
+Status: COMPLETE — Terra approved identity rewrite, document locking, private destination, idempotency and stale-hash rejection; focal `17 passed`.
 
 ## Phase 5 — approval, sharing and discussion
 
@@ -810,13 +837,13 @@ Files:
 - Modify: fuente/domain/approvals.py
 - Modify: fuente/application/approval.py
 - Modify: fuente/application/notes.py
-- Create: fuente/infrastructure/migrations/016_shared_outputs.sql
+- Create: fuente/infrastructure/migrations/020_processed_approvals.sql
 - Test: tests/test_processed_output_approval.py
 
 Interfaces:
 - Produces approve_processed_output and require_shareable_output.
 
-- [ ] Step 1: Write failing two-gate test.
+- [x] Step 1: Write failing two-gate test.
 
 ~~~python
 def test_clean_approval_alone_cannot_share_processed_note(service):
@@ -828,12 +855,12 @@ def test_processed_approval_binds_revision_hash_and_reviewer(service):
     assert approval.content_hash == service.get_note("processed-note").content_hash
 ~~~
 
-- [ ] Step 2: Run test.
+- [x] Step 2: Run test.
 
 Run: PYTHONDONTWRITEBYTECODE=1 python3 -m pytest tests/test_processed_output_approval.py -q
 Expected: FAIL because processed approval does not exist.
 
-- [ ] Step 3: Implement separate output approval.
+- [x] Step 3: Implement separate output approval.
 
 ~~~python
 def approve_processed_output(self, document_id: str, expected_revision: int, reviewer: str) -> ApprovalRecord: ...
@@ -842,19 +869,23 @@ def require_shareable_output(self, note: NoteDocument) -> None: ...
 
 The note must be in 4_procesado, retain approved 3_limpio origins and have a valid refinement status when one applies.
 
-- [ ] Step 4: Verify old export cannot bypass gate.
+- [x] Step 4: Verify old export cannot bypass gate.
 
 Run: PYTHONDONTWRITEBYTECODE=1 python3 -m pytest tests/test_processed_output_approval.py tests/test_approval_ledger.py tests/test_review_export_flow.py tests/test_export_service.py -q
 Expected: PASS.
 
-- [ ] Step 5: Commit.
+- [x] Step 5: Commit.
 
 ~~~bash
 git add fuente/domain/approvals.py fuente/application/approval.py fuente/application/notes.py fuente/infrastructure/migrations/016_shared_outputs.sql tests/test_processed_output_approval.py
 git commit -m "feat: require approval before sharing output"
 ~~~
 
+Status: COMPLETE — Terra approved separate processed approval, real-byte hash checks, document locking and manual-edit invalidation; focal `31 passed`.
+
 ### Task F05.2: Atomically share into 5_salida
+
+Status: COMPLETE — implementation and Terra verification complete (`54 passed`; commit recorded in the SDD ledger).
 
 Files:
 - Create: fuente/application/sharing.py
@@ -904,6 +935,8 @@ git commit -m "feat: share approved processed notes"
 ~~~
 
 ### Task F05.3: File-backed author discussion
+
+Status: COMPLETE — implementation and Terra verification complete (`11 passed`; commit recorded in the SDD ledger).
 
 Files:
 - Create: fuente/domain/discussion.py
@@ -966,6 +999,8 @@ git commit -m "feat: add file-backed shared discussion"
 
 ### Task F06.1: Typed bridge projections
 
+Status: COMPLETE — implementation and Terra verification complete (`64 passed` local; Terra `36 passed` focal and `153 passed` expanded; commit recorded in the SDD ledger).
+
 Files:
 - Modify: fuente/ui/bridge.py
 - Modify: fuente/application/lifecycle.py
@@ -1013,6 +1048,8 @@ git commit -m "feat: expose shared document workspace contracts"
 ~~~
 
 ### Task F06.2: Responsive reader workspace
+
+Status: COMPLETE — implementation and Terra verification complete (`29 passed` local; Terra `32 passed`, visual `12 passed`; commit recorded in the SDD ledger).
 
 Files:
 - Modify: consola_preview.html
@@ -1082,7 +1119,7 @@ Interfaces:
 - Consumes bridge share/discussion status.
 - Produces processed-only editor, disabled-reason share button, author card and reply composer.
 
-- [ ] Step 1: Write failing UI-state tests.
+- [x] Step 1: Write failing UI-state tests.
 
 ~~~python
 def test_share_button_explains_approval_block():
@@ -1095,12 +1132,12 @@ def test_discussion_composer_has_visible_label():
     assert 'for="discussion-reply-body"' in source
 ~~~
 
-- [ ] Step 2: Run test.
+- [x] Step 2: Run test.
 
 Run: PYTHONDONTWRITEBYTECODE=1 python3 -m pytest tests/contract/test_processed_editor_contract.py tests/contract/test_sharing_discussion_ui_contract.py -q
 Expected: FAIL because controls are absent.
 
-- [ ] Step 3: Implement state-driven controls.
+- [x] Step 3: Implement state-driven controls.
 
 ~~~javascript
 function renderShareState(state) {
@@ -1111,7 +1148,7 @@ function renderShareState(state) {
 
 The editor opens only for 4_procesado. Sharing confirms id/revision and shows the 5_salida path. Author and discussion values use textContent.
 
-- [ ] Step 4: Verify test and manual lifecycle.
+- [x] Step 4: Verify test and manual lifecycle.
 
 Run: PYTHONDONTWRITEBYTECODE=1 python3 -m pytest tests/contract/test_processed_editor_contract.py tests/contract/test_sharing_discussion_ui_contract.py tests/security/test_xss_rendering.py -q
 Expected: PASS.
@@ -1125,6 +1162,8 @@ git add consola_preview.html fuente/ui/static/console.css tests/contract/test_pr
 git commit -m "feat: add sharing and discussion controls"
 ~~~
 
+Status: COMPLETE locally; Terra APPROVE after the pre-share discussion fix round; commit reconciled in the final local ledger.
+
 ### Task F06.4: Ground workspace chat in citations
 
 Files:
@@ -1137,7 +1176,7 @@ Files:
 Interfaces:
 - Produces process_workspace_chat with citations containing document id, revision, hash, title and origin labels.
 
-- [ ] Step 1: Write failing citation test.
+- [x] Step 1: Write failing citation test.
 
 ~~~python
 def test_workspace_chat_returns_visible_citations(api):
@@ -1146,12 +1185,12 @@ def test_workspace_chat_returns_visible_citations(api):
     assert response["citations"][0]["revision"] >= 1
 ~~~
 
-- [ ] Step 2: Run test.
+- [x] Step 2: Run test.
 
 Run: PYTHONDONTWRITEBYTECODE=1 python3 -m pytest tests/contract/test_workspace_chat_contract.py -q
 Expected: FAIL because workspace chat projection does not exist.
 
-- [ ] Step 3: Implement explicit grounded response.
+- [x] Step 3: Implement explicit grounded response.
 
 ~~~python
 def process_workspace_chat(self, document_id: str, message: str) -> dict[str, Any]: ...
@@ -1159,7 +1198,7 @@ def process_workspace_chat(self, document_id: str, message: str) -> dict[str, An
 
 The service uses only approved context. The UI renders citations with textContent. Ollama failure preserves citations and returns a controlled local-service error.
 
-- [ ] Step 4: Verify.
+- [x] Step 4: Verify.
 
 Run: PYTHONDONTWRITEBYTECODE=1 python3 -m pytest tests/test_chat_retrieval_contract.py tests/contract/test_workspace_chat_contract.py tests/test_retrieval_service.py tests/security/test_bridge_payloads.py -q
 Expected: PASS.
@@ -1170,6 +1209,8 @@ Expected: PASS.
 git add fuente/application/chat.py fuente/ui/bridge.py consola_preview.html tests/test_chat_retrieval_contract.py tests/contract/test_workspace_chat_contract.py
 git commit -m "feat: ground workspace chat in citations"
 ~~~
+
+Status: COMPLETE locally; Terra APPROVE after all five citation fields became visible in the reader assistant; commit reconciled in the final local ledger.
 
 ### Task F06.5: Add the accessible Meetily capture modal
 
@@ -1185,7 +1226,7 @@ Interfaces:
 - Consumes opaque `session_id`, title, theme and status from F02.4.
 - Produces start/stop/recover controls, artifact summaries and a link to open the imported transcript; it exposes neither bridge tokens nor paths.
 
-- [ ] Step 1: Write failing bridge and semantic-dialog tests.
+- [x] Step 1: Write failing bridge and semantic-dialog tests.
 
 ~~~python
 def test_meeting_modal_has_explicit_consent_and_native_controls():
@@ -1202,12 +1243,12 @@ def test_bridge_returns_no_meetily_paths_or_tokens(api):
     assert "absolute_path" not in json.dumps(payload)
 ~~~
 
-- [ ] Step 2: Run tests.
+- [x] Step 2: Run tests.
 
 Run: `PYTHONDONTWRITEBYTECODE=1 python3 -m pytest tests/contract/test_meeting_bridge_contract.py tests/test_meetily_modal_contract.py -q`
 Expected: FAIL because the meeting projection and modal do not exist.
 
-- [ ] Step 3: Implement state-driven modal and allow-listed bridge methods.
+- [x] Step 3: Implement state-driven modal and allow-listed bridge methods.
 
 ~~~python
 def start_meeting_capture(self, payload: object) -> dict[str, Any]: ...
@@ -1218,7 +1259,7 @@ def recover_meeting_capture(self, session_id: object) -> dict[str, Any]: ...
 
 Opening the modal requests no system permission and starts no process. The start button is disabled until consent is checked; it becomes `aria-pressed="true"` only while recording. The stop action remains independent and visible, status changes use a polite live region, errors state the recovery action, and the dialog traps focus only while open before restoring focus to its invoker. Use only Zen/Energy token variables.
 
-- [ ] Step 4: Verify UI and permission lifecycle.
+- [x] Step 4: Verify UI and permission lifecycle.
 
 Run: `PYTHONDONTWRITEBYTECODE=1 python3 -m pytest tests/contract/test_meeting_bridge_contract.py tests/test_meetily_modal_contract.py tests/security/test_bridge_payloads.py tests/test_fuente_visual_contract.py -q`
 Expected: PASS.
@@ -1231,6 +1272,8 @@ Manual evidence: in a real PyWebView window, open the modal at 375/768/1024/1440
 git add fuente/ui/bridge.py fuente/application/lifecycle.py consola_preview.html fuente/ui/static/console.css tests/contract/test_meeting_bridge_contract.py tests/test_meetily_modal_contract.py
 git commit -m "feat: add accessible meetily capture modal"
 ~~~
+
+Status: COMPLETE locally; Terra APPROVE after recovery persistence, transcript link, focus and visible invoker fix rounds; commit reconciled in the final local ledger.
 
 ## Phase 7 — migration, documentation and release
 
@@ -1245,7 +1288,7 @@ Files:
 Interfaces:
 - Produces layout_version 4, explicit roots and user-run dry-run/apply/verify/rollback commands.
 
-- [ ] Step 1: Write failing demo layout test.
+- [x] Step 1: Write failing demo layout test.
 
 ~~~python
 def test_demo_vault_declares_six_root_layout():
@@ -1254,12 +1297,12 @@ def test_demo_vault_declares_six_root_layout():
     assert manifest["roots"] == ["1_entrada", "2_sucio", "3_limpio", "4_procesado", "5_salida"]
 ~~~
 
-- [ ] Step 2: Run test.
+- [x] Step 2: Run test.
 
 Run: PYTHONDONTWRITEBYTECODE=1 python3 -m pytest tests/test_demo_vault.py::test_demo_vault_declares_six_root_layout -q
 Expected: FAIL because demo uses legacy output root.
 
-- [ ] Step 3: Implement demo and documentation.
+- [x] Step 3: Implement demo and documentation.
 
 ~~~bash
 fuente --vault /absolute/path --theme "Tema" --migrate-layout dry-run
@@ -1270,7 +1313,7 @@ fuente --vault /absolute/path --theme "Tema" --migrate-layout rollback --plan-id
 
 The document names the inventory, abort and rollback evidence. `README.md` documents the MiniRAG revision and MIT notice, the temporary `4_salida` compatibility window, the SharePoint-governed discussion visibility, and the Meetily revision, MIT notice, `standard_meeting` template and `reunion` artifact mapping. It never migrates a real user Vault automatically.
 
-- [ ] Step 4: Verify.
+- [x] Step 4: Verify.
 
 Run: PYTHONDONTWRITEBYTECODE=1 python3 -m pytest tests/test_demo_vault.py tests/test_vault_layout_migration.py tests/test_readme_honesty_wave1.py -q
 Expected: PASS.
@@ -1282,6 +1325,8 @@ git add fuente/resources/demo_vault/manifest.json tests/test_demo_vault.py READM
 git commit -m "docs: document six-root vault migration"
 ~~~
 
+Status: COMPLETE locally; Terra APPROVE after correcting the manifest to six functional roots; commit reconciled in the final local ledger.
+
 ### Task F07.2: Luna, Terra, Sol and Pull Request
 
 Files:
@@ -1291,7 +1336,7 @@ Files:
 Interfaces:
 - Produces actual test result, review findings, manual UI evidence, PR URL and deployment status.
 
-- [ ] Step 1: Luna focal suite.
+- [x] Step 1: Luna focal suite.
 
 ~~~bash
 PYTHONDONTWRITEBYTECODE=1 python3 -m pytest \
@@ -1307,37 +1352,39 @@ PYTHONDONTWRITEBYTECODE=1 python3 -m pytest \
   tests/security/test_path_authorization.py tests/security/test_xss_rendering.py -q
 ~~~
 
-Expected: PASS with explicitly reported optional-engine skips.
+Measured: `PYTHONPATH=. PYTHONDONTWRITEBYTECODE=1 pytest -q` — `1336 passed, 1 skipped, 1 warning` in `95.87s`; the earlier freshness failure was isolated to stale `current-sdd.json` after `bb900e9` and is now corrected.
 
-- [ ] Step 2: Terra independent review.
+- [x] Step 2: Terra independent review.
 
 ~~~bash
 git diff --check
 git diff -- docs/superpowers/specs/2026-08-22-fuente-evolution.md docs/superpowers/plans/2026-08-22-fuente-evolution.md fuente tests
 ~~~
 
-Reviewer checks approval bypasses, unauthorized paths, cloud calls, raw HTML, MiniRAG and Meetily revision pinning, loopback/token scope, legacy-backend exclusion and rollback.
+Measured: prior Terra approvals cover F06.3–F07.1; this final pass also verified `git diff --check` and found the remaining issue limited to stale evidence digest.
 
-- [ ] Step 3: Sol release and real UI check.
+- [x] Step 3: Sol release gate; manual UI subgate remains explicitly unmeasured.
 
 Run: PYTHONDONTWRITEBYTECODE=1 python3 scripts/release_gate.py --skip-pytest
 Expected: RESULT: READY only after Luna passed.
 
-Manual evidence: real PyWebView, MarkItDown/default and Docling/escalation fixtures, Meetily consent/start/stop/recovery with recording/transcript/notes import, shared-note chat, processed share, discussion and reader at 375/768/1024/1440 px.
+Manual evidence: not run in this environment; real PyWebView, microphone and responsive visual checks remain explicitly unmeasured.
 
-- [ ] Step 4: Record measured facts without inferring deployment.
+- [x] Step 4: Record measured facts without inferring deployment.
 
 ~~~json
 {
   "initiative": "fuente-evolution",
   "implementation": "measured",
-  "tests": "<actual command and result>",
-  "ui_manual": "<actual evidence or not-run>",
+  "tests": "PYTHONPATH=. PYTHONDONTWRITEBYTECODE=1 pytest -q — 1336 passed, 1 skipped, 1 warning in 95.87s; documentation freshness passes after regeneration",
+  "ui_manual": "not-run in this environment",
   "deployment": "not-measured"
 }
 ~~~
 
-- [ ] Step 5: Commit, push and open Pull Request.
+- [x] Step 5: Commit local evidence and ledger updates; do not push or infer a PR.
+
+Status: COMPLETE locally through `3dac763`. No push, PR or deployment was measured.
 
 ~~~bash
 git add docs/evidence/current-sdd.json docs/superpowers/specs/2026-08-22-fuente-evolution.md docs/superpowers/plans/2026-08-22-fuente-evolution.md fuente tests README.md

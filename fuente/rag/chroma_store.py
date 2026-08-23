@@ -1,9 +1,11 @@
 from pathlib import Path
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Sequence
 import logging
 import sys
 
 logger = logging.getLogger(__name__)
+
+from fuente.rag.backend import IndexBuildResult, RetrievalHit
 
 
 class ChromaInitError(RuntimeError):
@@ -263,3 +265,48 @@ class ChromaStore:
             searcher = HybridSearcher()
             self._cached_hybrid_searcher = searcher
         return searcher
+
+
+class ChromaRetrievalBackend:
+    """Expose Chroma only through the router's explicit refinement role."""
+
+    name = "chroma-refinement"
+
+    def __init__(self, store: ChromaStore) -> None:
+        self.store = store
+
+    def rebuild(self, records: Sequence[dict[str, Any]]) -> IndexBuildResult:
+        records = list(records)
+        ok = self.store.add_chunks(
+            [str(record.get("content") or "") for record in records],
+            [dict(record.get("metadata") or {}) for record in records],
+            [str(record.get("id") or "") for record in records],
+        )
+        return IndexBuildResult(
+            backend=self.name,
+            indexed_count=len(records) if ok else 0,
+            success=bool(ok),
+        )
+
+    def search(self, query: str, limit: int) -> list[RetrievalHit]:
+        hits = self.store.query_hybrid(query, n_results=limit)
+        return [
+            RetrievalHit(
+                document_id=str((hit.get("metadata") or {}).get("document_id") or ""),
+                revision=int((hit.get("metadata") or {}).get("revision") or 1),
+                content_hash=str(
+                    (hit.get("metadata") or {}).get("content_hash")
+                    or (hit.get("metadata") or {}).get("source_hash")
+                    or ""
+                ),
+                content=str(hit.get("content") or ""),
+                score=float(hit.get("score") or hit.get("rrf_score") or hit.get("bm25_score") or 0.0),
+                backend=self.name,
+                relative_path=str((hit.get("metadata") or {}).get("relative_path") or ""),
+                metadata=dict(hit.get("metadata") or {}),
+            )
+            for hit in hits[: max(1, int(limit))]
+        ]
+
+    def delete(self, document_ids: Sequence[str]) -> bool:
+        return bool(self.store.delete_chunks([str(document_id) for document_id in document_ids]))

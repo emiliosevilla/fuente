@@ -173,8 +173,23 @@ class FuenteChatModal(tk.Toplevel):
                     else ram.recommend_model_decision
                 ),
                 ollama_url=self.config.ollama_url,
+                refinement_guard=lambda candidate_id, expected_revision: self._require_accepted_refinement(
+                    store, candidate_id, expected_revision
+                ),
             )
             return service.ask(message, context)
+
+    @staticmethod
+    def _require_accepted_refinement(
+        store: JobStore, candidate_id: str, expected_revision: int
+    ) -> None:
+        verdict = store.get_refinement_verdict(candidate_id)
+        if (
+            verdict is None
+            or verdict.get("decision") != "accepted"
+            or int(verdict.get("revision", -1)) != expected_revision
+        ):
+            raise ValueError("refinement candidate is not accepted for this revision")
 
     def _setup_ui(self):
         tb = tk.Frame(

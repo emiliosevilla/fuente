@@ -4,10 +4,14 @@ from __future__ import annotations
 
 import re
 import sqlite3
+from uuid import UUID
 from pathlib import Path, PureWindowsPath
 from typing import TYPE_CHECKING, Any, Mapping, Optional
 
 from fuente.application.approval import ApprovalApplicationService
+from fuente.application.discussion import DiscussionApplicationService
+from fuente.application.sharing import SharingApplicationService
+from fuente.application.meetings import MeetingCaptureRequest
 from fuente.application.job_control import (
     decode_cursor,
     validate_expected_revision,
@@ -31,6 +35,7 @@ from fuente.domain.errors import (
     NoteRevisionConflictError,
     PathAuthorizationError,
 )
+from fuente.domain.sync import SyncDirection
 
 if TYPE_CHECKING:
     from fuente.control_console import FuenteConsoleBackend
@@ -49,6 +54,7 @@ class FuentePyWebViewApi:
         "step2_transcribe": {},
         "step3_structure": {},
         "reflow_links": {},
+        "evaluate_refinement": {"candidate_id": str, "expected_revision": int},
         "reindex_notes": {},
         "stat_ram": {},
         "stat_input": {},
@@ -112,7 +118,7 @@ class FuentePyWebViewApi:
         """Validate an opaque editor ID without normalizing or resolving paths."""
         if not isinstance(value, str):
             return cls._error("invalid_payload", "document_id must be a string")
-        if not value.strip():
+        if not value.strip() or "\x00" in value or value.strip() in {".", ".."}:
             return cls._error("invalid_payload", "document_id is required")
         if "/" in value or "\\" in value or value.strip().endswith(".md"):
             return cls._error("path_not_authorized", "Path is not authorized")
@@ -151,11 +157,15 @@ class FuentePyWebViewApi:
             if set(payload) != {"scope"} or not isinstance(payload["scope"], Mapping):
                 return cls._error("invalid_payload", "scope must be an object")
             scope_payload = dict(payload["scope"])
-        allowed = {"document_id", "theme", "issue"}
+        allowed = {"document_id", "theme", "issue", "candidate_id", "candidate_revision"}
         if set(scope_payload) - allowed:
             return cls._error("invalid_payload", "Unsupported scope field")
         for field, value in scope_payload.items():
             if value is None:
+                continue
+            if field == "candidate_revision":
+                if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+                    return cls._error("invalid_payload", "candidate_revision must be a positive integer")
                 continue
             if not isinstance(value, str):
                 return cls._error("invalid_payload", "Scope values must be strings")
@@ -202,6 +212,48 @@ class FuentePyWebViewApi:
     def get_sync_inputs(self) -> dict[str, Any]:
         """Return the canonical provider/input projection without filesystem roots."""
         return self.backend.get_sync_inputs()
+
+    def sync_connection(self, payload: object) -> dict[str, Any] | ErrorResult:
+        """Run one explicit directional sync using a persisted opaque ID."""
+        parsed = self._payload(payload)
+        if isinstance(parsed, dict) and "error" in parsed:
+            return parsed
+        assert isinstance(parsed, dict)
+        if set(parsed) != {"connection_id", "direction"}:
+            return self._error("invalid_payload", "Unsupported sync field")
+        connection_id = self._sync_connection_id(parsed["connection_id"])
+        if isinstance(connection_id, dict):
+            return connection_id
+        try:
+            direction = SyncDirection(parsed["direction"])
+        except (TypeError, ValueError):
+            return self._error("invalid_payload", "direction is not supported")
+        connection = next(
+            (
+                item
+                for item in self.backend.sync_manager.load_connections()
+                if item.connection_id == connection_id
+            ),
+            None,
+        )
+        if connection is None:
+            return self._error("sync_connection_not_found", "Sync connection was not found")
+        try:
+            report = self.backend.sync_manager.sync_connection(
+                connection, direction=direction
+            )
+        except PathAuthorizationError as error:
+            return {"error": error.code, "message": str(error)}
+        except ValueError as error:
+            return self._error("sync_failed", str(error))
+        return {
+            "status": "completed",
+            "active_theme": self.backend.vault.active_theme,
+            "direction": direction.value,
+            "last_run_at": self.backend.sync_manager.get_last_sync_status()["last_run_at"],
+            **self.backend.sync_manager.public_sync_report(report),
+            "refresh": True,
+        }
 
     def select_sync_folder(self, title: object = "Vincular carpeta de sincronización") -> dict[str, Any] | ErrorResult:
         valid_title = self._text(title, "title", required=False)
@@ -923,6 +975,84 @@ class FuentePyWebViewApi:
             return self._error("invalid_payload", "context must be an object")
         return self.backend.process_chat(text, context=dict(context or {}))
 
+    def _meeting_service(self):
+        lifecycle = getattr(self.backend, "lifecycle", None)
+        if lifecycle is not None:
+            return lifecycle.meeting_service
+        from fuente.application.meetings import MeetingCaptureApplicationService
+
+        return MeetingCaptureApplicationService(self.backend.config)
+
+    def start_meeting_capture(self, payload: object) -> dict[str, Any]:
+        data = self._payload(payload)
+        if isinstance(data, dict) and "error" in data:
+            return data
+        consent = data.get("consent")
+        if consent is not True:
+            return self._error("consent_required", "El consentimiento de grabación es obligatorio")
+        theme_id = self._text(data.get("theme_id"), "theme_id")
+        title = self._text(data.get("title"), "title")
+        requested_by = self._text(data.get("requested_by"), "requested_by")
+        if any(isinstance(value, dict) for value in (theme_id, title, requested_by)):
+            return next(value for value in (theme_id, title, requested_by) if isinstance(value, dict))
+        try:
+            session_id = self._meeting_service().start(
+                MeetingCaptureRequest(theme_id=theme_id, title=title, requested_by=requested_by),
+                consent=True,
+            )
+            return {"session_id": session_id, "status": "recording"}
+        except Exception as error:
+            return self._error("meeting_start_failed", str(error))
+
+    def stop_meeting_capture(self, session_id: object) -> dict[str, Any]:
+        value = self._text(session_id, "session_id")
+        if isinstance(value, dict):
+            return value
+        try:
+            return self._meeting_service().stop(value)
+        except Exception as error:
+            return self._error("meeting_stop_failed", str(error))
+
+    def recover_meeting_capture(self, session_id: object) -> dict[str, Any]:
+        value = self._text(session_id, "session_id")
+        if isinstance(value, dict):
+            return value
+        try:
+            return self._meeting_service().recover(value)
+        except Exception as error:
+            return self._error("meeting_recover_failed", str(error))
+
+    def get_meeting_session(self, session_id: object) -> dict[str, Any]:
+        value = self._text(session_id, "session_id")
+        if isinstance(value, dict):
+            return value
+        try:
+            service = self._meeting_service()
+            payload = service.manifest(value)
+            status = service.status(value)
+            payload["session_id"] = value
+            payload["status"] = status.status
+            payload["recoverable"] = status.recoverable
+            if status.error_code:
+                payload["error_code"] = status.error_code
+            return payload
+        except Exception as error:
+            return self._error("meeting_session_failed", str(error))
+
+    def process_workspace_chat(self, document_id: object, message: object) -> dict[str, Any]:
+        note = self._text(document_id, "document_id")
+        text = self._text(message, "message")
+        if isinstance(note, dict):
+            return note
+        if isinstance(text, dict):
+            return text
+        if "/" in note or "\\" in note or note.endswith(".md"):
+            return self._error("path_not_authorized", "Document id is not authorized")
+        return self.backend.process_chat(
+            text,
+            context={"context_mode": "single_note", "document_id": note},
+        )
+
     def get_notes_list(self) -> list[dict[str, Any]]:
         return self.backend.get_notes_list()
 
@@ -934,6 +1064,110 @@ class FuentePyWebViewApi:
         if "/" in note or "\\" in note or note.endswith(".md"):
             return self._error("path_not_authorized", "Path is not authorized")
         return self.backend.get_note_content_html(note)
+
+    def get_document_workspace(self, document_id: object) -> dict[str, Any]:
+        """Return a path-free reader/editor/share/discussion projection."""
+        note = self._editor_note_id(document_id)
+        if isinstance(note, dict):
+            return note
+        try:
+            notes = self.backend.get_notes_service()
+            document = notes.get_note(note)
+            shared = notes.job_store.get_latest_shared_output(document.document_id)
+            can_share = False
+            share_reason = "Requiere aprobación editorial vigente."
+            try:
+                notes.require_shareable_output(document.document_id)
+                can_share = True
+                share_reason = "Revisión aprobada; lista para compartir."
+            except (PathAuthorizationError, NoteRevisionConflictError, ValueError):
+                pass
+            discussion = DiscussionApplicationService(
+                vault=notes.vault, store=notes.job_store
+            )
+            return {
+                "note": {
+                    "document_id": document.document_id,
+                    "revision": document.revision,
+                    "title": document.title,
+                    "author": str(document.frontmatter.get("author") or ""),
+                    "status": document.status,
+                    "relative_path": document.relative_path,
+                },
+                "shared": shared is not None,
+                "can_share": can_share,
+                "share_reason": share_reason,
+                "shared_output": shared,
+                "discussion": [event.to_dict() for event in discussion.read_discussion(document.document_id)],
+            }
+        except (PathAuthorizationError, NoteRevisionConflictError) as error:
+            return {"error": error.code, "message": str(error)}
+        except (OSError, ValueError) as error:
+            return self._error("workspace_unavailable", str(error))
+
+    def share_processed_note(
+        self, document_id: object, expected_revision: object, publisher: object
+    ) -> dict[str, Any]:
+        note = self._editor_note_id(document_id)
+        if isinstance(note, dict):
+            return note
+        revision_error = self._revision(expected_revision)
+        if revision_error is not None:
+            return revision_error
+        normalized_publisher = self._text(publisher, "publisher")
+        if isinstance(normalized_publisher, dict):
+            return normalized_publisher
+        try:
+            notes = self.backend.get_notes_service()
+            shared = SharingApplicationService(notes_service=notes).share_processed_note(
+                note, expected_revision, normalized_publisher
+            )
+            return shared.__dict__
+        except (PathAuthorizationError, NoteRevisionConflictError) as error:
+            return {"error": error.code, "message": str(error)}
+        except (OSError, ValueError) as error:
+            return self._error("share_failed", str(error))
+
+    def get_discussion(self, shared_note_id: object) -> dict[str, Any]:
+        note = self._editor_note_id(shared_note_id)
+        if isinstance(note, dict):
+            return note
+        try:
+            notes = self.backend.get_notes_service()
+            service = DiscussionApplicationService(vault=notes.vault, store=notes.job_store)
+            return {"events": [event.to_dict() for event in service.read_discussion(note)]}
+        except (OSError, ValueError) as error:
+            return self._error("discussion_unavailable", str(error))
+
+    def add_discussion_reply(self, shared_note_id: object, payload: object) -> dict[str, Any]:
+        note = self._editor_note_id(shared_note_id)
+        if isinstance(note, dict):
+            return note
+        parsed = self._payload(payload)
+        if isinstance(parsed, dict) and "error" in parsed:
+            return parsed
+        assert isinstance(parsed, dict)
+        if set(parsed) - {"author", "body", "parent_id"} or "author" not in parsed or "body" not in parsed:
+            return self._error("validation_error", "author and body are required")
+        author = self._text(parsed["author"], "author")
+        body = self._text(parsed["body"], "body")
+        parent_id = parsed.get("parent_id")
+        if isinstance(author, dict) or isinstance(body, dict):
+            return self._error("validation_error", "author and body are required")
+        if parent_id is not None and not isinstance(parent_id, str):
+            return self._error("validation_error", "parent_id must be a string")
+        if parent_id is not None:
+            try:
+                UUID(parent_id)
+            except (ValueError, AttributeError):
+                return self._error("validation_error", "parent_id must be a valid event id")
+        try:
+            notes = self.backend.get_notes_service()
+            service = DiscussionApplicationService(vault=notes.vault, store=notes.job_store)
+            event = service.add_reply(note, author, body, parent_id)
+            return event.to_dict()
+        except (OSError, ValueError) as error:
+            return self._error("validation_error", str(error))
 
     def export_note(
         self,

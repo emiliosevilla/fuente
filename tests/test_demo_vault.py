@@ -24,6 +24,15 @@ def _manifest() -> dict:
     )
 
 
+def test_demo_vault_declares_six_root_layout():
+    manifest = _manifest()
+    assert manifest["layout_version"] == 4
+    assert manifest["roots"] == [
+        "1_entrada/personal", "1_entrada/común", "2_sucio", "3_limpio", "4_procesado", "5_salida"
+    ]
+    assert manifest["legacy_destination_root"] == "4_salida"
+
+
 def test_demo_vault_is_idempotent_and_never_overwrites(tmp_path: Path):
     vault = tmp_path / "Vault"
     vault.mkdir()

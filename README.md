@@ -10,13 +10,24 @@ El proyecto funciona sin servicios cloud obligatorios. Ollama, Chroma,
 Tesseract, FFmpeg y los convertidores opcionales se usan sólo cuando están
 instalados y la política de ejecución los permite.
 
+## Dependencias de terceros fijadas
+
+La ruta primaria de RAG usa MiniRAG HKUDS mediante el adaptador local de
+Fuente. La revisión fijada es
+`e204d239421f45004852953679927fdf6733f236` y su licencia declarada es MIT:
+[LICENSE oficial de MiniRAG](https://github.com/HKUDS/MiniRAG/blob/e204d239421f45004852953679927fdf6733f236/LICENSE).
+El estado de MiniRAG se guarda bajo `.fuente/minirag`; si no está instalado o
+el presupuesto local no permite usarlo, Fuente degrada a BM25. ChromaDB no es
+la ruta primaria: se conserva para refinamiento explícito y evaluado.
+
 ## Qué hace
 
 - Ingresa archivos desde `1_entrada/`, conserva una copia de auditoría en
   `2_sucio/` y genera la transcripción Markdown en `3_limpio/`.
 - Trata `3_limpio/` como registro canónico. Cada documento tiene identidad,
   revisión y hash para ligar la aprobación a unos bytes concretos.
-- Genera resultados derivados en `4_salida/` sólo después de superar las
+- Genera resultados de trabajo en `4_procesado/` y publica copias compartidas en
+  `5_salida/` sólo después de superar las
   comprobaciones de aprobación y revisión editorial.
 - Mantiene el estado de jobs, configuración, cuarentena y catálogos en
   `.fuente/`, fuera del contenido editorial.
@@ -30,13 +41,46 @@ instalados y la política de ejecución los permite.
 ## Flujo del Vault
 
 ```text
-1_entrada  →  2_sucio  →  3_limpio  →  aprobación  →  4_salida
-   entrada      auditoría      canónico       humana       derivados
+1_entrada  →  2_sucio  →  3_limpio  →  4_procesado  →  aprobación  →  5_salida
+   entrada      auditoría      canónico       edición             compartido
 ```
 
 La aprobación no se deduce por estar en una carpeta. Se valida con el
 `document_id`, la revisión y el hash del Markdown. Si el documento cambia, la
 aprobación anterior deja de ser válida.
+
+### Migración del Vault y compatibilidad
+
+El layout objetivo usa `4_procesado/` para edición privada y `5_salida/` para
+publicación compartida. `4_salida/` se conserva sólo como ventana de lectura
+compatible; las nuevas notas no deben escribirse allí. La migración nunca se
+ejecuta automáticamente ni modifica el Vault al instalar Fuente.
+
+### Estado documental de la evolución
+
+La implementación local de la evolución está cerrada y verificada. El ledger
+detalla fases, revisiones Terra, commits y pruebas; la evidencia final conserva
+el último `HEAD` medido. La validación manual de PyWebView, micrófono y
+despliegue remoto queda expresamente fuera de esa medición.
+
+```bash
+fuente --vault /ruta/al/Vault --theme "General" --migrate-layout dry-run
+fuente --vault /ruta/al/Vault --theme "General" --migrate-layout apply --plan-id <plan-id>
+fuente --vault /ruta/al/Vault --theme "General" --migrate-layout verify --plan-id <plan-id>
+fuente --vault /ruta/al/Vault --theme "General" --migrate-layout rollback --plan-id <plan-id>
+```
+
+`apply` aborta ante hashes cambiados, colisiones o enlaces simbólicos no
+autorizados. La guía completa está en
+[`docs/migrations/2026-08-22-six-root-vault.md`](docs/migrations/2026-08-22-six-root-vault.md).
+
+### Reuniones con Meetily
+
+`Nueva reunión` abre una captura local embebida con consentimiento obligatorio.
+La plantilla es `standard_meeting`; sus artefactos van a
+`2_sucio/reunion`, `3_limpio/reunion` y `4_procesado/reunion`. La interfaz sólo
+recibe identificadores opacos, hashes y estados, nunca tokens ni rutas
+absolutas. Las notas requieren aprobación antes de compartir.
 
 La salida derivada puede quedar en `pending_review`. No se indexa, exporta ni
 se muestra como resultado publicado mientras no cumpla el contrato editorial.
@@ -70,7 +114,10 @@ Los jobs son durables, reanudables y tienen estados y razones explícitos.
 ### Búsqueda, RAG y recursos
 
 - BM25 sobre el Markdown autorizado del Vault.
-- Búsqueda híbrida con Chroma local cuando el perfil lo permite.
+- MiniRAG local como backend primario de recuperación; Chroma queda reservado
+  para ciclos explícitos de refinamiento evaluado.
+- Búsqueda híbrida/BM25 como degradación local cuando el presupuesto o MiniRAG
+  no están disponibles.
 - Chunk IDs deterministas y reconciliación del índice.
 - Ollama por loopback (`http://localhost:11434`) como ruta predeterminada.
 - RAM Governor que mide memoria, catálogo local y presupuesto antes de elegir
@@ -155,6 +202,7 @@ Extras disponibles:
 | `audio` | `pip install -e ".[audio]"` | Faster-Whisper local. |
 | `ocr` | `pip install -e ".[ocr]"` | Pillow, pytesseract y OCR de imágenes. |
 | `office` | `pip install -e ".[office]"` | MarkItDown y Docling como convertidores opcionales. |
+| `rag` | `pip install -e ".[rag]"` | MiniRAG HKUDS fijado para la ruta primaria. |
 | `all` | `pip install -e ".[all]"` | Todos los extras de usuario. |
 | `dev` | `pip install -e ".[dev]"` | PyInstaller para empaquetado. |
 | `test` | `pip install -e ".[test]"` | Pytest. |
@@ -222,7 +270,9 @@ Vault. La desinstalación de la aplicación no debe borrar las notas ni el Vault
 
 3. Si ya no necesitas los archivos de la aplicación, elimina la carpeta de
    instalación de Fuente. Conserva aparte el Vault y sus carpetas
-   `1_entrada/`, `2_sucio/`, `3_limpio/` y `4_salida/`.
+   `1_entrada/`, `2_sucio/`, `3_limpio/`, `4_procesado/` y `5_salida/`.
+   `4_salida/` sólo puede existir como compatibilidad temporal durante la
+   migración.
 
 Python, Obsidian, Ollama y Tesseract no se eliminan automáticamente porque
 pueden ser utilizados por otras aplicaciones. Si quieres quitarlos, usa el

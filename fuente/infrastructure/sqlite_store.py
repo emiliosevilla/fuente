@@ -37,6 +37,8 @@ from fuente.domain.jobs import (
     JobStoreBusyError,
     StageEvent,
 )
+from fuente.domain.meetings import MeetingSession
+from fuente.domain.refinement import RefinementCandidate, RefinementVerdict
 from fuente.domain.note_catalog import IdentityCollisionError
 from fuente.domain.sync import SyncManifestEntry
 
@@ -107,6 +109,234 @@ class JobStore:
 
     def close(self) -> None:
         self._connection.close()
+
+    # -- refinement identity and verdicts --------------------------------
+
+    def save_refinement_candidate(self, candidate: RefinementCandidate) -> dict[str, Any]:
+        if not isinstance(candidate, RefinementCandidate):
+            raise TypeError("candidate must be a RefinementCandidate")
+        values = candidate.to_record()
+        try:
+            self._connection.execute(
+                """
+                INSERT INTO refinement_candidates
+                (candidate_id, document_id, revision, content_hash, baseline_revision,
+                 baseline_content_hash, baseline_path, candidate_path, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                tuple(values[field] for field in (
+                    "candidate_id", "document_id", "revision", "content_hash",
+                    "baseline_revision", "baseline_content_hash",
+                    "baseline_path", "candidate_path", "created_at",
+                )),
+            )
+        except sqlite3.IntegrityError:
+            existing = self.get_refinement_candidate(candidate.candidate_id)
+            if existing is None or any(
+                existing[field] != values[field]
+                for field in ("document_id", "revision", "content_hash", "baseline_revision",
+                              "baseline_content_hash", "baseline_path", "candidate_path")
+            ):
+                raise ValueError("refinement candidate identity conflict")
+        return self.get_refinement_candidate(candidate.candidate_id) or values
+
+    def get_refinement_candidate(self, candidate_id: str) -> dict[str, Any] | None:
+        row = self._connection.execute(
+            "SELECT * FROM refinement_candidates WHERE candidate_id = ?", (candidate_id,)
+        ).fetchone()
+        return dict(row) if row is not None else None
+
+    def save_refinement_verdict(
+        self,
+        document_id: str,
+        revision: int,
+        content_hash: str,
+        verdict: RefinementVerdict,
+    ) -> None:
+        if not isinstance(verdict, RefinementVerdict):
+            raise TypeError("verdict must be a RefinementVerdict")
+        values = verdict.to_record()
+        with self._immediate_transaction(verdict.candidate_id) as connection:
+            candidate = connection.execute(
+                "SELECT * FROM refinement_candidates WHERE candidate_id = ?",
+                (verdict.candidate_id,),
+            ).fetchone()
+            if candidate is None:
+                candidate_values = RefinementCandidate(
+                    candidate_id=verdict.candidate_id,
+                    document_id=document_id,
+                    revision=revision,
+                    content_hash=content_hash,
+                ).to_record()
+                connection.execute(
+                    """
+                    INSERT INTO refinement_candidates
+                    (candidate_id, document_id, revision, content_hash, baseline_revision,
+                     baseline_content_hash, baseline_path, candidate_path, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    tuple(candidate_values[field] for field in (
+                        "candidate_id", "document_id", "revision", "content_hash",
+                        "baseline_revision", "baseline_content_hash",
+                        "baseline_path", "candidate_path", "created_at",
+                    )),
+                )
+                candidate = connection.execute(
+                    "SELECT * FROM refinement_candidates WHERE candidate_id = ?",
+                    (verdict.candidate_id,),
+                ).fetchone()
+            assert candidate is not None
+            if (candidate["document_id"], candidate["revision"], candidate["content_hash"]) != (
+                document_id, revision, content_hash
+            ):
+                raise ValueError("refinement verdict does not match candidate identity")
+            try:
+                connection.execute(
+                    """
+                    INSERT INTO refinement_verdicts
+                    (candidate_id, decision, baseline_score, candidate_score, graph_delta,
+                     retrieval_delta, verifier_reason, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    tuple(values[field] for field in (
+                        "candidate_id", "decision", "baseline_score", "candidate_score",
+                        "graph_delta", "retrieval_delta", "verifier_reason", "created_at",
+                    )),
+                )
+            except sqlite3.IntegrityError:
+                existing = connection.execute(
+                    "SELECT * FROM refinement_verdicts WHERE candidate_id = ?",
+                    (verdict.candidate_id,),
+                ).fetchone()
+                if existing is None or any(
+                    existing[field] != values[field]
+                    for field in ("decision", "baseline_score", "candidate_score", "graph_delta", "retrieval_delta", "verifier_reason")
+                ):
+                    raise ValueError("refinement verdict already exists with different values")
+
+    def get_refinement_verdict(self, candidate_id: str) -> dict[str, Any] | None:
+        row = self._connection.execute(
+            """
+            SELECT v.*, c.document_id, c.revision, c.content_hash
+            FROM refinement_verdicts AS v
+            JOIN refinement_candidates AS c ON c.candidate_id = v.candidate_id
+            WHERE v.candidate_id = ?
+            """,
+            (candidate_id,),
+        ).fetchone()
+        return dict(row) if row is not None else None
+
+    # -- processed note approvals -----------------------------------------
+
+    def approve_processed_note(
+        self, *, note_id: str, revision: int, content_hash: str, reviewer: str
+    ) -> dict[str, Any] | None:
+        identity = self.get_document_identity(note_id)
+        if (
+            identity is None
+            or int(identity["revision"]) != revision
+            or str(identity.get("content_hash") or "") != content_hash
+        ):
+            return None
+        now = _timestamp()
+        with self._immediate_transaction(note_id) as connection:
+            existing = connection.execute(
+                "SELECT * FROM processed_approvals WHERE note_id = ?",
+                (note_id,),
+            ).fetchone()
+            if existing is not None:
+                if (
+                    int(existing["revision"]) != revision
+                    or str(existing["content_hash"]) != content_hash
+                ):
+                    raise ValueError("processed approval already exists for another revision")
+                return dict(existing)
+            connection.execute(
+                """
+                INSERT INTO processed_approvals
+                (note_id, revision, content_hash, reviewer, approved_at)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (note_id, revision, content_hash, reviewer, now),
+            )
+            row = connection.execute(
+                "SELECT * FROM processed_approvals WHERE note_id = ?", (note_id,)
+            ).fetchone()
+            return dict(row) if row is not None else None
+
+    def is_processed_approval_current(
+        self, note_id: str, revision: int, content_hash: str
+    ) -> bool:
+        row = self._connection.execute(
+            """
+            SELECT 1 FROM processed_approvals AS approval
+            JOIN document_identities AS identity ON identity.document_id = approval.note_id
+            WHERE approval.note_id = ? AND approval.revision = ?
+              AND approval.content_hash = ? AND approval.invalidated_at IS NULL
+              AND identity.revision = ? AND identity.content_hash = ?
+            """,
+            (note_id, revision, content_hash, revision, content_hash),
+        ).fetchone()
+        return row is not None
+
+    # -- shared output receipts ------------------------------------------
+
+    def record_shared_output(
+        self,
+        *,
+        note_id: str,
+        revision: int,
+        content_hash: str,
+        publisher: str,
+        source_relative_path: str,
+        relative_path: str,
+    ) -> dict[str, Any]:
+        """Record one idempotent publication receipt."""
+        now = _timestamp()
+        with self._immediate_transaction(note_id) as connection:
+            existing = connection.execute(
+                "SELECT * FROM shared_outputs WHERE note_id = ? AND revision = ?",
+                (note_id, revision),
+            ).fetchone()
+            if existing is not None:
+                return dict(existing)
+            connection.execute(
+                """
+                INSERT INTO shared_outputs
+                (note_id, revision, content_hash, publisher,
+                 source_relative_path, relative_path, shared_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    note_id,
+                    revision,
+                    content_hash,
+                    publisher,
+                    source_relative_path,
+                    relative_path,
+                    now,
+                ),
+            )
+            row = connection.execute(
+                "SELECT * FROM shared_outputs WHERE note_id = ? AND revision = ?",
+                (note_id, revision),
+            ).fetchone()
+            assert row is not None
+            return dict(row)
+
+    def get_shared_output(self, note_id: str, revision: int) -> dict[str, Any] | None:
+        row = self._connection.execute(
+            "SELECT * FROM shared_outputs WHERE note_id = ? AND revision = ?",
+            (note_id, revision),
+        ).fetchone()
+        return dict(row) if row is not None else None
+
+    def get_latest_shared_output(self, note_id: str) -> dict[str, Any] | None:
+        row = self._connection.execute(
+            "SELECT * FROM shared_outputs WHERE note_id = ? ORDER BY revision DESC LIMIT 1",
+            (note_id,),
+        ).fetchone()
+        return dict(row) if row is not None else None
 
     def __enter__(self) -> "JobStore":
         return self
@@ -191,6 +421,84 @@ class JobStore:
             "SELECT * FROM sync_manifest ORDER BY source_key ASC"
         ).fetchall()
         return [SyncManifestEntry.from_row(row) for row in rows]
+
+    # -- meeting sessions --------------------------------------------------
+
+    def create_meeting_session(self, session: MeetingSession) -> dict[str, Any]:
+        """Persist one meeting identity without replacing an existing one."""
+        if not isinstance(session, MeetingSession):
+            raise TypeError("session must be a MeetingSession")
+        values = (
+            session.session_id,
+            session.provider,
+            session.provider_revision,
+            session.template_id,
+            session.status,
+            session.manifest_relative_path or f".fuente/reunion/{session.session_id}/manifest.json",
+            session.recording_relative_path or "",
+            session.transcript_relative_path or "",
+            session.notes_relative_path,
+            session.recording_sha256.lower() if session.recording_sha256 else None,
+            session.transcript_sha256.lower() if session.transcript_sha256 else None,
+            session.notes_sha256.lower() if session.notes_sha256 else None,
+            session.created_at,
+            session.updated_at,
+        )
+        try:
+            self._connection.execute(
+                """
+                INSERT INTO meeting_sessions (
+                    session_id, provider, provider_revision, template_id, status,
+                    manifest_relative_path, recording_relative_path,
+                    transcript_relative_path, notes_relative_path,
+                    recording_sha256, transcript_sha256, notes_sha256,
+                    created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                values,
+            )
+        except sqlite3.IntegrityError as error:
+            existing = self.get_meeting_session(session.session_id)
+            if existing is None:
+                raise
+            immutable_values = {
+                "provider": session.provider,
+                "provider_revision": session.provider_revision,
+                "template_id": session.template_id,
+                "manifest_relative_path": values[5],
+                "recording_relative_path": values[6],
+                "transcript_relative_path": values[7],
+                "notes_relative_path": values[8],
+                "recording_sha256": values[9],
+                "transcript_sha256": values[10],
+                "notes_sha256": values[11].lower() if values[11] else None,
+            }
+            if any(existing[field] != value for field, value in immutable_values.items()):
+                raise ValueError("meeting session identity already exists with different artifacts") from error
+            return existing
+        stored = self.get_meeting_session(session.session_id)
+        assert stored is not None
+        return stored
+
+    record_meeting_session = create_meeting_session
+    save_meeting_session = create_meeting_session
+
+    def get_meeting_session(self, session_id: str) -> dict[str, Any] | None:
+        row = self._connection.execute(
+            "SELECT * FROM meeting_sessions WHERE session_id = ?", (session_id,)
+        ).fetchone()
+        return dict(row) if row is not None else None
+
+    def list_meeting_sessions(self) -> list[dict[str, Any]]:
+        rows = self._connection.execute(
+            "SELECT * FROM meeting_sessions ORDER BY created_at ASC, session_id ASC"
+        ).fetchall()
+        return [dict(row) for row in rows]
+
+    def delete_meeting_session(self, session_id: str) -> None:
+        self._connection.execute(
+            "DELETE FROM meeting_sessions WHERE session_id = ?", (session_id,)
+        )
 
     # -- Vault layout migration -----------------------------------------
 

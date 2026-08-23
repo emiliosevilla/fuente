@@ -212,6 +212,7 @@
                     <button class="btn-small" data-onclick-command="triggerAction('export_reader_note', {}, this)">Exportar</button>
                     <button class="btn-small" data-onclick-command="triggerAction('open_obsidian', {}, this)">Abrir en Obsidian</button>
                     <button class="btn-small" data-onclick-command="openFusionWorkflow()">Fusionar seleccionadas</button>
+                    <button class="btn-small" data-onclick-command="openMeetilyModal()">Nueva reunión</button>
                     <button class="close-btn" data-onclick-command="closeModal('modal-reader')">&times;</button>
                 </div>
             </div>
@@ -238,10 +239,48 @@
                             </div>
                         </div>
                     </section>
-                    <aside class="reader-properties-pane" data-reader-region="properties" aria-label="Propiedades de la nota">
-                        <div class="reader-properties-visual">
-                            <h2>Propiedades</h2>
-                            <div id="reader-properties" role="list" aria-live="polite"></div>
+                    <aside class="reader-properties-pane" data-reader-region="properties" role="dialog" aria-modal="false" aria-label="Contexto de la nota">
+                        <div class="workspace-tabs" role="tablist" aria-label="Contexto de la nota">
+                            <button type="button" class="btn-small workspace-tab is-active" id="workspace-tab-assistant" role="tab" aria-selected="true" aria-controls="workspace-panel-assistant" data-onclick-command="switchWorkspaceTab('assistant')">Asistente</button>
+                            <button type="button" class="btn-small workspace-tab" id="workspace-tab-notes" role="tab" aria-selected="false" aria-controls="workspace-panel-notes" data-onclick-command="switchWorkspaceTab('notes')">Notas</button>
+                            <button type="button" class="btn-small workspace-tab" id="workspace-tab-discussion" role="tab" aria-selected="false" aria-controls="workspace-panel-discussion" data-onclick-command="switchWorkspaceTab('discussion')">Discusión</button>
+                        </div>
+                        <div id="workspace-panel-assistant" class="workspace-panel" role="tabpanel" aria-labelledby="workspace-tab-assistant">
+                            <div class="reader-properties-visual">
+                                <h2>Propiedades</h2>
+                                <div id="reader-properties" role="list" aria-live="polite"></div>
+                            </div>
+                            <form id="workspace-chat-form" class="workspace-chat-form">
+                                <label for="workspace-chat-input">Preguntar sobre esta nota</label>
+                                <textarea id="workspace-chat-input" rows="3" required></textarea>
+                                <button type="submit" class="btn-primary">Preguntar</button>
+                            </form>
+                            <div id="workspace-chat-answer" class="workspace-chat-answer" aria-live="polite"></div>
+                            <div id="workspace-chat-citations" class="workspace-chat-citations" aria-label="Citas de la respuesta"></div>
+                        </div>
+                        <div id="workspace-panel-notes" class="workspace-panel is-hidden" role="tabpanel" aria-labelledby="workspace-tab-notes">
+                            <h2>Notas de trabajo</h2>
+                            <div id="processed-editor-state" class="workspace-state-card">
+                                <p class="workspace-empty-state">Las notas privadas se editan en 4_procesado.</p>
+                                <button type="button" class="btn-primary" id="document-share-button" disabled>Compartir nota</button>
+                                <p id="document-share-reason" class="workspace-help" role="status">Requiere aprobación editorial vigente.</p>
+                                <p id="document-share-path" class="workspace-help" aria-live="polite"></p>
+                            </div>
+                        </div>
+                        <div id="workspace-panel-discussion" class="workspace-panel is-hidden" role="tabpanel" aria-labelledby="workspace-tab-discussion">
+                            <h2>Discusión</h2>
+                            <div id="document-author-card" class="author-card" aria-label="Autor de la nota">Autor pendiente</div>
+                            <div id="discussion-events" class="discussion-events" aria-live="polite"></div>
+                            <p id="discussion-status" class="workspace-help" role="status">Comparte la nota para abrir la discusión.</p>
+                            <form id="discussion-reply-form" class="discussion-composer">
+                                <fieldset id="discussion-reply-fields" disabled>
+                                    <label for="discussion-reply-author">Tu nombre</label>
+                                    <input id="discussion-reply-author" name="author" type="text" autocomplete="name" required>
+                                    <label for="discussion-reply-body">Comentario</label>
+                                    <textarea id="discussion-reply-body" name="body" rows="4" required></textarea>
+                                    <button type="submit" class="btn-primary" id="discussion-reply-submit">Publicar comentario</button>
+                                </fieldset>
+                            </form>
                         </div>
                     </aside>
                     <section class="reader-relations-pane" data-reader-region="relations" aria-label="Relaciones locales de la nota">
@@ -282,6 +321,31 @@
                         </div>
                     </section>
                 </template>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="meetily-modal" role="dialog" aria-modal="true" aria-labelledby="meetily-modal-title" aria-hidden="true">
+        <div class="modal-container meeting-modal-container">
+            <div class="modal-header">
+                <div class="modal-title" id="meetily-modal-title">REUNIÓN — CAPTURA LOCAL</div>
+                <button class="close-btn" data-onclick-command="closeMeetilyModal()" aria-label="Cerrar captura de reunión">&times;</button>
+            </div>
+            <div class="modal-body meeting-modal-body">
+                <p>La grabación y sus artefactos se guardan localmente en las carpetas de reunión del tema activo.</p>
+                <label for="meetily-title">Título de la reunión</label>
+                <input id="meetily-title" type="text" required>
+                <label for="meetily-requested-by">Identificador del autor</label>
+                <input id="meetily-requested-by" type="text" required>
+                <label><input id="meetily-recording-consent" type="checkbox"> Consiento la grabación de esta reunión.</label>
+                <div class="meeting-modal-actions">
+                    <button type="button" class="btn-primary" id="meetily-start-recording" disabled aria-pressed="false" data-onclick-command="startMeetilyRecording()">Iniciar grabación</button>
+                    <button type="button" class="btn-small" id="meetily-stop-recording" disabled data-onclick-command="stopMeetilyRecording()">Detener</button>
+                    <button type="button" class="btn-small" id="meetily-recover-recording" data-onclick-command="recoverMeetilyRecording()">Recuperar</button>
+                </div>
+                <p id="meetily-status" role="status" aria-live="polite">La captura está detenida.</p>
+                <p id="meetily-artifacts" class="workspace-help"></p>
+                <button type="button" class="btn-small is-hidden" id="meetily-open-transcript" data-onclick-command="openMeetilyTranscript()">Abrir transcripción</button>
             </div>
         </div>
     </div>
@@ -3427,6 +3491,243 @@
             });
         }
 
+        function switchWorkspaceTab(tabId) {
+            const allowed = ['assistant', 'notes', 'discussion'];
+            if (allowed.indexOf(tabId) === -1) return;
+            allowed.forEach(function(id) {
+                const tab = document.getElementById('workspace-tab-' + id);
+                const panel = document.getElementById('workspace-panel-' + id);
+                const active = id === tabId;
+                if (tab) {
+                    tab.setAttribute('aria-selected', active ? 'true' : 'false');
+                    tab.classList.toggle('is-active', active);
+                }
+                if (panel) panel.classList.toggle('is-hidden', !active);
+            });
+        }
+
+        let currentDocumentWorkspace = null;
+
+        function showWorkspaceError(message) {
+            const status = document.getElementById('discussion-status');
+            if (status) status.textContent = message || 'No se pudo completar la operación.';
+        }
+
+        function renderShareState(state) {
+            const shareButton = document.getElementById('document-share-button');
+            const reason = document.getElementById('document-share-reason');
+            const path = document.getElementById('document-share-path');
+            const replyFields = document.getElementById('discussion-reply-fields');
+            const replyButton = document.getElementById('discussion-reply-submit');
+            const discussionStatus = document.getElementById('discussion-status');
+            const canShare = Boolean(state && state.can_share);
+            const isShared = Boolean(state && state.shared);
+            if (shareButton) shareButton.disabled = !canShare;
+            if (reason) reason.textContent = canShare ? 'Revisión aprobada; lista para compartir.' : ((state && state.reason) || 'Requiere aprobación editorial vigente.');
+            if (path) path.textContent = (state && state.shared_path) ? 'Publicado en: ' + state.shared_path : '';
+            if (replyFields) replyFields.disabled = !isShared;
+            if (replyButton) replyButton.disabled = !isShared;
+            if (discussionStatus && !isShared) discussionStatus.textContent = 'Comparte la nota para abrir la discusión.';
+            if (discussionStatus && isShared) discussionStatus.textContent = 'Discusión de la nota compartida.';
+        }
+
+        function renderDiscussionEvents(events) {
+            const container = document.getElementById('discussion-events');
+            if (!container) return;
+            container.replaceChildren();
+            (events || []).forEach(function(event) {
+                const item = document.createElement('article');
+                item.className = 'discussion-event';
+                const author = document.createElement('span');
+                author.className = 'discussion-event-author';
+                author.textContent = event.author || 'Autor';
+                const body = document.createElement('p');
+                body.textContent = event.body || '';
+                item.append(author, body);
+                container.appendChild(item);
+            });
+        }
+
+        function renderDocumentWorkspace(workspace) {
+            currentDocumentWorkspace = workspace || null;
+            const note = workspace && workspace.note;
+            const author = document.getElementById('document-author-card');
+            if (author) author.textContent = 'Autor: ' + ((note && note.author) || 'No identificado');
+            renderShareState({
+                can_share: Boolean(workspace && workspace.can_share),
+                shared: Boolean(workspace && workspace.shared),
+                shared_path: workspace && workspace.shared_output && workspace.shared_output.relative_path,
+                reason: workspace && workspace.share_reason,
+            });
+            renderDiscussionEvents(workspace && workspace.discussion);
+        }
+
+        function loadDocumentWorkspace(documentId) {
+            if (!(window.pywebview && window.pywebview.api && window.pywebview.api.get_document_workspace)) return;
+            window.pywebview.api.get_document_workspace(documentId).then(function(workspace) {
+                if (!workspace || workspace.error) return;
+                renderDocumentWorkspace(workspace);
+            });
+        }
+
+        function renderWorkspaceChatReply(reply) {
+            const answer = document.getElementById('workspace-chat-answer');
+            const citations = document.getElementById('workspace-chat-citations');
+            if (answer) answer.textContent = (reply && (reply.text || reply.answer)) || (reply && reply.error && reply.error.message) || 'Sin respuesta.';
+            if (!citations) return;
+            citations.replaceChildren();
+            (reply && reply.citations || []).forEach(function(citation) {
+                const item = document.createElement('p');
+                item.textContent = [citation.title, citation.origin, citation.document_id, 'rev. ' + citation.revision, citation.content_hash].filter(Boolean).join(' · ');
+                citations.appendChild(item);
+            });
+        }
+
+        function submitWorkspaceChat(event) {
+            event.preventDefault();
+            const input = document.getElementById('workspace-chat-input');
+            if (!currentDocumentWorkspace || !currentDocumentWorkspace.note || !input || !input.value.trim()) return;
+            if (!(window.pywebview && window.pywebview.api && window.pywebview.api.process_workspace_chat)) return;
+            window.pywebview.api.process_workspace_chat(currentDocumentWorkspace.note.document_id, input.value.trim())
+                .then(renderWorkspaceChatReply)
+                .catch(function() { renderWorkspaceChatReply({error: {message: 'No se pudo consultar la nota.'}}); });
+        }
+
+        let currentMeetingSessionId = null;
+
+        let meetilyInvoker = null;
+        let meetilyFocusHandler = null;
+
+        function openMeetilyModal() {
+            meetilyInvoker = document.activeElement;
+            openModal('meetily-modal');
+            const modal = document.getElementById('meetily-modal');
+            if (modal) modal.setAttribute('aria-hidden', 'false');
+            const consent = document.getElementById('meetily-recording-consent');
+            if (consent) consent.focus();
+            if (window.pywebview && window.pywebview.api) {
+                const saved = window.localStorage.getItem('fuente.meeting.session_id');
+                if (saved) {
+                    currentMeetingSessionId = saved;
+                    window.pywebview.api.get_meeting_session(saved).then(renderMeetilyResult);
+                }
+            }
+            meetilyFocusHandler = function(event) {
+                if (event.key === 'Escape') { closeMeetilyModal(); return; }
+                if (event.key !== 'Tab' || !modal) return;
+                const focusable = Array.from(modal.querySelectorAll('button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])')).filter(function(element) { return element.offsetParent !== null; });
+                if (!focusable.length) return;
+                const first = focusable[0], last = focusable[focusable.length - 1];
+                if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+                else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+            };
+            document.addEventListener('keydown', meetilyFocusHandler);
+        }
+
+        function closeMeetilyModal() {
+            const modal = document.getElementById('meetily-modal');
+            closeModal('meetily-modal');
+            if (modal) modal.setAttribute('aria-hidden', 'true');
+            if (meetilyFocusHandler) document.removeEventListener('keydown', meetilyFocusHandler);
+            if (meetilyInvoker && typeof meetilyInvoker.focus === 'function') meetilyInvoker.focus();
+            meetilyFocusHandler = null;
+        }
+
+        function setMeetilyStatus(message) {
+            const status = document.getElementById('meetily-status');
+            if (status) status.textContent = message;
+        }
+
+        function renderMeetilyResult(result) {
+            if (!result || result.error) {
+                setMeetilyStatus((result && result.message) || 'No se pudo completar la operación. Recupera la sesión si es necesario.');
+                return;
+            }
+            currentMeetingSessionId = result.session_id || currentMeetingSessionId;
+            if (currentMeetingSessionId && window.localStorage) window.localStorage.setItem('fuente.meeting.session_id', currentMeetingSessionId);
+            const statusMessage = result.status === 'imported'
+                ? 'Artefactos importados en las carpetas de reunión.'
+                : (result.status === 'recoverable' ? 'La sesión necesita recuperación.' : 'Grabación activa.');
+            setMeetilyStatus(statusMessage);
+            const stop = document.getElementById('meetily-stop-recording');
+            if (stop) stop.disabled = result.status !== 'recording';
+            const start = document.getElementById('meetily-start-recording');
+            if (start) start.setAttribute('aria-pressed', result.status === 'recording' ? 'true' : 'false');
+            const artifacts = document.getElementById('meetily-artifacts');
+            if (artifacts && result.transcript_status) artifacts.textContent = 'Transcripción: ' + result.transcript_status + ' · Notas: ' + (result.notes_status || 'pendientes');
+            const transcript = document.getElementById('meetily-open-transcript');
+            if (transcript) {
+                transcript.classList.toggle('is-hidden', !result.transcript_document_id);
+                transcript.dataset.documentId = result.transcript_document_id || '';
+            }
+        }
+
+        function startMeetilyRecording() {
+            const consent = document.getElementById('meetily-recording-consent');
+            const title = document.getElementById('meetily-title');
+            const requestedBy = document.getElementById('meetily-requested-by');
+            if (!(consent && consent.checked && title && title.value.trim() && requestedBy && requestedBy.value.trim())) {
+                setMeetilyStatus('Completa título, autor y consentimiento antes de iniciar.');
+                return;
+            }
+            window.pywebview.api.start_meeting_capture({
+                theme_id: currentActiveTheme || 'General', title: title.value.trim(),
+                requested_by: requestedBy.value.trim(), consent: true
+            }).then(renderMeetilyResult).catch(function() { setMeetilyStatus('No se pudo iniciar; revisa permisos y recupera la sesión.'); });
+        }
+
+        function stopMeetilyRecording() {
+            if (!currentMeetingSessionId || !(window.pywebview && window.pywebview.api)) return;
+            window.pywebview.api.stop_meeting_capture(currentMeetingSessionId).then(renderMeetilyResult).catch(function() { setMeetilyStatus('No se pudo detener; recupera la sesión.'); });
+        }
+
+        function openMeetilyTranscript() {
+            const button = document.getElementById('meetily-open-transcript');
+            const documentId = button && button.dataset.documentId;
+            if (!documentId) return;
+            closeMeetilyModal();
+            openModal('modal-reader');
+            loadNoteContent(documentId);
+        }
+
+        function recoverMeetilyRecording() {
+            if (!currentMeetingSessionId || !(window.pywebview && window.pywebview.api)) {
+                setMeetilyStatus('Indica una sesión activa para recuperar.');
+                return;
+            }
+            window.pywebview.api.recover_meeting_capture(currentMeetingSessionId).then(renderMeetilyResult).catch(function() { setMeetilyStatus('No se pudo recuperar la sesión.'); });
+        }
+
+        function submitDiscussionReply(event) {
+            event.preventDefault();
+            const author = document.getElementById('discussion-reply-author');
+            const body = document.getElementById('discussion-reply-body');
+            if (!currentDocumentWorkspace || !currentDocumentWorkspace.shared || !currentDocumentWorkspace.note || !window.pywebview || !window.pywebview.api) {
+                showWorkspaceError('Comparte la nota antes de publicar comentarios.');
+                return;
+            }
+            window.pywebview.api.add_discussion_reply(currentDocumentWorkspace.note.document_id, {
+                author: author ? author.value : '', body: body ? body.value : '', parent_id: null
+            }).then(function(result) {
+                if (result && !result.error) {
+                    if (body) body.value = '';
+                    loadDocumentWorkspace(currentDocumentWorkspace.note.document_id);
+                } else {
+                    showWorkspaceError((result && (result.message || result.error)) || 'No se pudo publicar el comentario.');
+                }
+            }).catch(function() { showWorkspaceError('No se pudo publicar el comentario.'); });
+        }
+
+        function shareCurrentDocument() {
+            if (!currentDocumentWorkspace || !currentDocumentWorkspace.note || !window.pywebview || !window.pywebview.api) return;
+            const note = currentDocumentWorkspace.note;
+            const publisher = String(note.author || '').trim() || 'Fuente';
+            window.pywebview.api.share_processed_note(note.document_id, note.revision, publisher).then(function(result) {
+                if (result && !result.error) loadDocumentWorkspace(note.document_id);
+                else showWorkspaceError((result && (result.message || result.error)) || 'No se pudo compartir la nota.');
+            }).catch(function() { showWorkspaceError('No se pudo compartir la nota.'); });
+        }
+
         function switchReaderView(view) {
             const listBtn = document.getElementById('btn-reader-mode-list');
             const graphBtn = document.getElementById('btn-reader-mode-graph');
@@ -4836,6 +5137,7 @@
                 if (res.document_id) currentSelectedDocumentId = res.document_id;
                 currentSelectedNoteTitle = displayTitle;
                 renderNoteDocument(displayTitle, res.document);
+                loadDocumentWorkspace(currentSelectedDocumentId);
                 updateReaderBackButton();
             }).catch(function(err) {
                 const message = String(err || nativeBackendUnavailableMessage());
@@ -5047,6 +5349,17 @@
 
         document.addEventListener('DOMContentLoaded', function() {
             applyVisualStyle(readVisualStyle());
+            const shareButton = document.getElementById('document-share-button');
+            if (shareButton) shareButton.addEventListener('click', shareCurrentDocument);
+            const discussionForm = document.getElementById('discussion-reply-form');
+            if (discussionForm) discussionForm.addEventListener('submit', submitDiscussionReply);
+            const workspaceChatForm = document.getElementById('workspace-chat-form');
+            if (workspaceChatForm) workspaceChatForm.addEventListener('submit', submitWorkspaceChat);
+            const consent = document.getElementById('meetily-recording-consent');
+            if (consent) consent.addEventListener('change', function() {
+                const start = document.getElementById('meetily-start-recording');
+                if (start) start.disabled = !consent.checked;
+            });
             if (isExplicitPreviewMode()) {
                 markExplicitPreviewMode();
             } else {
@@ -5067,7 +5380,8 @@
             document.querySelectorAll('.modal-overlay').forEach(function(overlay) {
                 overlay.addEventListener('click', function(e) {
                     if (e.target === overlay) {
-                        closeModal(overlay.id);
+                        if (overlay.id === 'meetily-modal') closeMeetilyModal();
+                        else closeModal(overlay.id);
                     }
                 });
                 overlay.addEventListener('wheel', function(e) {

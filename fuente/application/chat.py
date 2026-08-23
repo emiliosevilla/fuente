@@ -183,6 +183,7 @@ class ChatApplicationService:
         ollama_url: str = "",
         system_prompt: str = CHAT_SYSTEM_PROMPT,
         budget_decision_resolver: Optional[BudgetDecisionResolver] = None,
+        refinement_guard: Optional[Callable[[str, int], None]] = None,
     ) -> None:
         self.retrieval = retrieval
         self.provider = provider
@@ -190,6 +191,7 @@ class ChatApplicationService:
         self._budget_decision_resolver = budget_decision_resolver
         self.ollama_url = ollama_url
         self.system_prompt = system_prompt
+        self._refinement_guard = refinement_guard
 
     def ask(
         self,
@@ -209,6 +211,11 @@ class ChatApplicationService:
                 model="",
                 ok=False,
             )
+
+        candidate_id = str(ctx.get("candidate_id") or "").strip()
+        if candidate_id and self._refinement_guard is not None:
+            revision = int(ctx.get("candidate_revision") or 0)
+            self._refinement_guard(candidate_id, revision)
 
         scope, scope_kwargs = _normalize_scope(ctx)
         retrieval_ctx = self.retrieval.build_context(query, scope, **scope_kwargs)
@@ -393,6 +400,17 @@ class ChatApplicationService:
     ) -> dict[str, Any]:
         safe_text = text or ""
         labels = [_source_label(src) for src in sources]
+        citations = [
+            {
+                "document_id": str(source.get("document_id") or ""),
+                "revision": int(source.get("revision") or 1),
+                "content_hash": str(source.get("content_hash") or ""),
+                "title": str(source.get("title") or source.get("relative_path") or ""),
+                "origin": str(source.get("origin") or "retrieved_note"),
+                "snippet": str(source.get("snippet") or ""),
+            }
+            for source in sources
+        ]
         return {
             "ok": ok,
             "text": safe_text,
@@ -400,6 +418,7 @@ class ChatApplicationService:
             "html": html.escape(safe_text, quote=True),
             "sources": sources,
             "source_labels": labels,
+            "citations": citations,
             "retrieval_mode": retrieval_mode,
             "error": error,
             "has_context": has_context,

@@ -18,6 +18,7 @@ from fuente.domain.errors import (
     NoteRevisionConflictError,
     OutputApprovalRequiredError,
     PathAuthorizationError,
+    RefinementRejectedError,
 )
 from fuente.domain.frontmatter import FrontmatterError, serialize_human_frontmatter
 from fuente.domain.metadata_form import validate_metadata_fields, validate_metadata_save_fields
@@ -26,6 +27,7 @@ from fuente.infrastructure.atomic_files import atomic_write_text, document_file_
 from fuente.infrastructure.sqlite_store import JobStore
 from fuente.domain.runtime_policy import RuntimePolicy
 from fuente.rag.chroma_store import ChromaStore
+from fuente.rag.minirag_store import MiniRAGStore
 from fuente.rag.semantic_chunker import SemanticChunker
 from fuente.ui.markdown_projection import project_note_document
 
@@ -62,6 +64,7 @@ class NotesApplicationService:
         self.path_resolver = path_resolver
         self.job_store = job_store
         self.chroma = chroma_store
+        self.minirag = MiniRAGStore(vault.config.minirag_dir)
         self.chunker = chunker or SemanticChunker()
         self._index_notifier = index_notifier
         self.runtime_policy = runtime_policy
@@ -113,6 +116,60 @@ class NotesApplicationService:
             note,
             requires_origins=note.note_type != "original",
         )
+
+    def approve_processed_output(
+        self, document_id: str, expected_revision: int, reviewer: str
+    ):
+        note = self.get_note(document_id)
+        with document_file_lock(
+            self.vault.config.vault_path / ".fuente" / "note-editor-locks",
+            note.document_id,
+        ):
+            path, _relative = self._resolve_note_path(note.document_id)
+            if not path.resolve().is_relative_to(self.vault.processed_dir.resolve()):
+                raise OutputApprovalRequiredError(note.document_id)
+            content_hash = self._current_processed_hash(note, path)
+            if note.revision != expected_revision:
+                raise NoteRevisionConflictError(note.document_id)
+            self.require_eligible_origins(note, requires_origins=note.note_type != "original")
+            return self.approval_service.approve_processed(
+                note.document_id,
+                expected_revision,
+                reviewer,
+                content_hash=content_hash,
+            )
+
+    def require_shareable_output(self, document_id: str) -> None:
+        note = self.get_note(document_id)
+        with document_file_lock(
+            self.vault.config.vault_path / ".fuente" / "note-editor-locks",
+            note.document_id,
+        ):
+            path, _relative = self._resolve_note_path(note.document_id)
+            if not path.resolve().is_relative_to(self.vault.processed_dir.resolve()):
+                raise OutputApprovalRequiredError(note.document_id)
+            content_hash = self._current_processed_hash(note, path)
+            self.require_eligible_origins(note, requires_origins=note.note_type != "original")
+            if not self.approval_service.is_processed_current(
+                note.document_id, note.revision, content_hash
+            ):
+                raise OutputApprovalRequiredError(note.document_id)
+
+    def _current_processed_hash(self, note: NoteDocument, path: Path) -> str:
+        try:
+            actual_hash = content_hash_for_markdown(
+                path.read_text(encoding="utf-8", errors="replace")
+            )
+        except (OSError, UnicodeError) as error:
+            raise NoteRevisionConflictError(note.document_id) from error
+        identity = self.job_store.get_document_identity(note.document_id)
+        if (
+            actual_hash != note.content_hash
+            or identity is None
+            or str(identity.get("content_hash") or "") != actual_hash
+        ):
+            raise NoteRevisionConflictError(note.document_id)
+        return actual_hash
 
     def _load_published_output_target(
         self,
@@ -232,6 +289,8 @@ class NotesApplicationService:
         if catalog_record is not None:
             self._resolve_catalog_note_path(catalog_record)
             return str(catalog_record["note_id"])
+        if self.job_store.get_document_identity(cleaned) is not None:
+            return cleaned
         return self.path_resolver.canonical_note_id(cleaned)
 
     def get_note(self, document_id: str) -> NoteDocument:
@@ -522,6 +581,90 @@ class NotesApplicationService:
             content_hash=candidate_hash,
         )
 
+    def promote_refinement_candidate(
+        self, candidate_id: str, *, expected_revision: int
+    ) -> NoteDocument:
+        lock_directory = self.vault.config.vault_path / ".fuente" / "note-editor-locks"
+        with document_file_lock(lock_directory, candidate_id):
+            return self._promote_refinement_candidate(
+                candidate_id, expected_revision=expected_revision
+            )
+
+    def _promote_refinement_candidate(
+        self, candidate_id: str, *, expected_revision: int
+    ) -> NoteDocument:
+        """Copy one accepted candidate into private 4_procesado atomically."""
+        candidate_row = self.job_store.get_refinement_candidate(candidate_id)
+        verdict = self.job_store.get_refinement_verdict(candidate_id)
+        if (
+            candidate_row is None
+            or verdict is None
+            or verdict.get("decision") != "accepted"
+            or int(candidate_row["revision"]) != expected_revision
+            or int(verdict.get("revision", -1)) != expected_revision
+        ):
+            raise RefinementRejectedError(candidate_id)
+
+        candidate = self.get_note(candidate_id)
+        if (
+            candidate.revision != expected_revision
+            or candidate.content_hash != str(candidate_row["content_hash"])
+            or candidate.content_hash != str(verdict["content_hash"])
+        ):
+            raise NoteRevisionConflictError(candidate_id)
+        self.require_eligible_origins(candidate)
+
+        issue = self.vault.sanitize_filename(
+            str(candidate.frontmatter.get("issue") or "_Sin_Cuestion")
+        )
+        target_dir = self.vault.processed_dir / issue
+        target_dir.mkdir(parents=True, exist_ok=True)
+        target = target_dir / f"{self.vault.sanitize_filename(candidate.title)}.md"
+        if target.is_symlink() or not target.resolve().is_relative_to(
+            self.vault.processed_dir.resolve()
+        ):
+            raise PathAuthorizationError()
+        relative = target.resolve().relative_to(
+            self.vault.config.vault_path.resolve()
+        ).as_posix()
+        promoted_id = document_id_for_relative_path(relative)
+        metadata = dict(candidate.frontmatter)
+        metadata["note_id"] = promoted_id
+        markdown = serialize_human_frontmatter(metadata) + candidate.body_markdown
+        promoted_hash = content_hash_for_markdown(markdown)
+        previous = target.read_text(encoding="utf-8") if target.exists() else None
+        if previous is not None and previous != markdown:
+            raise NoteRevisionConflictError(promoted_id)
+        if previous is None:
+            atomic_write_text(target, markdown)
+        try:
+            identity = self.job_store.ensure_document_identity(
+                document_id=promoted_id,
+                relative_path=relative,
+                content_hash=promoted_hash,
+            )
+            if (
+                identity.get("relative_path") != relative
+                or identity.get("content_hash") != promoted_hash
+            ):
+                raise NoteRevisionConflictError(promoted_id)
+        except BaseException:
+            if previous is None and target.exists():
+                target.unlink()
+            elif previous is not None:
+                atomic_write_text(target, previous)
+            raise
+        return NoteDocument.from_persisted(
+            document_id=promoted_id,
+            relative_path=relative,
+            markdown=markdown,
+            revision=int(identity["revision"]),
+        ).with_metadata(
+            metadata,
+            revision=int(identity["revision"]),
+            content_hash=promoted_hash,
+        )
+
     def approve(
         self,
         document_id: str,
@@ -808,6 +951,10 @@ class NotesApplicationService:
         origins = [origin.to_dict() for origin in note.origins]
         for chunk in chunks:
             metadata = dict(chunk.get("metadata") or {})
+            metadata.setdefault("document_id", note.document_id)
+            metadata.setdefault("revision", note.revision)
+            metadata.setdefault("content_hash", note.content_hash)
+            metadata.setdefault("relative_path", note.relative_path)
             metadata["origins_json"] = json.dumps(origins, sort_keys=True)
             chunk["metadata"] = metadata
         chunk_ids = [chunk["id"] for chunk in chunks]
@@ -818,16 +965,27 @@ class NotesApplicationService:
         }
 
         obsolete = sorted(published - set(chunk_ids))
-        if chunks and not self.chroma.add_chunks(
-            [chunk["content"] for chunk in chunks],
-            [chunk["metadata"] for chunk in chunks],
-            chunk_ids,
-        ):
-            logger.warning(
-                "Chunk index unavailable for approved note %s",
-                note.document_id,
+        indexed_with = self.minirag
+        try:
+            result = self.minirag.rebuild(chunks)
+        except RuntimeError as error:
+            if "MiniRAG is not installed" not in str(error):
+                raise
+            indexed_with = self.chroma
+            result = self.chroma.add_chunks(
+                [chunk["content"] for chunk in chunks],
+                [chunk["metadata"] for chunk in chunks],
+                chunk_ids,
             )
+        if not result:
+            logger.warning("Chunk index unavailable for approved note %s", note.document_id)
             return
+
+        def delete_index(ids: list[str]) -> bool:
+            delete = getattr(indexed_with, "delete", None)
+            if callable(delete):
+                return delete(ids) is not False
+            return bool(indexed_with.delete_chunks(ids))
 
         # New vectors are durable before the published artifact set changes.
         # If SQLite rejects the artifact publish, compensate only the newly
@@ -848,7 +1006,7 @@ class NotesApplicationService:
                 )
         except Exception:
             rollback_errors = []
-            if new_chunk_ids and not self.chroma.delete_chunks(new_chunk_ids):
+            if new_chunk_ids and not delete_index(new_chunk_ids):
                 rollback_errors.append("chroma")
             try:
                 self.job_store.delete_index_artifacts(
@@ -878,7 +1036,7 @@ class NotesApplicationService:
                 note.document_id,
                 len(obsolete),
             )
-            if self.chroma.delete_chunks(obsolete):
+            if delete_index(obsolete):
                 self.job_store.delete_index_artifacts(
                     note.document_id, artifact_ids=obsolete
                 )
@@ -894,6 +1052,13 @@ class NotesApplicationService:
         catalog_record = self.job_store.get_note(document_id)
         if catalog_record is not None:
             path = self._resolve_catalog_note_path(catalog_record)
+            relative = path.relative_to(
+                self.vault.config.vault_path.resolve()
+            ).as_posix()
+            return path, relative
+        identity = self.job_store.get_document_identity(document_id)
+        if identity is not None:
+            path = self._resolve_catalog_note_path(identity)
             relative = path.relative_to(
                 self.vault.config.vault_path.resolve()
             ).as_posix()
@@ -933,6 +1098,8 @@ class NotesApplicationService:
             path = self.path_resolver.resolve_clean(relative_path)
         elif candidate.is_relative_to(self.vault.output_dir.resolve()):
             path = self.path_resolver.resolve_note(relative_path)
+        elif candidate.is_relative_to(self.vault.processed_dir.resolve()):
+            path = candidate
         else:
             raise PathAuthorizationError()
         if not path.is_file() or path.suffix.lower() != ".md":

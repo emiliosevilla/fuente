@@ -2,8 +2,9 @@ import csv
 import json
 import logging
 import re
+import time
 from pathlib import Path
-from typing import Any, Protocol
+from typing import Any, Protocol, Tuple
 
 from fuente.extractors.base import BaseExtractor
 from fuente.extractors.base import ExtractionResult
@@ -12,6 +13,8 @@ from fuente.extractors.macos_vision import (
     OCRProcessingError,
     OCRUnavailableError,
 )
+from fuente.extractors.ocr_image import ImageOCRExtractor
+from fuente.extractors.policy import ExtractionPolicy
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +23,15 @@ class OCRPDFBackend(Protocol):
 
 
 class TextAndOfficeExtractor(BaseExtractor):
-    """Extractor completo para TXT, PDF, DOCX, DOC, XLSX, XLS, PPTX, PPT, MSG, CSV, JSON, HTML con Docling y MarkItDown."""
+    """Extractor local con MarkItDown primero y escalado Docling medido."""
+
+    QUALITY_THRESHOLD = 0.6
+    IMAGE_EXTENSIONS = {".png", ".jpeg", ".jpg", ".tiff", ".bmp", ".webp"}
+    DOCLING_EXTENSIONS = {".pdf", *IMAGE_EXTENSIONS}
+    MARKITDOWN_EXTENSIONS = {
+        ".txt", ".md", ".pdf", ".docx", ".doc", ".xlsx", ".xls",
+        ".pptx", ".ppt", ".msg", ".html", ".htm", *IMAGE_EXTENSIONS,
+    }
 
     SUPPORTED_EXTENSIONS = {
         ".txt", ".md", ".pdf",
@@ -28,7 +39,7 @@ class TextAndOfficeExtractor(BaseExtractor):
         ".xlsx", ".xls",
         ".pptx", ".ppt",
         ".msg", ".csv",
-        ".json", ".html", ".htm"
+        ".json", ".html", ".htm", *IMAGE_EXTENSIONS,
     }
 
     def __init__(self, ocr_backend: OCRPDFBackend | None = None) -> None:
@@ -37,55 +48,213 @@ class TextAndOfficeExtractor(BaseExtractor):
     def can_handle(self, file_path: Path) -> bool:
         return file_path.suffix.lower() in self.SUPPORTED_EXTENSIONS
 
-    def extract(self, file_path: Path) -> Tuple[str, Dict[str, Any]]:
+    def extract(self, file_path: Path) -> ExtractionResult | Tuple[str, dict[str, Any]]:
         ext = file_path.suffix.lower()
         metadata = {"original_file": file_path.name, "format": ext}
 
-        # Para CSV y JSON, utilizar extractores estructurados nativos para asegurar tablas y bloques ```json
+        # CSV y JSON permanecen nativos para conservar su estructura exacta.
         if ext in {".csv", ".json"}:
-            if ext == ".csv":
-                return self._extract_csv(file_path), metadata
-            elif ext == ".json":
-                return self._extract_json(file_path), metadata
+            content = self._extract_csv(file_path) if ext == ".csv" else self._extract_json(file_path)
+            return ExtractionResult(
+                content,
+                {**metadata, "extraction_method": "native", "extraction_status": "completed"},
+            )
 
-        # 1. Intenta primero Docling (IBM) si está instalado
-        docling_res = self._try_docling(file_path)
-        if docling_res:
-            return docling_res, metadata
+        attempts: list[dict[str, Any]] = []
+        degradations: list[str] = []
 
-        # 2. Intenta MarkItDown (Microsoft) si está instalado
-        markitdown_res = self._try_markitdown(file_path)
-        if markitdown_res:
-            return markitdown_res, metadata
-
-        # 3. Extractores específicos de formato en Python
-        try:
-            if ext in {".txt", ".md"}:
-                return self._extract_txt(file_path), metadata
-            elif ext == ".pdf":
-                return self._extract_pdf(file_path, metadata)
-            elif ext in {".docx", ".doc"}:
-                return self._extract_docx(file_path), metadata
-            elif ext in {".xlsx", ".xls"}:
-                return self._extract_xlsx(file_path), metadata
-            elif ext in {".pptx", ".ppt"}:
-                return self._extract_pptx(file_path), metadata
-            elif ext == ".msg":
-                return self._extract_msg(file_path), metadata
-            elif ext == ".csv":
-                return self._extract_csv(file_path), metadata
-            elif ext == ".json":
-                return self._extract_json(file_path), metadata
-            elif ext in {".html", ".htm"}:
-                return self._extract_html(file_path), metadata
+        if ext in self.MARKITDOWN_EXTENSIONS:
+            markitdown_started = time.perf_counter()
+            markitdown_res = self._try_markitdown(file_path)
+            markitdown_score = self._quality_score(file_path, markitdown_res)
+            if markitdown_res:
+                if markitdown_score >= self.QUALITY_THRESHOLD:
+                    return self._completed(
+                        markitdown_res,
+                        file_path,
+                        metadata,
+                        "markitdown",
+                        attempts,
+                        markitdown_started,
+                    )
+                attempts.append(self._attempt(
+                    "markitdown", "rejected", markitdown_res, markitdown_score,
+                    "quality_below_threshold", markitdown_started,
+                ))
             else:
-                return self._extract_fallback(file_path), metadata
-        except Exception as e:
-            logger.error(f"Error extrayendo {file_path.name}: {e}")
-            return f"[Error de extracción en {file_path.name}: {str(e)}]", metadata
+                reason = "markitdown_unavailable_or_failed"
+                degradations.append(reason)
+                attempts.append(self._attempt(
+                    "markitdown", "failed", None, 0.0, reason, markitdown_started,
+                ))
+
+        native_started = time.perf_counter()
+        try:
+            native_result = self._extract_native(file_path, metadata)
+        except Exception as error:
+            logger.error(f"Error extrayendo {file_path.name}: {error}")
+            native_result = ExtractionResult(
+                None,
+                metadata,
+                "failed",
+                f"native_error: {type(error).__name__}: {error}",
+            )
+
+        native_content, native_metadata, native_status, native_reason = self._normalize_result(
+            native_result, metadata
+        )
+        native_score = self._quality_score(file_path, native_content)
+        native_outcome = "accepted" if native_status == "completed" and native_score >= self.QUALITY_THRESHOLD else "rejected"
+        attempts.append(self._attempt(
+            "ocr" if ext in self.IMAGE_EXTENSIONS or ext == ".pdf" and native_metadata.get("extraction_method") not in {None, "pdf_text"} else "native",
+            native_outcome,
+            native_content,
+            native_score,
+            native_reason or (None if native_outcome == "accepted" else "quality_below_threshold"),
+            native_started,
+        ))
+        if native_outcome == "accepted":
+            return self._with_attempt_metadata(
+                ExtractionResult(native_content, native_metadata, native_status, native_reason),
+                attempts,
+                degradations,
+            )
+
+        if ext in self.DOCLING_EXTENSIONS:
+            docling_started = time.perf_counter()
+            docling_res = self._try_docling(file_path)
+            docling_score = self._quality_score(file_path, docling_res)
+            if docling_res:
+                docling_outcome = "accepted" if docling_score >= self.QUALITY_THRESHOLD else "rejected"
+                attempts.append(self._attempt(
+                    "docling", docling_outcome, docling_res, docling_score,
+                    None if docling_outcome == "accepted" else "quality_below_threshold",
+                    docling_started,
+                ))
+                if docling_outcome == "accepted":
+                    return self._with_attempt_metadata(
+                        ExtractionResult(
+                            docling_res,
+                            {
+                                **native_metadata,
+                                "extraction_method": "docling",
+                                "extraction_status": "completed",
+                            },
+                            "completed",
+                        ),
+                        attempts,
+                        degradations,
+                        escalation="docling",
+                    )
+            else:
+                reason = "docling_unavailable_or_failed"
+                degradations.append(reason)
+                attempts.append(self._attempt(
+                    "docling", "failed", None, 0.0, reason, docling_started,
+                ))
+
+        reason = native_reason or "extraction_quality: no accepted extraction"
+        return self._with_attempt_metadata(
+            ExtractionResult(native_content, native_metadata, "failed", reason),
+            attempts,
+            degradations,
+        )
+
+    def _extract_native(self, path: Path, metadata: dict[str, Any]) -> ExtractionResult | str:
+        ext = path.suffix.lower()
+        if ext in {".txt", ".md"}:
+            return self._extract_txt(path)
+        if ext == ".pdf":
+            return self._extract_pdf(path, metadata)
+        if ext in self.IMAGE_EXTENSIONS:
+            return ImageOCRExtractor(ocr_backend=self.ocr_backend).extract(path)
+        if ext in {".docx", ".doc"}:
+            return self._extract_docx(path)
+        if ext in {".xlsx", ".xls"}:
+            return self._extract_xlsx(path)
+        if ext in {".pptx", ".ppt"}:
+            return self._extract_pptx(path)
+        if ext == ".msg":
+            return self._extract_msg(path)
+        if ext in {".html", ".htm"}:
+            return self._extract_html(path)
+        return self._extract_fallback(path)
+
+    @staticmethod
+    def _quality_score(path: Path, content: str | None) -> float:
+        return ExtractionPolicy._score(path, content)[0]
+
+    @staticmethod
+    def _attempt(
+        engine: str,
+        outcome: str,
+        content: str | None,
+        quality_score: float,
+        reason: str | None,
+        started_at: float,
+    ) -> dict[str, Any]:
+        return {
+            "engine": engine,
+            "outcome": outcome,
+            "result": content,
+            "quality_score": quality_score,
+            "reason": reason,
+            "reasons": [reason] if reason else [],
+            "duration_ms": round((time.perf_counter() - started_at) * 1000),
+            "has_content": bool(content and content.strip()),
+        }
+
+    def _completed(
+        self,
+        content: str,
+        path: Path,
+        metadata: dict[str, Any],
+        engine: str,
+        attempts: list[dict[str, Any]],
+        started_at: float,
+    ) -> ExtractionResult:
+        attempts.append(self._attempt(engine, "accepted", content, self._quality_score(path, content), None, started_at))
+        return self._with_attempt_metadata(
+            ExtractionResult(content, {**metadata, "extraction_method": engine, "extraction_status": "completed"}),
+            attempts,
+            [],
+        )
+
+    @staticmethod
+    def _normalize_result(
+        result: ExtractionResult | str,
+        base_metadata: dict[str, Any],
+    ) -> tuple[str | None, dict[str, Any], str, str | None]:
+        if isinstance(result, ExtractionResult):
+            return result.content, {**base_metadata, **result.metadata}, result.status, result.reason
+        return result, {
+            **base_metadata,
+            "extraction_method": "native",
+            "extraction_status": "completed",
+        }, "completed", None
+
+    @staticmethod
+    def _with_attempt_metadata(
+        result: ExtractionResult,
+        attempts: list[dict[str, Any]],
+        degradations: list[str],
+        *,
+        escalation: str | None = None,
+    ) -> ExtractionResult:
+        metadata = {
+            **result.metadata,
+            "extraction_attempts": attempts,
+            "extraction_degradations": degradations,
+        }
+        if escalation:
+            metadata["extraction_escalation"] = escalation
+            metadata["extraction_escalation_reason"] = "quality_below_threshold"
+        return ExtractionResult(result.content, metadata, result.status, result.reason)
 
     def _try_docling(self, path: Path) -> str | None:
-        """Intenta extraer vía Docling (IBM Research) si se encuentra disponible en el entorno."""
+        """Escala sólo PDF/imagen a Docling cuando el llamador ya midió baja calidad."""
+        if path.suffix.lower() not in self.DOCLING_EXTENSIONS:
+            return None
         try:
             from docling.document_converter import DocumentConverter
             converter = DocumentConverter()
@@ -100,16 +269,16 @@ class TextAndOfficeExtractor(BaseExtractor):
         return None
 
     def _try_markitdown(self, path: Path) -> str | None:
-        """Intenta extraer vía MarkItDown (Microsoft) si se encuentra disponible."""
+        """Convierte sólo una ruta local, con plugins y servicios cloud deshabilitados."""
         try:
             from markitdown import MarkItDown
-            md = MarkItDown()
-            res = md.convert(str(path))
+            md = MarkItDown(enable_plugins=False)
+            res = md.convert_local(path)
             if res and res.text_content:
                 logger.info(f"Extracción MarkItDown exitosa para {path.name}")
                 return res.text_content
-        except Exception:
-            pass
+        except Exception as error:
+            logger.debug(f"MarkItDown no disponible o error para {path.name}: {error}")
         return None
 
     def _extract_txt(self, path: Path) -> str:

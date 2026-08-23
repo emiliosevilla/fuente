@@ -12,6 +12,7 @@ supposed to pick up.
 """
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Optional
@@ -31,6 +32,7 @@ from fuente.core.vault import VaultManager
 from fuente.domain.errors import NoteRevisionConflictError
 from fuente.domain.frontmatter import parse_frontmatter, serialize_frontmatter
 from fuente.domain.runtime_policy import AudioMode, ExecutionProfile, RuntimePolicy
+from fuente.extractors.base import ExtractionResult
 from fuente.extractors.registry import ExtractorRegistry
 from fuente.graph_engine.linker import GraphLinker
 from fuente.infrastructure.sqlite_store import JobStore
@@ -433,6 +435,63 @@ def test_ingesting_a_source_completes_and_records_its_identities(harness):
     assert identity["relative_path"] == "4_salida/informe_trimestral.md"
     assert identity["content_hash"] == job.source_hash
     assert harness.notes() == [harness.vault.output_dir / "informe_trimestral.md"]
+
+
+def test_office_pdf_attempts_are_persisted_in_order_before_clean_save(
+    temp_vault_path, monkeypatch
+):
+    harness = _build_harness(temp_vault_path)
+    source_identity = "1_entrada/escaneado.pdf"
+    source_path = harness.vault.input_dir / "escaneado.pdf"
+    source_path.write_bytes(b"%PDF-fake")
+    extractor = harness.service.extractors.extractors[0]
+    monkeypatch.setattr(extractor, "_try_markitdown", lambda _path: "\x00\x01")
+    monkeypatch.setattr(
+        extractor,
+        "_extract_native",
+        lambda _path, metadata: ExtractionResult(
+            None,
+            {**metadata, "extraction_method": "pdf_text", "extraction_status": "failed"},
+            "failed",
+            "ocr_empty",
+        ),
+    )
+    monkeypatch.setattr(extractor, "_try_docling", lambda _path: "# Docling\n\nTexto recuperado")
+
+    original_save_clean = harness.vault.save_clean_md
+    observed_rows: list[dict[str, Any]] = []
+
+    def save_clean(*args, **kwargs):
+        observed_rows.extend(
+            dict(row)
+            for row in harness.store._connection.execute(
+                "SELECT engine, outcome, result, quality_score, reasons, duration_ms "
+                "FROM extraction_attempts ORDER BY attempt_id"
+            ).fetchall()
+        )
+        return original_save_clean(*args, **kwargs)
+
+    monkeypatch.setattr(harness.vault, "save_clean_md", save_clean)
+    try:
+        job = harness.service.submit(source_identity)
+        waiting = harness.service.resume(job.job_id)
+
+        assert waiting.stage == "saved_clean"
+        assert [row["engine"] for row in observed_rows] == [
+            "markitdown", "native", "docling"
+        ]
+        assert [row["outcome"] for row in observed_rows] == [
+            "rejected", "rejected", "accepted"
+        ]
+        assert [row["result"] for row in observed_rows] == [
+            "\x00\x01", None, "# Docling\n\nTexto recuperado"
+        ]
+        assert json.loads(observed_rows[0]["reasons"]) == ["quality_below_threshold"]
+        assert json.loads(observed_rows[1]["reasons"]) == ["ocr_empty"]
+        assert json.loads(observed_rows[2]["reasons"]) == []
+        assert all(row["duration_ms"] >= 0 for row in observed_rows)
+    finally:
+        harness.store.close()
 
 
 def test_ingestion_passes_output_relative_path_to_linker(harness):

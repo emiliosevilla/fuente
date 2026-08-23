@@ -33,8 +33,10 @@ last durable stage, which is exactly what `resume()` picks up.
 from __future__ import annotations
 
 import logging
+import json
 import uuid
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Optional
 
@@ -72,9 +74,13 @@ from fuente.domain.quarantine import InvalidModelOutputError
 from fuente.domain.runtime_policy import RuntimePolicy
 from fuente.extractors.audio import AudioModelUnavailableError
 from fuente.extractors.base import ExtractionResult
+from fuente.extractors.policy import ExtractionDecision, ExtractionPolicy
 from fuente.infrastructure.atomic_files import atomic_write_text
 from fuente.infrastructure.sqlite_store import JobStore
 from fuente.ram_governor.budget import unavailable_snapshot
+from fuente.rag.chroma_store import ChromaRetrievalBackend
+from fuente.rag.router import RetrievalRouter
+from fuente.rag.minirag_store import MiniRAGStore
 
 logger = logging.getLogger(__name__)
 
@@ -237,13 +243,21 @@ class IngestionApplicationService:
         scheduler: Optional[ResourceScheduler] = None,
         copy_to_dirty: Optional[Callable[[Path], Path]] = None,
         stabilize: Optional[Callable[[Path], bool]] = None,
+        router: RetrievalRouter | None = None,
     ) -> None:
         self.config = config
         self.vault = vault
         self.job_store = job_store
         self.extractors = extractors
+        # Keep registry as policy entrypoint so runtime adapters and tests
+        # replacing its public ``extract`` method remain connected.
+        self.extraction_policy = ExtractionPolicy([extractors])
         self.chunker = chunker
         self.chroma = chroma
+        self.router = router or RetrievalRouter(
+            primary=MiniRAGStore(config.vault.minirag_dir),
+            refinement=ChromaRetrievalBackend(chroma),
+        )
         self.atomic_generator = atomic_generator
         self.linker = linker
         self.runtime_policy = runtime_policy
@@ -279,6 +293,19 @@ class IngestionApplicationService:
     def _vector_index_enabled(self) -> bool:
         """Legacy harnesses remain Auto; an injected policy is authoritative."""
         return self.runtime_policy is None or self.runtime_policy.vector_index_enabled
+
+    def _delete_primary_chunks(self, chunk_ids) -> bool:
+        """Treat the contract's ``None`` delete result as successful."""
+        try:
+            return self.router.primary().delete(chunk_ids) is not False
+        except RuntimeError as error:
+            if "MiniRAG is not installed" not in str(error):
+                raise
+            return self.router.refinement().delete(chunk_ids) is not False
+
+    def _delete_refinement_chunks(self, chunk_ids) -> bool:
+        """Remove refinement projections during compensation."""
+        return self.router.refinement().delete(chunk_ids) is not False
 
     def _build_scheduler(self) -> ResourceScheduler:
         governor = self.ram_governor
@@ -759,12 +786,15 @@ class IngestionApplicationService:
                 document_id,
                 len(obsolete),
             )
-            self.chroma.delete_chunks(obsolete)
-        if not self.chroma.add_chunks(
-            [chunk["content"] for chunk in chunks],
-            [chunk["metadata"] for chunk in chunks],
-            chunk_ids,
-        ):
+            self._delete_primary_chunks(obsolete)
+        try:
+            result = self.router.primary().rebuild(chunks)
+        except RuntimeError as error:
+            if "MiniRAG is not installed" not in str(error):
+                raise
+            logger.info("MiniRAG unavailable; using Chroma refinement backend for this run")
+            result = self.router.refinement().rebuild(chunks)
+        if not result.success:
             logger.warning(
                 "Chunk index unavailable for job %s; continuing without vectors",
                 job.job_id,
@@ -1028,13 +1058,12 @@ class IngestionApplicationService:
                 for artifact in artifacts
                 if artifact["kind"] in doomed_kinds
             ]
-            if plan.invalidate_chunk_index and not self.chroma.delete_chunks(
-                [
-                    artifact["artifact_id"]
-                    for artifact in artifacts
-                    if artifact["kind"] == CHUNK_ARTIFACT_KIND
-                ]
-            ):
+            chunk_ids = [
+                artifact["artifact_id"]
+                for artifact in artifacts
+                if artifact["kind"] == CHUNK_ARTIFACT_KIND
+            ]
+            if plan.invalidate_chunk_index and not self._delete_primary_chunks(chunk_ids):
                 return False
             self.job_store.delete_index_artifacts(document_id, artifact_ids=doomed)
             return True
@@ -1369,7 +1398,7 @@ class IngestionApplicationService:
                 if artifact["kind"] == CHUNK_ARTIFACT_KIND
             ]
             if chunk_ids and self._vector_index_enabled():
-                if not self.chroma.delete_chunks(chunk_ids):
+                if not self._delete_primary_chunks(chunk_ids):
                     raise RuntimeError("could not remove stale chunk index entries")
             if artifacts:
                 self.job_store.delete_index_artifacts(document_id)
@@ -1560,12 +1589,36 @@ class IngestionApplicationService:
         max_attempts = max_attempts_for_error_class(ErrorClass.CORRUPT_OR_UNSUPPORTED)
         for attempt in range(1, max_attempts + 1):
             try:
-                result = self.extractors.extract(dirty_path)
-                if isinstance(result, ExtractionResult):
-                    extracted = result
-                else:
-                    content, metadata = result
-                    extracted = ExtractionResult(content, dict(metadata))
+                decision = self.extraction_policy.extract(dirty_path)
+                self._persist_extraction_attempts(job, decision)
+                if decision.status == "skipped":
+                    return job, ExtractionResult(
+                        content=None,
+                        metadata={"original_file": dirty_path.name},
+                        status="skipped",
+                        reason=decision.reason,
+                    )
+                if decision.selected_engine is None:
+                    reason = decision.reason or "extraction_quality: no accepted extraction"
+                    error_code = self._decision_error_code(decision)
+                    last_error = ExtractionFailedError(reason, code=error_code)
+                    failure = evaluate_failure(
+                        error_code=error_code,
+                        attempt_count=attempt,
+                        error_message=reason,
+                    )
+                    job = self.job_store.update_job(
+                        job.job_id,
+                        expected_revision=job.revision,
+                        error_code=error_code,
+                        error_message=failure.user_reason,
+                    )
+                    if failure.action is FailureAction.RETRY:
+                        continue
+                    break
+                extracted = ExtractionResult(
+                    decision.content, dict(decision.metadata or {})
+                )
                 return job, extracted
             except AudioModelUnavailableError as error:
                 return job, ExtractionResult(
@@ -1595,9 +1648,31 @@ class IngestionApplicationService:
                     continue
                 break
         assert last_error is not None
+        if error_code not in {"corrupt_content", "unsupported_content"}:
+            raise last_error
         raise ContentRetryExhaustedError(
             last_error, error_code, max_attempts
         ) from last_error
+
+    def _persist_extraction_attempts(
+        self, job: JobRecord, decision: ExtractionDecision
+    ) -> None:
+        connection = getattr(self.job_store, "_connection", None)
+        if connection is None:
+            raise RuntimeError("job store does not expose extraction persistence")
+        now = datetime.now(timezone.utc).isoformat()
+        for attempt in decision.attempts:
+            connection.execute(
+                """
+                INSERT INTO extraction_attempts
+                (job_id, source_relative_path, engine, outcome, result,
+                 quality_score, reasons, duration_ms, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (job.job_id, job.source_relative_path, attempt.engine,
+                 attempt.outcome, attempt.result, attempt.quality_score,
+                 json.dumps(attempt.reasons), attempt.duration_ms, now),
+            )
 
     @staticmethod
     def _content_error_code(error: Exception) -> str:
@@ -1609,3 +1684,13 @@ class IngestionApplicationService:
         if "unsupported" in message or "not supported" in message:
             return "unsupported_content"
         return ""
+
+    @staticmethod
+    def _decision_error_code(decision: ExtractionDecision) -> str:
+        reasons = [reason for attempt in decision.attempts for reason in attempt.reasons]
+        message = " ".join(reasons).lower()
+        if "corrupt" in message or "malformed" in message:
+            return "corrupt_content"
+        if "unsupported" in message or "not supported" in message:
+            return "unsupported_content"
+        return "processing_error"

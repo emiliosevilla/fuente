@@ -37,6 +37,26 @@ class OutputApprovalRequiredError(ValueError):
         super().__init__(f"Output note is not approved: {document_id}")
 
 
+class SharedOutputConflictError(ValueError):
+    """Raised when a shared projection conflicts with an existing receipt."""
+
+    code = "shared_output_conflict"
+
+    def __init__(self, document_id: str) -> None:
+        self.document_id = document_id
+        super().__init__(f"Shared output conflict: {document_id}")
+
+
+class RefinementRejectedError(ValueError):
+    """Raised when a candidate lacks an accepted, current refinement verdict."""
+
+    code = "refinement_rejected"
+
+    def __init__(self, candidate_id: str) -> None:
+        self.candidate_id = candidate_id
+        super().__init__(f"Refinement candidate is not accepted: {candidate_id}")
+
+
 class InvalidNoteTransitionError(ValueError):
     """Raised when a UI-controlled status transition is not allowed."""
 

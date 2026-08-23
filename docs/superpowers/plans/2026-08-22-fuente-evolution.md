@@ -1346,7 +1346,7 @@ PYTHONDONTWRITEBYTECODE=1 python3 -m pytest \
   tests/security/test_path_authorization.py tests/security/test_xss_rendering.py -q
 ~~~
 
-Measured: `PYTHONPATH=. PYTHONDONTWRITEBYTECODE=1 pytest -q` — `1334 passed, 1 skipped, 1 warning`; one freshness failure was isolated to stale `current-sdd.json` after `bb900e9`, so evidence refresh remains part of this task.
+Measured: `PYTHONPATH=. PYTHONDONTWRITEBYTECODE=1 pytest -q` — `1336 passed, 1 skipped, 1 warning` in `95.87s`; the earlier freshness failure was isolated to stale `current-sdd.json` after `bb900e9` and is now corrected.
 
 - [x] Step 2: Terra independent review.
 
@@ -1370,7 +1370,7 @@ Manual evidence: not run in this environment; real PyWebView, microphone and res
 {
   "initiative": "fuente-evolution",
   "implementation": "measured",
-  "tests": "PYTHONPATH=. PYTHONDONTWRITEBYTECODE=1 pytest -q — 1334 passed, 1 skipped, 1 warning; freshness requires regenerated evidence",
+  "tests": "PYTHONPATH=. PYTHONDONTWRITEBYTECODE=1 pytest -q — 1336 passed, 1 skipped, 1 warning in 95.87s; documentation freshness passes after regeneration",
   "ui_manual": "not-run in this environment",
   "deployment": "not-measured"
 }

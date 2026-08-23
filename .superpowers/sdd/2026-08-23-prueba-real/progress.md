@@ -28,7 +28,7 @@ Código está publicado y pruebas automatizadas históricas están verdes. Esta 
 | PR-01 | distribución macOS | parcial | macOS + PyInstaller | NOT_RUN | G1 |
 | PR-02 | distribución Windows | no | Windows + PyInstaller | NOT_RUN | G6 |
 | PR-03 | instalación macOS limpia | no | macOS limpio | NOT_RUN | G2 |
-| PR-04 | layout, migración y aprobación | sí | copia de Vault | NOT_RUN | G3 |
+| PR-04 | layout, migración y aprobación | sí | copia de Vault | PASS: checkout y copia temporal; Vault real no probado | G3 |
 | PR-05 | extracción ETL | sí | PDF, imagen y audio reales | NOT_RUN | G3 |
 | PR-06 | MiniRAG, Chroma y refinamiento | sí | Ollama y RAG reales | NOT_RUN | G3 |
 | PR-07 | compartir y discusión | sí | PyWebView para aceptación visual | NOT_RUN | G3 |
@@ -101,3 +101,13 @@ PR-00 completado con G0 PASS en checkout limpio aislado. Siguiente: PR-04–PR-0
 - Estado final checkout principal medido: raíz solicitada, rama `dev`, `HEAD f538f16bccd2d92eea112e575938786ab14453e9`; sólo cambió el ledger `progress.md`; diff fuera del ledger vacío; sin cambios de producto, dependencias, ramas ni publicación Git.
 - `Ruling: G0 PASS sólo para el checkout temporal final sobre dev; el principal sigue BLOCKED por el ledger modificado — porque son estados de evidencia distintos — coste si es incorrecto: se podría ocultar otra mutación del árbol.`
 - PR-00 round 1: COMPLETE con G0 PASS aislado; PR-01 en adelante permanecen sin ejecutar.
+
+## Fix round 1 — PR-04 — 2026-08-23
+
+- Resultado: `PASS` limitado a checkout y copia temporal sintética.
+- Checkout medido: raíz `/Users/emiliosevillaortego/Documents/Programación/fuente`, rama `dev`, `HEAD e68c9c08c21d10312865ece3b2a5c28068ccc149`, `dev...origin/dev`.
+- Suite focalizada: `PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -q tests/test_vault_layout.py tests/test_vault_layout_migration.py tests/test_approval_ledger.py tests/test_processed_output_approval.py tests/test_atomic_files.py tests/security/test_path_authorization.py` -> `55 passed in 0.79s`.
+- Copia temporal: el comando reproducible y su salida completa están en `task-PR-04-report.md`; resultado `COPY_LAYOUT_HASH_ROLLBACK=PASS`, `LEGACY_4_SALIDA_COMPATIBILITY=PASS`, `TEMP_CLEANUP=PASS`.
+- Límite: no se probó el Vault real y PR-10 continúa bloqueado por IDs duplicados; este PASS no lo desbloquea ni aplica migraciones reales.
+- Revisión independiente: Terra aprobó PR-04 tras fix round 1 y fix round 2; ledger, comando reproducible y comprobación real de limpieza quedaron verificados. Sin hallazgos abiertos.
+- Task PR-04: complete (commits e68c9c0..e68c9c0, review clean; fase de evidencia sin cambios de producto).

@@ -43,7 +43,7 @@ Current gate: F04.3 accepted-candidate promotion is in progress. F04.2 positive-
 | F04.1 | F03.1 | verdict persistence | yes | yes — `49f87fe` | `35 passed` focal identity/store suite | yes — Terra APPROVE; no findings after atomicity fix | no | F04.2 may start |
 | F04.2 | F03.2,F03.3,F04.1 | positive-only verifier | yes | yes — `85dcb9e` | `154 passed` focal; full `1301 passed, 1 skipped, 1 warning` | yes — Terra APPROVE after baseline CAS and MiniRAG read fallback fixes | no | F04.3 may start |
 | F04.3 | F04.2 | processed promotion | yes | yes — `2ec53b3` | `55 passed, 1 warning` focal notes/refinement suite | yes — Terra APPROVE; no findings after identity/lock remediation | no | F05.1 may start |
-| F05.1 | F01.1,F04.3 | output approval | yes | no | no | no | no | Human |
+| F05.1 | F01.1,F04.3 | output approval | yes | yes — pending commit | `34 passed` focal; Terra focal `31 passed` | yes — Terra APPROVE after real-byte hash remediation | no | F05.2 may start |
 | F05.2 | F05.1 | atomic sharing | yes | no | no | no | no | Terra |
 | F05.3 | F05.2,D-03 | discussion files | yes | no | no | no | no | Luna |
 | F06.1 | F05.2,F05.3 | bridge contracts | yes | no | no | no | no | Luna |
@@ -392,3 +392,11 @@ At task end, update only that row with a commit, exact test command/result, revi
 - Promotion locks the candidate through the atomic file/identity operation, rewrites `note_id` to the new `4_procesado` route, records the processed identity and is idempotent for the same bytes.
 - Verification: focal `55 passed, 1 warning`; `git diff --check` clean. Terra re-review: APPROVE; no findings.
 - Commit: `2ec53b3` (`feat: promote only verified processed candidates`).
+
+### F05.1 completion — 2026-08-23
+
+- Added separate `processed_approvals` ledger in migration `020`; it stores revision, current content hash, reviewer and timestamp independently from canonical `3_limpio` approvals.
+- Added `approve_processed_output` and `require_shareable_output`. Both require `4_procesado`, approved origins, exact SQLite identity and the real current Markdown hash under a document lock.
+- Manual edits after approval invalidate shareability; clean approval alone cannot authorize output sharing.
+- Verification: focal `34 passed`; `git diff --check` clean. Terra re-review: APPROVE; no findings.
+- Commit: pending in this checkpoint; F05.2 may start after commit.

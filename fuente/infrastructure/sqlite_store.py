@@ -279,6 +279,58 @@ class JobStore:
         ).fetchone()
         return row is not None
 
+    # -- shared output receipts ------------------------------------------
+
+    def record_shared_output(
+        self,
+        *,
+        note_id: str,
+        revision: int,
+        content_hash: str,
+        publisher: str,
+        source_relative_path: str,
+        relative_path: str,
+    ) -> dict[str, Any]:
+        """Record one idempotent publication receipt."""
+        now = _timestamp()
+        with self._immediate_transaction(note_id) as connection:
+            existing = connection.execute(
+                "SELECT * FROM shared_outputs WHERE note_id = ? AND revision = ?",
+                (note_id, revision),
+            ).fetchone()
+            if existing is not None:
+                return dict(existing)
+            connection.execute(
+                """
+                INSERT INTO shared_outputs
+                (note_id, revision, content_hash, publisher,
+                 source_relative_path, relative_path, shared_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    note_id,
+                    revision,
+                    content_hash,
+                    publisher,
+                    source_relative_path,
+                    relative_path,
+                    now,
+                ),
+            )
+            row = connection.execute(
+                "SELECT * FROM shared_outputs WHERE note_id = ? AND revision = ?",
+                (note_id, revision),
+            ).fetchone()
+            assert row is not None
+            return dict(row)
+
+    def get_shared_output(self, note_id: str, revision: int) -> dict[str, Any] | None:
+        row = self._connection.execute(
+            "SELECT * FROM shared_outputs WHERE note_id = ? AND revision = ?",
+            (note_id, revision),
+        ).fetchone()
+        return dict(row) if row is not None else None
+
     def __enter__(self) -> "JobStore":
         return self
 

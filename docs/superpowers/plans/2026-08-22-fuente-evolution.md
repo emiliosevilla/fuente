@@ -1,5 +1,11 @@
 # Fuente Evolution Implementation Plan
 
+Execution ledger status: COMPLETE locally on `dev` at the reconciled `HEAD`.
+The task recipes below are historical implementation records; their final
+status lines and the progress ledger are authoritative. Manual PyWebView,
+microphone, remote deployment and PR publication remain unmeasured; no
+deployment is inferred.
+
 > For agentic workers: REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox syntax for tracking.
 
 Goal: Convert Fuente into a local-first knowledge workspace with MarkItDown/MiniRAG primary cycles, evidence-gated refinement, filesystem collaboration, and an accessible document experience.
@@ -1156,7 +1162,7 @@ git add consola_preview.html fuente/ui/static/console.css tests/contract/test_pr
 git commit -m "feat: add sharing and discussion controls"
 ~~~
 
-Status: IMPLEMENTED and TESTED; Terra APPROVE after a fix round for pre-share discussion fields. Commit is the remaining checkpoint.
+Status: COMPLETE locally; Terra APPROVE after the pre-share discussion fix round; commit reconciled in the final local ledger.
 
 ### Task F06.4: Ground workspace chat in citations
 
@@ -1204,7 +1210,7 @@ git add fuente/application/chat.py fuente/ui/bridge.py consola_preview.html test
 git commit -m "feat: ground workspace chat in citations"
 ~~~
 
-Status: IMPLEMENTED and TESTED; Terra APPROVE after making all five citation fields visible in the reader assistant. Commit is the remaining checkpoint.
+Status: COMPLETE locally; Terra APPROVE after all five citation fields became visible in the reader assistant; commit reconciled in the final local ledger.
 
 ### Task F06.5: Add the accessible Meetily capture modal
 
@@ -1267,7 +1273,7 @@ git add fuente/ui/bridge.py fuente/application/lifecycle.py consola_preview.html
 git commit -m "feat: add accessible meetily capture modal"
 ~~~
 
-Status: IMPLEMENTED and TESTED; Terra APPROVE after recovery persistence, transcript link, focus and visible invoker fix rounds. Commit is the remaining checkpoint.
+Status: COMPLETE locally; Terra APPROVE after recovery persistence, transcript link, focus and visible invoker fix rounds; commit reconciled in the final local ledger.
 
 ## Phase 7 — migration, documentation and release
 
@@ -1319,7 +1325,7 @@ git add fuente/resources/demo_vault/manifest.json tests/test_demo_vault.py READM
 git commit -m "docs: document six-root vault migration"
 ~~~
 
-Status: IMPLEMENTED and TESTED; Terra APPROVE after correcting the manifest to six functional roots. Commit is the remaining checkpoint.
+Status: COMPLETE locally; Terra APPROVE after correcting the manifest to six functional roots; commit reconciled in the final local ledger.
 
 ### Task F07.2: Luna, Terra, Sol and Pull Request
 

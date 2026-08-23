@@ -413,3 +413,13 @@ At task end, update only that row with a commit, exact test command/result, revi
 - F07.1 implementation: demo manifest now declares layout version 4 and the six functional roots (`1_entrada/personal`, `1_entrada/común`, `2_sucio`, `3_limpio`, `4_procesado`, `5_salida`), with `4_salida` explicitly marked compatibility-only. Added the user-run migration guide and README commands/limits; no automatic Vault or OneDrive/SharePoint mutation.
 - F07.1 verification: `PYTHONPATH=. pytest -q tests/test_demo_vault.py tests/test_vault_layout_migration.py tests/test_readme_honesty_wave1.py` — `30 passed`; Terra APPROVE after the manifest root correction.
 - F06.2 implementation is complete and Terra-approved: the reader exposes functional Asistente/Notas/Discusión tabs, accessible context dialog semantics, and responsive stacking without weakening the existing 51 visual assertions.
+
+### Documentation reconciliation — 2026-08-23
+
+- Reconciled plan status text with executed local work; final ledger is the
+  authority for completion, while task recipes remain historical records.
+- Updated README references to the six-root layout, compatibility-only
+  `4_salida` and final local implementation state.
+- Regenerated `docs/evidence/current-sdd.json` after measuring current branch
+  and source digest. Evidence does not claim manual PyWebView/microphone
+  validation, PR publication or deployment.

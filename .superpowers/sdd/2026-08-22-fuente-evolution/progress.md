@@ -44,7 +44,7 @@ Current gate: F04.3 accepted-candidate promotion is in progress. F04.2 positive-
 | F04.2 | F03.2,F03.3,F04.1 | positive-only verifier | yes | yes — `85dcb9e` | `154 passed` focal; full `1301 passed, 1 skipped, 1 warning` | yes — Terra APPROVE after baseline CAS and MiniRAG read fallback fixes | no | F04.3 may start |
 | F04.3 | F04.2 | processed promotion | yes | yes — `2ec53b3` | `55 passed, 1 warning` focal notes/refinement suite | yes — Terra APPROVE; no findings after identity/lock remediation | no | F05.1 may start |
 | F05.1 | F01.1,F04.3 | output approval | yes | yes — `1c71e83` | `34 passed` focal; Terra focal `31 passed` | yes — Terra APPROVE after real-byte hash remediation | no | F05.2 may start |
-| F05.2 | F05.1 | atomic sharing | yes | no | no | no | no | Terra |
+| F05.2 | F05.1 | atomic sharing | yes | yes — pending commit | `54 passed` focal | yes — Terra APPROVE after symlink, migration and rollback remediation | no | F05.3 may start |
 | F05.3 | F05.2,D-03 | discussion files | yes | no | no | no | no | Luna |
 | F06.1 | F05.2,F05.3 | bridge contracts | yes | no | no | no | no | Luna |
 | F06.2 | F06.1 | reader workspace | yes | no | no | no | no | Terra |
@@ -400,3 +400,4 @@ At task end, update only that row with a commit, exact test command/result, revi
 - Manual edits after approval invalidate shareability; clean approval alone cannot authorize output sharing.
 - Verification: focal `34 passed`; `git diff --check` clean. Terra re-review: APPROVE; no findings.
 - Commit: `1c71e83` (`feat: require approval before sharing output`).
+- F05.2 implementation is complete and Terra-approved: sharing writes an atomic projection under `5_salida`, preserves `4_procesado`, and records `(note_id, revision, hash, publisher, source, destination)` in SQLite. Symlink traversal and receipt-failure rollback are covered.

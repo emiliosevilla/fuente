@@ -212,6 +212,7 @@
                     <button class="btn-small" data-onclick-command="triggerAction('export_reader_note', {}, this)">Exportar</button>
                     <button class="btn-small" data-onclick-command="triggerAction('open_obsidian', {}, this)">Abrir en Obsidian</button>
                     <button class="btn-small" data-onclick-command="openFusionWorkflow()">Fusionar seleccionadas</button>
+                    <button class="btn-small" data-onclick-command="openMeetilyModal()">Nueva reunión</button>
                     <button class="close-btn" data-onclick-command="closeModal('modal-reader')">&times;</button>
                 </div>
             </div>
@@ -320,6 +321,31 @@
                         </div>
                     </section>
                 </template>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="meetily-modal" role="dialog" aria-modal="true" aria-labelledby="meetily-modal-title" aria-hidden="true">
+        <div class="modal-container meeting-modal-container">
+            <div class="modal-header">
+                <div class="modal-title" id="meetily-modal-title">REUNIÓN — CAPTURA LOCAL</div>
+                <button class="close-btn" data-onclick-command="closeMeetilyModal()" aria-label="Cerrar captura de reunión">&times;</button>
+            </div>
+            <div class="modal-body meeting-modal-body">
+                <p>La grabación y sus artefactos se guardan localmente en las carpetas de reunión del tema activo.</p>
+                <label for="meetily-title">Título de la reunión</label>
+                <input id="meetily-title" type="text" required>
+                <label for="meetily-requested-by">Identificador del autor</label>
+                <input id="meetily-requested-by" type="text" required>
+                <label><input id="meetily-recording-consent" type="checkbox"> Consiento la grabación de esta reunión.</label>
+                <div class="meeting-modal-actions">
+                    <button type="button" class="btn-primary" id="meetily-start-recording" disabled aria-pressed="false" data-onclick-command="startMeetilyRecording()">Iniciar grabación</button>
+                    <button type="button" class="btn-small" id="meetily-stop-recording" disabled data-onclick-command="stopMeetilyRecording()">Detener</button>
+                    <button type="button" class="btn-small" id="meetily-recover-recording" data-onclick-command="recoverMeetilyRecording()">Recuperar</button>
+                </div>
+                <p id="meetily-status" role="status" aria-live="polite">La captura está detenida.</p>
+                <p id="meetily-artifacts" class="workspace-help"></p>
+                <button type="button" class="btn-small is-hidden" id="meetily-open-transcript" data-onclick-command="openMeetilyTranscript()">Abrir transcripción</button>
             </div>
         </div>
     </div>
@@ -3567,6 +3593,111 @@
                 .catch(function() { renderWorkspaceChatReply({error: {message: 'No se pudo consultar la nota.'}}); });
         }
 
+        let currentMeetingSessionId = null;
+
+        let meetilyInvoker = null;
+        let meetilyFocusHandler = null;
+
+        function openMeetilyModal() {
+            meetilyInvoker = document.activeElement;
+            openModal('meetily-modal');
+            const modal = document.getElementById('meetily-modal');
+            if (modal) modal.setAttribute('aria-hidden', 'false');
+            const consent = document.getElementById('meetily-recording-consent');
+            if (consent) consent.focus();
+            if (window.pywebview && window.pywebview.api) {
+                const saved = window.localStorage.getItem('fuente.meeting.session_id');
+                if (saved) {
+                    currentMeetingSessionId = saved;
+                    window.pywebview.api.get_meeting_session(saved).then(renderMeetilyResult);
+                }
+            }
+            meetilyFocusHandler = function(event) {
+                if (event.key === 'Escape') { closeMeetilyModal(); return; }
+                if (event.key !== 'Tab' || !modal) return;
+                const focusable = Array.from(modal.querySelectorAll('button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])')).filter(function(element) { return element.offsetParent !== null; });
+                if (!focusable.length) return;
+                const first = focusable[0], last = focusable[focusable.length - 1];
+                if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+                else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+            };
+            document.addEventListener('keydown', meetilyFocusHandler);
+        }
+
+        function closeMeetilyModal() {
+            const modal = document.getElementById('meetily-modal');
+            closeModal('meetily-modal');
+            if (modal) modal.setAttribute('aria-hidden', 'true');
+            if (meetilyFocusHandler) document.removeEventListener('keydown', meetilyFocusHandler);
+            if (meetilyInvoker && typeof meetilyInvoker.focus === 'function') meetilyInvoker.focus();
+            meetilyFocusHandler = null;
+        }
+
+        function setMeetilyStatus(message) {
+            const status = document.getElementById('meetily-status');
+            if (status) status.textContent = message;
+        }
+
+        function renderMeetilyResult(result) {
+            if (!result || result.error) {
+                setMeetilyStatus((result && result.message) || 'No se pudo completar la operación. Recupera la sesión si es necesario.');
+                return;
+            }
+            currentMeetingSessionId = result.session_id || currentMeetingSessionId;
+            if (currentMeetingSessionId && window.localStorage) window.localStorage.setItem('fuente.meeting.session_id', currentMeetingSessionId);
+            const statusMessage = result.status === 'imported'
+                ? 'Artefactos importados en las carpetas de reunión.'
+                : (result.status === 'recoverable' ? 'La sesión necesita recuperación.' : 'Grabación activa.');
+            setMeetilyStatus(statusMessage);
+            const stop = document.getElementById('meetily-stop-recording');
+            if (stop) stop.disabled = result.status !== 'recording';
+            const start = document.getElementById('meetily-start-recording');
+            if (start) start.setAttribute('aria-pressed', result.status === 'recording' ? 'true' : 'false');
+            const artifacts = document.getElementById('meetily-artifacts');
+            if (artifacts && result.transcript_status) artifacts.textContent = 'Transcripción: ' + result.transcript_status + ' · Notas: ' + (result.notes_status || 'pendientes');
+            const transcript = document.getElementById('meetily-open-transcript');
+            if (transcript) {
+                transcript.classList.toggle('is-hidden', !result.transcript_document_id);
+                transcript.dataset.documentId = result.transcript_document_id || '';
+            }
+        }
+
+        function startMeetilyRecording() {
+            const consent = document.getElementById('meetily-recording-consent');
+            const title = document.getElementById('meetily-title');
+            const requestedBy = document.getElementById('meetily-requested-by');
+            if (!(consent && consent.checked && title && title.value.trim() && requestedBy && requestedBy.value.trim())) {
+                setMeetilyStatus('Completa título, autor y consentimiento antes de iniciar.');
+                return;
+            }
+            window.pywebview.api.start_meeting_capture({
+                theme_id: currentActiveTheme || 'General', title: title.value.trim(),
+                requested_by: requestedBy.value.trim(), consent: true
+            }).then(renderMeetilyResult).catch(function() { setMeetilyStatus('No se pudo iniciar; revisa permisos y recupera la sesión.'); });
+        }
+
+        function stopMeetilyRecording() {
+            if (!currentMeetingSessionId || !(window.pywebview && window.pywebview.api)) return;
+            window.pywebview.api.stop_meeting_capture(currentMeetingSessionId).then(renderMeetilyResult).catch(function() { setMeetilyStatus('No se pudo detener; recupera la sesión.'); });
+        }
+
+        function openMeetilyTranscript() {
+            const button = document.getElementById('meetily-open-transcript');
+            const documentId = button && button.dataset.documentId;
+            if (!documentId) return;
+            closeMeetilyModal();
+            openModal('modal-reader');
+            loadNoteContent(documentId);
+        }
+
+        function recoverMeetilyRecording() {
+            if (!currentMeetingSessionId || !(window.pywebview && window.pywebview.api)) {
+                setMeetilyStatus('Indica una sesión activa para recuperar.');
+                return;
+            }
+            window.pywebview.api.recover_meeting_capture(currentMeetingSessionId).then(renderMeetilyResult).catch(function() { setMeetilyStatus('No se pudo recuperar la sesión.'); });
+        }
+
         function submitDiscussionReply(event) {
             event.preventDefault();
             const author = document.getElementById('discussion-reply-author');
@@ -5224,6 +5355,11 @@
             if (discussionForm) discussionForm.addEventListener('submit', submitDiscussionReply);
             const workspaceChatForm = document.getElementById('workspace-chat-form');
             if (workspaceChatForm) workspaceChatForm.addEventListener('submit', submitWorkspaceChat);
+            const consent = document.getElementById('meetily-recording-consent');
+            if (consent) consent.addEventListener('change', function() {
+                const start = document.getElementById('meetily-start-recording');
+                if (start) start.disabled = !consent.checked;
+            });
             if (isExplicitPreviewMode()) {
                 markExplicitPreviewMode();
             } else {
@@ -5244,7 +5380,8 @@
             document.querySelectorAll('.modal-overlay').forEach(function(overlay) {
                 overlay.addEventListener('click', function(e) {
                     if (e.target === overlay) {
-                        closeModal(overlay.id);
+                        if (overlay.id === 'meetily-modal') closeMeetilyModal();
+                        else closeModal(overlay.id);
                     }
                 });
                 overlay.addEventListener('wheel', function(e) {

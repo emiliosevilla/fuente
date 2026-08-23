@@ -50,7 +50,7 @@ Current gate: F04.3 accepted-candidate promotion is in progress. F04.2 positive-
 | F06.2 | F06.1 | reader workspace | yes | yes — `4688a91` | `29 passed` local; Terra `32 passed`, visual `12 passed` | yes — Terra APPROVE; 51/51 visual assertions conserved | no | F06.3 may start |
 | F06.3 | F06.1 | editor/share/discussion UI | yes | yes — pending commit | `166 passed, 1 warning`; `git diff --check` clean | yes — Terra APPROVE; browser confirmed fieldset and 11/11 focal UI/XSS | no | F06.4 may start |
 | F06.4 | F03.2,F06.1 | grounded workspace chat | yes | yes — pending commit | `35 passed`; `git diff --check` clean | yes — Terra APPROVE after citation visibility fix; five citation fields shown with `textContent` | no | F06.5 may start |
-| F06.5 | F02.4,F06.1 | accessible Meetily capture modal | yes | no | no | no | no | Terra |
+| F06.5 | F02.4,F06.1 | accessible Meetily capture modal | yes | yes — pending commit | `30 passed` focal; `18 passed` gateway/recovery; `git diff --check` clean | yes — Terra APPROVE after recovery, focus, state and invoker fix rounds | no | F07.1 may start |
 | F07.1 | F01–F06 | demo/migration docs | yes | no | no | no | no | Sol |
 | F07.2 | all | final evidence and PR | yes | no | no | no | no | Sol |
 
@@ -408,4 +408,6 @@ At task end, update only that row with a commit, exact test command/result, revi
 - F06.3 verification: `PYTHONPATH=. pytest -q tests/contract/test_processed_editor_contract.py tests/contract/test_sharing_discussion_ui_contract.py tests/contract tests/security/test_xss_rendering.py` — `166 passed, 1 warning`; Terra browser gate approved `fieldset#discussion-reply-fields` behavior.
 - F06.4 implementation: added `process_workspace_chat` with opaque document-id validation and `single_note` context, propagated citation identity (`document_id`, `revision`, `content_hash`, `title`, `origin`) through chat results, and rendered all five fields safely in the reader assistant.
 - F06.4 verification: `PYTHONPATH=. pytest -q tests/contract/test_workspace_chat_contract.py tests/test_chat_retrieval_contract.py tests/test_retrieval_service.py tests/security/test_bridge_payloads.py` — `35 passed`; Terra APPROVE after citation visibility fix.
+- F06.5 implementation: added an accessible local meeting modal with consent-gated start, stop/recover actions, persisted opaque session recovery, visible `aria-pressed` state, focus trapping/restoration, background/Escape close handling, and a visible reader invoker. The service persists an opaque `transcript_document_id`; no token or filesystem path crosses the bridge.
+- F06.5 verification: `PYTHONPATH=. pytest -q tests/contract/test_meeting_bridge_contract.py tests/test_meetily_modal_contract.py tests/security/test_bridge_payloads.py tests/test_meeting_artifact_contract.py tests/test_meeting_import_recovery.py` — `30 passed`; Terra additionally recorded `18 passed` gateway/recovery and approved.
 - F06.2 implementation is complete and Terra-approved: the reader exposes functional Asistente/Notas/Discusión tabs, accessible context dialog semantics, and responsive stacking without weakening the existing 51 visual assertions.

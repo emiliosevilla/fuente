@@ -1220,7 +1220,7 @@ Interfaces:
 - Consumes opaque `session_id`, title, theme and status from F02.4.
 - Produces start/stop/recover controls, artifact summaries and a link to open the imported transcript; it exposes neither bridge tokens nor paths.
 
-- [ ] Step 1: Write failing bridge and semantic-dialog tests.
+- [x] Step 1: Write failing bridge and semantic-dialog tests.
 
 ~~~python
 def test_meeting_modal_has_explicit_consent_and_native_controls():
@@ -1237,12 +1237,12 @@ def test_bridge_returns_no_meetily_paths_or_tokens(api):
     assert "absolute_path" not in json.dumps(payload)
 ~~~
 
-- [ ] Step 2: Run tests.
+- [x] Step 2: Run tests.
 
 Run: `PYTHONDONTWRITEBYTECODE=1 python3 -m pytest tests/contract/test_meeting_bridge_contract.py tests/test_meetily_modal_contract.py -q`
 Expected: FAIL because the meeting projection and modal do not exist.
 
-- [ ] Step 3: Implement state-driven modal and allow-listed bridge methods.
+- [x] Step 3: Implement state-driven modal and allow-listed bridge methods.
 
 ~~~python
 def start_meeting_capture(self, payload: object) -> dict[str, Any]: ...
@@ -1253,7 +1253,7 @@ def recover_meeting_capture(self, session_id: object) -> dict[str, Any]: ...
 
 Opening the modal requests no system permission and starts no process. The start button is disabled until consent is checked; it becomes `aria-pressed="true"` only while recording. The stop action remains independent and visible, status changes use a polite live region, errors state the recovery action, and the dialog traps focus only while open before restoring focus to its invoker. Use only Zen/Energy token variables.
 
-- [ ] Step 4: Verify UI and permission lifecycle.
+- [x] Step 4: Verify UI and permission lifecycle.
 
 Run: `PYTHONDONTWRITEBYTECODE=1 python3 -m pytest tests/contract/test_meeting_bridge_contract.py tests/test_meetily_modal_contract.py tests/security/test_bridge_payloads.py tests/test_fuente_visual_contract.py -q`
 Expected: PASS.
@@ -1266,6 +1266,8 @@ Manual evidence: in a real PyWebView window, open the modal at 375/768/1024/1440
 git add fuente/ui/bridge.py fuente/application/lifecycle.py consola_preview.html fuente/ui/static/console.css tests/contract/test_meeting_bridge_contract.py tests/test_meetily_modal_contract.py
 git commit -m "feat: add accessible meetily capture modal"
 ~~~
+
+Status: IMPLEMENTED and TESTED; Terra APPROVE after recovery persistence, transcript link, focus and visible invoker fix rounds. Commit is the remaining checkpoint.
 
 ## Phase 7 — migration, documentation and release
 

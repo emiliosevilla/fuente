@@ -49,7 +49,7 @@ Current gate: F04.3 accepted-candidate promotion is in progress. F04.2 positive-
 | F06.1 | F05.2,F05.3 | bridge contracts | yes | yes — `f635c10` | `64 passed` local; Terra `36 passed` focal, `153 passed` expanded | yes — Terra APPROVE after ID and parent UUID validation | no | F06.2 may start |
 | F06.2 | F06.1 | reader workspace | yes | yes — `4688a91` | `29 passed` local; Terra `32 passed`, visual `12 passed` | yes — Terra APPROVE; 51/51 visual assertions conserved | no | F06.3 may start |
 | F06.3 | F06.1 | editor/share/discussion UI | yes | yes — pending commit | `166 passed, 1 warning`; `git diff --check` clean | yes — Terra APPROVE; browser confirmed fieldset and 11/11 focal UI/XSS | no | F06.4 may start |
-| F06.4 | F03.2,F06.1 | grounded workspace chat | yes | no | no | no | no | Luna |
+| F06.4 | F03.2,F06.1 | grounded workspace chat | yes | yes — pending commit | `35 passed`; `git diff --check` clean | yes — Terra APPROVE after citation visibility fix; five citation fields shown with `textContent` | no | F06.5 may start |
 | F06.5 | F02.4,F06.1 | accessible Meetily capture modal | yes | no | no | no | no | Terra |
 | F07.1 | F01–F06 | demo/migration docs | yes | no | no | no | no | Sol |
 | F07.2 | all | final evidence and PR | yes | no | no | no | no | Sol |
@@ -406,4 +406,6 @@ At task end, update only that row with a commit, exact test command/result, revi
 - F05.2/F05.3/F06.1/F06.2 commit reconciliation: the previously recorded pending commits are now anchored to `172a16f`, `e9852c7`, `f635c10` and `4688a91`; no source changes were inferred from test results.
 - F06.3 implementation: the reader workspace exposes a 4_procesado-only edit/share state, approval reason, shared path, author identity and discussion composer. Discussion controls are disabled until `shared=true`; operation failures are visible through `role=status`; author/body/path rendering uses `textContent`.
 - F06.3 verification: `PYTHONPATH=. pytest -q tests/contract/test_processed_editor_contract.py tests/contract/test_sharing_discussion_ui_contract.py tests/contract tests/security/test_xss_rendering.py` — `166 passed, 1 warning`; Terra browser gate approved `fieldset#discussion-reply-fields` behavior.
+- F06.4 implementation: added `process_workspace_chat` with opaque document-id validation and `single_note` context, propagated citation identity (`document_id`, `revision`, `content_hash`, `title`, `origin`) through chat results, and rendered all five fields safely in the reader assistant.
+- F06.4 verification: `PYTHONPATH=. pytest -q tests/contract/test_workspace_chat_contract.py tests/test_chat_retrieval_contract.py tests/test_retrieval_service.py tests/security/test_bridge_payloads.py` — `35 passed`; Terra APPROVE after citation visibility fix.
 - F06.2 implementation is complete and Terra-approved: the reader exposes functional Asistente/Notas/Discusión tabs, accessible context dialog semantics, and responsive stacking without weakening the existing 51 visual assertions.

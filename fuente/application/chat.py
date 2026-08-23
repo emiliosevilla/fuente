@@ -400,6 +400,17 @@ class ChatApplicationService:
     ) -> dict[str, Any]:
         safe_text = text or ""
         labels = [_source_label(src) for src in sources]
+        citations = [
+            {
+                "document_id": str(source.get("document_id") or ""),
+                "revision": int(source.get("revision") or 1),
+                "content_hash": str(source.get("content_hash") or ""),
+                "title": str(source.get("title") or source.get("relative_path") or ""),
+                "origin": str(source.get("origin") or "retrieved_note"),
+                "snippet": str(source.get("snippet") or ""),
+            }
+            for source in sources
+        ]
         return {
             "ok": ok,
             "text": safe_text,
@@ -407,6 +418,7 @@ class ChatApplicationService:
             "html": html.escape(safe_text, quote=True),
             "sources": sources,
             "source_labels": labels,
+            "citations": citations,
             "retrieval_mode": retrieval_mode,
             "error": error,
             "has_context": has_context,

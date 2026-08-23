@@ -974,6 +974,20 @@ class FuentePyWebViewApi:
             return self._error("invalid_payload", "context must be an object")
         return self.backend.process_chat(text, context=dict(context or {}))
 
+    def process_workspace_chat(self, document_id: object, message: object) -> dict[str, Any]:
+        note = self._text(document_id, "document_id")
+        text = self._text(message, "message")
+        if isinstance(note, dict):
+            return note
+        if isinstance(text, dict):
+            return text
+        if "/" in note or "\\" in note or note.endswith(".md"):
+            return self._error("path_not_authorized", "Document id is not authorized")
+        return self.backend.process_chat(
+            text,
+            context={"context_mode": "single_note", "document_id": note},
+        )
+
     def get_notes_list(self) -> list[dict[str, Any]]:
         return self.backend.get_notes_list()
 

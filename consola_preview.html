@@ -245,10 +245,17 @@
                             <button type="button" class="btn-small workspace-tab" id="workspace-tab-discussion" role="tab" aria-selected="false" aria-controls="workspace-panel-discussion" data-onclick-command="switchWorkspaceTab('discussion')">Discusión</button>
                         </div>
                         <div id="workspace-panel-assistant" class="workspace-panel" role="tabpanel" aria-labelledby="workspace-tab-assistant">
-                        <div class="reader-properties-visual">
-                            <h2>Propiedades</h2>
-                            <div id="reader-properties" role="list" aria-live="polite"></div>
-                        </div>
+                            <div class="reader-properties-visual">
+                                <h2>Propiedades</h2>
+                                <div id="reader-properties" role="list" aria-live="polite"></div>
+                            </div>
+                            <form id="workspace-chat-form" class="workspace-chat-form">
+                                <label for="workspace-chat-input">Preguntar sobre esta nota</label>
+                                <textarea id="workspace-chat-input" rows="3" required></textarea>
+                                <button type="submit" class="btn-primary">Preguntar</button>
+                            </form>
+                            <div id="workspace-chat-answer" class="workspace-chat-answer" aria-live="polite"></div>
+                            <div id="workspace-chat-citations" class="workspace-chat-citations" aria-label="Citas de la respuesta"></div>
                         </div>
                         <div id="workspace-panel-notes" class="workspace-panel is-hidden" role="tabpanel" aria-labelledby="workspace-tab-notes">
                             <h2>Notas de trabajo</h2>
@@ -3537,6 +3544,29 @@
             });
         }
 
+        function renderWorkspaceChatReply(reply) {
+            const answer = document.getElementById('workspace-chat-answer');
+            const citations = document.getElementById('workspace-chat-citations');
+            if (answer) answer.textContent = (reply && (reply.text || reply.answer)) || (reply && reply.error && reply.error.message) || 'Sin respuesta.';
+            if (!citations) return;
+            citations.replaceChildren();
+            (reply && reply.citations || []).forEach(function(citation) {
+                const item = document.createElement('p');
+                item.textContent = [citation.title, citation.origin, citation.document_id, 'rev. ' + citation.revision, citation.content_hash].filter(Boolean).join(' · ');
+                citations.appendChild(item);
+            });
+        }
+
+        function submitWorkspaceChat(event) {
+            event.preventDefault();
+            const input = document.getElementById('workspace-chat-input');
+            if (!currentDocumentWorkspace || !currentDocumentWorkspace.note || !input || !input.value.trim()) return;
+            if (!(window.pywebview && window.pywebview.api && window.pywebview.api.process_workspace_chat)) return;
+            window.pywebview.api.process_workspace_chat(currentDocumentWorkspace.note.document_id, input.value.trim())
+                .then(renderWorkspaceChatReply)
+                .catch(function() { renderWorkspaceChatReply({error: {message: 'No se pudo consultar la nota.'}}); });
+        }
+
         function submitDiscussionReply(event) {
             event.preventDefault();
             const author = document.getElementById('discussion-reply-author');
@@ -5192,6 +5222,8 @@
             if (shareButton) shareButton.addEventListener('click', shareCurrentDocument);
             const discussionForm = document.getElementById('discussion-reply-form');
             if (discussionForm) discussionForm.addEventListener('submit', submitDiscussionReply);
+            const workspaceChatForm = document.getElementById('workspace-chat-form');
+            if (workspaceChatForm) workspaceChatForm.addEventListener('submit', submitWorkspaceChat);
             if (isExplicitPreviewMode()) {
                 markExplicitPreviewMode();
             } else {

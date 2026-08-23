@@ -1170,7 +1170,7 @@ Files:
 Interfaces:
 - Produces process_workspace_chat with citations containing document id, revision, hash, title and origin labels.
 
-- [ ] Step 1: Write failing citation test.
+- [x] Step 1: Write failing citation test.
 
 ~~~python
 def test_workspace_chat_returns_visible_citations(api):
@@ -1179,12 +1179,12 @@ def test_workspace_chat_returns_visible_citations(api):
     assert response["citations"][0]["revision"] >= 1
 ~~~
 
-- [ ] Step 2: Run test.
+- [x] Step 2: Run test.
 
 Run: PYTHONDONTWRITEBYTECODE=1 python3 -m pytest tests/contract/test_workspace_chat_contract.py -q
 Expected: FAIL because workspace chat projection does not exist.
 
-- [ ] Step 3: Implement explicit grounded response.
+- [x] Step 3: Implement explicit grounded response.
 
 ~~~python
 def process_workspace_chat(self, document_id: str, message: str) -> dict[str, Any]: ...
@@ -1192,7 +1192,7 @@ def process_workspace_chat(self, document_id: str, message: str) -> dict[str, An
 
 The service uses only approved context. The UI renders citations with textContent. Ollama failure preserves citations and returns a controlled local-service error.
 
-- [ ] Step 4: Verify.
+- [x] Step 4: Verify.
 
 Run: PYTHONDONTWRITEBYTECODE=1 python3 -m pytest tests/test_chat_retrieval_contract.py tests/contract/test_workspace_chat_contract.py tests/test_retrieval_service.py tests/security/test_bridge_payloads.py -q
 Expected: PASS.
@@ -1203,6 +1203,8 @@ Expected: PASS.
 git add fuente/application/chat.py fuente/ui/bridge.py consola_preview.html tests/test_chat_retrieval_contract.py tests/contract/test_workspace_chat_contract.py
 git commit -m "feat: ground workspace chat in citations"
 ~~~
+
+Status: IMPLEMENTED and TESTED; Terra APPROVE after making all five citation fields visible in the reader assistant. Commit is the remaining checkpoint.
 
 ### Task F06.5: Add the accessible Meetily capture modal
 

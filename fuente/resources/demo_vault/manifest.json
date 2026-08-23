@@ -1,5 +1,8 @@
 {
   "schema_version": 1,
+  "layout_version": 4,
+  "roots": ["1_entrada/personal", "1_entrada/común", "2_sucio", "3_limpio", "4_procesado", "5_salida"],
+  "legacy_destination_root": "4_salida",
   "demo_version": "1.0.0",
   "theme": "General",
   "issue": "Demo",

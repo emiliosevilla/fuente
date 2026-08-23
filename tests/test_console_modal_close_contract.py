@@ -23,6 +23,7 @@ EXPECTED_MODAL_IDS = {
     "modal-help",
     "modal-health",
     "modal-job-queue",
+    "meetily-modal",
 }
 
 
@@ -94,7 +95,8 @@ def test_console_contains_complete_modal_inventory_with_one_x_close_each():
     for modal_id, modal in modals.items():
         assert len(modal["close_buttons"]) == 1, modal_id
         close_button = modal["close_buttons"][0]
-        assert close_button["command"] == f"closeModal('{modal_id}')"
+        expected = "closeMeetilyModal()" if modal_id == "meetily-modal" else f"closeModal('{modal_id}')"
+        assert close_button["command"] == expected
 
 
 def test_console_has_no_redundant_text_close_buttons():

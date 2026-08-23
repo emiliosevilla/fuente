@@ -44,6 +44,7 @@ VALID_ACTION_PAYLOADS: dict[str, dict] = {
     "step2_transcribe": {},
     "step3_structure": {},
     "reflow_links": {"issue": "Issue-A"},
+    "evaluate_refinement": {"candidate_id": "candidate-1", "expected_revision": 2},
     "reindex_notes": {},
     "stat_ram": {},
     "stat_input": {},

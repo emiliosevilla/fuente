@@ -14,10 +14,12 @@ from fuente.domain.errors import PathAuthorizationError
 from fuente.domain.paths import SourcePathAuthorizer
 from fuente.domain.sync import (
     ConnectedFolder,
+    SyncDirection,
     SyncManifestEntry,
     SyncProvider,
     SyncRecordValidationError,
 )
+from fuente.domain.vault_layout import VaultLayout
 from fuente.infrastructure.atomic_files import atomic_copy, atomic_write_json
 from fuente.infrastructure.sqlite_store import JobStore
 
@@ -173,6 +175,8 @@ class SyncReport:
     scanned: int = 0
     diagnostics: list[SyncDiagnostic] = field(default_factory=list)
     source_files: tuple[SourceFile, ...] = ()
+    source_root: str = ""
+    destination_root: str = ""
 
     def __post_init__(self) -> None:
         if isinstance(self.skipped, bool):
@@ -223,6 +227,8 @@ class SyncReport:
             self.manifest_updates,
             self.diagnostics,
             self.source_files,
+            self.source_root,
+            self.destination_root,
         ) == (
             other.copied,
             other.unchanged,
@@ -232,6 +238,8 @@ class SyncReport:
             other.manifest_updates,
             other.diagnostics,
             other.source_files,
+            other.source_root,
+            other.destination_root,
         )
 
 
@@ -311,6 +319,24 @@ class FolderSyncManager:
         resolved = SourcePathAuthorizer(self.vault_root).resolve(candidate)
         expected = (self.active_theme_dir / expected_root_name).resolve(strict=False)
         if resolved != expected:
+            raise PathAuthorizationError()
+        return resolved
+
+    def _authorized_theme_root(self, path: Path, *parts: str) -> Path:
+        """Authorize one exact root below the active theme."""
+        resolved = SourcePathAuthorizer(self.vault_root).resolve(path)
+        expected = self.active_theme_dir.joinpath(*parts).resolve(strict=False)
+        if resolved != expected:
+            raise PathAuthorizationError()
+        return resolved
+
+    def _authorized_output_destination(self, path: Path) -> Path:
+        """Authorize an external destination without allowing Vault writes."""
+        candidate = Path(os.path.abspath(Path(path).expanduser()))
+        if candidate.is_symlink():
+            raise PathAuthorizationError()
+        resolved = SourcePathAuthorizer(candidate).resolve(candidate)
+        if resolved == self.vault_root or resolved.is_relative_to(self.vault_root):
             raise PathAuthorizationError()
         return resolved
 
@@ -600,6 +626,35 @@ class FolderSyncManager:
                 for connection in connected
                 if connection.connection_id in requested_ids
             ]
+        return self._sync_inbound_connections(connected, input_dir, dirty_dir)
+
+    def sync_connection(
+        self, connection: ConnectedFolder, *, direction: SyncDirection
+    ) -> SyncReport:
+        """Sync one configured local folder in exactly one direction."""
+        if not isinstance(connection, ConnectedFolder):
+            raise TypeError("connection must be a ConnectedFolder")
+        try:
+            direction = SyncDirection(direction)
+        except (TypeError, ValueError) as error:
+            raise ValueError(f"Unsupported sync direction: {direction!r}") from error
+
+        if direction is SyncDirection.INPUT_COMMON:
+            destination = self._authorized_theme_root(
+                self.active_theme_dir / "1_entrada" / "común",
+                "1_entrada",
+                "común",
+            )
+            return self._sync_inbound_connections([connection], destination, None)
+        return self.sync_output(connection.root, connection=connection)
+
+    def _sync_inbound_connections(
+        self,
+        connected: list[ConnectedFolder],
+        input_dir: Path,
+        dirty_dir: Path | None,
+    ) -> SyncReport:
+        """Reconcile provider files into one authorized input root."""
         sources: list[SourceFile] = []
         diagnostics: list[SyncDiagnostic] = []
 
@@ -623,17 +678,20 @@ class FolderSyncManager:
         manifest_updates = 0
         destination_authorizer = SourcePathAuthorizer(self.vault_root)
 
-        candidates: list[tuple[SourceFile, Path, Path, str]] = []
+        candidates: list[tuple[SourceFile, Path, Path | None, str]] = []
         for source in sources:
             destination_relative = Path(source.source_relative_path)
             requested_dest = input_dir / destination_relative
-            requested_dirty_file = dirty_dir / destination_relative
             try:
                 # Authorize both final paths before any existence check/stat or
                 # parent creation. This rejects an existing symlink component
                 # in either destination tree before it can redirect a write.
                 dest = destination_authorizer.resolve(requested_dest)
-                dirty_file = destination_authorizer.resolve(requested_dirty_file)
+                dirty_file = (
+                    destination_authorizer.resolve(dirty_dir / destination_relative)
+                    if dirty_dir is not None
+                    else None
+                )
                 vault_destination = dest.relative_to(self.vault_root).as_posix()
             except (OSError, PathAuthorizationError, ValueError) as error:
                 diagnostic = self._diagnostic(
@@ -647,7 +705,7 @@ class FolderSyncManager:
             candidates.append((source, dest, dirty_file, vault_destination))
 
         with JobStore(self.vault_root) as manifest_store:
-            destination_groups: dict[str, list[tuple[SourceFile, Path, Path, str]]] = {}
+            destination_groups: dict[str, list[tuple[SourceFile, Path, Path | None, str]]] = {}
             for candidate in candidates:
                 destination_groups.setdefault(candidate[0].source_relative_path, []).append(candidate)
 
@@ -712,7 +770,139 @@ class FolderSyncManager:
             scanned=len(sources),
             diagnostics=skipped,
             source_files=tuple(sources),
+            destination_root=str(input_dir),
         )
+        self._last_report = report
+        self._last_run_at = datetime.now(timezone.utc).isoformat()
+        return report
+
+    def sync_output(
+        self, destination_root: Path | str, *, connection: ConnectedFolder | None = None
+    ) -> SyncReport:
+        """Copy the active theme's shared output to one external local folder."""
+        shared_root = self._authorized_theme_root(
+            VaultLayout(self.active_theme_dir).shared_dir,
+            "5_salida",
+        )
+        destination = self._authorized_output_destination(Path(destination_root))
+        sources: list[SourceFile] = []
+        diagnostics: list[SyncDiagnostic] = []
+        if shared_root.exists() and (connection is None or connection.enabled):
+            authorizer = SourcePathAuthorizer(shared_root)
+            try:
+                for candidate in shared_root.rglob("*"):
+                    try:
+                        relative = candidate.relative_to(shared_root)
+                        if (
+                            any(part.startswith(".") for part in relative.parts)
+                            or is_hidden_or_temporary_file(candidate)
+                            or candidate.is_symlink()
+                        ):
+                            continue
+                        authorized = authorizer.resolve(candidate)
+                        if not authorized.is_file():
+                            continue
+                        stat = authorized.stat()
+                        sources.append(
+                            SourceFile(
+                                provider=(
+                                    f"shared_output:{connection.connection_id}"
+                                    if connection is not None
+                                    else f"shared_output:{destination}"
+                                ),
+                                source_relative_path=relative.as_posix(),
+                                absolute_source_path=authorized,
+                                sha256=self._sha256(authorized),
+                                mtime_ns=stat.st_mtime_ns,
+                                allowed_extension=authorized.suffix.lower(),
+                                source_root_identity=str(shared_root),
+                            )
+                        )
+                    except (OSError, PathAuthorizationError, ValueError):
+                        continue
+            except OSError as error:
+                diagnostics.append(self._diagnostic(shared_root, str(error), "unreadable_root"))
+        sources.sort(key=lambda item: item.source_relative_path)
+        copied_count = 0
+        unchanged_count = 0
+        conflicts: list[SyncConflict] = []
+        skipped = diagnostics[:]
+        manifest_updates = 0
+        destination_authorizer = SourcePathAuthorizer(destination)
+
+        with JobStore(self.vault_root) as manifest_store:
+            for source in sources:
+                relative = Path(source.source_relative_path)
+                requested_dest = destination / relative
+                try:
+                    dest = destination_authorizer.resolve(requested_dest)
+                except (OSError, PathAuthorizationError, ValueError) as error:
+                    skipped.append(
+                        self._diagnostic(requested_dest, str(error), "destination_rejected")
+                    )
+                    continue
+                manifest_destination = f"5_salida/{source.source_relative_path}"
+                source_key = self._source_key(source)
+                manifest = manifest_store.get_sync_manifest_entry(source_key)
+                existing_hash = self._file_hash(dest)
+                owns_destination = bool(
+                    manifest is not None
+                    and manifest.source_key == source_key
+                    and manifest.destination_relative == manifest_destination
+                )
+                if existing_hash == source.sha256:
+                    unchanged_count += 1
+                    manifest_updates += self._manifest_update(
+                        manifest_store,
+                        SyncManifestEntry(
+                            source_key,
+                            source.sha256,
+                            source.mtime_ns,
+                            manifest_destination,
+                            "unchanged",
+                        ),
+                    )
+                    continue
+                if existing_hash is not None and not owns_destination:
+                    conflict, update = self._record_output_conflict(
+                        manifest_store,
+                        source,
+                        existing_hash,
+                        manifest_destination,
+                    )
+                    conflicts.append(conflict)
+                    manifest_updates += update
+                    continue
+                try:
+                    atomic_copy(source.absolute_source_path, dest)
+                except (OSError, PathAuthorizationError, SyncRecordValidationError) as error:
+                    skipped.append(self._diagnostic(source.absolute_source_path, str(error), "copy_failed"))
+                    continue
+                copied_count += 1
+                manifest_updates += self._manifest_update(
+                    manifest_store,
+                    SyncManifestEntry(
+                        source_key,
+                        source.sha256,
+                        source.mtime_ns,
+                        manifest_destination,
+                        "copied",
+                    ),
+                )
+
+        report = SyncReport(
+            copied=copied_count,
+            unchanged=unchanged_count,
+            conflicts=conflicts,
+            skipped=skipped,
+            manifest_updates=manifest_updates,
+            scanned=len(sources),
+            diagnostics=skipped,
+            source_files=tuple(sources),
+            source_root=str(shared_root),
+            destination_root=str(destination),
+        )
+        self.last_diagnostics = skipped
         self._last_report = report
         self._last_run_at = datetime.now(timezone.utc).isoformat()
         return report
@@ -723,7 +913,9 @@ class FolderSyncManager:
         return f"{source.provider}:{source.source_identity}:{source.source_relative_path}"
 
     @staticmethod
-    def _file_hash(path: Path) -> str | None:
+    def _file_hash(path: Path | None) -> str | None:
+        if path is None:
+            return None
         if not path.exists() or not path.is_file():
             return None
         return FolderSyncManager._sha256(path)
@@ -741,7 +933,7 @@ class FolderSyncManager:
         store: JobStore,
         source: SourceFile,
         dest: Path,
-        dirty_file: Path,
+        dirty_file: Path | None,
         vault_destination: str,
     ) -> tuple[str, int]:
         source_key = self._source_key(source)
@@ -805,7 +997,7 @@ class FolderSyncManager:
         store: JobStore,
         source: SourceFile,
         dest: Path,
-        dirty_file: Path,
+        dirty_file: Path | None,
         vault_destination: str,
     ) -> tuple[SyncConflict, int]:
         existing_hash = self._file_hash(dest) or self._file_hash(dirty_file)
@@ -823,6 +1015,32 @@ class FolderSyncManager:
                 source.sha256,
                 source.mtime_ns,
                 vault_destination,
+                "conflict",
+            ),
+        )
+        return conflict, update
+
+    def _record_output_conflict(
+        self,
+        store: JobStore,
+        source: SourceFile,
+        existing_hash: str,
+        destination_relative: str,
+    ) -> tuple[SyncConflict, int]:
+        conflict = SyncConflict(
+            source_key=self._source_key(source),
+            source_relative_path=source.source_relative_path,
+            destination_relative=source.source_relative_path,
+            source_hash=source.sha256,
+            existing_hash=existing_hash,
+        )
+        update = self._manifest_update(
+            store,
+            SyncManifestEntry(
+                conflict.source_key,
+                source.sha256,
+                source.mtime_ns,
+                destination_relative,
                 "conflict",
             ),
         )

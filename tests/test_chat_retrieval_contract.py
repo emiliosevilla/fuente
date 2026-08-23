@@ -136,6 +136,11 @@ def test_chat_cites_exact_retrieved_sources(grounded_service):
     paths = {src["relative_path"] for src in result["sources"]}
     assert "Derecho_Civil/4_salida/Contratos/fianza.md" in paths
     assert result["source_labels"]
+    assert result["citations"][0]["document_id"] == "note-fianza"
+    assert result["citations"][0]["revision"] == 1
+    assert result["citations"][0]["content_hash"] == "abc"
+    assert result["citations"][0]["title"] == "fianza"
+    assert result["citations"][0]["origin"] == "retrieved_note"
     assert "fianza.md" in result["source_labels"][0] or "fianza" in result["source_labels"][0]
     assert provider.calls, "fake provider should have been invoked"
     assert "evidencia" in provider.calls[0]["system"].lower() or "incertidumbre" in provider.calls[0]["system"].lower()
@@ -157,6 +162,7 @@ def test_ollama_failure_is_visible_and_not_fake_success(grounded_service):
     assert "he procesado" not in lowered
     # Still returns the sources that were retrieved before the model call.
     assert result["sources"]
+    assert result["citations"]
     assert result["html"] == html.escape(result["text"], quote=True)
 
 

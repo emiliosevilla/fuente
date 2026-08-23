@@ -58,6 +58,8 @@ class ReflowScope:
     document_id: str | None = None
     theme: str | None = None
     issue: str | None = None
+    candidate_id: str | None = None
+    candidate_revision: int | None = None
 
 
 @dataclass(frozen=True)
@@ -99,11 +101,13 @@ class ReflowApplicationService:
         path_resolver: AuthorizedPathResolver | None = None,
         index_notifier: Callable[[], None] | None = None,
         eligibility_guard: Callable[[str], None] | None = None,
+        refinement_guard: Callable[[str, int], None] | None = None,
     ) -> None:
         self.lifecycle = lifecycle
         self.path_resolver = path_resolver
         self.index_notifier = index_notifier
         self.eligibility_guard = eligibility_guard
+        self.refinement_guard = refinement_guard
 
     @property
     def vault(self):
@@ -134,6 +138,10 @@ class ReflowApplicationService:
 
         if scope.document_id is not None and self.eligibility_guard is not None:
             self.eligibility_guard(scope.document_id)
+        if scope.candidate_id is not None and self.refinement_guard is not None:
+            if scope.candidate_revision is None:
+                raise ValueError("candidate_revision is required with candidate_id")
+            self.refinement_guard(scope.candidate_id, scope.candidate_revision)
 
         kwargs: dict[str, Any] = {"authorized_scope": authorized_target}
         if scope.document_id is not None:

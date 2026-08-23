@@ -10,7 +10,7 @@ from fuente.domain.approvals import (
     validate_approval_note_id,
     validate_revision,
 )
-from fuente.domain.errors import NoteRevisionConflictError
+from fuente.domain.errors import NoteRevisionConflictError, OutputApprovalRequiredError
 from fuente.infrastructure.atomic_files import document_file_lock
 
 
@@ -57,6 +57,32 @@ class ApprovalApplicationService:
     def is_eligible(self, note_id: str, revision: int, content_hash: str) -> bool:
         """The single approval decision consumed by generation in Task 5."""
         return self.ledger.is_current(note_id, revision, content_hash)
+
+    def approve_processed(
+        self, note_id: str, expected_revision: int, reviewer: str,
+        *, content_hash: str,
+    ) -> ApprovalRecord:
+        note_id = validate_approval_note_id(note_id)
+        expected_revision = validate_revision(expected_revision)
+        reviewer = normalize_reviewer(reviewer)
+        row = self.ledger.store.approve_processed_note(
+            note_id=note_id,
+            revision=expected_revision,
+            content_hash=content_hash,
+            reviewer=reviewer,
+        )
+        if row is None:
+            raise NoteRevisionConflictError(note_id)
+        return ApprovalRecord(
+            note_id=str(row["note_id"]),
+            revision=int(row["revision"]),
+            content_hash=str(row["content_hash"]),
+            reviewer=str(row["reviewer"]),
+            approved_at=str(row["approved_at"]),
+        )
+
+    def is_processed_current(self, note_id: str, revision: int, content_hash: str) -> bool:
+        return self.ledger.store.is_processed_approval_current(note_id, revision, content_hash)
 
     @property
     def _lock_directory(self):

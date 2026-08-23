@@ -1679,6 +1679,20 @@
 .tab-btn.is-active { font-weight: 700 !important; background-color: var(--bg-card-hover) !important; }
 .reader-view.is-active { display: flex !important; }
 .reader-view.is-hidden { display: none !important; }
+.workspace-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
+.workspace-tab[aria-selected="true"] { background: var(--fuente-frost-2); color: var(--fuente-snow-2); }
+.workspace-panel { min-height: 180px; }
+.workspace-empty-state { color: var(--muted); line-height: 1.55; }
+.workspace-state-card, .author-card, .discussion-composer { display: grid; gap: 10px; }
+.workspace-help { color: var(--muted); font-size: 0.82rem; line-height: 1.4; }
+.author-card { padding: 12px; border-left: 3px solid var(--fuente-frost-2); background: var(--fuente-glass-strong); }
+.discussion-events { display: grid; gap: 10px; max-height: 220px; overflow-y: auto; margin: 12px 0; }
+.discussion-event { padding: 10px; border: 1px solid var(--fuente-glass-border); border-radius: 10px; }
+.discussion-event-author { color: var(--fuente-frost-1); font-weight: 700; }
+.discussion-composer input, .discussion-composer textarea { width: 100%; border: 1px solid var(--border); border-radius: 8px; padding: 8px; background: var(--fuente-glass); color: var(--paper); }
+.meeting-modal-body { display: grid; gap: 12px; }
+.meeting-modal-body input[type="text"] { width: 100%; border: 1px solid var(--border); border-radius: 8px; padding: 8px; background: var(--fuente-glass); color: var(--paper); }
+.meeting-modal-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .reader-graph-container.is-active { display: block !important; }
 .graph-canvas { width: 100%; height: 100%; display: block; cursor: grab; }
 .graph-canvas.is-panning { cursor: grabbing; }
@@ -1917,6 +1931,31 @@ body {
 
     .reader-relations-pane {
         min-height: 260px;
+    }
+}
+
+@media (max-width: 1024px) {
+    #modal-reader .reader-properties-pane {
+        min-height: 240px;
+    }
+}
+
+@media (max-width: 600px) {
+    #modal-reader .reader-dual-pane {
+        flex-direction: column;
+    }
+    #modal-reader .reader-sidebar {
+        width: 100%;
+        min-width: 0;
+        max-width: none;
+        min-height: 220px;
+    }
+    #modal-reader .reader-context-grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
+    #modal-reader .reader-properties-pane,
+    #modal-reader .reader-relations-pane {
+        width: 100%;
     }
 }
 

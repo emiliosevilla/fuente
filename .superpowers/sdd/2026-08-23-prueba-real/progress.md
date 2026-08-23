@@ -1,6 +1,6 @@
 # Ledger — prueba_real de Fuente
 
-Status: PR-00 COMPLETE — G0 PASS en checkout limpio aislado; checkout de campaña bloqueado sólo por el ledger modificado
+Status: PR-00 COMPLETE sólo como baseline de repositorio — G0 PASS en checkout limpio aislado; PR-04 y PR-05 PARTIAL; ninguna validación real de usuario cerrada
 Spec: docs/superpowers/specs/2026-08-23-prueba-real.md
 Plan: docs/superpowers/plans/2026-08-23-prueba-real.md
 Created: 2026-08-23
@@ -28,8 +28,8 @@ Código está publicado y pruebas automatizadas históricas están verdes. Esta 
 | PR-01 | distribución macOS | parcial | macOS + PyInstaller | NOT_RUN | G1 |
 | PR-02 | distribución Windows | no | Windows + PyInstaller | NOT_RUN | G6 |
 | PR-03 | instalación macOS limpia | no | macOS limpio | NOT_RUN | G2 |
-| PR-04 | layout, migración y aprobación | sí | copia de Vault | PASS: checkout y copia temporal; Vault real no probado | G3 |
-| PR-05 | extracción ETL | sí | PDF, imagen y audio reales | PASS: checkout y corpus sintético; datos reales no probados | G3 |
+| PR-04 | layout, migración y aprobación | sí | copia de Vault | PARTIAL: checkout y copia temporal sintética; Vault real y migración real no probados | G3 |
+| PR-05 | extracción ETL | sí | PDF, imagen y audio reales | PARTIAL: checkout y corpus sintético; archivos, motores y datos reales no probados | G3 |
 | PR-06 | MiniRAG, Chroma y refinamiento | sí | Ollama y RAG reales | NOT_RUN | G3 |
 | PR-07 | compartir y discusión | sí | PyWebView para aceptación visual | NOT_RUN | G3 |
 | PR-08 | consola, lector y responsive | no | instalación PyWebView | NOT_RUN | G3 |
@@ -50,6 +50,15 @@ Estos datos son baseline, no resultados de PR-01–PR-12.
 ## Reglas
 
 Cada fila pasa a PASS sólo con fecha, commit, comando o pasos, resultado, artefacto y evidencia. NOT_RUN nunca pasa a PASS por inferencia. Fallo de dependencia es BLOCKED, no bug de Fuente.
+
+Cada fase exige dos resultados en orden: `S` prueba sintética y, sólo si `S` pasa, `R` prueba real. `S PASS` sin `R PASS` es `PARTIAL`; `S FAIL` impide lanzar `R`; `R` no ejecutada queda `NOT_RUN` o `BLOCKED` según la causa. `COMPLETE` exige `S PASS` y `R PASS`.
+
+## Reevaluación de cierres
+
+- `PR-00`: se mantiene `COMPLETE` sólo como baseline del repositorio y G0 aislado. No prueba instalación ni uso real.
+- `PR-04`: baja de `COMPLETE` a `PARTIAL`; la copia fue temporal y sintética, no el Vault autorizado real.
+- `PR-05`: baja de `PASS/COMPLETE` a `PARTIAL`; el probe fue sintético y usó backends ausentes o stubs, sin archivos, Vault, audio ni transcripciones reales.
+- La campaña no tiene todavía ninguna fase real de usuario cerrada. `PR-01`, `PR-03`, `PR-08`, `PR-09` y `PR-11` siguen `NOT_RUN`; `PR-10` sigue `BLOCKED`.
 
 ## Próximo paso
 
@@ -110,7 +119,7 @@ PR-00 completado con G0 PASS en checkout limpio aislado. Siguiente: PR-04–PR-0
 - Copia temporal: el comando reproducible y su salida completa están en `task-PR-04-report.md`; resultado `COPY_LAYOUT_HASH_ROLLBACK=PASS`, `LEGACY_4_SALIDA_COMPATIBILITY=PASS`, `TEMP_CLEANUP=PASS`.
 - Límite: no se probó el Vault real y PR-10 continúa bloqueado por IDs duplicados; este PASS no lo desbloquea ni aplica migraciones reales.
 - Revisión independiente: Terra aprobó PR-04 tras fix round 1 y fix round 2; ledger, comando reproducible y comprobación real de limpieza quedaron verificados. Sin hallazgos abiertos.
-- Task PR-04: complete (commits e68c9c0..e68c9c0, review clean; fase de evidencia sin cambios de producto).
+- Task PR-04: revisión histórica complete para laboratorio sintético; estado actual partial (Vault real y migración real pendientes).
 
 ## Ejecución 2026-08-23 — PR-05
 
@@ -123,6 +132,6 @@ PR-00 completado con G0 PASS en checkout limpio aislado. Siguiente: PR-04–PR-0
 - Cuarentena/recuperación: `retry_pending` en intento 1; `quarantined` en intento 3; restauración autorizada a `5_salida/General/fallido.md`; manifiesto final `retry_pending`, `restored`; hash restaurado `ff6e473387b251f5942814aa6dd143a1e396298584b0b2c4916efea587c557dc`.
 - Artefactos temporales: `/private/tmp/fuente-pr05-probe-output.json` y `/private/tmp/fuente_pr05_probe.py`; el corpus se eliminó automáticamente al finalizar el `TemporaryDirectory`.
 - Informe: `.superpowers/sdd/2026-08-23-prueba-real/task-PR-05-report.md`.
-- Estado PR-05: `PASS` limitado a checkout y corpus sintético temporal. No se prueban Vault real, audio/transcripciones reales, MarkItDown real disponible, Docling real instalado, OCR de sistema ni instalación. Plan actualizado; no se publica Git.
+- Estado PR-05 tras reevaluación: `PARTIAL` limitado a checkout y corpus sintético temporal. No se prueban archivos reales, Vault real, audio/transcripciones reales, MarkItDown real disponible, Docling real instalado, OCR de sistema ni instalación.
 - Revisión independiente Terra: `PASS` tras fix round 1. Comprobó checks del plan, sistema operativo medido, ruta del artefacto, diff limitado a documentación y `git diff --check`; sin hallazgos abiertos.
-- Task PR-05: complete (commits `e21e657..e21e657`, review clean; fase de evidencia sin cambios de producto).
+- Task PR-05: reevaluado como partial (evidencia sintética válida, cierre real pendiente; sin cambios de producto).

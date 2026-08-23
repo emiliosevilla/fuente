@@ -13,6 +13,9 @@ Spec: docs/superpowers/specs/2026-08-23-prueba-real.md
 ## Global Constraints
 
 - Probar primero con corpus sintético y copia de Vault.
+- Cada fase tiene dos pasos obligatorios y ordenados: `S` prueba sintética y, sólo si `S` pasa, `R` prueba real.
+- `S PASS` sin `R PASS` es `PARTIAL`, nunca `COMPLETE`.
+- Si `S` falla, no se lanza `R`; la fase queda `FAIL`. Si `R` no puede ejecutarse por entorno, queda `BLOCKED` o `NOT_RUN`, nunca `PASS`.
 - Mantener 3_limpio como fuente canónica y exigir aprobación antes de 5_salida.
 - No configurar OAuth, Graph API, SharePoint ni OneDrive desde Fuente.
 - No guardar audio o transcripciones reales en Git.
@@ -30,9 +33,20 @@ Spec: docs/superpowers/specs/2026-08-23-prueba-real.md
 - Gate: scripts/release_gate.py
 - Pruebas: tests/
 
+## Protocolo obligatorio por fase
+
+Para cada PR se registran dos evidencias separadas:
+
+1. `S — sintética`: datos, rutas, motores o dispositivos controlados; demuestra que el flujo básico y sus errores esperados funcionan.
+2. `R — real`: datos, instalación, dependencias, Vault, dispositivo o permisos reales; demuestra que la capacidad funciona fuera del laboratorio.
+
+La fase sólo se cierra cuando ambas evidencias pasan. El resultado debe indicar siempre `S`, `R` y el estado global.
+
 ## Fase 0 — baseline y seguridad
 
 ### PR-00: congelar punto de prueba
+
+Secuencia: `S` checkout/corpus aislado → `R` checkout de campaña limpio y reproducible.
 
 Archivos: leer README.md, pyproject.toml, build_installer.py y fuente.spec; actualizar ledger.
 
@@ -59,11 +73,13 @@ Esperado: suite verde y RESULT: READY.
 - [x] Preparar corpus temporal con tema General y TXT, Markdown, DOCX, CSV, JSON e imagen no sensible.
 - [x] Registrar G0 con comandos, resultados, hashes y límites.
 
-Resultado PR-00: `COMPLETE`; G0 `PASS` en checkout limpio aislado fijado a `f538f16bccd2d92eea112e575938786ab14453e9`. La suite pasó con `1336 passed, 1 skipped, 1 warning`; `release_gate.py` devolvió `RESULT: READY` y código `0`. El checkout principal conserva sólo el ledger modificado para la evidencia; no hubo cambios de producto, dependencias ni publicación Git. PR-01–PR-12 siguen pendientes, y PR-10 continúa bloqueado por IDs duplicados.
+Resultado PR-00: `COMPLETE` sólo como baseline del repositorio; G0 `PASS` en checkout limpio aislado fijado a `f538f16bccd2d92eea112e575938786ab14453e9`. La suite pasó con `1336 passed, 1 skipped, 1 warning`; `release_gate.py` devolvió `RESULT: READY` y código `0`. Esto no prueba instalación ni uso real. PR-01–PR-12 siguen pendientes, y PR-10 continúa bloqueado por IDs duplicados.
 
 ## Fase 1 — artefactos
 
 ### PR-01: distribución macOS
+
+Secuencia: `S` inspección y smoke controlado del artefacto → `R` paquete construido en macOS y arrancado fuera del checkout.
 
 - [ ] Ejecutar desde macOS:
 
@@ -86,6 +102,8 @@ Comprobar ausencia de venv, .fuente, Vault real, 1_entrada, 2_sucio, 3_limpio, 4
 
 ### PR-02: distribución Windows
 
+Secuencia: `S` inspección del contenido esperado → `R` build y smoke en Windows. Sin máquina Windows, `R = NOT_RUN`.
+
 - [ ] Ejecutar en Windows:
 
 ~~~bat
@@ -99,6 +117,8 @@ py -3 build_installer.py
 
 ### PR-03: instalación macOS
 
+Secuencia: `S` instalación en directorio temporal con configuración controlada → `R` instalación desde paquete limpio con usuario, permisos y Vault real autorizado.
+
 - [ ] Copiar sólo ZIP a directorio temporal, extraer y ejecutar instalar_fuente.command.
 - [ ] Instalar modo mínimo y comprobar Python, acceso directo, arranque y Vault desde Ajustes.
 - [ ] Repetir con extras completos .[all] y comprobar audio, OCR, ofimática y RAG sin descarga automática de modelos.
@@ -108,6 +128,8 @@ py -3 build_installer.py
 ## Fase 3 — pruebas posibles desde checkout
 
 ### PR-04: layout, migración y aprobación
+
+Secuencia: `S` copia de Vault sintética → `R` copia autorizada del Vault real, sin aplicar sobre el original.
 
 ~~~bash
 PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -q \
@@ -119,9 +141,11 @@ PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -q \
 - [x] Confirmar layout, hashes, rollback, CAS y rechazo de rutas.
 - [x] Repetir en copia de Vault y confirmar que 4_salida sólo es compatibilidad.
 
-Resultado PR-04: `COMPLETE`; `55 passed in 0.79s`, copia temporal PASS y re-revisión Terra PASS tras dos rondas de evidencia. PASS limitado a checkout y copia temporal sintética; Vault real no probado. `PR-10` sigue bloqueado por IDs duplicados.
+Resultado PR-04: `PARTIAL`; `55 passed in 0.79s`, copia temporal sintética PASS y re-revisión Terra PASS tras dos rondas de evidencia. No se probó el Vault autorizado real ni una migración real; por tanto no cierra la validación de layout, migración y aprobación. `PR-10` sigue bloqueado por IDs duplicados.
 
 ### PR-05: extracción ETL
+
+Secuencia: `S` corpus sintético con backends controlados → `R` archivos reales y extras instalados, con Vault real o copia autorizada.
 
 ~~~bash
 PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -q \
@@ -133,9 +157,11 @@ PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -q \
 - [x] Comparar Markdown, motor elegido, hash y razones de auditoría.
 - [x] Verificar cuarentena y recuperación.
 
-Resultado PR-05: `PASS` limitado a corpus sintético temporal y checkout; suite focal `75 passed in 2.16s`. TXT/DOCX/CSV/JSON, PDF difícil e imagen quedaron medidos con hashes y auditoría; la cuarentena y recuperación pasaron. Límites: MarkItDown no produjo resultado, Docling y OCR se probaron con stubs, y no se usaron Vault, audio ni transcripciones reales.
+Resultado PR-05: `PARTIAL`; suite focal `75 passed in 2.16s` y probe sintético con hashes, auditoría, cuarentena y recuperación. No se validaron archivos reales, MarkItDown real, Docling real, OCR real, Vault real, audio ni transcripciones; por tanto no cierra la validación ETL real.
 
 ### PR-06: MiniRAG, Chroma y refinamiento
+
+Secuencia: `S` notas y respuestas controladas → `R` Ollama, modelo, almacenamiento y notas reales autorizadas.
 
 ~~~bash
 PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -q \
@@ -150,6 +176,8 @@ PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -q \
 - [ ] Confirmar procedencia y fallback.
 
 ### PR-07: editor, compartir y discusión
+
+Secuencia: `S` flujo automatizado y datos controlados → `R` aceptación visual y escritura real en las rutas autorizadas.
 
 ~~~bash
 PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -q \
@@ -166,6 +194,8 @@ PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -q \
 
 ### PR-08: consola, lector y responsive
 
+Secuencia: `S` smoke automatizado/aislado → `R` instalación limpia, ventana, teclado, foco y aceptación visual reales.
+
 - [ ] Arrancar desde instalación limpia, no desde checkout.
 - [ ] Recorrer Ajustes, Vault, tema, ingesta, revisión, edición, búsqueda, lector, Asistente, Notas y Discusión.
 - [ ] Probar teclado, foco, Escape, cierre de modal, lector de pantalla si disponible y ventana de 375 px.
@@ -174,6 +204,8 @@ PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -q \
 ## Fase 5 — Meetily
 
 ### PR-09: reunión local
+
+Secuencia: `S` puente y recuperación simulados → `R` Meetily, micrófono, consentimiento, grabación y recuperación reales.
 
 - [ ] Configurar puente local fijado y conceder micrófono sólo al iniciar grabación.
 - [ ] Confirmar que abrir modal no graba y que iniciar exige consentimiento.
@@ -185,6 +217,8 @@ PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -q \
 ## Fase 6 — Vault y carpetas montadas
 
 ### PR-10: Vault General
+
+Secuencia: `S` dry-run y apply sobre copia sintética → `R` dry-run y apply sobre copia autorizada del Vault real; nunca sobre el original sin autorización.
 
 - [ ] Ejecutar dry-run:
 
@@ -199,6 +233,8 @@ fuente --vault /Users/emiliosevillaortego/Documents/Fuente_Vault \
 
 ### PR-11: OneDrive/SharePoint montado
 
+Secuencia: `S` rutas montadas simuladas → `R` cliente oficial, rutas montadas y permisos reales.
+
 - [ ] Configurar rutas manualmente desde Ajustes.
 - [ ] Comprobar entrada montada sólo a 1_entrada/común.
 - [ ] Comprobar nota aprobada compartida sólo a 5_salida.
@@ -209,6 +245,8 @@ fuente --vault /Users/emiliosevillaortego/Documents/Fuente_Vault \
 ## Fase 7 — cierre
 
 ### PR-12: informe final
+
+Secuencia: `S` comprobar que cada fase tiene pareja `S/R` documentada → `R` decisión final basada sólo en resultados reales medidos.
 
 - [ ] Clasificar cada capacidad como PASS, FAIL, BLOCKED o NOT_RUN.
 - [ ] Separar bug, dependencia ausente, permiso, dato inválido y límite de alcance.

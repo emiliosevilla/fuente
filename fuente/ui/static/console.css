@@ -1683,6 +1683,13 @@
 .workspace-tab[aria-selected="true"] { background: var(--fuente-frost-2); color: var(--fuente-snow-2); }
 .workspace-panel { min-height: 180px; }
 .workspace-empty-state { color: var(--muted); line-height: 1.55; }
+.workspace-state-card, .author-card, .discussion-composer { display: grid; gap: 10px; }
+.workspace-help { color: var(--muted); font-size: 0.82rem; line-height: 1.4; }
+.author-card { padding: 12px; border-left: 3px solid var(--fuente-frost-2); background: var(--fuente-glass-strong); }
+.discussion-events { display: grid; gap: 10px; max-height: 220px; overflow-y: auto; margin: 12px 0; }
+.discussion-event { padding: 10px; border: 1px solid var(--fuente-glass-border); border-radius: 10px; }
+.discussion-event-author { color: var(--fuente-frost-1); font-weight: 700; }
+.discussion-composer input, .discussion-composer textarea { width: 100%; border: 1px solid var(--border); border-radius: 8px; padding: 8px; background: var(--fuente-glass); color: var(--paper); }
 .reader-graph-container.is-active { display: block !important; }
 .graph-canvas { width: 100%; height: 100%; display: block; cursor: grab; }
 .graph-canvas.is-panning { cursor: grabbing; }

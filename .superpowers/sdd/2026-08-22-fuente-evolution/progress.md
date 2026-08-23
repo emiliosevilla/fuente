@@ -44,11 +44,11 @@ Current gate: F04.3 accepted-candidate promotion is in progress. F04.2 positive-
 | F04.2 | F03.2,F03.3,F04.1 | positive-only verifier | yes | yes — `85dcb9e` | `154 passed` focal; full `1301 passed, 1 skipped, 1 warning` | yes — Terra APPROVE after baseline CAS and MiniRAG read fallback fixes | no | F04.3 may start |
 | F04.3 | F04.2 | processed promotion | yes | yes — `2ec53b3` | `55 passed, 1 warning` focal notes/refinement suite | yes — Terra APPROVE; no findings after identity/lock remediation | no | F05.1 may start |
 | F05.1 | F01.1,F04.3 | output approval | yes | yes — `1c71e83` | `34 passed` focal; Terra focal `31 passed` | yes — Terra APPROVE after real-byte hash remediation | no | F05.2 may start |
-| F05.2 | F05.1 | atomic sharing | yes | yes — pending commit | `54 passed` focal | yes — Terra APPROVE after symlink, migration and rollback remediation | no | F05.3 may start |
-| F05.3 | F05.2,D-03 | discussion files | yes | yes — pending commit | `11 passed` focal | yes — Terra APPROVE after receipt containment, symlink and schema validation | no | F06.1 may start |
-| F06.1 | F05.2,F05.3 | bridge contracts | yes | yes — pending commit | `64 passed` local; Terra `36 passed` focal, `153 passed` expanded | yes — Terra APPROVE after ID and parent UUID validation | no | F06.2 may start |
-| F06.2 | F06.1 | reader workspace | yes | yes — pending commit | `29 passed` local; Terra `32 passed`, visual `12 passed` | yes — Terra APPROVE; 51/51 visual assertions conserved | no | F06.3 may start |
-| F06.3 | F06.1 | editor/share/discussion UI | yes | no | no | no | no | Terra |
+| F05.2 | F05.1 | atomic sharing | yes | yes — `172a16f` | `54 passed` focal | yes — Terra APPROVE after symlink, migration and rollback remediation | no | F05.3 may start |
+| F05.3 | F05.2,D-03 | discussion files | yes | yes — `e9852c7` | `11 passed` focal | yes — Terra APPROVE after receipt containment, symlink and schema validation | no | F06.1 may start |
+| F06.1 | F05.2,F05.3 | bridge contracts | yes | yes — `f635c10` | `64 passed` local; Terra `36 passed` focal, `153 passed` expanded | yes — Terra APPROVE after ID and parent UUID validation | no | F06.2 may start |
+| F06.2 | F06.1 | reader workspace | yes | yes — `4688a91` | `29 passed` local; Terra `32 passed`, visual `12 passed` | yes — Terra APPROVE; 51/51 visual assertions conserved | no | F06.3 may start |
+| F06.3 | F06.1 | editor/share/discussion UI | yes | yes — pending commit | `166 passed, 1 warning`; `git diff --check` clean | yes — Terra APPROVE; browser confirmed fieldset and 11/11 focal UI/XSS | no | F06.4 may start |
 | F06.4 | F03.2,F06.1 | grounded workspace chat | yes | no | no | no | no | Luna |
 | F06.5 | F02.4,F06.1 | accessible Meetily capture modal | yes | no | no | no | no | Terra |
 | F07.1 | F01–F06 | demo/migration docs | yes | no | no | no | no | Sol |
@@ -403,4 +403,7 @@ At task end, update only that row with a commit, exact test command/result, revi
 - F05.2 implementation is complete and Terra-approved: sharing writes an atomic projection under `5_salida`, preserves `4_procesado`, and records `(note_id, revision, hash, publisher, source, destination)` in SQLite. Symlink traversal and receipt-failure rollback are covered.
 - F05.3 implementation is complete and Terra-approved: discussion events are immutable JSON under `5_salida/_fuente_discussion`, with one author-pinned event, validated reply lineage, safe receipts, and strict event schema parsing.
 - F06.1 implementation is complete and Terra-approved: the PyWebView bridge exposes path-free workspace, share, discussion read and reply operations with strict opaque-ID, revision and parent validation.
+- F05.2/F05.3/F06.1/F06.2 commit reconciliation: the previously recorded pending commits are now anchored to `172a16f`, `e9852c7`, `f635c10` and `4688a91`; no source changes were inferred from test results.
+- F06.3 implementation: the reader workspace exposes a 4_procesado-only edit/share state, approval reason, shared path, author identity and discussion composer. Discussion controls are disabled until `shared=true`; operation failures are visible through `role=status`; author/body/path rendering uses `textContent`.
+- F06.3 verification: `PYTHONPATH=. pytest -q tests/contract/test_processed_editor_contract.py tests/contract/test_sharing_discussion_ui_contract.py tests/contract tests/security/test_xss_rendering.py` — `166 passed, 1 warning`; Terra browser gate approved `fieldset#discussion-reply-fields` behavior.
 - F06.2 implementation is complete and Terra-approved: the reader exposes functional Asistente/Notas/Discusión tabs, accessible context dialog semantics, and responsive stacking without weakening the existing 51 visual assertions.

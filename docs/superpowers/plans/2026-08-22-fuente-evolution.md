@@ -1113,7 +1113,7 @@ Interfaces:
 - Consumes bridge share/discussion status.
 - Produces processed-only editor, disabled-reason share button, author card and reply composer.
 
-- [ ] Step 1: Write failing UI-state tests.
+- [x] Step 1: Write failing UI-state tests.
 
 ~~~python
 def test_share_button_explains_approval_block():
@@ -1126,12 +1126,12 @@ def test_discussion_composer_has_visible_label():
     assert 'for="discussion-reply-body"' in source
 ~~~
 
-- [ ] Step 2: Run test.
+- [x] Step 2: Run test.
 
 Run: PYTHONDONTWRITEBYTECODE=1 python3 -m pytest tests/contract/test_processed_editor_contract.py tests/contract/test_sharing_discussion_ui_contract.py -q
 Expected: FAIL because controls are absent.
 
-- [ ] Step 3: Implement state-driven controls.
+- [x] Step 3: Implement state-driven controls.
 
 ~~~javascript
 function renderShareState(state) {
@@ -1142,7 +1142,7 @@ function renderShareState(state) {
 
 The editor opens only for 4_procesado. Sharing confirms id/revision and shows the 5_salida path. Author and discussion values use textContent.
 
-- [ ] Step 4: Verify test and manual lifecycle.
+- [x] Step 4: Verify test and manual lifecycle.
 
 Run: PYTHONDONTWRITEBYTECODE=1 python3 -m pytest tests/contract/test_processed_editor_contract.py tests/contract/test_sharing_discussion_ui_contract.py tests/security/test_xss_rendering.py -q
 Expected: PASS.
@@ -1155,6 +1155,8 @@ Manual evidence: approve processed fixture, share it, add pinned author comment 
 git add consola_preview.html fuente/ui/static/console.css tests/contract/test_processed_editor_contract.py tests/contract/test_sharing_discussion_ui_contract.py
 git commit -m "feat: add sharing and discussion controls"
 ~~~
+
+Status: IMPLEMENTED and TESTED; Terra APPROVE after a fix round for pre-share discussion fields. Commit is the remaining checkpoint.
 
 ### Task F06.4: Ground workspace chat in citations
 

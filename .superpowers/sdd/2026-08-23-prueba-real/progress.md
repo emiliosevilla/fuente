@@ -1,10 +1,34 @@
 # Ledger — prueba_real de Fuente
 
-Status: PR-00 COMPLETE sólo como baseline de repositorio — G0 PASS en checkout limpio aislado; PR-04 y PR-05 PARTIAL; ninguna validación real de usuario cerrada
+Status activo: PR-00 S `PASS`, R `PASS`, estado `COMPLETE`; PR-04–PR-12 `NOT_RUN`
 Spec: docs/superpowers/specs/2026-08-23-prueba-real.md
 Plan: docs/superpowers/plans/2026-08-23-prueba-real.md
 Created: 2026-08-23
-Commit under test: f561aab / PR #58 merged as d5014ad
+Baseline activo medido: dev `e6aef697a6f9b4f49f1878940b95f8cf51d2b342`; main merge `a44aa0a92f2231bad7a401be30bca159fec45910`; PR #64
+
+## Reinicio activo — 2026-08-23
+
+Se conserva todo el ledger histórico inferior sin borrarlo. Este bloque gobierna la campaña actual.
+
+| Orden | ID | S | R | Estado activo |
+|---:|---|---|---|---|
+| 1 | PR-00 | PASS | PASS | COMPLETE |
+| 2 | PR-04 | NOT_RUN | NOT_RUN | NOT_RUN |
+| 3 | PR-05 | NOT_RUN | NOT_RUN | NOT_RUN |
+| 4 | PR-06 | NOT_RUN | NOT_RUN | NOT_RUN |
+| 5 | PR-07 | NOT_RUN | NOT_RUN | NOT_RUN |
+| 6 | PR-01 | NOT_RUN | NOT_RUN | NOT_RUN |
+| 7 | PR-03 | NOT_RUN | NOT_RUN | NOT_RUN |
+| 8 | PR-08 | NOT_RUN | NOT_RUN | NOT_RUN |
+| 9 | PR-09 | NOT_RUN | NOT_RUN | NOT_RUN |
+| 10 | PR-10 | NOT_RUN | NOT_RUN | NOT_RUN |
+| 11 | PR-11 | NOT_RUN | NOT_RUN | NOT_RUN |
+| 12 | PR-02 | NOT_RUN | NOT_RUN | NOT_RUN |
+| 13 | PR-12 | NOT_RUN | NOT_RUN | NOT_RUN |
+
+Cada fase debe ejecutar `S` sintética y, sólo si pasa, `R` real. `PR-10` repite su prueba sintética y no hereda automáticamente el bloqueo histórico por IDs duplicados. PR-00 es la única fase `COMPLETE` en el estado activo actual.
+
+## Evidencia histórica conservada
 
 ## Estado sencillo
 
@@ -60,6 +84,17 @@ Cada fase exige dos resultados en orden: `S` prueba sintética y, sólo si `S` p
 - `PR-05`: baja de `PASS/COMPLETE` a `PARTIAL`; el probe fue sintético y usó backends ausentes o stubs, sin archivos, Vault, audio ni transcripciones reales.
 - La campaña no tiene todavía ninguna fase real de usuario cerrada. `PR-01`, `PR-03`, `PR-08`, `PR-09` y `PR-11` siguen `NOT_RUN`; `PR-10` sigue `BLOCKED`.
 
+## Ejecución 2026-08-23 — PR-00 R
+
+- Informe: `.superpowers/sdd/2026-08-23-prueba-real/task-PR-00-R-report.md`.
+- Clon final: `/private/tmp/fuente-pr00-r-final-v8XzM0`; rama `dev`; `HEAD`, `dev` y `origin/dev` = `e6aef697a6f9b4f49f1878940b95f8cf51d2b342`; estado final `## dev...origin/dev`.
+- No se usó corpus sintético, Vault, audio, transcripciones, stubs ni datos añadidos. Se leyeron `README.md`, `pyproject.toml`, `build_installer.py` y `fuente.spec`; sus hashes están en el informe.
+- `PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -q`: PASS — `1332 passed, 1 skipped, 1 warning in 65.91s (0:01:05)`.
+- `PYTHONDONTWRITEBYTECODE=1 python3 scripts/release_gate.py`: PASS — `RESULT: READY`, código 0; checkout final limpio.
+- PR-00 R: `PASS`; PR-00: `COMPLETE`; G0: `PASS` para el checkout temporal. PR-04+ siguen `NOT_RUN`.
+- Primera tentativa detached descartada por el error reproducible `AssertionError: assert 'dev' == ''`; la ejecución válida repitió en rama local `dev` sobre el mismo commit.
+- No hubo cambios de código producto, borrado de evidencia, commit ni publicación.
+
 ## Próximo paso
 
 Orden práctico vigente:
@@ -78,7 +113,7 @@ Orden práctico vigente:
 12. PR-02 sintética y real: Windows, si hay máquina disponible.
 13. PR-12 decisión final basada en resultados S/R.
 
-PR-00 completado con G0 PASS en checkout limpio aislado. No aplicar PR-10 mientras persistan IDs duplicados.
+El cierre histórico de PR-00 y el bloqueo histórico de PR-10 se conservan como antecedente; no gobiernan el estado activo del reinicio.
 
 ## Ejecución 2026-08-23 — pre-flight
 
@@ -151,3 +186,15 @@ PR-00 completado con G0 PASS en checkout limpio aislado. No aplicar PR-10 mientr
 - Estado PR-05 tras reevaluación: `PARTIAL` limitado a checkout y corpus sintético temporal. No se prueban archivos reales, Vault real, audio/transcripciones reales, MarkItDown real disponible, Docling real instalado, OCR de sistema ni instalación.
 - Revisión independiente Terra: `PASS` tras fix round 1. Comprobó checks del plan, sistema operativo medido, ruta del artefacto, diff limitado a documentación y `git diff --check`; sin hallazgos abiertos.
 - Task PR-05: reevaluado como partial (evidencia sintética válida, cierre real pendiente; sin cambios de producto).
+
+## Repetición PR-00 S — 2026-08-23
+
+- Informe: `.superpowers/sdd/2026-08-23-prueba-real/task-PR-00-S-rerun-report.md`.
+- Checkout temporal limpio: `/private/tmp/fuente-pr00-s-rerun-clone-Nobf4w`; rama `dev`; `HEAD`, `dev` y `origin/dev` = `e6aef697a6f9b4f49f1878940b95f8cf51d2b342`; `git status --short --branch` = `## dev...origin/dev`.
+- Sistema/versiones: macOS `26.6` build `25G72`, arm64; Python `3.14.6`; Git `2.50.1`; pytest `9.1.1`.
+- Corpus aislado fuera del repo: `/private/tmp/fuente-pr00-s-rerun-corpus-XIlR34/General/1_entrada`, con TXT, Markdown, DOCX, CSV, JSON e imagen PNG no sensibles. Manifiesto de hashes: `/private/tmp/fuente-pr00-s-rerun-corpus-XIlR34/CORPUS-SHA256.txt`.
+- `PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -q`: `PASS`, `1332 passed, 1 skipped, 1 warning in 63.59s (0:01:03)`, código `0`; salida SHA-256 `00e90605265a888bd92818a8f89f13043b836b2d8019deb7e6a3aa4fc3a30f1f`.
+- `PYTHONDONTWRITEBYTECODE=1 python3 scripts/release_gate.py`: `PASS`, código `0`, `RESULT: READY`; `source_tree_clean` y todos los checks PASS; salida SHA-256 `f6dd3f2f611b4be32defc494c63181eaac8186bf8658fc99ba9cb1801a67d1ab`.
+- G0: `PASS` en el checkout temporal limpio. PR-00 S: `PASS`; PR-00 R: `NOT_RUN`; PR-00: `PARTIAL`.
+- No se ejecutaron PR-00 R, PR-04 ni ninguna fase posterior. No hubo commit, publicación, escritura del Vault real ni cambios de código de producto.
+- Límite: G0 acredita checkout, corpus sintético y automatización; no acredita instalación, UI instalada, permisos, hardware, Meetily, Vault real, carpetas montadas ni Windows.

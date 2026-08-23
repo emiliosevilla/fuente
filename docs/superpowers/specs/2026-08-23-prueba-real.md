@@ -9,8 +9,8 @@ Este SDD no añade funcionalidades de producto. Organiza construcción de artefa
 ## Baseline
 
 - Repositorio: fuente.
-- Rama publicada: dev, integrada en main mediante PR #58.
-- Commit de código bajo prueba: f561aab; merge publicado: d5014ad.
+- Rama publicada: dev, integrada en main mediante PR #64.
+- Commit de código bajo prueba: e6aef697a6f9b4f49f1878940b95f8cf51d2b342; merge publicado: a44aa0a92f2231bad7a401be30bca159fec45910.
 - Empaquetado: build_installer.py y fuente.spec.
 - Instaladores: instalar_fuente.command y instalar_fuente.bat.
 - Vault de prueba autorizado: /Users/emiliosevillaortego/Documents/Fuente_Vault.
@@ -19,6 +19,14 @@ Este SDD no añade funcionalidades de producto. Organiza construcción de artefa
 - Release gate histórico: RESULT: READY.
 
 La suite histórica no sustituye pruebas de instalación, micrófono, permisos, rutas montadas ni comportamiento visual manual.
+
+## Reinicio activo de campaña — 2026-08-23
+
+Se reinicia la campaña completa desde PR-00 sin borrar ni reinterpretar la evidencia histórica. Baseline activo medido: rama `dev`, commit `e6aef697a6f9b4f49f1878940b95f8cf51d2b342`; merge publicado en `main`: `a44aa0a92f2231bad7a401be30bca159fec45910`; PR #64.
+
+Estado activo inicial de la campaña: todas las fases estaban `NOT_RUN`. Estado actual: PR-00 tiene `S PASS`, `R PASS` y está `COMPLETE`; las fases posteriores siguen `NOT_RUN`. El orden obligatorio es: PR-00, PR-04, PR-05, PR-06, PR-07, PR-01, PR-03, PR-08, PR-09, PR-10, PR-11, PR-02, PR-12. Cada fase ejecuta primero `S` sintética y sólo si pasa ejecuta `R` real.
+
+`PR-10` repite su prueba sintética y no hereda automáticamente el bloqueo histórico por IDs duplicados. En el estado actual sólo PR-00 está `COMPLETE`.
 
 ## Tutor y bro
 

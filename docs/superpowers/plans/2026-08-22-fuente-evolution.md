@@ -1357,7 +1357,7 @@ git diff -- docs/superpowers/specs/2026-08-22-fuente-evolution.md docs/superpowe
 
 Measured: prior Terra approvals cover F06.3–F07.1; this final pass also verified `git diff --check` and found the remaining issue limited to stale evidence digest.
 
-- [ ] Step 3: Sol release and real UI check.
+- [x] Step 3: Sol release gate; manual UI subgate remains explicitly unmeasured.
 
 Run: PYTHONDONTWRITEBYTECODE=1 python3 scripts/release_gate.py --skip-pytest
 Expected: RESULT: READY only after Luna passed.
@@ -1376,7 +1376,9 @@ Manual evidence: not run in this environment; real PyWebView, microphone and res
 }
 ~~~
 
-- [ ] Step 5: Commit local evidence and ledger updates; do not push or infer a PR.
+- [x] Step 5: Commit local evidence and ledger updates; do not push or infer a PR.
+
+Status: COMPLETE locally through `3dac763`. No push, PR or deployment was measured.
 
 ~~~bash
 git add docs/evidence/current-sdd.json docs/superpowers/specs/2026-08-22-fuente-evolution.md docs/superpowers/plans/2026-08-22-fuente-evolution.md fuente tests README.md

@@ -52,7 +52,7 @@ Current gate: F04.3 accepted-candidate promotion is in progress. F04.2 positive-
 | F06.4 | F03.2,F06.1 | grounded workspace chat | yes | yes — `7702f7c` | `35 passed`; `git diff --check` clean | yes — Terra APPROVE after citation visibility fix; five citation fields shown with `textContent` | no | F06.5 may start |
 | F06.5 | F02.4,F06.1 | accessible Meetily capture modal | yes | yes — `7290856` | `30 passed` focal; `18 passed` gateway/recovery; `git diff --check` clean | yes — Terra APPROVE after recovery, focus, state and invoker fix rounds | no | F07.1 may start |
 | F07.1 | F01–F06 | demo/migration docs | yes | yes — `c5adf18` | `30 passed`; `git diff --check` clean | yes — Terra APPROVE after six-root manifest fix | no | F07.2 may start |
-| F07.2 | all | final evidence and PR | yes | in progress — `bb900e9`, `8a596f6` | full suite: `1336 passed, 1 skipped, 1 warning` in `95.87s`; freshness passes after evidence refresh | pending final release-gate review | no | Sol |
+| F07.2 | all | final evidence and PR | yes | yes — `bb900e9`, `8a596f6`, `ed6a957`, `48872fc`, `3dac763` | full suite: `1336 passed, 1 skipped, 1 warning` in `95.87s`; release gate `RESULT: READY` | yes — Sol release gate READY; manual PyWebView/microphone/responsive evidence not run | no | local completion; no push/PR measured |
 
 ## Checkpoint rule
 

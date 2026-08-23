@@ -2,8 +2,57 @@ from pathlib import Path
 from typing import List, Dict, Any, Optional, Sequence
 import logging
 import sys
+import json
 
 logger = logging.getLogger(__name__)
+
+_JSON_METADATA_KEYS = "__fuente_json_metadata_keys"
+
+
+def _json_default(value: Any) -> Any:
+    if isinstance(value, set):
+        return sorted(value)
+    if hasattr(value, "isoformat"):
+        return value.isoformat()
+    raise TypeError(f"Unsupported metadata value: {type(value).__name__}")
+
+
+def _serialize_metadata(metadata: Dict[str, Any]) -> Dict[str, Any]:
+    """Keep Chroma scalar-only while preserving structured metadata."""
+    safe: Dict[str, Any] = {}
+    encoded_keys: list[str] = []
+    for key, value in metadata.items():
+        if key == _JSON_METADATA_KEYS:
+            safe[key] = value
+        elif isinstance(value, (str, int, float, bool)):
+            safe[key] = value
+        else:
+            safe[key] = json.dumps(
+                value, default=_json_default, ensure_ascii=False, sort_keys=True
+            )
+            encoded_keys.append(key)
+    if encoded_keys:
+        safe[_JSON_METADATA_KEYS] = json.dumps(sorted(encoded_keys))
+    return safe
+
+
+def _hydrate_metadata(metadata: Dict[str, Any] | None) -> Dict[str, Any]:
+    """Restore values encoded by ``_serialize_metadata``."""
+    hydrated = dict(metadata or {})
+    encoded = hydrated.pop(_JSON_METADATA_KEYS, "[]")
+    try:
+        keys = json.loads(encoded) if isinstance(encoded, str) else []
+    except json.JSONDecodeError:
+        keys = []
+    for key in keys if isinstance(keys, list) else []:
+        value = hydrated.get(key)
+        if not isinstance(value, str):
+            continue
+        try:
+            hydrated[key] = json.loads(value)
+        except json.JSONDecodeError:
+            logger.warning("Metadato JSON inválido en Chroma: %s", key)
+    return hydrated
 
 from fuente.rag.backend import IndexBuildResult, RetrievalHit
 
@@ -133,15 +182,7 @@ class ChromaStore:
         if not chunks or not ids:
             return True
 
-        safe_metadatas = []
-        for meta in metadatas:
-            safe_meta = {}
-            for k, v in meta.items():
-                if isinstance(v, (str, int, float, bool)):
-                    safe_meta[k] = v
-                else:
-                    safe_meta[k] = str(v)
-            safe_metadatas.append(safe_meta)
+        safe_metadatas = [_serialize_metadata(meta) for meta in metadatas]
 
         try:
             self.collection.upsert(documents=chunks, metadatas=safe_metadatas, ids=ids)
@@ -191,7 +232,7 @@ class ChromaStore:
 
             output = []
             for doc, meta, doc_id in zip(documents, metadatas, ids):
-                output.append({"id": doc_id, "content": doc, "metadata": meta})
+                output.append({"id": doc_id, "content": doc, "metadata": _hydrate_metadata(meta)})
             return output
         except Exception as e:
             logger.error(f"Error consultando ChromaDB: {e}")
@@ -209,7 +250,7 @@ class ChromaStore:
                 all_data.get("documents", []),
                 all_data.get("metadatas", []),
             ):
-                docs.append({"id": d_id, "content": doc, "metadata": meta or {}})
+                docs.append({"id": d_id, "content": doc, "metadata": _hydrate_metadata(meta)})
             return docs
         except Exception as e:
             logger.error(f"Error obteniendo chunks de ChromaDB: {e}")

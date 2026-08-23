@@ -1,6 +1,6 @@
 # Ledger — prueba_real de Fuente
 
-Status activo: PR-00 S `PASS`, R `PASS`, estado `COMPLETE`; PR-04 S `PASS`, R `NOT_RUN`, estado `PARTIAL`; PR-05–PR-12 `NOT_RUN`
+Status activo: PR-00 S `PASS`, R `PASS`, estado `COMPLETE`; PR-04 S `PASS`, R `PARTIAL`, estado `PARTIAL`; PR-05–PR-12 `NOT_RUN`
 Spec: docs/superpowers/specs/2026-08-23-prueba-real.md
 Plan: docs/superpowers/plans/2026-08-23-prueba-real.md
 Created: 2026-08-23
@@ -13,7 +13,7 @@ Se conserva todo el ledger histórico inferior sin borrarlo. Este bloque gobiern
 | Orden | ID | S | R | Estado activo |
 |---:|---|---|---|---|
 | 1 | PR-00 | PASS | PASS | COMPLETE |
-| 2 | PR-04 | PASS | NOT_RUN | PARTIAL |
+| 2 | PR-04 | PASS | PARTIAL | PARTIAL |
 | 3 | PR-05 | NOT_RUN | NOT_RUN | NOT_RUN |
 | 4 | PR-06 | NOT_RUN | NOT_RUN | NOT_RUN |
 | 5 | PR-07 | NOT_RUN | NOT_RUN | NOT_RUN |
@@ -26,9 +26,24 @@ Se conserva todo el ledger histórico inferior sin borrarlo. Este bloque gobiern
 | 12 | PR-02 | NOT_RUN | NOT_RUN | NOT_RUN |
 | 13 | PR-12 | NOT_RUN | NOT_RUN | NOT_RUN |
 
-Cada fase debe ejecutar `S` sintética y, sólo si pasa, `R` real. `PR-10` repite su prueba sintética y no hereda automáticamente el bloqueo histórico por IDs duplicados. PR-00 es la única fase `COMPLETE` en el estado activo actual.
+Cada fase debe ejecutar `S` sintética y, sólo si pasa, `R` real. `PR-10` repite su prueba sintética y no hereda automáticamente el bloqueo histórico por IDs duplicados. PR-00 es la única fase `COMPLETE`; PR-04 está `PARTIAL` porque apply/rollback reales siguen pendientes.
 
 ## Evidencia histórica conservada
+
+## Ejecución 2026-08-23 — PR-04 R
+
+- Informe: `.superpowers/sdd/2026-08-23-prueba-real/task-PR-04-R-report.md`.
+- Dry-run ejecutado por operador humano sobre copia real: 3 notas escaneadas, 1 migrable.
+- Bloqueo observado: `malformed_frontmatter` en `4_salida/Nota de prueba — lector Fuente.md`; `date must be a string`.
+- No se ejecutó `apply`; Vault original no modificado.
+- PR-04 R: `BLOCKED`; no se declara `PASS`.
+
+## Repetición 2026-08-23 — PR-04 R tras fix de fecha YAML
+
+- Informe: `.superpowers/sdd/2026-08-23-prueba-real/task-PR-04-R-rerun-date-fix-report.md`.
+- Dry-run sobre la misma copia real: `3` notas escaneadas, `2` migrables, `findings: []`.
+- `apply`, inventario posterior y rollback siguen `NOT_RUN`.
+- PR-04 R: `PARTIAL`; no se declara `COMPLETE`.
 
 ## Estado sencillo
 

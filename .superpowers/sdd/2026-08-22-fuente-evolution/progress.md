@@ -51,7 +51,7 @@ Current gate: F04.3 accepted-candidate promotion is in progress. F04.2 positive-
 | F06.3 | F06.1 | editor/share/discussion UI | yes | yes — pending commit | `166 passed, 1 warning`; `git diff --check` clean | yes — Terra APPROVE; browser confirmed fieldset and 11/11 focal UI/XSS | no | F06.4 may start |
 | F06.4 | F03.2,F06.1 | grounded workspace chat | yes | yes — pending commit | `35 passed`; `git diff --check` clean | yes — Terra APPROVE after citation visibility fix; five citation fields shown with `textContent` | no | F06.5 may start |
 | F06.5 | F02.4,F06.1 | accessible Meetily capture modal | yes | yes — pending commit | `30 passed` focal; `18 passed` gateway/recovery; `git diff --check` clean | yes — Terra APPROVE after recovery, focus, state and invoker fix rounds | no | F07.1 may start |
-| F07.1 | F01–F06 | demo/migration docs | yes | no | no | no | no | Sol |
+| F07.1 | F01–F06 | demo/migration docs | yes | yes — pending commit | `30 passed`; `git diff --check` clean | yes — Terra APPROVE after six-root manifest fix | no | F07.2 may start |
 | F07.2 | all | final evidence and PR | yes | no | no | no | no | Sol |
 
 ## Checkpoint rule
@@ -410,4 +410,6 @@ At task end, update only that row with a commit, exact test command/result, revi
 - F06.4 verification: `PYTHONPATH=. pytest -q tests/contract/test_workspace_chat_contract.py tests/test_chat_retrieval_contract.py tests/test_retrieval_service.py tests/security/test_bridge_payloads.py` — `35 passed`; Terra APPROVE after citation visibility fix.
 - F06.5 implementation: added an accessible local meeting modal with consent-gated start, stop/recover actions, persisted opaque session recovery, visible `aria-pressed` state, focus trapping/restoration, background/Escape close handling, and a visible reader invoker. The service persists an opaque `transcript_document_id`; no token or filesystem path crosses the bridge.
 - F06.5 verification: `PYTHONPATH=. pytest -q tests/contract/test_meeting_bridge_contract.py tests/test_meetily_modal_contract.py tests/security/test_bridge_payloads.py tests/test_meeting_artifact_contract.py tests/test_meeting_import_recovery.py` — `30 passed`; Terra additionally recorded `18 passed` gateway/recovery and approved.
+- F07.1 implementation: demo manifest now declares layout version 4 and the six functional roots (`1_entrada/personal`, `1_entrada/común`, `2_sucio`, `3_limpio`, `4_procesado`, `5_salida`), with `4_salida` explicitly marked compatibility-only. Added the user-run migration guide and README commands/limits; no automatic Vault or OneDrive/SharePoint mutation.
+- F07.1 verification: `PYTHONPATH=. pytest -q tests/test_demo_vault.py tests/test_vault_layout_migration.py tests/test_readme_honesty_wave1.py` — `30 passed`; Terra APPROVE after the manifest root correction.
 - F06.2 implementation is complete and Terra-approved: the reader exposes functional Asistente/Notas/Discusión tabs, accessible context dialog semantics, and responsive stacking without weakening the existing 51 visual assertions.

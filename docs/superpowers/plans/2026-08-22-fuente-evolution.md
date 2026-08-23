@@ -930,6 +930,8 @@ git commit -m "feat: share approved processed notes"
 
 ### Task F05.3: File-backed author discussion
 
+Status: COMPLETE — implementation and Terra verification complete (`11 passed`; commit recorded in the SDD ledger).
+
 Files:
 - Create: fuente/domain/discussion.py
 - Create: fuente/application/discussion.py

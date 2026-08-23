@@ -579,6 +579,20 @@ class RetrievalApplicationService:
                     "chunk_id": str(chunk.get("id") or ""),
                     "snippet": str(chunk.get("snippet") or ""),
                     "origins": list((chunk.get("metadata") or {}).get("origins") or []),
+                    "revision": int((chunk.get("metadata") or {}).get("revision") or 1),
+                    "content_hash": str(
+                        (chunk.get("metadata") or {}).get("content_hash")
+                        or (chunk.get("metadata") or {}).get("source_hash")
+                        or ""
+                    ),
+                    "title": str(
+                        (chunk.get("metadata") or {}).get("title")
+                        or (chunk.get("relative_path") or "").rsplit("/", 1)[-1].removesuffix(".md")
+                    ),
+                    "origin": str(
+                        (chunk.get("metadata") or {}).get("origin_kind")
+                        or "retrieved_note"
+                    ),
                 }
             )
         return sources

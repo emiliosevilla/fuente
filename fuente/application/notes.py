@@ -18,6 +18,7 @@ from fuente.domain.errors import (
     NoteRevisionConflictError,
     OutputApprovalRequiredError,
     PathAuthorizationError,
+    RefinementRejectedError,
 )
 from fuente.domain.frontmatter import FrontmatterError, serialize_human_frontmatter
 from fuente.domain.metadata_form import validate_metadata_fields, validate_metadata_save_fields
@@ -234,6 +235,8 @@ class NotesApplicationService:
         if catalog_record is not None:
             self._resolve_catalog_note_path(catalog_record)
             return str(catalog_record["note_id"])
+        if self.job_store.get_document_identity(cleaned) is not None:
+            return cleaned
         return self.path_resolver.canonical_note_id(cleaned)
 
     def get_note(self, document_id: str) -> NoteDocument:
@@ -522,6 +525,90 @@ class NotesApplicationService:
             candidate_metadata,
             revision=int(identity["revision"]),
             content_hash=candidate_hash,
+        )
+
+    def promote_refinement_candidate(
+        self, candidate_id: str, *, expected_revision: int
+    ) -> NoteDocument:
+        lock_directory = self.vault.config.vault_path / ".fuente" / "note-editor-locks"
+        with document_file_lock(lock_directory, candidate_id):
+            return self._promote_refinement_candidate(
+                candidate_id, expected_revision=expected_revision
+            )
+
+    def _promote_refinement_candidate(
+        self, candidate_id: str, *, expected_revision: int
+    ) -> NoteDocument:
+        """Copy one accepted candidate into private 4_procesado atomically."""
+        candidate_row = self.job_store.get_refinement_candidate(candidate_id)
+        verdict = self.job_store.get_refinement_verdict(candidate_id)
+        if (
+            candidate_row is None
+            or verdict is None
+            or verdict.get("decision") != "accepted"
+            or int(candidate_row["revision"]) != expected_revision
+            or int(verdict.get("revision", -1)) != expected_revision
+        ):
+            raise RefinementRejectedError(candidate_id)
+
+        candidate = self.get_note(candidate_id)
+        if (
+            candidate.revision != expected_revision
+            or candidate.content_hash != str(candidate_row["content_hash"])
+            or candidate.content_hash != str(verdict["content_hash"])
+        ):
+            raise NoteRevisionConflictError(candidate_id)
+        self.require_eligible_origins(candidate)
+
+        issue = self.vault.sanitize_filename(
+            str(candidate.frontmatter.get("issue") or "_Sin_Cuestion")
+        )
+        target_dir = self.vault.processed_dir / issue
+        target_dir.mkdir(parents=True, exist_ok=True)
+        target = target_dir / f"{self.vault.sanitize_filename(candidate.title)}.md"
+        if target.is_symlink() or not target.resolve().is_relative_to(
+            self.vault.processed_dir.resolve()
+        ):
+            raise PathAuthorizationError()
+        relative = target.resolve().relative_to(
+            self.vault.config.vault_path.resolve()
+        ).as_posix()
+        promoted_id = document_id_for_relative_path(relative)
+        metadata = dict(candidate.frontmatter)
+        metadata["note_id"] = promoted_id
+        markdown = serialize_human_frontmatter(metadata) + candidate.body_markdown
+        promoted_hash = content_hash_for_markdown(markdown)
+        previous = target.read_text(encoding="utf-8") if target.exists() else None
+        if previous is not None and previous != markdown:
+            raise NoteRevisionConflictError(promoted_id)
+        if previous is None:
+            atomic_write_text(target, markdown)
+        try:
+            identity = self.job_store.ensure_document_identity(
+                document_id=promoted_id,
+                relative_path=relative,
+                content_hash=promoted_hash,
+            )
+            if (
+                identity.get("relative_path") != relative
+                or identity.get("content_hash") != promoted_hash
+            ):
+                raise NoteRevisionConflictError(promoted_id)
+        except BaseException:
+            if previous is None and target.exists():
+                target.unlink()
+            elif previous is not None:
+                atomic_write_text(target, previous)
+            raise
+        return NoteDocument.from_persisted(
+            document_id=promoted_id,
+            relative_path=relative,
+            markdown=markdown,
+            revision=int(identity["revision"]),
+        ).with_metadata(
+            metadata,
+            revision=int(identity["revision"]),
+            content_hash=promoted_hash,
         )
 
     def approve(
@@ -915,6 +1002,13 @@ class NotesApplicationService:
                 self.vault.config.vault_path.resolve()
             ).as_posix()
             return path, relative
+        identity = self.job_store.get_document_identity(document_id)
+        if identity is not None:
+            path = self._resolve_catalog_note_path(identity)
+            relative = path.relative_to(
+                self.vault.config.vault_path.resolve()
+            ).as_posix()
+            return path, relative
         path = self.path_resolver.resolve_note_id(document_id)
         if not path.exists():
             raise PathAuthorizationError()
@@ -950,6 +1044,8 @@ class NotesApplicationService:
             path = self.path_resolver.resolve_clean(relative_path)
         elif candidate.is_relative_to(self.vault.output_dir.resolve()):
             path = self.path_resolver.resolve_note(relative_path)
+        elif candidate.is_relative_to(self.vault.processed_dir.resolve()):
+            path = candidate
         else:
             raise PathAuthorizationError()
         if not path.is_file() or path.suffix.lower() != ".md":

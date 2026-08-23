@@ -772,7 +772,7 @@ git commit -m "feat: verify refinements before promotion"
 
 Status: COMPLETE — Terra approved after baseline CAS and MiniRAG read fallback fixes; focal `154 passed, 1 warning`; full suite `1301 passed, 1 skipped, 1 warning` before evidence refresh.
 
-### Task F04.3: Promote accepted candidate only into 4_procesado
+### Task F04.3: Promote accepted candidate only into 4_procesado — COMPLETE
 
 Files:
 - Modify: fuente/application/ingestion.py
@@ -784,7 +784,7 @@ Interfaces:
 - Consumes accepted RefinementVerdict.
 - Produces promote_refinement_candidate with revision fencing.
 
-- [ ] Step 1: Write failing promotion tests.
+- [x] Step 1: Write failing promotion tests.
 
 ~~~python
 def test_rejected_candidate_never_writes_processed_note(service):
@@ -796,12 +796,12 @@ def test_accepted_candidate_writes_private_processed_root(service):
     assert "/4_procesado/" in note.relative_path
 ~~~
 
-- [ ] Step 2: Run test.
+- [x] Step 2: Run test.
 
 Run: PYTHONDONTWRITEBYTECODE=1 python3 -m pytest tests/test_refinement_promotion.py -q
 Expected: FAIL because promotion does not exist.
 
-- [ ] Step 3: Implement atomic promotion.
+- [x] Step 3: Implement atomic promotion.
 
 ~~~python
 def promote_refinement_candidate(self, candidate_id: str, *, expected_revision: int) -> NoteDocument: ...
@@ -809,17 +809,19 @@ def promote_refinement_candidate(self, candidate_id: str, *, expected_revision: 
 
 Verify stored hash and verdict immediately before write; invalidate stale derived indexes; never copy a rejected candidate.
 
-- [ ] Step 4: Verify idempotency and approvals.
+- [x] Step 4: Verify idempotency and approvals.
 
 Run: PYTHONDONTWRITEBYTECODE=1 python3 -m pytest tests/test_refinement_promotion.py tests/test_approval_ledger.py tests/integration/test_pipeline_idempotency.py -q
 Expected: PASS.
 
-- [ ] Step 5: Commit.
+- [x] Step 5: Commit.
 
 ~~~bash
 git add fuente/application/ingestion.py fuente/application/notes.py fuente/core/vault.py tests/test_refinement_promotion.py
 git commit -m "feat: promote only verified processed candidates"
 ~~~
+
+Status: COMPLETE — Terra approved identity rewrite, document locking, private destination, idempotency and stale-hash rejection; focal `17 passed`.
 
 ## Phase 5 — approval, sharing and discussion
 

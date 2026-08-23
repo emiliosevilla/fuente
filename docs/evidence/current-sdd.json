@@ -1,8 +1,8 @@
 {
-  "base_head": "48872fc48421ffc9018a0f438ea2daf725f9bc2b",
+  "base_head": "4c38feffe2ae6c87c721b92256e81007247f04cf",
   "branch": "dev",
   "gate": "RESULT: READY",
-  "measured_at": "2026-08-23T01:58:54Z",
+  "measured_at": "2026-08-23T08:54:56Z",
   "p_status": {
     "P-01": "COMPLETE",
     "P-02": "COMPLETE",
@@ -24,5 +24,5 @@
     "Q-08": "COMPLETE"
   },
   "source_tree_digest": "1cb9128e53cf5a12a80ad599204633c99f424b86cfb764375c5aa9ebd82a8046",
-  "suite": "PYTHONPATH=. PYTHONDONTWRITEBYTECODE=1 pytest -q — 1336 passed, 1 skipped, 1 warning in 95.87s; documentation freshness passes after evidence regeneration"
+  "suite": "PYTHONPATH=. PYTHONDONTWRITEBYTECODE=1 pytest -q — 1336 passed, 1 skipped, 1 warning in 95.87s; documentation freshness passes"
 }

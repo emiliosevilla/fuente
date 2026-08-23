@@ -331,6 +331,13 @@ class JobStore:
         ).fetchone()
         return dict(row) if row is not None else None
 
+    def get_latest_shared_output(self, note_id: str) -> dict[str, Any] | None:
+        row = self._connection.execute(
+            "SELECT * FROM shared_outputs WHERE note_id = ? ORDER BY revision DESC LIMIT 1",
+            (note_id,),
+        ).fetchone()
+        return dict(row) if row is not None else None
+
     def __enter__(self) -> "JobStore":
         return self
 

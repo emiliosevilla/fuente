@@ -1282,7 +1282,7 @@ Files:
 Interfaces:
 - Produces layout_version 4, explicit roots and user-run dry-run/apply/verify/rollback commands.
 
-- [ ] Step 1: Write failing demo layout test.
+- [x] Step 1: Write failing demo layout test.
 
 ~~~python
 def test_demo_vault_declares_six_root_layout():
@@ -1291,12 +1291,12 @@ def test_demo_vault_declares_six_root_layout():
     assert manifest["roots"] == ["1_entrada", "2_sucio", "3_limpio", "4_procesado", "5_salida"]
 ~~~
 
-- [ ] Step 2: Run test.
+- [x] Step 2: Run test.
 
 Run: PYTHONDONTWRITEBYTECODE=1 python3 -m pytest tests/test_demo_vault.py::test_demo_vault_declares_six_root_layout -q
 Expected: FAIL because demo uses legacy output root.
 
-- [ ] Step 3: Implement demo and documentation.
+- [x] Step 3: Implement demo and documentation.
 
 ~~~bash
 fuente --vault /absolute/path --theme "Tema" --migrate-layout dry-run
@@ -1307,7 +1307,7 @@ fuente --vault /absolute/path --theme "Tema" --migrate-layout rollback --plan-id
 
 The document names the inventory, abort and rollback evidence. `README.md` documents the MiniRAG revision and MIT notice, the temporary `4_salida` compatibility window, the SharePoint-governed discussion visibility, and the Meetily revision, MIT notice, `standard_meeting` template and `reunion` artifact mapping. It never migrates a real user Vault automatically.
 
-- [ ] Step 4: Verify.
+- [x] Step 4: Verify.
 
 Run: PYTHONDONTWRITEBYTECODE=1 python3 -m pytest tests/test_demo_vault.py tests/test_vault_layout_migration.py tests/test_readme_honesty_wave1.py -q
 Expected: PASS.
@@ -1318,6 +1318,8 @@ Expected: PASS.
 git add fuente/resources/demo_vault/manifest.json tests/test_demo_vault.py README.md docs/migrations/2026-08-22-six-root-vault.md
 git commit -m "docs: document six-root vault migration"
 ~~~
+
+Status: IMPLEMENTED and TESTED; Terra APPROVE after correcting the manifest to six functional roots. Commit is the remaining checkpoint.
 
 ### Task F07.2: Luna, Terra, Sol and Pull Request
 

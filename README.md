@@ -49,6 +49,32 @@ La aprobación no se deduce por estar en una carpeta. Se valida con el
 `document_id`, la revisión y el hash del Markdown. Si el documento cambia, la
 aprobación anterior deja de ser válida.
 
+### Migración del Vault y compatibilidad
+
+El layout objetivo usa `4_procesado/` para edición privada y `5_salida/` para
+publicación compartida. `4_salida/` se conserva sólo como ventana de lectura
+compatible; las nuevas notas no deben escribirse allí. La migración nunca se
+ejecuta automáticamente ni modifica el Vault al instalar Fuente.
+
+```bash
+fuente --vault /ruta/al/Vault --theme "General" --migrate-layout dry-run
+fuente --vault /ruta/al/Vault --theme "General" --migrate-layout apply --plan-id <plan-id>
+fuente --vault /ruta/al/Vault --theme "General" --migrate-layout verify --plan-id <plan-id>
+fuente --vault /ruta/al/Vault --theme "General" --migrate-layout rollback --plan-id <plan-id>
+```
+
+`apply` aborta ante hashes cambiados, colisiones o enlaces simbólicos no
+autorizados. La guía completa está en
+[`docs/migrations/2026-08-22-six-root-vault.md`](docs/migrations/2026-08-22-six-root-vault.md).
+
+### Reuniones con Meetily
+
+`Nueva reunión` abre una captura local embebida con consentimiento obligatorio.
+La plantilla es `standard_meeting`; sus artefactos van a
+`2_sucio/reunion`, `3_limpio/reunion` y `4_procesado/reunion`. La interfaz sólo
+recibe identificadores opacos, hashes y estados, nunca tokens ni rutas
+absolutas. Las notas requieren aprobación antes de compartir.
+
 La salida derivada puede quedar en `pending_review`. No se indexa, exporta ni
 se muestra como resultado publicado mientras no cumpla el contrato editorial.
 Las proyecciones de la interfaz no sustituyen los archivos Markdown.

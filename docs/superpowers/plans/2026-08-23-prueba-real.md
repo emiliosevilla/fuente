@@ -257,15 +257,18 @@ Secuencia: `S` comprobar que cada fase tiene pareja `S/R` documentada → `R` de
 ## Orden resumido
 
 1. PR-00 baseline y corpus sintético.
-2. PR-04–PR-07 desde checkout.
-3. PR-01 artefacto macOS.
-4. PR-03 instalación macOS limpia.
-5. PR-08 interfaz instalada.
-6. PR-09 Meetily y micrófono.
-7. PR-10 dry-run y migración de General si procede.
-8. PR-11 carpetas montadas.
-9. PR-02 Windows, si hay máquina Windows.
-10. PR-12 decisión final.
+2. PR-04 real: copia autorizada de Vault, layout, migración y aprobación.
+3. PR-05 real: ETL con archivos reales y motores instalados.
+4. PR-06 sintética y real: MiniRAG, Chroma, Ollama y refinamiento.
+5. PR-07 sintética y real: editor, aprobación, compartir y discusión.
+6. PR-01 sintética y real: artefacto macOS.
+7. PR-03 sintética y real: instalación macOS limpia.
+8. PR-08 sintética y real: interfaz instalada.
+9. PR-09 sintética y real: Meetily, micrófono, audio y transcripción.
+10. PR-10 sintética y real: dry-run y migración de General, si se resuelven IDs duplicados.
+11. PR-11 sintética y real: carpetas OneDrive/SharePoint montadas.
+12. PR-02 sintética y real: Windows, si hay máquina disponible.
+13. PR-12 decisión final basada en resultados S/R.
 
 ## Autorrevisión
 

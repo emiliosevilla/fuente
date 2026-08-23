@@ -36,7 +36,7 @@ Spec: docs/superpowers/specs/2026-08-23-prueba-real.md
 
 Archivos: leer README.md, pyproject.toml, build_installer.py y fuente.spec; actualizar ledger.
 
-- [ ] Medir checkout.
+- [x] Medir checkout.
 
 ~~~bash
 git status --short --branch
@@ -47,7 +47,7 @@ python3 --version
 
 Esperado: árbol limpio, ramas sincronizadas y commit explícito.
 
-- [ ] Ejecutar baseline automatizado.
+- [x] Ejecutar baseline automatizado.
 
 ~~~bash
 PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -q
@@ -56,8 +56,10 @@ PYTHONDONTWRITEBYTECODE=1 python3 scripts/release_gate.py
 
 Esperado: suite verde y RESULT: READY.
 
-- [ ] Preparar Vault temporal con tema General y TXT, Markdown, DOCX, CSV, JSON e imagen no sensible.
-- [ ] Registrar G0 con comandos, resultados, hashes y límites.
+- [x] Preparar corpus temporal con tema General y TXT, Markdown, DOCX, CSV, JSON e imagen no sensible.
+- [x] Registrar G0 con comandos, resultados, hashes y límites.
+
+Resultado PR-00: `COMPLETE`; G0 `PASS` en checkout limpio aislado fijado a `f538f16bccd2d92eea112e575938786ab14453e9`. La suite pasó con `1336 passed, 1 skipped, 1 warning`; `release_gate.py` devolvió `RESULT: READY` y código `0`. El checkout principal conserva sólo el ledger modificado para la evidencia; no hubo cambios de producto, dependencias ni publicación Git. PR-01–PR-12 siguen pendientes, y PR-10 continúa bloqueado por IDs duplicados.
 
 ## Fase 1 — artefactos
 

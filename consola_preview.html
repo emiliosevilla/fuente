@@ -252,11 +252,27 @@
                         </div>
                         <div id="workspace-panel-notes" class="workspace-panel is-hidden" role="tabpanel" aria-labelledby="workspace-tab-notes">
                             <h2>Notas de trabajo</h2>
-                            <p class="workspace-empty-state">Las notas privadas se editan en 4_procesado.</p>
+                            <div id="processed-editor-state" class="workspace-state-card">
+                                <p class="workspace-empty-state">Las notas privadas se editan en 4_procesado.</p>
+                                <button type="button" class="btn-primary" id="document-share-button" disabled>Compartir nota</button>
+                                <p id="document-share-reason" class="workspace-help" role="status">Requiere aprobación editorial vigente.</p>
+                                <p id="document-share-path" class="workspace-help" aria-live="polite"></p>
+                            </div>
                         </div>
                         <div id="workspace-panel-discussion" class="workspace-panel is-hidden" role="tabpanel" aria-labelledby="workspace-tab-discussion">
                             <h2>Discusión</h2>
-                            <p class="workspace-empty-state">Comparte la nota para abrir su discusión.</p>
+                            <div id="document-author-card" class="author-card" aria-label="Autor de la nota">Autor pendiente</div>
+                            <div id="discussion-events" class="discussion-events" aria-live="polite"></div>
+                            <p id="discussion-status" class="workspace-help" role="status">Comparte la nota para abrir la discusión.</p>
+                            <form id="discussion-reply-form" class="discussion-composer">
+                                <fieldset id="discussion-reply-fields" disabled>
+                                    <label for="discussion-reply-author">Tu nombre</label>
+                                    <input id="discussion-reply-author" name="author" type="text" autocomplete="name" required>
+                                    <label for="discussion-reply-body">Comentario</label>
+                                    <textarea id="discussion-reply-body" name="body" rows="4" required></textarea>
+                                    <button type="submit" class="btn-primary" id="discussion-reply-submit">Publicar comentario</button>
+                                </fieldset>
+                            </form>
                         </div>
                     </aside>
                     <section class="reader-relations-pane" data-reader-region="relations" aria-label="Relaciones locales de la nota">
@@ -3457,6 +3473,100 @@
             });
         }
 
+        let currentDocumentWorkspace = null;
+
+        function showWorkspaceError(message) {
+            const status = document.getElementById('discussion-status');
+            if (status) status.textContent = message || 'No se pudo completar la operación.';
+        }
+
+        function renderShareState(state) {
+            const shareButton = document.getElementById('document-share-button');
+            const reason = document.getElementById('document-share-reason');
+            const path = document.getElementById('document-share-path');
+            const replyFields = document.getElementById('discussion-reply-fields');
+            const replyButton = document.getElementById('discussion-reply-submit');
+            const discussionStatus = document.getElementById('discussion-status');
+            const canShare = Boolean(state && state.can_share);
+            const isShared = Boolean(state && state.shared);
+            if (shareButton) shareButton.disabled = !canShare;
+            if (reason) reason.textContent = canShare ? 'Revisión aprobada; lista para compartir.' : ((state && state.reason) || 'Requiere aprobación editorial vigente.');
+            if (path) path.textContent = (state && state.shared_path) ? 'Publicado en: ' + state.shared_path : '';
+            if (replyFields) replyFields.disabled = !isShared;
+            if (replyButton) replyButton.disabled = !isShared;
+            if (discussionStatus && !isShared) discussionStatus.textContent = 'Comparte la nota para abrir la discusión.';
+            if (discussionStatus && isShared) discussionStatus.textContent = 'Discusión de la nota compartida.';
+        }
+
+        function renderDiscussionEvents(events) {
+            const container = document.getElementById('discussion-events');
+            if (!container) return;
+            container.replaceChildren();
+            (events || []).forEach(function(event) {
+                const item = document.createElement('article');
+                item.className = 'discussion-event';
+                const author = document.createElement('span');
+                author.className = 'discussion-event-author';
+                author.textContent = event.author || 'Autor';
+                const body = document.createElement('p');
+                body.textContent = event.body || '';
+                item.append(author, body);
+                container.appendChild(item);
+            });
+        }
+
+        function renderDocumentWorkspace(workspace) {
+            currentDocumentWorkspace = workspace || null;
+            const note = workspace && workspace.note;
+            const author = document.getElementById('document-author-card');
+            if (author) author.textContent = 'Autor: ' + ((note && note.author) || 'No identificado');
+            renderShareState({
+                can_share: Boolean(workspace && workspace.can_share),
+                shared: Boolean(workspace && workspace.shared),
+                shared_path: workspace && workspace.shared_output && workspace.shared_output.relative_path,
+                reason: workspace && workspace.share_reason,
+            });
+            renderDiscussionEvents(workspace && workspace.discussion);
+        }
+
+        function loadDocumentWorkspace(documentId) {
+            if (!(window.pywebview && window.pywebview.api && window.pywebview.api.get_document_workspace)) return;
+            window.pywebview.api.get_document_workspace(documentId).then(function(workspace) {
+                if (!workspace || workspace.error) return;
+                renderDocumentWorkspace(workspace);
+            });
+        }
+
+        function submitDiscussionReply(event) {
+            event.preventDefault();
+            const author = document.getElementById('discussion-reply-author');
+            const body = document.getElementById('discussion-reply-body');
+            if (!currentDocumentWorkspace || !currentDocumentWorkspace.shared || !currentDocumentWorkspace.note || !window.pywebview || !window.pywebview.api) {
+                showWorkspaceError('Comparte la nota antes de publicar comentarios.');
+                return;
+            }
+            window.pywebview.api.add_discussion_reply(currentDocumentWorkspace.note.document_id, {
+                author: author ? author.value : '', body: body ? body.value : '', parent_id: null
+            }).then(function(result) {
+                if (result && !result.error) {
+                    if (body) body.value = '';
+                    loadDocumentWorkspace(currentDocumentWorkspace.note.document_id);
+                } else {
+                    showWorkspaceError((result && (result.message || result.error)) || 'No se pudo publicar el comentario.');
+                }
+            }).catch(function() { showWorkspaceError('No se pudo publicar el comentario.'); });
+        }
+
+        function shareCurrentDocument() {
+            if (!currentDocumentWorkspace || !currentDocumentWorkspace.note || !window.pywebview || !window.pywebview.api) return;
+            const note = currentDocumentWorkspace.note;
+            const publisher = String(note.author || '').trim() || 'Fuente';
+            window.pywebview.api.share_processed_note(note.document_id, note.revision, publisher).then(function(result) {
+                if (result && !result.error) loadDocumentWorkspace(note.document_id);
+                else showWorkspaceError((result && (result.message || result.error)) || 'No se pudo compartir la nota.');
+            }).catch(function() { showWorkspaceError('No se pudo compartir la nota.'); });
+        }
+
         function switchReaderView(view) {
             const listBtn = document.getElementById('btn-reader-mode-list');
             const graphBtn = document.getElementById('btn-reader-mode-graph');
@@ -4866,6 +4976,7 @@
                 if (res.document_id) currentSelectedDocumentId = res.document_id;
                 currentSelectedNoteTitle = displayTitle;
                 renderNoteDocument(displayTitle, res.document);
+                loadDocumentWorkspace(currentSelectedDocumentId);
                 updateReaderBackButton();
             }).catch(function(err) {
                 const message = String(err || nativeBackendUnavailableMessage());
@@ -5077,6 +5188,10 @@
 
         document.addEventListener('DOMContentLoaded', function() {
             applyVisualStyle(readVisualStyle());
+            const shareButton = document.getElementById('document-share-button');
+            if (shareButton) shareButton.addEventListener('click', shareCurrentDocument);
+            const discussionForm = document.getElementById('discussion-reply-form');
+            if (discussionForm) discussionForm.addEventListener('submit', submitDiscussionReply);
             if (isExplicitPreviewMode()) {
                 markExplicitPreviewMode();
             } else {

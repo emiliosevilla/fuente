@@ -995,6 +995,14 @@ class FuentePyWebViewApi:
             notes = self.backend.get_notes_service()
             document = notes.get_note(note)
             shared = notes.job_store.get_latest_shared_output(document.document_id)
+            can_share = False
+            share_reason = "Requiere aprobación editorial vigente."
+            try:
+                notes.require_shareable_output(document.document_id)
+                can_share = True
+                share_reason = "Revisión aprobada; lista para compartir."
+            except (PathAuthorizationError, NoteRevisionConflictError, ValueError):
+                pass
             discussion = DiscussionApplicationService(
                 vault=notes.vault, store=notes.job_store
             )
@@ -1008,6 +1016,8 @@ class FuentePyWebViewApi:
                     "relative_path": document.relative_path,
                 },
                 "shared": shared is not None,
+                "can_share": can_share,
+                "share_reason": share_reason,
                 "shared_output": shared,
                 "discussion": [event.to_dict() for event in discussion.read_discussion(document.document_id)],
             }

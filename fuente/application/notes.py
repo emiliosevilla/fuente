@@ -117,6 +117,60 @@ class NotesApplicationService:
             requires_origins=note.note_type != "original",
         )
 
+    def approve_processed_output(
+        self, document_id: str, expected_revision: int, reviewer: str
+    ):
+        note = self.get_note(document_id)
+        with document_file_lock(
+            self.vault.config.vault_path / ".fuente" / "note-editor-locks",
+            note.document_id,
+        ):
+            path, _relative = self._resolve_note_path(note.document_id)
+            if not path.resolve().is_relative_to(self.vault.processed_dir.resolve()):
+                raise OutputApprovalRequiredError(note.document_id)
+            content_hash = self._current_processed_hash(note, path)
+            if note.revision != expected_revision:
+                raise NoteRevisionConflictError(note.document_id)
+            self.require_eligible_origins(note, requires_origins=note.note_type != "original")
+            return self.approval_service.approve_processed(
+                note.document_id,
+                expected_revision,
+                reviewer,
+                content_hash=content_hash,
+            )
+
+    def require_shareable_output(self, document_id: str) -> None:
+        note = self.get_note(document_id)
+        with document_file_lock(
+            self.vault.config.vault_path / ".fuente" / "note-editor-locks",
+            note.document_id,
+        ):
+            path, _relative = self._resolve_note_path(note.document_id)
+            if not path.resolve().is_relative_to(self.vault.processed_dir.resolve()):
+                raise OutputApprovalRequiredError(note.document_id)
+            content_hash = self._current_processed_hash(note, path)
+            self.require_eligible_origins(note, requires_origins=note.note_type != "original")
+            if not self.approval_service.is_processed_current(
+                note.document_id, note.revision, content_hash
+            ):
+                raise OutputApprovalRequiredError(note.document_id)
+
+    def _current_processed_hash(self, note: NoteDocument, path: Path) -> str:
+        try:
+            actual_hash = content_hash_for_markdown(
+                path.read_text(encoding="utf-8", errors="replace")
+            )
+        except (OSError, UnicodeError) as error:
+            raise NoteRevisionConflictError(note.document_id) from error
+        identity = self.job_store.get_document_identity(note.document_id)
+        if (
+            actual_hash != note.content_hash
+            or identity is None
+            or str(identity.get("content_hash") or "") != actual_hash
+        ):
+            raise NoteRevisionConflictError(note.document_id)
+        return actual_hash
+
     def _load_published_output_target(
         self,
         target: PublishedOutputTarget,

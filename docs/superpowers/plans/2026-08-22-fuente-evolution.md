@@ -831,13 +831,13 @@ Files:
 - Modify: fuente/domain/approvals.py
 - Modify: fuente/application/approval.py
 - Modify: fuente/application/notes.py
-- Create: fuente/infrastructure/migrations/016_shared_outputs.sql
+- Create: fuente/infrastructure/migrations/020_processed_approvals.sql
 - Test: tests/test_processed_output_approval.py
 
 Interfaces:
 - Produces approve_processed_output and require_shareable_output.
 
-- [ ] Step 1: Write failing two-gate test.
+- [x] Step 1: Write failing two-gate test.
 
 ~~~python
 def test_clean_approval_alone_cannot_share_processed_note(service):
@@ -849,12 +849,12 @@ def test_processed_approval_binds_revision_hash_and_reviewer(service):
     assert approval.content_hash == service.get_note("processed-note").content_hash
 ~~~
 
-- [ ] Step 2: Run test.
+- [x] Step 2: Run test.
 
 Run: PYTHONDONTWRITEBYTECODE=1 python3 -m pytest tests/test_processed_output_approval.py -q
 Expected: FAIL because processed approval does not exist.
 
-- [ ] Step 3: Implement separate output approval.
+- [x] Step 3: Implement separate output approval.
 
 ~~~python
 def approve_processed_output(self, document_id: str, expected_revision: int, reviewer: str) -> ApprovalRecord: ...
@@ -863,17 +863,19 @@ def require_shareable_output(self, note: NoteDocument) -> None: ...
 
 The note must be in 4_procesado, retain approved 3_limpio origins and have a valid refinement status when one applies.
 
-- [ ] Step 4: Verify old export cannot bypass gate.
+- [x] Step 4: Verify old export cannot bypass gate.
 
 Run: PYTHONDONTWRITEBYTECODE=1 python3 -m pytest tests/test_processed_output_approval.py tests/test_approval_ledger.py tests/test_review_export_flow.py tests/test_export_service.py -q
 Expected: PASS.
 
-- [ ] Step 5: Commit.
+- [x] Step 5: Commit.
 
 ~~~bash
 git add fuente/domain/approvals.py fuente/application/approval.py fuente/application/notes.py fuente/infrastructure/migrations/016_shared_outputs.sql tests/test_processed_output_approval.py
 git commit -m "feat: require approval before sharing output"
 ~~~
+
+Status: COMPLETE — Terra approved separate processed approval, real-byte hash checks, document locking and manual-edit invalidation; focal `31 passed`.
 
 ### Task F05.2: Atomically share into 5_salida
 

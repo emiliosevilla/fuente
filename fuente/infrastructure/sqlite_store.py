@@ -226,6 +226,59 @@ class JobStore:
         ).fetchone()
         return dict(row) if row is not None else None
 
+    # -- processed note approvals -----------------------------------------
+
+    def approve_processed_note(
+        self, *, note_id: str, revision: int, content_hash: str, reviewer: str
+    ) -> dict[str, Any] | None:
+        identity = self.get_document_identity(note_id)
+        if (
+            identity is None
+            or int(identity["revision"]) != revision
+            or str(identity.get("content_hash") or "") != content_hash
+        ):
+            return None
+        now = _timestamp()
+        with self._immediate_transaction(note_id) as connection:
+            existing = connection.execute(
+                "SELECT * FROM processed_approvals WHERE note_id = ?",
+                (note_id,),
+            ).fetchone()
+            if existing is not None:
+                if (
+                    int(existing["revision"]) != revision
+                    or str(existing["content_hash"]) != content_hash
+                ):
+                    raise ValueError("processed approval already exists for another revision")
+                return dict(existing)
+            connection.execute(
+                """
+                INSERT INTO processed_approvals
+                (note_id, revision, content_hash, reviewer, approved_at)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (note_id, revision, content_hash, reviewer, now),
+            )
+            row = connection.execute(
+                "SELECT * FROM processed_approvals WHERE note_id = ?", (note_id,)
+            ).fetchone()
+            return dict(row) if row is not None else None
+
+    def is_processed_approval_current(
+        self, note_id: str, revision: int, content_hash: str
+    ) -> bool:
+        row = self._connection.execute(
+            """
+            SELECT 1 FROM processed_approvals AS approval
+            JOIN document_identities AS identity ON identity.document_id = approval.note_id
+            WHERE approval.note_id = ? AND approval.revision = ?
+              AND approval.content_hash = ? AND approval.invalidated_at IS NULL
+              AND identity.revision = ? AND identity.content_hash = ?
+            """,
+            (note_id, revision, content_hash, revision, content_hash),
+        ).fetchone()
+        return row is not None
+
     def __enter__(self) -> "JobStore":
         return self
 

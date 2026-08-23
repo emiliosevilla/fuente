@@ -1,6 +1,6 @@
 # Ledger — prueba_real de Fuente
 
-Status activo: PR-00 S `PASS`, R `PASS`, estado `COMPLETE`; PR-04–PR-12 `NOT_RUN`
+Status activo: PR-00 S `PASS`, R `PASS`, estado `COMPLETE`; PR-04 S `PASS`, R `NOT_RUN`, estado `PARTIAL`; PR-05–PR-12 `NOT_RUN`
 Spec: docs/superpowers/specs/2026-08-23-prueba-real.md
 Plan: docs/superpowers/plans/2026-08-23-prueba-real.md
 Created: 2026-08-23
@@ -13,7 +13,7 @@ Se conserva todo el ledger histórico inferior sin borrarlo. Este bloque gobiern
 | Orden | ID | S | R | Estado activo |
 |---:|---|---|---|---|
 | 1 | PR-00 | PASS | PASS | COMPLETE |
-| 2 | PR-04 | NOT_RUN | NOT_RUN | NOT_RUN |
+| 2 | PR-04 | PASS | NOT_RUN | PARTIAL |
 | 3 | PR-05 | NOT_RUN | NOT_RUN | NOT_RUN |
 | 4 | PR-06 | NOT_RUN | NOT_RUN | NOT_RUN |
 | 5 | PR-07 | NOT_RUN | NOT_RUN | NOT_RUN |
@@ -83,6 +83,15 @@ Cada fase exige dos resultados en orden: `S` prueba sintética y, sólo si `S` p
 - `PR-04`: baja de `COMPLETE` a `PARTIAL`; la copia fue temporal y sintética, no el Vault autorizado real.
 - `PR-05`: baja de `PASS/COMPLETE` a `PARTIAL`; el probe fue sintético y usó backends ausentes o stubs, sin archivos, Vault, audio ni transcripciones reales.
 - La campaña no tiene todavía ninguna fase real de usuario cerrada. `PR-01`, `PR-03`, `PR-08`, `PR-09` y `PR-11` siguen `NOT_RUN`; `PR-10` sigue `BLOCKED`.
+
+## Ejecución 2026-08-23 — PR-04 S
+
+- Informe: `.superpowers/sdd/2026-08-23-prueba-real/task-PR-04-S-report.md`.
+- Checkout medido: raíz solicitada, rama `dev`, HEAD `743a5df6aaf2c26be87c2190ffa014cc010b4460`, estado `## dev...origin/dev`.
+- Suite exacta: `PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -q tests/test_vault_layout.py tests/test_vault_layout_migration.py tests/test_approval_ledger.py tests/test_processed_output_approval.py tests/test_atomic_files.py tests/security/test_path_authorization.py` -> `55 passed in 0.87s`.
+- Copia temporal sintética fuera del repo: `/var/folders/9q/j53jk0752ln6pgbcs4t3y1g00000gn/T/fuente-pr04-s-khjh9dw6/vault-copy`; layout, hash `9b09b67fe93edd24ea95134753c0be63303f2af53b94b6ce6ee5a88bd82f9f9b`, apply, rollback, CAS, rechazo de rutas y compatibilidad `4_salida` PASS; limpieza PASS.
+- Salida del probe: `/private/tmp/fuente-pr04-s-probe-output.txt`, SHA-256 `8aad50793dc97a0b232510d525f6af3f8d6f5748107270c8515da62f7939ceef`.
+- PR-04 S: `PASS`; PR-04 R: `NOT_RUN`; estado: `PARTIAL`. No se usó el Vault real, ni producto, dependencias, commit o publicación.
 
 ## Ejecución 2026-08-23 — PR-00 R
 

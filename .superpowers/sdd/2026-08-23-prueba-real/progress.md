@@ -62,7 +62,23 @@ Cada fase exige dos resultados en orden: `S` prueba sintética y, sólo si `S` p
 
 ## Próximo paso
 
-PR-00 completado con G0 PASS en checkout limpio aislado. Siguiente: PR-04–PR-07 desde checkout. Construir PR-01 antes de PR-03, PR-08 y PR-09. No aplicar PR-10 mientras persistan IDs duplicados.
+Orden práctico vigente:
+
+1. PR-00 baseline y corpus sintético.
+2. PR-04 real: copia autorizada de Vault, layout, migración y aprobación.
+3. PR-05 real: ETL con archivos reales y motores instalados.
+4. PR-06 sintética y real: MiniRAG, Chroma, Ollama y refinamiento.
+5. PR-07 sintética y real: editor, aprobación, compartir y discusión.
+6. PR-01 sintética y real: artefacto macOS.
+7. PR-03 sintética y real: instalación macOS limpia.
+8. PR-08 sintética y real: interfaz instalada.
+9. PR-09 sintética y real: Meetily, micrófono, audio y transcripción.
+10. PR-10 sintética y real: dry-run y migración de General, si se resuelven IDs duplicados.
+11. PR-11 sintética y real: carpetas OneDrive/SharePoint montadas.
+12. PR-02 sintética y real: Windows, si hay máquina disponible.
+13. PR-12 decisión final basada en resultados S/R.
+
+PR-00 completado con G0 PASS en checkout limpio aislado. No aplicar PR-10 mientras persistan IDs duplicados.
 
 ## Ejecución 2026-08-23 — pre-flight
 

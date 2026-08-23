@@ -1690,6 +1690,9 @@
 .discussion-event { padding: 10px; border: 1px solid var(--fuente-glass-border); border-radius: 10px; }
 .discussion-event-author { color: var(--fuente-frost-1); font-weight: 700; }
 .discussion-composer input, .discussion-composer textarea { width: 100%; border: 1px solid var(--border); border-radius: 8px; padding: 8px; background: var(--fuente-glass); color: var(--paper); }
+.meeting-modal-body { display: grid; gap: 12px; }
+.meeting-modal-body input[type="text"] { width: 100%; border: 1px solid var(--border); border-radius: 8px; padding: 8px; background: var(--fuente-glass); color: var(--paper); }
+.meeting-modal-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .reader-graph-container.is-active { display: block !important; }
 .graph-canvas { width: 100%; height: 100%; display: block; cursor: grab; }
 .graph-canvas.is-panning { cursor: grabbing; }

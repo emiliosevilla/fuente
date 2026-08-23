@@ -225,9 +225,10 @@ class MeetilyGatewayClient:
             }
         return public
 
-    def mark_imported(self, session_id: str) -> None:
+    def mark_imported(self, session_id: str, *, transcript_document_id: str | None = None) -> None:
         validate_session_id(session_id)
-        self._write_state(session_id, "imported")
+        state = {"transcript_document_id": transcript_document_id} if transcript_document_id else None
+        self._write_state(session_id, "imported", **(state or {}))
 
     def mark_recoverable(
         self,
@@ -424,6 +425,7 @@ class MeetilyGatewayClient:
         error_code: str | None = None,
         error_message: str | None = None,
         artifacts: MeetingArtifacts | None = None,
+        transcript_document_id: str | None = None,
     ) -> None:
         existing = self._read_state(session_id, missing_ok=True)
         payload: dict[str, Any] = dict(existing)
@@ -463,6 +465,8 @@ class MeetilyGatewayClient:
                 "notes_markdown": artifacts.notes_markdown,
                 "recording_sha256": artifacts.recording_sha256,
             }
+        if transcript_document_id is not None:
+            payload["transcript_document_id"] = transcript_document_id
         atomic_write_json(self._state_path(session_id), payload, sort_keys=True)
 
     def _read_state(self, session_id: str, *, missing_ok: bool = False) -> dict[str, Any]:

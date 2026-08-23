@@ -7,6 +7,7 @@ from typing import Any
 from fuente.config import AppConfig
 from fuente.core.vault import MeetingImportApplicationService, VaultManager
 from fuente.domain.meetings import MeetingImportResult
+from fuente.domain.paths import document_id_for_relative_path
 from fuente.infrastructure.sqlite_store import JobStore
 from fuente.integrations.meetily import MeetingStatus, MeetilyGatewayClient
 
@@ -69,7 +70,8 @@ class MeetingCaptureApplicationService:
                 artifacts=artifacts,
             )
             raise
-        self.gateway.mark_imported(session_id)
+        transcript_document_id = document_id_for_relative_path(result.transcript_relative_path)
+        self.gateway.mark_imported(session_id, transcript_document_id=transcript_document_id)
         return {
             "session_id": result.session_id,
             "status": "imported",
@@ -78,6 +80,7 @@ class MeetingCaptureApplicationService:
             "recording_sha256": result.recording_sha256,
             "transcript_sha256": result.transcript_sha256,
             "notes_sha256": result.notes_sha256,
+            "transcript_document_id": transcript_document_id,
         }
 
     def _get_importer(self) -> MeetingImportApplicationService:

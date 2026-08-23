@@ -66,6 +66,17 @@ historial: []
         self.assertEqual(metadata["history"], [])
         self.assertEqual(body, "# Cuerpo\n")
 
+    def test_parse_accepts_unquoted_yaml_date(self):
+        metadata, _ = parse_frontmatter(
+            """---
+fecha: 2026-08-18
+---
+# Cuerpo
+"""
+        )
+
+        self.assertEqual(metadata["date"], "2026-08-18")
+
     def test_parse_rejects_duplicate_keys_and_invalid_status(self):
         with self.assertRaises(FrontmatterError):
             parse_frontmatter("---\ntitle: one\ntitle: two\n---\nbody")

@@ -1,6 +1,6 @@
 # Ledger — prueba_real de Fuente
 
-Status activo: PR-00 S `PASS`, R `PASS`, estado `COMPLETE`; PR-04 S `PASS`, R `PARTIAL`, estado `PARTIAL`; PR-05–PR-12 `NOT_RUN`
+Status activo: PR-00 S `PASS`, R `PASS`, estado `COMPLETE`; PR-04 S `PASS`, R `PASS`, estado `COMPLETE` por no-op de migración; PR-05–PR-12 `NOT_RUN`
 Spec: docs/superpowers/specs/2026-08-23-prueba-real.md
 Plan: docs/superpowers/plans/2026-08-23-prueba-real.md
 Created: 2026-08-23
@@ -13,7 +13,7 @@ Se conserva todo el ledger histórico inferior sin borrarlo. Este bloque gobiern
 | Orden | ID | S | R | Estado activo |
 |---:|---|---|---|---|
 | 1 | PR-00 | PASS | PASS | COMPLETE |
-| 2 | PR-04 | PASS | PARTIAL | PARTIAL |
+| 2 | PR-04 | PASS | PASS | COMPLETE |
 | 3 | PR-05 | NOT_RUN | NOT_RUN | NOT_RUN |
 | 4 | PR-06 | NOT_RUN | NOT_RUN | NOT_RUN |
 | 5 | PR-07 | NOT_RUN | NOT_RUN | NOT_RUN |
@@ -26,7 +26,7 @@ Se conserva todo el ledger histórico inferior sin borrarlo. Este bloque gobiern
 | 12 | PR-02 | NOT_RUN | NOT_RUN | NOT_RUN |
 | 13 | PR-12 | NOT_RUN | NOT_RUN | NOT_RUN |
 
-Cada fase debe ejecutar `S` sintética y, sólo si pasa, `R` real. `PR-10` repite su prueba sintética y no hereda automáticamente el bloqueo histórico por IDs duplicados. PR-00 es la única fase `COMPLETE`; PR-04 está `PARTIAL` porque apply/rollback reales siguen pendientes.
+Cada fase debe ejecutar `S` sintética y, sólo si pasa, `R` real. `PR-10` repite su prueba sintética y no hereda automáticamente el bloqueo histórico por IDs duplicados. PR-00 y PR-04 están `COMPLETE`; PR-04 se cierra por no-op de migración: el Vault real ya estaba en layout final y no contenía notas migrables, por lo que apply/rollback no forman parte del alcance vigente.
 
 ## Evidencia histórica conservada
 
@@ -44,6 +44,15 @@ Cada fase debe ejecutar `S` sintética y, sólo si pasa, `R` real. `PR-10` repit
 - Dry-run sobre la misma copia real: `3` notas escaneadas, `2` migrables, `findings: []`.
 - `apply`, inventario posterior y rollback siguen `NOT_RUN`.
 - PR-04 R: `PARTIAL`; no se declara `COMPLETE`.
+
+## Ejecución 2026-08-23 — PR-04 R sobre Vault nuevo
+
+- Vault: `/Users/emiliosevillaortego/Documents/Programación/fuente_vault`.
+- Layout comprobado: `General/1_entrada`, `2_sucio`, `3_limpio`, `4_procesado` y `5_salida`, con `1_entrada/personal` y `1_entrada/común`.
+- `dry-run`: `notes_scanned: 0`, `migratable_notes: 0`, `findings: []`.
+- Inventario: `is_safe_to_apply: true`, `clean_notes: []`, `derived_notes: []`, `findings: []`.
+- Resultado: PR-04 R `PASS` dentro del alcance vigente; estructura e inventario pasan. La migración y el rollback no son aplicables a un Vault ya final y vacío de notas procesadas.
+- Siguiente consumidor: los archivos `.md` y `.txt` de `General/1_entrada` pasan a PR-05 ETL real.
 
 ## Estado sencillo
 
@@ -67,7 +76,7 @@ Código está publicado y pruebas automatizadas históricas están verdes. Esta 
 | PR-01 | distribución macOS | parcial | macOS + PyInstaller | NOT_RUN | G1 |
 | PR-02 | distribución Windows | no | Windows + PyInstaller | NOT_RUN | G6 |
 | PR-03 | instalación macOS limpia | no | macOS limpio | NOT_RUN | G2 |
-| PR-04 | layout, migración y aprobación | sí | copia de Vault | PARTIAL: checkout y copia temporal sintética; Vault real y migración real no probados | G3 |
+| PR-04 | layout, migración y aprobación | sí | Vault nuevo con layout final | COMPLETE: layout, dry-run e inventario reales PASS; migración/rollback no aplican al alcance vigente | G3 |
 | PR-05 | extracción ETL | sí | PDF, imagen y audio reales | PARTIAL: checkout y corpus sintético; archivos, motores y datos reales no probados | G3 |
 | PR-06 | MiniRAG, Chroma y refinamiento | sí | Ollama y RAG reales | NOT_RUN | G3 |
 | PR-07 | compartir y discusión | sí | PyWebView para aceptación visual | NOT_RUN | G3 |

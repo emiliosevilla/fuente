@@ -1,8 +1,8 @@
 {
-  "base_head": "57ba9711020adad408f3cf4d1213d8fa66efe084",
+  "base_head": "ed6a957c141ee71fe1f35ea0305e54c4cba55fae",
   "branch": "dev",
-  "gate": "RESULT: READY",
-  "measured_at": "2026-08-22T22:36:04Z",
+  "gate": "RESULT: BLOCKED",
+  "measured_at": "2026-08-23T01:58:12Z",
   "p_status": {
     "P-01": "COMPLETE",
     "P-02": "COMPLETE",
@@ -23,6 +23,6 @@
     "Q-07": "COMPLETE",
     "Q-08": "COMPLETE"
   },
-  "source_tree_digest": "6eebd752386ae23e8cb0eb713eafbe3f36e6eadb31e23d69d59fb1ea80360ec0",
-  "suite": "50 passed"
+  "source_tree_digest": "1cb9128e53cf5a12a80ad599204633c99f424b86cfb764375c5aa9ebd82a8046",
+  "suite": "PYTHONPATH=. PYTHONDONTWRITEBYTECODE=1 pytest -q — 1336 passed, 1 skipped, 1 warning in 95.87s; documentation freshness passes after evidence regeneration"
 }

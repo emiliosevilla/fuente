@@ -29,7 +29,7 @@ Código está publicado y pruebas automatizadas históricas están verdes. Esta 
 | PR-02 | distribución Windows | no | Windows + PyInstaller | NOT_RUN | G6 |
 | PR-03 | instalación macOS limpia | no | macOS limpio | NOT_RUN | G2 |
 | PR-04 | layout, migración y aprobación | sí | copia de Vault | PASS: checkout y copia temporal; Vault real no probado | G3 |
-| PR-05 | extracción ETL | sí | PDF, imagen y audio reales | NOT_RUN | G3 |
+| PR-05 | extracción ETL | sí | PDF, imagen y audio reales | PASS: checkout y corpus sintético; datos reales no probados | G3 |
 | PR-06 | MiniRAG, Chroma y refinamiento | sí | Ollama y RAG reales | NOT_RUN | G3 |
 | PR-07 | compartir y discusión | sí | PyWebView para aceptación visual | NOT_RUN | G3 |
 | PR-08 | consola, lector y responsive | no | instalación PyWebView | NOT_RUN | G3 |
@@ -111,3 +111,18 @@ PR-00 completado con G0 PASS en checkout limpio aislado. Siguiente: PR-04–PR-0
 - Límite: no se probó el Vault real y PR-10 continúa bloqueado por IDs duplicados; este PASS no lo desbloquea ni aplica migraciones reales.
 - Revisión independiente: Terra aprobó PR-04 tras fix round 1 y fix round 2; ledger, comando reproducible y comprobación real de limpieza quedaron verificados. Sin hallazgos abiertos.
 - Task PR-04: complete (commits e68c9c0..e68c9c0, review clean; fase de evidencia sin cambios de producto).
+
+## Ejecución 2026-08-23 — PR-05
+
+- Checkout medido antes de ejecutar: raíz `/Users/emiliosevillaortego/Documents/Programación/fuente`, rama `dev`, `HEAD e21e6575947ee91455856d750459fc32147e4d9f`, Python `3.14.6`.
+- Sistema operativo medido: `sw_vers` -> `ProductName: macOS`, `ProductVersion: 26.6`, `BuildVersion: 25G72`; `uname -a` -> `Darwin MacBook-Air-de-EMILIO.local 25.6.0 Darwin Kernel Version 25.6.0: Sat Jul 11 15:23:52 PDT 2026; root:xnu-12377.161.13~4/RELEASE_ARM64_T8122 arm64`.
+- Suite exacta: `PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -q tests/test_extraction_policy.py tests/test_extractors.py tests/test_ingestion_recovery.py tests/test_job_store.py` -> `PASS`, `75 passed in 2.16s`.
+- Corpus temporal sintético y probe: `PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=. python3 /private/tmp/fuente_pr05_probe.py | tee /private/tmp/fuente-pr05-probe-output.json` -> `PASS`. Incluyó TXT, DOCX, CSV, JSON, PDF difícil e imagen.
+- Resultado de motores: TXT/DOCX `native` por MarkItDown no disponible/fallido; CSV/JSON `native`; PDF `docling` tras `markitdown: quality_below_threshold` y `native: ocr_empty`; imagen `stub_ocr` completada.
+- Hashes y auditoría completos: `.superpowers/sdd/2026-08-23-prueba-real/task-PR-05-report.md`; salida del probe `/private/tmp/fuente-pr05-probe-output.json`, SHA-256 `5d5def6f99b6cfa87bd71ced0a9f77a8ef6b3e115186199ac2d6e5cc39dba6d4`.
+- Cuarentena/recuperación: `retry_pending` en intento 1; `quarantined` en intento 3; restauración autorizada a `5_salida/General/fallido.md`; manifiesto final `retry_pending`, `restored`; hash restaurado `ff6e473387b251f5942814aa6dd143a1e396298584b0b2c4916efea587c557dc`.
+- Artefactos temporales: `/private/tmp/fuente-pr05-probe-output.json` y `/private/tmp/fuente_pr05_probe.py`; el corpus se eliminó automáticamente al finalizar el `TemporaryDirectory`.
+- Informe: `.superpowers/sdd/2026-08-23-prueba-real/task-PR-05-report.md`.
+- Estado PR-05: `PASS` limitado a checkout y corpus sintético temporal. No se prueban Vault real, audio/transcripciones reales, MarkItDown real disponible, Docling real instalado, OCR de sistema ni instalación. Plan actualizado; no se publica Git.
+- Revisión independiente Terra: `PASS` tras fix round 1. Comprobó checks del plan, sistema operativo medido, ruta del artefacto, diff limitado a documentación y `git diff --check`; sin hallazgos abiertos.
+- Task PR-05: complete (commits `e21e657..e21e657`, review clean; fase de evidencia sin cambios de producto).

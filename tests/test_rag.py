@@ -60,11 +60,12 @@ class TestRAG(unittest.TestCase):
             )
             self.assertTrue(added)
             
-            # Verificar sanitización de metadatos (el tag en lista pasa a string)
+            # Chroma recibe escalares, pero Fuente conserva estructura mediante JSON.
             mock_collection.upsert.assert_called_once()
             called_kwargs = mock_collection.upsert.call_args[1]
-            self.assertEqual(called_kwargs["metadatas"][0]["tags"], "['tag1', 'tag2']")
+            self.assertEqual(called_kwargs["metadatas"][0]["tags"], '["tag1", "tag2"]')
             self.assertEqual(called_kwargs["metadatas"][0]["version"], 1)
+            self.assertIn("tags", called_kwargs["metadatas"][0]["__fuente_json_metadata_keys"])
 
             # Consultar similares
             results = store.query_similar("concepto clave")
@@ -94,6 +95,31 @@ class TestRAG(unittest.TestCase):
             mock_chromadb.PersistentClient.assert_called_once_with(path=str(self.chroma_dir))
             mock_chromadb.HttpClient.assert_not_called()
             mock_chromadb.CloudClient.assert_not_called()
+
+    def test_chroma_round_trips_structured_metadata(self):
+        store = ChromaStore(self.chroma_dir)
+        mock_collection = MagicMock()
+        mock_collection.query.return_value = {
+            "documents": [["texto"]],
+            "metadatas": [[{
+                "tags": '["uno", "dos"]',
+                "history": '[{"action": "approved"}]',
+                "__fuente_json_metadata_keys": '["history", "tags"]',
+            }]],
+            "ids": [["chunk"]],
+        }
+        mock_client = MagicMock()
+        mock_client.get_or_create_collection.return_value = mock_collection
+        mock_chromadb = MagicMock()
+        mock_chromadb.PersistentClient.return_value = mock_client
+
+        with patch.dict("sys.modules", {"chromadb": mock_chromadb}):
+            store.query_similar("q")
+
+        metadata = store.query_similar("q")[0]["metadata"]
+        self.assertEqual(metadata["tags"], ["uno", "dos"])
+        self.assertEqual(metadata["history"], [{"action": "approved"}])
+        self.assertNotIn("__fuente_json_metadata_keys", metadata)
 
     def test_sqlite_patch_logic(self):
         # Probar que el parche de SQLite no falla ni lanza excepciones imprevistas

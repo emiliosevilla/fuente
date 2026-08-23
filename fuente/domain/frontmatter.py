@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from datetime import date, datetime
 from uuid import UUID
 
 import yaml
@@ -131,6 +132,8 @@ def parse_frontmatter(markdown: str) -> tuple[dict, str]:
         raise FrontmatterError("Frontmatter root must be a mapping")
 
     metadata = _migrate(dict(loaded))
+    if isinstance(metadata.get("date"), (date, datetime)):
+        metadata["date"] = metadata["date"].isoformat()
     _validate(metadata)
     return metadata, body
 

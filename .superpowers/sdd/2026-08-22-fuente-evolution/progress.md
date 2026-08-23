@@ -1,10 +1,10 @@
 # Ledger — Fuente evolution
 
-Status: IMPLEMENTATION IN PROGRESS
+Status: COMPLETE LOCALLY; NOT DEPLOYED
 Spec: docs/superpowers/specs/2026-08-22-fuente-evolution.md
 Plan: docs/superpowers/plans/2026-08-22-fuente-evolution.md
 Created: 2026-08-22
-Current gate: F04.3 accepted-candidate promotion is in progress. F04.2 positive-only verification is implemented, tested, reviewed, and committed.
+Current gate: local implementation complete through F07.2. Full suite and release gate passed; manual PyWebView/microphone/responsive checks, push, PR and remote deployment were not measured.
 
 ## Evidence vocabulary
 

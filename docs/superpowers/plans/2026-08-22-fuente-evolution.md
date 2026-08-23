@@ -1043,6 +1043,8 @@ git commit -m "feat: expose shared document workspace contracts"
 
 ### Task F06.2: Responsive reader workspace
 
+Status: COMPLETE — implementation and Terra verification complete (`29 passed` local; Terra `32 passed`, visual `12 passed`; commit recorded in the SDD ledger).
+
 Files:
 - Modify: consola_preview.html
 - Modify: fuente/ui/static/console.css

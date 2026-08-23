@@ -238,10 +238,25 @@
                             </div>
                         </div>
                     </section>
-                    <aside class="reader-properties-pane" data-reader-region="properties" aria-label="Propiedades de la nota">
+                    <aside class="reader-properties-pane" data-reader-region="properties" role="dialog" aria-modal="false" aria-label="Contexto de la nota">
+                        <div class="workspace-tabs" role="tablist" aria-label="Contexto de la nota">
+                            <button type="button" class="btn-small workspace-tab is-active" id="workspace-tab-assistant" role="tab" aria-selected="true" aria-controls="workspace-panel-assistant" data-onclick-command="switchWorkspaceTab('assistant')">Asistente</button>
+                            <button type="button" class="btn-small workspace-tab" id="workspace-tab-notes" role="tab" aria-selected="false" aria-controls="workspace-panel-notes" data-onclick-command="switchWorkspaceTab('notes')">Notas</button>
+                            <button type="button" class="btn-small workspace-tab" id="workspace-tab-discussion" role="tab" aria-selected="false" aria-controls="workspace-panel-discussion" data-onclick-command="switchWorkspaceTab('discussion')">Discusión</button>
+                        </div>
+                        <div id="workspace-panel-assistant" class="workspace-panel" role="tabpanel" aria-labelledby="workspace-tab-assistant">
                         <div class="reader-properties-visual">
                             <h2>Propiedades</h2>
                             <div id="reader-properties" role="list" aria-live="polite"></div>
+                        </div>
+                        </div>
+                        <div id="workspace-panel-notes" class="workspace-panel is-hidden" role="tabpanel" aria-labelledby="workspace-tab-notes">
+                            <h2>Notas de trabajo</h2>
+                            <p class="workspace-empty-state">Las notas privadas se editan en 4_procesado.</p>
+                        </div>
+                        <div id="workspace-panel-discussion" class="workspace-panel is-hidden" role="tabpanel" aria-labelledby="workspace-tab-discussion">
+                            <h2>Discusión</h2>
+                            <p class="workspace-empty-state">Comparte la nota para abrir su discusión.</p>
                         </div>
                     </aside>
                     <section class="reader-relations-pane" data-reader-region="relations" aria-label="Relaciones locales de la nota">
@@ -3424,6 +3439,21 @@
                 if (child !== welcome) {
                     child.remove();
                 }
+            });
+        }
+
+        function switchWorkspaceTab(tabId) {
+            const allowed = ['assistant', 'notes', 'discussion'];
+            if (allowed.indexOf(tabId) === -1) return;
+            allowed.forEach(function(id) {
+                const tab = document.getElementById('workspace-tab-' + id);
+                const panel = document.getElementById('workspace-panel-' + id);
+                const active = id === tabId;
+                if (tab) {
+                    tab.setAttribute('aria-selected', active ? 'true' : 'false');
+                    tab.classList.toggle('is-active', active);
+                }
+                if (panel) panel.classList.toggle('is-hidden', !active);
             });
         }
 

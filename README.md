@@ -56,6 +56,13 @@ publicación compartida. `4_salida/` se conserva sólo como ventana de lectura
 compatible; las nuevas notas no deben escribirse allí. La migración nunca se
 ejecuta automáticamente ni modifica el Vault al instalar Fuente.
 
+### Estado documental de la evolución
+
+La implementación local de la evolución está cerrada y verificada. El ledger
+detalla fases, revisiones Terra, commits y pruebas; la evidencia final conserva
+el último `HEAD` medido. La validación manual de PyWebView, micrófono y
+despliegue remoto queda expresamente fuera de esa medición.
+
 ```bash
 fuente --vault /ruta/al/Vault --theme "General" --migrate-layout dry-run
 fuente --vault /ruta/al/Vault --theme "General" --migrate-layout apply --plan-id <plan-id>
@@ -263,7 +270,9 @@ Vault. La desinstalación de la aplicación no debe borrar las notas ni el Vault
 
 3. Si ya no necesitas los archivos de la aplicación, elimina la carpeta de
    instalación de Fuente. Conserva aparte el Vault y sus carpetas
-   `1_entrada/`, `2_sucio/`, `3_limpio/` y `4_salida/`.
+   `1_entrada/`, `2_sucio/`, `3_limpio/`, `4_procesado/` y `5_salida/`.
+   `4_salida/` sólo puede existir como compatibilidad temporal durante la
+   migración.
 
 Python, Obsidian, Ollama y Tesseract no se eliminan automáticamente porque
 pueden ser utilizados por otras aplicaciones. Si quieres quitarlos, usa el

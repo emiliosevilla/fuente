@@ -17,7 +17,7 @@ Baseline activo medido: `dev` en `e6aef697a6f9b4f49f1878940b95f8cf51d2b342`, mer
 | Orden | Fase | Estado activo |
 |---:|---|---|
 | 1 | PR-00 | COMPLETE (S PASS / R PASS) |
-| 2 | PR-04 | NOT_RUN |
+| 2 | PR-04 | PARTIAL (S PASS / R NOT_RUN) |
 | 3 | PR-05 | NOT_RUN |
 | 4 | PR-06 | NOT_RUN |
 | 5 | PR-07 | NOT_RUN |
@@ -32,7 +32,7 @@ Baseline activo medido: `dev` en `e6aef697a6f9b4f49f1878940b95f8cf51d2b342`, mer
 
 PR-10 debe repetir `S` sintética; el bloqueo histórico por IDs duplicados no se hereda automáticamente. Ninguna fase puede declararse `COMPLETE` sin `S PASS` y `R PASS` de esta campaña.
 
-Ejecución activa: PR-00 S PASS y R PASS en clon limpio; PR-00 queda `COMPLETE` y no se continúa automáticamente a PR-04.
+Ejecución activa: PR-00 S PASS y R PASS en clon limpio (`COMPLETE`); PR-04 S PASS en copia temporal sintética, R NOT_RUN y estado `PARTIAL`. PR-05+ permanecen `NOT_RUN`.
 
 ## Global Constraints
 
@@ -164,10 +164,17 @@ PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -q \
   tests/test_atomic_files.py tests/security/test_path_authorization.py
 ~~~
 
-- [ ] Confirmar layout, hashes, rollback, CAS y rechazo de rutas.
-- [ ] Repetir en copia de Vault y confirmar que 4_salida sólo es compatibilidad.
+- [x] Confirmar layout, hashes, rollback, CAS y rechazo de rutas.
+- [x] Repetir en copia de Vault y confirmar que 4_salida sólo es compatibilidad.
 
-Antecedente histórico PR-04: se conserva el resultado anterior en el ledger; no es resultado activo. Estado activo tras reinicio: `NOT_RUN`.
+Ejecución 2026-08-23: `S PASS`, `R NOT_RUN`, estado `PARTIAL`. El probe
+reproducible y su resultado están en:
+`.superpowers/sdd/2026-08-23-prueba-real/task-PR-04-S-probe.py` y
+`.superpowers/sdd/2026-08-23-prueba-real/task-PR-04-S-report.md`. La copia fue
+sintética y temporal; el Vault real y la migración real siguen sin ejecutarse.
+
+Runbook para ejecución humana sobre copia autorizada:
+`.superpowers/sdd/2026-08-23-prueba-real/task-PR-04-R-runbook.md`.
 
 ### PR-05: extracción ETL
 

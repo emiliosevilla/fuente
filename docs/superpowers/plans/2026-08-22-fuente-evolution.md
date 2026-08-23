@@ -993,6 +993,8 @@ git commit -m "feat: add file-backed shared discussion"
 
 ### Task F06.1: Typed bridge projections
 
+Status: COMPLETE — implementation and Terra verification complete (`64 passed` local; Terra `36 passed` focal and `153 passed` expanded; commit recorded in the SDD ledger).
+
 Files:
 - Modify: fuente/ui/bridge.py
 - Modify: fuente/application/lifecycle.py

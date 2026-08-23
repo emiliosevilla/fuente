@@ -4,10 +4,13 @@ from __future__ import annotations
 
 import re
 import sqlite3
+from uuid import UUID
 from pathlib import Path, PureWindowsPath
 from typing import TYPE_CHECKING, Any, Mapping, Optional
 
 from fuente.application.approval import ApprovalApplicationService
+from fuente.application.discussion import DiscussionApplicationService
+from fuente.application.sharing import SharingApplicationService
 from fuente.application.job_control import (
     decode_cursor,
     validate_expected_revision,
@@ -114,7 +117,7 @@ class FuentePyWebViewApi:
         """Validate an opaque editor ID without normalizing or resolving paths."""
         if not isinstance(value, str):
             return cls._error("invalid_payload", "document_id must be a string")
-        if not value.strip():
+        if not value.strip() or "\x00" in value or value.strip() in {".", ".."}:
             return cls._error("invalid_payload", "document_id is required")
         if "/" in value or "\\" in value or value.strip().endswith(".md"):
             return cls._error("path_not_authorized", "Path is not authorized")
@@ -982,6 +985,100 @@ class FuentePyWebViewApi:
         if "/" in note or "\\" in note or note.endswith(".md"):
             return self._error("path_not_authorized", "Path is not authorized")
         return self.backend.get_note_content_html(note)
+
+    def get_document_workspace(self, document_id: object) -> dict[str, Any]:
+        """Return a path-free reader/editor/share/discussion projection."""
+        note = self._editor_note_id(document_id)
+        if isinstance(note, dict):
+            return note
+        try:
+            notes = self.backend.get_notes_service()
+            document = notes.get_note(note)
+            shared = notes.job_store.get_latest_shared_output(document.document_id)
+            discussion = DiscussionApplicationService(
+                vault=notes.vault, store=notes.job_store
+            )
+            return {
+                "note": {
+                    "document_id": document.document_id,
+                    "revision": document.revision,
+                    "title": document.title,
+                    "author": str(document.frontmatter.get("author") or ""),
+                    "status": document.status,
+                    "relative_path": document.relative_path,
+                },
+                "shared": shared is not None,
+                "shared_output": shared,
+                "discussion": [event.to_dict() for event in discussion.read_discussion(document.document_id)],
+            }
+        except (PathAuthorizationError, NoteRevisionConflictError) as error:
+            return {"error": error.code, "message": str(error)}
+        except (OSError, ValueError) as error:
+            return self._error("workspace_unavailable", str(error))
+
+    def share_processed_note(
+        self, document_id: object, expected_revision: object, publisher: object
+    ) -> dict[str, Any]:
+        note = self._editor_note_id(document_id)
+        if isinstance(note, dict):
+            return note
+        revision_error = self._revision(expected_revision)
+        if revision_error is not None:
+            return revision_error
+        normalized_publisher = self._text(publisher, "publisher")
+        if isinstance(normalized_publisher, dict):
+            return normalized_publisher
+        try:
+            notes = self.backend.get_notes_service()
+            shared = SharingApplicationService(notes_service=notes).share_processed_note(
+                note, expected_revision, normalized_publisher
+            )
+            return shared.__dict__
+        except (PathAuthorizationError, NoteRevisionConflictError) as error:
+            return {"error": error.code, "message": str(error)}
+        except (OSError, ValueError) as error:
+            return self._error("share_failed", str(error))
+
+    def get_discussion(self, shared_note_id: object) -> dict[str, Any]:
+        note = self._editor_note_id(shared_note_id)
+        if isinstance(note, dict):
+            return note
+        try:
+            notes = self.backend.get_notes_service()
+            service = DiscussionApplicationService(vault=notes.vault, store=notes.job_store)
+            return {"events": [event.to_dict() for event in service.read_discussion(note)]}
+        except (OSError, ValueError) as error:
+            return self._error("discussion_unavailable", str(error))
+
+    def add_discussion_reply(self, shared_note_id: object, payload: object) -> dict[str, Any]:
+        note = self._editor_note_id(shared_note_id)
+        if isinstance(note, dict):
+            return note
+        parsed = self._payload(payload)
+        if isinstance(parsed, dict) and "error" in parsed:
+            return parsed
+        assert isinstance(parsed, dict)
+        if set(parsed) - {"author", "body", "parent_id"} or "author" not in parsed or "body" not in parsed:
+            return self._error("validation_error", "author and body are required")
+        author = self._text(parsed["author"], "author")
+        body = self._text(parsed["body"], "body")
+        parent_id = parsed.get("parent_id")
+        if isinstance(author, dict) or isinstance(body, dict):
+            return self._error("validation_error", "author and body are required")
+        if parent_id is not None and not isinstance(parent_id, str):
+            return self._error("validation_error", "parent_id must be a string")
+        if parent_id is not None:
+            try:
+                UUID(parent_id)
+            except (ValueError, AttributeError):
+                return self._error("validation_error", "parent_id must be a valid event id")
+        try:
+            notes = self.backend.get_notes_service()
+            service = DiscussionApplicationService(vault=notes.vault, store=notes.job_store)
+            event = service.add_reply(note, author, body, parent_id)
+            return event.to_dict()
+        except (OSError, ValueError) as error:
+            return self._error("validation_error", str(error))
 
     def export_note(
         self,

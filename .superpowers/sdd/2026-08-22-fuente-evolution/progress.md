@@ -48,11 +48,11 @@ Current gate: F04.3 accepted-candidate promotion is in progress. F04.2 positive-
 | F05.3 | F05.2,D-03 | discussion files | yes | yes — `e9852c7` | `11 passed` focal | yes — Terra APPROVE after receipt containment, symlink and schema validation | no | F06.1 may start |
 | F06.1 | F05.2,F05.3 | bridge contracts | yes | yes — `f635c10` | `64 passed` local; Terra `36 passed` focal, `153 passed` expanded | yes — Terra APPROVE after ID and parent UUID validation | no | F06.2 may start |
 | F06.2 | F06.1 | reader workspace | yes | yes — `4688a91` | `29 passed` local; Terra `32 passed`, visual `12 passed` | yes — Terra APPROVE; 51/51 visual assertions conserved | no | F06.3 may start |
-| F06.3 | F06.1 | editor/share/discussion UI | yes | yes — pending commit | `166 passed, 1 warning`; `git diff --check` clean | yes — Terra APPROVE; browser confirmed fieldset and 11/11 focal UI/XSS | no | F06.4 may start |
-| F06.4 | F03.2,F06.1 | grounded workspace chat | yes | yes — pending commit | `35 passed`; `git diff --check` clean | yes — Terra APPROVE after citation visibility fix; five citation fields shown with `textContent` | no | F06.5 may start |
-| F06.5 | F02.4,F06.1 | accessible Meetily capture modal | yes | yes — pending commit | `30 passed` focal; `18 passed` gateway/recovery; `git diff --check` clean | yes — Terra APPROVE after recovery, focus, state and invoker fix rounds | no | F07.1 may start |
-| F07.1 | F01–F06 | demo/migration docs | yes | yes — pending commit | `30 passed`; `git diff --check` clean | yes — Terra APPROVE after six-root manifest fix | no | F07.2 may start |
-| F07.2 | all | final evidence and PR | yes | no | no | no | no | Sol |
+| F06.3 | F06.1 | editor/share/discussion UI | yes | yes — `288b0dc` | `166 passed, 1 warning`; `git diff --check` clean | yes — Terra APPROVE; browser confirmed fieldset and 11/11 focal UI/XSS | no | F06.4 may start |
+| F06.4 | F03.2,F06.1 | grounded workspace chat | yes | yes — `7702f7c` | `35 passed`; `git diff --check` clean | yes — Terra APPROVE after citation visibility fix; five citation fields shown with `textContent` | no | F06.5 may start |
+| F06.5 | F02.4,F06.1 | accessible Meetily capture modal | yes | yes — `7290856` | `30 passed` focal; `18 passed` gateway/recovery; `git diff --check` clean | yes — Terra APPROVE after recovery, focus, state and invoker fix rounds | no | F07.1 may start |
+| F07.1 | F01–F06 | demo/migration docs | yes | yes — `c5adf18` | `30 passed`; `git diff --check` clean | yes — Terra APPROVE after six-root manifest fix | no | F07.2 may start |
+| F07.2 | all | final evidence and PR | yes | in progress — `bb900e9` | full suite: `1334 passed, 1 skipped, 1 warning`; freshness pending evidence refresh | pending final release-gate review | no | Sol |
 
 ## Checkpoint rule
 

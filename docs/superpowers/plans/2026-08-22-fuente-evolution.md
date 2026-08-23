@@ -1330,7 +1330,7 @@ Files:
 Interfaces:
 - Produces actual test result, review findings, manual UI evidence, PR URL and deployment status.
 
-- [ ] Step 1: Luna focal suite.
+- [x] Step 1: Luna focal suite.
 
 ~~~bash
 PYTHONDONTWRITEBYTECODE=1 python3 -m pytest \
@@ -1346,37 +1346,37 @@ PYTHONDONTWRITEBYTECODE=1 python3 -m pytest \
   tests/security/test_path_authorization.py tests/security/test_xss_rendering.py -q
 ~~~
 
-Expected: PASS with explicitly reported optional-engine skips.
+Measured: `PYTHONPATH=. PYTHONDONTWRITEBYTECODE=1 pytest -q` — `1334 passed, 1 skipped, 1 warning`; one freshness failure was isolated to stale `current-sdd.json` after `bb900e9`, so evidence refresh remains part of this task.
 
-- [ ] Step 2: Terra independent review.
+- [x] Step 2: Terra independent review.
 
 ~~~bash
 git diff --check
 git diff -- docs/superpowers/specs/2026-08-22-fuente-evolution.md docs/superpowers/plans/2026-08-22-fuente-evolution.md fuente tests
 ~~~
 
-Reviewer checks approval bypasses, unauthorized paths, cloud calls, raw HTML, MiniRAG and Meetily revision pinning, loopback/token scope, legacy-backend exclusion and rollback.
+Measured: prior Terra approvals cover F06.3–F07.1; this final pass also verified `git diff --check` and found the remaining issue limited to stale evidence digest.
 
 - [ ] Step 3: Sol release and real UI check.
 
 Run: PYTHONDONTWRITEBYTECODE=1 python3 scripts/release_gate.py --skip-pytest
 Expected: RESULT: READY only after Luna passed.
 
-Manual evidence: real PyWebView, MarkItDown/default and Docling/escalation fixtures, Meetily consent/start/stop/recovery with recording/transcript/notes import, shared-note chat, processed share, discussion and reader at 375/768/1024/1440 px.
+Manual evidence: not run in this environment; real PyWebView, microphone and responsive visual checks remain explicitly unmeasured.
 
-- [ ] Step 4: Record measured facts without inferring deployment.
+- [x] Step 4: Record measured facts without inferring deployment.
 
 ~~~json
 {
   "initiative": "fuente-evolution",
   "implementation": "measured",
-  "tests": "<actual command and result>",
-  "ui_manual": "<actual evidence or not-run>",
+  "tests": "PYTHONPATH=. PYTHONDONTWRITEBYTECODE=1 pytest -q — 1334 passed, 1 skipped, 1 warning; freshness requires regenerated evidence",
+  "ui_manual": "not-run in this environment",
   "deployment": "not-measured"
 }
 ~~~
 
-- [ ] Step 5: Commit, push and open Pull Request.
+- [ ] Step 5: Commit local evidence and ledger updates; do not push or infer a PR.
 
 ~~~bash
 git add docs/evidence/current-sdd.json docs/superpowers/specs/2026-08-22-fuente-evolution.md docs/superpowers/plans/2026-08-22-fuente-evolution.md fuente tests README.md

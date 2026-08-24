@@ -11,7 +11,7 @@
 - Terra: `PASS`, sin hallazgos abiertos.
 - Estado fase layout: `S PASS`; no se declara R ni cierre de producto por esta fase.
 
-Status activo: PR-00 S `PASS`, R `PASS`, estado `COMPLETE`; PR-04 S `PASS`, R `PASS`, estado `COMPLETE` por no-op de migración; PR-05 S `PASS`, R `PASS`, estado `COMPLETE`; PR-06–PR-12 `NOT_RUN`
+Status activo: PR-00 S `PASS`, R `PASS`, estado `COMPLETE`; PR-04 S `PASS`, R `PASS`, estado `COMPLETE` por no-op de migración; PR-05 S `PASS`, R `PASS`, estado `COMPLETE`; PR-06 S `PASS`, R `NOT_RUN`, estado `PARTIAL`; PR-07–PR-12 `NOT_RUN`. Estado global: `PARTIAL`.
 Spec: docs/superpowers/specs/2026-08-23-prueba-real.md
 Plan: docs/superpowers/plans/2026-08-23-prueba-real.md
 Created: 2026-08-23
@@ -26,7 +26,7 @@ Se conserva todo el ledger histórico inferior sin borrarlo. Este bloque gobiern
 | 1 | PR-00 | PASS | PASS | COMPLETE |
 | 2 | PR-04 | PASS | PASS | COMPLETE |
 | 3 | PR-05 | PASS | PASS | COMPLETE |
-| 4 | PR-06 | NOT_RUN | NOT_RUN | NOT_RUN |
+| 4 | PR-06 | PASS | NOT_RUN | PARTIAL |
 | 5 | PR-07 | NOT_RUN | NOT_RUN | NOT_RUN |
 | 6 | PR-01 | NOT_RUN | NOT_RUN | NOT_RUN |
 | 7 | PR-03 | NOT_RUN | NOT_RUN | NOT_RUN |
@@ -38,6 +38,16 @@ Se conserva todo el ledger histórico inferior sin borrarlo. Este bloque gobiern
 | 13 | PR-12 | NOT_RUN | NOT_RUN | NOT_RUN |
 
 Cada fase debe ejecutar `S` sintética y, sólo si pasa, `R` real. `PR-10` repite su prueba sintética y no hereda automáticamente el bloqueo histórico por IDs duplicados. PR-00 y PR-04 están `COMPLETE`; PR-04 se cierra por no-op de migración: el Vault real ya estaba en layout final y no contenía notas migrables, por lo que apply/rollback no forman parte del alcance vigente.
+
+## Ejecución 2026-08-24 — PR-06 S
+
+- Informe: `.superpowers/sdd/2026-08-23-prueba-real/task-PR-06-S-report.md`.
+- Checkout medido: rama `dev`, `HEAD c45ee95fb0d793dcb02c056419e72dd65f4c32e9`, árbol limpio antes de registrar evidencia.
+- Comando exacto: `PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -q tests/test_retrieval_router.py tests/test_minirag_store.py tests/test_rag.py tests/test_refinement_store.py tests/test_refinement_service.py tests/test_refinement_promotion.py`.
+- Resultado: `36 passed in 0.35s`, código `0`; `PR-06 S PASS`.
+- Evidencia: corpus sintético temporal; búsqueda MiniRAG, procedencia, fallback, propuestas positiva/negativa y promoción positive-only a `4_procesado` cubiertos por la suite focal.
+- `PR-06 R NOT_RUN`: no se probaron Ollama, modelo, almacenamiento ni notas reales. Estado global: `PARTIAL`.
+- Sin cambios de producto, dependencias ni Vault real.
 
 ## Corrección activa de layout — 2026-08-24
 

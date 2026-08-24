@@ -390,12 +390,12 @@ Secuencia: `S` comprobar que cada fase tiene estado `S/R` documentado → `R` de
 - [x] Clasificar cada capacidad como PASS, FAIL, BLOCKED o NOT_RUN.
 - [x] Separar bug, dependencia ausente, permiso, dato inválido y límite de alcance.
 - [ ] Decidir APTO PARA PRUEBA DIARIA, APTO CON LIMITACIONES o NO APTO; queda para R real.
-- [x] Actualizar ledger con artefactos, gates, fallos y siguiente acción; no hay commit de PR-12 por instrucción.
+- [x] Actualizar ledger con artefactos, gates, fallos y siguiente acción; documentación final commiteada en `10ec0f3`.
 - [x] No convertir NOT_RUN en PASS por inferencia.
 
 Auditoría PR-12 S 2026-08-24: PASS documental. Informe final:
 `docs/superpowers/reports/2026-08-24-prueba-real-synthetic-and-real-script.md`.
-PR-12 R: NOT_RUN. No se repitieron suites completas ni se hizo commit.
+PR-12 R: NOT_RUN. No se repitieron suites completas; la documentación quedó commiteada en `10ec0f3`.
 
 ## Orden resumido
 

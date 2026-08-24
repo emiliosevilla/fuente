@@ -472,4 +472,4 @@ El cierre histórico de PR-00 y el bloqueo histórico de PR-10 se conservan como
 - Auditoría documental: `PASS`. No se repitieron suites completas. `git diff --check`: `PASS`.
 - PR-12 S: `PASS`; PR-12 R: `NOT_RUN`; estado PR-12: `PARTIAL`; estado global de campaña: `PARTIAL` porque quedan R pendientes.
 - Informe final y guion seguro: `docs/superpowers/reports/2026-08-24-prueba-real-synthetic-and-real-script.md`.
-- No se hizo commit, push ni despliegue. `dist/` permanece fuera del alcance y no se trata como `DEPLOYED`.
+- No se hizo push ni despliegue. La auditoría quedó registrada en `10ec0f3`; `dist/` permanece fuera del alcance y no se trata como `DEPLOYED`.

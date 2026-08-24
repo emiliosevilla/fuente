@@ -29,7 +29,7 @@ Baseline activo medido: `dev` en `e6aef697a6f9b4f49f1878940b95f8cf51d2b342`, mer
 | 2 | PR-04 | COMPLETE (S PASS / R PASS — no-op de migración) |
 | 3 | PR-05 | COMPLETE (S PASS / R PASS) |
 | 4 | PR-06 | PARTIAL (S PASS / R NOT_RUN) |
-| 5 | PR-07 | NOT_RUN |
+| 5 | PR-07 | PARTIAL (S PASS / R NOT_RUN) |
 | 6 | PR-01 | NOT_RUN |
 | 7 | PR-03 | NOT_RUN |
 | 8 | PR-08 | NOT_RUN |
@@ -41,7 +41,7 @@ Baseline activo medido: `dev` en `e6aef697a6f9b4f49f1878940b95f8cf51d2b342`, mer
 
 PR-10 debe repetir `S` sintética; el bloqueo histórico por IDs duplicados no se hereda automáticamente. Ninguna fase puede declararse `COMPLETE` sin `S PASS` y `R PASS` de esta campaña.
 
-Ejecución activa: PR-00, PR-04 y PR-05 están `COMPLETE`; PR-06 está `PARTIAL` (`S PASS`, `R NOT_RUN`); PR-07+ permanecen `NOT_RUN`.
+Ejecución activa: PR-00, PR-04 y PR-05 están `COMPLETE`; PR-06 y PR-07 están `PARTIAL` (`S PASS`, `R NOT_RUN`); PR-01, PR-03 y PR-08+ permanecen `NOT_RUN`.
 
 ## Global Constraints
 
@@ -238,12 +238,25 @@ Secuencia: `S` flujo automatizado y datos controlados → `R` aceptación visual
 PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -q \
   tests/test_sharing_service.py tests/test_discussion_service.py \
   tests/contract/test_processed_editor_contract.py \
-  tests/contract/test_sharing_discussion_ui_contract.py
+  tests/contract/test_sharing_discussion_ui_contract.py \
+  tests/test_approval_ledger.py tests/test_processed_output_approval.py
 ~~~
 
-- [ ] Editar, aprobar, compartir y comprobar 5_compartido.
-- [ ] Confirmar autor, comentario fijado, respuesta y JSON inmutable.
-- [ ] Editar después de aprobar y confirmar bloqueo de compartir.
+- [x] Editar, aprobar, compartir y comprobar 5_compartido.
+- [x] Confirmar autor, comentario fijado, respuesta y JSON inmutable.
+- [x] Editar después de aprobar y confirmar bloqueo de compartir.
+
+Ejecución sintética 2026-08-24: `S PASS`; informe:
+`.superpowers/sdd/2026-08-23-prueba-real/task-PR-07-S-report.md`. La suite
+focal inicial pasó 15 tests en `0.47s` sobre corpus temporal sintético. La
+ampliación intermedia añadió `tests/test_approval_ledger.py` y pasó 25 tests
+en `0.54s`. La ampliación final añadió
+`tests/test_processed_output_approval.py` y pasó 28 tests en `0.64s`,
+incluyendo invalidación de aprobación, marcado de derivado obsoleto, edición
+desde consola a `pending_review` y bloqueo de compartir tras editar
+manualmente una nota procesada aprobada. `R` sigue
+`NOT_RUN` porque la aceptación visual PyWebView y la escritura en Vault real
+requieren entorno real.
 
 ## Fase 4 — interfaz instalada
 

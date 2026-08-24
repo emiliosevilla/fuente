@@ -2,9 +2,10 @@
 
 ## Objetivo
 
-Cada tema usa `1_entrada/personal`, `1_entrada/común`, `2_sucio`, `3_limpio`,
-`4_procesado` y `5_salida`. `3_limpio` es el registro canónico; `4_procesado`
-es privado y editable; `5_salida` contiene copias compartidas aprobadas.
+Cada tema usa `1_volcado/personal`, `1_volcado/común`, `2_copiado`, `3_capturado`,
+`4_procesado` y `5_compartido`. `3_capturado` es el registro canónico;
+`4_procesado` es privado y editable; `5_compartido` contiene copias compartidas
+aprobadas.
 
 ## Procedimiento seguro
 
@@ -21,6 +22,7 @@ ni filtra permisos de SharePoint.
 
 ## Compatibilidad
 
-`4_salida` puede seguir leyéndose durante la transición, pero las nuevas
-escrituras deben usar `4_procesado` o `5_salida`. El Vault real no se modifica
+`1_entrada`, `2_sucio`, `3_limpio` y `4_salida` pueden seguir leyéndose durante
+la transición, pero las nuevas escrituras deben usar `1_volcado`, `2_copiado`,
+`3_capturado`, `4_procesado` o `5_compartido`. El Vault real no se modifica
 sin una acción explícita de `apply`.

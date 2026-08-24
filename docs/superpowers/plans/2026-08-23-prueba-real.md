@@ -10,6 +10,15 @@ Tech Stack: Python 3.10+, pytest, PyInstaller, ZIP, PyWebView, SQLite, Ollama, M
 
 Spec: docs/superpowers/specs/2026-08-23-prueba-real.md
 
+## Contrato activo de layout canónico
+
+Cada tema/Vault usa exactamente cinco raíces: `1_volcado` (con `personal` y
+`común` cuando aplique), `2_copiado`, `3_capturado`, `4_procesado` y
+`5_compartido`. `3_capturado` es el origen canónico y compartir a
+`5_compartido` exige aprobación independiente. `1_entrada`, `2_sucio`,
+`3_limpio`, `4_salida` y `5_salida` sólo aparecen en migraciones o fixtures
+legacy; no son defaults ni destinos del runtime.
+
 ## Reinicio activo — 2026-08-23
 
 Baseline activo medido: `dev` en `e6aef697a6f9b4f49f1878940b95f8cf51d2b342`, merge de `main` `a44aa0a92f2231bad7a401be30bca159fec45910`, PR #64. Se conserva la evidencia anterior como antecedente, pero se resetean sus checks y resultados para esta campaña.
@@ -18,7 +27,7 @@ Baseline activo medido: `dev` en `e6aef697a6f9b4f49f1878940b95f8cf51d2b342`, mer
 |---:|---|---|
 | 1 | PR-00 | COMPLETE (S PASS / R PASS) |
 | 2 | PR-04 | COMPLETE (S PASS / R PASS — no-op de migración) |
-| 3 | PR-05 | NOT_RUN |
+| 3 | PR-05 | COMPLETE (S PASS / R PASS) |
 | 4 | PR-06 | NOT_RUN |
 | 5 | PR-07 | NOT_RUN |
 | 6 | PR-01 | NOT_RUN |
@@ -32,7 +41,7 @@ Baseline activo medido: `dev` en `e6aef697a6f9b4f49f1878940b95f8cf51d2b342`, mer
 
 PR-10 debe repetir `S` sintética; el bloqueo histórico por IDs duplicados no se hereda automáticamente. Ninguna fase puede declararse `COMPLETE` sin `S PASS` y `R PASS` de esta campaña.
 
-Ejecución activa: PR-00 y PR-04 están `COMPLETE`; PR-05+ permanecen `NOT_RUN`.
+Ejecución activa: PR-00, PR-04 y PR-05 están `COMPLETE`; PR-06+ permanecen `NOT_RUN`.
 
 ## Global Constraints
 
@@ -40,7 +49,7 @@ Ejecución activa: PR-00 y PR-04 están `COMPLETE`; PR-05+ permanecen `NOT_RUN`.
 - Cada fase tiene dos pasos obligatorios y ordenados: `S` prueba sintética y, sólo si `S` pasa, `R` prueba real.
 - `S PASS` sin `R PASS` es `PARTIAL`, nunca `COMPLETE`.
 - Si `S` falla, no se lanza `R`; la fase queda `FAIL`. Si `R` no puede ejecutarse por entorno, queda `BLOCKED` o `NOT_RUN`, nunca `PASS`.
-- Mantener 3_limpio como fuente canónica y exigir aprobación antes de 5_salida.
+- Mantener 3_capturado como fuente canónica y exigir aprobación antes de 5_compartido.
 - No configurar OAuth, Graph API, SharePoint ni OneDrive desde Fuente.
 - No guardar audio o transcripciones reales en Git.
 - Construir macOS en macOS y Windows en Windows.
@@ -121,7 +130,7 @@ Esperado: binario macOS y Fuente_Distribucion_macOS.zip, o fallo registrado como
 unzip -l dist/Fuente_Distribucion_macOS.zip
 ~~~
 
-Comprobar ausencia de venv, .fuente, Vault real, 1_entrada, 2_sucio, 3_limpio, 4_salida y secretos.
+Comprobar ausencia de venv, .fuente, Vault real, las cinco raíces canónicas y secretos; las raíces legacy sólo pueden aparecer en fixtures o entradas de migración explícitas.
 
 - [ ] Arrancar binario en copia temporal y comprobar error controlado cuando falta configuración.
 - [ ] Registrar nombre, tamaño, SHA-256, plataforma y G1.
@@ -165,7 +174,7 @@ PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -q \
 ~~~
 
 - [x] Confirmar layout, hashes, rollback, CAS y rechazo de rutas en la prueba sintética.
-- [x] Comprobar el Vault nuevo con layout final `1_entrada`–`5_salida`, `dry-run` e inventario.
+- [x] Comprobar el Vault nuevo con layout final `1_volcado`–`5_compartido`, `dry-run` e inventario.
 
 Ejecución sintética 2026-08-23: `S PASS`. El probe reproducible y su resultado están en:
 `.superpowers/sdd/2026-08-23-prueba-real/task-PR-04-S-probe.py` y
@@ -177,7 +186,7 @@ Repetición real sobre `/Users/emiliosevillaortego/Documents/Programación/fuen
 `dry-run PASS` (`notes_scanned: 0`, `migratable_notes: 0`, `findings: []`) e inventario
 `PASS` (`is_safe_to_apply: true`, sin notas ni hallazgos). No hubo `apply` ni `rollback`
 significativos porque el Vault ya tenía el layout final y no contenía notas migrables.
-PR-04 R queda `PASS` dentro del alcance vigente: layout final, `dry-run` e inventario seguro. La migración y el rollback no aplican al Vault nuevo y no se declaran probados. Las notas de `1_entrada` continúan como entrada real de PR-05.
+PR-04 R queda `PASS` dentro del alcance vigente: layout final, `dry-run` e inventario seguro. La migración y el rollback no aplican al Vault nuevo y no se declaran probados. Las notas de `1_volcado` continúan como entrada real de PR-05.
 
 Runbook para ejecución humana sobre copia autorizada:
 `.superpowers/sdd/2026-08-23-prueba-real/task-PR-04-R-runbook.md`.
@@ -192,11 +201,16 @@ PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -q \
   tests/test_ingestion_recovery.py tests/test_job_store.py
 ~~~
 
-- [ ] Probar TXT, DOCX, CSV, JSON, PDF difícil e imagen en corpus de prueba.
-- [ ] Comparar Markdown, motor elegido, hash y razones de auditoría.
-- [ ] Verificar cuarentena y recuperación.
+- [x] S sintética: probar TXT, DOCX, CSV, JSON, PDF difícil e imagen en corpus temporal controlado.
+- [x] S sintética: comparar Markdown, motor elegido, hash y razones de auditoría.
+- [x] S sintética: verificar cuarentena y recuperación mediante la suite focal.
+- [x] R real: probar archivos, motores opcionales y datos autorizados reales.
 
-Antecedente histórico PR-05: se conserva el resultado anterior en el ledger; no es resultado activo. Estado activo tras reinicio: `NOT_RUN`.
+R se ejecutó sobre el Vault autorizado y quedó `PASS`: TXT, Markdown, PDF, imagen y MP3 reales pasan tras instalar las extras autorizadas `office` y `audio`. Evidencia: `.superpowers/sdd/2026-08-23-prueba-real/task-PR-05-R-report.md`.
+
+La ingesta completa posterior corrigió el escaneo recursivo de `1_volcado/personal` y `1_volcado/común`: encontró los 5 archivos, produjo 3 artefactos en `2_copiado` y 3 Markdown en `3_capturado`; imagen y audio quedaron diferidos por el gobernador de RAM y todo lo demás espera aprobación humana antes de `4_procesado`.
+
+Antecedente histórico PR-05: se conserva el resultado anterior en el ledger; no es resultado activo. Estado activo: `COMPLETE` (`S PASS`, `R PASS`).
 
 ### PR-06: MiniRAG, Chroma y refinamiento
 
@@ -225,7 +239,7 @@ PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -q \
   tests/contract/test_sharing_discussion_ui_contract.py
 ~~~
 
-- [ ] Editar, aprobar, compartir y comprobar 5_salida.
+- [ ] Editar, aprobar, compartir y comprobar 5_compartido.
 - [ ] Confirmar autor, comentario fijado, respuesta y JSON inmutable.
 - [ ] Editar después de aprobar y confirmar bloqueo de compartir.
 
@@ -248,8 +262,8 @@ Secuencia: `S` puente y recuperación simulados → `R` Meetily, micrófono, con
 
 - [ ] Configurar puente local fijado y conceder micrófono sólo al iniciar grabación.
 - [ ] Confirmar que abrir modal no graba y que iniciar exige consentimiento.
-- [ ] Grabar 30–60 segundos y comprobar 2_sucio/reunion, hash y manifiesto.
-- [ ] Comprobar 3_limpio/reunion, 4_procesado/reunion, standard_meeting, procedencia y bloqueo hasta aprobación.
+- [ ] Grabar 30–60 segundos y comprobar 2_copiado/reunion, hash y manifiesto.
+- [ ] Comprobar 3_capturado/reunion, 4_procesado/reunion, standard_meeting, procedencia y bloqueo hasta aprobación.
 - [ ] Interrumpir una copia de prueba, recuperar sesión y comprobar ausencia de duplicados o parciales.
 - [ ] Registrar G4 sin guardar audio ni transcript en Git.
 
@@ -277,9 +291,9 @@ fuente --vault /Users/emiliosevillaortego/Documents/Programación/fuente_vault 
 Secuencia: `S` rutas montadas simuladas → `R` cliente oficial, rutas montadas y permisos reales.
 
 - [ ] Configurar rutas manualmente desde Ajustes.
-- [ ] Comprobar entrada montada sólo a 1_entrada/común.
-- [ ] Comprobar nota aprobada compartida sólo a 5_salida.
-- [ ] Confirmar que 3_limpio y 4_procesado no reciben escritura externa.
+- [ ] Comprobar entrada montada sólo a 1_volcado/común.
+- [ ] Comprobar nota aprobada compartida sólo a 5_compartido.
+- [ ] Confirmar que 3_capturado y 4_procesado no reciben escritura externa.
 - [ ] Confirmar que Fuente no autentica ni filtra permisos SharePoint.
 - [ ] Registrar G5.
 

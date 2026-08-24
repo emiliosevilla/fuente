@@ -75,10 +75,10 @@ def test_disabled_connection_is_not_scanned(tmp_path):
         [ConnectedFolder("local", str(source), "Disabled", enabled=False)]
     )
 
-    copied = manager.sync_to_input(tmp_path / "1_entrada", tmp_path / "2_sucio")
+    copied = manager.sync_to_input(tmp_path / "1_volcado", tmp_path / "2_copiado")
 
     assert copied == 0
-    assert not (tmp_path / "1_entrada" / "should-not-copy.md").exists()
+    assert not (tmp_path / "1_volcado" / "should-not-copy.md").exists()
 
 
 def test_malformed_connection_has_stable_diagnostic(tmp_path):
@@ -98,7 +98,7 @@ def test_manifest_entry_survives_store_reopen(tmp_path):
         source_key="network:team/report.md",
         source_hash="sha256:abc123",
         source_mtime_ns=123456789,
-        destination_relative="1_entrada/report.md",
+        destination_relative="1_volcado/report.md",
         status="copied",
     )
 
@@ -127,19 +127,19 @@ def test_common_input_sync_uses_only_the_common_input_root(tmp_path):
     first = manager.sync_connection(connection, direction=SyncDirection.INPUT_COMMON)
     second = manager.sync_connection(connection, direction=SyncDirection.INPUT_COMMON)
 
-    common = vault / "Tema" / "1_entrada" / "común"
+    common = vault / "Tema" / "1_volcado" / "común"
     assert first.copied == 1
     assert second.unchanged == 1
-    assert first.destination_root.endswith("1_entrada/común")
+    assert first.destination_root.endswith("1_volcado/común")
     assert (common / "shared.md").read_text(encoding="utf-8") == "common input"
-    assert not (vault / "Tema" / "1_entrada" / "personal" / "shared.md").exists()
-    assert not (vault / "Tema" / "3_limpio" / "shared.md").exists()
+    assert not (vault / "Tema" / "1_volcado" / "personal" / "shared.md").exists()
+    assert not (vault / "Tema" / "3_capturado" / "shared.md").exists()
     assert not (vault / "Tema" / "4_procesado" / "shared.md").exists()
 
 
 def test_shared_output_sync_copies_only_from_shared_root(tmp_path):
     vault = tmp_path / "vault"
-    shared = vault / "Tema" / "5_salida"
+    shared = vault / "Tema" / "5_compartido"
     shared.mkdir(parents=True)
     (shared / "approved.md").write_text("approved output", encoding="utf-8")
     destination = tmp_path / "shared-mount"
@@ -152,7 +152,7 @@ def test_shared_output_sync_copies_only_from_shared_root(tmp_path):
     assert first.copied == 1
     assert second.unchanged == 1
     assert (destination / "approved.md").read_text(encoding="utf-8") == "approved output"
-    assert not (vault / "Tema" / "3_limpio" / "approved.md").exists()
+    assert not (vault / "Tema" / "3_capturado" / "approved.md").exists()
     assert not (vault / "Tema" / "4_procesado" / "approved.md").exists()
 
 

@@ -41,7 +41,7 @@ Versión bro: primero comprobamos motor en laboratorio; después instalamos como
 
 ## Capacidades ya cubiertas por código y tests; comprobar igualmente
 
-1. Layout por tema: 1_entrada/personal, 1_entrada/común, 2_sucio, 3_limpio, 4_procesado, 5_salida.
+1. Layout por tema: 1_volcado/personal, 1_volcado/común, 2_copiado, 3_capturado, 4_procesado, 5_compartido.
 2. Autorización de rutas y contención dentro del tema activo.
 3. Migración con inventario, hashes, apply, verify y rollback.
 4. MarkItDown como primera extracción local.
@@ -53,7 +53,7 @@ Versión bro: primero comprobamos motor en laboratorio; después instalamos como
 10. Aprobaciones ligadas a document_id, revisión y hash.
 11. Refinamiento positive-only con baseline, CAS, Ollama y epsilon 0.10.
 12. Promoción sólo de candidatos aceptados a 4_procesado.
-13. Compartición atómica a 5_salida tras aprobación independiente.
+13. Compartición atómica a 5_compartido tras aprobación independiente.
 14. Discusión JSON inmutable con autor, comentario fijado y respuestas.
 15. Bridge PyWebView con identificadores opacos y validación de revisiones.
 16. Chat contextual con citas de identidad, revisión, hash, título y origen.
@@ -70,7 +70,7 @@ Versión bro: primero comprobamos motor en laboratorio; después instalamos como
 6. Puente local de Meetily con ejecutable configurado.
 7. Grabación, transcripción y nota de reunión en rutas reales.
 8. OneDrive/SharePoint montado por cliente oficial.
-9. Lectura de 1_entrada/común y escritura controlada de 5_salida.
+9. Lectura de 1_volcado/común y escritura controlada de 5_compartido.
 10. Ollama instalado, modelo disponible y presupuesto de RAM real.
 11. OCR, audio, Docling y MiniRAG con extras instalados.
 12. Instalador Windows, exe y comportamiento Windows.

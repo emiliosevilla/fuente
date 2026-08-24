@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Optional, List, Dict, Any, TYPE_CHECKING
 
 from fuente.ui.reader_history import pop_reader_history, push_reader_history
+from fuente.domain.vault_layout import CANONICAL_PROCESSED_DIR_NAME
 
 if TYPE_CHECKING:
     from fuente.control_console import FuenteConsoleBackend
@@ -39,7 +40,7 @@ except ImportError:
 
 class FuenteReaderModal(tk.Toplevel):
     """
-    Ventana Modal Nativa Papiro para lectura de Notas Preparadas de Fuente (4_salida/).
+    Ventana Modal Nativa Papiro para lectura de Notas Preparadas de Fuente (4_procesado/).
     Usa el mismo backend de listado/autorización que la consola PyWebView.
     """
 
@@ -56,13 +57,13 @@ class FuenteReaderModal(tk.Toplevel):
 
             if output_dir is None:
                 raise ValueError("backend or output_dir is required")
-            # Legacy callers pass 4_salida; bind a backend on that theme/vault root.
             resolved_output = Path(output_dir).resolve()
-            vault_root = (
-                resolved_output.parent
-                if resolved_output.name == "4_salida"
-                else resolved_output
-            )
+            if resolved_output.name != CANONICAL_PROCESSED_DIR_NAME:
+                raise ValueError(
+                    "output_dir must be the canonical 4_procesado root; "
+                    "legacy paths are accepted only by migration tooling"
+                )
+            vault_root = resolved_output.parent
             backend = FuenteConsoleBackend(vault_root)
 
         self.backend = backend
@@ -370,7 +371,7 @@ class FuenteReaderModal(tk.Toplevel):
         self.load_note(document_id)
 
     def _on_broken_link_click(self, note_name: str):
-        messagebox.showinfo("Nota Pendiente", f"La nota '{note_name}' aún no ha sido estructurada en 4_salida.")
+        messagebox.showinfo("Nota Pendiente", f"La nota '{note_name}' aún no ha sido estructurada en 4_procesado.")
 
     def _go_back(self):
         prev = pop_reader_history(self.history)
@@ -384,12 +385,12 @@ class FuenteReaderModal(tk.Toplevel):
         elif self.all_notes:
             self.load_note(self.all_notes[0]["document_id"])
         else:
-            self.lbl_note_title.config(text="📜 4_salida vacía")
+            self.lbl_note_title.config(text="📜 4_procesado vacío")
             self.txt_reader.config(state="normal")
             self.txt_reader.delete("1.0", tk.END)
             self.txt_reader.insert(
                 tk.END,
-                "No se encontraron notas en 4_salida. Ejecuta el Paso 3 (Estructuración) para generar notas inteligentes.",
+                "No se encontraron notas en 4_procesado. Ejecuta el Paso 3 (Estructuración) para generar notas inteligentes.",
             )
             self.txt_reader.config(state="disabled")
 
@@ -412,7 +413,7 @@ class FuenteReaderModal(tk.Toplevel):
         except Exception as error:
             messagebox.showwarning(
                 "Aprobación pendiente",
-                f"Esta nota de 4_salida aún no está aprobada para exportarse:\n{error}",
+                f"Esta nota de 4_procesado aún no está aprobada para exportarse:\n{error}",
             )
             return False
 

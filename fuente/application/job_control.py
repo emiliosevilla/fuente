@@ -23,6 +23,7 @@ from fuente.domain.jobs import (
     transition,
 )
 from fuente.infrastructure.sqlite_store import JobStore
+from fuente.domain.vault_layout import VaultLayout
 
 if TYPE_CHECKING:
     from fuente.application.ingestion import IngestionApplicationService
@@ -326,7 +327,7 @@ class JobControlService:
                 return False
         root = Path(self.job_store.vault_root).resolve()
         source = (root / source_relative_path).resolve()
-        input_root = (root / "1_entrada").resolve()
+        input_root = VaultLayout(root).input_personal_dir.parent.resolve()
         try:
             source.relative_to(input_root)
         except ValueError:

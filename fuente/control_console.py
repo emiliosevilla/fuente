@@ -769,7 +769,7 @@ class FuenteConsoleBackend:
         metadata = hit.get("metadata") or {}
         relative_path = str(metadata.get("relative_path") or "")
         document_id = str(metadata.get("document_id") or "")
-        if relative_path.startswith("3_limpio/"):
+        if relative_path.startswith(f"{self.vault.config.clean_dir_name}/"):
             try:
                 self.get_notes_service().require_eligible_canonical_note(
                     document_id
@@ -1889,7 +1889,7 @@ class FuenteConsoleBackend:
                 self.vault.input_dir, self.vault.dirty_dir
             )
             return {
-                "log": f"Recopilación completada hacia 1_entrada. Archivos nuevos o actualizados traídos: {copied_count}",
+                "log": f"Recopilación completada hacia {self.vault.config.input_dir_name}. Archivos nuevos o actualizados traídos: {copied_count}",
                 "refresh": True,
                 "stats": self.get_stats_dict()
             }
@@ -2014,7 +2014,7 @@ class FuenteConsoleBackend:
                 self.vault.input_dir, self.vault.dirty_dir
             )
             return {
-                "log": f"[PASO 1 RECEPCIÓN] Flush Manual ejecutado. Transferidos {copied} archivos a 1_entrada.",
+                "log": f"[PASO 1 RECEPCIÓN] Flush Manual ejecutado. Transferidos {copied} archivos a {self.vault.config.input_dir_name}.",
                 "refresh": True,
                 "stats": self.get_stats_dict()
             }
@@ -2064,7 +2064,7 @@ class FuenteConsoleBackend:
                             file_path, err, attempt_count=1
                         )
                         log_lines.append(f"[ERROR] {file_path.name}: {err}")
-                message = "Estructuración de datos completada hacia 3_limpio."
+                message = f"Estructuración de datos completada hacia {self.vault.config.clean_dir_name}."
                 if log_lines:
                     message = message + "\n" + "\n".join(log_lines)
                 return {
@@ -2081,7 +2081,7 @@ class FuenteConsoleBackend:
                     return res
                 notes_count = len(list(self.vault.output_dir.rglob("*.md"))) if self.vault.output_dir.exists() else 0
                 return {
-                    "log": f"[PASO 3 ESTRUCTURACIÓN] Grafo refinado e hiperinterenlazado. Notas en 4_salida: {notes_count}.",
+                    "log": f"[PASO 3 ESTRUCTURACIÓN] Grafo refinado e hiperinterenlazado. Notas en {self.vault.config.output_dir_name}: {notes_count}.",
                     "refresh": True,
                     "stats": self.get_stats_dict()
                 }
@@ -2269,9 +2269,10 @@ class FuenteConsoleBackend:
     def _issue_from_relative_path(self, relative_path: str) -> str:
         """Derive the Cuestión folder from a vault-relative note path."""
         parts = Path(relative_path).parts
-        if "4_salida" not in parts:
+        output_root = self.vault.config.output_dir_name
+        if output_root not in parts:
             return "_Sin_Cuestion"
-        remainder = parts[parts.index("4_salida") + 1 :]
+        remainder = parts[parts.index(output_root) + 1 :]
         if len(remainder) >= 2:
             return remainder[0]
         return "_Sin_Cuestion"
@@ -2458,10 +2459,10 @@ class FuenteConsoleBackend:
     def get_category_files(self, category: str) -> List[Dict[str, Any]]:
         """Return authorized, vault-relative identities for a pipeline category."""
         categories = {
-            "1_entrada": ("input", self.vault.input_dir),
-            "2_sucio": ("dirty", self.vault.dirty_dir),
-            "3_limpio": ("clean", self.vault.clean_dir),
-            "4_salida": ("output", self.vault.output_dir),
+            self.vault.config.input_dir_name: ("input", self.vault.input_dir),
+            self.vault.config.dirty_dir_name: ("dirty", self.vault.dirty_dir),
+            self.vault.config.clean_dir_name: ("clean", self.vault.clean_dir),
+            self.vault.config.output_dir_name: ("output", self.vault.output_dir),
         }
         if category not in categories:
             return []
@@ -2491,10 +2492,10 @@ class FuenteConsoleBackend:
         if not isinstance(file_identity, str):
             return {"error": "path_not_authorized", "message": "Path is not authorized"}
         root_names = {
-            "1_entrada": "input",
-            "2_sucio": "dirty",
-            "3_limpio": "clean",
-            "4_salida": "output",
+            self.vault.config.input_dir_name: "input",
+            self.vault.config.dirty_dir_name: "dirty",
+            self.vault.config.clean_dir_name: "clean",
+            self.vault.config.output_dir_name: "output",
         }
         try:
             parts = Path(file_identity).parts

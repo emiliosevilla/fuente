@@ -9,7 +9,10 @@ from pathlib import Path
 from typing import Literal
 import logging
 
-from fuente.config import DEFAULT_ISSUE, VaultConfig
+from fuente.config import (
+    DEFAULT_ISSUE,
+    VaultConfig,
+)
 from fuente.domain.documents import MarkdownDocument, content_hash_for_markdown
 from fuente.domain.frontmatter import FrontmatterError, serialize_frontmatter
 from fuente.domain.errors import PathAuthorizationError
@@ -71,10 +74,7 @@ class VaultManager:
         """Devuelve el directorio del Tema activo en la Bóveda."""
         if self.active_theme == "General" and not (self.config.vault_path / "General").exists():
             return self.config.vault_path
-        theme_dir = self.config.vault_path / self.sanitize_filename(self.active_theme)
-        if not theme_dir.exists() and (self.config.vault_path / self.config.input_dir_name).exists():
-            return self.config.vault_path
-        return theme_dir
+        return self.config.vault_path / self.sanitize_filename(self.active_theme)
 
     @property
     def input_dir(self) -> Path:
@@ -110,12 +110,20 @@ class VaultManager:
 
     def _ensure_directories(self) -> None:
         """Crea la jerarquía de carpetas del tema activo si no existe."""
+        if (
+            self.config.input_dir_name == self.layout.input_personal_dir.parent.name
+            and self.config.dirty_dir_name == self.layout.root("dirty").name
+            and self.config.clean_dir_name == self.layout.root("clean").name
+            and self.config.output_dir_name == self.layout.processed_dir.name
+            and self.config.shared_dir_name == self.layout.shared_dir.name
+        ):
+            self.layout.ensure()
         dirs = [
             self.input_dir,
             self.dirty_dir,
             self.clean_dir,
-            self.output_dir,
             self.output_dir / "_Sin_Cuestion",
+            self.shared_dir,
             self.config.system_dir,
             self.config.chroma_dir,
         ]
@@ -144,6 +152,14 @@ class VaultManager:
                     obsidian_rules = current
                 except Exception:
                     pass
+
+            ignore_filters = obsidian_rules.get("userIgnoreFilters", [])
+            if not isinstance(ignore_filters, list):
+                ignore_filters = []
+            for hidden_root in (self.config.input_dir_name, self.config.dirty_dir_name):
+                if hidden_root not in ignore_filters:
+                    ignore_filters.append(hidden_root)
+            obsidian_rules["userIgnoreFilters"] = ignore_filters
 
             atomic_write_json(app_json, obsidian_rules)
         except Exception as e:
@@ -245,12 +261,16 @@ class VaultManager:
     def get_available_themes(self) -> list[str]:
         """Obtiene la lista de Temas disponibles en la Bóveda."""
         themes = set()
-        if (self.config.vault_path / "1_entrada").exists():
+        if (self.config.vault_path / self.config.input_dir_name).exists():
             themes.add("General")
         
         for item in self.config.vault_path.iterdir():
             if item.is_dir() and not item.name.startswith(".") and item.name not in ["__pycache__"]:
-                if (item / "1_entrada").exists() or (item / "4_salida").exists():
+                if (
+                    (item / self.config.input_dir_name).exists()
+                    or (item / self.config.output_dir_name).exists()
+                    or (item / self.config.shared_dir_name).exists()
+                ):
                     themes.add(item.name)
 
         if not themes:
@@ -285,7 +305,7 @@ class VaultManager:
 
     # --- GESTIÓN DE CUESTIONES ---
     def get_issues_in_theme(self) -> list[str]:
-        """Lista las Cuestiones (subcarpetas) dentro de 4_salida del Tema activo."""
+        """Lista las Cuestiones dentro de la salida procesada del tema activo."""
         out_dir = self.output_dir
         if not out_dir.exists():
             return ["_Sin_Cuestion"]
@@ -301,7 +321,7 @@ class VaultManager:
         return sorted(issues)
 
     def create_issue_in_theme(self, issue_name: str) -> Path:
-        """Crea una nueva Cuestión (subcarpeta sanitizada) en 4_salida del Tema activo."""
+        """Crea una nueva Cuestión en la salida procesada del tema activo."""
         sanitized_issue = re.sub(r"[^\w\s-]", "", issue_name).strip().replace(" ", "_")
         if not sanitized_issue:
             sanitized_issue = "_Sin_Cuestion"
@@ -312,7 +332,7 @@ class VaultManager:
         return issue_dir
 
     def copy_to_dirty(self, source_path: Path) -> Path:
-        """Copia un archivo crudo desde 1_entrada hacia 2_sucio manteniendo el hash original."""
+        """Copia un archivo crudo desde 1_volcado hacia 2_copiado manteniendo el hash original."""
         if not source_path.exists():
             raise FileNotFoundError(f"Archivo de entrada no encontrado: {source_path}")
 
@@ -322,11 +342,11 @@ class VaultManager:
         dest_path = self.dirty_dir / dest_filename
 
         shutil.copy2(source_path, dest_path)
-        logger.info(f"Copiado a 2_sucio: {source_path.name} -> {dest_path.name}")
+        logger.info(f"Copiado a 2_copiado: {source_path.name} -> {dest_path.name}")
         return dest_path
 
     def save_clean_md(self, relative_name: str, content: str, metadata: dict) -> Path:
-        """Guarda un documento transformado a .md verbatim en 3_limpio evitando colisiones."""
+        """Guarda un documento transformado a .md verbatim en 3_capturado evitando colisiones."""
         p = Path(relative_name)
         safe_stem = self.sanitize_filename(p.stem)
         ext_clean = p.suffix.lstrip(".").lower()
@@ -349,7 +369,7 @@ class VaultManager:
             **metadata,
         }
         document_metadata = enrich_extraction_metadata(document_metadata, content)
-        # `3_limpio` is the canonical record.  It needs a stable v3 identity
+        # `3_capturado` is the canonical record.  It needs a stable v3 identity
         # so a human approval can bind to these exact bytes.  It is an input
         # record, not a derived summary, and therefore has no origins itself.
         document_metadata.update(
@@ -369,7 +389,7 @@ class VaultManager:
 
         atomic_write_text(clean_path, full_content)
 
-        logger.info(f"Guardado en 3_limpio: {clean_path.name}")
+        logger.info(f"Guardado en 3_capturado: {clean_path.name}")
         return clean_path
 
     def atomic_note_path(self, title: str, issue_name: str = "", source_ext: str = "") -> Path:
@@ -393,7 +413,7 @@ class VaultManager:
         return output_path
 
     def save_atomic_note(self, title: str, content: str, issue_name: str = "", source_ext: str = "") -> Path:
-        """Guarda una nota atómica estructurada en 4_salida (o 4_salida/<issue_name> si se especifica)."""
+        """Guarda una nota atómica estructurada en la salida procesada."""
         output_path = self.atomic_note_path(title, issue_name, source_ext)
         target_issue_dir = output_path.parent
 
@@ -502,10 +522,11 @@ class VaultManager:
 
         return {
             "active_theme": self.active_theme,
-            "1_entrada": _dir_info(self.input_dir),
-            "2_sucio": _dir_info(self.dirty_dir),
-            "3_limpio": _dir_info(self.clean_dir),
-            "4_salida": _dir_info(self.output_dir),
+            self.config.input_dir_name: _dir_info(self.input_dir),
+            self.config.dirty_dir_name: _dir_info(self.dirty_dir),
+            self.config.clean_dir_name: _dir_info(self.clean_dir),
+            self.config.output_dir_name: _dir_info(self.output_dir),
+            self.config.shared_dir_name: _dir_info(self.shared_dir),
             "quarantine": {
                 "count": len(self.quarantine_service.list_active_items()),
                 "oldest": "N/A",

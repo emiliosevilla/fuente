@@ -22,12 +22,12 @@ la ruta primaria: se conserva para refinamiento explícito y evaluado.
 
 ## Qué hace
 
-- Ingresa archivos desde `1_entrada/`, conserva una copia de auditoría en
-  `2_sucio/` y genera la transcripción Markdown en `3_limpio/`.
-- Trata `3_limpio/` como registro canónico. Cada documento tiene identidad,
+- Ingresa archivos desde `1_volcado/`, conserva una copia de auditoría en
+  `2_copiado/` y genera la transcripción Markdown en `3_capturado/`.
+- Trata `3_capturado/` como registro canónico. Cada documento tiene identidad,
   revisión y hash para ligar la aprobación a unos bytes concretos.
 - Genera resultados de trabajo en `4_procesado/` y publica copias compartidas en
-  `5_salida/` sólo después de superar las
+  `5_compartido/` sólo después de superar las
   comprobaciones de aprobación y revisión editorial.
 - Mantiene el estado de jobs, configuración, cuarentena y catálogos en
   `.fuente/`, fuera del contenido editorial.
@@ -41,7 +41,7 @@ la ruta primaria: se conserva para refinamiento explícito y evaluado.
 ## Flujo del Vault
 
 ```text
-1_entrada  →  2_sucio  →  3_limpio  →  4_procesado  →  aprobación  →  5_salida
+1_volcado  →  2_copiado  →  3_capturado  →  4_procesado  →  aprobación  →  5_compartido
    entrada      auditoría      canónico       edición             compartido
 ```
 
@@ -51,9 +51,10 @@ aprobación anterior deja de ser válida.
 
 ### Migración del Vault y compatibilidad
 
-El layout objetivo usa `4_procesado/` para edición privada y `5_salida/` para
-publicación compartida. `4_salida/` se conserva sólo como ventana de lectura
-compatible; las nuevas notas no deben escribirse allí. La migración nunca se
+El layout canónico usa `4_procesado/` para edición privada y `5_compartido/` para
+publicación compartida. `1_entrada/`, `2_sucio/`, `3_limpio/` y `4_salida/` sólo
+se reconocen como rutas legacy durante migraciones; las nuevas notas no deben
+escribirse allí. La migración nunca se
 ejecuta automáticamente ni modifica el Vault al instalar Fuente.
 
 ### Estado documental de la evolución
@@ -78,7 +79,7 @@ autorizados. La guía completa está en
 
 `Nueva reunión` abre una captura local embebida con consentimiento obligatorio.
 La plantilla es `standard_meeting`; sus artefactos van a
-`2_sucio/reunion`, `3_limpio/reunion` y `4_procesado/reunion`. La interfaz sólo
+`2_copiado/reunion`, `3_capturado/reunion` y `4_procesado/reunion`. La interfaz sólo
 recibe identificadores opacos, hashes y estados, nunca tokens ni rutas
 absolutas. Las notas requieren aprobación antes de compartir.
 
@@ -163,7 +164,7 @@ credenciales cloud.
 
 Fuente puede leer una carpeta que OneDrive o SharePoint ya haya montado en el
 sistema de archivos. La sincronización es unidireccional hacia
-`1_entrada/`. No implementa OAuth, Graph API, credenciales cloud ni escritura
+`1_volcado/`. No implementa OAuth, Graph API, credenciales cloud ni escritura
 de vuelta al proveedor. La carpeta debe estar montada por el cliente oficial.
 
 ## Módulos del paquete
@@ -270,8 +271,8 @@ Vault. La desinstalación de la aplicación no debe borrar las notas ni el Vault
 
 3. Si ya no necesitas los archivos de la aplicación, elimina la carpeta de
    instalación de Fuente. Conserva aparte el Vault y sus carpetas
-   `1_entrada/`, `2_sucio/`, `3_limpio/`, `4_procesado/` y `5_salida/`.
-   `4_salida/` sólo puede existir como compatibilidad temporal durante la
+    `1_volcado/`, `2_copiado/`, `3_capturado/`, `4_procesado/` y `5_compartido/`.
+   Las rutas legacy sólo pueden existir como compatibilidad temporal durante la
    migración.
 
 Python, Obsidian, Ollama y Tesseract no se eliminan automáticamente porque

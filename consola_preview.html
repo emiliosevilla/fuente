@@ -128,7 +128,7 @@
                     <div class="node-card" data-onclick-command="triggerAction('step1_flush')">
                         <div class="node-tag">── PASO 1 ──</div>
                         <div class="node-name">Recopilación de archivos en formato variado</div>
-                        <div class="node-desc">Flush Manual desde carpetas vinculadas hacia 1_entrada</div>
+                        <div class="node-desc">Flush Manual desde carpetas vinculadas hacia 1_volcado</div>
                     </div>
                 </div>
 
@@ -142,7 +142,7 @@
                     <div class="node-card" data-onclick-command="triggerAction('step2_transcribe')">
                         <div class="node-tag">── PASO 2 ──</div>
                         <div class="node-name">Traslado de la información a formato uniforme</div>
-                        <div class="node-desc">Procesado ETL: 1_entrada ➔ 2_sucio ➔ 3_limpio</div>
+                        <div class="node-desc">Procesado ETL: 1_volcado ➔ 2_copiado ➔ 3_capturado</div>
                     </div>
                 </div>
 
@@ -156,7 +156,7 @@
                     <div class="node-card" data-onclick-command="triggerAction('step3_structure')">
                         <div class="node-tag">── PASO 3 ──</div>
                         <div class="node-name">Preparación de notas inteligentes</div>
-                        <div class="node-desc">Bucle Optimizado + Vectorización ChromaDB ➔ 4_salida</div>
+                        <div class="node-desc">Bucle Optimizado + Vectorización ChromaDB ➔ 4_procesado</div>
                     </div>
                 </div>
 
@@ -235,7 +235,7 @@
                             </div>
                             <div class="reader-view-pane" id="reader-content">
                                 <h2 class="console-layout-007">Selecciona una nota</h2>
-                                <p class="console-layout-008">Explora el mapa de conocimiento generado en 4_salida.</p>
+                                <p class="console-layout-008">Explora el mapa de conocimiento generado en 4_procesado.</p>
                             </div>
                         </div>
                     </section>
@@ -394,7 +394,7 @@
             </div>
             <div class="modal-body console-layout-015">
                 <p class="console-layout-016">
-                    Ingresa el título del Tema para Fuente. Se creará una bóveda Obsidian aislada con su correspondiente estructura de carpetas (1_entrada, 2_sucio, 3_limpio, 4_salida).
+                    Ingresa el título del Tema para Fuente. Se creará una bóveda Obsidian aislada con su correspondiente estructura de carpetas (1_volcado, 2_copiado, 3_capturado, 4_procesado).
                 </p>
                 <div class="console-layout-017">
                     <label class="console-text-006">Título del Tema:</label>
@@ -452,8 +452,8 @@
                 </div>
             </div>
             <div id="chat-context-badge" class="console-layout-026">
-                <span><b>Contexto Activo:</b> <span id="chat-context-label" class="console-text-008">Toda la Bóveda (4_salida)</span></span>
-                <small id="chat-context-subtext" class="console-text-009">Acceso a la totalidad del conocimiento en 4_salida</small>
+                                <span><b>Contexto Activo:</b> <span id="chat-context-label" class="console-text-008">Toda la Bóveda (4_procesado)</span></span>
+                                <small id="chat-context-subtext" class="console-text-009">Acceso a la totalidad del conocimiento en 4_procesado</small>
             </div>
             <div class="modal-body">
                 <div class="chat-container-box">
@@ -499,7 +499,7 @@
                 <div class="console-layout-028">
                     <div class="console-text-012">Desglose de la Carpeta de Ingesta:</div>
                     <ul class="console-layout-029">
-                        <li>Archivos locales directos en 1_entrada: <b id="stat-input-direct-count" class="console-text-003">0</b></li>
+                        <li>Archivos locales directos en 1_volcado: <b id="stat-input-direct-count" class="console-text-003">0</b></li>
                         <li>Entradas externas vinculadas: <b id="stat-input-providers-count" class="console-text-003">0</b></li>
                     </ul>
                 </div>
@@ -521,14 +521,14 @@
                 <div class="console-layout-028">
                     <div class="console-text-012">Resumen de Notas e Interconexiones:</div>
                     <ul class="console-layout-029">
-                        <li>Sumarios y notas en 4_salida: <b id="stat-notes-total-count" class="console-text-003">0</b></li>
+                        <li>Sumarios y notas en 4_procesado: <b id="stat-notes-total-count" class="console-text-003">0</b></li>
                         <li>Hiperenlaces cruzados ([[nota]]): <b id="stat-notes-links-count" class="console-text-004">0</b></li>
                         <li>Base de datos vectorial: <b class="console-text-013">ChromaDB Activo</b></li>
                     </ul>
                 </div>
             </div>
             <div class="modal-footer">
-                <span class="console-text-011">Notas atómicas vectorizadas e hiperinterenlazadas en 4_salida.</span>
+                        <span class="console-text-011">Notas atómicas vectorizadas e hiperinterenlazadas en 4_procesado.</span>
             </div>
         </div>
     </div>
@@ -581,16 +581,16 @@
                             <input type="text" id="setting-vault-path" value="" readonly class="console-layout-036">
                             <button class="btn-secondary console-layout-037" data-onclick-command="browseVaultFolder()">Explorar...</button>
                         </div>
-                        <span class="console-layout-038">Las carpetas 1_entrada, 2_sucio, 3_limpio y 4_salida están estructuradas automáticamente por Fuente en esta bóveda.</span>
+                        <span class="console-layout-038">Las carpetas 1_volcado, 2_copiado, 3_capturado y 4_procesado están estructuradas automáticamente por Fuente en esta bóveda.</span>
                     </div>
 
-                    <!-- CONEXIONES DE INGESTA (1_ENTRADA) -->
+                    <!-- CONEXIONES DE INGESTA (1_VOLCADO) -->
                     <div class="console-layout-039">
                         <div class="console-layout-040">
-                            <label class="console-text-016">Entradas vinculadas a 1_entrada (Ingesta):</label>
+                            <label class="console-text-016">Entradas vinculadas a 1_volcado (Ingesta):</label>
                             <button class="btn-small" data-onclick-command="addLinkedInputFolder()">+ Vincular Carpeta de Ingesta</button>
                         </div>
-                        <span class="console-layout-041">Archivos volcados en estas carpetas locales/compartidas serán recopilados hacia 1_entrada:</span>
+                        <span class="console-layout-041">Archivos volcados en estas carpetas locales/compartidas serán recopilados hacia 1_volcado:</span>
                         <div id="linked-input-folders-list" class="console-layout-042">
                             <div class="console-text-017">No hay carpetas de ingesta vinculadas.</div>
                         </div>
@@ -600,10 +600,10 @@
                     <!-- CONEXIONES DE SALIDA (4_SALIDA) -->
                     <div class="console-layout-039">
                         <div class="console-layout-040">
-                            <label class="console-text-016">Destinos Vinculados a 4_salida (Difusión):</label>
+                            <label class="console-text-016">Destinos Vinculados a 5_compartido (Difusión):</label>
                             <button class="btn-small" data-onclick-command="addLinkedOutputFolder()">+ Vincular Carpeta de Destino</button>
                         </div>
-                        <span class="console-layout-041">Notas preparadas en 4_salida se replicarán en estos destinos locales/compartidos:</span>
+                        <span class="console-layout-041">Notas aprobadas en 5_compartido se replicarán en estos destinos locales/compartidos:</span>
                         <div id="linked-output-folders-list" class="console-layout-042">
                             <div class="console-text-017">No hay carpetas de destino vinculadas.</div>
                         </div>
@@ -859,8 +859,8 @@
                         Fuente te permite ordenar tu conocimiento en bloques independientes y asuntos específicos:
                     </p>
                     <ul class="console-layout-055">
-                        <li><b>Temas:</b> Grandes bloques de conocimiento independientes elegibles en el menú <code>TEMA</code> de la cabecera. Cada Tema trabaja con su propia bóveda de notas (<code>1_entrada</code>, <code>2_sucio</code>, <code>3_limpio</code>, <code>4_salida</code>).</li>
-                        <li><b>Cuestiones:</b> Subcarpetas temáticas dentro de <code>4_salida</code> que agrupan notas relacionadas entre sí. Las notas recién creadas sin clasificar quedan en <code>_Sin_Cuestion</code>.</li>
+                        <li><b>Temas:</b> Grandes bloques de conocimiento independientes elegibles en el menú <code>TEMA</code> de la cabecera. Cada Tema trabaja con su propia bóveda de notas (<code>1_volcado</code>, <code>2_copiado</code>, <code>3_capturado</code>, <code>4_procesado</code>, <code>5_compartido</code>).</li>
+                        <li><b>Cuestiones:</b> Subcarpetas temáticas dentro de <code>4_procesado</code> que agrupan notas relacionadas entre sí. Las notas recién creadas sin clasificar quedan en <code>_Sin_Cuestion</code>.</li>
                     </ul>
                 </div>
 
@@ -871,7 +871,7 @@
                         Transformación automática del material en bruto en notas inteligentes estructuradas:
                     </p>
                     <ul class="console-layout-055">
-                        <li><b>De Entrada a Limpio (1_entrada ➔ 3_limpio):</b> Ingesta de archivos, transcripción de audios y lectura de imágenes para obtener texto claro preservando 100% de la información original.</li>
+                        <li><b>De Volcado a Capturado (1_volcado ➔ 3_capturado):</b> Ingesta de archivos, transcripción de audios y lectura de imágenes para obtener texto claro preservando 100% de la información original.</li>
                         <li><b>Nuevo Flujo de Trabajo:</b> Generación asistida por Inteligencia Artificial que analiza la información limpia, construye notas atómicas interconectadas, crea la <b>Nota Marco de Cuestión</b> y actualiza el <b>Mapa General de Contenidos (MOC)</b>.</li>
                     </ul>
                 </div>
@@ -2503,7 +2503,7 @@
         function addLinkedInputFolder() {
             log('Abriendo selector nativo del Finder para entradas de ingesta...');
             if (window.pywebview && window.pywebview.api) {
-                window.pywebview.api.select_sync_input_folder("Vincular entrada de ingesta (1_entrada)").then(function(selection) {
+                window.pywebview.api.select_sync_input_folder("Vincular entrada de ingesta (1_volcado)").then(function(selection) {
                     if (!selection || selection.status === 'cancelled') {
                         log('Selección de ingesta cancelada.');
                         return;
@@ -2547,7 +2547,7 @@
         function addLinkedOutputFolder() {
             log('Abriendo selector nativo del Finder para Destinos de Difusión...');
             if (window.pywebview && window.pywebview.api) {
-                window.pywebview.api.select_folder("Vincular Carpeta de Destino (4_salida)").then(function(folder) {
+                window.pywebview.api.select_folder("Vincular Carpeta de Destino (5_compartido)").then(function(folder) {
                     if (folder && !linkedOutputFolders.includes(folder)) {
                         linkedOutputFolders.push(folder);
                         renderLinkedFolders();
@@ -2871,7 +2871,7 @@
         }
 
         function getFullNotePath(notePath) {
-            const defaultBase = "/Users/emiliosevillaortego/Documents/Programación/fuente/Vault_Fuente/4_salida/";
+            const defaultBase = "/Users/emiliosevillaortego/Documents/Programación/fuente/Vault_Fuente/4_procesado/";
             if (!notePath) return defaultBase + "_Indice_MOC.md";
             if (notePath.startsWith("/")) return notePath;
             return defaultBase + (notePath.endsWith(".md") ? notePath : notePath + ".md");
@@ -3320,11 +3320,11 @@
 
         function openCurrentNoteInObsidian(btnEl) {
             const noteFile = currentSelectedNotePath ? (currentSelectedNotePath.endsWith('.md') ? currentSelectedNotePath : currentSelectedNotePath + '.md') : '_Indice_MOC.md';
-            const obsidianUri = 'obsidian://open?vault=Vault_Fuente&file=4_salida%2F' + encodeURIComponent(noteFile);
+            const obsidianUri = 'obsidian://open?vault=Vault_Fuente&file=4_procesado%2F' + encodeURIComponent(noteFile);
             const title = currentSelectedNoteTitle || noteFile;
 
             showButtonFeedback(btnEl, '✓ Abriendo...');
-            log('Abriendo nota "' + title + '" en Obsidian Vault (4_salida)...');
+            log('Abriendo nota "' + title + '" en Obsidian Vault (4_procesado)...');
 
             if (window.pywebview && window.pywebview.api) {
                 window.pywebview.api.trigger_action('open_obsidian', { note_path: noteFile, obsidian_uri: obsidianUri });
@@ -3364,13 +3364,13 @@
                     if (res && res.alert) { alert(res.alert); }
                 });
             } else {
-                if (actionName === 'flush_sources' || actionName === 'step1_flush') { log('Recopilación completada hacia 1_entrada (modo vista previa).'); }
-                else if (actionName === 'step2_transcribe') { log('Estructuración de datos completada hacia 3_limpio.'); }
+                if (actionName === 'flush_sources' || actionName === 'step1_flush') { log('Recopilación completada hacia 1_volcado (modo vista previa).'); }
+                else if (actionName === 'step2_transcribe') { log('Estructuración de datos completada hacia 3_capturado.'); }
                 else if (actionName === 'step3_structure') { log('Preparación de notas inteligentes con Bucle Optimizado finalizada.'); }
                 else if (actionName === 'quick_help') { openModal('modal-help'); }
                 else if (actionName === 'stat_ram') { alert('Purga de memoria RAM ejecutada.'); }
                 else if (actionName === 'stat_notes') { alert('Telemetría del Grafo: 142 notas preparadas, 380 interenlaces.'); }
-                else if (actionName === 'stat_input') { alert('Archivos por procesar: 3 en 1_entrada.'); }
+                else if (actionName === 'stat_input') { alert('Archivos por procesar: 3 en 1_volcado.'); }
                 else if (actionName === 'stat_processed') { openModal('modal-category'); }
             }
         }
@@ -3836,7 +3836,7 @@
                 ctx.fillStyle = getComputedStyle(document.documentElement)
                     .getPropertyValue('--fuente-snow-0').trim() || '#888';
                 ctx.font = '14px Arial, sans-serif';
-                ctx.fillText('No hay notas en 4_salida para construir el gráfico', width / 2 - 160, height / 2);
+                ctx.fillText('No hay notas en 4_procesado para construir el gráfico', width / 2 - 160, height / 2);
                 return;
             }
 
@@ -4695,8 +4695,8 @@
                     );
                 }
             } else {
-                if (labelEl) labelEl.innerText = 'Toda la Bóveda de Notas (4_salida)';
-                if (subtextEl) subtextEl.innerText = 'Acceso a la totalidad del conocimiento en 4_salida';
+                if (labelEl) labelEl.innerText = 'Toda la Bóveda de Notas (4_procesado)';
+                if (subtextEl) subtextEl.innerText = 'Acceso a la totalidad del conocimiento en 4_procesado';
 
                 if (scrollBox) {
                     scrollBox.replaceChildren();
@@ -4704,7 +4704,7 @@
                         scrollBox,
                         'ai',
                         'Fuente IA:',
-                        'Hilo de conversación iniciado. Contexto fijado en todas las notas de la Bóveda (4_salida). Puedo responder preguntas relacionando cualquier documento procesado.'
+                        'Hilo de conversación iniciado. Contexto fijado en todas las notas de la Bóveda (4_procesado). Puedo responder preguntas relacionando cualquier documento procesado.'
                     );
                 }
             }
@@ -5156,10 +5156,10 @@
                 });
             } else {
                 const mockFiles = [
-                    { name: 'transcripcion_reunion_inicial_2026.txt', path: '/Users/emiliosevillaortego/Documents/Programación/fuente/Vault_Fuente/2_sucio/transcripcion_reunion_inicial_2026.txt', folder: '2_sucio' },
-                    { name: 'esquema_base_datos_vectorial.txt', path: '/Users/emiliosevillaortego/Documents/Programación/fuente/Vault_Fuente/2_sucio/esquema_base_datos_vectorial.txt', folder: '2_sucio' },
-                    { name: 'transcripcion_reunion_inicial_2026_limpio.txt', path: '/Users/emiliosevillaortego/Documents/Programación/fuente/Vault_Fuente/3_limpio/transcripcion_reunion_inicial_2026_limpio.txt', folder: '3_limpio' },
-                    { name: 'esquema_base_datos_vectorial_limpio.txt', path: '/Users/emiliosevillaortego/Documents/Programación/fuente/Vault_Fuente/3_limpio/esquema_base_datos_vectorial_limpio.txt', folder: '3_limpio' }
+                    { name: 'transcripcion_reunion_inicial_2026.txt', path: '/Users/emiliosevillaortego/Documents/Programación/fuente/Vault_Fuente/2_copiado/transcripcion_reunion_inicial_2026.txt', folder: '2_copiado' },
+                    { name: 'esquema_base_datos_vectorial.txt', path: '/Users/emiliosevillaortego/Documents/Programación/fuente/Vault_Fuente/2_copiado/esquema_base_datos_vectorial.txt', folder: '2_copiado' },
+                    { name: 'transcripcion_reunion_inicial_2026_limpio.txt', path: '/Users/emiliosevillaortego/Documents/Programación/fuente/Vault_Fuente/3_capturado/transcripcion_reunion_inicial_2026_capturado.txt', folder: '3_capturado' },
+                    { name: 'esquema_base_datos_vectorial_limpio.txt', path: '/Users/emiliosevillaortego/Documents/Programación/fuente/Vault_Fuente/3_capturado/esquema_base_datos_vectorial_capturado.txt', folder: '3_capturado' }
                 ];
                 renderCategoryFiles(mockFiles);
             }

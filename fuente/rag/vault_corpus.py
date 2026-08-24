@@ -9,6 +9,7 @@ from fuente.domain.documents import MarkdownDocument, content_hash_for_markdown
 from fuente.domain.errors import PathAuthorizationError
 from fuente.domain.frontmatter import FrontmatterError, parse_frontmatter
 from fuente.domain.paths import AuthorizedPathResolver, document_id_for_relative_path
+from fuente.domain.vault_layout import VaultLayout
 from fuente.rag.semantic_chunker import SemanticChunker
 
 logger = logging.getLogger(__name__)
@@ -33,7 +34,7 @@ class VaultCorpusProvider:
         canonical_eligibility_guard: Callable[[str], None] | None = None,
     ) -> None:
         self.vault_root = Path(vault_root).resolve()
-        configured_roots = output_roots or (self.vault_root / "4_salida",)
+        configured_roots = output_roots or (VaultLayout(self.vault_root).processed_dir,)
         self.output_roots = tuple(
             sorted({Path(root).resolve() for root in configured_roots}, key=lambda path: path.as_posix())
         )
@@ -98,9 +99,9 @@ class VaultCorpusProvider:
         resolver = AuthorizedPathResolver(
             vault_root=self.vault_root,
             output=output_root,
-            input=output_root.parent / "1_entrada",
-            dirty=output_root.parent / "2_sucio",
-            clean=output_root.parent / "3_limpio",
+            input=VaultLayout(output_root.parent).input_personal_dir.parent,
+            dirty=VaultLayout(output_root.parent).root("dirty"),
+            clean=VaultLayout(output_root.parent).root("clean"),
             quarantine=self.vault_root / ".fuente" / "quarantine",
         )
         return resolver.resolve_note(vault_relative)

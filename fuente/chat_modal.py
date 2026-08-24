@@ -24,6 +24,7 @@ from fuente.core.vault import VaultManager
 from fuente.domain.errors import CanonicalEligibilityError
 from fuente.domain.origins import parse_origins
 from fuente.domain.runtime_policy import resolve_runtime_policy
+from fuente.domain.vault_layout import CANONICAL_CLEAN_DIR_NAME
 from fuente.infrastructure.sqlite_store import JobStore
 from fuente.rag.chroma_store import ChromaStore
 from fuente.rag.vault_corpus import VaultCorpusProvider
@@ -114,7 +115,7 @@ class FuenteChatModal(tk.Toplevel):
                 metadata = hit.get("metadata") or {}
                 relative_path = str(metadata.get("relative_path") or "")
                 document_id = str(metadata.get("document_id") or "")
-                if relative_path.startswith("3_limpio/"):
+                if relative_path.startswith(f"{CANONICAL_CLEAN_DIR_NAME}/"):
                     try:
                         notes.require_eligible_canonical_note(document_id)
                     except (TypeError, ValueError, CanonicalEligibilityError):

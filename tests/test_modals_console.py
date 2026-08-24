@@ -16,7 +16,7 @@ class TestFuenteModals(unittest.TestCase):
 
     def setUp(self):
         self.tmp_dir = Path(tempfile.mkdtemp())
-        self.output_dir = self.tmp_dir / "4_salida"
+        self.output_dir = self.tmp_dir / "4_procesado"
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
         # Crear algunas notas de prueba

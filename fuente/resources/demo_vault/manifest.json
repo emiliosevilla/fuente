@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "layout_version": 4,
-  "roots": ["1_entrada/personal", "1_entrada/común", "2_sucio", "3_limpio", "4_procesado", "5_salida"],
+  "roots": ["1_volcado/personal", "1_volcado/común", "2_copiado", "3_capturado", "4_procesado", "5_compartido"],
   "legacy_destination_root": "4_salida",
   "demo_version": "1.0.0",
   "theme": "General",
@@ -9,21 +9,21 @@
   "notes": [
     {
       "source_resource": "notes/Introduccion.md",
-      "destination": "4_salida/Demo/Introduccion.md",
+      "destination": "4_procesado/Demo/Introduccion.md",
       "sha256": "aaa2f021878edb005253fae1d9b331e4da19a1adc9acc8bdbeb8b0c136e572d7",
       "expected_wikilinks": ["Arquitectura_Local", "Flujo_Revision"],
       "expected_initial_review_status": "pending_review"
     },
     {
       "source_resource": "notes/Arquitectura_Local.md",
-      "destination": "4_salida/Demo/Arquitectura_Local.md",
-      "sha256": "885de60d5bbdf7ace7bbeacc5b38dcfb1dbb1164f49704caf489a81407754f7c",
+      "destination": "4_procesado/Demo/Arquitectura_Local.md",
+      "sha256": "04531563f47b2304fcbd9f333bed4821391e2ec81af2ac58c9db07586afeef57",
       "expected_wikilinks": ["Introduccion"],
       "expected_initial_review_status": "approved"
     },
     {
       "source_resource": "notes/Flujo_Revision.md",
-      "destination": "4_salida/Demo/Flujo_Revision.md",
+      "destination": "4_procesado/Demo/Flujo_Revision.md",
       "sha256": "5b979f52bc5a77a81589d2b50031063126b8bc877d16443cb7f9418add37289c",
       "expected_wikilinks": ["Introduccion"],
       "expected_initial_review_status": "approved"

@@ -41,12 +41,13 @@ def _service(tmp_path):
 def test_rejected_candidate_never_writes_processed_note(tmp_path):
     vault, store, notes, candidate_id = _service(tmp_path)
     try:
+        before = set(vault.output_dir.rglob("*.md"))
         store._connection.execute(
             "DELETE FROM refinement_verdicts WHERE candidate_id = ?", (candidate_id,)
         )
         with pytest.raises(RefinementRejectedError):
             notes.promote_refinement_candidate(candidate_id, expected_revision=1)
-        assert list(vault.processed_dir.rglob("*.md")) == []
+        assert set(vault.output_dir.rglob("*.md")) == before
     finally:
         store.close()
 
@@ -68,12 +69,13 @@ def test_accepted_candidate_writes_private_processed_root(tmp_path):
 def test_promotion_rejects_stale_candidate_hash_without_writing(tmp_path):
     vault, store, notes, candidate_id = _service(tmp_path)
     try:
+        before = set(vault.output_dir.rglob("*.md"))
         store._connection.execute(
             "UPDATE refinement_candidates SET content_hash = 'stale' WHERE candidate_id = ?",
             (candidate_id,),
         )
         with pytest.raises(Exception):
             notes.promote_refinement_candidate(candidate_id, expected_revision=1)
-        assert list(vault.processed_dir.rglob("*.md")) == []
+        assert set(vault.output_dir.rglob("*.md")) == before
     finally:
         store.close()

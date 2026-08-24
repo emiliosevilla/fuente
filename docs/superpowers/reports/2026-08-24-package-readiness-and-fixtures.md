@@ -15,7 +15,7 @@ No se puede afirmar todavía que la instalación sea operativa en cualquier equi
 
 | Requisito | Evidencia medida | Estado | Límite pendiente |
 |---|---|---|---|
-| Almacenamiento Obsidian | Instalador crea/prepara el Vault y detecta Obsidian en macOS/Windows | PARCIAL | Obsidian no se incluye en el bundle; en este Mac no se detectó `obsidian` |
+| Almacenamiento Obsidian | Instalador no crea Vault; primer arranque exige Obsidian y Ajustes valida `.obsidian/` + lectura/escritura | PARCIAL | Obsidian no se incluye en el bundle; falta repetir la prueba real con un Vault existente |
 | MiniRAG | `minirag-hku` fijado en `pyproject.toml`; cliente real creado con MiniRAG 0.0.2; módulos analizados por PyInstaller | PASS en paquete | Falta ejercitar una ingesta real desde el ejecutable |
 | BM25 | Backend híbrido y pruebas existentes | PASS en código | Falta flujo manual completo |
 | ChromaDB | `chromadb==0.6.3`; cliente persistente local; presente en archive | PASS | Falta prueba con datos reales del Vault |
@@ -39,6 +39,9 @@ No se puede afirmar todavía que la instalación sea operativa en cualquier equi
 - `fuente.spec` y `build_installer.py`: incluyen MiniRAG, Meetily, `consola_preview.html` y `readme.html`; se eliminó el hidden import incorrecto `pyyaml`.
 - `assets/toastui-editor/`: incorpora TOAST UI Editor 3.2.2 y su CSS local; no depende de CDN.
 - `instalar_fuente.command` y `instalar_fuente.bat`: instalan siempre el stack completo y activan OCR por defecto.
+- `fuente/ui/setup_backend.py`: primer arranque sin Vault; exige Obsidian, valida que la ruta contenga `.obsidian/`, permite instalación automática de Obsidian y creación guiada del Vault, y guarda la ruta sólo después de comprobarla.
+- `fuente/installer_contract.py` y `fuente/installer_gui.py`: instalación sin Vault técnico por defecto; la selección/creación y los accesos al Vault quedan aplazados a Ajustes.
+- `fuente.spec`, `fuente/control_console.py` y `create_shortcuts.py`: spinner de arranque, `.app` macOS y lanzamiento sin Terminal técnica como ventana de usuario.
 - Tests de packaging, scripts, contrato de instalador, proyección y bridge: **75 passed**; contrato JavaScript del editor: **4 passed**.
 
 ## Evidencia de build
@@ -78,3 +81,39 @@ La ejecución diagnóstica `./dist/Fuente_macOS --help` no devolvió ayuda y que
 5. Consultar una nota con BM25 y con recuperación semántica.
 6. Si Ollama está disponible, comprobar respuesta Qwen y registrar el nombre exacto del modelo.
 7. Dejar Windows como gate separado: construir y repetir la misma secuencia en una máquina Windows.
+
+## Borrador de resultado de pruebas reales — macOS
+
+### PR-01 — Descarga y descompresión del ZIP
+
+- Estado: **PASS**.
+- El ZIP se descargó y se descomprimió en el Escritorio.
+- El ejecutable `Fuente_macOS` pudo iniciarse.
+
+### PR-02 — Primer arranque del ejecutable (evidencia anterior)
+
+- Estado funcional: **PARCIAL / FAIL de aceptación**.
+- La evidencia anterior mostró que el proceso verificaba y creaba `~/Documents/Fuente_Vault`; ese comportamiento queda corregido y ya no es válido para la siguiente prueba.
+- La nueva ejecución debe abrir Ajustes antes de iniciar servicios de Vault, comprobar Obsidian y exigir un Vault real con `.obsidian/`.
+- Tras guardar una ruta válida, Fuente debe validarla de nuevo y relanzarse automáticamente conectada a ella.
+- No se abrió Chrome.
+
+### Peticiones de mejora detectadas durante la prueba
+
+1. **Feedback durante el arranque:** mostrar al menos un spinner mientras se inicializan los servicios, para que el usuario sepa que el ejecutable está trabajando.
+2. **Cierre de Terminal:** cerrar automáticamente la ventana de Terminal cuando la aplicación haya terminado correctamente, evitando dejar una consola técnica abierta al usuario final.
+
+El spinner y el cierre de la Terminal quedan incorporados en el fixture; falta que el usuario los confirme en la repetición manual.
+
+### Incidencias adicionales de aceptación
+
+1. **Vault real de Obsidian:** la ruta debe contener `.obsidian/`; una carpeta normal debe rechazarse aunque Obsidian esté instalado.
+2. **Obsidian ausente:** el primer arranque debe detenerse en Ajustes y ofrecer instalación automática; no debe intentar crear ni encontrar un Vault técnico.
+3. **Creación guiada:** Ajustes debe pedir nombre y carpeta padre, crear el Vault de Obsidian, comprobarlo y relanzar Fuente automáticamente.
+
+### Estado del rebuild posterior a estos fixtures
+
+- Los tests focalizados del backend de configuración, contrato del instalador, packaging y puente pasaron: **49 passed**.
+- `py_compile` y `git diff --check` pasaron.
+- El rebuild posterior quedó **BLOQUEADO** dentro del análisis interno de PyInstaller, tras más de quince minutos sin CPU efectiva; se interrumpió de forma segura.
+- El ZIP que actualmente existe en `dist/` no debe usarse para repetir esta prueba: no se ha demostrado que contenga la última validación `.obsidian/`.

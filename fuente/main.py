@@ -10,6 +10,7 @@ from pathlib import Path
 from fuente.config import get_default_config
 from fuente.application.lifecycle import ApplicationLifecycle
 from fuente.core.app_checker import check_and_prompt_user_apps_closed
+from fuente.ui.setup_backend import load_startup_vault
 
 # Configuración básica de logging y codificación UTF-8 para consola en Windows
 if sys.platform == "win32":
@@ -48,30 +49,6 @@ def require_graphical_display() -> None:
         return
     print(_NO_DISPLAY_MESSAGE, file=sys.stderr)
     sys.exit(1)
-
-
-def select_vault_folder_gui() -> Path:
-    """Abre un diálogo gráfico nativo del sistema operativo para seleccionar la carpeta del Vault de Obsidian."""
-    try:
-        import tkinter as tk
-        from tkinter import filedialog
-
-        root = tk.Tk()
-        root.withdraw()
-        root.attributes("-topmost", True)
-
-        print("\n[+] Selecciona la carpeta de tu Vault de Obsidian en la ventana que se ha abierto...")
-        folder_selected = filedialog.askdirectory(title="Selecciona tu carpeta Vault de Obsidian para Fuente")
-
-        if folder_selected:
-            return Path(folder_selected).resolve()
-    except Exception as e:
-        logger.debug(f"GUI dialog fallback error: {e}")
-
-    # Si se cancela o falla el GUI, usar directorio por defecto
-    default_dir = Path("./ObsidianVault").resolve()
-    default_dir.mkdir(parents=True, exist_ok=True)
-    return default_dir
 
 
 def run_flush(vault_path: Path) -> dict:
@@ -126,7 +103,7 @@ def run_headless(vault_path: Path, wait_for_shutdown=None) -> None:
         lifecycle.stop()
 
 
-def run_continuous_console(vault_path: Path) -> None:
+def run_continuous_console(vault_path: Path | None) -> None:
     """Modo predeterminado: lanza la Consola Central de Control (posee su propio ciclo de vida)."""
     require_graphical_display()
     from fuente.control_console import launch_control_console
@@ -164,15 +141,12 @@ def main():
     args = parser.parse_args()
 
     vault_arg = args.vault or args.vault_pos
-    if vault_arg:
-        vault_path = Path(vault_arg).resolve()
-    else:
-        vault_path = Path.home() / "Documents" / "Fuente_Vault"
-
-    vault_path.mkdir(parents=True, exist_ok=True)
+    vault_path = Path(vault_arg).expanduser().resolve() if vault_arg else load_startup_vault()
 
 
     if args.flush:
+        vault_path = vault_path or Path.home() / "Documents" / "Fuente_Vault"
+        vault_path.mkdir(parents=True, exist_ok=True)
         # Modo Flush directo por consola
         print("\n" + "=" * 65)
         print("                        FUENTE — EVENTO FLUSH")
@@ -197,6 +171,8 @@ def main():
         print(" Todos los archivos han sido procesados y el mapa de conocimiento")
         print(" en Obsidian ha sido actualizado correctamente.\n")
     elif args.headless:
+        vault_path = vault_path or Path.home() / "Documents" / "Fuente_Vault"
+        vault_path.mkdir(parents=True, exist_ok=True)
         # Modo headless: servicios continuos sin ninguna interfaz gráfica (Docker/CI).
         run_headless(vault_path)
     else:

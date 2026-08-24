@@ -126,7 +126,13 @@ class ChromaStore:
         self.init_error = None
         _patch_sqlite_for_chroma()
         try:
-            import chromadb
+            try:
+                import chromadb
+            except ImportError:
+                from fuente.runtime_loader import ensure_capability
+
+                ensure_capability("core")
+                import chromadb
 
             self.persist_directory.mkdir(parents=True, exist_ok=True)
             self.client = chromadb.PersistentClient(path=str(self.persist_directory))

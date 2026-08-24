@@ -568,6 +568,14 @@
                     <button class="btn-small tab-btn" id="tab-btn-template" data-onclick-command="switchSettingsTab('template')">Plantilla Nota</button>
                 </div>
                 <div id="settings-load-status" class="console-text-017" role="status" aria-live="polite"></div>
+                <div id="setup-vault-panel" class="console-layout-039" hidden>
+                    <strong>Configuración inicial</strong>
+                    <div id="setup-obsidian-status" class="console-text-017" role="status" aria-live="polite"></div>
+                    <div class="console-layout-040">
+                        <button class="btn-secondary" id="setup-install-obsidian" data-onclick-command="installObsidian()">Instalar Obsidian automáticamente</button>
+                        <button class="btn-secondary" id="setup-create-vault" data-onclick-command="createGuidedVault()">Crear Vault guiado</button>
+                    </div>
+                </div>
 
                 <!-- PESTAÑA 1: MEMORIA & CONEXIONES -->
                 <div class="tab-panel console-layout-033" id="tab-panel-routes">
@@ -634,6 +642,14 @@
                         <span>Permitir Ollama fuera de este equipo. Las solicitudes pueden salir del dispositivo.</span>
                     </label>
                     <span id="offline-mode-detail">Modo solo local: inferencia en Ollama loopback; la consola no carga recursos de red en tiempo de ejecución.</span>
+                    <div id="runtime-capabilities" class="console-layout-039" hidden>
+                        <div class="console-layout-040">
+                            <label class="console-text-016">Funciones instalables:</label>
+                            <span class="console-text-017">Se descargan sólo al necesitarlas.</span>
+                        </div>
+                        <div id="runtime-capability-list" class="console-layout-042"></div>
+                        <div id="runtime-capability-status" class="console-text-017" role="status" aria-live="polite"></div>
+                    </div>
                     <fieldset id="eco-controls" disabled>
                         <legend>Perfil de ejecución medido</legend>
                         <label for="setting-resource-profile">Perfil</label>
@@ -957,6 +973,8 @@
                 'dismissOnboarding()': dismissOnboarding,
                 'openOnboardingFromHelp()': openOnboardingFromHelp,
                 'hideOnboardingPanel()': hideOnboardingPanel,
+                'installObsidian()': installObsidian,
+                'createGuidedVault()': createGuidedVault,
             };
             if (handlers[command]) handlers[command]();
         }
@@ -1052,7 +1070,11 @@
                 renderOnboarding({ status: 'pending', show_first_run_panel: true });
                 return;
             }
-            window.pywebview.api.install_demo_vault().then(renderDemoInstallResult);
+            callNativeRequest('install_demo_vault', function() {
+                return window.pywebview.api.install_demo_vault();
+            }).then(renderDemoInstallResult).catch(function(err) {
+                renderNativeBackendStatusError(String(err || nativeBackendUnavailableMessage()));
+            });
         }
 
         function dismissOnboarding() {
@@ -1060,9 +1082,13 @@
                 hideOnboardingPanel();
                 return;
             }
-            window.pywebview.api.dismiss_onboarding().then(function(status) {
+            callNativeRequest('dismiss_onboarding', function() {
+                return window.pywebview.api.dismiss_onboarding();
+            }).then(function(status) {
                 renderOnboarding(status);
                 hideOnboardingPanel();
+            }).catch(function(err) {
+                renderNativeBackendStatusError(String(err || nativeBackendUnavailableMessage()));
             });
         }
 
@@ -1207,6 +1233,14 @@
                     throw error;
                 });
             });
+        }
+
+        function callNativeLongRequest(methodName, invoke) {
+            const api = window.pywebview && window.pywebview.api;
+            if (!api || typeof api[methodName] !== 'function') {
+                return Promise.reject(new Error(nativeBackendUnavailableMessage()));
+            }
+            return Promise.resolve().then(invoke);
         }
 
         function recoverNativeModalLoads() {
@@ -2474,6 +2508,130 @@
             input.click();
         }
 
+        function renderSetupSettings(info) {
+            const panel = document.getElementById('setup-vault-panel');
+            if (!panel) return;
+            panel.hidden = !info || !info.setup_mode;
+            if (!info || !info.setup_mode) return;
+            const installed = Boolean(info.obsidian_installed);
+            const status = document.getElementById('setup-obsidian-status');
+            if (status) {
+                status.textContent = installed
+                    ? 'Obsidian detectado. Selecciona un Vault existente o crea uno nuevo.'
+                    : 'Obsidian no está instalado. Instálalo antes de configurar el Vault.';
+            }
+            const install = document.getElementById('setup-install-obsidian');
+            const create = document.getElementById('setup-create-vault');
+            if (install) install.hidden = installed;
+            if (create) create.disabled = !installed;
+            const browse = document.querySelector('[data-onclick-command="browseVaultFolder()"]');
+            if (browse) browse.disabled = !installed;
+        }
+
+        function installObsidian() {
+            const status = document.getElementById('setup-obsidian-status');
+            if (status) status.textContent = 'Instalando Obsidian…';
+            callNativeLongRequest('install_obsidian', function() {
+                return window.pywebview.api.install_obsidian();
+            }).then(function(result) {
+                if (result && result.error) {
+                    if (status) status.textContent = result.message || result.error;
+                    return;
+                }
+                renderSetupSettings({ setup_mode: true, obsidian_installed: true });
+            }).catch(function(err) {
+                if (status) status.textContent = String(err || 'No se pudo instalar Obsidian.');
+            });
+        }
+
+        function restartWithSelectedVault(result) {
+            if (!result || !result.restart_required || !result.vault_path) return;
+            const status = document.getElementById('settings-save-status');
+            if (status) status.textContent = 'Vault válido. Reiniciando Fuente…';
+            callNativeLongRequest('restart_with_vault', function() {
+                return window.pywebview.api.restart_with_vault(result.vault_path);
+            }).catch(function(err) {
+                const message = String(err || nativeBackendUnavailableMessage());
+                renderSettingsSaveError(message);
+                renderNativeBackendStatusError(message);
+            });
+        }
+
+        function createGuidedVault() {
+            const name = window.prompt('Nombre del nuevo Vault de Obsidian:');
+            if (!name || !name.trim()) return;
+            callNativeRequest('select_folder', function() {
+                return window.pywebview.api.select_folder('Elige dónde crear el Vault de Obsidian');
+            }).then(function(parentPath) {
+                if (!parentPath) return;
+                return callNativeRequest('create_vault', function() {
+                    return window.pywebview.api.create_vault({
+                        vault_name: name.trim(),
+                        parent_path: parentPath,
+                    });
+                });
+            }).then(function(result) {
+                if (!result) return;
+                if (result.error) {
+                    const status = document.getElementById('setup-obsidian-status');
+                    if (status) status.textContent = result.message || result.error;
+                    return;
+                }
+                restartWithSelectedVault(result);
+            }).catch(function(err) {
+                const status = document.getElementById('setup-obsidian-status');
+                if (status) status.textContent = String(err || 'No se pudo crear el Vault.');
+            });
+        }
+
+        function renderCapabilities(capabilities) {
+            const panel = document.getElementById('runtime-capabilities');
+            const list = document.getElementById('runtime-capability-list');
+            if (!panel || !list) return;
+            panel.hidden = !Array.isArray(capabilities);
+            if (!Array.isArray(capabilities)) return;
+            list.replaceChildren();
+            capabilities.forEach(function(capability) {
+                const row = document.createElement('div');
+                const text = document.createElement('span');
+                text.textContent = capability.label + ': ' + capability.description;
+                const button = document.createElement('button');
+                button.className = 'btn-small';
+                button.disabled = !!capability.installed || !!capability.required;
+                button.textContent = capability.installed ? 'Instalada' : (capability.required ? 'Base requerida' : 'Instalar');
+                button.addEventListener('click', function() { installCapability(capability.id); });
+                row.append(text, button);
+                list.appendChild(row);
+            });
+        }
+
+        function installCapability(capabilityId) {
+            const status = document.getElementById('runtime-capability-status');
+            if (status) status.textContent = 'Descargando ' + capabilityId + '…';
+            callNativeLongRequest('install_capability', function() {
+                return window.pywebview.api.install_capability(capabilityId);
+            }).then(function(result) {
+                if (result && result.error) {
+                    if (status) status.textContent = result.message || result.error;
+                    return;
+                }
+                if (status) status.textContent = 'Capacidad instalada.';
+                loadCapabilities();
+            }).catch(function(error) {
+                if (status) status.textContent = String(error || 'No se pudo instalar capacidad.');
+            });
+        }
+
+        function loadCapabilities() {
+            callNativeRequest('get_capabilities', function() {
+                return window.pywebview.api.get_capabilities();
+            }).then(function(result) {
+                renderCapabilities(result && result.capabilities);
+            }).catch(function() {
+                renderCapabilities(null);
+            });
+        }
+
         function browseVaultFolder() {
             log('Abriendo selector nativo del Finder de macOS para la Bóveda...');
             if (window.pywebview && window.pywebview.api) {
@@ -2725,6 +2883,8 @@
                     document.getElementById('setting-whisper-model-path').value = info.whisper_model_path || '';
                 }
                 if (info.offline_mode) { applyOfflineModeState(info.offline_mode); }
+                renderSetupSettings(info);
+                if (!info.setup_mode) loadCapabilities();
                 renderLinkedFolders();
                 populateOllamaModels(info.models, info.current_model);
                 if (statusEl) statusEl.textContent = 'Ajustes cargados desde el Vault conectado.';
@@ -5289,7 +5449,21 @@
                 if (res.offline_mode) applyOfflineModeState(res.offline_mode);
                 if (res.stats) updateDashboardStats(res.stats);
                 const statusEl = document.getElementById('settings-save-status');
-                if (statusEl) statusEl.textContent = 'Ajustes guardados correctamente.';
+                if (statusEl) {
+                    statusEl.textContent = res.restart_required
+                        ? 'Vault válido. Reiniciando Fuente…'
+                        : 'Ajustes guardados correctamente.';
+                }
+                if (res.restart_required) {
+                    callNativeLongRequest('restart_with_vault', function() {
+                        return window.pywebview.api.restart_with_vault(settings.vault_path);
+                    }).catch(function(err) {
+                        const message = String(err || nativeBackendUnavailableMessage());
+                        renderSettingsSaveError(message);
+                        renderNativeBackendStatusError(message);
+                    });
+                    return;
+                }
                 closeModal('modal-settings');
             }).catch(function(err) {
                 const message = String(err || nativeBackendUnavailableMessage());
@@ -5321,6 +5495,19 @@
                     }
                     if (state.onboarding) {
                         renderOnboarding(state.onboarding);
+                    }
+                    const status = document.getElementById('bottom-status-line');
+                    if (status) {
+                        status.textContent = state.vault_path
+                            ? 'Conectado al Vault: ' + state.vault_path
+                            : 'Sin Vault conectado. Configúralo desde Ajustes.';
+                        if (state.setup_mode) {
+                            renderSetupSettings({
+                                setup_mode: true,
+                                obsidian_installed: Boolean(state.obsidian_installed),
+                            });
+                            openModal('modal-settings');
+                        }
                     }
                 }).catch(function(err) {
                     renderNativeBackendStatusError(String(err || nativeBackendUnavailableMessage()));

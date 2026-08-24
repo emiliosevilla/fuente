@@ -76,7 +76,7 @@ class InstallStepResult:
 @dataclass
 class InstallationContext:
     base_dir: Path
-    vault_path: Path
+    vault_path: Optional[Path] = None
     cloud_folders: List[Path | str | ConnectedFolder] = field(default_factory=list)
     confirm: Optional[ConfirmCallback] = None
     log: Optional[LogCallback] = None
@@ -651,6 +651,13 @@ def step_configure_anythingllm(ctx: InstallationContext) -> InstallStepResult:
 
 
 def step_create_shortcuts(ctx: InstallationContext) -> InstallStepResult:
+    if ctx.vault_path is None:
+        return InstallStepResult(
+            name="shortcuts",
+            success=True,
+            message="Shortcuts deferred until an Obsidian Vault is connected from Settings",
+            skipped=True,
+        )
     if not ctx.create_shortcuts:
         return InstallStepResult(
             name="shortcuts",
@@ -702,7 +709,7 @@ def build_receipt(
         "version": RECEIPT_VERSION,
         "installed_at": datetime.now(timezone.utc).isoformat(),
         "base_dir": str(ctx.base_dir.resolve()),
-        "vault_path": str(ctx.vault_path.resolve()),
+        "vault_path": str(ctx.vault_path.resolve()) if ctx.vault_path else None,
         "python_version": sys.version.split()[0],
         "fuente_version": fuente_version,
         "model": model_name,
@@ -731,9 +738,18 @@ def run_installation(ctx: InstallationContext) -> List[InstallStepResult]:
         log(f"[step:{step_name}] {'ok' if result.success else 'failed'}: {result.message}")
         return result
 
-    log(f"[+] Preparing vault at {ctx.vault_path}")
-    results.append(_run_named_step("vault_structure", lambda: ensure_vault_structure(ctx.vault_path)))
-    results.append(_run_named_step("cloud_folders", lambda: step_save_cloud_folders(ctx)))
+    if ctx.vault_path is None:
+        log("[+] Vault deferred: configure an Obsidian Vault from Settings")
+        results.append(_run_named_step("vault_structure", lambda: InstallStepResult(
+            name="vault_structure", success=True,
+            message="Vault configuration deferred until first launch", skipped=True)))
+        results.append(_run_named_step("cloud_folders", lambda: InstallStepResult(
+            name="cloud_folders", success=True,
+            message="Cloud folders deferred until a Vault is connected", skipped=True)))
+    else:
+        log(f"[+] Preparing vault at {ctx.vault_path}")
+        results.append(_run_named_step("vault_structure", lambda: ensure_vault_structure(ctx.vault_path)))
+        results.append(_run_named_step("cloud_folders", lambda: step_save_cloud_folders(ctx)))
 
     results.append(_run_named_step("ocr_runtime", lambda: step_install_ocr(ctx)))
 
@@ -741,7 +757,12 @@ def run_installation(ctx: InstallationContext) -> List[InstallStepResult]:
     results.append(model_step)
 
     results.append(_run_named_step("anythingllm_install", lambda: step_install_anythingllm(ctx)))
-    results.append(_run_named_step("anythingllm_config", lambda: step_configure_anythingllm(ctx)))
+    if ctx.vault_path is None:
+        results.append(_run_named_step("anythingllm_config", lambda: InstallStepResult(
+            name="anythingllm_config", success=True,
+            message="AnythingLLM configuration deferred until a Vault is connected", skipped=True)))
+    else:
+        results.append(_run_named_step("anythingllm_config", lambda: step_configure_anythingllm(ctx)))
     results.append(_run_named_step("shortcuts", lambda: step_create_shortcuts(ctx)))
 
     prereqs = detect_prerequisites(

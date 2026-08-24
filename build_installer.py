@@ -3,7 +3,10 @@ Script de empaquetado para distribución de ejecutables independientes y paquete
 Genera los archivos ZIP de distribución listos para macOS o Windows sin mezclar scripts de otros S.O.
 """
 import os
+import shutil
 import sys
+import time
+import tempfile
 import zipfile
 import subprocess
 from pathlib import Path
@@ -30,6 +33,69 @@ def add_dir_to_zip(zf: zipfile.ZipFile, source_dir: Path, arc_dir_name: str):
             rel_path = full_path.relative_to(source_dir)
             arcname = f"{arc_dir_name}/{rel_path}"
             zf.write(full_path, arcname=arcname)
+
+
+def sign_macos_app(app_bundle: Path) -> None:
+    """Make the generated bundle internally coherent for local distribution."""
+    if sys.platform != "darwin":
+        return
+    identity = os.environ.get("FUENTE_CODESIGN_IDENTITY", "-")
+    sign_command = [
+        "codesign", "--deep", "--force", "--verbose",
+        "--sign", identity, str(app_bundle),
+    ]
+    for attempt in range(3):
+        subprocess.check_call(["/usr/bin/xattr", "-cr", str(app_bundle)])
+        subprocess.check_call(sign_command)
+        subprocess.check_call(["/usr/bin/xattr", "-cr", str(app_bundle)])
+        try:
+            subprocess.check_call([
+                "codesign", "--verify", "--deep", "--strict", str(app_bundle),
+            ])
+            return
+        except subprocess.CalledProcessError:
+            if attempt == 2:
+                raise
+            time.sleep(0.5)
+
+
+def write_macos_launcher(dist_dir: Path) -> Path:
+    """Create the official macOS entry point for the distributed app."""
+    launcher = dist_dir / "Instalador_Fuente.command"
+    launcher.write_text(
+        '''#!/bin/bash
+set -e
+APP_PATH="/Applications/Fuente.app"
+if [ ! -d "$APP_PATH" ]; then
+    echo "Arrastra Fuente.app a Applications antes de ejecutar este instalador." >&2
+    exit 1
+fi
+/usr/bin/xattr -cr "$APP_PATH"
+exec /usr/bin/open "$APP_PATH"
+''',
+        encoding="utf-8",
+    )
+    launcher.chmod(0o755)
+    return launcher
+
+
+def create_macos_dmg(dist_dir: Path, app_bundle: Path, launcher: Path) -> Path:
+    """Create the primary macOS installer image with the standard Applications link."""
+    dmg_path = dist_dir / "Fuente_Distribucion_macOS.dmg"
+    with tempfile.TemporaryDirectory(prefix="fuente-dmg-") as temp_dir:
+        staging = Path(temp_dir)
+        staged_app = staging / app_bundle.name
+        shutil.copytree(app_bundle, staged_app, symlinks=True)
+        subprocess.check_call(["/usr/bin/xattr", "-cr", str(staged_app)])
+        shutil.copy2(launcher, staging / launcher.name)
+        (staging / "Applications").symlink_to("/Applications")
+        dmg_path.unlink(missing_ok=True)
+        subprocess.check_call([
+            "/usr/bin/hdiutil", "create", "-volname", "Fuente",
+            "-srcfolder", str(staging), "-ov", "-format", "UDZO",
+            str(dmg_path),
+        ])
+    return dmg_path
 
 
 def prepare_runtime_payload(base_dir: Path) -> Path:
@@ -138,13 +204,26 @@ def build():
     if not app_bundle.is_dir():
         raise RuntimeError("PyInstaller no generó Fuente.app; no se creará un ZIP incompleto.")
 
+    sign_macos_app(app_bundle)
+
     print(f"\nCreando paquete ZIP de distribución auto-contenido: {zip_path.name}...")
-    with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
-        add_dir_to_zip(zf, app_bundle, "Fuente.app")
+    dmg_path = None
+    if is_mac:
+        launcher = write_macos_launcher(dist_dir)
+        zip_path.unlink(missing_ok=True)
+        subprocess.check_call([
+            "/usr/bin/zip", "-qryy", str(zip_path), "Fuente.app", launcher.name,
+        ], cwd=dist_dir)
+        dmg_path = create_macos_dmg(dist_dir, app_bundle, launcher)
+    else:
+        with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
+            add_dir_to_zip(zf, app_bundle, "Fuente.app")
 
     print("=" * 60)
     print("¡PAQUETE DE DISTRIBUCIÓN CREADO EXITOSAMENTE!")
     print(f"[+] Archivo ZIP listo para entregar: {zip_path.resolve()}")
+    if dmg_path is not None:
+        print(f"[+] Archivo DMG principal listo para entregar: {dmg_path.resolve()}")
     print("=" * 60 + "\n")
 
 

@@ -218,6 +218,27 @@ extras; ninguna de ellas es obligatoria para el núcleo.
 - macOS: `instalar_fuente.command`
 - Windows: `instalar_fuente.bat`
 
+#### Paquete macOS descargable
+
+El paquete macOS final se entrega como
+`Fuente_Distribucion_macOS.dmg`. Ábrelo y arrastra `Fuente.app` a
+`Applications`. Después ejecuta `Instalador_Fuente.command` desde la ventana
+del DMG:
+
+```text
+Fuente_Distribucion_macOS.dmg
+├── Fuente.app
+├── Instalador_Fuente.command
+└── Applications → /Applications
+```
+
+No abras `Fuente.app` directamente. `Instalador_Fuente.command` comprueba que
+la aplicación está en `/Applications`, limpia sus atributos de cuarentena con
+`xattr -cr` y después la abre con `open`; al terminar, Terminal se cierra
+automáticamente. Este flujo se usa porque el paquete no está firmado con un
+certificado Apple Developer ID ni notarizado. Ejecuta el instalador sólo con
+paquetes de Fuente obtenidos de una fuente confiable.
+
 Los instaladores preparan el entorno, comprueban requisitos y crean los
 accesos directos correspondientes. Si eliges los extras completos, también
 ofrecen instalar Tesseract con los idiomas `eng` y `spa`, y verifican el motor

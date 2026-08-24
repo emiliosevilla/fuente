@@ -34,6 +34,13 @@ def test_distribution_sources_include_webview_console_and_reader_editor() -> Non
     assert "prepare_runtime_payload(base_dir)" in build
     assert "prepare_pip_payload(base_dir)" in build
     assert 'add_dir_to_zip(zf, app_bundle, "Fuente.app")' in build
+    assert 'write_macos_launcher(dist_dir)' in build
+    assert 'launcher = dist_dir / "Instalador_Fuente.command"' in build
+    assert '/usr/bin/xattr -cr "$APP_PATH"' in build
+    assert 'exec /usr/bin/open "$APP_PATH"' in build
+    assert '"/usr/bin/zip", "-qryy"' in build
+    assert '"/usr/bin/hdiutil", "create"' in build
+    assert 'Fuente_Distribucion_macOS.dmg' in build
     assert '("consola_preview.html", ".")' in spec
     assert '("build/runtime-source.zip", ".")' in spec
     assert '("build/pip-source.zip", ".")' in spec
@@ -60,4 +67,5 @@ def test_macos_gui_binary_does_not_open_terminal() -> None:
     assert 'name="Fuente.app"' in spec
     build = (ROOT / "build_installer.py").read_text(encoding="utf-8")
     assert 'add_dir_to_zip(zf, app_bundle, "Fuente.app")' in build
+    assert 'codesign' in build
     assert 'add_dir_to_zip(zf, base_dir / "fuente", "fuente")' not in build

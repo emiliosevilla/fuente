@@ -36,12 +36,12 @@ Baseline activo medido: `dev` en `e6aef697a6f9b4f49f1878940b95f8cf51d2b342`, mer
 | 9 | PR-09 | PARTIAL (S PASS / R NOT_RUN) |
 | 10 | PR-10 | PARTIAL (S PASS / R NOT_RUN) |
 | 11 | PR-11 | PARTIAL (S PASS / R NOT_RUN) |
-| 12 | PR-02 | NOT_RUN |
+| 12 | PR-02 | PARTIAL (S PASS / R NOT_RUN) |
 | 13 | PR-12 | NOT_RUN |
 
 PR-10 debe repetir `S` sintética; el bloqueo histórico por IDs duplicados no se hereda automáticamente. Ninguna fase puede declararse `COMPLETE` sin `S PASS` y `R PASS` de esta campaña.
 
-Ejecución activa: PR-00, PR-04 y PR-05 están `COMPLETE`; PR-06, PR-07, PR-01, PR-03, PR-08, PR-09, PR-10 y PR-11 están `PARTIAL` (`S PASS`, `R NOT_RUN`); PR-02 y PR-12 permanecen `NOT_RUN`.
+Ejecución activa: PR-00, PR-04 y PR-05 están `COMPLETE`; PR-06, PR-07, PR-01, PR-03, PR-08, PR-09, PR-10, PR-11 y PR-02 están `PARTIAL` (`S PASS`, `R NOT_RUN`); PR-12 permanece `NOT_RUN`.
 
 ## Global Constraints
 
@@ -161,14 +161,25 @@ hubo falso código 0 sin binario.
 
 Secuencia: `S` inspección del contenido esperado → `R` build y smoke en Windows. Sin máquina Windows, `R = NOT_RUN`.
 
-- [ ] Ejecutar en Windows:
+- [x] S sintética/portable: contrato del instalador, scripts, package data,
+  autorización con `PureWindowsPath`, descubrimiento parametrizado `win32`,
+  gobernador de RAM, system checker y checks estáticos de build.
 
 ~~~bat
 py -3 build_installer.py
 ~~~
 
-- [ ] Inspeccionar ZIP y exe con mismas exclusiones, hash y smoke.
-- [ ] Si no existe máquina Windows, registrar NOT_RUN; no extrapolar desde macOS.
+- [ ] R: ejecutar build, inspeccionar ZIP/exe y hacer smoke en Windows.
+- [x] Registrar `R = NOT_RUN` al no existir máquina/runner Windows; no se
+  extrapola desde macOS.
+
+Ejecución sintética 2026-08-24: `S PASS`; informe:
+`.superpowers/sdd/2026-08-23-prueba-real/task-PR-02-S-report.md`. La suite
+focal pasó `132 passed in 4.16s`; compilación sintáctica de
+`build_installer.py`/`fuente.spec`, aserciones estáticas de nombres y package
+data también pasaron. Host medido: macOS 26.6 arm64, Python 3.14.6.
+`R` queda `NOT_RUN`: el build `py -3`, ZIP, `.exe` y smoke Windows requieren
+Windows real. Estado PR-02: `PARTIAL`.
 
 ## Fase 2 — instalación limpia
 

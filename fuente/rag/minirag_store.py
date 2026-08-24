@@ -23,11 +23,19 @@ class MiniRAGStore:
         *,
         client: Any | None = None,
         client_factory: Callable[[Path], Any] | None = None,
+        ollama_url: str = "http://localhost:11434",
+        model: str | None = None,
+        embedding_func: Any | None = None,
+        llm_model_func: Callable[..., Any] | None = None,
     ) -> None:
         self.root = Path(root).expanduser().resolve()
         self.root.mkdir(parents=True, exist_ok=True)
         self._client = client
         self._client_factory = client_factory
+        self.ollama_url = ollama_url
+        self.model = model
+        self._embedding_func = embedding_func
+        self._llm_model_func = llm_model_func
 
     @property
     def _manifest_path(self) -> Path:
@@ -41,10 +49,53 @@ class MiniRAGStore:
             return self._client
         try:
             from minirag import MiniRAG  # type: ignore[import-not-found]
+            from minirag.utils import EmbeddingFunc  # type: ignore[import-not-found]
         except ImportError as exc:
             raise RuntimeError("MiniRAG is not installed; use BM25 fallback") from exc
-        self._client = MiniRAG(working_dir=str(self.root))
+        embedding_func = self._embedding_func or self._default_embedding_func(EmbeddingFunc)
+        llm_model_func = self._llm_model_func or self._default_llm_model_func()
+        self._client = MiniRAG(
+            working_dir=str(self.root),
+            embedding_func=embedding_func,
+            llm_model_func=llm_model_func,
+        )
         return self._client
+
+    def _default_embedding_func(self, embedding_type: Any) -> Any:
+        """Use Chroma's local MiniLM embedder for both local indexes."""
+        from chromadb.utils.embedding_functions import DefaultEmbeddingFunction
+
+        embedder = DefaultEmbeddingFunction()
+
+        async def embed(texts: list[str]) -> Any:
+            return embedder(texts)
+
+        return embedding_type(embedding_dim=384, max_token_size=8192, func=embed)
+
+    def _default_llm_model_func(self) -> Callable[..., Any]:
+        from fuente.application.chat import OllamaChatProvider
+        from fuente.ram_governor.governor import RAMGovernor
+
+        selected_model = self.model
+        if not selected_model:
+            selected_model = RAMGovernor(ollama_url=self.ollama_url).recommend_model()
+        selected_model = selected_model or "qwen2.5:1.5b"
+        provider = OllamaChatProvider(self.ollama_url, timeout=120.0)
+
+        async def generate(prompt: str, history_messages: list[dict[str, str]] | None = None) -> str:
+            history = "\n".join(
+                f"{item.get('role', 'user')}: {item.get('content', '')}"
+                for item in (history_messages or [])
+            )
+            full_prompt = f"{history}\n{prompt}" if history else prompt
+            return await asyncio.to_thread(
+                provider.generate,
+                model=selected_model,
+                system="Eres el extractor local de entidades de Fuente. Devuelve sólo el formato solicitado.",
+                prompt=full_prompt,
+            )
+
+        return generate
 
     def rebuild(self, records: Sequence[IndexRecord]) -> IndexBuildResult:
         normalized = [self._normalize_record(record) for record in records]

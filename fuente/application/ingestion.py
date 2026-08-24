@@ -255,7 +255,11 @@ class IngestionApplicationService:
         self.chunker = chunker
         self.chroma = chroma
         self.router = router or RetrievalRouter(
-            primary=MiniRAGStore(config.vault.minirag_dir),
+            primary=MiniRAGStore(
+                config.vault.minirag_dir,
+                ollama_url=config.ollama_url,
+                model=config.custom_model_override,
+            ),
             refinement=ChromaRetrievalBackend(chroma),
         )
         self.atomic_generator = atomic_generator

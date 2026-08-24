@@ -43,6 +43,14 @@ office = [
 ]
 rag = [
     "minirag-hku @ git+https://github.com/HKUDS/MiniRAG.git@e204d239421f45004852953679927fdf6733f236",
+    "json-repair~=0.63.3",
+    "tiktoken~=0.14.0",
+    "nltk~=3.10.3",
+    "rouge~=1.0.1",
+    "sentence-transformers~=6.0.0",
+    "scikit-learn~=1.9.0",
+    "nano-vectordb~=0.0.4.3",
+    "pipmaster~=1.1.13",
 ]
 dev = [
     "pyinstaller~=6.21.0",
@@ -58,6 +66,14 @@ all = [
     "markitdown~=0.1.7",
     "docling~=2.118.0",
     "minirag-hku @ git+https://github.com/HKUDS/MiniRAG.git@e204d239421f45004852953679927fdf6733f236",
+    "json-repair~=0.63.3",
+    "tiktoken~=0.14.0",
+    "nltk~=3.10.3",
+    "rouge~=1.0.1",
+    "sentence-transformers~=6.0.0",
+    "scikit-learn~=1.9.0",
+    "nano-vectordb~=0.0.4.3",
+    "pipmaster~=1.1.13",
 ]
 
 [tool.setuptools.packages.find]

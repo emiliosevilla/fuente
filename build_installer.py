@@ -96,6 +96,8 @@ def build():
             base_dir / "pyproject.toml",
             base_dir / "requirements.txt",
             base_dir / "README.md",
+            base_dir / "consola_preview.html",
+            base_dir / "readme.html",
         ]
     else:
         root_files = [
@@ -105,6 +107,8 @@ def build():
             base_dir / "pyproject.toml",
             base_dir / "requirements.txt",
             base_dir / "README.md",
+            base_dir / "consola_preview.html",
+            base_dir / "readme.html",
         ]
 
     if main_exe.exists():

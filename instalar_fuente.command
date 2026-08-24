@@ -61,15 +61,11 @@ fi
 
 VENV_PY="$DIR/venv/bin/python"
 [ -x "$VENV_PY" ] || fail "No se pudo crear o localizar el Python del entorno virtual."
-export FUENTE_INSTALL_OCR=0
+export FUENTE_INSTALL_OCR=1
 
 "$VENV_PY" -m pip install --upgrade pip
-if confirm "¿Instalar extras completos (.[all]) para audio/OCR/ofimática?"; then
-    export FUENTE_INSTALL_OCR=1
-    "$VENV_PY" -m pip install -e ".[all]"
-else
-    "$VENV_PY" -m pip install -e .
-fi
+echo "[+] Instalando el conjunto completo de funciones locales (audio, OCR, ofimática y RAG)..."
+"$VENV_PY" -m pip install -e ".[all]"
 if [ -f "requirements.txt" ]; then
     "$VENV_PY" -m pip install -r requirements.txt
 fi

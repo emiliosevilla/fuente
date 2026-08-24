@@ -10,7 +10,12 @@ _ICON_PATH = Path('assets/fuente_icon.ico')
 if not _ICON_PATH.is_file():
     raise FileNotFoundError(f"PyInstaller icon missing: {_ICON_PATH.resolve()}")
 
-datas = [('fuente', 'fuente'), ('assets', 'assets')]
+datas = [
+    ('fuente', 'fuente'),
+    ('assets', 'assets'),
+    ('consola_preview.html', '.'),
+    ('readme.html', '.'),
+]
 hidden_imports = [
     'fuente',
     'fuente.config',
@@ -19,6 +24,7 @@ hidden_imports = [
     'fuente.core.app_checker',
     'fuente.core.anythingllm_config',
     'fuente.core.folder_sync',
+    'fuente.integrations.meetily',
     'fuente.control_console',
     'fuente.installer_gui',
     'fuente.extractors.base',
@@ -32,6 +38,8 @@ hidden_imports = [
     'fuente.rag.chroma_store',
     'fuente.rag.semantic_chunker',
     'fuente.rag.hybrid_search',
+    'fuente.rag.minirag_store',
+    'fuente.rag.router',
     'fuente.graph_engine.prompts',
     'fuente.graph_engine.atomic_generator',
     'fuente.graph_engine.linker',
@@ -45,7 +53,6 @@ hidden_imports = [
     'tkinter',
     'tkinter.filedialog',
     'json',
-    'pyyaml',
     'yaml',
     'sqlite3',
 
@@ -54,7 +61,7 @@ hidden_imports = [
 for pkg in [
     'psutil', 'watchdog', 'requests', 'pydantic', 'pdfplumber', 'docx', 'pptx',
     'openpyxl', 'extract_msg', 'PIL', 'pytesseract', 'markitdown', 'docling',
-    'faster_whisper', 'webview',
+    'faster_whisper', 'webview', 'minirag',
 ]:
     try:
         hidden_imports += collect_submodules(pkg)

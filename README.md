@@ -220,8 +220,10 @@ extras; ninguna de ellas es obligatoria para el núcleo.
 Los instaladores preparan el entorno, comprueban requisitos y crean los
 accesos directos correspondientes. Si eliges los extras completos, también
 ofrecen instalar Tesseract con los idiomas `eng` y `spa`, y verifican el motor
-antes de habilitar OCR. La instalación básica no descarga el motor OCR. No
-descargan modelos de Ollama durante el arranque normal.
+antes de habilitar OCR. La instalación guiada instala siempre los extras Python
+completos, incluido MiniRAG, y después pide confirmación clara para los
+componentes del sistema y el modelo Qwen que ocupan espacio. La instalación
+del modelo no se ejecuta en segundo plano ni se da por válida sin verificación.
 
 Para una instalación guiada, abre el instalador correspondiente desde la
 carpeta de Fuente. El instalador comprueba Python 3.10 o superior, crea el

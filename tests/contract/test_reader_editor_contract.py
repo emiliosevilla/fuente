@@ -20,12 +20,13 @@ def _function_body(name: str) -> str:
     return match.group("body")
 
 
-def test_reader_contains_plain_markdown_editor_preview_and_state_region():
+def test_reader_contains_visual_markdown_editor_and_state_region():
     assert 'id="reader-markdown-editor"' in SOURCE
-    assert 'id="reader-markdown-preview"' in SOURCE
+    assert 'assets/toastui-editor/toastui-editor.js' in SOURCE
+    assert 'assets/toastui-editor/toastui-editor.css' in SOURCE
+    assert "initialEditType: 'wysiwyg'" in SOURCE
+    assert "getMarkdown()" in SOURCE
     assert 'id="reader-edit-state"' in SOURCE
-    assert 'data-reader-editor-mode="edit"' in SOURCE
-    assert 'data-reader-editor-mode="preview"' in SOURCE
 
 
 def test_mount_replaces_normal_reader_surface_with_one_editor_surface():
@@ -102,9 +103,8 @@ def test_conflict_offers_reload_or_keep_editing_without_replacing_draft():
     assert "readerEditorBody" in SOURCE
 
 
-def test_user_markdown_uses_value_and_safe_text_sinks():
-    assert "readerEditorBody = editor.value" in SOURCE
-    assert "editor.value = readerEditorBody" in SOURCE
+def test_user_markdown_uses_toastui_markdown_api_and_safe_text_sinks():
+    assert "readerEditorInstance.getMarkdown()" in SOURCE
+    assert "readerEditorInstance.setMarkdown(readerEditorBody, false)" in SOURCE
     assert ".textContent =" in SOURCE
     assert "reader-markdown-editor.innerHTML" not in SOURCE
-    assert "reader-markdown-preview.innerHTML" not in SOURCE

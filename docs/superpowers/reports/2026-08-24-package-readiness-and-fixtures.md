@@ -7,7 +7,7 @@ Revisor independiente: Terra/Pauli, auditoría de solo lectura.
 
 ## Resultado ejecutivo
 
-El stack Python completo queda declarado en `.[all]`, el binario macOS se ha reconstruido y el ZIP pasa `unzip -t`. El artefacto incluye el editor Markdown, MiniRAG, ChromaDB, MarkItDown, Docling, OCR, audio, Meetily y los extractores registrados.
+El stack Python completo queda declarado en `.[all]`, el binario macOS se ha reconstruido y el ZIP pasa `unzip -t`. El artefacto incluye el editor visual Markdown TOAST UI, MiniRAG, ChromaDB, MarkItDown, Docling, OCR, audio, Meetily y los extractores registrados.
 
 No se puede afirmar todavía que la instalación sea operativa en cualquier equipo: Obsidian, Ollama, Tesseract, FFmpeg y el bridge de Meetily son componentes externos; el artefacto Windows no se ha construido ni ejecutado en Windows; y el binario macOS queda residente sin devolver salida con `--help`, por lo que requiere una prueba manual del arranque gráfico.
 
@@ -26,7 +26,7 @@ No se puede afirmar todavía que la instalación sea operativa en cualquier equi
 | Ollama | Instalador detecta/inicia Ollama y descarga un modelo Qwen con confirmación; este Mac tiene `/usr/local/bin/ollama` | PARCIAL | El daemon y el modelo no se han probado en esta sesión |
 | Qwen por defecto | `RAMGovernor` selecciona modelo y el adaptador MiniRAG usa fallback `qwen2.5:1.5b` | PASS en código | El modelo concreto depende de RAM y disponibilidad de Ollama |
 | Harness de consulta | Fuente usa Ollama propio + BM25 + Chroma; AnythingLLM es integración opcional | PASS en diseño | No se añade Pi ni AnythingLLM al núcleo sin una mejora medida |
-| Editor en modales | `consola_preview.html` contiene `reader-markdown-editor` y `reader-editor-panel`; ZIP los incluye | PASS en paquete | Falta interacción manual del modal |
+| Editor en modales | TOAST UI Editor 3.2.2, asset local de 1.1 MB; arranca en WYSIWYG y expone Markdown para el bridge | PASS en paquete | Falta interacción manual del modal |
 | Meetily en ETL | `fuente/integrations/meetily.py` y bridge local incluidos | PARCIAL | El bridge es externo y no se ha arrancado en esta sesión |
 | Instalación hija de cinco | Scripts instalan siempre `.[all]`, activan OCR y dejan preguntas claras para componentes externos | PARCIAL | La experiencia gráfica completa aún requiere validación manual en macOS y Windows |
 | Windows | `.bat` actualizado con extras completos, detección de Winget/Obsidian/Ollama/Tesseract | UNVERIFIED | No hay artefacto Windows construido ni una máquina Windows disponible aquí |
@@ -37,8 +37,9 @@ No se puede afirmar todavía que la instalación sea operativa en cualquier equi
 - `fuente/rag/minirag_store.py`: adaptador con embedder explícito y LLM Ollama compatible con la API de MiniRAG.
 - `fuente/application/ingestion.py` y `fuente/control_console.py`: pasan URL y modelo configurados al adaptador.
 - `fuente.spec` y `build_installer.py`: incluyen MiniRAG, Meetily, `consola_preview.html` y `readme.html`; se eliminó el hidden import incorrecto `pyyaml`.
+- `assets/toastui-editor/`: incorpora TOAST UI Editor 3.2.2 y su CSS local; no depende de CDN.
 - `instalar_fuente.command` y `instalar_fuente.bat`: instalan siempre el stack completo y activan OCR por defecto.
-- Tests de packaging, scripts, contrato de instalador y MiniRAG: **37 passed**.
+- Tests de packaging, scripts, contrato de instalador, proyección y bridge: **75 passed**; contrato JavaScript del editor: **4 passed**.
 
 ## Evidencia de build
 
@@ -48,6 +49,8 @@ Comandos ejecutados:
 venv/bin/python -m pip install -e ".[all]"
 venv/bin/python -m pip check
 venv/bin/python -m pytest -q tests/test_minirag_store.py tests/test_packaging_fuente.py tests/test_installer_scripts.py tests/test_installer_contract.py
+venv/bin/python -m pytest -q tests/test_editor_projection.py tests/contract/test_bridge_note_editor_contract.py tests/contract/test_reader_editor_contract.py tests/test_packaging_fuente.py tests/test_installer_scripts.py
+node --test tests/contract/test_reader_editor_deferred.mjs
 venv/bin/python build_installer.py
 unzip -t dist/Fuente_Distribucion_macOS.zip
 ```
@@ -56,11 +59,11 @@ Resultados:
 
 ```text
 No broken requirements found.
-37 passed in 0.50s
-dist/Fuente_Distribucion_macOS.zip 375203202 bytes
-dist/Fuente_macOS 377537296 bytes
-SHA-256 ZIP: 808b493fa03ffc6539873e08dbc4fad04a7166fdcdd7cd432878334634c20426
-SHA-256 binario: 25986d75393131303954496e01762f095339ebdf418e0e178c8b835bcd7837b6
+75 passed en la suite Python focal; 4 passed en la suite JavaScript focal.
+dist/Fuente_Distribucion_macOS.zip 375814478 bytes
+dist/Fuente_macOS 377841888 bytes
+SHA-256 ZIP: 111c17bb041aff780a7535af744a9b9a937a49e317a80b9c1bc571f61dc1fc21
+SHA-256 binario: 97dcea52c115cc3bd5068e763349a3c1c79945cd7814d9794837813cce64b1be
 No errors detected in compressed data
 ```
 

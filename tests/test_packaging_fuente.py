@@ -38,6 +38,9 @@ def test_distribution_sources_include_webview_console_and_reader_editor() -> Non
     html = (ROOT / "consola_preview.html").read_text(encoding="utf-8")
     assert 'id="reader-markdown-editor"' in html
     assert 'id="reader-editor-panel"' in html
+    assert (ROOT / "assets" / "toastui-editor" / "toastui-editor.js").is_file()
+    assert (ROOT / "assets" / "toastui-editor" / "toastui-editor.css").is_file()
+    assert "assets/toastui-editor/toastui-editor.js" in html
 
 
 def test_spec_declares_dynamic_rag_and_meeting_modules() -> None:

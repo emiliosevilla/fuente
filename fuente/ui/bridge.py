@@ -4,6 +4,9 @@ from __future__ import annotations
 
 import re
 import sqlite3
+import os
+import sys
+import threading
 from uuid import UUID
 from pathlib import Path, PureWindowsPath
 from typing import TYPE_CHECKING, Any, Mapping, Optional
@@ -581,6 +584,47 @@ class FuentePyWebViewApi:
             )
         return self.backend.save_settings(parsed)
 
+    def restart_with_vault(self, vault_path: object) -> dict[str, Any] | ErrorResult:
+        """Validate selected Vault, close current UI and relaunch this executable."""
+        vault = self._text(vault_path, "vault_path")
+        if isinstance(vault, dict):
+            return vault
+        validator = getattr(self.backend, "validate_vault", None)
+        if not callable(validator):
+            return self._error("restart_not_supported", "El cambio de Vault requiere reinicio manual.")
+        result = validator(vault)
+        if result.get("error"):
+            return result
+
+        def relaunch() -> None:
+            if self._window is not None:
+                self._window.destroy()
+            os.execv(sys.executable, [sys.executable, "--vault", result["vault_path"]])
+
+        threading.Timer(0.15, relaunch).start()
+        return {"status": "restarting", "vault_path": result["vault_path"]}
+
+    def install_obsidian(self) -> dict[str, Any]:
+        action = getattr(self.backend, "install_obsidian", None)
+        if not callable(action):
+            return self._error("setup_not_available", "Obsidian ya se gestiona desde el instalador.")
+        return action()
+
+    def create_vault(self, payload: object) -> dict[str, Any] | ErrorResult:
+        parsed = self._payload(payload)
+        if isinstance(parsed, dict) and "error" in parsed:
+            return parsed
+        assert isinstance(parsed, dict)
+        if set(parsed) != {"vault_name", "parent_path"}:
+            return self._error("invalid_payload", "Se requiere nombre y carpeta padre del Vault.")
+        for field in ("vault_name", "parent_path"):
+            if not isinstance(parsed[field], str) or not parsed[field].strip():
+                return self._error("invalid_payload", f"{field} debe ser texto no vacío")
+        action = getattr(self.backend, "create_vault", None)
+        if not callable(action):
+            return self._error("setup_not_available", "La creación guiada sólo está disponible durante la configuración inicial.")
+        return action(parsed)
+
     def select_folder(self, title: object = "Seleccionar Carpeta") -> str | ErrorResult:
         valid_title = self._text(title, "title", required=False)
         if isinstance(valid_title, dict):
@@ -588,6 +632,21 @@ class FuentePyWebViewApi:
         if len(valid_title) > 120:
             return self._error("invalid_payload", "title is too long")
         return self.backend.select_folder(valid_title or "Seleccionar Carpeta")
+
+    def get_capabilities(self) -> dict[str, Any] | ErrorResult:
+        action = getattr(self.backend, "get_capabilities", None)
+        if not callable(action):
+            return self._error("capabilities_not_available", "Capacidades no disponibles durante la configuración inicial.")
+        return action()
+
+    def install_capability(self, capability_id: object) -> dict[str, Any] | ErrorResult:
+        capability = self._text(capability_id, "capability_id")
+        if isinstance(capability, dict):
+            return capability
+        action = getattr(self.backend, "install_capability", None)
+        if not callable(action):
+            return self._error("capabilities_not_available", "Capacidades no disponibles durante la configuración inicial.")
+        return action(capability)
 
     def get_themes(self) -> dict[str, Any]:
         return {

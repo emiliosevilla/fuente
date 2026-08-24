@@ -23,6 +23,7 @@ from fuente.installer_contract import (
     run_installation,
     save_receipt,
     step_save_cloud_folders,
+    step_create_shortcuts,
     step_install_anythingllm,
     step_install_model,
     wait_for_ollama_ready,
@@ -58,7 +59,7 @@ def test_ensure_vault_structure_is_idempotent(tmp_path):
 
     assert first.success and second.success
     assert second.skipped is True
-    for sub in ("1_entrada", "2_sucio", "3_limpio", "4_salida"):
+    for sub in ("1_volcado", "2_copiado", "3_capturado", "4_procesado", "5_compartido"):
         assert (vault / sub).is_dir()
 
 
@@ -217,6 +218,16 @@ def test_run_installation_without_log_does_not_raise(tmp_path):
     assert load_receipt(tmp_path) is not None
 
 
+def test_step_create_shortcuts_propagates_false(tmp_path):
+    ctx = InstallationContext(base_dir=tmp_path, vault_path=tmp_path / "Fuente")
+
+    with patch("create_shortcuts.create_shortcuts", return_value=False):
+        result = step_create_shortcuts(ctx)
+
+    assert result.success is False
+    assert result.message == "Desktop shortcut creation returned false"
+
+
 def test_receipt_stores_model_name_from_step(tmp_path):
     vault = tmp_path / "Fuente"
     ctx = InstallationContext(
@@ -311,7 +322,7 @@ def test_launch_anythingllm_without_install_does_not_open_browser(monkeypatch):
 def test_run_installation_second_run_no_duplicate_cloud_folders(tmp_path):
     vault = tmp_path / "Fuente"
     vault.mkdir()
-    for sub in ("1_entrada", "2_sucio", "3_limpio", "4_salida"):
+    for sub in ("1_volcado", "2_copiado", "3_capturado", "4_procesado", "5_compartido"):
         (vault / sub).mkdir()
 
     folder_a = tmp_path / "cloud_a"

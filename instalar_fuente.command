@@ -75,11 +75,6 @@ if [ -f "requirements.txt" ]; then
 fi
 
 echo ""
-echo "Creando accesos directos de Fuente..."
-[ -f "create_shortcuts.py" ] || fail "Falta create_shortcuts.py en la distribución."
-"$VENV_PY" create_shortcuts.py
-
-echo ""
 echo "Comprobando instalación de Obsidian..."
 if [ ! -d "/Applications/Obsidian.app" ] && ! command -v obsidian >/dev/null 2>&1; then
     echo "[!] Obsidian no está instalado en este Mac."

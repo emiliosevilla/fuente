@@ -24,13 +24,23 @@ La suite histórica no sustituye pruebas de instalación, micrófono, permisos, 
 
 Se reinicia la campaña completa desde PR-00 sin borrar ni reinterpretar la evidencia histórica. Baseline activo medido: rama `dev`, commit `e6aef697a6f9b4f49f1878940b95f8cf51d2b342`; merge publicado en `main`: `a44aa0a92f2231bad7a401be30bca159fec45910`; PR #64.
 
-Estado activo inicial de la campaña: todas las fases estaban `NOT_RUN`. Estado actual: PR-00, PR-04 y PR-05 tienen `S PASS`, `R PASS` y están `COMPLETE`; PR-06, PR-07, PR-01, PR-03, PR-08 y PR-09 tienen `S PASS`, `R NOT_RUN` y están `PARTIAL`; PR-10, PR-11, PR-02 y PR-12 siguen `NOT_RUN`. El orden obligatorio es: PR-00, PR-04, PR-05, PR-06, PR-07, PR-01, PR-03, PR-08, PR-09, PR-10, PR-11, PR-02, PR-12. Cada fase ejecuta primero `S` sintética y sólo si pasa ejecuta `R` real.
+Estado activo inicial de la campaña: todas las fases estaban `NOT_RUN`. Estado actual: PR-00, PR-04 y PR-05 tienen `S PASS`, `R PASS` y están `COMPLETE`; PR-06, PR-07, PR-01, PR-03, PR-08, PR-09 y PR-10 tienen `S PASS`, `R NOT_RUN` y están `PARTIAL`; PR-11, PR-02 y PR-12 siguen `NOT_RUN`. El orden obligatorio es: PR-00, PR-04, PR-05, PR-06, PR-07, PR-01, PR-03, PR-08, PR-09, PR-10, PR-11, PR-02, PR-12. Cada fase ejecuta primero `S` sintética y sólo si pasa ejecuta `R` real.
 
-`PR-10` repite su prueba sintética y no hereda automáticamente el bloqueo histórico por IDs duplicados. En el estado actual PR-00, PR-04 y PR-05 están `COMPLETE`; PR-06, PR-07, PR-01, PR-03, PR-08 y PR-09 están `PARTIAL` (`S PASS`, `R NOT_RUN`); PR-10, PR-11, PR-02 y PR-12 están `NOT_RUN`.
+`PR-10` repite su prueba sintética y no hereda automáticamente el bloqueo histórico por IDs duplicados. En el estado actual PR-00, PR-04 y PR-05 están `COMPLETE`; PR-06, PR-07, PR-01, PR-03, PR-08, PR-09 y PR-10 están `PARTIAL` (`S PASS`, `R NOT_RUN`); PR-11, PR-02 y PR-12 están `NOT_RUN`.
 
 ### Evidencia vigente de PR-03 S — 2026-08-24
 
 `instalar_fuente.command` ya no crea accesos antes del asistente; `step_create_shortcuts` falla si `create_shortcuts` devuelve `False`. El probe sintético desde el ZIP limpio creó dos `.command` ejecutables con `target_dir` explícito, sin selector Tk, y ejecutó `run_installation(..., create_shortcuts=False, install_model=False)` con las cinco raíces canónicas. Los focales del instalador dieron `23 passed`; `PR-03 S = PASS`, `PR-03 R = NOT_RUN`, estado `PARTIAL`. Evidencia completa: `.superpowers/sdd/2026-08-23-prueba-real/task-PR-03-S-report.md`. No se ejecutaron extras, modelos ni Vault real.
+
+### Evidencia vigente de PR-10 S — 2026-08-24
+
+La suite focal de Vault y migraciones pasó `134 passed in 3.76s` sobre
+temporales sintéticos. Cubre dry-run, plan-id, hashes, apply, rollback,
+idempotencia, conflictos humanos, symlinks, autorización de rutas, IDs
+duplicados y CLI. Se corrigió el guard canónico de `3_capturado` en
+`taxonomy_migration.py`; el resto del cambio fue de fixtures y documentación.
+`PR-10 S = PASS`, `PR-10 R = NOT_RUN`, estado `PARTIAL`. Evidencia completa:
+`.superpowers/sdd/2026-08-23-prueba-real/task-PR-10-S-report.md`.
 
 ## Tutor y bro
 

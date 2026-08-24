@@ -33,7 +33,7 @@ Baseline activo medido: `dev` en `e6aef697a6f9b4f49f1878940b95f8cf51d2b342`, mer
 | 6 | PR-01 | PARTIAL (S PASS / R NOT_RUN) |
 | 7 | PR-03 | PARTIAL (S PASS / R NOT_RUN) |
 | 8 | PR-08 | PARTIAL (S PASS / R NOT_RUN) |
-| 9 | PR-09 | NOT_RUN |
+| 9 | PR-09 | PARTIAL (S PASS / R NOT_RUN) |
 | 10 | PR-10 | NOT_RUN |
 | 11 | PR-11 | NOT_RUN |
 | 12 | PR-02 | NOT_RUN |
@@ -41,7 +41,7 @@ Baseline activo medido: `dev` en `e6aef697a6f9b4f49f1878940b95f8cf51d2b342`, mer
 
 PR-10 debe repetir `S` sintética; el bloqueo histórico por IDs duplicados no se hereda automáticamente. Ninguna fase puede declararse `COMPLETE` sin `S PASS` y `R PASS` de esta campaña.
 
-Ejecución activa: PR-00, PR-04 y PR-05 están `COMPLETE`; PR-06, PR-07, PR-01, PR-03 y PR-08 están `PARTIAL` (`S PASS`, `R NOT_RUN`); PR-09+ permanecen `NOT_RUN`.
+Ejecución activa: PR-00, PR-04 y PR-05 están `COMPLETE`; PR-06, PR-07, PR-01, PR-03, PR-08 y PR-09 están `PARTIAL` (`S PASS`, `R NOT_RUN`); PR-10+ permanecen `NOT_RUN`.
 
 ## Global Constraints
 
@@ -307,12 +307,21 @@ visual/teclado/foco en PyWebView.
 
 Secuencia: `S` puente y recuperación simulados → `R` Meetily, micrófono, consentimiento, grabación y recuperación reales.
 
-- [ ] Configurar puente local fijado y conceder micrófono sólo al iniciar grabación.
-- [ ] Confirmar que abrir modal no graba y que iniciar exige consentimiento.
-- [ ] Grabar 30–60 segundos y comprobar 2_copiado/reunion, hash y manifiesto.
-- [ ] Comprobar 3_capturado/reunion, 4_procesado/reunion, standard_meeting, procedencia y bloqueo hasta aprobación.
-- [ ] Interrumpir una copia de prueba, recuperar sesión y comprobar ausencia de duplicados o parciales.
+- [x] S sintética: puente allow-listed, consentimiento, manifiesto, hash,
+  layout canónico, aprobación bloqueada, recuperación y duplicados.
+- [ ] R: configurar puente local fijado y conceder micrófono sólo al iniciar grabación.
+- [ ] R: confirmar que abrir modal no graba y que iniciar exige consentimiento.
+- [ ] R: grabar 30–60 segundos y comprobar 2_copiado/reunion, hash y manifiesto.
+- [ ] R: comprobar 3_capturado/reunion, 4_procesado/reunion, standard_meeting,
+  procedencia y bloqueo hasta aprobación.
+- [ ] R: interrumpir una copia de prueba, recuperar sesión y comprobar ausencia de duplicados o parciales.
 - [ ] Registrar G4 sin guardar audio ni transcript en Git.
+
+Ejecución sintética 2026-08-24: `S PASS`; informe:
+`.superpowers/sdd/2026-08-23-prueba-real/task-PR-09-S-report.md`. La suite
+focal pasó `106 passed in 2.76s`; sólo se actualizó una fixture de sincronización
+de `1_entrada`/`2_sucio` a `1_volcado`/`2_copiado`. `R` sigue `NOT_RUN` porque
+requiere Meetily, micrófono, audio y permisos reales.
 
 ## Fase 6 — Vault y carpetas montadas
 

@@ -27,7 +27,7 @@ Los informes con estados anteriores se conservan como historial. La tabla usa el
 
 ## Trazabilidad y límites
 
-- Commits de las fases sintéticas: `c45ee95`, `12899f9`, `80e4c7b`, `1347cc5`, `35ad154`, `064077a`, `eb3c095`, `c0ae001`, `60a018b` y `8565dd0`; auditoría final: `10ec0f3`.
+- Commits de las fases sintéticas: `c45ee95`, `12899f9`, `80e4c7b`, `1347cc5`, `35ad154`, `064077a`, `eb3c095`, `c0ae001`, `60a018b` y `8565dd0`; auditoría inicial `10ec0f3` y reconciliaciones documentales posteriores.
 - Los informes de PR-08, PR-09, PR-10, PR-11 y PR-02 declaran expresamente `S PASS`, `R NOT_RUN` y no commit propio; la auditoría no los eleva.
 - `dist/` no es despliegue: queda fuera de Git y no cambia el estado de ninguna fase.
 - Las carpetas canónicas son `1_volcado`, `2_copiado`, `3_capturado`, `4_procesado` y `5_compartido`. `3_capturado` es la fuente canónica; `5_compartido` exige aprobación.

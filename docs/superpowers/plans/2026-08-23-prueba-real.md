@@ -30,7 +30,7 @@ Baseline activo medido: `dev` en `e6aef697a6f9b4f49f1878940b95f8cf51d2b342`, mer
 | 3 | PR-05 | COMPLETE (S PASS / R PASS) |
 | 4 | PR-06 | PARTIAL (S PASS / R NOT_RUN) |
 | 5 | PR-07 | PARTIAL (S PASS / R NOT_RUN) |
-| 6 | PR-01 | NOT_RUN |
+| 6 | PR-01 | PARTIAL (S PASS / R NOT_RUN) |
 | 7 | PR-03 | NOT_RUN |
 | 8 | PR-08 | NOT_RUN |
 | 9 | PR-09 | NOT_RUN |
@@ -41,7 +41,7 @@ Baseline activo medido: `dev` en `e6aef697a6f9b4f49f1878940b95f8cf51d2b342`, mer
 
 PR-10 debe repetir `S` sintética; el bloqueo histórico por IDs duplicados no se hereda automáticamente. Ninguna fase puede declararse `COMPLETE` sin `S PASS` y `R PASS` de esta campaña.
 
-Ejecución activa: PR-00, PR-04 y PR-05 están `COMPLETE`; PR-06 y PR-07 están `PARTIAL` (`S PASS`, `R NOT_RUN`); PR-01, PR-03 y PR-08+ permanecen `NOT_RUN`.
+Ejecución activa: PR-00, PR-04 y PR-05 están `COMPLETE`; PR-06 y PR-07 están `PARTIAL` (`S PASS`, `R NOT_RUN`); PR-01 está `PARTIAL` (`S PASS`, `R NOT_RUN`); PR-03 y PR-08+ permanecen `NOT_RUN`.
 
 ## Global Constraints
 
@@ -116,7 +116,7 @@ Ejecución actual: `task-PR-00-S-rerun-report.md` registra S PASS y `task-PR-00-
 
 Secuencia: `S` inspección y smoke controlado del artefacto → `R` paquete construido en macOS y arrancado fuera del checkout.
 
-- [ ] Ejecutar desde macOS:
+- [x] Ejecutar desde macOS:
 
 ~~~bash
 python3 build_installer.py
@@ -124,7 +124,12 @@ python3 build_installer.py
 
 Esperado: binario macOS y Fuente_Distribucion_macOS.zip, o fallo registrado como FAIL.
 
-- [ ] Inspeccionar ZIP:
+Primera ejecución 2026-08-24 sobre `dev`/`80e4c7b`: PyInstaller `6.21.0` estaba
+disponible y no se instaló nada. El binario falló por `PermissionError` en la
+cache de PyInstaller; el script creó el ZIP fallback basado en código fuente.
+Resultado de ese intento: `PARTIAL`, no PASS; queda como antecedente.
+
+- [x] Inspeccionar ZIP:
 
 ~~~bash
 unzip -l dist/Fuente_Distribucion_macOS.zip
@@ -132,8 +137,25 @@ unzip -l dist/Fuente_Distribucion_macOS.zip
 
 Comprobar ausencia de venv, .fuente, Vault real, las cinco raíces canónicas y secretos; las raíces legacy sólo pueden aparecer en fixtures o entradas de migración explícitas.
 
-- [ ] Arrancar binario en copia temporal y comprobar error controlado cuando falta configuración.
-- [ ] Registrar nombre, tamaño, SHA-256, plataforma y G1.
+Resultado: ZIP íntegro, 138 archivos, 651197 bytes, SHA-256
+`050f53de7831ac03415729cbbaf41fc7b35e76674c1ca990b183d76286a8d3a4`; las
+exclusiones no aparecen. `fuente/resources/demo_vault` es recurso demo.
+
+- [x] Arrancar binario en copia temporal y comprobar error controlado cuando falta configuración — smoke CLI del binario PASS; la prueba R sigue abierta.
+- [x] Registrar nombre, tamaño, SHA-256, plataforma y G1 — G1 PASS.
+
+Smoke controlado de contenido extraído: `python3 -m fuente.main --help` y
+`run_flush` directo sobre Vault sintético pasaron; la entrada CLI completa quedó
+limitada por la comprobación de procesos macOS. Evidencia:
+`.superpowers/sdd/2026-08-23-prueba-real/task-PR-01-S-report.md`.
+Repetición 2026-08-24 con `PYINSTALLER_CONFIG_DIR=/private/tmp/fuente-pr01-config-VQBpz1/pyinstaller-config`:
+PyInstaller generó `Fuente_macOS` (`Mach-O arm64`, 360419696 bytes) y el ZIP
+de 139 archivos (`358231283` bytes). `unzip -t` PASS; exclusiones PASS; smoke
+del binario extraído (`--help` 0, argumento inválido 2) PASS. Evidencia:
+`.superpowers/sdd/2026-08-23-prueba-real/task-PR-01-S-report.md`.
+Estado vigente PR-01: `S PASS`, `R NOT_RUN`, fase `PARTIAL`; G1 PASS;
+`dist/` no es DEPLOYED. No se corrigió código ni se añadió prueba porque no
+hubo falso código 0 sin binario.
 
 ### PR-02: distribución Windows
 

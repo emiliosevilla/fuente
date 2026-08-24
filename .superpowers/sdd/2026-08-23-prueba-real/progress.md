@@ -11,7 +11,7 @@
 - Terra: `PASS`, sin hallazgos abiertos.
 - Estado fase layout: `S PASS`; no se declara R ni cierre de producto por esta fase.
 
-Status activo: PR-00 S `PASS`, R `PASS`, estado `COMPLETE`; PR-04 S `PASS`, R `PASS`, estado `COMPLETE` por no-op de migración; PR-05 S `PASS`, R `PASS`, estado `COMPLETE`; PR-06, PR-07, PR-01, PR-03, PR-08, PR-09, PR-10 y PR-11 S `PASS`, R `NOT_RUN`, estado `PARTIAL`; PR-02 y PR-12 `NOT_RUN`. Estado global: `PARTIAL`.
+Status activo: PR-00 S `PASS`, R `PASS`, estado `COMPLETE`; PR-04 S `PASS`, R `PASS`, estado `COMPLETE` por no-op de migración; PR-05 S `PASS`, R `PASS`, estado `COMPLETE`; PR-06, PR-07, PR-01, PR-03, PR-08, PR-09, PR-10, PR-11 y PR-02 S `PASS`, R `NOT_RUN`, estado `PARTIAL`; PR-12 `NOT_RUN`. Estado global: `PARTIAL`.
 Spec: docs/superpowers/specs/2026-08-23-prueba-real.md
 Plan: docs/superpowers/plans/2026-08-23-prueba-real.md
 Created: 2026-08-23
@@ -34,10 +34,21 @@ Se conserva todo el ledger histórico inferior sin borrarlo. Este bloque gobiern
 | 9 | PR-09 | PASS | NOT_RUN | PARTIAL |
 | 10 | PR-10 | PASS | NOT_RUN | PARTIAL |
 | 11 | PR-11 | PASS | NOT_RUN | PARTIAL |
-| 12 | PR-02 | NOT_RUN | NOT_RUN | NOT_RUN |
+| 12 | PR-02 | PASS | NOT_RUN | PARTIAL |
 | 13 | PR-12 | NOT_RUN | NOT_RUN | NOT_RUN |
 
 Cada fase debe ejecutar `S` sintética y, sólo si pasa, `R` real. `PR-10` repite su prueba sintética y no hereda automáticamente el bloqueo histórico por IDs duplicados. PR-00 y PR-04 están `COMPLETE`; PR-04 se cierra por no-op de migración: el Vault real ya estaba en layout final y no contenía notas migrables, por lo que apply/rollback no forman parte del alcance vigente.
+
+## Ejecución 2026-08-24 — PR-02 S
+
+- Informe: `.superpowers/sdd/2026-08-23-prueba-real/task-PR-02-S-report.md`.
+- Checkout medido antes de ejecutar: rama `dev`, `HEAD 60a018b`; `dist/` era el único artefacto sin rastrear y se conservó.
+- Host medido: macOS 26.6, Darwin 25.6.0 arm64; Python `3.14.6`; `sys.platform=darwin`.
+- Suite exacta: `PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -q tests/test_installer_contract.py tests/test_installer_scripts.py tests/test_package_data.py tests/test_packaging_fuente.py tests/test_authorized_paths.py tests/security/test_path_authorization.py tests/test_folder_sync_discovery.py tests/test_resource_budget.py tests/test_system_checker.py tests/test_ram_governor_resilience.py tests/test_ocr_runtime.py tests/test_shortcuts.py`.
+- Resultado: `132 passed in 4.16s`; código `0`; `PR-02 S PASS`.
+- Checks adicionales: `PYTHONDONTWRITEBYTECODE=1 python3 -m py_compile build_installer.py fuente.spec` PASS; aserciones estáticas de artefactos/scripts por plataforma y package data PASS; `git diff --check` PASS.
+- Cobertura: contrato/scripts de instalador, package data, `PureWindowsPath` y autorización, descubrimiento `win32`, gobernador de RAM, system checker, OCR y shortcuts.
+- Límite: no se ejecutó `py -3 build_installer.py`, ZIP, `.exe` ni smoke Windows. El host es macOS y no se simuló Windows. `PR-02 R NOT_RUN`; estado `PARTIAL`; no se hizo commit, push ni despliegue.
 
 ## Ejecución 2026-08-24 — PR-11 S
 

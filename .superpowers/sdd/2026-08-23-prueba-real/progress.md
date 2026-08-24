@@ -11,7 +11,7 @@
 - Terra: `PASS`, sin hallazgos abiertos.
 - Estado fase layout: `S PASS`; no se declara R ni cierre de producto por esta fase.
 
-Status activo: PR-00 S `PASS`, R `PASS`, estado `COMPLETE`; PR-04 S `PASS`, R `PASS`, estado `COMPLETE` por no-op de migración; PR-05 S `PASS`, R `PASS`, estado `COMPLETE`; PR-06 S `PASS`, R `NOT_RUN`, estado `PARTIAL`; PR-07 S `PASS`, R `NOT_RUN`, estado `PARTIAL`; PR-01, PR-03 y PR-08–PR-12 `NOT_RUN`. Estado global: `PARTIAL`.
+Status activo: PR-00 S `PASS`, R `PASS`, estado `COMPLETE`; PR-04 S `PASS`, R `PASS`, estado `COMPLETE` por no-op de migración; PR-05 S `PASS`, R `PASS`, estado `COMPLETE`; PR-06 S `PASS`, R `NOT_RUN`, estado `PARTIAL`; PR-07 S `PASS`, R `NOT_RUN`, estado `PARTIAL`; PR-01 S `PASS`, R `NOT_RUN`, estado `PARTIAL`; PR-03 y PR-08–PR-12 `NOT_RUN`. Estado global: `PARTIAL`.
 Spec: docs/superpowers/specs/2026-08-23-prueba-real.md
 Plan: docs/superpowers/plans/2026-08-23-prueba-real.md
 Created: 2026-08-23
@@ -28,7 +28,7 @@ Se conserva todo el ledger histórico inferior sin borrarlo. Este bloque gobiern
 | 3 | PR-05 | PASS | PASS | COMPLETE |
 | 4 | PR-06 | PASS | NOT_RUN | PARTIAL |
 | 5 | PR-07 | PASS | NOT_RUN | PARTIAL |
-| 6 | PR-01 | NOT_RUN | NOT_RUN | NOT_RUN |
+| 6 | PR-01 | PASS | NOT_RUN | PARTIAL |
 | 7 | PR-03 | NOT_RUN | NOT_RUN | NOT_RUN |
 | 8 | PR-08 | NOT_RUN | NOT_RUN | NOT_RUN |
 | 9 | PR-09 | NOT_RUN | NOT_RUN | NOT_RUN |
@@ -38,6 +38,32 @@ Se conserva todo el ledger histórico inferior sin borrarlo. Este bloque gobiern
 | 13 | PR-12 | NOT_RUN | NOT_RUN | NOT_RUN |
 
 Cada fase debe ejecutar `S` sintética y, sólo si pasa, `R` real. `PR-10` repite su prueba sintética y no hereda automáticamente el bloqueo histórico por IDs duplicados. PR-00 y PR-04 están `COMPLETE`; PR-04 se cierra por no-op de migración: el Vault real ya estaba en layout final y no contenía notas migrables, por lo que apply/rollback no forman parte del alcance vigente.
+
+## Ejecución 2026-08-24 — PR-01 S
+
+- Informe: `.superpowers/sdd/2026-08-23-prueba-real/task-PR-01-S-report.md`.
+- Checkout medido: raíz solicitada, rama `dev`, `HEAD 80e4c7b572ec70de47430ba62bd614ee06dc95bd`.
+- Sistema: macOS `26.6`, build `25G72`, Darwin `25.6.0`, `arm64`; Python `3.14.6`.
+- PyInstaller `6.21.0` estaba importable; no se instaló ninguna dependencia.
+- `python3 build_installer.py`: el binario falló con `PermissionError: [Errno 1] Operation not permitted` en la caché de PyInstaller; el script creó el ZIP fallback y terminó con código 0.
+- ZIP: `dist/Fuente_Distribucion_macOS.zip`, 138 archivos, 651197 bytes, SHA-256 `050f53de7831ac03415729cbbaf41fc7b35e76674c1ca990b183d76286a8d3a4`.
+- `unzip -t`: PASS. No aparecen `venv`, `.fuente`, Vault real, las cinco raíces canónicas, raíces legacy ni nombres/patrones sensibles. `fuente/resources/demo_vault` es demo empaquetado.
+- Smoke temporal: extracción, `python3 -m fuente.main --help` y `run_flush` directo sobre Vault vacío sintético PASS; el CLI completo quedó limitado por comprobación de procesos macOS y no se cuenta como arranque real.
+- Resultado de la primera ejecución: `PR-01 S PARTIAL`; `PR-01 R NOT_RUN`; estado de fase `PARTIAL`; G1 no cerrado; `dist/` no es `DEPLOYED`.
+- No se modificó código producto ni dependencias; no hubo commit.
+
+## Repetición 2026-08-24 — PR-01 S con caché temporal
+
+- Informe vigente: `.superpowers/sdd/2026-08-23-prueba-real/task-PR-01-S-report.md`.
+- Checkout medido: raíz solicitada, rama `dev`, `HEAD 80e4c7b572ec70de47430ba62bd614ee06dc95bd`.
+- Comando: `PYINSTALLER_CONFIG_DIR=/private/tmp/fuente-pr01-config-VQBpz1/pyinstaller-config python3 build_installer.py`.
+- PyInstaller `6.21.0` terminó correctamente con el binario macOS; no se instalaron dependencias. El log incluye avisos de imports opcionales, pero no hubo fallo de compilación ni falso código 0 sin binario.
+- Binario: `dist/Fuente_macOS`, `Mach-O 64-bit arm64`, 360419696 bytes, SHA-256 `4b82a3afccdc9c73e7a108381fa21a0d0d4b40e04262b987929740762426e87e`.
+- ZIP: 139 archivos, 358231283 bytes, SHA-256 `5fda5a759b04772d262e269b86e7423cde330e6f16454c1a847cc922dec127dd`; `unzip -t` PASS.
+- Exclusiones: PASS para `venv`, `.fuente`, Vault real, las cinco raíces canónicas, raíces legacy y nombres/material sensible; `demo_vault` es recurso demo.
+- Smoke del binario extraído: dentro del sandbox falló por `semctl: Operation not permitted`; fuera del sandbox `--help` terminó 0 y argumento inválido terminó 2. No se ejecutó R.
+- Resultado vigente: `PR-01 S PASS`; `PR-01 R NOT_RUN`; estado de fase `PARTIAL`; G1 `PASS`; `dist/` no es `DEPLOYED`.
+- No se modificó `build_installer.py`, no se añadió prueba y no hubo commit: la señalización ya era correcta cuando el binario se generó.
 
 ## Ejecución 2026-08-24 — PR-06 S
 
@@ -142,7 +168,7 @@ Código está publicado y pruebas automatizadas históricas están verdes. Esta 
 | ID | Fase | Antes de instalar | Entorno real | Inicial | Gate |
 |---|---|---|---|---|---|
 | PR-00 | baseline, corpus y seguridad | sí | no | PASS | G0 |
-| PR-01 | distribución macOS | parcial | macOS + PyInstaller | NOT_RUN | G1 |
+| PR-01 | distribución macOS | parcial | macOS + PyInstaller | PARTIAL: S PASS, R NOT_RUN | G1 PASS |
 | PR-02 | distribución Windows | no | Windows + PyInstaller | NOT_RUN | G6 |
 | PR-03 | instalación macOS limpia | no | macOS limpio | NOT_RUN | G2 |
 | PR-04 | layout, migración y aprobación | sí | Vault nuevo con layout final | COMPLETE: layout, dry-run e inventario reales PASS; migración/rollback no aplican al alcance vigente | G3 |
@@ -175,7 +201,7 @@ Cada fase exige dos resultados en orden: `S` prueba sintética y, sólo si `S` p
 - `PR-00`: se mantiene `COMPLETE` sólo como baseline del repositorio y G0 aislado. No prueba instalación ni uso real.
 - `PR-04`: baja de `COMPLETE` a `PARTIAL`; la copia fue temporal y sintética, no el Vault autorizado real.
 - `PR-05`: baja de `PASS/COMPLETE` a `PARTIAL`; el probe fue sintético y usó backends ausentes o stubs, sin archivos, Vault, audio ni transcripciones reales.
-- La campaña no tiene todavía ninguna fase real de usuario cerrada. `PR-01`, `PR-03`, `PR-08`, `PR-09` y `PR-11` siguen `NOT_RUN`; `PR-10` sigue `BLOCKED`.
+- La campaña no tiene todavía ninguna fase real de usuario cerrada. `PR-01` está `PARTIAL` con R `NOT_RUN`; `PR-03`, `PR-08`, `PR-09` y `PR-11` siguen `NOT_RUN`; `PR-10` sigue `BLOCKED`.
 
 ## Ejecución 2026-08-23 — PR-04 S
 

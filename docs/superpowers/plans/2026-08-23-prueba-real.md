@@ -31,7 +31,7 @@ Baseline activo medido: `dev` en `e6aef697a6f9b4f49f1878940b95f8cf51d2b342`, mer
 | 4 | PR-06 | PARTIAL (S PASS / R NOT_RUN) |
 | 5 | PR-07 | PARTIAL (S PASS / R NOT_RUN) |
 | 6 | PR-01 | PARTIAL (S PASS / R NOT_RUN) |
-| 7 | PR-03 | NOT_RUN |
+| 7 | PR-03 | PARTIAL (S PASS / R NOT_RUN) |
 | 8 | PR-08 | NOT_RUN |
 | 9 | PR-09 | NOT_RUN |
 | 10 | PR-10 | NOT_RUN |
@@ -41,7 +41,7 @@ Baseline activo medido: `dev` en `e6aef697a6f9b4f49f1878940b95f8cf51d2b342`, mer
 
 PR-10 debe repetir `S` sintética; el bloqueo histórico por IDs duplicados no se hereda automáticamente. Ninguna fase puede declararse `COMPLETE` sin `S PASS` y `R PASS` de esta campaña.
 
-Ejecución activa: PR-00, PR-04 y PR-05 están `COMPLETE`; PR-06 y PR-07 están `PARTIAL` (`S PASS`, `R NOT_RUN`); PR-01 está `PARTIAL` (`S PASS`, `R NOT_RUN`); PR-03 y PR-08+ permanecen `NOT_RUN`.
+Ejecución activa: PR-00, PR-04 y PR-05 están `COMPLETE`; PR-06 y PR-07 están `PARTIAL` (`S PASS`, `R NOT_RUN`); PR-01 está `PARTIAL` (`S PASS`, `R NOT_RUN`); PR-03 está `PARTIAL` (`S PASS`, `R NOT_RUN`) y PR-08+ permanecen `NOT_RUN`.
 
 ## Global Constraints
 
@@ -176,11 +176,12 @@ py -3 build_installer.py
 
 Secuencia: `S` instalación en directorio temporal con configuración controlada → `R` instalación desde paquete limpio con usuario, permisos y Vault real autorizado.
 
-- [ ] Copiar sólo ZIP a directorio temporal, extraer y ejecutar instalar_fuente.command.
+- [x] Copiar sólo ZIP a directorio temporal, extraer y probar el instalador corregido; el probe limpio ya no ejecuta el selector desde el shell.
+- [x] Probe sintético: `create_shortcuts` con `target_dir` temporal y `run_installation(..., create_shortcuts=False, install_model=False)` PASS; focales `23 passed`.
 - [ ] Instalar modo mínimo y comprobar Python, acceso directo, arranque y Vault desde Ajustes.
 - [ ] Repetir con extras completos .[all] y comprobar audio, OCR, ofimática y RAG sin descarga automática de modelos.
 - [ ] Comprobar desinstalación sin borrar Vault.
-- [ ] Registrar G2.
+- [ ] Registrar G2 — `PARTIAL` (`S PASS`, `R NOT_RUN`); evidencia en `.superpowers/sdd/2026-08-23-prueba-real/task-PR-03-S-report.md`.
 
 ## Fase 3 — pruebas posibles desde checkout
 

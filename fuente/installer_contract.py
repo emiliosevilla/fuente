@@ -661,7 +661,14 @@ def step_create_shortcuts(ctx: InstallationContext) -> InstallStepResult:
     try:
         from create_shortcuts import create_shortcuts
 
-        create_shortcuts(ctx.base_dir, vault_dir=ctx.vault_path)
+        created = create_shortcuts(ctx.base_dir, vault_dir=ctx.vault_path)
+        if not created:
+            return InstallStepResult(
+                name="shortcuts",
+                success=False,
+                message="Desktop shortcut creation returned false",
+                actionable="Run `python create_shortcuts.py` from the Fuente folder.",
+            )
         return InstallStepResult(
             name="shortcuts",
             success=True,

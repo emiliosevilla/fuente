@@ -11,7 +11,7 @@
 - Terra: `PASS`, sin hallazgos abiertos.
 - Estado fase layout: `S PASS`; no se declara R ni cierre de producto por esta fase.
 
-Status activo: PR-00 S `PASS`, R `PASS`, estado `COMPLETE`; PR-04 S `PASS`, R `PASS`, estado `COMPLETE` por no-op de migración; PR-05 S `PASS`, R `PASS`, estado `COMPLETE`; PR-06 S `PASS`, R `NOT_RUN`, estado `PARTIAL`; PR-07 S `PASS`, R `NOT_RUN`, estado `PARTIAL`; PR-01 S `PASS`, R `NOT_RUN`, estado `PARTIAL`; PR-03 y PR-08–PR-12 `NOT_RUN`. Estado global: `PARTIAL`.
+Status activo: PR-00 S `PASS`, R `PASS`, estado `COMPLETE`; PR-04 S `PASS`, R `PASS`, estado `COMPLETE` por no-op de migración; PR-05 S `PASS`, R `PASS`, estado `COMPLETE`; PR-06 S `PASS`, R `NOT_RUN`, estado `PARTIAL`; PR-07 S `PASS`, R `NOT_RUN`, estado `PARTIAL`; PR-01 S `PASS`, R `NOT_RUN`, estado `PARTIAL`; PR-03 S `PASS`, R `NOT_RUN`, estado `PARTIAL`; PR-08–PR-12 `NOT_RUN`. Estado global: `PARTIAL`.
 Spec: docs/superpowers/specs/2026-08-23-prueba-real.md
 Plan: docs/superpowers/plans/2026-08-23-prueba-real.md
 Created: 2026-08-23
@@ -29,7 +29,7 @@ Se conserva todo el ledger histórico inferior sin borrarlo. Este bloque gobiern
 | 4 | PR-06 | PASS | NOT_RUN | PARTIAL |
 | 5 | PR-07 | PASS | NOT_RUN | PARTIAL |
 | 6 | PR-01 | PASS | NOT_RUN | PARTIAL |
-| 7 | PR-03 | NOT_RUN | NOT_RUN | NOT_RUN |
+| 7 | PR-03 | PASS | NOT_RUN | PARTIAL |
 | 8 | PR-08 | NOT_RUN | NOT_RUN | NOT_RUN |
 | 9 | PR-09 | NOT_RUN | NOT_RUN | NOT_RUN |
 | 10 | PR-10 | NOT_RUN | NOT_RUN | NOT_RUN |
@@ -64,6 +64,28 @@ Cada fase debe ejecutar `S` sintética y, sólo si pasa, `R` real. `PR-10` repit
 - Smoke del binario extraído: dentro del sandbox falló por `semctl: Operation not permitted`; fuera del sandbox `--help` terminó 0 y argumento inválido terminó 2. No se ejecutó R.
 - Resultado vigente: `PR-01 S PASS`; `PR-01 R NOT_RUN`; estado de fase `PARTIAL`; G1 `PASS`; `dist/` no es `DEPLOYED`.
 - No se modificó `build_installer.py`, no se añadió prueba y no hubo commit: la señalización ya era correcta cuando el binario se generó.
+
+## Ejecución 2026-08-24 — PR-03 S
+
+- Informe: `.superpowers/sdd/2026-08-23-prueba-real/task-PR-03-S-report.md`.
+- Checkout medido: raíz solicitada, rama `dev`, `HEAD 1347cc5e89228ae2dab2acb301f96dd1d3c2153e`; macOS `26.6`, build `25G72`, Darwin `25.6.0`, `arm64`; Python `3.14.6`.
+- Entrada única: copia temporal de `dist/Fuente_Distribucion_macOS.zip` en `/private/tmp/fuente-pr03-s-YNq2nj/input/Fuente_Distribucion_macOS.zip`; SHA-256 `5fda5a759b04772d262e269b86e7423cde330e6f16454c1a847cc922dec127dd`; `unzip -t` PASS.
+- Primer comando en sandbox: `/bin/bash ./instalar_fuente.command` con `HOME` y `PATH` sintéticos; BLOCKED por `NameResolutionError` contra `pypi.org` y `No matching distribution found for setuptools>=61.0`.
+- Repetición con red autorizada sólo para el venv temporal: instalación mínima terminó para `fuente-0.1.0` y `requirements.txt`; se respondió `n` a extras completos; no se descargaron extras ni modelos.
+- Bloqueo exacto posterior: `create_shortcuts.py` dejó abierto el selector Tk `Elige la carpeta donde crear los accesos directos (Fuente y La Memoria de Fuente)`. Se detuvo con `Ctrl-C`; código `1`. No se alcanzó la GUI principal ni `run_installation`.
+- Evidencia negativa medida: existe `/private/tmp/fuente-pr03-s-YNq2nj/extracted/venv/bin/python`; no existen `.fuente_install_receipt.json`, `home/Documents/Fuente_Vault` ni `home/Desktop/Fuente.command`; no quedaron procesos temporales.
+- Resultado: `PR-03 S BLOCKED`; `PR-03 R NOT_RUN`; estado de fase `BLOCKED`; G2 `BLOCKED`. Extras, arranque, rutas canónicas y desinstalación: `NOT_RUN`.
+- No se modificaron producto ni dependencias del checkout; no se ejecutó R y no hubo commit.
+
+## Corrección 2026-08-24 — PR-03 S
+
+- Se eliminó la llamada previa a `create_shortcuts.py` de `instalar_fuente.command`; el asistente queda como único dueño.
+- `step_create_shortcuts` ahora propaga `False` como fallo; `tests/test_installer_contract.py` usa `1_volcado`–`5_compartido`; `tests/test_shortcuts.py` verifica dos `.command` ejecutables con `target_dir` explícito y sin selector Tk.
+- Focales: `PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -q tests/test_installer_contract.py tests/test_shortcuts.py` -> `23 passed in 0.47s`, código `0`; `bash -n instalar_fuente.command` y `git diff --check` PASS.
+- ZIP limpio regenerado con PyInstaller `6.21.0`: `dist/Fuente_Distribucion_macOS.zip`, 358230404 bytes, SHA-256 `9a28eb380541bac010417cee7928f35beade04f401dd4f3a4a38336d2c439597`; `unzip -t` PASS.
+- Probe: `/private/tmp/fuente-pr03-s-probe-QYz6Xj`; `create_shortcuts` PASS con dos accesos ejecutables; `run_installation(..., create_shortcuts=False, install_model=False)` PASS con recibo y raíces canónicas creadas.
+- No se descargaron modelos, no se usó el Vault real y no se ejecutó R.
+- Resultado vigente: `PR-03 S PASS`; `PR-03 R NOT_RUN`; estado `PARTIAL`; G2 `PARTIAL`. La GUI completa, extras y desinstalación real siguen pendientes.
 
 ## Ejecución 2026-08-24 — PR-06 S
 
@@ -170,7 +192,7 @@ Código está publicado y pruebas automatizadas históricas están verdes. Esta 
 | PR-00 | baseline, corpus y seguridad | sí | no | PASS | G0 |
 | PR-01 | distribución macOS | parcial | macOS + PyInstaller | PARTIAL: S PASS, R NOT_RUN | G1 PASS |
 | PR-02 | distribución Windows | no | Windows + PyInstaller | NOT_RUN | G6 |
-| PR-03 | instalación macOS limpia | no | macOS limpio | NOT_RUN | G2 |
+| PR-03 | instalación macOS limpia | no | macOS limpio | BLOCKED: S BLOCKED, R NOT_RUN | G2 BLOCKED |
 | PR-04 | layout, migración y aprobación | sí | Vault nuevo con layout final | COMPLETE: layout, dry-run e inventario reales PASS; migración/rollback no aplican al alcance vigente | G3 |
 | PR-05 | extracción ETL | sí | PDF, imagen y audio reales | COMPLETE: TXT, Markdown, PDF, imagen y MP3 reales; motores office/audio instalados y medidos | G3 |
 | PR-06 | MiniRAG, Chroma y refinamiento | sí | Ollama y RAG reales | NOT_RUN | G3 |
@@ -201,7 +223,7 @@ Cada fase exige dos resultados en orden: `S` prueba sintética y, sólo si `S` p
 - `PR-00`: se mantiene `COMPLETE` sólo como baseline del repositorio y G0 aislado. No prueba instalación ni uso real.
 - `PR-04`: baja de `COMPLETE` a `PARTIAL`; la copia fue temporal y sintética, no el Vault autorizado real.
 - `PR-05`: baja de `PASS/COMPLETE` a `PARTIAL`; el probe fue sintético y usó backends ausentes o stubs, sin archivos, Vault, audio ni transcripciones reales.
-- La campaña no tiene todavía ninguna fase real de usuario cerrada. `PR-01` está `PARTIAL` con R `NOT_RUN`; `PR-03`, `PR-08`, `PR-09` y `PR-11` siguen `NOT_RUN`; `PR-10` sigue `BLOCKED`.
+- La campaña no tiene todavía ninguna fase real de usuario cerrada. `PR-01` está `PARTIAL` con R `NOT_RUN`; `PR-03` está `PARTIAL` con S `PASS` y R `NOT_RUN`; `PR-08`, `PR-09` y `PR-11` siguen `NOT_RUN`; `PR-10` sigue `BLOCKED`.
 
 ## Ejecución 2026-08-23 — PR-04 S
 

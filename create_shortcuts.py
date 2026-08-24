@@ -179,14 +179,18 @@ def create_shortcuts(base_dir: Path, target_dir: Optional[Path] = None, vault_di
         script_fuente_content = f"""#!/bin/bash
 cd "{base_dir}"
 export PYTHONPATH="{base_dir}:$PYTHONPATH"
-if [ -f "./Fuente_macOS" ]; then
-    ./Fuente_macOS "{vault_dir}"
+if [ -d "./Fuente.app" ]; then
+    open "./Fuente.app"
+elif [ -d "./dist/Fuente.app" ]; then
+    open "./dist/Fuente.app"
+elif [ -f "./Fuente_macOS" ]; then
+    ./Fuente_macOS
 elif [ -f "./dist/Fuente_macOS" ]; then
-    ./dist/Fuente_macOS "{vault_dir}"
+    ./dist/Fuente_macOS
 elif [ -f "./venv/bin/python3" ]; then
-    ./venv/bin/python3 -m fuente.main "{vault_dir}"
+    ./venv/bin/python3 -m fuente.main
 else
-    python3 -m fuente.main "{vault_dir}"
+    python3 -m fuente.main
 fi
 """
 
@@ -221,4 +225,3 @@ fi
 if __name__ == "__main__":
     base = Path(__file__).resolve().parent
     create_shortcuts(base)
-

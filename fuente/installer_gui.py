@@ -16,7 +16,6 @@ from fuente.installer_contract import (
     failed_steps,
     installation_succeeded,
     load_receipt,
-    resolve_vault_path,
     run_installation,
 )
 
@@ -45,8 +44,7 @@ class FuenteInstallerWizard(tk.Tk):
 
         # Variables de estado del instalador
         self.base_dir = Path(__file__).resolve().parent.parent
-        default_vault = (Path.home() / "Documents" / "Fuente_Vault").resolve()
-        self.vault_path_var = tk.StringVar(value=str(default_vault))
+        self.vault_path_var = tk.StringVar(value="")
 
         self.obsidian_status_var = tk.StringVar(value="Comprobando...")
         self.ollama_status_var = tk.StringVar(value="Comprobando...")
@@ -64,11 +62,6 @@ class FuenteInstallerWizard(tk.Tk):
         self.install_steps = []
         self.install_had_failures = False
         self._existing_receipt = load_receipt(self.base_dir)
-        if self._existing_receipt and self._existing_receipt.get("vault_path"):
-            self.vault_path_var.set(
-                str(Path(self._existing_receipt["vault_path"]).resolve())
-            )
-
         # Construir la interfaz base
         self._setup_ui()
         self.show_step(1)
@@ -399,14 +392,6 @@ class FuenteInstallerWizard(tk.Tk):
         else:
             self.ocr_status_var.set("Opcional, no seleccionado")
 
-        if self._existing_receipt:
-            vault = self._existing_receipt.get("vault_path")
-            if vault:
-                self.obsidian_status_var.set(
-                    self.obsidian_status_var.get()
-                    + f" | Reinstalación segura (vault: {Path(vault).name})"
-                )
-
     # --- PASO 3: Progreso de Instalación ---
     def _render_step5_installation(self):
         title = tk.Label(
@@ -486,12 +471,10 @@ class FuenteInstallerWizard(tk.Tk):
 
     def _run_installation_tasks(self):
         try:
-            vault = resolve_vault_path(self.vault_path_var.get())
-            self._run_on_main_thread(self.vault_path_var.set, str(vault))
-
-            self._set_install_status("1. Preparando estructura de carpetas Vault...")
+            vault = None
+            self._set_install_status("1. Instalando Fuente; el Vault se configurará desde Ajustes...")
             self._set_progress(10)
-            self._log(f"[+] Vault objetivo: {vault}")
+            self._log("[+] Vault aplazado: se elegirá desde Ajustes tras instalar Fuente")
 
             ctx = InstallationContext(
                 base_dir=self.base_dir,
@@ -599,11 +582,11 @@ class FuenteInstallerWizard(tk.Tk):
             )
             use_instructions = (
                 "📌 Tu entorno ha sido configurado por completo:\n\n"
-                "• Vault de Obsidian: 'La Memoria de Fuente' preparado.\n"
-                "• Ubicación del Vault y carpetas conectadas: se configuran desde 'Ajustes'.\n"
+                "• Vault de Obsidian: se selecciona o crea desde 'Ajustes' en el primer arranque.\n"
+                "• No se crea ni se asume ningún Vault durante la instalación.\n"
                 "• Ollama AI: Modelo configurado según tu memoria RAM.\n"
                 f"{anythingllm_summary}\n"
-                "• Acceso Directo: Se ha creado el botón 'Fuente' en tu Escritorio.\n\n"
+                "• Acceso Directo: se habilita después de conectar un Vault desde 'Ajustes'.\n\n"
                 "Al hacer clic en 'Finalizar', se abrirá tu Consola Central de Control."
             )
             box_fg = "#065F46"
@@ -641,12 +624,18 @@ class FuenteInstallerWizard(tk.Tk):
             if self.run_first_flush_var.get():
                 self.destroy()
                 # Lanzar Consola Central de Control
-                vault_arg = self.vault_path_var.get()
+                app_bundle = self.base_dir / "Fuente.app"
+                if app_bundle.is_dir():
+                    subprocess.Popen(
+                        ["open", str(app_bundle)],
+                        cwd=self.base_dir,
+                    )
+                    return
                 main_exe = self.base_dir / ("Fuente_macOS" if sys.platform == "darwin" else "Fuente_windows.exe")
                 if main_exe.exists():
-                    subprocess.Popen([str(main_exe), vault_arg], cwd=self.base_dir)
+                    subprocess.Popen([str(main_exe)], cwd=self.base_dir)
                 else:
-                    subprocess.Popen([sys.executable, "-m", "fuente.main", vault_arg], cwd=self.base_dir)
+                    subprocess.Popen([sys.executable, "-m", "fuente.main"], cwd=self.base_dir)
             else:
                 self.destroy()
         else:

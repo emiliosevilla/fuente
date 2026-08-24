@@ -256,7 +256,13 @@ class TextAndOfficeExtractor(BaseExtractor):
         if path.suffix.lower() not in self.DOCLING_EXTENSIONS:
             return None
         try:
-            from docling.document_converter import DocumentConverter
+            try:
+                from docling.document_converter import DocumentConverter
+            except ImportError:
+                from fuente.runtime_loader import ensure_capability
+
+                ensure_capability("office")
+                from docling.document_converter import DocumentConverter
             converter = DocumentConverter()
             result = converter.convert(str(path))
             if result and hasattr(result, "document"):
@@ -271,7 +277,13 @@ class TextAndOfficeExtractor(BaseExtractor):
     def _try_markitdown(self, path: Path) -> str | None:
         """Convierte sólo una ruta local, con plugins y servicios cloud deshabilitados."""
         try:
-            from markitdown import MarkItDown
+            try:
+                from markitdown import MarkItDown
+            except ImportError:
+                from fuente.runtime_loader import ensure_capability
+
+                ensure_capability("office")
+                from markitdown import MarkItDown
             md = MarkItDown(enable_plugins=False)
             res = md.convert_local(path)
             if res and res.text_content:

@@ -8,6 +8,14 @@ import zipfile
 import subprocess
 from pathlib import Path
 
+RUNTIME_PAYLOAD = Path("build/runtime-source.zip")
+PIP_PAYLOAD = Path("build/pip-source.zip")
+RUNTIME_EXCLUDED_DIRS = {
+    "__pycache__", ".obsidian", "1_entrada", "2_sucio", "3_limpio",
+    "4_salida", "1_volcado", "2_copiado", "3_capturado", "4_procesado",
+    "5_compartido", ".fuente", "chroma", "venv",
+}
+
 
 def add_dir_to_zip(zf: zipfile.ZipFile, source_dir: Path, arc_dir_name: str):
     """Añade recursivamente un directorio al ZIP omitiendo archivos temporales, __pycache__, muestras y recursos web (.html)."""
@@ -24,11 +32,53 @@ def add_dir_to_zip(zf: zipfile.ZipFile, source_dir: Path, arc_dir_name: str):
             zf.write(full_path, arcname=arcname)
 
 
+def prepare_runtime_payload(base_dir: Path) -> Path:
+    """Bundle Fuente code only; native capabilities install after setup."""
+    payload = base_dir / RUNTIME_PAYLOAD
+    payload.parent.mkdir(parents=True, exist_ok=True)
+    source_dir = base_dir / "fuente"
+    with zipfile.ZipFile(payload, "w", zipfile.ZIP_DEFLATED) as zf:
+        for path in source_dir.rglob("*"):
+            relative = path.relative_to(source_dir)
+            if (
+                not path.is_file()
+                or path.suffix == ".pyc"
+                or path.name.startswith(".")
+                or any(part in RUNTIME_EXCLUDED_DIRS for part in relative.parts)
+            ):
+                continue
+            zf.write(path, arcname=str(Path("fuente") / relative))
+    return payload
+
+
+def prepare_pip_payload(base_dir: Path) -> Path:
+    """Keep Pip as data so PyInstaller does not analyze its whole command tree."""
+    site_packages = next(
+        (Path(path) for path in sys.path if (Path(path) / "pip").is_dir()),
+        None,
+    )
+    if site_packages is None:
+        raise RuntimeError("Pip no está disponible en el entorno de compilación.")
+    payload = base_dir / PIP_PAYLOAD
+    pip_init = site_packages / "pip" / "__init__.py"
+    if payload.is_file() and payload.stat().st_mtime >= pip_init.stat().st_mtime:
+        return payload
+    with zipfile.ZipFile(payload, "w", zipfile.ZIP_STORED) as zf:
+        for root in [site_packages / "pip", *site_packages.glob("pip-*.dist-info")]:
+            for path in root.rglob("*"):
+                if path.is_file() and path.suffix != ".pyc":
+                    zf.write(path, arcname=str(path.relative_to(site_packages)))
+    return payload
+
+
 
 def build():
     print("=== Compilador de Distribución Fuente ===")
     
     base_dir = Path(__file__).resolve().parent
+    clean_flag = ["--clean"] if os.environ.get("FUENTE_PYINSTALLER_CLEAN") == "1" else []
+    prepare_runtime_payload(base_dir)
+    prepare_pip_payload(base_dir)
 
     # 1. Verificar/Instalar PyInstaller
     try:
@@ -53,9 +103,10 @@ def build():
             sys.executable,
             "-m",
             "PyInstaller",
+            "--noconfirm",
             "--name=Fuente_macOS" if sys.platform == "darwin" else "--name=Fuente_windows",
             "--onefile",
-            "--clean",
+            *clean_flag,
             "fuente/main.py",
         ]
     else:
@@ -63,15 +114,16 @@ def build():
             sys.executable,
             "-m",
             "PyInstaller",
-            "--clean",
+            "--noconfirm",
+            *clean_flag,
             "fuente.spec",
         ]
 
     print(f"Ejecutando compilación PyInstaller: {' '.join(cmd)}")
     try:
         subprocess.check_call(cmd, cwd=base_dir)
-    except Exception as e:
-        print(f"[!] PyInstaller no pudo generar el binario único: {e}. Se creará el paquete de distribución basado en código fuente autónomo.")
+    except Exception as error:
+        raise RuntimeError(f"PyInstaller no pudo generar Fuente.app: {error}") from error
 
     dist_dir = base_dir / "dist"
     dist_dir.mkdir(parents=True, exist_ok=True)
@@ -82,60 +134,13 @@ def build():
     zip_name = "Fuente_Distribucion_macOS.zip" if is_mac else "Fuente_Distribucion_Windows.zip"
     zip_path = dist_dir / zip_name
 
-    # Definición de archivos a incluir según la plataforma
-    main_exe_name = "Fuente_macOS" if is_mac else "Fuente_windows.exe"
-    main_exe = dist_dir / main_exe_name
-    if not main_exe.exists():
-        main_exe = base_dir / main_exe_name
-
-    # Archivos raíz específicos por S.O. (¡Sin mezclar .bat en macOS ni .command en Windows!)
-    if is_mac:
-        root_files = [
-            base_dir / "instalar_fuente.command",
-            base_dir / "create_shortcuts.py",
-            base_dir / "pyproject.toml",
-            base_dir / "requirements.txt",
-            base_dir / "README.md",
-            base_dir / "consola_preview.html",
-            base_dir / "readme.html",
-        ]
-    else:
-        root_files = [
-            base_dir / "instalar_fuente.bat",
-            base_dir / "run_fuente.bat",
-            base_dir / "create_shortcuts.py",
-            base_dir / "pyproject.toml",
-            base_dir / "requirements.txt",
-            base_dir / "README.md",
-            base_dir / "consola_preview.html",
-            base_dir / "readme.html",
-        ]
-
-    if main_exe.exists():
-        root_files.insert(0, main_exe)
+    app_bundle = dist_dir / "Fuente.app"
+    if not app_bundle.is_dir():
+        raise RuntimeError("PyInstaller no generó Fuente.app; no se creará un ZIP incompleto.")
 
     print(f"\nCreando paquete ZIP de distribución auto-contenido: {zip_path.name}...")
     with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
-        # 1. Agregar archivos raíz
-        for file_path in root_files:
-            if file_path.exists() and file_path.is_file():
-                arcname = file_path.name
-                if is_mac and (file_path.suffix in [".command", ""] or file_path.name == "Fuente_macOS"):
-                    # Preservar permisos de ejecución POSIX (0755)
-                    with open(file_path, "rb") as f_in:
-                        data = f_in.read()
-                    zinfo = zipfile.ZipInfo(arcname)
-                    zinfo.external_attr = 0o755 << 16
-                    zinfo.compress_type = zipfile.ZIP_DEFLATED
-                    zf.writestr(zinfo, data)
-                else:
-                    zf.write(file_path, arcname=arcname)
-
-        # 2. Agregar carpeta completa 'fuente/'
-        add_dir_to_zip(zf, base_dir / "fuente", "fuente")
-
-        # 3. Agregar carpeta completa 'assets/'
-        add_dir_to_zip(zf, base_dir / "assets", "assets")
+        add_dir_to_zip(zf, app_bundle, "Fuente.app")
 
     print("=" * 60)
     print("¡PAQUETE DE DISTRIBUCIÓN CREADO EXITOSAMENTE!")

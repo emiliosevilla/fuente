@@ -53,7 +53,13 @@ class AudioExtractor(BaseExtractor):
         # Preserve the legacy Auto behavior. Policy-driven Tiny CPU never
         # reaches this branch and therefore never passes a remote model name.
         try:
-            from faster_whisper import WhisperModel
+            try:
+                from faster_whisper import WhisperModel
+            except ImportError:
+                from fuente.runtime_loader import ensure_capability
+
+                ensure_capability("audio")
+                from faster_whisper import WhisperModel
 
             model = WhisperModel("tiny", device="cpu", compute_type="int8")
             segments, info = model.transcribe(str(file_path), beam_size=5)
@@ -98,7 +104,13 @@ class AudioExtractor(BaseExtractor):
                     local_files_only=True,
                 )
             else:
-                from faster_whisper import WhisperModel
+                try:
+                    from faster_whisper import WhisperModel
+                except ImportError:
+                    from fuente.runtime_loader import ensure_capability
+
+                    ensure_capability("audio")
+                    from faster_whisper import WhisperModel
 
                 model = WhisperModel(
                     str(model_path),

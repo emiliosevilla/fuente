@@ -10,6 +10,12 @@ MAIN_SOURCE = (ROOT / "fuente" / "main.py").read_text(encoding="utf-8")
 LAUNCHER_SOURCE = (ROOT / "fuente" / "control_console.py").read_text(
     encoding="utf-8"
 )
+SETUP_SOURCE = (ROOT / "fuente" / "ui" / "setup_backend.py").read_text(
+    encoding="utf-8"
+)
+BRIDGE_SOURCE = (ROOT / "fuente" / "ui" / "bridge.py").read_text(
+    encoding="utf-8"
+)
 
 
 def _function_source(name: str, next_name: str) -> str:
@@ -94,6 +100,31 @@ def test_normal_cli_routes_to_the_native_typed_bridge_not_a_static_server():
     assert "js_api=api" in launcher
     assert "http.server" not in MAIN_SOURCE
     assert "http.server" not in LAUNCHER_SOURCE
+
+
+def test_first_run_stays_unconfigured_until_settings_selects_a_vault():
+    assert "load_startup_vault()" in MAIN_SOURCE
+    assert "Fuente_Vault" in MAIN_SOURCE  # CLI-only fallback for flush/headless.
+    assert "FuenteSetupBackend" in LAUNCHER_SOURCE
+    assert "Fuente iniciando servicios" in LAUNCHER_SOURCE
+    assert "mode=\"indeterminate\"" in LAUNCHER_SOURCE
+    assert "Sin Vault conectado. Configúralo desde Ajustes." in SOURCE
+    assert "restart_with_vault" in SOURCE
+
+
+def test_onboarding_actions_surface_native_bridge_errors():
+    create = _function_source("createDemoVault", "dismissOnboarding")
+    dismiss = _function_source("dismissOnboarding", "openOnboardingFromHelp")
+    assert "callNativeRequest('install_demo_vault'" in create
+    assert "callNativeRequest('dismiss_onboarding'" in dismiss
+    assert create.count(".catch(function(err)") == 1
+    assert dismiss.count(".catch(function(err)") == 1
+
+
+def test_settings_restart_validates_selected_vault_before_relaunch():
+    assert "validate_vault_path" in SETUP_SOURCE
+    assert "def restart_with_vault" in BRIDGE_SOURCE
+    assert "os.execv(sys.executable" in BRIDGE_SOURCE
 
 
 def test_note_content_rejection_and_malformed_payload_render_visible_error():

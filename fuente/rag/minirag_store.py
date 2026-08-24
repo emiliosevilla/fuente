@@ -51,7 +51,14 @@ class MiniRAGStore:
             from minirag import MiniRAG  # type: ignore[import-not-found]
             from minirag.utils import EmbeddingFunc  # type: ignore[import-not-found]
         except ImportError as exc:
-            raise RuntimeError("MiniRAG is not installed; use BM25 fallback") from exc
+            try:
+                from fuente.runtime_loader import ensure_capability
+
+                ensure_capability("rag")
+                from minirag import MiniRAG  # type: ignore[import-not-found]
+                from minirag.utils import EmbeddingFunc  # type: ignore[import-not-found]
+            except Exception as install_error:
+                raise RuntimeError("MiniRAG is not installed; use BM25 fallback") from install_error
         embedding_func = self._embedding_func or self._default_embedding_func(EmbeddingFunc)
         llm_model_func = self._llm_model_func or self._default_llm_model_func()
         self._client = MiniRAG(

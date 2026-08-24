@@ -31,10 +31,12 @@ def test_distribution_sources_include_webview_console_and_reader_editor() -> Non
     build = (ROOT / "build_installer.py").read_text(encoding="utf-8")
     spec = (ROOT / "fuente.spec").read_text(encoding="utf-8")
 
-    assert "base_dir / \"consola_preview.html\"" in build
-    assert "base_dir / \"readme.html\"" in build
-    assert "('consola_preview.html', '.')" in spec
-    assert "('readme.html', '.')" in spec
+    assert "prepare_runtime_payload(base_dir)" in build
+    assert "prepare_pip_payload(base_dir)" in build
+    assert 'add_dir_to_zip(zf, app_bundle, "Fuente.app")' in build
+    assert '("consola_preview.html", ".")' in spec
+    assert '("build/runtime-source.zip", ".")' in spec
+    assert '("build/pip-source.zip", ".")' in spec
     html = (ROOT / "consola_preview.html").read_text(encoding="utf-8")
     assert 'id="reader-markdown-editor"' in html
     assert 'id="reader-editor-panel"' in html
@@ -43,8 +45,19 @@ def test_distribution_sources_include_webview_console_and_reader_editor() -> Non
     assert "assets/toastui-editor/toastui-editor.js" in html
 
 
-def test_spec_declares_dynamic_rag_and_meeting_modules() -> None:
+def test_bootstrap_spec_excludes_optional_native_runtime() -> None:
     spec = (ROOT / "fuente.spec").read_text(encoding="utf-8")
-    assert "fuente.integrations.meetily" in spec
-    assert "fuente.rag.minirag_store" in spec
-    assert "'minirag'" in spec
+    assert '"fuente/bootstrap.py"' in spec
+    assert "COLLECT(" in spec
+    assert '"torch"' in spec
+    assert '"docling"' in spec
+    assert '"pip._internal.cli.main"' not in spec
+
+
+def test_macos_gui_binary_does_not_open_terminal() -> None:
+    spec = (ROOT / "fuente.spec").read_text(encoding="utf-8")
+    assert "console=False" in spec
+    assert 'name="Fuente.app"' in spec
+    build = (ROOT / "build_installer.py").read_text(encoding="utf-8")
+    assert 'add_dir_to_zip(zf, app_bundle, "Fuente.app")' in build
+    assert 'add_dir_to_zip(zf, base_dir / "fuente", "fuente")' not in build

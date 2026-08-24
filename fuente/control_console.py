@@ -2226,6 +2226,16 @@ class FuenteConsoleBackend:
             "offline_mode": describe_offline_mode(self.config),
         }
 
+    def get_capabilities(self) -> Dict[str, Any]:
+        from fuente.runtime_loader import capability_status
+
+        return {"capabilities": capability_status()}
+
+    def install_capability(self, capability_id: str) -> Dict[str, Any]:
+        from fuente.runtime_loader import install_capability
+
+        return install_capability(capability_id)
+
     def _resolve_chat_context(
         self, context: Optional[Dict[str, Any]]
     ) -> Dict[str, Any] | Dict[str, str]:
@@ -2761,17 +2771,75 @@ def launch_control_console(vault_path: Optional[Path] = None):
     before the window opens and stopped — bounded, no leftover threads —
     once the window is closed, regardless of which UI backend was used.
     """
-    if not vault_path:
-        vault_path = Path.home() / "Documents" / "Fuente_Vault"
+    html_file = Path(__file__).resolve().parent.parent / "consola_preview.html"
+
+    if vault_path is None:
+        from fuente.ui.setup_backend import FuenteSetupBackend
+
+        if not HAS_WEBVIEW or not html_file.exists():
+            raise RuntimeError("La configuración inicial requiere PyWebView y la consola HTML.")
+        backend = FuenteSetupBackend()
+        api = FuentePyWebViewApi(backend)
+        webview.settings["ALLOW_DOWNLOADS"] = True
+        window = webview.create_window(
+            "Fuente Control Console — Sin Vault conectado",
+            url=html_file.as_uri(),
+            js_api=api,
+            width=1280,
+            height=850,
+            min_size=(980, 680),
+            background_color="#DCD4C7",
+        )
+        api.set_window(window)
+        webview.start(debug=False)
+        return
 
     vault_path = Path(vault_path).resolve()
     backend = FuenteConsoleBackend(vault_path)
-
     lifecycle = ApplicationLifecycle(backend.config, mode="continuous")
-    html_file = Path(__file__).resolve().parent.parent / "consola_preview.html"
 
     try:
-        lifecycle.start()
+        startup_error: list[BaseException] = []
+        startup_done = threading.Event()
+
+        def start_services() -> None:
+            try:
+                lifecycle.start()
+            except BaseException as error:
+                startup_error.append(error)
+            finally:
+                startup_done.set()
+
+        threading.Thread(target=start_services, name="fuente-startup", daemon=True).start()
+        splash = tk.Tk()
+        splash.title("Fuente")
+        splash.geometry("420x150")
+        splash.resizable(False, False)
+        splash.configure(bg=THEME["bg_root"])
+        splash.attributes("-topmost", True)
+        tk.Label(
+            splash,
+            text="Fuente iniciando servicios…",
+            font=(FONT_TYPEWRITER, 14, "bold"),
+            fg=THEME["paper"],
+            bg=THEME["bg_root"],
+        ).pack(pady=(30, 14))
+        progress = ttk.Progressbar(splash, mode="indeterminate", length=300)
+        progress.pack()
+        progress.start(12)
+
+        def poll_startup() -> None:
+            if startup_done.is_set():
+                progress.stop()
+                splash.destroy()
+                return
+            splash.after(80, poll_startup)
+
+        splash.after(80, poll_startup)
+        splash.mainloop()
+        if startup_error:
+            raise startup_error[0]
+
         # One VaultManager: console theme actions retarget FolderMonitor + graph loop.
         backend.attach_lifecycle(lifecycle)
         if HAS_WEBVIEW and html_file.exists():

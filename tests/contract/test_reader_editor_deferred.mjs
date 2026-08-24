@@ -71,6 +71,22 @@ class FakeNode {
     }
 }
 
+class FakeToastEditor {
+    constructor(options) {
+        this.value = options.initialValue || "";
+        this.listeners = [];
+        options.el._toastEditor = this;
+    }
+
+    on(event, callback) {
+        if (event === "change") this.listeners.push(callback);
+    }
+
+    getMarkdown() { return this.value; }
+    setMarkdown(value) { this.value = String(value ?? ""); }
+    changeMode() {}
+}
+
 function makeHarness() {
     const elements = new Map();
     [
@@ -78,7 +94,6 @@ function makeHarness() {
         "reader-markdown-save",
         "reader-markdown-cancel",
         "reader-edit-state",
-        "reader-markdown-preview",
         "reader-editor-conflict",
     ].forEach((id) => elements.set(id, new FakeNode("div")));
     const reader = new FakeNode("div");
@@ -101,7 +116,7 @@ function makeHarness() {
     };
     const reloads = [];
     const getEditorResolvers = [];
-    const window = { pywebview: { api: {} } };
+    const window = { pywebview: { api: {} }, toastui: { Editor: FakeToastEditor } };
     window.pywebview.api.get_note_editor = (documentId) => new Promise((resolve) => {
         getEditorResolvers.push({ documentId, resolve });
     });
@@ -122,6 +137,7 @@ function makeHarness() {
             saveButton: document.getElementById('reader-markdown-save'),
             stateElement: document.getElementById('reader-edit-state'),
             setLoaded(id, revision, body, projection) {
+                mountReaderEditor();
                 currentSelectedDocumentId = id;
                 readerEditorDocumentId = id;
                 readerEditorRevision = revision;
@@ -131,10 +147,11 @@ function makeHarness() {
                 readerEditorState = { status: 'saved', dirty: false };
                 readerEditorSession += 1;
                 readerEditorSaveOperation = null;
-                this.editor.value = body;
+                this.editor._toastEditor.setMarkdown(body);
             },
             markDirty(body, revision = null) {
-                this.editor.value = body;
+                if (!readerEditorInstance) mountReaderEditor();
+                this.editor._toastEditor.setMarkdown(body);
                 readerEditorBody = body;
                 if (revision !== null) readerEditorRevision = revision;
                 readerEditorState = { status: 'dirty', dirty: true };
@@ -218,13 +235,13 @@ test("save preserves text typed after the request began", async () => {
     harness.test.markDirty("# First draft\n");
 
     harness.test.save();
-    harness.editor.value = "# Newer draft typed while saving\n";
+    harness.editor._toastEditor.setMarkdown("# Newer draft typed while saving\n");
     resolveSave(success("opaque-a", 5, "# First draft\n"));
     await Promise.resolve();
     await Promise.resolve();
 
     const state = harness.test.state();
-    assert.equal(harness.editor.value, "# Newer draft typed while saving\n");
+    assert.equal(harness.editor._toastEditor.getMarkdown(), "# Newer draft typed while saving\n");
     assert.equal(state.body, "# Newer draft typed while saving\n");
     assert.equal(state.originalBody, "# First draft\n");
     assert.equal(state.revision, 5);

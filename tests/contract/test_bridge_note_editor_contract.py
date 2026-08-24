@@ -20,7 +20,7 @@ EDITOR_DOCUMENT = {
     "frontmatter": {"title": "Nota", "status": "pending_review"},
     "body_markdown": "# Cuerpo\n",
     "projection": {
-        "editor_strategy": "exclude_tiptap",
+        "editor_strategy": "toastui_wysiwyg",
         "document_id": "opaque-note-7",
         "revision": 7,
         "frontmatter": {"title": "Nota", "status": "pending_review"},

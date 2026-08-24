@@ -20,6 +20,7 @@ wheels/
 *.egg-info/
 dist/*.whl
 dist/*.tar.gz
+dist/
 .installed.cfg
 *.egg
 

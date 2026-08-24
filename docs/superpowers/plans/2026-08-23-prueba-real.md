@@ -34,14 +34,14 @@ Baseline activo medido: `dev` en `e6aef697a6f9b4f49f1878940b95f8cf51d2b342`, mer
 | 7 | PR-03 | PARTIAL (S PASS / R NOT_RUN) |
 | 8 | PR-08 | PARTIAL (S PASS / R NOT_RUN) |
 | 9 | PR-09 | PARTIAL (S PASS / R NOT_RUN) |
-| 10 | PR-10 | NOT_RUN |
+| 10 | PR-10 | PARTIAL (S PASS / R NOT_RUN) |
 | 11 | PR-11 | NOT_RUN |
 | 12 | PR-02 | NOT_RUN |
 | 13 | PR-12 | NOT_RUN |
 
 PR-10 debe repetir `S` sintética; el bloqueo histórico por IDs duplicados no se hereda automáticamente. Ninguna fase puede declararse `COMPLETE` sin `S PASS` y `R PASS` de esta campaña.
 
-Ejecución activa: PR-00, PR-04 y PR-05 están `COMPLETE`; PR-06, PR-07, PR-01, PR-03, PR-08 y PR-09 están `PARTIAL` (`S PASS`, `R NOT_RUN`); PR-10+ permanecen `NOT_RUN`.
+Ejecución activa: PR-00, PR-04 y PR-05 están `COMPLETE`; PR-06, PR-07, PR-01, PR-03, PR-08, PR-09 y PR-10 están `PARTIAL` (`S PASS`, `R NOT_RUN`); PR-11+ permanecen `NOT_RUN`.
 
 ## Global Constraints
 
@@ -331,16 +331,26 @@ Secuencia: `S` dry-run y apply sobre copia sintética → `R` dry-run y apply so
 
 En este reinicio se repite primero `S`; el bloqueo histórico por IDs duplicados no fija el estado activo.
 
-- [ ] Ejecutar dry-run:
+- [x] Ejecutar dry-run sintético, apply, rollback, conflictos, symlinks,
+  autorización, duplicados, idempotencia y CLI sobre temporales.
 
 ~~~bash
 fuente --vault /Users/emiliosevillaortego/Documents/Programación/fuente_vault \
   --theme "General" --migrate-layout dry-run
 ~~~
 
-- [ ] Resolver o documentar IDs duplicados antes de apply.
-- [ ] Aplicar sólo con autorización y plan-id producido por ese dry-run.
-- [ ] Verificar en copia y probar rollback en copia; no hacer rollback destructivo sobre datos reales.
+- [x] Resolver o documentar IDs duplicados en sintético: el inventario bloquea
+  apply cuando encuentra `duplicate_note_id`.
+- [ ] Aplicar sólo con autorización y plan-id producido por el dry-run real.
+- [x] Verificar apply y rollback en copias sintéticas; la copia real y su
+  rollback siguen pendientes.
+
+Ejecución sintética 2026-08-24: `S PASS`; informe
+`.superpowers/sdd/2026-08-23-prueba-real/task-PR-10-S-report.md`. La suite
+focal final pasó `134 passed in 3.76s`; se actualizaron fixtures a las raíces
+canónicas y se corrigió un guard real que excluía `3_limpio` en vez de
+`3_capturado`. `R` sigue `NOT_RUN` porque requiere copia autorizada del Vault
+General y decisión sobre sus IDs duplicados.
 
 ### PR-11: OneDrive/SharePoint montado
 

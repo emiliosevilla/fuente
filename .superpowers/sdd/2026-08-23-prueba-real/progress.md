@@ -11,7 +11,7 @@
 - Terra: `PASS`, sin hallazgos abiertos.
 - Estado fase layout: `S PASS`; no se declara R ni cierre de producto por esta fase.
 
-Status activo: PR-00 S `PASS`, R `PASS`, estado `COMPLETE`; PR-04 S `PASS`, R `PASS`, estado `COMPLETE` por no-op de migración; PR-05 S `PASS`, R `PASS`, estado `COMPLETE`; PR-06 S `PASS`, R `NOT_RUN`, estado `PARTIAL`; PR-07 S `PASS`, R `NOT_RUN`, estado `PARTIAL`; PR-01 S `PASS`, R `NOT_RUN`, estado `PARTIAL`; PR-03 S `PASS`, R `NOT_RUN`, estado `PARTIAL`; PR-08 S `PASS`, R `NOT_RUN`, estado `PARTIAL`; PR-09–PR-12 `NOT_RUN`. Estado global: `PARTIAL`.
+Status activo: PR-00 S `PASS`, R `PASS`, estado `COMPLETE`; PR-04 S `PASS`, R `PASS`, estado `COMPLETE` por no-op de migración; PR-05 S `PASS`, R `PASS`, estado `COMPLETE`; PR-06, PR-07, PR-01, PR-03, PR-08, PR-09 y PR-10 S `PASS`, R `NOT_RUN`, estado `PARTIAL`; PR-11, PR-02 y PR-12 `NOT_RUN`. Estado global: `PARTIAL`.
 Spec: docs/superpowers/specs/2026-08-23-prueba-real.md
 Plan: docs/superpowers/plans/2026-08-23-prueba-real.md
 Created: 2026-08-23
@@ -31,13 +31,24 @@ Se conserva todo el ledger histórico inferior sin borrarlo. Este bloque gobiern
 | 6 | PR-01 | PASS | NOT_RUN | PARTIAL |
 | 7 | PR-03 | PASS | NOT_RUN | PARTIAL |
 | 8 | PR-08 | PASS | NOT_RUN | PARTIAL |
-| 9 | PR-09 | NOT_RUN | NOT_RUN | NOT_RUN |
-| 10 | PR-10 | NOT_RUN | NOT_RUN | NOT_RUN |
+| 9 | PR-09 | PASS | NOT_RUN | PARTIAL |
+| 10 | PR-10 | PASS | NOT_RUN | PARTIAL |
 | 11 | PR-11 | NOT_RUN | NOT_RUN | NOT_RUN |
 | 12 | PR-02 | NOT_RUN | NOT_RUN | NOT_RUN |
 | 13 | PR-12 | NOT_RUN | NOT_RUN | NOT_RUN |
 
 Cada fase debe ejecutar `S` sintética y, sólo si pasa, `R` real. `PR-10` repite su prueba sintética y no hereda automáticamente el bloqueo histórico por IDs duplicados. PR-00 y PR-04 están `COMPLETE`; PR-04 se cierra por no-op de migración: el Vault real ya estaba en layout final y no contenía notas migrables, por lo que apply/rollback no forman parte del alcance vigente.
+
+## Ejecución 2026-08-24 — PR-10 S
+
+- Informe: `.superpowers/sdd/2026-08-23-prueba-real/task-PR-10-S-report.md`.
+- Checkout medido antes de ejecutar: rama `dev`, `HEAD eb3c095`; `dist/` es el único artefacto sin rastrear y se conservó.
+- Comando exacto: `PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -q tests/test_vault_layout_migration.py tests/test_vault_migration.py tests/test_fuente_migration_inventory.py tests/test_fuente_v3_migration.py tests/test_authorized_paths.py tests/security/test_path_authorization.py tests/test_taxonomy_migration.py tests/test_vault_layout.py`.
+- Primera ejecución: `115 passed, 19 failed`; los fallos eran fixtures/expectativas legacy.
+- Reejecución final: `134 passed in 3.76s`, código `0`; `git diff --check` PASS.
+- Cobertura: dry-run, plan-id, hashes, apply, rollback, idempotencia, reanudación, conflictos humanos, symlinks, autorización de rutas, IDs duplicados y CLI sobre temporales sintéticos.
+- Cambio de producto mínimo: `taxonomy_migration.py` excluía `3_limpio`; ahora usa `CANONICAL_CLEAN_DIR_NAME` para no aceptar `3_capturado` como candidato de sumarios. El resto son fixtures y documentación canónicos.
+- No se usó el Vault real ni el original. `PR-10 S PASS`; `PR-10 R NOT_RUN`; estado `PARTIAL`.
 
 ## Ejecución 2026-08-24 — PR-01 S
 

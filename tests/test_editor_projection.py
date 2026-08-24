@@ -32,8 +32,8 @@ def _minimal_frontmatter(**overrides) -> dict:
 
 
 class TestEditorProjection(unittest.TestCase):
-    def test_editor_strategy_excludes_tiptap(self):
-        self.assertEqual(EDITOR_STRATEGY, "exclude_tiptap")
+    def test_editor_strategy_uses_visual_markdown_editor(self):
+        self.assertEqual(EDITOR_STRATEGY, "toastui_wysiwyg")
 
     def test_supported_blocks_round_trip_without_loss(self):
         markdown = """# Title
@@ -71,7 +71,7 @@ print("hello")
             revision=3,
         )
         projection = project_note_document(note)
-        self.assertEqual(projection["editor_strategy"], "exclude_tiptap")
+        self.assertEqual(projection["editor_strategy"], "toastui_wysiwyg")
         self.assertEqual(projection["frontmatter"]["title"], "Projection test")
         self.assertNotIn("---", note_body_from_projection(projection))
         self.assertEqual(note_body_from_projection(projection), body)

@@ -104,7 +104,7 @@ Los jobs son durables, reanudables y tienen estados y razones explícitos.
 
 ### Edición y revisión editorial
 
-- Editor de Markdown con proyección segura para la interfaz.
+- Editor visual Markdown TOAST UI Editor, servido localmente dentro del bundle.
 - Edición compare-and-swap (CAS) para no sobrescribir cambios concurrentes.
 - Ledger de aprobaciones ligado a identidad, revisión y hash.
 - Reflow de enlaces y enriquecimiento como jobs explícitos y recuperables.
@@ -156,7 +156,8 @@ El flujo editorial usa Markdown con `frontmatter` como fuente canónica y
 protege las ediciones mediante `compare-and-swap` (CAS). El `reflow` y el
 enriquecimiento son jobs `durable` y recuperables; la detección de `candidate`
 es determinista; la `fusion` usa `preview-then-commit` y es
-`source-preserving`. El editor WYSIWYG forma parte del alcance previsto. Quedan
+`source-preserving`. El editor WYSIWYG ya está integrado en los modales y guarda
+Markdown mediante el bridge nativo. Quedan
 fuera de alcance actual la integración nativa con Graph API/OAuth y las
 credenciales cloud.
 
@@ -342,7 +343,7 @@ ejecutar la suite o el gate.
 ## Límites actuales
 
 Fuente no pretende ser un servicio cloud ni un cliente de Graph API. El editor
-WYSIWYG forma parte de la evolución prevista del producto. La fuente de verdad
+WYSIWYG es una capa local de edición; la fuente de verdad
 es el Markdown aprobado; la base SQLite, el grafo, los índices RAG y la
 interfaz son capas derivadas y reconstruibles.
 

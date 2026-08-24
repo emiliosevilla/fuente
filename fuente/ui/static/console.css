@@ -1537,9 +1537,10 @@
     border-bottom: 1px solid var(--border);
 }
 
-.reader-editor-mode-toggle {
-    display: flex;
-    gap: 6px;
+.reader-editor-mode-hint {
+    color: var(--muted);
+    font-size: 0.78rem;
+    font-weight: 700;
 }
 
 .reader-edit-state {
@@ -1559,8 +1560,7 @@
     font-weight: 700;
 }
 
-.reader-markdown-editor,
-.reader-markdown-preview {
+.reader-markdown-editor {
     flex: 1;
     min-height: 360px;
     width: 100%;
@@ -1573,28 +1573,24 @@
     font: 0.88rem/1.6 var(--font-mono);
 }
 
-.reader-markdown-editor {
-    resize: vertical;
-    outline: none;
+.reader-markdown-editor .toastui-editor-defaultUI {
+    min-height: 360px;
+    border: 1px solid var(--border-accent);
+    border-radius: var(--card-radius);
+    overflow: hidden;
 }
 
-.reader-markdown-editor:focus {
-    border-color: var(--gold);
-    box-shadow: 0 0 0 2px rgba(197, 160, 89, 0.2);
+.reader-markdown-editor .toastui-editor-main,
+.reader-markdown-editor .toastui-editor-ww-container,
+.reader-markdown-editor .toastui-editor-md-container {
+    background: var(--bg-card);
 }
 
-.reader-markdown-preview {
-    overflow-y: auto;
-}
-
-.reader-markdown-preview pre {
-    white-space: pre-wrap;
-    word-break: break-word;
-    margin: 0 0 14px 0;
-    padding: 10px;
-    background: var(--bg-log);
-    border: 1px solid var(--border);
-    border-radius: 4px;
+.reader-markdown-editor .toastui-editor-contents,
+.reader-markdown-editor .toastui-editor-md-container .toastui-editor-md-preview,
+.reader-markdown-editor .toastui-editor-md-container .toastui-editor-md-preview-highlight {
+    color: var(--paper);
+    font-family: var(--font-mono);
 }
 
 .reader-editor-conflict {

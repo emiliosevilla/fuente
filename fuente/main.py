@@ -186,9 +186,9 @@ def main():
         files_found = result.get("files_found", 0)
         files_processed = result.get("files_processed", 0)
         if files_found:
-            logger.info(f"Ingesta completada: {files_processed}/{files_found} archivo(s) de 1_entrada procesados.")
+            logger.info(f"Ingesta completada: {files_processed}/{files_found} archivo(s) de 1_volcado procesados.")
         else:
-            logger.info("No se encontraron archivos nuevos en 1_entrada para procesar.")
+            logger.info("No se encontraron archivos nuevos en 1_volcado para procesar.")
         logger.info("Interconexiones del grafo de conocimiento refinadas.")
 
         print("\n" + "=" * 65)

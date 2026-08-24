@@ -43,10 +43,20 @@ Fuente_Vault/
 2_sucio/
 3_limpio/
 4_salida/
+1_volcado/
+2_copiado/
+3_capturado/
+4_procesado/
+5_compartido/
 fuente/1_entrada/
 fuente/2_sucio/
 fuente/3_limpio/
 fuente/4_salida/
+fuente/1_volcado/
+fuente/2_copiado/
+fuente/3_capturado/
+fuente/4_procesado/
+fuente/5_compartido/
 
 
 .fuente/

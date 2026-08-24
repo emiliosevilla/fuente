@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from fuente.domain.frontmatter import FrontmatterError, parse_frontmatter
+from fuente.domain.vault_layout import CANONICAL_PROCESSED_DIR_NAME
 
 
 class IdentityCollisionError(ValueError):
@@ -123,7 +124,7 @@ class NoteCatalog:
                 origin_kind = metadata.get("origin_kind")
                 if schema_version == 2:
                     origin_kind = metadata.get("source_kind")
-                    if "4_salida" in Path(relative_path).parts[:2] and note_type == "source":
+                    if CANONICAL_PROCESSED_DIR_NAME in Path(relative_path).parts[:2] and note_type == "source":
                         note_type = "summary"
                 self.store.register_note(
                     note_id=note_id,

@@ -123,6 +123,58 @@ def test_dry_run_makes_no_changes(vault_tree: Path):
     assert not migration_manifests
 
 
+def test_dry_run_processes_canonical_and_legacy_outputs_deterministically(vault_tree: Path):
+    canonical = _write_note(
+        vault_tree, "4_procesado/_Sin_Cuestion/canonical.md", LEGACY_NOTE
+    )
+    legacy = _write_note(vault_tree, "4_salida/_Sin_Cuestion/legacy.md", LEGACY_NOTE)
+
+    report = VaultMigrator(vault_tree).dry_run()
+
+    assert report.notes_scanned == 2
+    assert [finding.vault_relative_path for finding in report.findings] == []
+    assert canonical.exists()
+    assert legacy.exists()
+
+
+def test_dry_run_discovers_legacy_theme_without_mutating_vault(tmp_path: Path):
+    vault = tmp_path / "legacy_vault"
+    note = _write_note(
+        vault,
+        "TemaLegacy/4_salida/_Sin_Cuestion/legacy.md",
+        LEGACY_NOTE,
+    )
+    before = tuple(
+        (
+            path.relative_to(vault).as_posix(),
+            "dir" if path.is_dir() else "file",
+            path.read_bytes() if path.is_file() else None,
+        )
+        for path in sorted(vault.rglob("*"))
+    )
+
+    report = VaultMigrator(vault).dry_run()
+
+    after = tuple(
+        (
+            path.relative_to(vault).as_posix(),
+            "dir" if path.is_dir() else "file",
+            path.read_bytes() if path.is_file() else None,
+        )
+        for path in sorted(vault.rglob("*"))
+    )
+
+    assert report.themes == ["TemaLegacy"]
+    assert report.notes_scanned == 1
+    assert report.findings == []
+    assert note.exists()
+    assert before == after
+    assert not (vault / ".obsidian").exists()
+    assert not (vault / ".fuente").exists()
+    assert not (vault / "TemaLegacy" / "1_volcado").exists()
+    assert not (vault / "TemaLegacy" / "4_procesado").exists()
+
+
 def test_identity_backfill_refuses_retired_v2_source_serialization(vault_tree: Path):
     note = _write_note(vault_tree, "4_salida/_Sin_Cuestion/legacy.md", LEGACY_NOTE)
     original_path = note.relative_to(vault_tree).as_posix()
@@ -543,8 +595,9 @@ def test_catalog_rebuild_does_not_rewrite_eligible_notes_outside_manifest_or_rol
 
         assert manifest.entries == []
         assert {path: path.read_bytes() for path in (first, second)} == before
-        assert (vault.output_dir / CANONICAL_MOC_FILENAME).is_file()
-        assert (vault.output_dir / "Issue-A" / "_Cuestion_Issue-A.md").is_file()
+        legacy_output = vault.current_theme_dir / "4_salida"
+        assert (legacy_output / CANONICAL_MOC_FILENAME).is_file()
+        assert (legacy_output / "Issue-A" / "_Cuestion_Issue-A.md").is_file()
 
         migrator.rollback(migrator._manifest_file(manifest))
 

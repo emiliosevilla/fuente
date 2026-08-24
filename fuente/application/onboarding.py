@@ -13,6 +13,7 @@ from typing import Any, Callable, Literal, Mapping
 
 from fuente.domain.frontmatter import ALLOWED_STATUSES, FrontmatterError, parse_frontmatter
 from fuente.domain.paths import AuthorizedPathResolver
+from fuente.domain.vault_layout import VaultLayout
 from fuente.infrastructure.atomic_files import atomic_write_json, atomic_write_text
 
 
@@ -90,10 +91,10 @@ class OnboardingService:
     def _build_resolver(self) -> AuthorizedPathResolver:
         return AuthorizedPathResolver(
             vault_root=self.vault_path,
-            output=self.vault_path / "4_salida",
-            input=self.vault_path / "1_entrada",
-            dirty=self.vault_path / "2_sucio",
-            clean=self.vault_path / "3_limpio",
+            output=VaultLayout(self.vault_path).processed_dir,
+            input=VaultLayout(self.vault_path).input_personal_dir.parent,
+            dirty=VaultLayout(self.vault_path).root("dirty"),
+            clean=VaultLayout(self.vault_path).root("clean"),
             quarantine=self.vault_path / ".fuente" / "quarantine",
         )
 

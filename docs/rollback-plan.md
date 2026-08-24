@@ -26,7 +26,7 @@ absolutas verificadas por el operador.
 # Migración de frontmatter heredado (schema v1)
 python3 scripts/migrate_vault.py --vault /ruta/absoluta/Vault --rollback /ruta/absoluta/manifest.json
 
-# Taxonomía física de 4_salida
+# Migración física de la ruta legacy 4_salida
 python3 scripts/migrate_vault.py --vault /ruta/absoluta/Vault --taxonomy-rollback /ruta/absoluta/manifest.json
 
 # Normalización de notas heredadas

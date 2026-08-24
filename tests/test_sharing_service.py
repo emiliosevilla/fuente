@@ -1,4 +1,4 @@
-"""F05.2: approved processed notes publish atomically to 5_salida."""
+"""F05.2: approved processed notes publish atomically to 5_compartido."""
 from __future__ import annotations
 
 import pytest
@@ -35,7 +35,7 @@ def test_share_copies_approved_revision_and_receipt(tmp_path):
         shared = sharing.share_processed_note(processed.document_id, 1, "emilio")
 
         assert shared.publisher == "emilio"
-        assert shared.relative_path.startswith("5_salida/")
+        assert shared.relative_path.startswith("5_compartido/")
         assert (vault.config.vault_path / shared.relative_path).read_text(encoding="utf-8") == (
             vault.config.vault_path / processed.relative_path
         ).read_text(encoding="utf-8")

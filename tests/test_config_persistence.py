@@ -23,10 +23,12 @@ class TestConfigPersistenceAndSettings(unittest.TestCase):
     def test_default_config_creation(self):
         cfg = load_config(self.vault_path)
         self.assertEqual(cfg.vault.vault_path, self.vault_path.resolve())
-        self.assertEqual(cfg.vault.input_dir_name, "1_entrada")
-        self.assertEqual(cfg.vault.dirty_dir_name, "2_sucio")
-        self.assertEqual(cfg.vault.clean_dir_name, "3_limpio")
-        self.assertEqual(cfg.vault.output_dir_name, "4_salida")
+        self.assertEqual(cfg.vault.input_dir_name, "1_volcado")
+        self.assertEqual(cfg.vault.dirty_dir_name, "2_copiado")
+        self.assertEqual(cfg.vault.clean_dir_name, "3_capturado")
+        self.assertEqual(cfg.vault.output_dir_name, "4_procesado")
+        self.assertEqual(cfg.vault.processed_dir_name, "4_procesado")
+        self.assertEqual(cfg.vault.shared_dir_name, "5_compartido")
         self.assertIsNone(cfg.custom_model_override)
         self.assertEqual(cfg.ram_safety_margin_pct, 0.35)
         self.assertEqual(cfg.resource_profile, "auto")
@@ -52,6 +54,38 @@ class TestConfigPersistenceAndSettings(unittest.TestCase):
         self.assertEqual(loaded.custom_model_override, "qwen2.5:7b")
         self.assertEqual(loaded.ram_safety_margin_pct, 0.30)
         self.assertIn("# Custom Note Template", loaded.atomic_note_template)
+
+    def test_legacy_layout_settings_are_normalized_to_canonical_defaults(self):
+        config = AppConfig.from_dict(
+            {
+                "vault_path": str(self.vault_path),
+                "input_dir_name": "1_entrada",
+                "dirty_dir_name": "2_sucio",
+                "clean_dir_name": "3_limpio",
+                "output_dir_name": "4_salida",
+                "processed_dir_name": "4_salida",
+                "shared_dir_name": "5_salida",
+            }
+        )
+
+        self.assertEqual(
+            (
+                config.vault.input_dir_name,
+                config.vault.dirty_dir_name,
+                config.vault.clean_dir_name,
+                config.vault.output_dir_name,
+                config.vault.processed_dir_name,
+                config.vault.shared_dir_name,
+            ),
+            (
+                "1_volcado",
+                "2_copiado",
+                "3_capturado",
+                "4_procesado",
+                "4_procesado",
+                "5_compartido",
+            ),
+        )
 
     def test_runtime_policy_settings_round_trip(self):
         cfg = load_config(self.vault_path)

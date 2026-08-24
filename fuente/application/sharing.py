@@ -1,4 +1,4 @@
-"""Human-approved projections from private processed notes to ``5_salida``."""
+"""Human-approved projections from private processed notes to ``5_compartido``."""
 from __future__ import annotations
 
 from dataclasses import dataclass

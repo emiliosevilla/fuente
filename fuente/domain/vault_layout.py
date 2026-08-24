@@ -7,13 +7,26 @@ RootName = Literal[
     "input_personal", "input_common", "dirty", "clean", "processed", "shared"
 ]
 
+CANONICAL_INPUT_DIR_NAME = "1_volcado"
+CANONICAL_DIRTY_DIR_NAME = "2_copiado"
+CANONICAL_CLEAN_DIR_NAME = "3_capturado"
+CANONICAL_PROCESSED_DIR_NAME = "4_procesado"
+CANONICAL_SHARED_DIR_NAME = "5_compartido"
+
+# Read-only migration inputs. These names must never be used as defaults.
+LEGACY_INPUT_DIR_NAME = "1_entrada"
+LEGACY_DIRTY_DIR_NAME = "2_sucio"
+LEGACY_CLEAN_DIR_NAME = "3_limpio"
+LEGACY_OUTPUT_DIR_NAME = "4_salida"
+LEGACY_SHARED_DIR_NAME = "5_salida"
+
 _ROOT_PATHS: dict[RootName, tuple[str, ...]] = {
-    "input_personal": ("1_entrada", "personal"),
-    "input_common": ("1_entrada", "común"),
-    "dirty": ("2_sucio",),
-    "clean": ("3_limpio",),
-    "processed": ("4_procesado",),
-    "shared": ("5_salida",),
+    "input_personal": (CANONICAL_INPUT_DIR_NAME, "personal"),
+    "input_common": (CANONICAL_INPUT_DIR_NAME, "común"),
+    "dirty": (CANONICAL_DIRTY_DIR_NAME,),
+    "clean": (CANONICAL_CLEAN_DIR_NAME,),
+    "processed": (CANONICAL_PROCESSED_DIR_NAME,),
+    "shared": (CANONICAL_SHARED_DIR_NAME,),
 }
 
 

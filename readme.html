@@ -444,10 +444,11 @@
           <div class="feature-card">
             <h3>1. Flujo ETL de 4 Etapas</h3>
             <ul>
-              <li><code>1_entrada/</code>: Carpeta de ingesta continua de archivos volcados en bruto.</li>
-              <li><code>2_sucio/</code>: Copia de respaldo original para auditoría e integridad.</li>
-              <li><code>3_limpio/</code>: Transcripción verbatim a Markdown plano (<code>.md</code>).</li>
-              <li><code>4_salida/</code>: Notas atómicas estructuradas con metadatos e interconexión masiva (<span class="wikilink">[[WikiLinks]]</span>).</li>
+              <li><code>1_volcado/</code>: Carpeta de ingesta continua de archivos volcados en bruto.</li>
+              <li><code>2_copiado/</code>: Copia de respaldo original para auditoría e integridad.</li>
+              <li><code>3_capturado/</code>: Transcripción verbatim a Markdown plano (<code>.md</code>) y origen canónico.</li>
+              <li><code>4_procesado/</code>: Notas atómicas privadas, pendientes de aprobación para compartir.</li>
+              <li><code>5_compartido/</code>: Copias compartidas después de aprobación independiente.</li>
               <li><code>.fuente/</code>: Cuarentena (<code>quarantine/</code>) y base de datos vectorial semántica ChromaDB.</li>
             </ul>
           </div>
@@ -475,7 +476,7 @@
 
           <div class="feature-card">
             <h3>4. Bucle de Grafo Optimizado (<code>OptimizadoGraphLoop</code>)</h3>
-            <p style="font-size:0.95rem;">Hilo autónomo en segundo plano que re-evalúa notas, inserta enlaces <span class="wikilink">[[WikiLinks]]</span> cruzados y genera/actualiza de forma continua el mapa de contenidos global <code>4_salida/_Indice_MOC.md</code>.</p>
+            <p style="font-size:0.95rem;">Hilo autónomo en segundo plano que re-evalúa notas, inserta enlaces <span class="wikilink">[[WikiLinks]]</span> cruzados y genera/actualiza de forma continua el mapa de contenidos global <code>4_procesado/_Indice_MOC.md</code>.</p>
           </div>
 
           <div class="feature-card">
@@ -510,7 +511,7 @@
 
       <!-- Section: Plantilla de Nota Atómica Generada -->
       <section class="doc-section" id="plantilla">
-        <h2>📄 Plantilla de Nota Atómica Generada (<code>4_salida</code>)</h2>
+        <h2>📄 Plantilla de Nota Atómica Generada (<code>4_procesado</code>)</h2>
         <p>Cada archivo procesado genera una nota atómica estandarizada:</p>
 
 <pre><span class="token-comment">---</span>

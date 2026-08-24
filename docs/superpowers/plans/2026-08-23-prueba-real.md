@@ -28,7 +28,7 @@ Baseline activo medido: `dev` en `e6aef697a6f9b4f49f1878940b95f8cf51d2b342`, mer
 | 1 | PR-00 | COMPLETE (S PASS / R PASS) |
 | 2 | PR-04 | COMPLETE (S PASS / R PASS — no-op de migración) |
 | 3 | PR-05 | COMPLETE (S PASS / R PASS) |
-| 4 | PR-06 | NOT_RUN |
+| 4 | PR-06 | PARTIAL (S PASS / R NOT_RUN) |
 | 5 | PR-07 | NOT_RUN |
 | 6 | PR-01 | NOT_RUN |
 | 7 | PR-03 | NOT_RUN |
@@ -41,7 +41,7 @@ Baseline activo medido: `dev` en `e6aef697a6f9b4f49f1878940b95f8cf51d2b342`, mer
 
 PR-10 debe repetir `S` sintética; el bloqueo histórico por IDs duplicados no se hereda automáticamente. Ninguna fase puede declararse `COMPLETE` sin `S PASS` y `R PASS` de esta campaña.
 
-Ejecución activa: PR-00, PR-04 y PR-05 están `COMPLETE`; PR-06+ permanecen `NOT_RUN`.
+Ejecución activa: PR-00, PR-04 y PR-05 están `COMPLETE`; PR-06 está `PARTIAL` (`S PASS`, `R NOT_RUN`); PR-07+ permanecen `NOT_RUN`.
 
 ## Global Constraints
 
@@ -223,10 +223,12 @@ PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -q \
   tests/test_refinement_promotion.py
 ~~~
 
-- [ ] Buscar una nota en MiniRAG.
-- [ ] Ejecutar propuesta positiva y negativa.
-- [ ] Confirmar que sólo positiva llega a 4_procesado.
-- [ ] Confirmar procedencia y fallback.
+- [x] Buscar una nota en MiniRAG.
+- [x] Ejecutar propuesta positiva y negativa.
+- [x] Confirmar que sólo positiva llega a 4_procesado.
+- [x] Confirmar procedencia y fallback.
+
+Evidencia S: `.superpowers/sdd/2026-08-23-prueba-real/task-PR-06-S-report.md`; resultado `PR-06 S PASS`. R permanece `NOT_RUN`, por lo que PR-06 queda `PARTIAL`.
 
 ### PR-07: editor, compartir y discusión
 

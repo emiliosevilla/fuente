@@ -35,13 +35,13 @@ Baseline activo medido: `dev` en `e6aef697a6f9b4f49f1878940b95f8cf51d2b342`, mer
 | 8 | PR-08 | PARTIAL (S PASS / R NOT_RUN) |
 | 9 | PR-09 | PARTIAL (S PASS / R NOT_RUN) |
 | 10 | PR-10 | PARTIAL (S PASS / R NOT_RUN) |
-| 11 | PR-11 | NOT_RUN |
+| 11 | PR-11 | PARTIAL (S PASS / R NOT_RUN) |
 | 12 | PR-02 | NOT_RUN |
 | 13 | PR-12 | NOT_RUN |
 
 PR-10 debe repetir `S` sintética; el bloqueo histórico por IDs duplicados no se hereda automáticamente. Ninguna fase puede declararse `COMPLETE` sin `S PASS` y `R PASS` de esta campaña.
 
-Ejecución activa: PR-00, PR-04 y PR-05 están `COMPLETE`; PR-06, PR-07, PR-01, PR-03, PR-08, PR-09 y PR-10 están `PARTIAL` (`S PASS`, `R NOT_RUN`); PR-11+ permanecen `NOT_RUN`.
+Ejecución activa: PR-00, PR-04 y PR-05 están `COMPLETE`; PR-06, PR-07, PR-01, PR-03, PR-08, PR-09, PR-10 y PR-11 están `PARTIAL` (`S PASS`, `R NOT_RUN`); PR-02 y PR-12 permanecen `NOT_RUN`.
 
 ## Global Constraints
 
@@ -356,12 +356,19 @@ General y decisión sobre sus IDs duplicados.
 
 Secuencia: `S` rutas montadas simuladas → `R` cliente oficial, rutas montadas y permisos reales.
 
-- [ ] Configurar rutas manualmente desde Ajustes.
-- [ ] Comprobar entrada montada sólo a 1_volcado/común.
-- [ ] Comprobar nota aprobada compartida sólo a 5_compartido.
-- [ ] Confirmar que 3_capturado y 4_procesado no reciben escritura externa.
-- [ ] Confirmar que Fuente no autentica ni filtra permisos SharePoint.
-- [ ] Registrar G5.
+- [x] Ejecutar rutas montadas simuladas con temporales y contratos de Ajustes.
+- [x] Comprobar entrada montada sólo a `1_volcado/común`.
+- [x] Comprobar nota aprobada compartida sólo a `5_compartido`.
+- [x] Confirmar que `3_capturado` y `4_procesado` no reciben escritura externa.
+- [x] Confirmar que Fuente no autentica ni filtra permisos SharePoint.
+- [x] Registrar G5 sintético; `PR-11 S PASS`, `R NOT_RUN`, fase `PARTIAL`.
+
+Ejecución sintética 2026-08-24: informe
+`.superpowers/sdd/2026-08-23-prueba-real/task-PR-11-S-report.md`. La suite
+focal pasó `70 passed in 0.82s`; manifest/almacenamiento adicional pasó
+`34 passed in 0.68s`; `git diff --check` pasó. Sólo se actualizaron fixtures y
+expectativas a las raíces canónicas. `R` sigue `NOT_RUN`: no se usaron
+OneDrive/SharePoint, permisos o credenciales reales.
 
 ## Fase 7 — cierre
 

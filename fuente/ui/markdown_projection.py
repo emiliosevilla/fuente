@@ -1,13 +1,12 @@
 """Reversible Markdown ↔ editor projection for optional rich editors.
 
-Task 6.3 evaluation: TipTap is **excluded** from the packaged application.
+The packaged application uses TOAST UI Editor for visual editing.
 Markdown remains the source of truth via ``NoteDocument``; this module defines
 a portable JSON projection that preserves unsupported syntax as explicit
 ``raw_block`` / ``raw_inline`` nodes instead of silently dropping it.
 
-A future TipTap integration would consume this projection on the client, but
-measured round-trip quality for WikiLinks, tables and math does not meet the
-acceptance threshold without custom extensions and a large offline JS bundle.
+The projection is still used for safe rendering and for preserving unsupported
+syntax in the native bridge contract.
 """
 from __future__ import annotations
 
@@ -16,9 +15,7 @@ from typing import Any
 
 from fuente.domain.documents import NoteDocument
 
-# TipTap / ProseMirror evaluation outcome (Task 6.3):
-# EXCLUDED — no vendored TipTap assets; approval and persistence use NoteDocument.
-EDITOR_STRATEGY = "exclude_tiptap"
+EDITOR_STRATEGY = "toastui_wysiwyg"
 
 _HEADING_RE = re.compile(r"^(#{1,6})\s+(.+?)\s*$")
 _ORDERED_ITEM_RE = re.compile(r"^(\d+)\.\s+(.*)$")

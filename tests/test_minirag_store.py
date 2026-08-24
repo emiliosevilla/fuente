@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import sys
+import types
 from pathlib import Path
 
 from fuente.rag.minirag_store import MiniRAGStore
@@ -154,3 +156,30 @@ def test_minirag_store_preserves_split_record_provenance(tmp_path: Path):
     assert hits
     assert all(hit.document_id == "note-1" for hit in hits)
     assert all(hit.revision == 2 and hit.content_hash == "abc" for hit in hits)
+
+
+def test_default_client_receives_explicit_embedding_and_llm(tmp_path: Path, monkeypatch):
+    captured = {}
+
+    class FakeClient:
+        def __init__(self, **kwargs):
+            captured.update(kwargs)
+
+    fake_minirag = types.ModuleType("minirag")
+    fake_minirag.MiniRAG = FakeClient
+    fake_utils = types.ModuleType("minirag.utils")
+    fake_utils.EmbeddingFunc = object
+    monkeypatch.setitem(sys.modules, "minirag", fake_minirag)
+    monkeypatch.setitem(sys.modules, "minirag.utils", fake_utils)
+
+    embedding = object()
+    llm = object()
+    store = MiniRAGStore(
+        tmp_path / "minirag",
+        embedding_func=embedding,
+        llm_model_func=llm,
+    )
+    store._get_client()
+
+    assert captured["embedding_func"] is embedding
+    assert captured["llm_model_func"] is llm

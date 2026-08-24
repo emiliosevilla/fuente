@@ -742,7 +742,11 @@ class FuenteConsoleBackend:
                     ram_governor=self.ram_governor,
                     eligibility_guard=self._is_retrieval_hit_eligible,
                     router=RetrievalRouter(
-                        primary=MiniRAGStore(self.config.vault.minirag_dir),
+                        primary=MiniRAGStore(
+                            self.config.vault.minirag_dir,
+                            ollama_url=self.config.ollama_url,
+                            model=self.config.custom_model_override,
+                        ),
                         refinement=ChromaRetrievalBackend(chroma),
                     ),
                 )

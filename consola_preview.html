@@ -8,6 +8,7 @@
     <!-- La tipografía global de la consola y sus modales se define en console.css: Arial, sans-serif. -->
     <link rel="stylesheet" data-fuente-tokens="true" href="fuente/ui/static/fuente_tokens.css">
     <link rel="stylesheet" href="fuente/ui/static/console.css">
+    <link rel="stylesheet" href="assets/toastui-editor/toastui-editor.css">
 </head>
 <body>
 
@@ -299,15 +300,11 @@
                 <template id="reader-editor-template">
                     <section class="reader-editor-panel" id="reader-editor-panel" aria-label="Editor Markdown">
                         <div class="reader-editor-toolbar">
-                            <div class="reader-editor-mode-toggle" role="group" aria-label="Modo del editor">
-                                <button type="button" class="btn-small btn-toggle active" data-reader-editor-mode="edit">Editar</button>
-                                <button type="button" class="btn-small btn-toggle" data-reader-editor-mode="preview">Previsualizar</button>
-                            </div>
+                            <span class="reader-editor-mode-hint">Editor visual Markdown</span>
                             <span id="reader-edit-state" class="reader-edit-state" role="status" aria-live="polite">Cargando editor...</span>
                         </div>
-                        <label class="reader-editor-label" for="reader-markdown-editor">Cuerpo Markdown</label>
-                        <textarea id="reader-markdown-editor" class="reader-markdown-editor" spellcheck="false" aria-describedby="reader-edit-state"></textarea>
-                        <div id="reader-markdown-preview" class="reader-markdown-preview note-content is-hidden" aria-live="polite"></div>
+                        <label class="reader-editor-label" for="reader-markdown-editor">Cuerpo de la nota</label>
+                        <div id="reader-markdown-editor" class="reader-markdown-editor" aria-describedby="reader-edit-state"></div>
                         <div id="reader-editor-conflict" class="reader-editor-conflict is-hidden" role="alert">
                             <p id="reader-editor-conflict-message">La nota cambió en otra sesión.</p>
                             <div class="reader-editor-conflict-actions">
@@ -703,9 +700,8 @@
     </div>
 
     <!-- MODAL BANDEJA DE APROBACIÓN
-         Editor strategy (Task 6.3): TipTap excluded from packaged app — no vendored
-         JS bundle. Body round-trip uses fuente/ui/markdown_projection.py; approval
-         persists NoteDocument (frontmatter + body_markdown), not editor DOM state. -->
+         El editor visual se sirve desde el bundle local de TOAST UI Editor.
+         El guardado sigue persistiendo únicamente body_markdown mediante el bridge nativo. -->
     <div class="modal-overlay console-layer-002" id="modal-approval">
         <div class="modal-container">
             <div class="modal-header">
@@ -909,6 +905,7 @@
         </div>
     </div>
 
+    <script src="assets/toastui-editor/toastui-editor.js"></script>
     <script nonce="fuente-console">
         function runStaticCommand(command, element, event) {
             if (command.startsWith("if(event.key==='Enter')")) {
@@ -4117,6 +4114,7 @@
         let readerEditorOriginalDocumentModel = [];
         let readerEditorProjection = null;
         let readerEditorConflictBody = '';
+        let readerEditorInstance = null;
         let readerEditorState = { status: 'saved', dirty: false };
         let readerEditorSession = 0;
         let readerEditorSaveOperation = null;
@@ -4138,11 +4136,12 @@
             }
         }
 
+        function getReaderEditorMarkdown() {
+            return readerEditorInstance ? readerEditorInstance.getMarkdown() : '';
+        }
+
         function updateReaderEditorDirtyState() {
-            const editor = readerEditorElement('reader-markdown-editor');
-            if (editor) {
-                readerEditorBody = editor.value;
-            }
+            readerEditorBody = getReaderEditorMarkdown();
             readerEditorState.dirty = readerEditorBody !== readerEditorOriginalBody;
             if (readerEditorState.status !== 'loading' && readerEditorState.status !== 'conflict') {
                 setReaderEditorState(
@@ -4388,27 +4387,10 @@
             return '';
         }
 
-        function renderReaderEditorPreview() {
-            const preview = readerEditorElement('reader-markdown-preview');
-            if (!preview) return;
-            const projection = readerEditorBody === readerEditorOriginalBody
-                ? readerEditorProjection
-                : readerMarkdownToProjection(readerEditorBody);
-            const model = readerProjectionToDocumentModel(projection);
-            preview.replaceChildren(createNoteContent(model));
-        }
-
         function setReaderEditorMode(mode) {
-            const editor = readerEditorElement('reader-markdown-editor');
-            const preview = readerEditorElement('reader-markdown-preview');
-            if (!editor || !preview) return;
-            const previewMode = mode === 'preview';
-            editor.classList.toggle('is-hidden', previewMode);
-            preview.classList.toggle('is-hidden', !previewMode);
-            document.querySelectorAll('[data-reader-editor-mode]').forEach(function(button) {
-                button.classList.toggle('active', button.dataset.readerEditorMode === mode);
-            });
-            if (previewMode) renderReaderEditorPreview();
+            if (readerEditorInstance) {
+                readerEditorInstance.changeMode(mode === 'markdown' ? 'markdown' : 'wysiwyg');
+            }
         }
 
         function showReaderEditorConflict() {
@@ -4451,17 +4433,11 @@
             const conflict = readerEditorElement('reader-editor-conflict');
             if (!editor || !saveButton || !cancelButton || editor.dataset.wired === 'true') return;
             editor.dataset.wired = 'true';
-            editor.addEventListener('input', function() {
+            readerEditorInstance.on('change', function() {
                 updateReaderEditorDirtyState();
-                renderReaderEditorPreview();
             });
             saveButton.addEventListener('click', saveReaderEdit);
             cancelButton.addEventListener('click', cancelReaderEdit);
-            document.querySelectorAll('[data-reader-editor-mode]').forEach(function(button) {
-                button.addEventListener('click', function() {
-                    setReaderEditorMode(button.dataset.readerEditorMode);
-                });
-            });
             if (conflict) {
                 const reload = conflict.querySelector('[data-reader-editor-reload]');
                 const keep = conflict.querySelector('[data-reader-editor-keep]');
@@ -4478,6 +4454,18 @@
             if (!existing) {
                 reader.replaceChildren();
                 reader.appendChild(template.content.cloneNode(true));
+            }
+            if (!readerEditorInstance) {
+                const editor = readerEditorElement('reader-markdown-editor');
+                if (!(window.toastui && window.toastui.Editor && editor)) return false;
+                readerEditorInstance = new window.toastui.Editor({
+                    el: editor,
+                    height: '430px',
+                    initialEditType: 'wysiwyg',
+                    initialValue: '',
+                    previewStyle: 'vertical',
+                    usageStatistics: false
+                });
             }
             wireReaderEditorControls();
             return Boolean(readerEditorElement('reader-editor-panel'));
@@ -4498,7 +4486,7 @@
             readerEditorConflictBody = '';
             readerEditorProjection = null;
             readerEditorState = { status: 'loading', dirty: false };
-            setReaderEditorMode('edit');
+            setReaderEditorMode('wysiwyg');
             setReaderEditorState('loading', 'Cargando Markdown...');
             if (!(window.pywebview && window.pywebview.api && window.pywebview.api.get_note_editor)) {
                 setReaderEditorState('error', 'El editor requiere la conexión nativa de Fuente.');
@@ -4515,12 +4503,10 @@
                 readerEditorBody = editorDocument.body_markdown;
                 readerEditorOriginalBody = editorDocument.body_markdown;
                 readerEditorProjection = editorDocument.projection;
-                const editor = readerEditorElement('reader-markdown-editor');
-                if (editor) editor.value = readerEditorBody;
+                if (readerEditorInstance) readerEditorInstance.setMarkdown(readerEditorBody, false);
                 readerEditorState = { status: 'saved', dirty: false };
-                setReaderEditorMode('edit');
+                setReaderEditorMode('wysiwyg');
                 setReaderEditorState('saved', 'Sin cambios');
-                renderReaderEditorPreview();
             }).catch(function(error) {
                 if (currentSelectedDocumentId === documentId && readerEditorSession === editorSession) {
                     setReaderEditorState('error', 'No se pudo cargar el editor: ' + String(error));
@@ -4535,14 +4521,14 @@
                 ? readerProjectionToDocumentModel(readerEditorProjection)
                 : readerEditorOriginalDocumentModel;
             readerEditorState = { status: 'saved', dirty: false };
+            readerEditorInstance = null;
             renderNoteDocument(currentSelectedNoteTitle || 'Nota', documentModel);
         }
 
         function saveReaderEdit() {
-            const editor = readerEditorElement('reader-markdown-editor');
             const documentId = currentSelectedDocumentId;
-            if (!editor || !documentId || readerEditorDocumentId !== documentId || readerEditorRevision === null || readerEditorSaveOperation) return;
-            readerEditorBody = editor.value;
+            if (!readerEditorInstance || !documentId || readerEditorDocumentId !== documentId || readerEditorRevision === null || readerEditorSaveOperation) return;
+            readerEditorBody = getReaderEditorMarkdown();
             readerEditorState.dirty = readerEditorBody !== readerEditorOriginalBody;
             if (!readerEditorState.dirty) {
                 setReaderEditorState('saved', 'Sin cambios');
@@ -4567,7 +4553,7 @@
                 }
                 if (result && result.error === 'note_revision_conflict') {
                     readerEditorSaveOperation = null;
-                    readerEditorConflictBody = readerEditorElement('reader-markdown-editor').value;
+                    readerEditorConflictBody = getReaderEditorMarkdown();
                     showReaderEditorConflict();
                     return;
                 }
@@ -4576,19 +4562,15 @@
                     setReaderEditorState('error', (result && result.message) || 'No se pudo guardar la nota.');
                     return;
                 }
-                const currentEditor = readerEditorElement('reader-markdown-editor');
-                const newerDraft = currentEditor && currentEditor.value !== operation.body;
+                const newerDraft = getReaderEditorMarkdown() !== operation.body;
                 readerEditorSaveOperation = null;
                 readerEditorRevision = result.revision;
-                readerEditorBody = newerDraft ? currentEditor.value : result.body_markdown;
+                readerEditorBody = newerDraft ? getReaderEditorMarkdown() : result.body_markdown;
                 readerEditorOriginalBody = result.body_markdown;
                 readerEditorProjection = result.projection;
                 readerEditorState = { status: newerDraft ? 'dirty' : 'saved', dirty: newerDraft };
                 setReaderEditorState(newerDraft ? 'dirty' : 'saved', newerDraft ? 'Guardado; hay cambios posteriores' : 'Guardado');
-                if (newerDraft) {
-                    renderReaderEditorPreview();
-                    return;
-                }
+                if (newerDraft) return;
                 loadNoteContent(operation.documentId, { skipHistory: true });
             }).catch(function(error) {
                 if (!readerEditorOperationIsCurrent(operation)) {

@@ -55,16 +55,11 @@ if not exist "venv\Scripts\python.exe" (
 
 set "VENV_PY=%ROOT_DIR%\venv\Scripts\python.exe"
 if not exist "%VENV_PY%" goto :fail
-set "FUENTE_INSTALL_OCR=0"
+set "FUENTE_INSTALL_OCR=1"
 "%VENV_PY%" -m pip install --upgrade pip
 if !errorlevel! neq 0 goto :fail
-set /p FEATURE_SET="Instalar extras completos (.[all]) para audio/OCR/ofimatica? [s/N]: "
-if /I "!FEATURE_SET!"=="s" (
-    set "FUENTE_INSTALL_OCR=1"
-    "%VENV_PY%" -m pip install -e ".[all]"
-) else (
-    "%VENV_PY%" -m pip install -e .
-)
+echo [+] Instalando el conjunto completo de funciones locales (audio, OCR, ofimatica y RAG)...
+"%VENV_PY%" -m pip install -e ".[all]"
 if !errorlevel! neq 0 goto :fail
 if exist requirements.txt "%VENV_PY%" -m pip install -r requirements.txt
 if !errorlevel! neq 0 goto :fail

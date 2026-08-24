@@ -46,7 +46,7 @@ class AtomicNoteGenerator:
         self.ollama_url = ollama_url.rstrip("/")
 
     def generate_atomic_note(self, clean_md_content: str, model_name: str, file_name: str) -> str:
-        """Pasa el texto de 3_limpio por el LLM local para construir la nota atómica."""
+        """Pasa el texto de 3_capturado por el LLM local para construir la nota atómica."""
         prompt = f"Documento de Origen: {file_name}\n\nContenido Verbatim:\n{clean_md_content}\n\nGenera la nota atómica estructurada:"
 
         try:
@@ -137,7 +137,7 @@ class AtomicNoteGenerator:
 - **¿Cómo?**: Extracción verbatim y estructuración
 
 ## Problema
-Extracción desestructurada desde carpeta 1_entrada.
+Extracción desestructurada desde carpeta 1_volcado.
 
 ## Contexto
 Origen: {file_name}

@@ -22,7 +22,7 @@ python3 scripts/migrate_vault.py --vault /ruta/absoluta/Vault --dry-run
 # Aplicación de frontmatter v1; --manifest permite reanudar un manifiesto
 python3 scripts/migrate_vault.py --vault /ruta/absoluta/Vault --apply --manifest /ruta/absoluta/manifest.json
 
-# Plan de taxonomía física de 4_salida sin mover archivos
+# Plan de migración de rutas legacy sin mover archivos
 python3 scripts/migrate_vault.py --vault /ruta/absoluta/Vault --taxonomy-dry-run
 
 # Inventario de Fuente sin cambios y plan v2 a v3 con manifiesto explícito
@@ -47,7 +47,7 @@ Las variantes de rollback y sus condiciones se describen en
 una ruta no autorizada o una edición posterior, detenerse y resolverlo con
 revisión humana. No usar `--force` para eludir una discrepancia editorial.
 
-La topología futura `1_entrada/personal`, `1_entrada/común`, `2_sucio`,
-`3_limpio`, `4_procesado` y `5_salida` está especificada en el SDD de
-evolución, pero no está implementada por esta CLI actual. Se migrará sólo tras
-la fase de inventario, manifiesto y pruebas que define ese SDD.
+La topología canónica es `1_volcado/personal`, `1_volcado/común`, `2_copiado`,
+`3_capturado`, `4_procesado` y `5_compartido`. `1_entrada`, `2_sucio`,
+`3_limpio`, `4_salida` y `5_salida` son entradas legacy sólo para migración de
+fixtures o Vaults existentes; no son defaults ni destinos de producción.

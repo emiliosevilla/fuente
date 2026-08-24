@@ -16,6 +16,7 @@ from fuente.domain.approvals import ApprovalLedger
 from fuente.domain.documents import MarkdownDocument
 from fuente.domain.errors import PathAuthorizationError
 from fuente.domain.frontmatter import FrontmatterError
+from fuente.domain.vault_layout import CANONICAL_CLEAN_DIR_NAME
 from fuente.infrastructure.atomic_files import atomic_write_json, atomic_write_text
 from fuente.infrastructure.sqlite_store import IdentityCollisionError, JobStore
 
@@ -508,7 +509,7 @@ class TaxonomyMigrator:
                         TaxonomyFinding(
                             "invalid_route",
                             relative,
-                            "only 4_salida/Fuentes -> 4_salida/Sumarios is allowed",
+                            "only 4_procesado/Fuentes -> 4_procesado/Sumarios is allowed",
                         )
                     )
                     if destination in destinations and destinations[destination] != relative:
@@ -735,8 +736,8 @@ class TaxonomyMigrator:
             and new_parts[-2] in SUMMARY_FOLDERS.values()
             and new_parts[-1] == old_parts[-1]
             and old_parts[:-3] == new_parts[:-4]
-            and "3_limpio" not in old_parts
-            and "3_limpio" not in new_parts
+            and CANONICAL_CLEAN_DIR_NAME not in old_parts
+            and CANONICAL_CLEAN_DIR_NAME not in new_parts
         )
 
     def _is_prior_summary_route(self, path: Path, output: Path) -> bool:
@@ -970,7 +971,7 @@ class TaxonomyMigrator:
             TaxonomyFinding(
                 "invalid_route",
                 entry.old_relative_path,
-                "only 4_salida/Fuentes -> 4_salida/Sumarios is allowed",
+                "only 4_procesado/Fuentes -> 4_procesado/Sumarios is allowed",
             )
             for entry in manifest.entries
             if not self._is_exact_sumarios_route(entry.old_relative_path, entry.new_relative_path)

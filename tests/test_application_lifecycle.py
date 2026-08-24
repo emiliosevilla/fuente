@@ -14,7 +14,7 @@ from fuente.config import get_default_config
 from fuente.core.vault import VaultManager
 from fuente.domain.runtime_policy import resolve_runtime_policy
 from fuente.graph_engine.optimized_loop import OptimizadoGraphLoop
-from fuente.watcher.watcher import FolderMonitor
+from fuente.watcher.watcher import FolderMonitor, iter_input_files
 
 
 class FakePipeline:
@@ -479,3 +479,17 @@ def test_flush_cli_path_never_imports_control_console(monkeypatch, tmp_path):
 
     assert result["files_found"] == 0
     assert "fuente.control_console" not in sys.modules
+
+
+def test_iter_input_files_recurses_theme_input_and_ignores_temporary_files(tmp_path):
+    input_dir = tmp_path / "General" / "1_volcado"
+    (input_dir / "personal").mkdir(parents=True)
+    (input_dir / "común").mkdir()
+    (input_dir / "personal" / "nota.md").write_text("personal", encoding="utf-8")
+    (input_dir / "común" / "nota.txt").write_text("común", encoding="utf-8")
+    (input_dir / "común" / ".DS_Store").write_bytes(b"")
+
+    assert [path.relative_to(input_dir).as_posix() for path in iter_input_files(input_dir)] == [
+        "común/nota.txt",
+        "personal/nota.md",
+    ]

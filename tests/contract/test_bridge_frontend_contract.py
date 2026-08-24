@@ -49,14 +49,14 @@ VALID_ACTION_PAYLOADS: dict[str, dict] = {
     "stat_ram": {},
     "stat_input": {},
     "stat_notes": {},
-    "copy_reader_note": {"note_title": "Nota", "note_path": "4_salida/nota.md"},
+        "copy_reader_note": {"note_title": "Nota", "note_path": "4_procesado/nota.md"},
     "export_reader_note": {
         "format": "markdown",
         "note_title": "Nota",
         "document_id": "doc-1",
     },
     "open_obsidian": {
-        "note_path": "4_salida/nota.md",
+        "note_path": "4_procesado/nota.md",
         "obsidian_uri": "obsidian://open?vault=fuente&file=nota",
     },
     "open_anything_desktop": {},
@@ -68,7 +68,7 @@ ORIGIN_REF = {
     "note_id": "4ca13d5c-4d78-4f37-8c3c-d1dc530a4dc9",
     "revision": 2,
     "content_hash": "a" * 64,
-    "path": "Tema/3_limpio/origen.md",
+    "path": "Tema/3_capturado/origen.md",
 }
 
 
@@ -268,7 +268,7 @@ def test_fuente_v3_frontend_uses_origins_summaries_and_input_providers():
     assert 'id="metadata-sources"' not in source
     assert "Orígenes" in source
     assert "Sumarios" in source
-    assert "Entradas vinculadas a 1_entrada" in source
+    assert "Entradas vinculadas a 1_volcado" in source
     assert "window.pywebview.api.get_sync_inputs()" in source
     assert "window.pywebview.api.sync_inputs(" in source
 

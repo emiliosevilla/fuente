@@ -28,11 +28,11 @@ def test_bridge_get_quarantine_returns_items(tmp_path):
     from fuente.domain.quarantine import QuarantineService
 
     vault_root = tmp_path / "Vault"
-    for name in ("1_entrada", "2_sucio", "3_limpio", "4_salida", ".fuente"):
+    for name in ("1_volcado", "2_copiado", "3_capturado", "4_procesado", ".fuente"):
         (vault_root / name).mkdir(parents=True)
     get_default_config(vault_root)
     backend = FuenteConsoleBackend(vault_root)
-    bad = vault_root / "1_entrada" / "roto.pdf"
+    bad = vault_root / "1_volcado" / "roto.pdf"
     bad.write_bytes(b"%PDF-broken")
     QuarantineService(vault_root).quarantine(
         bad, error_code="extract_failed", attempt_count=1, error_message="boom"

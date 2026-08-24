@@ -16,10 +16,10 @@ from fuente.infrastructure.sqlite_store import JobStore
 @pytest.fixture
 def resolver(temp_vault_path):
     roots = {
-        "output": temp_vault_path / "4_salida",
-        "input": temp_vault_path / "1_entrada",
-        "dirty": temp_vault_path / "2_sucio",
-        "clean": temp_vault_path / "3_limpio",
+        "output": temp_vault_path / "4_procesado",
+        "input": temp_vault_path / "1_volcado",
+        "dirty": temp_vault_path / "2_copiado",
+        "clean": temp_vault_path / "3_capturado",
         "quarantine": temp_vault_path / ".fuente" / "quarantine",
     }
     for root in roots.values():
@@ -28,11 +28,11 @@ def resolver(temp_vault_path):
 
 
 def test_resolves_valid_nested_output_note(resolver, temp_vault_path):
-    note = temp_vault_path / "4_salida" / "Cuestion" / "nota.md"
+    note = temp_vault_path / "4_procesado" / "Cuestion" / "nota.md"
     note.parent.mkdir()
     note.write_text("# Nota", encoding="utf-8")
 
-    resolved = resolver.resolve_note("4_salida/Cuestion/nota.md")
+    resolved = resolver.resolve_note("4_procesado/Cuestion/nota.md")
 
     assert resolved == note.resolve()
 
@@ -40,8 +40,8 @@ def test_resolves_valid_nested_output_note(resolver, temp_vault_path):
 def test_resolver_uses_canonical_catalog_id_and_legacy_alias_after_move(
     temp_vault_path,
 ):
-    old_relative = "4_salida/Tema/a.md"
-    new_relative = "4_salida/Tema/b.md"
+    old_relative = "4_procesado/Tema/a.md"
+    new_relative = "4_procesado/Tema/b.md"
     old_note = temp_vault_path / old_relative
     new_note = temp_vault_path / new_relative
     old_note.parent.mkdir(parents=True)
@@ -67,10 +67,10 @@ def test_resolver_uses_canonical_catalog_id_and_legacy_alias_after_move(
             kind="legacy_route",
         )
         roots = {
-            "output": temp_vault_path / "4_salida",
-            "input": temp_vault_path / "1_entrada",
-            "dirty": temp_vault_path / "2_sucio",
-            "clean": temp_vault_path / "3_limpio",
+            "output": temp_vault_path / "4_procesado",
+            "input": temp_vault_path / "1_volcado",
+            "dirty": temp_vault_path / "2_copiado",
+            "clean": temp_vault_path / "3_capturado",
             "quarantine": temp_vault_path / ".fuente" / "quarantine",
         }
         resolver = AuthorizedPathResolver(
@@ -84,9 +84,9 @@ def test_resolver_uses_canonical_catalog_id_and_legacy_alias_after_move(
         assert resolver.resolve_note_id(legacy_id) == new_note.resolve()
         assert resolver.canonical_note_id(legacy_id) == "4ca13d5c-4d78-4f37-8c3c-d1dc530a4dc9"
         with pytest.raises(PathAuthorizationError):
-            resolver.resolve_note_id("4_salida/Tema/b.md")
+            resolver.resolve_note_id("4_procesado/Tema/b.md")
         with pytest.raises(PathAuthorizationError):
-            resolver.resolve_note_id(document_id_for_relative_path("4_salida/Tema/missing.md"))
+            resolver.resolve_note_id(document_id_for_relative_path("4_procesado/Tema/missing.md"))
     finally:
         store.close()
 
@@ -94,7 +94,7 @@ def test_resolver_uses_canonical_catalog_id_and_legacy_alias_after_move(
 def test_candidate_identity_outside_reflow_review_remains_rejected(
     resolver, temp_vault_path
 ):
-    relative = "4_salida/_Other_Review/_candidate.md"
+    relative = "4_procesado/_Other_Review/_candidate.md"
     document_id = document_id_for_relative_path(relative)
     candidate = temp_vault_path / relative
     candidate.parent.mkdir(parents=True)
@@ -123,8 +123,8 @@ def test_candidate_identity_outside_reflow_review_remains_rejected(
 
 
 def test_path_qualified_wikilink_disambiguates_duplicate_basenames(resolver, temp_vault_path):
-    first = temp_vault_path / "4_salida" / "tema-a" / "nota.md"
-    second = temp_vault_path / "4_salida" / "tema-b" / "nota.md"
+    first = temp_vault_path / "4_procesado" / "tema-a" / "nota.md"
+    second = temp_vault_path / "4_procesado" / "tema-b" / "nota.md"
     first.parent.mkdir(parents=True)
     second.parent.mkdir(parents=True)
     first.write_text("a", encoding="utf-8")
@@ -154,10 +154,10 @@ def test_path_qualified_wikilink_rejects_escape(target, resolver):
     [
         "../outside.md",
         "/tmp/outside.md",
-        r"4_salida\Cuestion\nota.md",
-        "4_salida/nota\x00.md",
-        "4_salida",
-        "4_salida/nota.txt",
+        r"4_procesado\Cuestion\nota.md",
+        "4_procesado/nota\x00.md",
+        "4_procesado",
+        "4_procesado/nota.txt",
     ],
 )
 def test_rejects_invalid_note_paths(resolver, client_path):
@@ -171,11 +171,11 @@ def test_rejects_invalid_note_paths(resolver, client_path):
 def test_rejects_symlink_to_external_file(resolver, temp_vault_path):
     external = temp_vault_path.parent / "outside.md"
     external.write_text("secret", encoding="utf-8")
-    link = temp_vault_path / "4_salida" / "outside.md"
+    link = temp_vault_path / "4_procesado" / "outside.md"
     link.symlink_to(external)
 
     with pytest.raises(PathAuthorizationError):
-        resolver.resolve_note("4_salida/outside.md")
+        resolver.resolve_note("4_procesado/outside.md")
 
 
 def test_resolves_quarantine_basename_only(resolver, temp_vault_path):
@@ -200,7 +200,7 @@ def test_note_handlers_accept_vault_relative_note_identity(temp_vault_path):
 
     result = backend.handle_action(
         "save_note",
-        {"path": "4_salida/Cuestion/nota.md", "content": "updated"},
+        {"path": "4_procesado/Cuestion/nota.md", "content": "updated"},
     )
 
     assert result["status"] == "saved"
@@ -278,7 +278,7 @@ def _new_v3_summary() -> str:
                     "note_id": "89a2f4fb-1d7b-4aa1-9793-119970502a00",
                     "revision": 1,
                     "content_hash": "a" * 64,
-                    "path": "3_limpio/origen.md",
+                    "path": "3_capturado/origen.md",
                 }
             ],
         }
@@ -333,7 +333,7 @@ def test_move_rejects_escaping_destination_symlink_with_stable_error(temp_vault_
 
     result = backend.handle_action(
         "move_note",
-        {"path": "4_salida/nota.md", "target_issue": "Escaping"},
+        {"path": "4_procesado/nota.md", "target_issue": "Escaping"},
     )
 
     assert result == {
@@ -371,8 +371,8 @@ def test_wikilink_callback_uses_unique_vault_relative_note_path(temp_vault_path)
     source.write_text("[[nested]]", encoding="utf-8")
     target.write_text("target", encoding="utf-8")
 
-    source_id = document_id_for_relative_path("4_salida/source.md")
-    target_id = document_id_for_relative_path("4_salida/Topic/nested.md")
+    source_id = document_id_for_relative_path("4_procesado/source.md")
+    target_id = document_id_for_relative_path("4_procesado/Topic/nested.md")
     result = backend.get_note_content_html(source_id)
 
     assert result["document"] == [
@@ -403,7 +403,7 @@ def test_wikilink_rejects_ambiguous_basename(temp_vault_path):
         note.write_text(issue, encoding="utf-8")
 
     result = backend.get_note_content_html(
-        document_id_for_relative_path("4_salida/source.md")
+        document_id_for_relative_path("4_procesado/source.md")
     )
 
     # Ambiguous wikilinks stay in-document as broken links (no whole-note failure).
@@ -442,8 +442,8 @@ def test_wikilink_callback_resolves_graph_qualified_target_end_to_end(temp_vault
     assert "[[Contratos/Obligaciones" in linked
     source.write_text(linked, encoding="utf-8")
 
-    source_id = document_id_for_relative_path("4_salida/Contratos/Referencia.md")
-    target_id = document_id_for_relative_path("4_salida/Contratos/Obligaciones.md")
+    source_id = document_id_for_relative_path("4_procesado/Contratos/Referencia.md")
+    target_id = document_id_for_relative_path("4_procesado/Contratos/Obligaciones.md")
     result = backend.get_note_content_html(source_id)
 
     assert result["document"][0]["children"][1]["document_id"] == target_id

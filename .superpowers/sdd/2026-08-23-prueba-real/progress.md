@@ -1,6 +1,17 @@
 # Ledger — prueba_real de Fuente
 
-Status activo: PR-00 S `PASS`, R `PASS`, estado `COMPLETE`; PR-04 S `PASS`, R `PASS`, estado `COMPLETE` por no-op de migración; PR-05–PR-12 `NOT_RUN`
+## Fase layout canónico — 2026-08-24
+
+- Cambio solicitado: `1_volcado`, `2_copiado`, `3_capturado`, `4_procesado`, `5_compartido`.
+- Obsidian oculta sólo `1_volcado` y `2_copiado`; las reglas existentes se conservan.
+- Legacy (`1_entrada`, `2_sucio`, `3_limpio`, `4_salida`, `5_salida`) queda aislado en migración/fixtures; runtime usa sólo defaults canónicos.
+- Evidencia: `.superpowers/sdd/2026-08-23-prueba-real/task-layout-canonical-report.md`.
+- Focales: `109 passed`; `compileall` PASS; `git diff --check` PASS.
+- Casos añadidos: coexistencia canónica/legacy, tema sólo legacy y `dry-run` sin mutaciones.
+- Terra: `PASS`, sin hallazgos abiertos.
+- Estado fase layout: `S PASS`; no se declara R ni cierre de producto por esta fase.
+
+Status activo: PR-00 S `PASS`, R `PASS`, estado `COMPLETE`; PR-04 S `PASS`, R `PARTIAL`, estado `PARTIAL`; PR-05 S `PASS`, R `PASS`, estado `COMPLETE`; PR-06, PR-07, PR-01, PR-03, PR-08, PR-09, PR-10, PR-11 y PR-02 S `PASS`, R `NOT_RUN`, estado `PARTIAL`; PR-12 S `PASS`, R `NOT_RUN`, estado `PARTIAL`. Estado global: `PARTIAL`.
 Spec: docs/superpowers/specs/2026-08-23-prueba-real.md
 Plan: docs/superpowers/plans/2026-08-23-prueba-real.md
 Created: 2026-08-23
@@ -13,20 +24,161 @@ Se conserva todo el ledger histórico inferior sin borrarlo. Este bloque gobiern
 | Orden | ID | S | R | Estado activo |
 |---:|---|---|---|---|
 | 1 | PR-00 | PASS | PASS | COMPLETE |
-| 2 | PR-04 | PASS | PASS | COMPLETE |
-| 3 | PR-05 | NOT_RUN | NOT_RUN | NOT_RUN |
-| 4 | PR-06 | NOT_RUN | NOT_RUN | NOT_RUN |
-| 5 | PR-07 | NOT_RUN | NOT_RUN | NOT_RUN |
-| 6 | PR-01 | NOT_RUN | NOT_RUN | NOT_RUN |
-| 7 | PR-03 | NOT_RUN | NOT_RUN | NOT_RUN |
-| 8 | PR-08 | NOT_RUN | NOT_RUN | NOT_RUN |
-| 9 | PR-09 | NOT_RUN | NOT_RUN | NOT_RUN |
-| 10 | PR-10 | NOT_RUN | NOT_RUN | NOT_RUN |
-| 11 | PR-11 | NOT_RUN | NOT_RUN | NOT_RUN |
-| 12 | PR-02 | NOT_RUN | NOT_RUN | NOT_RUN |
-| 13 | PR-12 | NOT_RUN | NOT_RUN | NOT_RUN |
+| 2 | PR-04 | PASS | PARTIAL | PARTIAL |
+| 3 | PR-05 | PASS | PASS | COMPLETE |
+| 4 | PR-06 | PASS | NOT_RUN | PARTIAL |
+| 5 | PR-07 | PASS | NOT_RUN | PARTIAL |
+| 6 | PR-01 | PASS | NOT_RUN | PARTIAL |
+| 7 | PR-03 | PASS | NOT_RUN | PARTIAL |
+| 8 | PR-08 | PASS | NOT_RUN | PARTIAL |
+| 9 | PR-09 | PASS | NOT_RUN | PARTIAL |
+| 10 | PR-10 | PASS | NOT_RUN | PARTIAL |
+| 11 | PR-11 | PASS | NOT_RUN | PARTIAL |
+| 12 | PR-02 | PASS | NOT_RUN | PARTIAL |
+| 13 | PR-12 | PASS | NOT_RUN | PARTIAL |
 
-Cada fase debe ejecutar `S` sintética y, sólo si pasa, `R` real. `PR-10` repite su prueba sintética y no hereda automáticamente el bloqueo histórico por IDs duplicados. PR-00 y PR-04 están `COMPLETE`; PR-04 se cierra por no-op de migración: el Vault real ya estaba en layout final y no contenía notas migrables, por lo que apply/rollback no forman parte del alcance vigente.
+Cada fase debe ejecutar `S` sintética y, sólo si pasa, `R` real. `PR-10` repite su prueba sintética y no hereda automáticamente el bloqueo histórico por IDs duplicados. PR-00 y PR-05 están `COMPLETE`; PR-04 está `PARTIAL`: el dry-run real pasó sobre una copia corregida, pero apply, inventario posterior y rollback quedaron `NOT_RUN`.
+
+## Ejecución 2026-08-24 — PR-02 S
+
+- Informe: `.superpowers/sdd/2026-08-23-prueba-real/task-PR-02-S-report.md`.
+- Checkout medido antes de ejecutar: rama `dev`, `HEAD 60a018b`; `dist/` era el único artefacto sin rastrear y se conservó.
+- Host medido: macOS 26.6, Darwin 25.6.0 arm64; Python `3.14.6`; `sys.platform=darwin`.
+- Suite exacta: `PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -q tests/test_installer_contract.py tests/test_installer_scripts.py tests/test_package_data.py tests/test_packaging_fuente.py tests/test_authorized_paths.py tests/security/test_path_authorization.py tests/test_folder_sync_discovery.py tests/test_resource_budget.py tests/test_system_checker.py tests/test_ram_governor_resilience.py tests/test_ocr_runtime.py tests/test_shortcuts.py`.
+- Resultado: `132 passed in 4.16s`; código `0`; `PR-02 S PASS`.
+- Checks adicionales: `PYTHONDONTWRITEBYTECODE=1 python3 -m py_compile build_installer.py fuente.spec` PASS; aserciones estáticas de artefactos/scripts por plataforma y package data PASS; `git diff --check` PASS.
+- Cobertura: contrato/scripts de instalador, package data, `PureWindowsPath` y autorización, descubrimiento `win32`, gobernador de RAM, system checker, OCR y shortcuts.
+- Límite: no se ejecutó `py -3 build_installer.py`, ZIP, `.exe` ni smoke Windows. El host es macOS y no se simuló Windows. `PR-02 R NOT_RUN`; estado `PARTIAL`; no se hizo commit, push ni despliegue.
+
+## Ejecución 2026-08-24 — PR-11 S
+
+- Informe: `.superpowers/sdd/2026-08-23-prueba-real/task-PR-11-S-report.md`.
+- Checkout medido antes de ejecutar: rama `dev`, `HEAD c0ae001`; `dist/` era el único artefacto sin rastrear y se conservó.
+- Comando exacto: `PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -q tests/test_folder_sync.py tests/test_folder_sync_contract.py tests/test_folder_sync_discovery.py tests/test_folder_sync_reconciliation.py tests/test_folder_sync_recursive.py tests/test_folder_sync_ui_contract.py tests/security/test_path_authorization.py tests/test_visible_vocabulary_contract.py`.
+- Primera ejecución: `56 passed, 14 failed`; los fallos eran fixtures/expectativas legacy frente a los destinos canónicos.
+- Reejecución final: `70 passed in 0.82s`, código `0`; `git diff --check` PASS.
+- Comprobación adicional de manifest/almacenamiento: `PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -q tests/test_job_store.py tests/test_atomic_files.py` -> `34 passed in 0.68s`.
+- Cobertura: rutas montadas simuladas y temporales, descubrimiento sin red, entrada sólo en `1_volcado/común`, salida sólo desde `5_compartido`, exclusión de `3_capturado`/`4_procesado`, manifest, hash-idempotencia, conflictos, symlinks, autorización de rutas y vocabulario visible.
+- No se implementan autenticación OAuth/Graph ni filtrado propio de permisos SharePoint; el cliente oficial y el sistema operativo mantienen ese límite.
+- Sólo se actualizaron fixtures y expectativas al layout canónico; no hubo cambios de producto.
+- No se usaron OneDrive/SharePoint reales, credenciales ni Vault real. `PR-11 S PASS`; `PR-11 R NOT_RUN`; estado `PARTIAL`; G5 sintético PASS.
+
+## Ejecución 2026-08-24 — PR-10 S
+
+- Informe: `.superpowers/sdd/2026-08-23-prueba-real/task-PR-10-S-report.md`.
+- Checkout medido antes de ejecutar: rama `dev`, `HEAD eb3c095`; `dist/` es el único artefacto sin rastrear y se conservó.
+- Comando exacto: `PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -q tests/test_vault_layout_migration.py tests/test_vault_migration.py tests/test_fuente_migration_inventory.py tests/test_fuente_v3_migration.py tests/test_authorized_paths.py tests/security/test_path_authorization.py tests/test_taxonomy_migration.py tests/test_vault_layout.py`.
+- Primera ejecución: `115 passed, 19 failed`; los fallos eran fixtures/expectativas legacy.
+- Reejecución final: `134 passed in 3.76s`, código `0`; `git diff --check` PASS.
+- Cobertura: dry-run, plan-id, hashes, apply, rollback, idempotencia, reanudación, conflictos humanos, symlinks, autorización de rutas, IDs duplicados y CLI sobre temporales sintéticos.
+- Cambio de producto mínimo: `taxonomy_migration.py` excluía `3_limpio`; ahora usa `CANONICAL_CLEAN_DIR_NAME` para no aceptar `3_capturado` como candidato de sumarios. El resto son fixtures y documentación canónicos.
+- No se usó el Vault real ni el original. `PR-10 S PASS`; `PR-10 R NOT_RUN`; estado `PARTIAL`.
+
+## Ejecución 2026-08-24 — PR-01 S
+
+- Informe: `.superpowers/sdd/2026-08-23-prueba-real/task-PR-01-S-report.md`.
+- Checkout medido: raíz solicitada, rama `dev`, `HEAD 80e4c7b572ec70de47430ba62bd614ee06dc95bd`.
+- Sistema: macOS `26.6`, build `25G72`, Darwin `25.6.0`, `arm64`; Python `3.14.6`.
+- PyInstaller `6.21.0` estaba importable; no se instaló ninguna dependencia.
+- `python3 build_installer.py`: el binario falló con `PermissionError: [Errno 1] Operation not permitted` en la caché de PyInstaller; el script creó el ZIP fallback y terminó con código 0.
+- ZIP: `dist/Fuente_Distribucion_macOS.zip`, 138 archivos, 651197 bytes, SHA-256 `050f53de7831ac03415729cbbaf41fc7b35e76674c1ca990b183d76286a8d3a4`.
+- `unzip -t`: PASS. No aparecen `venv`, `.fuente`, Vault real, las cinco raíces canónicas, raíces legacy ni nombres/patrones sensibles. `fuente/resources/demo_vault` es demo empaquetado.
+- Smoke temporal: extracción, `python3 -m fuente.main --help` y `run_flush` directo sobre Vault vacío sintético PASS; el CLI completo quedó limitado por comprobación de procesos macOS y no se cuenta como arranque real.
+- Resultado de la primera ejecución: `PR-01 S PARTIAL`; `PR-01 R NOT_RUN`; estado de fase `PARTIAL`; G1 no cerrado; `dist/` no es `DEPLOYED`.
+- No se modificó código producto ni dependencias; no hubo commit.
+
+## Repetición 2026-08-24 — PR-01 S con caché temporal
+
+- Informe vigente: `.superpowers/sdd/2026-08-23-prueba-real/task-PR-01-S-report.md`.
+- Checkout medido: raíz solicitada, rama `dev`, `HEAD 80e4c7b572ec70de47430ba62bd614ee06dc95bd`.
+- Comando: `PYINSTALLER_CONFIG_DIR=/private/tmp/fuente-pr01-config-VQBpz1/pyinstaller-config python3 build_installer.py`.
+- PyInstaller `6.21.0` terminó correctamente con el binario macOS; no se instalaron dependencias. El log incluye avisos de imports opcionales, pero no hubo fallo de compilación ni falso código 0 sin binario.
+- Binario: `dist/Fuente_macOS`, `Mach-O 64-bit arm64`, 360419696 bytes, SHA-256 `4b82a3afccdc9c73e7a108381fa21a0d0d4b40e04262b987929740762426e87e`.
+- ZIP: 139 archivos, 358231283 bytes, SHA-256 `5fda5a759b04772d262e269b86e7423cde330e6f16454c1a847cc922dec127dd`; `unzip -t` PASS.
+- Exclusiones: PASS para `venv`, `.fuente`, Vault real, las cinco raíces canónicas, raíces legacy y nombres/material sensible; `demo_vault` es recurso demo.
+- Smoke del binario extraído: dentro del sandbox falló por `semctl: Operation not permitted`; fuera del sandbox `--help` terminó 0 y argumento inválido terminó 2. No se ejecutó R.
+- Resultado vigente: `PR-01 S PASS`; `PR-01 R NOT_RUN`; estado de fase `PARTIAL`; G1 `PASS`; `dist/` no es `DEPLOYED`.
+- No se modificó `build_installer.py`, no se añadió prueba y no hubo commit: la señalización ya era correcta cuando el binario se generó.
+
+## Ejecución 2026-08-24 — PR-03 S
+
+- Informe: `.superpowers/sdd/2026-08-23-prueba-real/task-PR-03-S-report.md`.
+- Checkout medido: raíz solicitada, rama `dev`, `HEAD 1347cc5e89228ae2dab2acb301f96dd1d3c2153e`; macOS `26.6`, build `25G72`, Darwin `25.6.0`, `arm64`; Python `3.14.6`.
+- Entrada única: copia temporal de `dist/Fuente_Distribucion_macOS.zip` en `/private/tmp/fuente-pr03-s-YNq2nj/input/Fuente_Distribucion_macOS.zip`; SHA-256 `5fda5a759b04772d262e269b86e7423cde330e6f16454c1a847cc922dec127dd`; `unzip -t` PASS.
+- Primer comando en sandbox: `/bin/bash ./instalar_fuente.command` con `HOME` y `PATH` sintéticos; BLOCKED por `NameResolutionError` contra `pypi.org` y `No matching distribution found for setuptools>=61.0`.
+- Repetición con red autorizada sólo para el venv temporal: instalación mínima terminó para `fuente-0.1.0` y `requirements.txt`; se respondió `n` a extras completos; no se descargaron extras ni modelos.
+- Bloqueo exacto posterior: `create_shortcuts.py` dejó abierto el selector Tk `Elige la carpeta donde crear los accesos directos (Fuente y La Memoria de Fuente)`. Se detuvo con `Ctrl-C`; código `1`. No se alcanzó la GUI principal ni `run_installation`.
+- Evidencia negativa medida: existe `/private/tmp/fuente-pr03-s-YNq2nj/extracted/venv/bin/python`; no existen `.fuente_install_receipt.json`, `home/Documents/Fuente_Vault` ni `home/Desktop/Fuente.command`; no quedaron procesos temporales.
+- Resultado: `PR-03 S BLOCKED`; `PR-03 R NOT_RUN`; estado de fase `BLOCKED`; G2 `BLOCKED`. Extras, arranque, rutas canónicas y desinstalación: `NOT_RUN`.
+- No se modificaron producto ni dependencias del checkout; no se ejecutó R y no hubo commit.
+
+## Corrección 2026-08-24 — PR-03 S
+
+- Se eliminó la llamada previa a `create_shortcuts.py` de `instalar_fuente.command`; el asistente queda como único dueño.
+- `step_create_shortcuts` ahora propaga `False` como fallo; `tests/test_installer_contract.py` usa `1_volcado`–`5_compartido`; `tests/test_shortcuts.py` verifica dos `.command` ejecutables con `target_dir` explícito y sin selector Tk.
+- Focales: `PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -q tests/test_installer_contract.py tests/test_shortcuts.py` -> `23 passed in 0.47s`, código `0`; `bash -n instalar_fuente.command` y `git diff --check` PASS.
+- ZIP limpio regenerado con PyInstaller `6.21.0`: `dist/Fuente_Distribucion_macOS.zip`, 358230404 bytes, SHA-256 `9a28eb380541bac010417cee7928f35beade04f401dd4f3a4a38336d2c439597`; `unzip -t` PASS.
+- Probe: `/private/tmp/fuente-pr03-s-probe-QYz6Xj`; `create_shortcuts` PASS con dos accesos ejecutables; `run_installation(..., create_shortcuts=False, install_model=False)` PASS con recibo y raíces canónicas creadas.
+- No se descargaron modelos, no se usó el Vault real y no se ejecutó R.
+- Resultado vigente: `PR-03 S PASS`; `PR-03 R NOT_RUN`; estado `PARTIAL`; G2 `PARTIAL`. La GUI completa, extras y desinstalación real siguen pendientes.
+
+## Ejecución 2026-08-24 — PR-06 S
+
+- Informe: `.superpowers/sdd/2026-08-23-prueba-real/task-PR-06-S-report.md`.
+- Checkout medido: rama `dev`, `HEAD c45ee95fb0d793dcb02c056419e72dd65f4c32e9`, árbol limpio antes de registrar evidencia.
+- Comando exacto: `PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -q tests/test_retrieval_router.py tests/test_minirag_store.py tests/test_rag.py tests/test_refinement_store.py tests/test_refinement_service.py tests/test_refinement_promotion.py`.
+- Resultado: `36 passed in 0.35s`, código `0`; `PR-06 S PASS`.
+- Evidencia: corpus sintético temporal; búsqueda MiniRAG, procedencia, fallback, propuestas positiva/negativa y promoción positive-only a `4_procesado` cubiertos por la suite focal.
+- `PR-06 R NOT_RUN`: no se probaron Ollama, modelo, almacenamiento ni notas reales. Estado global: `PARTIAL`.
+- Sin cambios de producto, dependencias ni Vault real.
+
+## Corrección activa de layout — 2026-08-24
+
+El contrato vigente por tema/Vault es exactamente:
+`1_volcado` (entrada, con `personal`/`común` si aplica), `2_copiado`,
+`3_capturado` (Markdown canónico), `4_procesado` (privado) y `5_compartido`
+(compartido). La aprobación de `3_capturado` y la aprobación independiente
+antes de `5_compartido` se mantienen.
+
+Las rutas `1_entrada`, `2_sucio`, `3_limpio`, `4_salida` y `5_salida` quedan
+limitadas a migración y fixtures legacy. El runtime no las detecta como temas,
+defaults ni destinos. Este bloque actualiza la campaña activa; las evidencias
+históricas inferiores conservan sus rutas originales sin reescritura.
+
+## Ejecución 2026-08-24 — PR-07 S
+
+- Informe: `.superpowers/sdd/2026-08-23-prueba-real/task-PR-07-S-report.md`.
+- Checkout medido: rama `dev`, `HEAD 12899f9d836c0be1ae52d42d5d801a79db8d6bd4`.
+- Comando exacto: `PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -q tests/test_sharing_service.py tests/test_discussion_service.py tests/contract/test_processed_editor_contract.py tests/contract/test_sharing_discussion_ui_contract.py`.
+- Resultado: `15 passed in 0.47s`, código `0`; `PR-07 S PASS`.
+- Evidencia: corpus temporal sintético; aprobación y compartición atómica a
+  `5_compartido`, autor, comentario fijado, respuesta, JSON de eventos
+  inmutable, CAS de revisión y bloqueo al intentar compartir una revisión
+  obsoleta después de editar.
+- Ampliación Terra: se añadió `tests/test_approval_ledger.py`; la suite
+  ampliada pasó `25 passed in 0.54s`, código `0`, incluyendo invalidación de
+  aprobación y marcado de derivado obsoleto tras editar, y edición desde
+  consola que persiste `pending_review`.
+- `PR-07 R NOT_RUN`: no se probó PyWebView, aceptación visual ni escritura en
+  Vault real. Estado global: `PARTIAL`.
+- Sin cambios de producto, dependencias ni Vault real.
+
+### Ampliación final de evidencia — PR-07 S
+
+- Se añadió `tests/test_processed_output_approval.py` al comando completo.
+- Resultado: `28 passed in 0.61s`, código `0`; incluye
+  `test_manual_processed_edit_invalidates_shareability`.
+- Este caso confirma que editar manualmente una nota procesada aprobada
+  bloquea su compartición posterior.
+- Corrección Terra: el test construye `SharingApplicationService`, llama a
+  `share_processed_note()` con la revisión nueva y espera
+  `OutputApprovalRequiredError`; `5_compartido` queda vacío.
+- Diff desde HEAD `12899f9d836c0be1ae52d42d5d801a79db8d6bd4`: 4 archivos
+  rastreados, `69` líneas añadidas y `15` eliminadas; el cambio funcional es
+  sólo de `tests/test_processed_output_approval.py` (`10` añadidas, `4`
+  eliminadas).
+- PR-07 conserva `S PASS`, `R NOT_RUN`, estado `PARTIAL`; no se ejecutó R ni
+  se hizo commit.
 
 ## Evidencia histórica conservada
 
@@ -51,10 +203,10 @@ Cada fase debe ejecutar `S` sintética y, sólo si pasa, `R` real. `PR-10` repit
 - Layout comprobado: `General/1_entrada`, `2_sucio`, `3_limpio`, `4_procesado` y `5_salida`, con `1_entrada/personal` y `1_entrada/común`.
 - `dry-run`: `notes_scanned: 0`, `migratable_notes: 0`, `findings: []`.
 - Inventario: `is_safe_to_apply: true`, `clean_notes: []`, `derived_notes: []`, `findings: []`.
-- Resultado: PR-04 R `PASS` dentro del alcance vigente; estructura e inventario pasan. La migración y el rollback no son aplicables a un Vault ya final y vacío de notas procesadas.
+- Resultado histórico: PR-04 R `PASS` para estructura e inventario dentro de ese alcance; la migración y el rollback no son aplicables a un Vault ya final y vacío de notas procesadas.
 - Siguiente consumidor: los archivos `.md` y `.txt` de `General/1_entrada` pasan a PR-05 ETL real.
 
-## Estado sencillo
+## Estado sencillo histórico
 
 Código está publicado y pruebas automatizadas históricas están verdes. Esta campaña aún no ha construido ni instalado paquetes finales. Pruebas de hardware, permisos, UI instalada, Meetily real, Vault real y carpetas montadas empiezan en NOT_RUN.
 
@@ -73,13 +225,13 @@ Código está publicado y pruebas automatizadas históricas están verdes. Esta 
 | ID | Fase | Antes de instalar | Entorno real | Inicial | Gate |
 |---|---|---|---|---|---|
 | PR-00 | baseline, corpus y seguridad | sí | no | PASS | G0 |
-| PR-01 | distribución macOS | parcial | macOS + PyInstaller | NOT_RUN | G1 |
+| PR-01 | distribución macOS | parcial | macOS + PyInstaller | PARTIAL: S PASS, R NOT_RUN | G1 PASS |
 | PR-02 | distribución Windows | no | Windows + PyInstaller | NOT_RUN | G6 |
-| PR-03 | instalación macOS limpia | no | macOS limpio | NOT_RUN | G2 |
-| PR-04 | layout, migración y aprobación | sí | Vault nuevo con layout final | COMPLETE: layout, dry-run e inventario reales PASS; migración/rollback no aplican al alcance vigente | G3 |
-| PR-05 | extracción ETL | sí | PDF, imagen y audio reales | PARTIAL: checkout y corpus sintético; archivos, motores y datos reales no probados | G3 |
+| PR-03 | instalación macOS limpia | no | macOS limpio | BLOCKED: S BLOCKED, R NOT_RUN | G2 BLOCKED |
+| PR-04 | layout, migración y aprobación | sí | Vault nuevo con layout final | HISTÓRICO: PASS de layout, dry-run e inventario; migración/rollback no aplican al alcance vigente | G3 |
+| PR-05 | extracción ETL | sí | PDF, imagen y audio reales | COMPLETE: TXT, Markdown, PDF, imagen y MP3 reales; motores office/audio instalados y medidos | G3 |
 | PR-06 | MiniRAG, Chroma y refinamiento | sí | Ollama y RAG reales | NOT_RUN | G3 |
-| PR-07 | compartir y discusión | sí | PyWebView para aceptación visual | NOT_RUN | G3 |
+| PR-07 | compartir y discusión | sí | PyWebView para aceptación visual | PARTIAL: S PASS, R NOT_RUN | G3 |
 | PR-08 | consola, lector y responsive | no | instalación PyWebView | NOT_RUN | G3 |
 | PR-09 | Meetily, micrófono y recuperación | no | Meetily + permisos OS | NOT_RUN | G4 |
 | PR-10 | migración Vault General | dry-run sí | apply sobre copia autorizada | BLOCKED: IDs duplicados | G5 |
@@ -106,7 +258,7 @@ Cada fase exige dos resultados en orden: `S` prueba sintética y, sólo si `S` p
 - `PR-00`: se mantiene `COMPLETE` sólo como baseline del repositorio y G0 aislado. No prueba instalación ni uso real.
 - `PR-04`: baja de `COMPLETE` a `PARTIAL`; la copia fue temporal y sintética, no el Vault autorizado real.
 - `PR-05`: baja de `PASS/COMPLETE` a `PARTIAL`; el probe fue sintético y usó backends ausentes o stubs, sin archivos, Vault, audio ni transcripciones reales.
-- La campaña no tiene todavía ninguna fase real de usuario cerrada. `PR-01`, `PR-03`, `PR-08`, `PR-09` y `PR-11` siguen `NOT_RUN`; `PR-10` sigue `BLOCKED`.
+- La campaña no tiene todavía ninguna fase real de usuario cerrada. `PR-01` está `PARTIAL` con R `NOT_RUN`; `PR-03` está `PARTIAL` con S `PASS` y R `NOT_RUN`; `PR-08`, `PR-09` y `PR-11` siguen `NOT_RUN`; `PR-10` sigue `BLOCKED`.
 
 ## Ejecución 2026-08-23 — PR-04 S
 
@@ -147,6 +299,63 @@ Orden práctico vigente:
 13. PR-12 decisión final basada en resultados S/R.
 
 El cierre histórico de PR-00 y el bloqueo histórico de PR-10 se conservan como antecedente; no gobiernan el estado activo del reinicio.
+
+## Ejecución 2026-08-24 — PR-05 S
+
+- Informe: `.superpowers/sdd/2026-08-23-prueba-real/task-PR-05-S-report.md`.
+- Checkout medido: rama `dev`, `HEAD e1276779f22c01454063d3b46b85979ccca3eeb5`, árbol limpio antes de documentar.
+- Comando exacto: `PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -q tests/test_extraction_policy.py tests/test_extractors.py tests/test_ingestion_recovery.py tests/test_job_store.py`.
+- Resultado: `75 passed in 2.57s`; `PR-05 S: PASS`.
+- Cobertura comprobada: extracción controlada, degradación/fallback, cuarentena y recuperación; también persistencia y CAS de `JobStore`.
+- Corpus sintético temporal; no se usó Vault real, archivos reales, instalación ni motores opcionales reales. PR-05 R no se ejecutó.
+- Estado PR-05: `PARTIAL` (`S PASS`, `R NOT_RUN`). No se alteraron estados de otras fases.
+
+## Fix de evidencia 2026-08-24 — PR-05 S
+
+- Informe de fix: `.superpowers/sdd/2026-08-23-prueba-real/task-PR-05-S-fix-report.md`.
+- Probe reproducible: `.superpowers/sdd/2026-08-23-prueba-real/task-PR-05-S-probe.py`; salida: `.superpowers/sdd/2026-08-23-prueba-real/task-PR-05-S-probe-output.json`.
+- Probe ejecutado con código `0`; registró TXT, DOCX, CSV, JSON, PDF mínimo/difícil e imagen con SHA-256 de entrada y Markdown, motor, estado, razones y degradaciones.
+- Suite exacta reejecutada: `75 passed in 2.66s`, código `0`.
+- Run 1 y Run 2 del probe: SHA-256 `85e6b7d0f8fe300909af4e71b70d0bc921663225f3067e1589c01134cbacce5` en ambos; `cmp` confirmó igualdad byte a byte.
+- Cuarentena y recuperación observadas en la suite: cuarentena sin artefactos parciales, reconciliación tras fallo de índice y reintento con ruta de nota conservada.
+- Resultado: `PR-05 S PASS`; `PR-05 R NOT_RUN`; estado global `PARTIAL`. No se modificaron producto, dependencias ni estados de otras fases.
+
+## Fix round 2 de evidencia 2026-08-24 — PR-05 S
+
+- Se hizo determinista el DOCX sintético: ZIP con orden lexicográfico, timestamp fijo, metadatos fijos y compresión fija.
+- El probe procesa exactamente los seis archivos requeridos: TXT, DOCX, CSV, JSON, PDF mínimo/difícil e imagen.
+- Se ejecutó el probe dos veces y se registraron ambos SHA-256 iguales en el informe y el informe de fix.
+- Se reejecutó la suite exacta: `75 passed in 2.66s`, código `0`.
+- Plan reconciliado mínimamente: PR-05 activo `PARTIAL (S PASS / R NOT_RUN)`; sólo los tres checks sintéticos están marcados completos; el check real permanece abierto.
+- Resultado: `PR-05 S PASS`; `PR-05 R NOT_RUN`; estado global `PARTIAL`. Sin cambios de producto/dependencias y sin R.
+
+## Fix round 3 de evidencia 2026-08-24 — PR-05 S
+
+- Se corrigió en el informe el SHA-256 de entrada de `nota.docx` a `5a6f25555dfef27745b2a45ced8034bff294839edb4caa471a20eb6221ea05b9`, tomado exactamente de `task-PR-05-S-probe-output.json`.
+- Verificación de tabla contra JSON: `6/6` hashes de entrada y `6/6` hashes de Markdown coinciden.
+- No se modificó el probe ni se ejecutó R.
+- Resultado conservado: `PR-05 S PASS`; `PR-05 R NOT_RUN`; estado global `PARTIAL`.
+
+## Ejecución 2026-08-24 — PR-05 R
+
+- Informe: `.superpowers/sdd/2026-08-23-prueba-real/task-PR-05-R-report.md`.
+- Probe: `.superpowers/sdd/2026-08-23-prueba-real/task-PR-05-R-probe.py`; salida: `.superpowers/sdd/2026-08-23-prueba-real/task-PR-05-R-probe-output.json`.
+- Checkout medido: rama `dev`, `HEAD e1276779f22c01454063d3b46b85979ccca3eeb5`.
+- Vault autorizado medido: `fuente_vault/General/1_entrada`, con 5 archivos reales: TXT, Markdown, PDF, imagen y MP3.
+- Comando: `PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=. python3 .superpowers/sdd/2026-08-23-prueba-real/task-PR-05-R-probe.py`.
+- Ejecución doble determinista mediante `ExtractorRegistry`: salida SHA-256 `3e3cae7bdb5b15000f98c5c5ff8e5302da6d5d1741133771a93fc4d68c3e8497` en ambas; `cmp` confirmó `outputs_equal=YES`.
+- Resultado observado: TXT, Markdown y PDF `completed` por `markitdown`; imagen `completed` por `tesseract` tras fallo de Vision; MP3 `completed` con faster-whisper y modelo local `tiny`.
+- Límites observados: la primera descarga del modelo requirió red autorizada; las ejecuciones posteriores usaron el modelo local. Tesseract y `pytesseract` también están instalados y procesaron la imagen real.
+- PR-05 R: `PASS`; estado global PR-05: `COMPLETE`. Se instalaron las extras autorizadas `office` y `audio`, y se procesaron PDF, imagen, TXT, Markdown y MP3 reales.
+
+## Corrección de escaneo ETL 2026-08-24
+
+- Causa medida: `--flush` y `FolderMonitor` usaban `input_dir.glob("*")` y omitían archivos dentro de `1_entrada/personal` y `1_entrada/común`.
+- Corrección: `iter_input_files()` recorre recursivamente `1_entrada`, filtra temporales y se reutiliza en flush y monitor; las rutas relativas de origen mantienen `personal/` y `común/`.
+- Prueba focal: `PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -q tests/test_application_lifecycle.py tests/test_ingestion_recovery.py` → `43 passed in 3.33s`.
+- Flush real posterior: `files_found: 5`, `files_processed: 0` porque tres trabajos quedaron en `awaiting_clean_approval` y dos se difirieron por RAM (`media_ocr` 1.5 GB y `media_audio` 2.0 GB frente a 1.34 GB disponibles).
+- Artefactos observados: 3 copias en `General/2_sucio` y 3 Markdown en `General/3_limpio`; `General/4_procesado` permanece vacío correctamente hasta aprobación exacta.
+- Este seguimiento valida el escaneo recursivo y el ciclo hasta revisión; no declara aprobaciones humanas ni procesamiento de medios diferidos.
 
 ## Ejecución 2026-08-23 — pre-flight
 
@@ -197,7 +406,7 @@ El cierre histórico de PR-00 y el bloqueo histórico de PR-10 se conservan como
 
 ## Fix round 1 — PR-04 — 2026-08-23
 
-- Resultado: `PASS` limitado a checkout y copia temporal sintética.
+- Resultado histórico: `PASS` para checkout y copia temporal sintética; Vault real no probado.
 - Checkout medido: raíz `/Users/emiliosevillaortego/Documents/Programación/fuente`, rama `dev`, `HEAD e68c9c08c21d10312865ece3b2a5c28068ccc149`, `dev...origin/dev`.
 - Suite focalizada: `PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -q tests/test_vault_layout.py tests/test_vault_layout_migration.py tests/test_approval_ledger.py tests/test_processed_output_approval.py tests/test_atomic_files.py tests/security/test_path_authorization.py` -> `55 passed in 0.79s`.
 - Copia temporal: el comando reproducible y su salida completa están en `task-PR-04-report.md`; resultado `COPY_LAYOUT_HASH_ROLLBACK=PASS`, `LEGACY_4_SALIDA_COMPATIBILITY=PASS`, `TEMP_CLEANUP=PASS`.
@@ -231,3 +440,36 @@ El cierre histórico de PR-00 y el bloqueo histórico de PR-10 se conservan como
 - G0: `PASS` en el checkout temporal limpio. PR-00 S: `PASS`; PR-00 R: `NOT_RUN`; PR-00: `PARTIAL`.
 - No se ejecutaron PR-00 R, PR-04 ni ninguna fase posterior. No hubo commit, publicación, escritura del Vault real ni cambios de código de producto.
 - Límite: G0 acredita checkout, corpus sintético y automatización; no acredita instalación, UI instalada, permisos, hardware, Meetily, Vault real, carpetas montadas ni Windows.
+## Ejecución 2026-08-24 — PR-08 S
+
+- Informe: `.superpowers/sdd/2026-08-23-prueba-real/task-PR-08-S-report.md`.
+- Checkout medido antes de actuar: rama `dev`, commit `35ad154`; `dist/` permanece como único artefacto no rastreado de fases anteriores.
+- Comando focal exacto: `PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -q tests/test_bridge_contract.py tests/contract/test_bridge_frontend_contract.py tests/contract/test_reader_editor_contract.py tests/contract/test_reader_editor_deferred_contract.py tests/contract/test_note_editor_contract.py tests/contract/test_bridge_note_editor_contract.py tests/test_reader_workspace_contract.py tests/test_reader_contract.py tests/test_chat_retrieval_contract.py tests/contract/test_workspace_chat_contract.py tests/test_console_modal_close_contract.py tests/test_modals_console.py tests/test_meetily_modal_contract.py tests/test_console_ui1_contract.py tests/test_console_ui3_contract.py tests/test_console_step2_ingestion.py tests/test_console_graph_lifecycle.py tests/test_quarantine_ui_contract.py tests/contract/test_q03_ui_recovery_contract.py tests/test_ingestion_recovery.py tests/integration/test_pipeline_recovery.py tests/test_meeting_import_recovery.py tests/test_job_queue_ui_contract.py`.
+- Resultado final: `269 passed in 7.60s`, código `0`.
+- Comprobaciones complementarias: `PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -q tests/test_bridge_note_id_contract.py` -> `4 passed in 0.18s`; `node tests/contract/test_reader_editor_deferred.mjs` -> `4/4 pass`.
+- Cobertura: consola y bridge tipado, IDs opacos, lector, editor revisionado y carga diferida, chat contextual, modales y cierre, ingesta desde consola, cuarentena, recuperación por etapas y contratos de accesibilidad/UI disponibles en checkout.
+- Primera ejecución: `221 passed, 48 failed`; todos los fallos eran fixtures o expectativas con el layout retirado (`1_entrada`, `2_sucio`, `3_limpio`, `4_salida`) o el texto UI antiguo. Se actualizaron sólo seis archivos de tests al layout canónico; no se tocó producto.
+- `git diff --check`: PASS.
+- PR-08 S: `PASS`; PR-08 R: `NOT_RUN`; estado global: `PARTIAL`.
+- Límite: esta fase no prueba PyWebView instalado fuera del checkout, ventana real, teclado, foco, lector de pantalla ni responsive de 375 px. No se usó Vault real ni se guardaron datos sensibles.
+
+## Ejecución 2026-08-24 — PR-09 S
+
+- Informe: `.superpowers/sdd/2026-08-23-prueba-real/task-PR-09-S-report.md`.
+- Checkout medido antes de actuar: raíz `/Users/emiliosevillaortego/Documents/Programación/fuente`, rama `dev`, `HEAD 064077a2f67a5224ac0b0fd81fb52878350e0f55`; `dist/` permanece como único artefacto no rastreado.
+- Suite focal exacta: `PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -q tests/test_meetily_gateway.py tests/test_meeting_session_store.py tests/test_meeting_import_recovery.py tests/test_meeting_artifact_contract.py tests/test_meetily_modal_contract.py tests/contract/test_meeting_bridge_contract.py tests/contract/test_q03_ui_recovery_contract.py tests/security/test_bridge_payloads.py tests/test_bridge_contract.py tests/test_approval_ledger.py tests/test_ingestion_approval_gate.py tests/test_vault_layout.py tests/integration/test_pipeline_recovery.py tests/integration/test_pipeline_idempotency.py`.
+- Primera salida: `105 passed, 1 failed`; la única falla era una fixture que aún pasaba `1_entrada` y `2_sucio` a `FolderSyncManager`, que autoriza sólo `1_volcado` y `2_copiado`.
+- Corrección mínima: `tests/integration/test_pipeline_idempotency.py` usa las dos raíces canónicas en ambas llamadas; no se modificó producto.
+- Reejecución: `106 passed in 2.76s`, código `0`; `git diff --check` PASS.
+- Cobertura: bridge local allow-listed y token de un uso; consentimiento antes de lanzar; modal y recuperación; manifiesto incompleto, inválido y conflictivo; hashes SHA-256; importación atómica e idempotente; `2_copiado/reunion`, `3_capturado/reunion`, `4_procesado/reunion`; `standard_meeting`; procedencia; bloqueo de aprobación; sesiones durables; duplicados y reinicios sin parciales.
+- Resultado: `PR-09 S PASS`; `PR-09 R NOT_RUN`; estado global `PARTIAL`.
+- Límites: no se ejecutaron Meetily, micrófono, audio, transcripción real, permisos del sistema ni escritura en un Vault real; no se guardaron audio ni transcripciones en Git. No se hizo commit.
+
+## Auditoría 2026-08-24 — PR-12 S
+
+- Checkout medido antes de actuar: rama `dev`, `HEAD 8565dd0`; `git status --short` mostró únicamente `dist/` sin rastrear.
+- Se leyeron plan, spec, ledger e informes S/R de PR-00, PR-04, PR-05, PR-06, PR-07, PR-01, PR-03, PR-08, PR-09, PR-10, PR-11 y PR-02. El estado S/R documentado se mantuvo; `NOT_RUN` no se elevó por inferencia.
+- Auditoría documental: `PASS`. No se repitieron suites completas. `git diff --check`: `PASS`.
+- PR-12 S: `PASS`; PR-12 R: `NOT_RUN`; estado PR-12: `PARTIAL`; estado global de campaña: `PARTIAL` porque quedan R pendientes.
+- Informe final y guion seguro: `docs/superpowers/reports/2026-08-24-prueba-real-synthetic-and-real-script.md`.
+- No se hizo push ni despliegue. La auditoría y sus reconciliaciones quedaron registradas en commits; `dist/` permanece fuera del alcance y no se trata como `DEPLOYED`.

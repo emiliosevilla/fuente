@@ -543,7 +543,7 @@ historial: []
 """
 
     ingest_source = "smoke_ingest.txt"
-    ingest_identity = f"1_entrada/{ingest_source}"
+    ingest_identity = f"1_volcado/{ingest_source}"
     ingest_text = "# Smoke ingest\n\nContenido con token retrieval_alpha.\n"
 
     class FakeChroma:
@@ -631,11 +631,11 @@ historial: []
         def get_ollama_process_state(self) -> dict:
             return {"ok": True, "models": [], "error": None}
 
-    for name in ("1_entrada", "2_sucio", "3_limpio", "4_salida", ".fuente"):
+    for name in ("1_volcado", "2_copiado", "3_capturado", "4_procesado", "5_compartido", ".fuente"):
         (vault_path / name).mkdir(parents=True, exist_ok=True)
-    (vault_path / "4_salida" / "_Sin_Cuestion").mkdir(parents=True, exist_ok=True)
+    (vault_path / "4_procesado" / "_Sin_Cuestion").mkdir(parents=True, exist_ok=True)
 
-    note_rel = "4_salida/_Sin_Cuestion/smoke.md"
+    note_rel = "4_procesado/_Sin_Cuestion/smoke.md"
     note_path = vault_path / note_rel
     note_path.write_text(legacy_note, encoding="utf-8")
     before_migrate = legacy_note
@@ -743,7 +743,7 @@ historial: []
         if completed.stage != "completed":
             return False, f"ingestion stage {completed.stage} status {completed.status}"
         if source_path.exists():
-            return False, "ingestion did not remove source from 1_entrada"
+            return False, "ingestion did not remove source from 1_volcado"
         ingested_notes = sorted(vault.output_dir.rglob("*.md"))
         ingested_note_paths = [
             path for path in ingested_notes if path.name not in {"_Indice_MOC.md", "smoke.md"}

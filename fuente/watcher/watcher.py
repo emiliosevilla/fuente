@@ -85,8 +85,22 @@ def is_temporary_or_system_file(file_path: Path) -> bool:
     return False
 
 
+def iter_input_files(input_dir: Path) -> list[Path]:
+    """Return authorized files below 1_volcado, including personal/común."""
+    if not input_dir.exists():
+        return []
+    return sorted(
+        (
+            path
+            for path in input_dir.rglob("*")
+            if path.is_file() and not is_temporary_or_system_file(path)
+        ),
+        key=lambda path: path.as_posix(),
+    )
+
+
 def wait_until_file_stable(file_path: Path, max_wait_sec: float = 10.0, check_interval: float = 0.5) -> bool:
-    """Espera a que un archivo entrante en 1_entrada termine de escribirse en disco o red."""
+    """Espera a que un archivo entrante en 1_volcado termine de escribirse en disco o red."""
     if is_temporary_or_system_file(file_path):
         return False
 
@@ -215,7 +229,7 @@ class ETLPipeline:
         self.job_store.close()
 
     def process_file(self, raw_file_path: Path) -> bool:
-        """Ingesta un archivo de 1_entrada como un job y lo lleva a término."""
+        """Ingesta un archivo de 1_volcado como un job y lo lleva a término."""
         if is_temporary_or_system_file(raw_file_path):
             return False
 
@@ -293,7 +307,7 @@ class ETLPipeline:
 
 if HAS_WATCHDOG:
     class IngestionWatcher(FileSystemEventHandler):
-        """FileWatcher que escucha eventos de creación, traslado y modificación de archivos en 1_entrada."""
+        """FileWatcher que escucha eventos de creación, traslado y modificación de archivos en 1_volcado."""
 
         def __init__(self, pipeline: ETLPipeline):
             self.pipeline = pipeline
@@ -321,7 +335,7 @@ if HAS_WATCHDOG:
 
 
 class FolderMonitor:
-    """Administra la escucha en 1_entrada exclusivamente mediante sondeo (polling) cada 300 segundos."""
+    """Administra la escucha en 1_volcado exclusivamente mediante sondeo (polling) cada 300 segundos."""
 
     def __init__(self, pipeline: ETLPipeline, poll_interval_sec: float = 300.0):
         self.pipeline = pipeline
@@ -333,46 +347,46 @@ class FolderMonitor:
         input_dir = str(self.pipeline.vault.input_dir)
         self._stop_event.clear()
 
-        # 1. Escaneo e ingesta inmediata de archivos que ya estaban en 1_entrada antes de arrancar Fuente
+        # 1. Escaneo e ingesta inmediata de archivos que ya estaban en 1_volcado antes de arrancar Fuente
         self.process_existing_files()
 
         # 2. Monitoreo por sondeo (polling thread) únicamente cada 300 segundos
         self._poll_thread = threading.Thread(target=self._run_poll_loop, daemon=True, name="FolderPollingThread")
         self._poll_thread.start()
-        logger.info(f"Monitoreo por sondeo activo en 1_entrada (intervalo: {self.poll_interval_sec}s): {input_dir}")
+        logger.info(f"Monitoreo por sondeo activo en 1_volcado (intervalo: {self.poll_interval_sec}s): {input_dir}")
 
     def process_existing_files(self) -> None:
-        """Procesa de inmediato los archivos que ya se encontraban en 1_entrada al iniciar Fuente."""
+        """Procesa de inmediato los archivos que ya se encontraban en 1_volcado al iniciar Fuente."""
         # Active VaultManager theme paths — never flat AppConfig General roots.
         input_dir = self.pipeline.vault.input_dir
         # Los jobs interrumpidos por un cierre anterior continúan desde su
         # última etapa durable antes de admitir archivos nuevos.
         self.pipeline.resume_pending_jobs()
         try:
-            files = [f for f in input_dir.glob("*") if f.is_file() and not is_temporary_or_system_file(f)]
+            files = iter_input_files(input_dir)
             if files:
-                logger.info(f"Detectados {len(files)} archivo(s) preexistentes en 1_entrada. Iniciando procesamiento inmediato...")
+                logger.info(f"Detectados {len(files)} archivo(s) preexistentes en 1_volcado. Iniciando procesamiento inmediato...")
                 for f in files:
                     if self._stop_event.is_set():
                         break
                     self.pipeline.process_file(f)
                     time.sleep(0.01)
         except Exception as e:
-            logger.error(f"Error escaneando archivos preexistentes en 1_entrada: {e}")
+            logger.error(f"Error escaneando archivos preexistentes en 1_volcado: {e}")
 
     def stop(self) -> None:
         self._stop_event.set()
         if self._poll_thread:
             self._poll_thread.join(timeout=3)
-        logger.info("Monitoreo de la carpeta 1_entrada detenido.")
+        logger.info("Monitoreo de la carpeta 1_volcado detenido.")
 
     def _run_poll_loop(self) -> None:
         """Bucle de sondeo (polling) híbrido con cedido explícito de hilo (thread yield)."""
         while not self._stop_event.is_set():
-            # Re-read each poll so a mid-run theme switch retargets 1_entrada.
+            # Re-read each poll so a mid-run theme switch retargets 1_volcado.
             input_dir = self.pipeline.vault.input_dir
             try:
-                files = [f for f in input_dir.glob("*") if f.is_file() and not is_temporary_or_system_file(f)]
+                files = iter_input_files(input_dir)
                 for f in files:
                     if self._stop_event.is_set():
                         break

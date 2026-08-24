@@ -37,9 +37,9 @@ def _build_offline_ingestion(vault_root: Path) -> tuple[IngestionApplicationServ
 
 def test_step2_transcribe_uses_job_store(tmp_path):
     vault_root = tmp_path / "Vault"
-    for name in ("1_entrada", "2_sucio", "3_limpio", "4_salida", ".fuente"):
+    for name in ("1_volcado", "2_copiado", "3_capturado", "4_procesado", ".fuente"):
         (vault_root / name).mkdir(parents=True)
-    source = vault_root / "1_entrada" / "nota.txt"
+    source = vault_root / "1_volcado" / "nota.txt"
     source.write_text("contenido con token alpha\n", encoding="utf-8")
 
     backend = FuenteConsoleBackend(vault_root)

@@ -16,6 +16,7 @@ except ImportError:  # pragma: no cover - Windows has no flock.
     fcntl = None
 
 from fuente.infrastructure.sqlite_store import JobStore
+from fuente.domain.vault_layout import LEGACY_OUTPUT_DIR_NAME, VaultLayout
 
 
 _SUPPORTS_DIR_FD = frozenset(os.supports_dir_fd)
@@ -142,12 +143,16 @@ class VaultLayoutMigrator:
                 raise ValueError("theme must be a non-symlink directory") from error
             descriptors.append(theme_fd)
             try:
-                source_fd = os.open("4_salida", self._directory_flags(), dir_fd=theme_fd)
+                source_fd = os.open(LEGACY_OUTPUT_DIR_NAME, self._directory_flags(), dir_fd=theme_fd)
             except OSError as error:
                 raise ValueError("legacy output root must be a non-symlink directory") from error
             descriptors.append(source_fd)
             try:
-                destination_fd = os.open("4_procesado", self._directory_flags(), dir_fd=theme_fd)
+                destination_fd = os.open(
+                    VaultLayout(self.theme_dir).processed_dir.name,
+                    self._directory_flags(),
+                    dir_fd=theme_fd,
+                )
             except OSError as error:
                 raise ValueError("processed root must be a non-symlink directory") from error
             descriptors.append(destination_fd)
@@ -217,8 +222,10 @@ class VaultLayoutMigrator:
 
     def _expected_paths(self, item: LayoutMigrationItem) -> tuple[str, ...]:
         parts = self._relative_parts(item.relative_path)
-        expected_source = str(self.theme_dir / "4_salida" / Path(*parts))
-        expected_destination = str(self.theme_dir / "4_procesado" / Path(*parts))
+        expected_source = str(self.theme_dir / LEGACY_OUTPUT_DIR_NAME / Path(*parts))
+        expected_destination = str(
+            VaultLayout(self.theme_dir).processed_dir / Path(*parts)
+        )
         if item.source != expected_source or item.destination != expected_destination:
             raise RuntimeError(f"migration item path mismatch: {item.relative_path}")
         return parts
@@ -253,8 +260,8 @@ class VaultLayoutMigrator:
             items: list[LayoutMigrationItem] = []
             for parts in self._inventory_files(source_fd):
                 relative = PurePosixPath(*parts).as_posix()
-                source = self.theme_dir / "4_salida" / Path(*parts)
-                destination = self.theme_dir / "4_procesado" / Path(*parts)
+                source = self.theme_dir / LEGACY_OUTPUT_DIR_NAME / Path(*parts)
+                destination = VaultLayout(self.theme_dir).processed_dir / Path(*parts)
                 source_parent_fd = self._open_parent_dir(source_fd, parts[:-1])
                 try:
                     file_fd = os.open(parts[-1], self._file_flags(), dir_fd=source_parent_fd)

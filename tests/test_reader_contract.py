@@ -131,7 +131,7 @@ def test_reflow_candidate_is_reviewable_by_id_but_hidden_from_reader_and_moc(
 ):
     backend = FuenteConsoleBackend(temp_vault_path)
     relative = (
-        "4_salida/_Reflow_Review/"
+        "4_procesado/_Reflow_Review/"
         "_Original_reflow_00000000-0000-4000-8000-000000000001.md"
     )
     candidate_id = document_id_for_relative_path(relative)
@@ -248,13 +248,13 @@ def test_missing_or_unauthorized_note_ids_return_controlled_errors(temp_vault_pa
     assert missing["error"] == "path_not_authorized"
     assert "traceback" not in missing["message"].lower()
 
-    absolute = bridge.get_note_content(str(temp_vault_path / "4_salida" / "x.md"))
+    absolute = bridge.get_note_content(str(temp_vault_path / "4_procesado" / "x.md"))
     assert absolute == {
         "error": "path_not_authorized",
         "message": "Path is not authorized",
     }
 
-    relative = bridge.get_note_content("4_salida/Contratos/Pagos.md")
+    relative = bridge.get_note_content("4_procesado/Contratos/Pagos.md")
     assert relative == {
         "error": "path_not_authorized",
         "message": "Path is not authorized",
@@ -362,7 +362,7 @@ def test_listed_canonical_id_loads_markdown_when_catalog_route_is_stale(
     assert backend._job_store is not None
     backend._job_store.register_note(
         note_id=canonical_id,
-        relative_path="4_salida/_Sin_Cuestion/Ruta anterior.md",
+        relative_path="4_procesado/_Sin_Cuestion/Ruta anterior.md",
         revision=1,
         content_hash="stale",
         note_type="concept",
@@ -452,7 +452,7 @@ def test_reader_graph_marks_the_canonical_moc_without_changing_its_identity(
 
     assert graph_moc["node_type"] == "canonical_moc"
     assert graph_moc["document_id"] == listed_moc["document_id"]
-    assert graph_moc["path"] == listed_moc["path"] == "4_salida/_Indice_MOC.md"
+    assert graph_moc["path"] == listed_moc["path"] == "4_procesado/_Indice_MOC.md"
     assert bridge.get_note_content(graph_moc["document_id"])["path"] == graph_moc["path"]
 
 
@@ -541,7 +541,7 @@ def test_reader_graph_rejects_origin_paths_outside_authorized_clean_root(
     )
     unauthorized_origin = {
         **approved_origin,
-        "path": "4_salida/origen-autorizado.md",
+        "path": "4_procesado/origen-autorizado.md",
     }
     summary_id, _summary_path = save_v3_summary_note(
         backend.vault,

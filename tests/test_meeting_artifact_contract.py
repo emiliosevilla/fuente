@@ -63,8 +63,8 @@ def test_meeting_import_writes_only_expected_vault_roots(tmp_path: Path) -> None
         _artifacts(vault.config.vault_path), expected_session_id=SESSION_ID
     )
 
-    assert result.recording_relative_path == "2_sucio/reunion/m-1/recording.m4a"
-    assert result.transcript_relative_path == "3_limpio/reunion/m-1.md"
+    assert result.recording_relative_path == "2_copiado/reunion/m-1/recording.m4a"
+    assert result.transcript_relative_path == "3_capturado/reunion/m-1.md"
     assert result.notes_relative_path == "4_procesado/reunion/m-1.md"
     assert result.template_id == "standard_meeting"
     assert result.notes_status == "blocked_by_clean_approval"
@@ -83,8 +83,8 @@ def test_meeting_import_writes_only_expected_vault_roots(tmp_path: Path) -> None
         if path.is_file()
     }
     assert meeting_files == {
-        "2_sucio/reunion/m-1/recording.m4a",
-        "3_limpio/reunion/m-1.md",
+        "2_copiado/reunion/m-1/recording.m4a",
+        "3_capturado/reunion/m-1.md",
         "4_procesado/reunion/m-1.md",
     }
     assert not (vault.shared_dir / "reunion").exists()

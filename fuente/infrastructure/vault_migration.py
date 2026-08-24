@@ -5,14 +5,14 @@ import hashlib
 import logging
 import re
 import shutil
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterator, Optional, Protocol
 
 import yaml
 
-from fuente.config import AppConfig, get_default_config
+from fuente.config import AppConfig, VaultConfig, get_default_config
 from fuente.application.notes import NotesApplicationService
 from fuente.core.vault import VaultManager
 from fuente.domain.documents import MarkdownDocument, content_hash_for_markdown
@@ -26,6 +26,18 @@ from fuente.domain.frontmatter import (
 )
 from fuente.domain.jobs import CURRENT_PIPELINE_VERSION
 from fuente.domain.paths import AuthorizedPathResolver, document_id_for_relative_path
+from fuente.domain.vault_layout import (
+    CANONICAL_CLEAN_DIR_NAME,
+    CANONICAL_DIRTY_DIR_NAME,
+    CANONICAL_INPUT_DIR_NAME,
+    CANONICAL_PROCESSED_DIR_NAME,
+    CANONICAL_SHARED_DIR_NAME,
+    LEGACY_CLEAN_DIR_NAME,
+    LEGACY_DIRTY_DIR_NAME,
+    LEGACY_INPUT_DIR_NAME,
+    LEGACY_OUTPUT_DIR_NAME,
+    LEGACY_SHARED_DIR_NAME,
+)
 from fuente.graph_engine.optimized_loop import OptimizadoGraphLoop
 from fuente.infrastructure.atomic_files import atomic_write_json, atomic_write_text
 from fuente.infrastructure.sqlite_store import JobStore
@@ -197,21 +209,77 @@ def _unsupported_status_from_mapping(metadata: dict) -> Optional[str]:
     return raw
 
 
-def _iter_theme_output_notes(vault: VaultManager) -> Iterator[tuple[str, Path, str]]:
-    vault_root = vault.config.vault_path.resolve()
-    quarantine_dir = vault.quarantine_dir
-    for theme in vault.get_available_themes():
-        vault.set_active_theme(theme)
-        output_dir = vault.output_dir
-        if not output_dir.exists():
-            continue
-        for candidate in sorted(output_dir.rglob("*.md")):
-            if not candidate.is_file():
-                continue
-            if _should_skip_path(candidate, vault_root, quarantine_dir):
-                continue
-            relative = candidate.relative_to(vault_root).as_posix()
-            yield theme, candidate, relative
+def _migration_output_names(
+    config: VaultConfig, theme_dir: Path
+) -> tuple[str, ...]:
+    """Return output roots in stable order, including both during migration."""
+    names: list[str] = []
+    for name in (config.output_dir_name, LEGACY_OUTPUT_DIR_NAME):
+        if name not in names and (theme_dir / name).is_dir():
+            names.append(name)
+    return tuple(names)
+
+
+def _migration_theme_names(config: VaultConfig) -> list[str]:
+    """Discover themes from canonical and legacy roots for migration only."""
+    root_names = {
+        config.input_dir_name,
+        config.dirty_dir_name,
+        config.clean_dir_name,
+        config.output_dir_name,
+        config.shared_dir_name,
+        CANONICAL_INPUT_DIR_NAME,
+        CANONICAL_DIRTY_DIR_NAME,
+        CANONICAL_CLEAN_DIR_NAME,
+        CANONICAL_PROCESSED_DIR_NAME,
+        CANONICAL_SHARED_DIR_NAME,
+        LEGACY_INPUT_DIR_NAME,
+        LEGACY_DIRTY_DIR_NAME,
+        LEGACY_CLEAN_DIR_NAME,
+        LEGACY_OUTPUT_DIR_NAME,
+        LEGACY_SHARED_DIR_NAME,
+    }
+
+    def has_layout_root(theme_dir: Path) -> bool:
+        return any((theme_dir / name).is_dir() for name in root_names)
+
+    themes: set[str] = set()
+    if has_layout_root(config.vault_path):
+        themes.add("General")
+    for candidate in sorted(config.vault_path.iterdir(), key=lambda path: path.name):
+        if (
+            candidate.is_dir()
+            and not candidate.name.startswith(".")
+            and candidate.name != "__pycache__"
+            and has_layout_root(candidate)
+        ):
+            themes.add(candidate.name)
+    return sorted(themes) or ["General"]
+
+
+def _migration_theme_dir(vault_root: Path, theme: str) -> Path:
+    general_dir = vault_root / "General"
+    if theme == "General" and not general_dir.is_dir():
+        return vault_root
+    return vault_root / theme
+
+
+def _iter_theme_output_notes(
+    config: VaultConfig,
+) -> Iterator[tuple[str, Path, str]]:
+    vault_root = config.vault_path.resolve()
+    quarantine_dir = vault_root / config.system_dir_name / "quarantine"
+    for theme in _migration_theme_names(config):
+        theme_dir = _migration_theme_dir(vault_root, theme)
+        for output_name in _migration_output_names(config, theme_dir):
+            output_dir = theme_dir / output_name
+            for candidate in sorted(output_dir.rglob("*.md")):
+                if not candidate.is_file():
+                    continue
+                if _should_skip_path(candidate, vault_root, quarantine_dir):
+                    continue
+                relative = candidate.relative_to(vault_root).as_posix()
+                yield theme, candidate, relative
 
 
 class VaultMigrator:
@@ -227,23 +295,30 @@ class VaultMigrator:
     ) -> None:
         self.vault_path = Path(vault_path).resolve()
         self.config = config or get_default_config(self.vault_path)
-        self.vault = VaultManager(self.config.vault)
+        self._vault: VaultManager | None = None
         self._chroma = chroma
         self._chunker = chunker or SemanticChunker()
+
+    @property
+    def vault(self) -> VaultManager:
+        """Lazily construct the mutating manager for write/rebuild phases."""
+        if self._vault is None:
+            self._vault = VaultManager(self.config.vault)
+        return self._vault
 
     def scan(self) -> MigrationScanReport:
         report = MigrationScanReport(
             vault_path=str(self.vault_path),
             scanned_at=_utc_now(),
         )
-        themes = self.vault.get_available_themes()
+        themes = _migration_theme_names(self.config.vault)
         report.themes = list(themes)
 
         stem_locations: dict[str, list[str]] = {}
         note_id_locations: dict[str, list[str]] = {}
         note_records: list[tuple[str, Path, str]] = []
 
-        for theme, path, relative in _iter_theme_output_notes(self.vault):
+        for theme, path, relative in _iter_theme_output_notes(self.config.vault):
             note_records.append((theme, path, relative))
             stem_locations.setdefault(path.stem, []).append(relative)
 
@@ -560,7 +635,9 @@ class VaultMigrator:
         if manifest.moc_rebuilt:
             self._refresh_moc_catalog()
         if manifest.index_rebuilt:
-            self._rebuild_index(manifest.themes_processed or self.vault.get_available_themes())
+            self._rebuild_index(
+                manifest.themes_processed or _migration_theme_names(self.config.vault)
+            )
         return manifest, restored_count
 
     def _runtime_targets(self) -> tuple[Path, ...]:
@@ -636,9 +713,8 @@ class VaultMigrator:
             except ValueError:
                 return True
         try:
-            resolved = self._resolver_for_theme(theme).resolve(relative, root_name="vault")
-            resolved.relative_to(self.vault_path.resolve())
-        except PathAuthorizationError:
+            path.resolve().relative_to(self.vault_path.resolve())
+        except ValueError:
             return True
         return False
 
@@ -646,28 +722,43 @@ class VaultMigrator:
         """Regenerate graph outputs only through the provenance gate."""
         processed: list[str] = []
         with JobStore(self.vault_path) as store:
-            for theme in self.vault.get_available_themes():
+            for theme in _migration_theme_names(self.config.vault):
                 self.vault.set_active_theme(theme)
-                output_dir = self.vault.output_dir
-                if not output_dir.exists():
-                    continue
-                notes = NotesApplicationService(
-                    vault=self.vault,
-                    path_resolver=self.vault.path_resolver(),
-                    job_store=store,
-                )
-                loop = OptimizadoGraphLoop(
-                    output_dir,
-                    vault_root=self.vault.config.vault_path,
-                    eligibility_guard=notes.require_published_output,
-                )
-                result = loop.rebuild_catalog()
-                if result.get("status") == "success":
-                    processed.append(theme)
-                elif result.get("error") == "origin_not_approved":
-                    logger.info("Skipping unapproved graph rebuild for theme %s", theme)
-                else:
-                    logger.warning("Graph rebuild failed for theme %s: %s", theme, result)
+                for output_name in _migration_output_names(
+                    self.vault.config, self.vault.current_theme_dir
+                ):
+                    output_dir = self.vault.current_theme_dir / output_name
+                    legacy_config = replace(
+                        self.vault.config, output_dir_name=output_name
+                    )
+                    legacy_vault = VaultManager(legacy_config)
+                    legacy_vault.set_active_theme(theme)
+                    notes = NotesApplicationService(
+                        vault=legacy_vault,
+                        path_resolver=legacy_vault.path_resolver(),
+                        job_store=store,
+                    )
+                    loop = OptimizadoGraphLoop(
+                        output_dir,
+                        vault_root=self.vault.config.vault_path,
+                        eligibility_guard=notes.require_published_output,
+                    )
+                    result = loop.rebuild_catalog()
+                    if result.get("status") == "success":
+                        processed.append(theme)
+                    elif result.get("error") == "origin_not_approved":
+                        logger.info(
+                            "Skipping unapproved graph rebuild for theme %s/%s",
+                            theme,
+                            output_name,
+                        )
+                    else:
+                        logger.warning(
+                            "Graph rebuild failed for theme %s/%s: %s",
+                            theme,
+                            output_name,
+                            result,
+                        )
         return processed
 
     @staticmethod
@@ -701,7 +792,7 @@ class VaultMigrator:
             / "backups"
         ).as_posix()
         entries: list[ManifestEntry] = []
-        for theme, path, relative in _iter_theme_output_notes(self.vault):
+        for theme, path, relative in _iter_theme_output_notes(self.config.vault):
             if self._is_unsafe_path(path, relative, theme):
                 continue
             try:
@@ -748,7 +839,7 @@ class VaultMigrator:
             / "backups"
         ).as_posix()
         entries: list[ManifestEntry] = []
-        for theme, path, relative in _iter_theme_output_notes(self.vault):
+        for theme, path, relative in _iter_theme_output_notes(self.config.vault):
             if self._is_unsafe_path(path, relative, theme):
                 continue
             try:
@@ -838,9 +929,9 @@ class VaultMigrator:
 
         desired_ids: set[str] = set()
         for theme in themes:
-            self.vault.set_active_theme(theme)
-            for document_id, relative in self.vault.enumerate_documents("output"):
-                note_path = self.vault_path / relative
+            for _theme, note_path, relative in _iter_theme_output_notes(self.config.vault):
+                if _theme != theme:
+                    continue
                 try:
                     markdown = note_path.read_text(encoding="utf-8")
                     document = MarkdownDocument.from_markdown(markdown)
@@ -848,6 +939,9 @@ class VaultMigrator:
                     logger.warning("Skipping index rebuild for %s: %s", relative, error)
                     continue
 
+                document_id = str(
+                    document.note_id or document_id_for_relative_path(relative)
+                )
                 content_hash = content_hash_for_markdown(markdown)
                 identity = ChunkIdentity(
                     document_id=document_id,

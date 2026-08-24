@@ -11,7 +11,7 @@
 - Terra: `PASS`, sin hallazgos abiertos.
 - Estado fase layout: `S PASS`; no se declara R ni cierre de producto por esta fase.
 
-Status activo: PR-00 S `PASS`, R `PASS`, estado `COMPLETE`; PR-04 S `PASS`, R `PASS`, estado `COMPLETE` por no-op de migración; PR-05 S `PASS`, R `PASS`, estado `COMPLETE`; PR-06, PR-07, PR-01, PR-03, PR-08, PR-09 y PR-10 S `PASS`, R `NOT_RUN`, estado `PARTIAL`; PR-11, PR-02 y PR-12 `NOT_RUN`. Estado global: `PARTIAL`.
+Status activo: PR-00 S `PASS`, R `PASS`, estado `COMPLETE`; PR-04 S `PASS`, R `PASS`, estado `COMPLETE` por no-op de migración; PR-05 S `PASS`, R `PASS`, estado `COMPLETE`; PR-06, PR-07, PR-01, PR-03, PR-08, PR-09, PR-10 y PR-11 S `PASS`, R `NOT_RUN`, estado `PARTIAL`; PR-02 y PR-12 `NOT_RUN`. Estado global: `PARTIAL`.
 Spec: docs/superpowers/specs/2026-08-23-prueba-real.md
 Plan: docs/superpowers/plans/2026-08-23-prueba-real.md
 Created: 2026-08-23
@@ -33,11 +33,24 @@ Se conserva todo el ledger histórico inferior sin borrarlo. Este bloque gobiern
 | 8 | PR-08 | PASS | NOT_RUN | PARTIAL |
 | 9 | PR-09 | PASS | NOT_RUN | PARTIAL |
 | 10 | PR-10 | PASS | NOT_RUN | PARTIAL |
-| 11 | PR-11 | NOT_RUN | NOT_RUN | NOT_RUN |
+| 11 | PR-11 | PASS | NOT_RUN | PARTIAL |
 | 12 | PR-02 | NOT_RUN | NOT_RUN | NOT_RUN |
 | 13 | PR-12 | NOT_RUN | NOT_RUN | NOT_RUN |
 
 Cada fase debe ejecutar `S` sintética y, sólo si pasa, `R` real. `PR-10` repite su prueba sintética y no hereda automáticamente el bloqueo histórico por IDs duplicados. PR-00 y PR-04 están `COMPLETE`; PR-04 se cierra por no-op de migración: el Vault real ya estaba en layout final y no contenía notas migrables, por lo que apply/rollback no forman parte del alcance vigente.
+
+## Ejecución 2026-08-24 — PR-11 S
+
+- Informe: `.superpowers/sdd/2026-08-23-prueba-real/task-PR-11-S-report.md`.
+- Checkout medido antes de ejecutar: rama `dev`, `HEAD c0ae001`; `dist/` era el único artefacto sin rastrear y se conservó.
+- Comando exacto: `PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -q tests/test_folder_sync.py tests/test_folder_sync_contract.py tests/test_folder_sync_discovery.py tests/test_folder_sync_reconciliation.py tests/test_folder_sync_recursive.py tests/test_folder_sync_ui_contract.py tests/security/test_path_authorization.py tests/test_visible_vocabulary_contract.py`.
+- Primera ejecución: `56 passed, 14 failed`; los fallos eran fixtures/expectativas legacy frente a los destinos canónicos.
+- Reejecución final: `70 passed in 0.82s`, código `0`; `git diff --check` PASS.
+- Comprobación adicional de manifest/almacenamiento: `PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -q tests/test_job_store.py tests/test_atomic_files.py` -> `34 passed in 0.68s`.
+- Cobertura: rutas montadas simuladas y temporales, descubrimiento sin red, entrada sólo en `1_volcado/común`, salida sólo desde `5_compartido`, exclusión de `3_capturado`/`4_procesado`, manifest, hash-idempotencia, conflictos, symlinks, autorización de rutas y vocabulario visible.
+- No se implementan autenticación OAuth/Graph ni filtrado propio de permisos SharePoint; el cliente oficial y el sistema operativo mantienen ese límite.
+- Sólo se actualizaron fixtures y expectativas al layout canónico; no hubo cambios de producto.
+- No se usaron OneDrive/SharePoint reales, credenciales ni Vault real. `PR-11 S PASS`; `PR-11 R NOT_RUN`; estado `PARTIAL`; G5 sintético PASS.
 
 ## Ejecución 2026-08-24 — PR-10 S
 

@@ -69,8 +69,8 @@ def test_sync_to_input_orders_source_files_by_provider_and_path(tmp_path):
         (root / "z" / "b.md").write_text(root.name, encoding="utf-8")
 
     vault = tmp_path / "vault"
-    active_input = vault / "Tema" / "1_entrada"
-    active_dirty = vault / "Tema" / "2_sucio"
+    active_input = vault / "Tema" / "1_volcado"
+    active_dirty = vault / "Tema" / "2_copiado"
     manager = FolderSyncManager(vault, active_theme="Tema")
     connections = [
         ConnectedFolder("network", str(network_root), "Network", True),
@@ -93,8 +93,8 @@ def test_sync_to_input_rejects_nested_destination_symlink_without_outside_write(
     tmp_path, destination_root
 ):
     vault = tmp_path / "vault"
-    active_input = vault / "Tema" / "1_entrada"
-    active_dirty = vault / "Tema" / "2_sucio"
+    active_input = vault / "Tema" / "1_volcado"
+    active_dirty = vault / "Tema" / "2_copiado"
     active_input.mkdir(parents=True)
     active_dirty.mkdir(parents=True)
 
@@ -151,12 +151,12 @@ def test_sync_to_input_enforces_manager_active_theme_context(tmp_path):
 
     assert manager.active_theme == "TemaA"
     assert manager.sync_to_input(
-        vault / "TemaA" / "1_entrada", vault / "TemaA" / "2_sucio"
+        vault / "TemaA" / "1_volcado", vault / "TemaA" / "2_copiado"
     ) == 0
 
     with pytest.raises(PathAuthorizationError):
         manager.sync_to_input(
-            vault / "TemaB" / "1_entrada", vault / "TemaB" / "2_sucio"
+            vault / "TemaB" / "1_volcado", vault / "TemaB" / "2_copiado"
         )
 
 
@@ -211,7 +211,7 @@ def test_general_legacy_root_is_accepted_when_general_theme_directory_is_absent(
     report = manager.sync_to_input(vault.input_dir, vault.dirty_dir)
 
     assert report.copied == 1
-    assert (vault_path / "1_entrada" / "general.md").read_text(encoding="utf-8") == (
+    assert (vault_path / "1_volcado" / "general.md").read_text(encoding="utf-8") == (
         "legacy General root"
     )
 
@@ -261,9 +261,9 @@ def test_scan_connection_reports_unreadable_root_without_mutation(tmp_path, monk
 
 def test_sync_to_input_returns_report_and_preserves_active_theme_scope(tmp_path):
     vault = tmp_path / "vault"
-    active_theme = vault / "Tema" / "1_entrada"
-    active_dirty = vault / "Tema" / "2_sucio"
-    general_input = vault / "1_entrada"
+    active_theme = vault / "Tema" / "1_volcado"
+    active_dirty = vault / "Tema" / "2_copiado"
+    general_input = vault / "1_volcado"
     source = tmp_path / "source"
     (source / "nested").mkdir(parents=True)
     sample = source / "nested" / "sample.md"

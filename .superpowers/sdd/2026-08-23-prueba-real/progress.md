@@ -11,7 +11,7 @@
 - Terra: `PASS`, sin hallazgos abiertos.
 - Estado fase layout: `S PASS`; no se declara R ni cierre de producto por esta fase.
 
-Status activo: PR-00 S `PASS`, R `PASS`, estado `COMPLETE`; PR-04 S `PASS`, R `PASS`, estado `COMPLETE` por no-op de migración; PR-05 S `PASS`, R `PASS`, estado `COMPLETE`; PR-06 S `PASS`, R `NOT_RUN`, estado `PARTIAL`; PR-07 S `PASS`, R `NOT_RUN`, estado `PARTIAL`; PR-01 S `PASS`, R `NOT_RUN`, estado `PARTIAL`; PR-03 S `PASS`, R `NOT_RUN`, estado `PARTIAL`; PR-08–PR-12 `NOT_RUN`. Estado global: `PARTIAL`.
+Status activo: PR-00 S `PASS`, R `PASS`, estado `COMPLETE`; PR-04 S `PASS`, R `PASS`, estado `COMPLETE` por no-op de migración; PR-05 S `PASS`, R `PASS`, estado `COMPLETE`; PR-06 S `PASS`, R `NOT_RUN`, estado `PARTIAL`; PR-07 S `PASS`, R `NOT_RUN`, estado `PARTIAL`; PR-01 S `PASS`, R `NOT_RUN`, estado `PARTIAL`; PR-03 S `PASS`, R `NOT_RUN`, estado `PARTIAL`; PR-08 S `PASS`, R `NOT_RUN`, estado `PARTIAL`; PR-09–PR-12 `NOT_RUN`. Estado global: `PARTIAL`.
 Spec: docs/superpowers/specs/2026-08-23-prueba-real.md
 Plan: docs/superpowers/plans/2026-08-23-prueba-real.md
 Created: 2026-08-23
@@ -30,7 +30,7 @@ Se conserva todo el ledger histórico inferior sin borrarlo. Este bloque gobiern
 | 5 | PR-07 | PASS | NOT_RUN | PARTIAL |
 | 6 | PR-01 | PASS | NOT_RUN | PARTIAL |
 | 7 | PR-03 | PASS | NOT_RUN | PARTIAL |
-| 8 | PR-08 | NOT_RUN | NOT_RUN | NOT_RUN |
+| 8 | PR-08 | PASS | NOT_RUN | PARTIAL |
 | 9 | PR-09 | NOT_RUN | NOT_RUN | NOT_RUN |
 | 10 | PR-10 | NOT_RUN | NOT_RUN | NOT_RUN |
 | 11 | PR-11 | NOT_RUN | NOT_RUN | NOT_RUN |
@@ -405,3 +405,15 @@ El cierre histórico de PR-00 y el bloqueo histórico de PR-10 se conservan como
 - G0: `PASS` en el checkout temporal limpio. PR-00 S: `PASS`; PR-00 R: `NOT_RUN`; PR-00: `PARTIAL`.
 - No se ejecutaron PR-00 R, PR-04 ni ninguna fase posterior. No hubo commit, publicación, escritura del Vault real ni cambios de código de producto.
 - Límite: G0 acredita checkout, corpus sintético y automatización; no acredita instalación, UI instalada, permisos, hardware, Meetily, Vault real, carpetas montadas ni Windows.
+## Ejecución 2026-08-24 — PR-08 S
+
+- Informe: `.superpowers/sdd/2026-08-23-prueba-real/task-PR-08-S-report.md`.
+- Checkout medido antes de actuar: rama `dev`, commit `35ad154`; `dist/` permanece como único artefacto no rastreado de fases anteriores.
+- Comando focal exacto: `PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -q tests/test_bridge_contract.py tests/contract/test_bridge_frontend_contract.py tests/contract/test_reader_editor_contract.py tests/contract/test_reader_editor_deferred_contract.py tests/contract/test_note_editor_contract.py tests/contract/test_bridge_note_editor_contract.py tests/test_reader_workspace_contract.py tests/test_reader_contract.py tests/test_chat_retrieval_contract.py tests/contract/test_workspace_chat_contract.py tests/test_console_modal_close_contract.py tests/test_modals_console.py tests/test_meetily_modal_contract.py tests/test_console_ui1_contract.py tests/test_console_ui3_contract.py tests/test_console_step2_ingestion.py tests/test_console_graph_lifecycle.py tests/test_quarantine_ui_contract.py tests/contract/test_q03_ui_recovery_contract.py tests/test_ingestion_recovery.py tests/integration/test_pipeline_recovery.py tests/test_meeting_import_recovery.py tests/test_job_queue_ui_contract.py`.
+- Resultado final: `269 passed in 7.60s`, código `0`.
+- Comprobaciones complementarias: `PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -q tests/test_bridge_note_id_contract.py` -> `4 passed in 0.18s`; `node tests/contract/test_reader_editor_deferred.mjs` -> `4/4 pass`.
+- Cobertura: consola y bridge tipado, IDs opacos, lector, editor revisionado y carga diferida, chat contextual, modales y cierre, ingesta desde consola, cuarentena, recuperación por etapas y contratos de accesibilidad/UI disponibles en checkout.
+- Primera ejecución: `221 passed, 48 failed`; todos los fallos eran fixtures o expectativas con el layout retirado (`1_entrada`, `2_sucio`, `3_limpio`, `4_salida`) o el texto UI antiguo. Se actualizaron sólo seis archivos de tests al layout canónico; no se tocó producto.
+- `git diff --check`: PASS.
+- PR-08 S: `PASS`; PR-08 R: `NOT_RUN`; estado global: `PARTIAL`.
+- Límite: esta fase no prueba PyWebView instalado fuera del checkout, ventana real, teclado, foco, lector de pantalla ni responsive de 375 px. No se usó Vault real ni se guardaron datos sensibles.

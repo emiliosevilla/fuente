@@ -21,7 +21,7 @@ from fuente.infrastructure.sqlite_store import JobStore
 from fuente.rag.semantic_chunker import SemanticChunker
 
 SOURCE_NAME = "informe_trimestral.txt"
-SOURCE_IDENTITY = f"1_entrada/{SOURCE_NAME}"
+SOURCE_IDENTITY = f"1_volcado/{SOURCE_NAME}"
 SOURCE_TEXT = "# Informe Trimestral\n\nEl EBITDA creció un 15% en el trimestre."
 MODIFIED_SOURCE_TEXT = (
     "# Informe Trimestral (revisado)\n\nEl EBITDA creció un 22% en el trimestre."
@@ -300,7 +300,7 @@ def approve_waiting_clean(
     *,
     service: IngestionApplicationService | None = None,
 ):
-    """Record the exact canonical approval required to leave `3_limpio`."""
+    """Record the exact canonical approval required to leave `3_capturado`."""
     assert job.stage == "saved_clean"
     assert job.clean_artifact is not None
     active_service = service or harness.service

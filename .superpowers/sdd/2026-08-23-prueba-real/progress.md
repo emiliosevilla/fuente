@@ -11,7 +11,7 @@
 - Terra: `PASS`, sin hallazgos abiertos.
 - Estado fase layout: `S PASS`; no se declara R ni cierre de producto por esta fase.
 
-Status activo: PR-00 S `PASS`, R `PASS`, estado `COMPLETE`; PR-04 S `PASS`, R `PASS`, estado `COMPLETE` por no-op de migración; PR-05 S `PASS`, R `PASS`, estado `COMPLETE`; PR-06, PR-07, PR-01, PR-03, PR-08, PR-09, PR-10, PR-11 y PR-02 S `PASS`, R `NOT_RUN`, estado `PARTIAL`; PR-12 `NOT_RUN`. Estado global: `PARTIAL`.
+Status activo: PR-00 S `PASS`, R `PASS`, estado `COMPLETE`; PR-04 S `PASS`, R `PARTIAL`, estado `PARTIAL`; PR-05 S `PASS`, R `PASS`, estado `COMPLETE`; PR-06, PR-07, PR-01, PR-03, PR-08, PR-09, PR-10, PR-11 y PR-02 S `PASS`, R `NOT_RUN`, estado `PARTIAL`; PR-12 S `PASS`, R `NOT_RUN`, estado `PARTIAL`. Estado global: `PARTIAL`.
 Spec: docs/superpowers/specs/2026-08-23-prueba-real.md
 Plan: docs/superpowers/plans/2026-08-23-prueba-real.md
 Created: 2026-08-23
@@ -24,7 +24,7 @@ Se conserva todo el ledger histórico inferior sin borrarlo. Este bloque gobiern
 | Orden | ID | S | R | Estado activo |
 |---:|---|---|---|---|
 | 1 | PR-00 | PASS | PASS | COMPLETE |
-| 2 | PR-04 | PASS | PASS | COMPLETE |
+| 2 | PR-04 | PASS | PARTIAL | PARTIAL |
 | 3 | PR-05 | PASS | PASS | COMPLETE |
 | 4 | PR-06 | PASS | NOT_RUN | PARTIAL |
 | 5 | PR-07 | PASS | NOT_RUN | PARTIAL |
@@ -35,9 +35,9 @@ Se conserva todo el ledger histórico inferior sin borrarlo. Este bloque gobiern
 | 10 | PR-10 | PASS | NOT_RUN | PARTIAL |
 | 11 | PR-11 | PASS | NOT_RUN | PARTIAL |
 | 12 | PR-02 | PASS | NOT_RUN | PARTIAL |
-| 13 | PR-12 | NOT_RUN | NOT_RUN | NOT_RUN |
+| 13 | PR-12 | PASS | NOT_RUN | PARTIAL |
 
-Cada fase debe ejecutar `S` sintética y, sólo si pasa, `R` real. `PR-10` repite su prueba sintética y no hereda automáticamente el bloqueo histórico por IDs duplicados. PR-00 y PR-04 están `COMPLETE`; PR-04 se cierra por no-op de migración: el Vault real ya estaba en layout final y no contenía notas migrables, por lo que apply/rollback no forman parte del alcance vigente.
+Cada fase debe ejecutar `S` sintética y, sólo si pasa, `R` real. `PR-10` repite su prueba sintética y no hereda automáticamente el bloqueo histórico por IDs duplicados. PR-00 y PR-05 están `COMPLETE`; PR-04 está `PARTIAL`: el dry-run real pasó sobre una copia corregida, pero apply, inventario posterior y rollback quedaron `NOT_RUN`.
 
 ## Ejecución 2026-08-24 — PR-02 S
 
@@ -203,10 +203,10 @@ históricas inferiores conservan sus rutas originales sin reescritura.
 - Layout comprobado: `General/1_entrada`, `2_sucio`, `3_limpio`, `4_procesado` y `5_salida`, con `1_entrada/personal` y `1_entrada/común`.
 - `dry-run`: `notes_scanned: 0`, `migratable_notes: 0`, `findings: []`.
 - Inventario: `is_safe_to_apply: true`, `clean_notes: []`, `derived_notes: []`, `findings: []`.
-- Resultado: PR-04 R `PASS` dentro del alcance vigente; estructura e inventario pasan. La migración y el rollback no son aplicables a un Vault ya final y vacío de notas procesadas.
+- Resultado histórico: PR-04 R `PASS` para estructura e inventario dentro de ese alcance; la migración y el rollback no son aplicables a un Vault ya final y vacío de notas procesadas.
 - Siguiente consumidor: los archivos `.md` y `.txt` de `General/1_entrada` pasan a PR-05 ETL real.
 
-## Estado sencillo
+## Estado sencillo histórico
 
 Código está publicado y pruebas automatizadas históricas están verdes. Esta campaña aún no ha construido ni instalado paquetes finales. Pruebas de hardware, permisos, UI instalada, Meetily real, Vault real y carpetas montadas empiezan en NOT_RUN.
 
@@ -228,7 +228,7 @@ Código está publicado y pruebas automatizadas históricas están verdes. Esta 
 | PR-01 | distribución macOS | parcial | macOS + PyInstaller | PARTIAL: S PASS, R NOT_RUN | G1 PASS |
 | PR-02 | distribución Windows | no | Windows + PyInstaller | NOT_RUN | G6 |
 | PR-03 | instalación macOS limpia | no | macOS limpio | BLOCKED: S BLOCKED, R NOT_RUN | G2 BLOCKED |
-| PR-04 | layout, migración y aprobación | sí | Vault nuevo con layout final | COMPLETE: layout, dry-run e inventario reales PASS; migración/rollback no aplican al alcance vigente | G3 |
+| PR-04 | layout, migración y aprobación | sí | Vault nuevo con layout final | HISTÓRICO: PASS de layout, dry-run e inventario; migración/rollback no aplican al alcance vigente | G3 |
 | PR-05 | extracción ETL | sí | PDF, imagen y audio reales | COMPLETE: TXT, Markdown, PDF, imagen y MP3 reales; motores office/audio instalados y medidos | G3 |
 | PR-06 | MiniRAG, Chroma y refinamiento | sí | Ollama y RAG reales | NOT_RUN | G3 |
 | PR-07 | compartir y discusión | sí | PyWebView para aceptación visual | PARTIAL: S PASS, R NOT_RUN | G3 |
@@ -406,7 +406,7 @@ El cierre histórico de PR-00 y el bloqueo histórico de PR-10 se conservan como
 
 ## Fix round 1 — PR-04 — 2026-08-23
 
-- Resultado: `PASS` limitado a checkout y copia temporal sintética.
+- Resultado histórico: `PASS` para checkout y copia temporal sintética; Vault real no probado.
 - Checkout medido: raíz `/Users/emiliosevillaortego/Documents/Programación/fuente`, rama `dev`, `HEAD e68c9c08c21d10312865ece3b2a5c28068ccc149`, `dev...origin/dev`.
 - Suite focalizada: `PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -q tests/test_vault_layout.py tests/test_vault_layout_migration.py tests/test_approval_ledger.py tests/test_processed_output_approval.py tests/test_atomic_files.py tests/security/test_path_authorization.py` -> `55 passed in 0.79s`.
 - Copia temporal: el comando reproducible y su salida completa están en `task-PR-04-report.md`; resultado `COPY_LAYOUT_HASH_ROLLBACK=PASS`, `LEGACY_4_SALIDA_COMPATIBILITY=PASS`, `TEMP_CLEANUP=PASS`.
@@ -464,3 +464,12 @@ El cierre histórico de PR-00 y el bloqueo histórico de PR-10 se conservan como
 - Cobertura: bridge local allow-listed y token de un uso; consentimiento antes de lanzar; modal y recuperación; manifiesto incompleto, inválido y conflictivo; hashes SHA-256; importación atómica e idempotente; `2_copiado/reunion`, `3_capturado/reunion`, `4_procesado/reunion`; `standard_meeting`; procedencia; bloqueo de aprobación; sesiones durables; duplicados y reinicios sin parciales.
 - Resultado: `PR-09 S PASS`; `PR-09 R NOT_RUN`; estado global `PARTIAL`.
 - Límites: no se ejecutaron Meetily, micrófono, audio, transcripción real, permisos del sistema ni escritura en un Vault real; no se guardaron audio ni transcripciones en Git. No se hizo commit.
+
+## Auditoría 2026-08-24 — PR-12 S
+
+- Checkout medido antes de actuar: rama `dev`, `HEAD 8565dd0`; `git status --short` mostró únicamente `dist/` sin rastrear.
+- Se leyeron plan, spec, ledger e informes S/R de PR-00, PR-04, PR-05, PR-06, PR-07, PR-01, PR-03, PR-08, PR-09, PR-10, PR-11 y PR-02. El estado S/R documentado se mantuvo; `NOT_RUN` no se elevó por inferencia.
+- Auditoría documental: `PASS`. No se repitieron suites completas. `git diff --check`: `PASS`.
+- PR-12 S: `PASS`; PR-12 R: `NOT_RUN`; estado PR-12: `PARTIAL`; estado global de campaña: `PARTIAL` porque quedan R pendientes.
+- Informe final y guion seguro: `docs/superpowers/reports/2026-08-24-prueba-real-synthetic-and-real-script.md`.
+- No se hizo commit, push ni despliegue. `dist/` permanece fuera del alcance y no se trata como `DEPLOYED`.

@@ -26,7 +26,7 @@ Baseline activo medido: `dev` en `e6aef697a6f9b4f49f1878940b95f8cf51d2b342`, mer
 | Orden | Fase | Estado activo |
 |---:|---|---|
 | 1 | PR-00 | COMPLETE (S PASS / R PASS) |
-| 2 | PR-04 | COMPLETE (S PASS / R PASS — no-op de migración) |
+| 2 | PR-04 | PARTIAL (S PASS / R PARTIAL) |
 | 3 | PR-05 | COMPLETE (S PASS / R PASS) |
 | 4 | PR-06 | PARTIAL (S PASS / R NOT_RUN) |
 | 5 | PR-07 | PARTIAL (S PASS / R NOT_RUN) |
@@ -37,11 +37,11 @@ Baseline activo medido: `dev` en `e6aef697a6f9b4f49f1878940b95f8cf51d2b342`, mer
 | 10 | PR-10 | PARTIAL (S PASS / R NOT_RUN) |
 | 11 | PR-11 | PARTIAL (S PASS / R NOT_RUN) |
 | 12 | PR-02 | PARTIAL (S PASS / R NOT_RUN) |
-| 13 | PR-12 | NOT_RUN |
+| 13 | PR-12 | PARTIAL (S PASS / R NOT_RUN) |
 
 PR-10 debe repetir `S` sintética; el bloqueo histórico por IDs duplicados no se hereda automáticamente. Ninguna fase puede declararse `COMPLETE` sin `S PASS` y `R PASS` de esta campaña.
 
-Ejecución activa: PR-00, PR-04 y PR-05 están `COMPLETE`; PR-06, PR-07, PR-01, PR-03, PR-08, PR-09, PR-10, PR-11 y PR-02 están `PARTIAL` (`S PASS`, `R NOT_RUN`); PR-12 permanece `NOT_RUN`.
+Ejecución activa: PR-00 y PR-05 están `COMPLETE`; PR-04 está `PARTIAL` (`S PASS`, `R PARTIAL`); PR-06, PR-07, PR-01, PR-03, PR-08, PR-09, PR-10, PR-11 y PR-02 están `PARTIAL` (`S PASS`, `R NOT_RUN`); PR-12 está `PARTIAL` (`S PASS`, `R NOT_RUN`). La campaña global sigue `PARTIAL`.
 
 ## Global Constraints
 
@@ -108,7 +108,7 @@ Esperado: suite verde y RESULT: READY.
 
 Antecedente histórico PR-00: se conserva el resultado anterior en el ledger; no es resultado activo. Estado actual: `COMPLETE`.
 
-Ejecución actual: `task-PR-00-S-rerun-report.md` registra S PASS y `task-PR-00-R-report.md` registra R PASS. Estado actual PR-00: `COMPLETE`; PR-04: `BLOCKED`; PR-05+ permanecen `NOT_RUN`.
+Registro histórico de esa ejecución: `task-PR-00-S-rerun-report.md` registra S PASS y `task-PR-00-R-report.md` registra R PASS. Ese corte dejó PR-04 `BLOCKED`; el estado activo posterior se gobierna por la repetición documentada en la sección de PR-04.
 
 ## Fase 1 — artefactos
 
@@ -220,7 +220,7 @@ Repetición real sobre `/Users/emiliosevillaortego/Documents/Programación/fuen
 `dry-run PASS` (`notes_scanned: 0`, `migratable_notes: 0`, `findings: []`) e inventario
 `PASS` (`is_safe_to_apply: true`, sin notas ni hallazgos). No hubo `apply` ni `rollback`
 significativos porque el Vault ya tenía el layout final y no contenía notas migrables.
-PR-04 R queda `PASS` dentro del alcance vigente: layout final, `dry-run` e inventario seguro. La migración y el rollback no aplican al Vault nuevo y no se declaran probados. Las notas de `1_volcado` continúan como entrada real de PR-05.
+La repetición real de PR-04 queda `PARTIAL`: el `dry-run` pasó sobre la copia corregida, pero `apply`, inventario posterior y rollback quedaron `NOT_RUN`. La migración y el rollback no se declaran probados. Las notas de `1_volcado` continúan como entrada real de PR-05.
 
 Runbook para ejecución humana sobre copia autorizada:
 `.superpowers/sdd/2026-08-23-prueba-real/task-PR-04-R-runbook.md`.
@@ -385,13 +385,17 @@ OneDrive/SharePoint, permisos o credenciales reales.
 
 ### PR-12: informe final
 
-Secuencia: `S` comprobar que cada fase tiene pareja `S/R` documentada → `R` decisión final basada sólo en resultados reales medidos.
+Secuencia: `S` comprobar que cada fase tiene estado `S/R` documentado → `R` decisión final basada sólo en resultados reales medidos.
 
-- [ ] Clasificar cada capacidad como PASS, FAIL, BLOCKED o NOT_RUN.
-- [ ] Separar bug, dependencia ausente, permiso, dato inválido y límite de alcance.
-- [ ] Decidir APTO PARA PRUEBA DIARIA, APTO CON LIMITACIONES o NO APTO.
-- [ ] Actualizar ledger con commit, artefactos, gates, fallos y siguiente acción.
-- [ ] No convertir NOT_RUN en PASS por inferencia.
+- [x] Clasificar cada capacidad como PASS, FAIL, BLOCKED o NOT_RUN.
+- [x] Separar bug, dependencia ausente, permiso, dato inválido y límite de alcance.
+- [ ] Decidir APTO PARA PRUEBA DIARIA, APTO CON LIMITACIONES o NO APTO; queda para R real.
+- [x] Actualizar ledger con artefactos, gates, fallos y siguiente acción; no hay commit de PR-12 por instrucción.
+- [x] No convertir NOT_RUN en PASS por inferencia.
+
+Auditoría PR-12 S 2026-08-24: PASS documental. Informe final:
+`docs/superpowers/reports/2026-08-24-prueba-real-synthetic-and-real-script.md`.
+PR-12 R: NOT_RUN. No se repitieron suites completas ni se hizo commit.
 
 ## Orden resumido
 

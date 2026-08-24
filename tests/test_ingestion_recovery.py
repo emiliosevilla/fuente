@@ -39,7 +39,7 @@ from fuente.infrastructure.sqlite_store import JobStore
 from fuente.rag.semantic_chunker import SemanticChunker
 
 SOURCE_NAME = "informe_trimestral.txt"
-SOURCE_IDENTITY = f"1_entrada/{SOURCE_NAME}"
+SOURCE_IDENTITY = f"1_volcado/{SOURCE_NAME}"
 SOURCE_TEXT = "# Informe Trimestral\n\nEl EBITDA creció un 15% en el trimestre."
 
 
@@ -427,12 +427,12 @@ def test_ingesting_a_source_completes_and_records_its_identities(harness):
     assert job.stage == "completed"
     assert job.status == "completed"
     assert job.error_code is None
-    assert job.dirty_artifact.startswith("2_sucio/")
-    assert job.clean_artifact.startswith("3_limpio/")
+    assert job.dirty_artifact.startswith("2_copiado/")
+    assert job.clean_artifact.startswith("3_capturado/")
     assert job.note_document_id == document_id_for_source(SOURCE_IDENTITY)
 
     identity = harness.store.get_document_identity(job.note_document_id)
-    assert identity["relative_path"] == "4_salida/informe_trimestral.md"
+    assert identity["relative_path"] == "4_procesado/informe_trimestral.md"
     assert identity["content_hash"] == job.source_hash
     assert harness.notes() == [harness.vault.output_dir / "informe_trimestral.md"]
 
@@ -441,7 +441,7 @@ def test_office_pdf_attempts_are_persisted_in_order_before_clean_save(
     temp_vault_path, monkeypatch
 ):
     harness = _build_harness(temp_vault_path)
-    source_identity = "1_entrada/escaneado.pdf"
+    source_identity = "1_volcado/escaneado.pdf"
     source_path = harness.vault.input_dir / "escaneado.pdf"
     source_path.write_bytes(b"%PDF-fake")
     extractor = harness.service.extractors.extractors[0]
@@ -497,7 +497,7 @@ def test_office_pdf_attempts_are_persisted_in_order_before_clean_save(
 def test_ingestion_passes_output_relative_path_to_linker(harness):
     job = _ingest(harness)
     identity = harness.store.get_document_identity(job.note_document_id)
-    expected = Path(identity["relative_path"]).relative_to("4_salida").as_posix()
+    expected = Path(identity["relative_path"]).relative_to("4_procesado").as_posix()
 
     assert harness.service.linker.seen_current_relative_path == expected
 
@@ -535,7 +535,7 @@ def test_reprocessing_the_same_source_hash_does_not_create_duplicate_notes(harne
     first = _ingest(harness)
     assert first.stage == "completed"
 
-    # The very same bytes are dropped into 1_entrada again.
+    # The very same bytes are dropped into 1_volcado again.
     harness.source_path.write_text(SOURCE_TEXT, encoding="utf-8")
     second = harness.service.submit(SOURCE_IDENTITY)
 
@@ -691,7 +691,7 @@ def test_failed_dirty_compensation_preserves_dirty_artifact_identity(
         failed = _resume_after_clean_approval(harness, job.job_id)
 
         assert failed.stage == "quarantined"
-        assert failed.dirty_artifact.startswith("2_sucio/")
+        assert failed.dirty_artifact.startswith("2_copiado/")
         dirty_path = harness.vault.config.vault_path / failed.dirty_artifact
         assert dirty_path.exists()
     finally:
@@ -759,7 +759,7 @@ def test_process_pending_resumes_submitted_jobs_oldest_first(harness):
     second_source.write_text("# Segundo\n\nOtro contenido distinto.", encoding="utf-8")
 
     first = harness.service.submit(SOURCE_IDENTITY)
-    second = harness.service.submit("1_entrada/segundo_documento.txt")
+    second = harness.service.submit("1_volcado/segundo_documento.txt")
 
     processed = harness.service.process_pending(limit=1)
     assert [job.job_id for job in processed] == [first.job_id]
@@ -928,7 +928,7 @@ def test_missing_local_audio_model_skips_preserves_source_and_can_requeue(
     )
     harness.service.set_runtime_policy(policy)
     try:
-        submitted = harness.service.submit("1_entrada/grabacion.mp3")
+        submitted = harness.service.submit("1_volcado/grabacion.mp3")
         skipped = harness.service.resume(submitted.job_id)
 
         assert skipped.stage == "skipped"
@@ -943,7 +943,7 @@ def test_missing_local_audio_model_skips_preserves_source_and_can_requeue(
             skipped.job_id, expected_revision=skipped.revision
         )
         assert requeued.status == "pending"
-        assert requeued.source_relative_path == "1_entrada/grabacion.mp3"
+        assert requeued.source_relative_path == "1_volcado/grabacion.mp3"
         assert harness.source_path.exists()
     finally:
         harness.store.close()

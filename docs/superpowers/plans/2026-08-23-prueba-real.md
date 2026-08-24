@@ -32,7 +32,7 @@ Baseline activo medido: `dev` en `e6aef697a6f9b4f49f1878940b95f8cf51d2b342`, mer
 | 5 | PR-07 | PARTIAL (S PASS / R NOT_RUN) |
 | 6 | PR-01 | PARTIAL (S PASS / R NOT_RUN) |
 | 7 | PR-03 | PARTIAL (S PASS / R NOT_RUN) |
-| 8 | PR-08 | NOT_RUN |
+| 8 | PR-08 | PARTIAL (S PASS / R NOT_RUN) |
 | 9 | PR-09 | NOT_RUN |
 | 10 | PR-10 | NOT_RUN |
 | 11 | PR-11 | NOT_RUN |
@@ -41,7 +41,7 @@ Baseline activo medido: `dev` en `e6aef697a6f9b4f49f1878940b95f8cf51d2b342`, mer
 
 PR-10 debe repetir `S` sintética; el bloqueo histórico por IDs duplicados no se hereda automáticamente. Ninguna fase puede declararse `COMPLETE` sin `S PASS` y `R PASS` de esta campaña.
 
-Ejecución activa: PR-00, PR-04 y PR-05 están `COMPLETE`; PR-06 y PR-07 están `PARTIAL` (`S PASS`, `R NOT_RUN`); PR-01 está `PARTIAL` (`S PASS`, `R NOT_RUN`); PR-03 está `PARTIAL` (`S PASS`, `R NOT_RUN`) y PR-08+ permanecen `NOT_RUN`.
+Ejecución activa: PR-00, PR-04 y PR-05 están `COMPLETE`; PR-06, PR-07, PR-01, PR-03 y PR-08 están `PARTIAL` (`S PASS`, `R NOT_RUN`); PR-09+ permanecen `NOT_RUN`.
 
 ## Global Constraints
 
@@ -287,10 +287,19 @@ requieren entorno real.
 
 Secuencia: `S` smoke automatizado/aislado → `R` instalación limpia, ventana, teclado, foco y aceptación visual reales.
 
-- [ ] Arrancar desde instalación limpia, no desde checkout.
-- [ ] Recorrer Ajustes, Vault, tema, ingesta, revisión, edición, búsqueda, lector, Asistente, Notas y Discusión.
-- [ ] Probar teclado, foco, Escape, cierre de modal, lector de pantalla si disponible y ventana de 375 px.
+- [x] S sintética: suite focal de consola, bridge, lector, editor, chat, modales, recuperación y contratos UI.
+- [ ] R: arrancar desde instalación limpia, no desde checkout.
+- [ ] R: recorrer Ajustes, Vault, tema, ingesta, revisión, edición, búsqueda, lector, Asistente, Notas y Discusión.
+- [ ] R: probar teclado, foco, Escape, cierre de modal, lector de pantalla si disponible y ventana de 375 px.
 - [ ] Registrar G3 separando lector, editor, chat, responsive y accesibilidad.
+
+Ejecución sintética 2026-08-24: `S PASS`; informe:
+`.superpowers/sdd/2026-08-23-prueba-real/task-PR-08-S-report.md`. La suite
+focal pasó `269 passed in 7.60s`; los contratos JavaScript diferidos pasaron
+`4/4` y el contrato de IDs pasó `4 passed`. Los fixtures que aún usaban
+`1_entrada`–`4_salida` se actualizaron al layout canónico; no hubo cambios de
+producto. `R` sigue `NOT_RUN` porque requiere instalación limpia y aceptación
+visual/teclado/foco en PyWebView.
 
 ## Fase 5 — Meetily
 

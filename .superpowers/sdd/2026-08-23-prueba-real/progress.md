@@ -11,7 +11,7 @@
 - Terra: `PASS`, sin hallazgos abiertos.
 - Estado fase layout: `S PASS`; no se declara R ni cierre de producto por esta fase.
 
-Status activo: PR-00 S `PASS`, R `PASS`, estado `COMPLETE`; PR-04 S `PASS`, R `PASS`, estado `COMPLETE` por no-op de migración; PR-05 S `PASS`, R `PASS`, estado `COMPLETE`; PR-06 S `PASS`, R `NOT_RUN`, estado `PARTIAL`; PR-07–PR-12 `NOT_RUN`. Estado global: `PARTIAL`.
+Status activo: PR-00 S `PASS`, R `PASS`, estado `COMPLETE`; PR-04 S `PASS`, R `PASS`, estado `COMPLETE` por no-op de migración; PR-05 S `PASS`, R `PASS`, estado `COMPLETE`; PR-06 S `PASS`, R `NOT_RUN`, estado `PARTIAL`; PR-07 S `PASS`, R `NOT_RUN`, estado `PARTIAL`; PR-01, PR-03 y PR-08–PR-12 `NOT_RUN`. Estado global: `PARTIAL`.
 Spec: docs/superpowers/specs/2026-08-23-prueba-real.md
 Plan: docs/superpowers/plans/2026-08-23-prueba-real.md
 Created: 2026-08-23
@@ -27,7 +27,7 @@ Se conserva todo el ledger histórico inferior sin borrarlo. Este bloque gobiern
 | 2 | PR-04 | PASS | PASS | COMPLETE |
 | 3 | PR-05 | PASS | PASS | COMPLETE |
 | 4 | PR-06 | PASS | NOT_RUN | PARTIAL |
-| 5 | PR-07 | NOT_RUN | NOT_RUN | NOT_RUN |
+| 5 | PR-07 | PASS | NOT_RUN | PARTIAL |
 | 6 | PR-01 | NOT_RUN | NOT_RUN | NOT_RUN |
 | 7 | PR-03 | NOT_RUN | NOT_RUN | NOT_RUN |
 | 8 | PR-08 | NOT_RUN | NOT_RUN | NOT_RUN |
@@ -61,6 +61,41 @@ Las rutas `1_entrada`, `2_sucio`, `3_limpio`, `4_salida` y `5_salida` quedan
 limitadas a migración y fixtures legacy. El runtime no las detecta como temas,
 defaults ni destinos. Este bloque actualiza la campaña activa; las evidencias
 históricas inferiores conservan sus rutas originales sin reescritura.
+
+## Ejecución 2026-08-24 — PR-07 S
+
+- Informe: `.superpowers/sdd/2026-08-23-prueba-real/task-PR-07-S-report.md`.
+- Checkout medido: rama `dev`, `HEAD 12899f9d836c0be1ae52d42d5d801a79db8d6bd4`.
+- Comando exacto: `PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -q tests/test_sharing_service.py tests/test_discussion_service.py tests/contract/test_processed_editor_contract.py tests/contract/test_sharing_discussion_ui_contract.py`.
+- Resultado: `15 passed in 0.47s`, código `0`; `PR-07 S PASS`.
+- Evidencia: corpus temporal sintético; aprobación y compartición atómica a
+  `5_compartido`, autor, comentario fijado, respuesta, JSON de eventos
+  inmutable, CAS de revisión y bloqueo al intentar compartir una revisión
+  obsoleta después de editar.
+- Ampliación Terra: se añadió `tests/test_approval_ledger.py`; la suite
+  ampliada pasó `25 passed in 0.54s`, código `0`, incluyendo invalidación de
+  aprobación y marcado de derivado obsoleto tras editar, y edición desde
+  consola que persiste `pending_review`.
+- `PR-07 R NOT_RUN`: no se probó PyWebView, aceptación visual ni escritura en
+  Vault real. Estado global: `PARTIAL`.
+- Sin cambios de producto, dependencias ni Vault real.
+
+### Ampliación final de evidencia — PR-07 S
+
+- Se añadió `tests/test_processed_output_approval.py` al comando completo.
+- Resultado: `28 passed in 0.61s`, código `0`; incluye
+  `test_manual_processed_edit_invalidates_shareability`.
+- Este caso confirma que editar manualmente una nota procesada aprobada
+  bloquea su compartición posterior.
+- Corrección Terra: el test construye `SharingApplicationService`, llama a
+  `share_processed_note()` con la revisión nueva y espera
+  `OutputApprovalRequiredError`; `5_compartido` queda vacío.
+- Diff desde HEAD `12899f9d836c0be1ae52d42d5d801a79db8d6bd4`: 4 archivos
+  rastreados, `69` líneas añadidas y `15` eliminadas; el cambio funcional es
+  sólo de `tests/test_processed_output_approval.py` (`10` añadidas, `4`
+  eliminadas).
+- PR-07 conserva `S PASS`, `R NOT_RUN`, estado `PARTIAL`; no se ejecutó R ni
+  se hizo commit.
 
 ## Evidencia histórica conservada
 
@@ -113,7 +148,7 @@ Código está publicado y pruebas automatizadas históricas están verdes. Esta 
 | PR-04 | layout, migración y aprobación | sí | Vault nuevo con layout final | COMPLETE: layout, dry-run e inventario reales PASS; migración/rollback no aplican al alcance vigente | G3 |
 | PR-05 | extracción ETL | sí | PDF, imagen y audio reales | COMPLETE: TXT, Markdown, PDF, imagen y MP3 reales; motores office/audio instalados y medidos | G3 |
 | PR-06 | MiniRAG, Chroma y refinamiento | sí | Ollama y RAG reales | NOT_RUN | G3 |
-| PR-07 | compartir y discusión | sí | PyWebView para aceptación visual | NOT_RUN | G3 |
+| PR-07 | compartir y discusión | sí | PyWebView para aceptación visual | PARTIAL: S PASS, R NOT_RUN | G3 |
 | PR-08 | consola, lector y responsive | no | instalación PyWebView | NOT_RUN | G3 |
 | PR-09 | Meetily, micrófono y recuperación | no | Meetily + permisos OS | NOT_RUN | G4 |
 | PR-10 | migración Vault General | dry-run sí | apply sobre copia autorizada | BLOCKED: IDs duplicados | G5 |

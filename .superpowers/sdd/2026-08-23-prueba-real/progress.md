@@ -417,3 +417,15 @@ El cierre histórico de PR-00 y el bloqueo histórico de PR-10 se conservan como
 - `git diff --check`: PASS.
 - PR-08 S: `PASS`; PR-08 R: `NOT_RUN`; estado global: `PARTIAL`.
 - Límite: esta fase no prueba PyWebView instalado fuera del checkout, ventana real, teclado, foco, lector de pantalla ni responsive de 375 px. No se usó Vault real ni se guardaron datos sensibles.
+
+## Ejecución 2026-08-24 — PR-09 S
+
+- Informe: `.superpowers/sdd/2026-08-23-prueba-real/task-PR-09-S-report.md`.
+- Checkout medido antes de actuar: raíz `/Users/emiliosevillaortego/Documents/Programación/fuente`, rama `dev`, `HEAD 064077a2f67a5224ac0b0fd81fb52878350e0f55`; `dist/` permanece como único artefacto no rastreado.
+- Suite focal exacta: `PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -q tests/test_meetily_gateway.py tests/test_meeting_session_store.py tests/test_meeting_import_recovery.py tests/test_meeting_artifact_contract.py tests/test_meetily_modal_contract.py tests/contract/test_meeting_bridge_contract.py tests/contract/test_q03_ui_recovery_contract.py tests/security/test_bridge_payloads.py tests/test_bridge_contract.py tests/test_approval_ledger.py tests/test_ingestion_approval_gate.py tests/test_vault_layout.py tests/integration/test_pipeline_recovery.py tests/integration/test_pipeline_idempotency.py`.
+- Primera salida: `105 passed, 1 failed`; la única falla era una fixture que aún pasaba `1_entrada` y `2_sucio` a `FolderSyncManager`, que autoriza sólo `1_volcado` y `2_copiado`.
+- Corrección mínima: `tests/integration/test_pipeline_idempotency.py` usa las dos raíces canónicas en ambas llamadas; no se modificó producto.
+- Reejecución: `106 passed in 2.76s`, código `0`; `git diff --check` PASS.
+- Cobertura: bridge local allow-listed y token de un uso; consentimiento antes de lanzar; modal y recuperación; manifiesto incompleto, inválido y conflictivo; hashes SHA-256; importación atómica e idempotente; `2_copiado/reunion`, `3_capturado/reunion`, `4_procesado/reunion`; `standard_meeting`; procedencia; bloqueo de aprobación; sesiones durables; duplicados y reinicios sin parciales.
+- Resultado: `PR-09 S PASS`; `PR-09 R NOT_RUN`; estado global `PARTIAL`.
+- Límites: no se ejecutaron Meetily, micrófono, audio, transcripción real, permisos del sistema ni escritura en un Vault real; no se guardaron audio ni transcripciones en Git. No se hizo commit.

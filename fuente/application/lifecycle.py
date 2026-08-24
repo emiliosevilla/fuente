@@ -19,7 +19,7 @@ from fuente.application.meetings import MeetingCaptureApplicationService
 from fuente.config import AppConfig
 from fuente.domain.runtime_policy import RuntimePolicy
 from fuente.graph_engine.optimized_loop import OptimizadoGraphLoop
-from fuente.watcher.watcher import ETLPipeline, FolderMonitor
+from fuente.watcher.watcher import ETLPipeline, FolderMonitor, iter_input_files
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +46,7 @@ class ApplicationLifecycle:
         flagged via `is_headless` so callers (main.py) know not to open a
         UI toolkit for this run.
       - ``flush``: deterministic, single pass. Resumes any interrupted
-        jobs, ingests whatever currently sits in `1_entrada`, optionally
+        jobs, ingests whatever currently sits in `1_volcado`, optionally
         runs one graph-refine pass, then returns. No background thread is
         ever created for this mode.
     """
@@ -251,13 +251,9 @@ class ApplicationLifecycle:
         assert self.pipeline is not None
         self.pipeline.resume_pending_jobs()
 
-        # Active theme 1_entrada via VaultManager — required for Theme scope.
+        # Active theme 1_volcado via VaultManager — required for Theme scope.
         input_dir = self.pipeline.vault.input_dir
-        input_files = (
-            [f for f in input_dir.glob("*") if f.is_file() and not f.name.startswith(".")]
-            if input_dir.exists()
-            else []
-        )
+        input_files = iter_input_files(input_dir)
         processed = 0
         for file_path in input_files:
             if self.pipeline.process_file(file_path):

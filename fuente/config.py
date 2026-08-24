@@ -9,6 +9,18 @@ from typing import Optional, Sequence
 from urllib.parse import urlparse
 
 from fuente.domain.frontmatter import serialize_frontmatter
+from fuente.domain.vault_layout import (
+    CANONICAL_CLEAN_DIR_NAME,
+    CANONICAL_DIRTY_DIR_NAME,
+    CANONICAL_INPUT_DIR_NAME,
+    CANONICAL_PROCESSED_DIR_NAME,
+    CANONICAL_SHARED_DIR_NAME,
+    LEGACY_CLEAN_DIR_NAME,
+    LEGACY_DIRTY_DIR_NAME,
+    LEGACY_INPUT_DIR_NAME,
+    LEGACY_OUTPUT_DIR_NAME,
+    LEGACY_SHARED_DIR_NAME,
+)
 from fuente.infrastructure.atomic_files import atomic_write_json
 
 logger = logging.getLogger(__name__)
@@ -175,12 +187,12 @@ DEFAULT_ATOMIC_NOTE_TEMPLATE = serialize_frontmatter({
 @dataclass
 class VaultConfig:
     vault_path: Path
-    input_dir_name: str = "1_entrada"
-    dirty_dir_name: str = "2_sucio"
-    clean_dir_name: str = "3_limpio"
-    output_dir_name: str = "4_salida"
-    processed_dir_name: str = "4_procesado"
-    shared_dir_name: str = "5_salida"
+    input_dir_name: str = CANONICAL_INPUT_DIR_NAME
+    dirty_dir_name: str = CANONICAL_DIRTY_DIR_NAME
+    clean_dir_name: str = CANONICAL_CLEAN_DIR_NAME
+    output_dir_name: str = CANONICAL_PROCESSED_DIR_NAME
+    processed_dir_name: str = CANONICAL_PROCESSED_DIR_NAME
+    shared_dir_name: str = CANONICAL_SHARED_DIR_NAME
     system_dir_name: str = ".fuente"
 
     @property
@@ -319,12 +331,36 @@ class AppConfig:
         vault_path = Path(data.get("vault_path", Path.home() / "Documents" / "Fuente_Vault")).resolve()
         vault_cfg = VaultConfig(
             vault_path=vault_path,
-            input_dir_name=data.get("input_dir_name", "1_entrada"),
-            dirty_dir_name=data.get("dirty_dir_name", "2_sucio"),
-            clean_dir_name=data.get("clean_dir_name", "3_limpio"),
-            output_dir_name=data.get("output_dir_name", "4_salida"),
-            processed_dir_name=data.get("processed_dir_name", "4_procesado"),
-            shared_dir_name=data.get("shared_dir_name", "5_salida"),
+            input_dir_name=(
+                CANONICAL_INPUT_DIR_NAME
+                if data.get("input_dir_name", CANONICAL_INPUT_DIR_NAME) == LEGACY_INPUT_DIR_NAME
+                else data.get("input_dir_name", CANONICAL_INPUT_DIR_NAME)
+            ),
+            dirty_dir_name=(
+                CANONICAL_DIRTY_DIR_NAME
+                if data.get("dirty_dir_name", CANONICAL_DIRTY_DIR_NAME) == LEGACY_DIRTY_DIR_NAME
+                else data.get("dirty_dir_name", CANONICAL_DIRTY_DIR_NAME)
+            ),
+            clean_dir_name=(
+                CANONICAL_CLEAN_DIR_NAME
+                if data.get("clean_dir_name", CANONICAL_CLEAN_DIR_NAME) == LEGACY_CLEAN_DIR_NAME
+                else data.get("clean_dir_name", CANONICAL_CLEAN_DIR_NAME)
+            ),
+            output_dir_name=(
+                CANONICAL_PROCESSED_DIR_NAME
+                if data.get("output_dir_name", CANONICAL_PROCESSED_DIR_NAME) == LEGACY_OUTPUT_DIR_NAME
+                else data.get("output_dir_name", CANONICAL_PROCESSED_DIR_NAME)
+            ),
+            processed_dir_name=(
+                CANONICAL_PROCESSED_DIR_NAME
+                if data.get("processed_dir_name", CANONICAL_PROCESSED_DIR_NAME) == LEGACY_OUTPUT_DIR_NAME
+                else data.get("processed_dir_name", CANONICAL_PROCESSED_DIR_NAME)
+            ),
+            shared_dir_name=(
+                CANONICAL_SHARED_DIR_NAME
+                if data.get("shared_dir_name", CANONICAL_SHARED_DIR_NAME) == LEGACY_SHARED_DIR_NAME
+                else data.get("shared_dir_name", CANONICAL_SHARED_DIR_NAME)
+            ),
             system_dir_name=data.get("system_dir_name", ".fuente"),
         )
         return cls(

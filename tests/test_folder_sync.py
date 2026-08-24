@@ -32,7 +32,7 @@ class TestFolderSync(unittest.TestCase):
     def test_sync_to_input(self):
         ext_folder = self.vault_path / "ExternalSource"
         ext_folder.mkdir()
-        input_dir = self.vault_path / "1_entrada"
+        input_dir = self.vault_path / "1_volcado"
 
         # Crear archivo en la fuente externa
         sample_file = ext_folder / "test_doc.txt"
@@ -40,7 +40,7 @@ class TestFolderSync(unittest.TestCase):
 
         self.sync_mgr.save_connected_folders([ext_folder])
 
-        dirty_dir = self.vault_path / "2_sucio"
+        dirty_dir = self.vault_path / "2_copiado"
         dirty_dir.mkdir()
         copied = self.sync_mgr.sync_to_input(input_dir, dirty_dir)
         self.assertEqual(copied, 1)

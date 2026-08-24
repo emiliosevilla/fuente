@@ -20,7 +20,7 @@ Durability rules that the stage order encodes:
   orphaned vectors behind.
 - Generated Markdown is validated (frontmatter schema) before it is written,
   and the note is written atomically before its index entries are published.
-- The original file in `1_entrada` is deleted only once the note and its
+- The original file in `1_volcado` is deleted only once the note and its
   index artifacts are durable, immediately before the job commits `completed`.
 
 Stage failures are terminal for the job (see `fuente.domain.jobs`): the source
@@ -98,7 +98,7 @@ NOTE_ARTIFACT_KIND = "note_index"
 # or generate a derivative.
 AWAITING_CLEAN_APPROVAL = "awaiting_clean_approval"
 
-# Any stage below can publish an artifact derived from ``3_limpio`` or delete
+# Any stage below can publish an artifact derived from ``3_capturado`` or delete
 # the original input.  It therefore needs a fresh approval check, rather than
 # trusting an OriginRef that was observed at a previous stage.
 _APPROVAL_GUARDED_STAGES: frozenset[str] = frozenset(
@@ -740,7 +740,7 @@ class IngestionApplicationService:
             clean_artifact=self.vault_relative_identity(clean_path),
             status=DEFAULT_STATUS,
             error_code=AWAITING_CLEAN_APPROVAL,
-            error_message="Awaiting exact human approval of canonical 3_limpio Markdown",
+            error_message="Awaiting exact human approval of canonical 3_capturado Markdown",
         )
 
     def _run_index_chunks(self, job: JobRecord, context: _RunContext) -> JobRecord:
@@ -876,7 +876,7 @@ class IngestionApplicationService:
         waiting = self._revalidate_clean_approval(job, context)
         if waiting is not None:
             return waiting
-        # The source in `1_entrada` is the last durable copy of the input, so
+        # The source in `1_volcado` is the last durable copy of the input, so
         # it is dropped only after the note and its index entry are durable
         # *and* the job has committed `completed`.
         self._durable_note_path(job)
@@ -1079,7 +1079,7 @@ class IngestionApplicationService:
         """Delete a partial pipeline artifact from its own authorized root.
 
         Resolution is deliberately strict here: compensation may only delete
-        files below `2_sucio`/`3_limpio`, so a recorded artifact that points
+        files below `2_copiado`/`3_capturado`, so a recorded artifact that points
         anywhere else (notably at the original source) is left untouched.
         """
         if not identity:
@@ -1329,6 +1329,13 @@ class IngestionApplicationService:
             or int(existing["revision"]) != 1
             or str(existing["content_hash"]) != content_hash
         ):
+            logger.warning(
+                "Clean identity conflict: existing=%s/%s current=%s/%s",
+                existing["relative_path"],
+                existing["content_hash"],
+                relative_path,
+                content_hash,
+            )
             raise PathAuthorizationError()
 
     def _approved_clean_origin(self, job: JobRecord) -> OriginRef | None:
@@ -1418,7 +1425,7 @@ class IngestionApplicationService:
             stage="saved_clean",
             status=DEFAULT_STATUS,
             error_code=AWAITING_CLEAN_APPROVAL,
-            error_message="Awaiting exact human approval of canonical 3_limpio Markdown",
+            error_message="Awaiting exact human approval of canonical 3_capturado Markdown",
             clear_fields=("note_document_id",),
         )
 
@@ -1432,7 +1439,7 @@ class IngestionApplicationService:
             expected_revision=job.revision,
             status=DEFAULT_STATUS,
             error_code=AWAITING_CLEAN_APPROVAL,
-            error_message="Awaiting exact human approval of canonical 3_limpio Markdown",
+            error_message="Awaiting exact human approval of canonical 3_capturado Markdown",
         )
 
     def _selected_model(
@@ -1540,10 +1547,10 @@ class IngestionApplicationService:
             return
         try:
             source_path.unlink(missing_ok=True)
-            logger.info("Archivo limpiado de 1_entrada: %s", source_path.name)
+            logger.info("Archivo limpiado de 1_volcado: %s", source_path.name)
         except OSError as error:
             logger.warning(
-                "No se pudo eliminar %s de 1_entrada: %s", job.source_relative_path, error
+                "No se pudo eliminar %s de 1_volcado: %s", job.source_relative_path, error
             )
 
     def _source_path(self, job: JobRecord) -> Path:

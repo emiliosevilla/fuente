@@ -244,7 +244,7 @@ class SyncReport:
 
 
 class FolderSyncManager:
-    """Administra la lista de carpetas compartidas/externas vinculadas a 1_entrada."""
+    """Administra la lista de carpetas compartidas/externas vinculadas a 1_volcado."""
 
     def __init__(
         self,
@@ -279,7 +279,18 @@ class FolderSyncManager:
             and (
                 relative.parts[0].startswith(".")
                 or relative.parts[0]
-                in {"1_entrada", "2_sucio", "3_limpio", "4_salida"}
+                in {
+                    "1_volcado",
+                    "2_copiado",
+                    "3_capturado",
+                    "4_procesado",
+                    "5_compartido",
+                    "1_entrada",
+                    "2_sucio",
+                    "3_limpio",
+                    "4_salida",
+                    "5_salida",
+                }
             )
         ):
             raise PathAuthorizationError()
@@ -314,7 +325,7 @@ class FolderSyncManager:
         return SyncDiagnostic(path=str(path), message=message, code=code)
 
     def _authorized_destination(self, path: Path, expected_root_name: str) -> Path:
-        """Authorize one direct ``1_entrada``/``2_sucio`` theme root."""
+        """Authorize one direct ``1_volcado``/``2_copiado`` theme root."""
         candidate = Path(path).expanduser()
         resolved = SourcePathAuthorizer(self.vault_root).resolve(candidate)
         expected = (self.active_theme_dir / expected_root_name).resolve(strict=False)
@@ -349,10 +360,11 @@ class FolderSyncManager:
         manager therefore stores the exact canonical active-theme directory
         supplied by the trusted vault owner and accepts only its two roots.
         """
-        authorized_input = self._authorized_destination(input_dir, "1_entrada")
-        authorized_dirty = self._authorized_destination(dirty_dir, "2_sucio")
-        expected_input = (self.active_theme_dir / "1_entrada").resolve(strict=False)
-        expected_dirty = (self.active_theme_dir / "2_sucio").resolve(strict=False)
+        layout = VaultLayout(self.active_theme_dir)
+        authorized_input = self._authorized_destination(input_dir, layout.input_personal_dir.parent.name)
+        authorized_dirty = self._authorized_destination(dirty_dir, layout.root("dirty").name)
+        expected_input = layout.input_personal_dir.parent.resolve(strict=False)
+        expected_dirty = layout.root("dirty").resolve(strict=False)
         if authorized_input != expected_input or authorized_dirty != expected_dirty:
             raise PathAuthorizationError()
         return authorized_input, authorized_dirty
@@ -598,7 +610,7 @@ class FolderSyncManager:
         connection_ids: list[str] | None = None,
     ) -> SyncReport:
         """
-        Reconcile provider files into the exact active-theme ``1_entrada``.
+        Reconcile provider files into the exact active-theme ``1_volcado``.
 
         The durable ``JobStore.sync_manifest`` is the only provenance store.
         Hashes, rather than mtimes, decide whether a source is unchanged.  A
@@ -609,7 +621,7 @@ class FolderSyncManager:
 
         Both ``input_dir`` and ``dirty_dir`` must be the active Theme roots
         (typically ``VaultManager.input_dir`` / ``VaultManager.dirty_dir``).
-        Never hardcode the General vault-root ``2_sucio``.
+        Never hardcode the General vault-root ``2_copiado``.
         """
         input_dir, dirty_dir = self._authorized_destination_pair(
             Path(input_dir), Path(dirty_dir)
@@ -641,8 +653,8 @@ class FolderSyncManager:
 
         if direction is SyncDirection.INPUT_COMMON:
             destination = self._authorized_theme_root(
-                self.active_theme_dir / "1_entrada" / "común",
-                "1_entrada",
+                VaultLayout(self.active_theme_dir).input_common_dir,
+                VaultLayout(self.active_theme_dir).input_common_dir.parent.name,
                 "común",
             )
             return self._sync_inbound_connections([connection], destination, None)
@@ -754,7 +766,7 @@ class FolderSyncManager:
                     if outcome == "copied":
                         copied_count += 1
                         logger.info(
-                            "Recopilado archivo hacia 1_entrada: %s",
+                            "Recopilado archivo hacia 1_volcado: %s",
                             source.source_relative_path,
                         )
                     else:
@@ -782,7 +794,7 @@ class FolderSyncManager:
         """Copy the active theme's shared output to one external local folder."""
         shared_root = self._authorized_theme_root(
             VaultLayout(self.active_theme_dir).shared_dir,
-            "5_salida",
+            VaultLayout(self.active_theme_dir).shared_dir.name,
         )
         destination = self._authorized_output_destination(Path(destination_root))
         sources: list[SourceFile] = []
@@ -841,7 +853,10 @@ class FolderSyncManager:
                         self._diagnostic(requested_dest, str(error), "destination_rejected")
                     )
                     continue
-                manifest_destination = f"5_salida/{source.source_relative_path}"
+                manifest_destination = (
+                    f"{VaultLayout(self.active_theme_dir).shared_dir.name}/"
+                    f"{source.source_relative_path}"
+                )
                 source_key = self._source_key(source)
                 manifest = manifest_store.get_sync_manifest_entry(source_key)
                 existing_hash = self._file_hash(dest)
@@ -1190,7 +1205,7 @@ class FolderSyncModal(tk.Toplevel):
     def _setup_ui(self):
         header = tk.Label(
             self,
-            text="Entradas vinculadas a '1_entrada'",
+            text="Entradas vinculadas a '1_volcado'",
             font=(FONT_TYPEWRITER, 12, "bold"),
             bg=THEME["bg_card"],
             fg=THEME["paper"],
@@ -1203,7 +1218,7 @@ class FolderSyncModal(tk.Toplevel):
         info_lbl = tk.Label(
             self,
             text="Añade carpetas locales, de red (NAS) o de servicios en la nube (SharePoint / OneDrive).\n"
-                 "Fuente copiará automáticamente sus documentos hacia '1_entrada' para el Flush.",
+                 "Fuente copiará automáticamente sus documentos hacia '1_volcado' para el Flush.",
             font=(FONT_TYPEWRITER, 9),
             bg=THEME["bg_root"],
             fg=THEME["muted"],

@@ -145,12 +145,12 @@ def test_folder_sync_reuses_durable_manifest_after_manager_reopen(tmp_path):
     first_manager = FolderSyncManager(vault, active_theme="Tema")
     assert first_manager.save_connections([connection])
     first = first_manager.sync_to_input(
-        vault / "Tema" / "1_entrada", vault / "Tema" / "2_sucio"
+        vault / "Tema" / "1_volcado", vault / "Tema" / "2_copiado"
     )
 
     reopened_manager = FolderSyncManager(vault, active_theme="Tema")
     second = reopened_manager.sync_to_input(
-        vault / "Tema" / "1_entrada", vault / "Tema" / "2_sucio"
+        vault / "Tema" / "1_volcado", vault / "Tema" / "2_copiado"
     )
 
     assert first.copied == 1

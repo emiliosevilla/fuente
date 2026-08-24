@@ -24,9 +24,42 @@ La suite histórica no sustituye pruebas de instalación, micrófono, permisos, 
 
 Se reinicia la campaña completa desde PR-00 sin borrar ni reinterpretar la evidencia histórica. Baseline activo medido: rama `dev`, commit `e6aef697a6f9b4f49f1878940b95f8cf51d2b342`; merge publicado en `main`: `a44aa0a92f2231bad7a401be30bca159fec45910`; PR #64.
 
-Estado activo inicial de la campaña: todas las fases estaban `NOT_RUN`. Estado actual: PR-00 y PR-04 tienen `S PASS`, `R PASS` y están `COMPLETE`; PR-05 y las fases posteriores siguen `NOT_RUN`. El orden obligatorio es: PR-00, PR-04, PR-05, PR-06, PR-07, PR-01, PR-03, PR-08, PR-09, PR-10, PR-11, PR-02, PR-12. Cada fase ejecuta primero `S` sintética y sólo si pasa ejecuta `R` real.
+Estado activo inicial de la campaña: todas las fases estaban `NOT_RUN`. Estado actual: PR-00 y PR-05 tienen `S PASS`, `R PASS` y están `COMPLETE`; PR-04 tiene `S PASS`, `R PARTIAL` y está `PARTIAL`; PR-06, PR-07, PR-01, PR-03, PR-08, PR-09, PR-10, PR-11 y PR-02 tienen `S PASS`, `R NOT_RUN` y están `PARTIAL`; PR-12 tiene `S PASS`, `R NOT_RUN` y está `PARTIAL`. La campaña global está `PARTIAL`. El orden obligatorio es: PR-00, PR-04, PR-05, PR-06, PR-07, PR-01, PR-03, PR-08, PR-09, PR-10, PR-11, PR-02, PR-12. Cada fase ejecuta primero `S` sintética y sólo si pasa ejecuta `R` real.
 
-`PR-10` repite su prueba sintética y no hereda automáticamente el bloqueo histórico por IDs duplicados. En el estado actual PR-00 y PR-04 están `COMPLETE` y PR-05+ están `NOT_RUN`.
+`PR-10` repite su prueba sintética y no hereda automáticamente el bloqueo histórico por IDs duplicados. En el estado actual PR-00 y PR-05 están `COMPLETE`; PR-04 está `PARTIAL` (`S PASS`, `R PARTIAL`); PR-06, PR-07, PR-01, PR-03, PR-08, PR-09, PR-10, PR-11 y PR-02 están `PARTIAL` (`S PASS`, `R NOT_RUN`); PR-12 está `PARTIAL` (`S PASS`, `R NOT_RUN`).
+
+### Evidencia vigente de PR-12 S — 2026-08-24
+
+Se realizó sólo auditoría documental y `git diff --check`, sin repetir suites completas.
+Se comprobó el estado S/R documentado y la trazabilidad de informes para PR-00, PR-04, PR-05,
+PR-06, PR-07, PR-01, PR-03, PR-08, PR-09, PR-10, PR-11 y PR-02. Los estados
+`NOT_RUN` se conservaron. PR-12 S = `PASS`; PR-12 R = `NOT_RUN`; global =
+`PARTIAL`. Informe: `docs/superpowers/reports/2026-08-24-prueba-real-synthetic-and-real-script.md`.
+
+### Evidencia vigente de PR-02 S — 2026-08-24
+
+La suite portable de distribución Windows pasó `132 passed in 4.16s` en
+macOS. Cubre contrato y scripts del instalador, package data, autorización de
+rutas con `PureWindowsPath`, descubrimiento parametrizado para `win32`,
+gobernador de RAM y system checker. `build_installer.py` y `fuente.spec`
+pasaron compilación sintáctica y checks estáticos de nombres de artefacto,
+scripts por plataforma y recursos requeridos. Host medido: macOS 26.6 arm64,
+Python 3.14.6. `PR-02 S = PASS`; `PR-02 R = NOT_RUN`; estado `PARTIAL`.
+No se simula Windows ni se declara construido un `.exe`.
+
+### Evidencia vigente de PR-03 S — 2026-08-24
+
+`instalar_fuente.command` ya no crea accesos antes del asistente; `step_create_shortcuts` falla si `create_shortcuts` devuelve `False`. El probe sintético desde el ZIP limpio creó dos `.command` ejecutables con `target_dir` explícito, sin selector Tk, y ejecutó `run_installation(..., create_shortcuts=False, install_model=False)` con las cinco raíces canónicas. Los focales del instalador dieron `23 passed`; `PR-03 S = PASS`, `PR-03 R = NOT_RUN`, estado `PARTIAL`. Evidencia completa: `.superpowers/sdd/2026-08-23-prueba-real/task-PR-03-S-report.md`. No se ejecutaron extras, modelos ni Vault real.
+
+### Evidencia vigente de PR-10 S — 2026-08-24
+
+La suite focal de Vault y migraciones pasó `134 passed in 3.76s` sobre
+temporales sintéticos. Cubre dry-run, plan-id, hashes, apply, rollback,
+idempotencia, conflictos humanos, symlinks, autorización de rutas, IDs
+duplicados y CLI. Se corrigió el guard canónico de `3_capturado` en
+`taxonomy_migration.py`; el resto del cambio fue de fixtures y documentación.
+`PR-10 S = PASS`, `PR-10 R = NOT_RUN`, estado `PARTIAL`. Evidencia completa:
+`.superpowers/sdd/2026-08-23-prueba-real/task-PR-10-S-report.md`.
 
 ## Tutor y bro
 
@@ -41,7 +74,7 @@ Versión bro: primero comprobamos motor en laboratorio; después instalamos como
 
 ## Capacidades ya cubiertas por código y tests; comprobar igualmente
 
-1. Layout por tema: 1_entrada/personal, 1_entrada/común, 2_sucio, 3_limpio, 4_procesado, 5_salida.
+1. Layout por tema: 1_volcado/personal, 1_volcado/común, 2_copiado, 3_capturado, 4_procesado, 5_compartido.
 2. Autorización de rutas y contención dentro del tema activo.
 3. Migración con inventario, hashes, apply, verify y rollback.
 4. MarkItDown como primera extracción local.
@@ -53,7 +86,7 @@ Versión bro: primero comprobamos motor en laboratorio; después instalamos como
 10. Aprobaciones ligadas a document_id, revisión y hash.
 11. Refinamiento positive-only con baseline, CAS, Ollama y epsilon 0.10.
 12. Promoción sólo de candidatos aceptados a 4_procesado.
-13. Compartición atómica a 5_salida tras aprobación independiente.
+13. Compartición atómica a 5_compartido tras aprobación independiente.
 14. Discusión JSON inmutable con autor, comentario fijado y respuestas.
 15. Bridge PyWebView con identificadores opacos y validación de revisiones.
 16. Chat contextual con citas de identidad, revisión, hash, título y origen.
@@ -70,7 +103,7 @@ Versión bro: primero comprobamos motor en laboratorio; después instalamos como
 6. Puente local de Meetily con ejecutable configurado.
 7. Grabación, transcripción y nota de reunión en rutas reales.
 8. OneDrive/SharePoint montado por cliente oficial.
-9. Lectura de 1_entrada/común y escritura controlada de 5_salida.
+9. Lectura de 1_volcado/común y escritura controlada de 5_compartido.
 10. Ollama instalado, modelo disponible y presupuesto de RAM real.
 11. OCR, audio, Docling y MiniRAG con extras instalados.
 12. Instalador Windows, exe y comportamiento Windows.

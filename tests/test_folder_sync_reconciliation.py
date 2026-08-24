@@ -13,7 +13,7 @@ def _manager(tmp_path, *connections):
     vault = tmp_path / "vault"
     manager = FolderSyncManager(vault, active_theme="Tema")
     assert manager.save_connections(list(connections))
-    return manager, vault / "Tema" / "1_entrada", vault / "Tema" / "2_sucio"
+    return manager, vault / "Tema" / "1_volcado", vault / "Tema" / "2_copiado"
 
 
 def _connection(root, provider="local"):
@@ -98,13 +98,13 @@ def test_manifest_ownership_requires_the_current_active_theme_destination(tmp_pa
     assert manager.save_connections([_connection(source)])
 
     first = manager.sync_to_input(
-        tmp_path / "vault" / "TemaA" / "1_entrada",
-        tmp_path / "vault" / "TemaA" / "2_sucio",
+        tmp_path / "vault" / "TemaA" / "1_volcado",
+        tmp_path / "vault" / "TemaA" / "2_copiado",
     )
     assert first.copied == 1
 
-    theme_b_input = tmp_path / "vault" / "TemaB" / "1_entrada"
-    theme_b_dirty = tmp_path / "vault" / "TemaB" / "2_sucio"
+    theme_b_input = tmp_path / "vault" / "TemaB" / "1_volcado"
+    theme_b_dirty = tmp_path / "vault" / "TemaB" / "2_copiado"
     theme_b_input.mkdir(parents=True)
     theme_b_dirty.mkdir(parents=True)
     (theme_b_input / "note.md").write_text(
@@ -197,8 +197,8 @@ def test_interrupted_atomic_copy_leaves_no_partial_destination(tmp_path, monkeyp
 
 def test_changed_active_theme_never_writes_general(tmp_path):
     vault = tmp_path / "vault"
-    general_input = vault / "General" / "1_entrada"
-    general_dirty = vault / "General" / "2_sucio"
+    general_input = vault / "General" / "1_volcado"
+    general_dirty = vault / "General" / "2_copiado"
     source = tmp_path / "provider"
     source.mkdir()
     source_file = source / "note.md"
@@ -207,16 +207,16 @@ def test_changed_active_theme_never_writes_general(tmp_path):
     manager = FolderSyncManager(vault, active_theme="TemaA")
     assert manager.save_connections([_connection(source)])
     first = manager.sync_to_input(
-        vault / "TemaA" / "1_entrada", vault / "TemaA" / "2_sucio"
+        vault / "TemaA" / "1_volcado", vault / "TemaA" / "2_copiado"
     )
     source_file.write_text("two", encoding="utf-8")
     manager.set_active_theme("TemaB")
     second = manager.sync_to_input(
-        vault / "TemaB" / "1_entrada", vault / "TemaB" / "2_sucio"
+        vault / "TemaB" / "1_volcado", vault / "TemaB" / "2_copiado"
     )
 
     assert first.copied == second.copied == 1
-    assert (vault / "TemaA" / "1_entrada" / "note.md").read_text() == "one"
-    assert (vault / "TemaB" / "1_entrada" / "note.md").read_text() == "two"
+    assert (vault / "TemaA" / "1_volcado" / "note.md").read_text() == "one"
+    assert (vault / "TemaB" / "1_volcado" / "note.md").read_text() == "two"
     assert not (general_input / "note.md").exists()
     assert not (general_dirty / "note.md").exists()

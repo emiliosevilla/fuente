@@ -28,7 +28,7 @@ def test_demo_vault_declares_six_root_layout():
     manifest = _manifest()
     assert manifest["layout_version"] == 4
     assert manifest["roots"] == [
-        "1_entrada/personal", "1_entrada/común", "2_sucio", "3_limpio", "4_procesado", "5_salida"
+        "1_volcado/personal", "1_volcado/común", "2_copiado", "3_capturado", "4_procesado", "5_compartido"
     ]
     assert manifest["legacy_destination_root"] == "4_salida"
 
@@ -56,7 +56,7 @@ def test_demo_vault_is_idempotent_and_never_overwrites(tmp_path: Path):
 
 def test_collision_blocks_before_any_demo_or_marker_write(tmp_path: Path):
     vault = tmp_path / "Vault"
-    collision = vault / "4_salida" / "Demo" / "Arquitectura_Local.md"
+    collision = vault / "4_procesado" / "Demo" / "Arquitectura_Local.md"
     collision.parent.mkdir(parents=True)
     collision.write_text("contenido humano", encoding="utf-8")
     service = _service(vault)
@@ -64,9 +64,9 @@ def test_collision_blocks_before_any_demo_or_marker_write(tmp_path: Path):
     result = service.install_demo_vault()
 
     assert result.status == "blocked"
-    assert "4_salida/Demo/Arquitectura_Local.md" in result.collisions
-    assert not (vault / "4_salida" / "Demo" / "Introduccion.md").exists()
-    assert not (vault / "4_salida" / "Demo" / "Flujo_Revision.md").exists()
+    assert "4_procesado/Demo/Arquitectura_Local.md" in result.collisions
+    assert not (vault / "4_procesado" / "Demo" / "Introduccion.md").exists()
+    assert not (vault / "4_procesado" / "Demo" / "Flujo_Revision.md").exists()
     assert not (vault / ".fuente" / "onboarding.json").exists()
     assert collision.read_text(encoding="utf-8") == "contenido humano"
 
@@ -105,7 +105,7 @@ def test_install_rolls_back_notes_when_second_atomic_write_fails(
 
     assert result.status == "blocked"
     assert calls == 2
-    assert not list((vault / "4_salida").rglob("*.md"))
+    assert not list((vault / "4_procesado").rglob("*.md"))
     if initial_marker is None:
         assert not marker.exists()
     else:
@@ -140,7 +140,7 @@ def test_dismissed_onboarding_does_not_auto_prompt(tmp_path: Path):
 
     assert status.status == "dismissed"
     assert service.status().show_first_run_panel is False
-    assert not (vault / "4_salida" / "Demo").exists()
+    assert not (vault / "4_procesado" / "Demo").exists()
     marker = json.loads((vault / ".fuente" / "onboarding.json").read_text())
     assert marker["status"] == "dismissed"
 
@@ -153,10 +153,10 @@ def test_demo_manifest_notes_have_schema_one_and_resolvable_links(tmp_path: Path
 
     resolver = AuthorizedPathResolver(
         vault_root=vault,
-        output=vault / "4_salida",
-        input=vault / "1_entrada",
-        dirty=vault / "2_sucio",
-        clean=vault / "3_limpio",
+        output=vault / "4_procesado",
+        input=vault / "1_volcado",
+        dirty=vault / "2_copiado",
+        clean=vault / "3_capturado",
         quarantine=vault / ".fuente" / "quarantine",
     )
     manifest = _manifest()

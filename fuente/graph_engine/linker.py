@@ -100,7 +100,7 @@ class GraphLinker:
                     continue
                 document = None
             # Los derivados editoriales sólo entran en el grafo después de
-            # la aprobación humana de 4_salida. Los MOC y marcos del sistema
+            # la aprobación humana de 4_procesado. Los MOC y marcos del sistema
             # quedan excluidos arriba por su prefijo `_`.
             if (
                 document is not None

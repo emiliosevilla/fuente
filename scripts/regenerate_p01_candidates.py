@@ -57,15 +57,15 @@ def regenerate_p01_candidates(source_vault: Path, output_root: Path) -> list[dic
         raise ValueError("output root must not be a symlink")
     if output_root.exists() and (not output_root.is_dir() or any(output_root.iterdir())):
         raise ValueError("output root must be a new or empty directory")
-    dirty_dir = output_root / "Vault_Fuente_P01" / "2_sucio"
-    clean_dir = output_root / "Vault_Fuente_P01" / "3_limpio"
+    dirty_dir = output_root / "Vault_Fuente_P01" / "2_copiado"
+    clean_dir = output_root / "Vault_Fuente_P01" / "3_capturado"
     dirty_dir.mkdir(parents=True, exist_ok=True)
     clean_dir.mkdir(parents=True, exist_ok=True)
     registry = ExtractorRegistry()
     records: list[dict[str, Any]] = []
 
     for source_name in SOURCE_NAMES:
-        source = source_root / "2_sucio" / source_name
+        source = source_root / "2_copiado" / source_name
         if source.is_symlink() or not source.is_file():
             raise ValueError(f"source input must be a regular file: {source}")
         copied = dirty_dir / source_name
@@ -73,7 +73,7 @@ def regenerate_p01_candidates(source_vault: Path, output_root: Path) -> list[dic
         source_hash = _sha256(copied)
         result = registry.extract(copied)
         record: dict[str, Any] = {
-            "source": f"2_sucio/{source_name}",
+            "source": f"2_copiado/{source_name}",
             "sha256": source_hash,
             "bytes": copied.stat().st_size,
             "extraction_status": result.status,
@@ -82,7 +82,7 @@ def regenerate_p01_candidates(source_vault: Path, output_root: Path) -> list[dic
             "candidate": None,
         }
         if result.status == "completed" and result.content and result.content.strip():
-            candidate_relative = f"3_limpio/{_candidate_filename(source_name)}"
+            candidate_relative = f"3_capturado/{_candidate_filename(source_name)}"
             candidate_path = output_root / "Vault_Fuente_P01" / candidate_relative
             metadata = {
                 "schema_version": 3,

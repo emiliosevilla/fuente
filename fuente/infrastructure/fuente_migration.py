@@ -15,6 +15,16 @@ from fuente.domain.documents import content_hash_for_markdown
 from fuente.domain.frontmatter import FrontmatterError, parse_frontmatter, serialize_frontmatter
 from fuente.domain.note_catalog import IdentityCollisionError
 from fuente.domain.origins import OriginRef, parse_origins
+from fuente.domain.vault_layout import (
+    CANONICAL_CLEAN_DIR_NAME,
+    CANONICAL_DIRTY_DIR_NAME,
+    CANONICAL_INPUT_DIR_NAME,
+    CANONICAL_PROCESSED_DIR_NAME,
+    LEGACY_CLEAN_DIR_NAME,
+    LEGACY_INPUT_DIR_NAME,
+    LEGACY_DIRTY_DIR_NAME,
+    LEGACY_OUTPUT_DIR_NAME,
+)
 from fuente.infrastructure.atomic_files import (
     atomic_write_json,
     atomic_write_text,
@@ -23,9 +33,22 @@ from fuente.infrastructure.atomic_files import (
 from fuente.infrastructure.sqlite_store import JobStore
 
 
-KNOWN_NOTE_ROOTS = frozenset({"3_limpio", "4_salida"})
+KNOWN_NOTE_ROOTS = frozenset({
+    CANONICAL_CLEAN_DIR_NAME,
+    CANONICAL_PROCESSED_DIR_NAME,
+    LEGACY_CLEAN_DIR_NAME,
+    LEGACY_OUTPUT_DIR_NAME,
+})
 IGNORED_DIRECTORIES = frozenset(
-    {".fuente", ".fuente_quarantine", ".obsidian", "1_entrada", "2_sucio"}
+    {
+        ".fuente",
+        ".fuente_quarantine",
+        ".obsidian",
+        CANONICAL_INPUT_DIR_NAME,
+        CANONICAL_DIRTY_DIR_NAME,
+        LEGACY_INPUT_DIR_NAME,
+        LEGACY_DIRTY_DIR_NAME,
+    }
 )
 BLOCKING_FINDINGS = frozenset(
     {
@@ -371,7 +394,11 @@ def build_inventory(vault_root: Path, repo_root: Path) -> FuenteMigrationInvento
                 inventory.findings.append(_finding("frontmatter", relative, str(error)))
                 continue
             notes_by_id.setdefault(note.note_id, []).append(note)
-            target = inventory.clean_notes if note_root == "3_limpio" else inventory.derived_notes
+            target = (
+                inventory.clean_notes
+                if note_root in {CANONICAL_CLEAN_DIR_NAME, LEGACY_CLEAN_DIR_NAME}
+                else inventory.derived_notes
+            )
             target.append(note)
 
     for note_id, notes in notes_by_id.items():
@@ -428,7 +455,8 @@ def _authorized_output_path(vault: Path, relative_path: str) -> Path:
         or windows.is_absolute()
         or posix.as_posix() != relative_path
         or ".." in posix.parts
-        or _note_root(relative_path) != "4_salida"
+        or _note_root(relative_path)
+        not in {CANONICAL_PROCESSED_DIR_NAME, LEGACY_OUTPUT_DIR_NAME}
         or posix.suffix.lower() != ".md"
     ):
         raise V3MigrationBlockedError("path_not_authorized")
@@ -618,7 +646,7 @@ def plan_v3_migration(inventory: FuenteMigrationInventory) -> MigrationManifest:
                 MigrationFinding(
                     "legacy_origin_unresolved",
                     note.relative_path,
-                    "Every legacy origin must resolve exactly to 3_limpio",
+                    "Every legacy origin must resolve exactly to 3_capturado",
                 )
             )
 

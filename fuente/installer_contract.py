@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Sequence
 
 from fuente.domain.sync import ConnectedFolder, SyncProvider
+from fuente.domain.vault_layout import VaultLayout
 from fuente.extractors.ocr_runtime import (
     resolve_tesseract_command,
 )
@@ -28,7 +29,13 @@ logger = logging.getLogger(__name__)
 RECEIPT_FILENAME = ".fuente_install_receipt.json"
 RECEIPT_VERSION = "1"
 DEFAULT_OLLAMA_URL = "http://localhost:11434"
-VAULT_SUBDIRS = ("1_entrada", "2_sucio", "3_limpio", "4_salida")
+VAULT_SUBDIRS = (
+    "1_volcado",
+    "2_copiado",
+    "3_capturado",
+    "4_procesado",
+    "5_compartido",
+)
 OLLAMA_READY_TIMEOUT_SEC = 30.0
 OLLAMA_READY_POLL_SEC = 1.0
 OCR_REQUIRED_LANGUAGES = frozenset({"eng", "spa"})
@@ -627,7 +634,7 @@ def step_configure_anythingllm(ctx: InstallationContext) -> InstallStepResult:
 
     from fuente.core.anythingllm_config import configure_anythingllm_integration
 
-    output_dir = ctx.vault_path / "4_salida"
+    output_dir = VaultLayout(ctx.vault_path).processed_dir
     ok = configure_anythingllm_integration(output_dir)
     if ok:
         return InstallStepResult(
@@ -639,7 +646,7 @@ def step_configure_anythingllm(ctx: InstallationContext) -> InstallStepResult:
         name="anythingllm_config",
         success=False,
         message="Could not configure AnythingLLM integration",
-        actionable="Open AnythingLLM and point it to the vault 4_salida folder.",
+        actionable="Open AnythingLLM and point it to the vault 4_procesado folder.",
     )
 
 
@@ -654,7 +661,14 @@ def step_create_shortcuts(ctx: InstallationContext) -> InstallStepResult:
     try:
         from create_shortcuts import create_shortcuts
 
-        create_shortcuts(ctx.base_dir, vault_dir=ctx.vault_path)
+        created = create_shortcuts(ctx.base_dir, vault_dir=ctx.vault_path)
+        if not created:
+            return InstallStepResult(
+                name="shortcuts",
+                success=False,
+                message="Desktop shortcut creation returned false",
+                actionable="Run `python create_shortcuts.py` from the Fuente folder.",
+            )
         return InstallStepResult(
             name="shortcuts",
             success=True,

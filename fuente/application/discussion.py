@@ -1,4 +1,4 @@
-"""File-backed discussion for notes already published to ``5_salida``."""
+"""File-backed discussion for notes already published to ``5_compartido``."""
 from __future__ import annotations
 
 import json

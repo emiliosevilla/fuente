@@ -103,8 +103,8 @@ def test_graph_footer_separates_physical_wikilinks_from_validated_origins():
     assert "relation === 'origin'" in renderer
     assert "wikilinksCountEl.innerText = wikilinkCount" in renderer
     assert "originsCountEl.innerText = originCount" in renderer
-    assert "Enlaces:" in CONSOLE
-    assert "Orígenes:" in CONSOLE
+    assert '>Enlaces <b id="graph-wikilinks-count"' in CONSOLE
+    assert '>Orígenes <b id="graph-origins-count"' in CONSOLE
     assert "Las líneas unen notas relacionadas" in CONSOLE
 
 
@@ -121,6 +121,11 @@ def test_graph_layout_and_edges_are_stable_visible_and_bounded():
     assert "Math.max(layoutPadding" in renderer
     assert "ctx.measureText(visibleLabel + '…')" in renderer
     assert "ctx.textAlign = labelOnRight ? 'left' : 'right'" in renderer
+    assert "obsidianGraphEngine = null" in renderer
+    assert "requestGraphRender(180)" in renderer
+    assert CONSOLE.count("function loadObsidianGraphView()") == 1
+    assert "function zoomReaderGraph(factor)" in CONSOLE
+    assert "function centerReaderGraph()" in CONSOLE
 
 
 def test_graph_skips_colliding_labels_but_keeps_hover_and_moc_labels_visible():

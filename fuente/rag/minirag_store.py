@@ -38,6 +38,10 @@ def _normalize_minirag_record_kinds(response: str) -> str:
     )
 
 
+class MiniRAGUnavailableError(RuntimeError):
+    """MiniRAG cannot run now; callers should use their local fallback."""
+
+
 class MiniRAGStore:
     """Keep MiniRAG state and Fuente provenance under one authorized directory."""
 
@@ -85,7 +89,9 @@ class MiniRAGStore:
                 from minirag import MiniRAG  # type: ignore[import-not-found]
                 from minirag.utils import EmbeddingFunc  # type: ignore[import-not-found]
             except Exception as install_error:
-                raise RuntimeError("MiniRAG is not installed; use BM25 fallback") from install_error
+                raise MiniRAGUnavailableError(
+                    "MiniRAG is not installed; use BM25 fallback"
+                ) from install_error
         embedding_func = self._embedding_func or self._default_embedding_func(EmbeddingFunc)
         llm_model_func = self._llm_model_func or self._default_llm_model_func()
         self._client = MiniRAG(
@@ -116,7 +122,9 @@ class MiniRAGStore:
         if not selected_model:
             selected_model = RAMGovernor(ollama_url=self.ollama_url).recommend_model()
         if not selected_model:
-            raise RuntimeError("No local model fits the current RAM budget; use BM25 fallback")
+            raise MiniRAGUnavailableError(
+                "No local model fits the current RAM budget; use BM25 fallback"
+            )
         provider = OllamaChatProvider(self.ollama_url, timeout=180.0)
 
         async def generate(

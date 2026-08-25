@@ -8,23 +8,23 @@
   "issue": "Demo",
   "notes": [
     {
-      "source_resource": "notes/Introduccion.md",
+      "source_resource": "notes/Introduccion.txt",
       "destination": "4_procesado/Demo/Introduccion.md",
-      "sha256": "aaa2f021878edb005253fae1d9b331e4da19a1adc9acc8bdbeb8b0c136e572d7",
+      "sha256": "d0d56f54cf5821d36278fce4888d2efb0b449b743936c6fd1aa44c08b6f2feaf",
       "expected_wikilinks": ["Arquitectura_Local", "Flujo_Revision"],
       "expected_initial_review_status": "pending_review"
     },
     {
-      "source_resource": "notes/Arquitectura_Local.md",
+      "source_resource": "notes/Arquitectura_Local.txt",
       "destination": "4_procesado/Demo/Arquitectura_Local.md",
-      "sha256": "04531563f47b2304fcbd9f333bed4821391e2ec81af2ac58c9db07586afeef57",
+      "sha256": "7975d7a640e3ec844c0d2ca0a4003a73b9f886bd4bc4b48efa0e7e9e0f68b9c3",
       "expected_wikilinks": ["Introduccion"],
       "expected_initial_review_status": "approved"
     },
     {
-      "source_resource": "notes/Flujo_Revision.md",
+      "source_resource": "notes/Flujo_Revision.txt",
       "destination": "4_procesado/Demo/Flujo_Revision.md",
-      "sha256": "5b979f52bc5a77a81589d2b50031063126b8bc877d16443cb7f9418add37289c",
+      "sha256": "0a0053c65b095aece4322960a89cd33f5cabe7c1675b00121a6f4af4191b3310",
       "expected_wikilinks": ["Introduccion"],
       "expected_initial_review_status": "approved"
     }

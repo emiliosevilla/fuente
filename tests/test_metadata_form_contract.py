@@ -238,7 +238,7 @@ def test_approval_html_uses_typed_controls_not_raw_yaml_editor():
     assert approval_section.count("<textarea") == 1
     assert '<textarea id="metadata-origins"' in approval_section
     assert "<pre id=\"metadata-raw-frontmatter\">" in approval_section
-    assert "frontmatter YAML" in approval_section
+    assert ">Ver detalles</summary>" in approval_section
     assert 'value="approved"' not in approval_section
     assert 'value="rejected"' not in approval_section
 

@@ -27,7 +27,7 @@ from fuente.infrastructure.atomic_files import atomic_write_text, document_file_
 from fuente.infrastructure.sqlite_store import JobStore
 from fuente.domain.runtime_policy import RuntimePolicy
 from fuente.rag.chroma_store import ChromaStore
-from fuente.rag.minirag_store import MiniRAGStore
+from fuente.rag.minirag_store import MiniRAGStore, MiniRAGUnavailableError
 from fuente.rag.semantic_chunker import SemanticChunker
 from fuente.ui.markdown_projection import project_note_document
 
@@ -973,9 +973,7 @@ class NotesApplicationService:
         indexed_with = self.minirag
         try:
             result = self.minirag.rebuild(chunks)
-        except RuntimeError as error:
-            if "MiniRAG is not installed" not in str(error):
-                raise
+        except MiniRAGUnavailableError:
             indexed_with = self.chroma
             result = self.chroma.add_chunks(
                 [chunk["content"] for chunk in chunks],

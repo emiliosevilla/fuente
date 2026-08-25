@@ -68,7 +68,7 @@ def test_console_css_is_present_and_byte_identical_in_wheel(tmp_path):
                 "manifest = root.joinpath('manifest.json').read_text(encoding='utf-8'); "
                 "assert 'demo_version' in manifest; "
                 "[root.joinpath('notes', name).read_text(encoding='utf-8') for name in "
-                "('Introduccion.md', 'Arquitectura_Local.md', 'Flujo_Revision.md')]"
+                    "('Introduccion.txt', 'Arquitectura_Local.txt', 'Flujo_Revision.txt')]"
             ),
         ],
         check=True,
@@ -83,7 +83,7 @@ def test_console_css_is_present_and_byte_identical_in_wheel(tmp_path):
         assert "fuente/ui/static/console.css" in archive.namelist()
         assert "fuente/resources/demo_vault/manifest.json" in archive.namelist()
         assert {
-            "fuente/resources/demo_vault/notes/Introduccion.md",
-            "fuente/resources/demo_vault/notes/Arquitectura_Local.md",
-            "fuente/resources/demo_vault/notes/Flujo_Revision.md",
+            "fuente/resources/demo_vault/notes/Introduccion.txt",
+            "fuente/resources/demo_vault/notes/Arquitectura_Local.txt",
+            "fuente/resources/demo_vault/notes/Flujo_Revision.txt",
         } <= set(archive.namelist())

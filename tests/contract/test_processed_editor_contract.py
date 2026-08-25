@@ -17,4 +17,4 @@ def test_shared_revision_is_not_editable_in_discussion_panel():
     assert "function shareCurrentDocument()" in source
     assert "share_processed_note" in source
     assert "const publisher = String(note.author || '').trim() || 'Fuente';" in source
-    assert "Las notas privadas se editan en 4_procesado." in source
+    assert "Edita la nota antes de compartirla; la copia compartida queda cerrada." in source

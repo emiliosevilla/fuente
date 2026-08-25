@@ -5,7 +5,7 @@ import os
 import re
 from dataclasses import dataclass, replace
 from pathlib import Path
-from typing import Optional, Sequence
+from typing import Optional
 from urllib.parse import urlparse
 
 from fuente.domain.frontmatter import serialize_frontmatter
@@ -31,31 +31,6 @@ VALID_AUDIO_MODES = ("auto", "skip", "tiny_cpu")
 LOCAL_OLLAMA_MODEL_NAME = re.compile(
     r"^[A-Za-z0-9][A-Za-z0-9._-]*(?::[A-Za-z0-9][A-Za-z0-9._-]*)?$"
 )
-DEFAULT_MEETILY_BRIDGE_COMMAND = "/opt/meetily-bridge"
-_LEGACY_MEETILY_BRIDGE_COMMAND = "meetily-local-bridge"
-ALLOWED_MEETILY_BRIDGE_LOCATIONS = frozenset({DEFAULT_MEETILY_BRIDGE_COMMAND})
-
-
-def validate_meetily_bridge_command(value: str | os.PathLike[str] | Sequence[str]) -> str:
-    """Return the single D-05-approved local Meetily bridge executable.
-
-    A one-item list remains readable for old settings files. It is not a
-    command-line extension point: every other list shape is rejected.
-    """
-    if isinstance(value, (list, tuple)):
-        if len(value) != 1:
-            raise ValueError("meetily_bridge_command accepts one executable only")
-        value = value[0]
-    if isinstance(value, os.PathLike):
-        value = os.fspath(value)
-    if not isinstance(value, str):
-        raise ValueError("meetily_bridge_command must identify the local bridge")
-    candidate = value.strip()
-    if candidate not in ALLOWED_MEETILY_BRIDGE_LOCATIONS:
-        raise ValueError("meetily_bridge_command is not an allowed Meetily bridge")
-    return candidate
-
-
 def validate_local_ollama_model_name(value: str) -> str:
     """Return a safe local Ollama model identifier.
 
@@ -244,12 +219,6 @@ class AppConfig:
     resource_profile: str = "auto"
     audio_mode: str = "auto"
     whisper_model_path: str | None = None
-    meetily_bridge_command: str = DEFAULT_MEETILY_BRIDGE_COMMAND
-
-    def __post_init__(self) -> None:
-        self.meetily_bridge_command = validate_meetily_bridge_command(
-            self.meetily_bridge_command
-        )
 
     def to_dict(self) -> dict:
         return {
@@ -270,7 +239,6 @@ class AppConfig:
             "resource_profile": self.resource_profile,
             "audio_mode": self.audio_mode,
             "whisper_model_path": self.whisper_model_path,
-            "meetily_bridge_command": self.meetily_bridge_command,
         }
 
     @classmethod
@@ -296,23 +264,6 @@ class AppConfig:
             if isinstance(raw_whisper_path, str) and raw_whisper_path.strip()
             else None
         )
-        raw_bridge_command = data.get(
-            "meetily_bridge_command", DEFAULT_MEETILY_BRIDGE_COMMAND
-        )
-        if (
-            raw_bridge_command == _LEGACY_MEETILY_BRIDGE_COMMAND
-            or (
-                isinstance(raw_bridge_command, (list, tuple))
-                and len(raw_bridge_command) == 1
-                and raw_bridge_command[0] == _LEGACY_MEETILY_BRIDGE_COMMAND
-            )
-        ):
-            raw_bridge_command = DEFAULT_MEETILY_BRIDGE_COMMAND
-        try:
-            meetily_bridge_command = validate_meetily_bridge_command(raw_bridge_command)
-        except ValueError:
-            logger.warning("Ignoring unsafe Meetily bridge command from configuration")
-            meetily_bridge_command = DEFAULT_MEETILY_BRIDGE_COMMAND
         raw_model = data.get("custom_model_override", data.get("ollama_model"))
         custom_model_override = None
         if raw_model is not None:
@@ -374,7 +325,6 @@ class AppConfig:
             resource_profile=resource_profile,
             audio_mode=audio_mode,
             whisper_model_path=whisper_model_path,
-            meetily_bridge_command=meetily_bridge_command,
         )
 
 

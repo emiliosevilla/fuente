@@ -132,3 +132,24 @@ def test_graph_counters_use_high_contrast_tokens_on_the_dark_legend() -> None:
         assert rule is not None
         assert f"color: var({token})" in rule.group(1)
         assert _contrast_ratio(background, _token_hex(tokens, token)) >= 4.5
+
+
+def test_upgrade_palette_is_semantic_and_component_css_has_no_hex_literals() -> None:
+    css, tokens = _read(CONSOLE_CSS_PATH), _read(TOKENS_CSS_PATH)
+    for token in (
+        "--surface-canvas",
+        "--surface-raised",
+        "--surface-sunken",
+        "--surface-overlay",
+        "--text-primary",
+        "--text-secondary",
+        "--border-subtle",
+        "--accent-primary",
+        "--accent-selection",
+        "--focus-ring",
+        "--state-success",
+        "--state-warning",
+        "--state-danger",
+    ):
+        assert f"{token}:" in tokens
+    assert re.search(r"#[0-9a-fA-F]{6}", css) is None

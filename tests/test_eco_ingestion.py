@@ -32,7 +32,7 @@ def test_eco_ingestion_skips_vectors_and_waits_without_fake_llm(temp_vault_path)
         harness.service.set_runtime_policy(_eco_policy(temp_vault_path))
         harness.service.chroma = ForbiddenChroma()
 
-        submitted = harness.service.submit("1_entrada/informe_trimestral.txt")
+        submitted = harness.service.submit("1_volcado/informe_trimestral.txt")
         waiting = harness.service.resume(submitted.job_id)
         assert waiting.stage == "saved_clean"
         clean_metadata, _body = parse_frontmatter(

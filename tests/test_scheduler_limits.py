@@ -142,6 +142,7 @@ def test_classify_source_path_by_extension():
     assert classify_source_path("1_entrada/a.txt") is TaskClass.IO_TEXT
     assert classify_source_path("1_entrada/scan.png") is TaskClass.MEDIA_OCR
     assert classify_source_path("1_entrada/voice.mp3") is TaskClass.MEDIA_AUDIO
+    assert classify_source_path("1_entrada/meetily/audio.mp4") is TaskClass.MEDIA_AUDIO
 
 
 def test_task_class_for_job_maps_pipeline_stages(tmp_path):
@@ -387,9 +388,9 @@ def test_media_batch_sibling_not_quarantined_on_peer_failure(tmp_path):
     bad.write_bytes(b"\x89PNG\r\n\x1a\nbad-unique")
     sibling.write_bytes(b"\x89PNG\r\n\x1a\nsibling-unique")
 
-    j_good = service.submit("1_entrada/ok.txt")
-    j_bad = service.submit("1_entrada/bad.png")
-    j_sib = service.submit("1_entrada/sibling.png")
+    j_good = service.submit("1_volcado/ok.txt")
+    j_bad = service.submit("1_volcado/bad.png")
+    j_sib = service.submit("1_volcado/sibling.png")
 
     # Force extract stage for media jobs (submit advances to stabilized).
     for job in (j_bad, j_sib):
@@ -447,7 +448,7 @@ def test_process_pending_respects_budget_and_stays_resumable(tmp_path):
 
     source = vault.input_dir / "note.txt"
     source.write_text("contenido", encoding="utf-8")
-    job = service.submit("1_entrada/note.txt")
+    job = service.submit("1_volcado/note.txt")
     # Produce the canonical record through the real path, then park at its
     # approval boundary before exercising the scheduler.
     job = service.resume(job.job_id)
@@ -458,6 +459,7 @@ def test_process_pending_respects_budget_and_stays_resumable(tmp_path):
     service.process_pending(limit=1)
     reloaded = store.get_job(job.job_id)
     assert reloaded.stage == "saved_clean"
+    assert reloaded.status == "pending"
     assert reloaded.stage not in {"failed", "quarantined"}
     waits = [
         d for d in store.list_schedule_decisions(job.job_id) if d["action"] == "wait"
@@ -501,7 +503,7 @@ def test_orphaned_own_lease_does_not_block_resume(tmp_path):
 
     source = vault.input_dir / "resume_me.txt"
     source.write_text("hola", encoding="utf-8")
-    job = service.submit("1_entrada/resume_me.txt")
+    job = service.submit("1_volcado/resume_me.txt")
     job = service.resume(job.job_id)
     assert job.stage == "saved_clean"
     from tests.conftest import approve_saved_clean_job

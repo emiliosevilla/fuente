@@ -5,10 +5,12 @@ from pathlib import Path
 from typing import Callable, Any
 
 from fuente.application.ingestion import (
+    AWAITING_CLEAN_APPROVAL,
     ContentRetryExhaustedError,
     IngestionApplicationService,
     RetryExhaustedError,
     SourceNotStableError,
+    TERMINAL_STAGES,
 )
 from fuente.config import AppConfig
 from fuente.core.vault import VaultManager
@@ -264,6 +266,23 @@ class ETLPipeline:
                 f"=== Contenido ya ingerido (job {job.job_id}): {raw_file_path.name} ==="
             )
             return True
+        if job.stage in TERMINAL_STAGES:
+            logger.info(
+                "Job %s already terminal at %s; ignoring repeated source event",
+                job.job_id,
+                job.stage,
+            )
+            return False
+        if (
+            job.stage == "saved_clean"
+            and job.error_code == AWAITING_CLEAN_APPROVAL
+            and self.ingestion._approved_clean_origin(job) is None
+        ):
+            logger.info(
+                "Job %s remains parked for exact human approval; ignoring source event",
+                job.job_id,
+            )
+            return False
 
         try:
             job = self.ingestion.resume(job.job_id)

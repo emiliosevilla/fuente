@@ -15,9 +15,9 @@ class AudioModelUnavailableError(RuntimeError):
 
 
 class AudioExtractor(BaseExtractor):
-    """Extractor for audio transcription (MP3, WAV, M4A)."""
+    """Extractor for audio transcription, including Meetily MP4 recordings."""
 
-    SUPPORTED_EXTENSIONS = {".mp3", ".wav", ".m4a", ".ogg", ".flac"}
+    SUPPORTED_EXTENSIONS = {".mp3", ".wav", ".m4a", ".ogg", ".flac", ".mp4"}
 
     def __init__(
         self,

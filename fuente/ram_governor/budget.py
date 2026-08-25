@@ -286,6 +286,7 @@ def evaluate_resource(
     snapshot: MemorySnapshot,
     *,
     model_id: Optional[str] = None,
+    estimated_ram_gb: Optional[float] = None,
 ) -> BudgetDecision:
     """Decide whether a resource class may run under the current memory snapshot."""
     budget = RESOURCE_BUDGETS[kind]
@@ -297,6 +298,8 @@ def evaluate_resource(
         if meta is not None:
             estimated = meta.estimated_ram_gb
             concurrency = meta.concurrency_limit
+    if estimated_ram_gb is not None:
+        estimated = max(0.0, float(estimated_ram_gb))
 
     if not snapshot.is_measured:
         # Light text extraction may proceed conservatively; heavy media / LLM wait.

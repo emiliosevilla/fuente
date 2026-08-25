@@ -30,6 +30,7 @@ from fuente.application.job_control import JobControlService
 from fuente.config import get_default_config
 from fuente.core.vault import VaultManager
 from fuente.domain.errors import NoteRevisionConflictError
+from fuente.domain.documents import content_hash_for_markdown
 from fuente.domain.frontmatter import parse_frontmatter, serialize_frontmatter
 from fuente.domain.runtime_policy import AudioMode, ExecutionProfile, RuntimePolicy
 from fuente.extractors.base import ExtractionResult
@@ -433,7 +434,9 @@ def test_ingesting_a_source_completes_and_records_its_identities(harness):
 
     identity = harness.store.get_document_identity(job.note_document_id)
     assert identity["relative_path"] == "4_procesado/informe_trimestral.md"
-    assert identity["content_hash"] == job.source_hash
+    assert identity["content_hash"] == content_hash_for_markdown(
+        (harness.vault.output_dir / "informe_trimestral.md").read_text(encoding="utf-8")
+    )
     assert harness.notes() == [harness.vault.output_dir / "informe_trimestral.md"]
 
 

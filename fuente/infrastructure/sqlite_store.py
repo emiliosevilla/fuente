@@ -232,10 +232,12 @@ class JobStore:
         self, *, note_id: str, revision: int, content_hash: str, reviewer: str
     ) -> dict[str, Any] | None:
         identity = self.get_document_identity(note_id)
+        catalog = self.get_note(note_id)
+        current = identity or catalog
         if (
-            identity is None
-            or int(identity["revision"]) != revision
-            or str(identity.get("content_hash") or "") != content_hash
+            current is None
+            or int(current["revision"]) != revision
+            or str(current.get("content_hash") or "") != content_hash
         ):
             return None
         now = _timestamp()
@@ -245,11 +247,20 @@ class JobStore:
                 (note_id,),
             ).fetchone()
             if existing is not None:
-                if (
-                    int(existing["revision"]) != revision
-                    or str(existing["content_hash"]) != content_hash
-                ):
-                    raise ValueError("processed approval already exists for another revision")
+                if int(existing["revision"]) != revision or str(existing["content_hash"]) != content_hash:
+                    connection.execute(
+                        """
+                        UPDATE processed_approvals
+                        SET revision = ?, content_hash = ?, reviewer = ?,
+                            approved_at = ?, invalidated_at = NULL
+                        WHERE note_id = ?
+                        """,
+                        (revision, content_hash, reviewer, now, note_id),
+                    )
+                    existing = connection.execute(
+                        "SELECT * FROM processed_approvals WHERE note_id = ?",
+                        (note_id,),
+                    ).fetchone()
                 return dict(existing)
             connection.execute(
                 """
@@ -270,12 +281,16 @@ class JobStore:
         row = self._connection.execute(
             """
             SELECT 1 FROM processed_approvals AS approval
-            JOIN document_identities AS identity ON identity.document_id = approval.note_id
+            LEFT JOIN document_identities AS identity ON identity.document_id = approval.note_id
+            LEFT JOIN note_catalog AS catalog ON catalog.note_id = approval.note_id
             WHERE approval.note_id = ? AND approval.revision = ?
               AND approval.content_hash = ? AND approval.invalidated_at IS NULL
-              AND identity.revision = ? AND identity.content_hash = ?
+              AND (
+                (identity.revision = ? AND identity.content_hash = ?)
+                OR (identity.document_id IS NULL AND catalog.revision = ? AND catalog.content_hash = ?)
+              )
             """,
-            (note_id, revision, content_hash, revision, content_hash),
+            (note_id, revision, content_hash, revision, content_hash, revision, content_hash),
         ).fetchone()
         return row is not None
 

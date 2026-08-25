@@ -215,7 +215,11 @@
     <div class="modal-overlay" id="modal-reader">
         <div class="modal-container">
             <div class="modal-header">
-                <div class="modal-title">Notas</div>
+                <div class="reader-title-tools">
+                    <div class="modal-title">Notas</div>
+                    <button class="btn-small" id="btn-reader-library" aria-pressed="true" data-onclick-command="toggleReaderLibrary()">Biblioteca</button>
+                    <button class="btn-small" id="btn-reader-context" aria-pressed="true" data-onclick-command="toggleReaderContext()">Contexto</button>
+                </div>
                 <div class="console-layout-005">
                     <button class="btn-small" id="btn-reader-back" data-onclick-command="goBackReaderNote()" disabled title="Volver a la nota anterior">◄ Atrás</button>
                     <button class="btn-small btn-toggle active" id="btn-reader-mode-list" data-onclick-command="switchReaderView('list')">Notas</button>
@@ -224,9 +228,9 @@
                     <span class="console-layout-006"></span>
                     <button class="btn-small" data-onclick-command="triggerAction('copy_reader_note', {}, this)">Copiar</button>
                     <button class="btn-small" data-onclick-command="triggerAction('export_reader_note', {}, this)">Exportar</button>
-                    <button class="btn-small" data-onclick-command="triggerAction('open_obsidian', {}, this)">Abrir en Obsidian</button>
-                    <button class="btn-small" data-onclick-command="openFusionWorkflow()">Unir seleccionadas</button>
-                    <button class="btn-small" data-onclick-command="openMeetilyModal()">Nueva reunión</button>
+                    <button class="btn-small" data-onclick-command="triggerAction('open_obsidian', {}, this)">Obsidian</button>
+                    <button class="btn-small" data-onclick-command="openFusionWorkflow()">Unir</button>
+                    <button class="btn-small" data-onclick-command="openMeetilyModal()">Reunión</button>
                     <button class="close-btn" data-onclick-command="closeModal('modal-reader')">&times;</button>
                 </div>
             </div>
@@ -234,7 +238,7 @@
                 <div class="reader-search-row" role="search">
                     <label class="reader-search-label" for="reader-search">Buscar notas</label>
                     <div class="reader-search-wrapper">
-                        <span class="reader-search-icon" aria-hidden="true">🔍</span>
+                        <span class="reader-search-icon" aria-hidden="true">⌕</span>
                         <input type="search" class="reader-search-input" id="reader-search" placeholder="Buscar por título o frase..." autocomplete="off" data-oninput-command="filterReaderNotes()">
                     </div>
                 </div>
@@ -243,7 +247,7 @@
                         <div class="reader-dual-pane reader-view" id="reader-view-list">
                             <div class="reader-sidebar">
                                 <div class="reader-pinned-container" id="reader-pinned-moc"></div>
-                                <div class="reader-sidebar-divider">ÍNDICE DE NOTAS</div>
+                                <div class="reader-sidebar-divider">Biblioteca</div>
                                 <div class="reader-note-list-scroll">
                                     <ul class="reader-note-list" id="reader-note-list">
                                         <li class="reader-note-item active">Cargando notas...</li>
@@ -252,15 +256,15 @@
                             </div>
                             <div class="reader-view-pane" id="reader-content">
                                 <h2 class="console-layout-007">Selecciona una nota</h2>
-                                <p class="console-layout-008">Explora el mapa de conocimiento generado en 4_procesado.</p>
+                                <p class="console-layout-008">Elige una nota de la biblioteca para leerla.</p>
                             </div>
                         </div>
                     </section>
                     <aside class="reader-properties-pane" data-reader-region="properties" role="dialog" aria-modal="false" aria-label="Más sobre la nota">
                         <div class="workspace-tabs" role="tablist" aria-label="Más sobre la nota">
-                            <button type="button" class="btn-small workspace-tab is-active" id="workspace-tab-assistant" role="tab" aria-selected="true" aria-controls="workspace-panel-assistant" data-onclick-command="switchWorkspaceTab('assistant')">Ayuda</button>
-                            <button type="button" class="btn-small workspace-tab" id="workspace-tab-notes" role="tab" aria-selected="false" aria-controls="workspace-panel-notes" data-onclick-command="switchWorkspaceTab('notes')">Notas</button>
-                            <button type="button" class="btn-small workspace-tab" id="workspace-tab-discussion" role="tab" aria-selected="false" aria-controls="workspace-panel-discussion" data-onclick-command="switchWorkspaceTab('discussion')">Discusión</button>
+                            <button type="button" class="btn-small workspace-tab is-active" id="workspace-tab-assistant" role="tab" aria-selected="true" aria-controls="workspace-panel-assistant" data-onclick-command="switchWorkspaceTab('assistant')">Contexto</button>
+                            <button type="button" class="btn-small workspace-tab" id="workspace-tab-notes" role="tab" aria-selected="false" aria-controls="workspace-panel-notes" data-onclick-command="switchWorkspaceTab('notes')">Preparar</button>
+                            <button type="button" class="btn-small workspace-tab" id="workspace-tab-discussion" role="tab" aria-selected="false" aria-controls="workspace-panel-discussion" data-onclick-command="switchWorkspaceTab('discussion')">Conversación</button>
                         </div>
                         <div id="workspace-panel-assistant" class="workspace-panel" role="tabpanel" aria-labelledby="workspace-tab-assistant">
                             <div class="reader-properties-visual">
@@ -330,7 +334,7 @@
     <div class="modal-overlay" id="modal-reader-graph" role="dialog" aria-modal="true" aria-labelledby="reader-graph-modal-title" aria-hidden="true">
         <div class="modal-container reader-graph-modal-container">
             <div class="modal-header">
-                <div class="modal-title" id="reader-graph-modal-title">Grafo</div>
+                <div class="modal-title" id="reader-graph-modal-title">Mapa</div>
                 <button class="close-btn" data-onclick-command="closeModal('modal-reader-graph')" aria-label="Cerrar grafo">&times;</button>
             </div>
             <div class="modal-body reader-graph-modal-body">
@@ -1017,6 +1021,8 @@
                 'triggerOptimizedCycle()': triggerOptimizedCycle,
                 'clearLogView()': clearLogView,
                 'openMOCNote()': openMOCNote,
+                'toggleReaderLibrary()': toggleReaderLibrary,
+                'toggleReaderContext()': toggleReaderContext,
                 'filterReaderNotes()': filterReaderNotes,
                 'submitCreateThemeModal()': submitCreateThemeModal,
                 'clearChatHistory()': clearChatHistory,
@@ -4752,6 +4758,24 @@
             const noteContent = document.createElement('div');
             noteContent.className = 'note-content';
             (documentModel || []).forEach(function(block) {
+                if (block.type === 'paragraph' && typeof block.text === 'string') {
+                    const projected = readerMarkdownBlock([block.text]);
+                    if (projected.type === 'bullet_list' || projected.type === 'ordered_list') {
+                        const list = document.createElement(projected.type === 'bullet_list' ? 'ul' : 'ol');
+                        (projected.content || []).forEach(function(item) {
+                            const listItem = document.createElement('li');
+                            const paragraph = item && item.content && item.content[0];
+                            appendProjectionInline(listItem, paragraph && paragraph.content);
+                            list.appendChild(listItem);
+                        });
+                        noteContent.appendChild(list);
+                        return;
+                    }
+                    const paragraph = document.createElement('p');
+                    appendProjectionInline(paragraph, projected.content);
+                    noteContent.appendChild(paragraph);
+                    return;
+                }
                 if (block.children) {
                     const node = document.createElement(block.type === 'heading' ? 'h' + Math.min(Math.max(block.level || 3, 1), 3) : 'p');
                     block.children.forEach(function(token) {
@@ -5107,6 +5131,22 @@
             }
         }
 
+        function toggleReaderLibrary() {
+            const workspace = document.getElementById('reader-view-list');
+            const button = document.getElementById('btn-reader-library');
+            if (!workspace || !button) return;
+            const visible = workspace.classList.toggle('is-library-hidden') === false;
+            button.setAttribute('aria-pressed', String(visible));
+        }
+
+        function toggleReaderContext() {
+            const workspace = document.querySelector('#modal-reader .reader-context-grid');
+            const button = document.getElementById('btn-reader-context');
+            if (!workspace || !button) return;
+            const visible = workspace.classList.toggle('is-context-hidden') === false;
+            button.setAttribute('aria-pressed', String(visible));
+        }
+
         let activeChatContextMode = 'all_notes'; // 'single_note' or 'all_notes'
         let activeChatNoteTitle = '';
         let activeChatNotePath = '';
@@ -5173,18 +5213,15 @@
             const bar = document.createElement('div');
             bar.id = 'note-action-bar';
             bar.classList.add('console-layout-071');
-            const title = document.createElement('span');
-            title.classList.add('console-text-032');
-            title.textContent = 'Nota: ' + noteTitle;
             const actions = document.createElement('div');
             actions.classList.add('console-layout-072');
             const editButton = document.createElement('button');
             editButton.type = 'button';
             editButton.className = 'btn-small';
-            editButton.textContent = 'Editar Markdown';
+            editButton.textContent = 'Editar';
             editButton.addEventListener('click', function() { enterReaderEditMode(); });
             actions.appendChild(editButton);
-            [['single_note', 'Hablar con esta Nota'], ['all_notes', 'Hablar con todas las Notas']].forEach(function(action) {
+            [['single_note', 'Preguntar sobre esta nota'], ['all_notes', 'Preguntar sobre el tema']].forEach(function(action) {
                 const button = document.createElement('button');
                 button.type = 'button';
                 button.className = 'btn-small';
@@ -5196,7 +5233,7 @@
                 actions.appendChild(button);
             });
             syncChatContextButtons();
-            bar.append(title, actions);
+            bar.appendChild(actions);
             return bar;
         }
 

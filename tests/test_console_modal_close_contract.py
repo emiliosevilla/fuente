@@ -9,6 +9,7 @@ HTML = (ROOT / "consola_preview.html").read_text(encoding="utf-8")
 
 EXPECTED_MODAL_IDS = {
     "modal-reader",
+    "modal-reader-graph",
     "modal-fusion",
     "modal-create-theme",
     "modal-export-options",
@@ -21,6 +22,7 @@ EXPECTED_MODAL_IDS = {
     "modal-category",
     "modal-approval",
     "modal-help",
+    "modal-help-info",
     "modal-health",
     "modal-job-queue",
     "meetily-modal",

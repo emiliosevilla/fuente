@@ -27,6 +27,8 @@
             font-family: var(--font-mono) !important;
         }
 
+        [hidden] { display: none !important; }
+
         input, select, option, textarea, button {
             font-family: var(--font-mono) !important;
             color: var(--paper);
@@ -1839,6 +1841,7 @@
 .toast.is-hidden { opacity: 0; transform: translateY(14px); }
 .optimized-spinner.is-active { display: inline-block !important; }
 .modal-wide { width: 840px !important; }
+.modal-compact { width: min(480px, calc(100vw - 40px)); }
 .progress-0, .progress-25, .progress-50, .progress-75, .progress-100 { }
 .quarantine-status { font-size: 0.8rem; margin-top: 4px; }
 .quarantine-status.status-warning { color: var(--amber); }

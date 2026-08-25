@@ -2099,6 +2099,221 @@ html[data-fuente-style="energy"] .arrow-connector::before {
     transform: none;
 }
 
+#modal-reader .modal-container {
+    width: min(96vw, 1680px);
+    height: 94vh;
+    max-width: none;
+    max-height: 96vh;
+}
+
+#modal-reader .modal-header {
+    min-height: 54px;
+    gap: 18px;
+}
+
+#modal-reader .console-layout-005 {
+    justify-content: flex-end;
+    flex-wrap: wrap;
+}
+
+.reader-title-tools {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.reader-title-tools .btn-small[aria-pressed="false"] {
+    color: var(--muted);
+    border-color: transparent;
+}
+
+#modal-reader .modal-body {
+    gap: 10px;
+    padding: 12px 14px 14px;
+}
+
+.reader-search-row {
+    gap: 12px;
+    padding: 0;
+}
+
+.reader-search-label {
+    font-size: 0.68rem;
+    letter-spacing: 0.02em;
+    text-transform: none;
+}
+
+.reader-search-input {
+    min-height: 36px;
+    padding: 8px 12px 8px 32px !important;
+    border-color: var(--fuente-glass-border) !important;
+    border-radius: 8px !important;
+    background: var(--bg-root) !important;
+    box-shadow: none;
+}
+
+.reader-search-input:focus {
+    border-color: var(--accent) !important;
+    box-shadow: 0 0 0 2px var(--fuente-selection);
+}
+
+.reader-search-icon {
+    color: var(--accent);
+    font-size: 1rem;
+}
+
+.reader-context-grid {
+    grid-template-columns: minmax(0, 1fr) 300px;
+    gap: 10px;
+}
+
+.reader-context-grid.is-context-hidden {
+    grid-template-columns: minmax(0, 1fr);
+}
+
+.reader-context-grid.is-context-hidden .reader-properties-pane,
+.reader-dual-pane.is-library-hidden .reader-sidebar {
+    display: none;
+}
+
+.reader-dual-pane {
+    gap: 10px;
+}
+
+.reader-sidebar {
+    width: 164px;
+    min-width: 164px;
+    max-width: 164px;
+    border-color: var(--fuente-glass-border);
+    box-shadow: none;
+}
+
+.reader-sidebar-divider {
+    padding: 8px 9px 4px;
+    font-size: 0.6rem;
+    letter-spacing: 0.04em;
+    text-transform: none;
+}
+
+.reader-note-list-scroll {
+    padding: 0 5px 6px;
+}
+
+.reader-note-item {
+    padding: 5px 7px;
+    border-color: transparent;
+    background: transparent;
+    font-size: 0.66rem;
+}
+
+.reader-note-item:hover,
+.reader-note-item.active {
+    border-color: var(--fuente-glass-border);
+    background: var(--fuente-selection);
+    color: var(--paper);
+}
+
+.reader-view-pane {
+    padding: 28px clamp(24px, 4vw, 64px);
+    border-color: var(--fuente-glass-border);
+    background: var(--bg-root);
+    font-size: 0.94rem;
+    line-height: 1.72;
+}
+
+.reader-view-pane > * {
+    max-width: 820px;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+#note-action-bar {
+    top: -28px;
+    justify-content: flex-end;
+    min-height: 42px;
+    margin: -28px clamp(-64px, -4vw, -24px) 22px;
+    padding: 7px 10px;
+    border-color: var(--fuente-glass-border);
+    border-radius: 0;
+    background: var(--bg-card);
+    box-shadow: none;
+}
+
+#note-action-bar .console-layout-072 {
+    flex-direction: row;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+#note-action-bar .console-layout-073 {
+    width: auto;
+}
+
+.reader-properties-pane {
+    padding: 12px;
+    border-color: var(--fuente-glass-border);
+    box-shadow: none;
+}
+
+.workspace-tabs {
+    position: sticky;
+    top: -12px;
+    z-index: 2;
+    margin: -12px -12px 12px;
+    padding: 10px 12px;
+    flex-wrap: nowrap;
+    background: var(--bg-card);
+    border-bottom: 1px solid var(--fuente-glass-border);
+}
+
+.workspace-tab {
+    flex: 1;
+    padding: 5px 6px;
+    font-size: 0.66rem;
+}
+
+.workspace-tab[aria-selected="true"] {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #06201D;
+}
+
+.reader-properties-visual {
+    height: auto;
+    border-left: 0;
+    padding-left: 0;
+}
+
+.workspace-chat-form {
+    display: grid;
+    gap: 8px;
+    margin-top: 16px;
+}
+
+.workspace-chat-form label {
+    color: var(--muted);
+    font-size: 0.72rem;
+    font-weight: 700;
+}
+
+.workspace-chat-form textarea,
+.discussion-composer input,
+.discussion-composer textarea {
+    width: 100%;
+    padding: 8px 10px;
+    border: 1px solid var(--fuente-glass-border);
+    border-radius: 8px;
+    background: var(--bg-root);
+    color: var(--paper);
+    resize: vertical;
+}
+
+.reader-graph-modal-container {
+    width: 94vw;
+    max-width: 1500px;
+    height: 88vh;
+}
+
 @media (max-width: 1100px) {
     .subgraphs-container {
         grid-template-columns: repeat(5, minmax(0, 1fr));

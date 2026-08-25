@@ -33,9 +33,20 @@ def test_reader_graph_is_independent_and_search_is_above_reader():
 
 def test_reader_layout_is_compact():
     css = Path("fuente/ui/static/console.css").read_text(encoding="utf-8")
-    assert "width: 190px" in css
+    assert "width: 164px" in css
     assert ".reader-search-row" in css
     assert ".reader-graph-modal-container" in css
+
+
+def test_reader_library_and_context_are_independently_collapsible():
+    html = Path("consola_preview.html").read_text(encoding="utf-8")
+    css = Path("fuente/ui/static/console.css").read_text(encoding="utf-8")
+    assert 'id="btn-reader-library" aria-pressed="true"' in html
+    assert 'id="btn-reader-context" aria-pressed="true"' in html
+    assert "function toggleReaderLibrary()" in html
+    assert "function toggleReaderContext()" in html
+    assert ".reader-context-grid.is-context-hidden" in css
+    assert ".reader-dual-pane.is-library-hidden .reader-sidebar" in css
 
 
 def test_quick_guide_has_five_steps_and_tutor_details():

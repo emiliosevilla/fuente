@@ -134,3 +134,22 @@ def test_update_evidence_writes_explicit_results_and_exact_keys(tmp_path: Path, 
         "Q-01": "COMPLETE",
         "Q-02": "IMPLEMENTED / REVIEW OPEN",
     }
+
+
+def test_statuses_survive_after_the_markdown_sdd_is_removed(tmp_path: Path):
+    evidence = tmp_path / "docs/evidence/current-sdd.json"
+    evidence.parent.mkdir(parents=True)
+    evidence.write_text(
+        json.dumps(
+            {
+                "p_status": {"P-01": "COMPLETE"},
+                "q_status": {"Q-01": "COMPLETE"},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    assert read_sdd_statuses(tmp_path) == (
+        {"P-01": "COMPLETE"},
+        {"Q-01": "COMPLETE"},
+    )

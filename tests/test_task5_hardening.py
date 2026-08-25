@@ -30,7 +30,7 @@ ORIGIN = {
     "note_id": "4ca13d5c-4d78-4f37-8c3c-d1dc530a4dc9",
     "revision": 1,
     "content_hash": "a" * 64,
-    "path": "3_limpio/origen.md",
+    "path": "3_capturado/origen.md",
 }
 DERIVED_ID = "89a2f4fb-1d7b-4aa1-9793-119970502a00"
 
@@ -129,7 +129,7 @@ def test_v3_derivative_without_origins_is_rejected_before_approval(tmp_path):
         notes = NotesApplicationService(
             vault=vault, path_resolver=vault.path_resolver(), job_store=store
         )
-        document_id = document_id_for_relative_path("4_salida/Issue-A/derivada.md")
+        document_id = document_id_for_relative_path("4_procesado/Issue-A/derivada.md")
 
         with pytest.raises(CanonicalEligibilityError, match="origin_not_approved"):
             notes.approve(document_id, 1)
@@ -152,8 +152,8 @@ def test_empty_legacy_sources_cannot_commit_fusion_or_write_a_derivative(tmp_pat
         before = sorted(path.relative_to(vault.output_dir) for path in vault.output_dir.rglob("*.md"))
         preview = service.preview(
             [
-                document_id_for_relative_path("4_salida/legacy-a.md"),
-                document_id_for_relative_path("4_salida/legacy-b.md"),
+                document_id_for_relative_path("4_procesado/legacy-a.md"),
+                document_id_for_relative_path("4_procesado/legacy-b.md"),
             ],
             "Fusión legacy",
             "_Sin_Cuestion",
@@ -176,7 +176,7 @@ def test_export_and_public_approval_return_stable_origin_error(tmp_path):
         )
         blocked = SimpleNamespace(
             document_id="blocked-note",
-            relative_path="4_salida/blocked.md",
+            relative_path="4_procesado/blocked.md",
             title="Bloqueada",
             frontmatter={"schema_version": 3},
             origins=(),
@@ -195,7 +195,7 @@ def test_export_and_public_approval_return_stable_origin_error(tmp_path):
         )
 
         with pytest.raises(CanonicalEligibilityError):
-            exporter.write_export("blocked-note", "markdown", "4_salida/blocked.md")
+            exporter.write_export("blocked-note", "markdown", "4_procesado/blocked.md")
 
         # The console action is the public approval route and must not leak a
         # generic ValueError message for this expected provenance failure.
@@ -204,7 +204,7 @@ def test_export_and_public_approval_return_stable_origin_error(tmp_path):
         backend = FuenteConsoleBackend(vault.config.vault_path)
         backend.get_export_service = lambda: exporter
         assert backend.export_note(
-            "blocked-note", "markdown", destination_path="4_salida/blocked.md"
+            "blocked-note", "markdown", destination_path="4_procesado/blocked.md"
         ) == {
             "error": "origin_not_approved",
             "message": "origin_not_approved",
@@ -227,7 +227,7 @@ def test_export_and_public_approval_return_stable_origin_error(tmp_path):
 
 
 def test_direct_graph_reflow_excludes_pending_before_any_write(tmp_path):
-    output = tmp_path / "4_salida"
+    output = tmp_path / "4_procesado"
     note = output / "Issue-A" / "derivada.md"
     note.parent.mkdir(parents=True)
     note.write_text(_derived_markdown(origins=[ORIGIN]), encoding="utf-8")
@@ -417,7 +417,7 @@ def test_approved_output_wins_over_same_id_clean_catalog_route_in_graph(tmp_path
         assert clean_route_error.value.code == "output_not_approved"
         clean_target = NoteLinkTarget(
             document_id=original_id,
-            relative_path="../3_limpio/ESP/Original limpia.md",
+            relative_path="../3_capturado/ESP/Original limpia.md",
             stem="Original limpia",
             link_target="Original limpia",
             origins=(),
@@ -457,7 +457,7 @@ def test_approved_output_wins_over_same_id_clean_catalog_route_in_graph(tmp_path
         moc_node = next(
             node
             for node in graph["nodes"]
-            if node["path"] == "4_salida/_Indice_MOC.md"
+            if node["path"] == "4_procesado/_Indice_MOC.md"
         )
         original_node = next(
             node for node in graph["nodes"] if node["document_id"] == original_id
@@ -517,7 +517,7 @@ def test_migration_graph_guard_uses_concrete_output_target_on_shared_note_id(tmp
 def test_moc_keeps_publicable_notes_when_an_approved_sibling_has_invalid_origins(
     tmp_path,
 ):
-    output = tmp_path / "4_salida"
+    output = tmp_path / "4_procesado"
     issue = output / "Issue-A"
     issue.mkdir(parents=True)
     publicable_id = "89a2f4fb-1d7b-4aa1-9793-119970502a01"
@@ -580,7 +580,7 @@ def test_moc_keeps_publicable_notes_when_an_approved_sibling_has_invalid_origins
     moc_node = next(
         node
         for node in graph["nodes"]
-        if node["path"] == "4_salida/_Indice_MOC.md"
+            if node["path"] == "4_procesado/_Indice_MOC.md"
     )
     assert {
         "source": moc_node["id"],
@@ -610,7 +610,7 @@ def test_totally_excluded_catalog_clears_stale_moc_without_touching_human_notes(
     eligibility_error,
     expected_reason,
 ):
-    output = tmp_path / "4_salida"
+    output = tmp_path / "4_procesado"
     blocked = output / "Issue-A" / "Blocked.md"
     blocked.parent.mkdir(parents=True)
     blocked.write_text(
@@ -667,7 +667,7 @@ def test_lifecycle_flush_automatic_graph_blocks_before_writing(tmp_path):
     note.write_text(markdown, encoding="utf-8")
     pipeline.job_store.register_note(
         note_id=DERIVED_ID,
-        relative_path="4_salida/Issue-A/derivada.md",
+        relative_path="4_procesado/Issue-A/derivada.md",
         content_hash=content_hash_for_markdown(markdown),
         note_type="concept",
         origin_kind=None,
@@ -697,7 +697,7 @@ def test_lifecycle_flush_automatic_graph_blocks_before_writing(tmp_path):
 
 
 def test_graph_derivatives_are_v3_and_preserve_typed_origins(tmp_path):
-    output = tmp_path / "4_salida"
+    output = tmp_path / "4_procesado"
     note = output / "Issue-A" / "derivada.md"
     note.parent.mkdir(parents=True)
     note.write_text(
@@ -766,7 +766,7 @@ def test_empty_v1_sources_cannot_enter_graph_derivatives_in_loop_or_migration(tm
 
 
 def test_public_graph_nodes_preserve_typed_origins(tmp_path):
-    output = tmp_path / "4_salida" / "Issue-A"
+    output = tmp_path / "4_procesado" / "Issue-A"
     output.mkdir(parents=True)
     (output / "derivada.md").write_text(
         _derived_markdown(origins=[ORIGIN], status="approved"), encoding="utf-8"
@@ -780,7 +780,7 @@ def test_public_graph_nodes_preserve_typed_origins(tmp_path):
         {
             "id": "derivada",
             "label": "derivada",
-            "path": "4_salida/Issue-A/derivada.md",
+            "path": "4_procesado/Issue-A/derivada.md",
             "document_id": DERIVED_ID,
             "origins": [ORIGIN],
         }
@@ -788,7 +788,7 @@ def test_public_graph_nodes_preserve_typed_origins(tmp_path):
 
 
 def test_eco_and_hybrid_retrieval_exclude_unapproved_derivatives(tmp_path):
-    output = tmp_path / "4_salida" / "Issue-A"
+    output = tmp_path / "4_procesado" / "Issue-A"
     output.mkdir(parents=True)
     (output / "derivada.md").write_text(
         _derived_markdown(origins=[ORIGIN]), encoding="utf-8"
@@ -806,7 +806,7 @@ def test_eco_and_hybrid_retrieval_exclude_unapproved_derivatives(tmp_path):
         "content": "contenido comprobable",
         "metadata": {
             "document_id": DERIVED_ID,
-            "relative_path": "4_salida/Issue-A/derivada.md",
+            "relative_path": "4_procesado/Issue-A/derivada.md",
             "origins_json": '[{"note_id":"4ca13d5c-4d78-4f37-8c3c-d1dc530a4dc9"}]',
         },
     }
@@ -848,8 +848,8 @@ def test_corpus_excludes_pending_derivative_but_keeps_approved_clean_note(tmp_pa
             chunk["metadata"]["relative_path"] for chunk in provider.load()
         }
 
-        assert "3_limpio/origen.md" in relative_paths
-        assert "4_salida/Issue-A/pendiente.md" not in relative_paths
+        assert "3_capturado/origen.md" in relative_paths
+        assert "4_procesado/Issue-A/pendiente.md" not in relative_paths
     finally:
         store.close()
 
@@ -954,7 +954,7 @@ def test_reindex_failure_keeps_previous_vectors_and_artifact_record(tmp_path):
             chroma_store=chroma,
             chunker=OneChunk(),
         )
-        document_id = document_id_for_relative_path("4_salida/nota.md")
+        document_id = document_id_for_relative_path("4_procesado/nota.md")
         note = notes.get_note(document_id)
         store.add_index_artifact(
             artifact_id="old-chunk",
@@ -1004,7 +1004,7 @@ def test_reindex_compensates_new_vectors_when_artifact_registration_fails(tmp_pa
             chroma_store=chroma,
             chunker=OneChunk(),
         )
-        document_id = document_id_for_relative_path("4_salida/nota.md")
+        document_id = document_id_for_relative_path("4_procesado/nota.md")
         note = notes.get_note(document_id)
         store.add_index_artifact(
             artifact_id="old-chunk",

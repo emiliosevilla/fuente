@@ -251,7 +251,7 @@ def test_enrichment_writes_a_pending_review_candidate_without_touching_original(
         origin.to_dict() for origin in notes.get_note(document_id).origins
     ]
     assert "sources" not in candidate.frontmatter
-    assert result.candidate_path.startswith("4_salida/")
+    assert result.candidate_path.startswith("4_procesado/")
 
     again = _job_service(reflow_harness, generator).run(request.request_id)
     assert again == result
@@ -470,7 +470,7 @@ def test_store_without_authorizer_rejects_unknown_and_path_shaped_ids(reflow_har
             mode="enrich",
         )
     with pytest.raises(PathAuthorizationError):
-        unauthorizing_store.submit("4_salida/Original.md", expected_revision=1, mode="enrich")
+        unauthorizing_store.submit("4_procesado/Original.md", expected_revision=1, mode="enrich")
     assert store._connection.execute("SELECT COUNT(*) FROM reflow_requests").fetchone()[0] == 0
 
 

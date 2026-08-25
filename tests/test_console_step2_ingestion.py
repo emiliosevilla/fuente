@@ -73,6 +73,35 @@ def test_step2_without_lifecycle_does_not_construct_pipeline(tmp_path, monkeypat
     assert result["error"] == "ingestion_service_unavailable"
 
 
+def test_step2_does_not_resume_terminal_job(tmp_path):
+    vault_root = tmp_path / "Vault"
+    input_dir = vault_root / "1_volcado"
+    input_dir.mkdir(parents=True)
+    (input_dir / "reintroduced.txt").write_text("same bytes\n", encoding="utf-8")
+
+    class TerminalIngestion:
+        def vault_relative_identity(self, path):
+            return "1_volcado/reintroduced.txt"
+
+        def submit(self, identity):
+            return SimpleNamespace(
+                stage="quarantined",
+                error_code="previously_quarantined",
+                job_id="terminal-job",
+            )
+
+        def resume(self, job_id):
+            raise AssertionError("step2 must not resume a terminal job")
+
+    backend = FuenteConsoleBackend(vault_root)
+    backend.attach_ingestion_service(TerminalIngestion(), SimpleNamespace())
+
+    result = backend.handle_action("step2_transcribe", {})
+
+    assert "error" not in result
+    assert "stage=quarantined code=previously_quarantined" in result["log"]
+
+
 def test_step2_resolution_and_job_control_use_lifecycle_owned_instances(
     tmp_path, monkeypatch
 ):

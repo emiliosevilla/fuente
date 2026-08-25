@@ -105,7 +105,7 @@ def test_active_theme_default_reflows_the_non_general_active_theme(temp_vault_pa
     assert result.scope == {"document_id": None, "theme": "Theme-A", "issue": None}
     assert result.processed_notes == 2
     assert "[[Target]]" in source.read_text(encoding="utf-8")
-    assert not (temp_vault_path / "4_salida" / "_Indice_MOC.md").exists()
+    assert not (temp_vault_path / "4_procesado" / "_Indice_MOC.md").exists()
 
 
 def test_generated_markdown_mutations_are_reported_and_invalidate_index(
@@ -145,7 +145,7 @@ def test_reflow_reports_notes_excluded_from_the_generated_moc(temp_vault_path):
         _note("Bloqueada", "# Bloqueada\n", "_Sin_Cuestion"), encoding="utf-8"
     )
     service, lifecycle, _invalidations = _service(vault)
-    blocked_id = document_id_for_relative_path("4_salida/Bloqueada.md")
+    blocked_id = document_id_for_relative_path("4_procesado/Bloqueada.md")
 
     def require_publicable(target) -> None:
         if target.document_id == blocked_id:
@@ -194,7 +194,7 @@ def test_document_reflow_is_scoped_complete_and_idempotent(temp_vault_path):
     gamma.write_text(_note("Gamma", "# Gamma\n\nStable gamma body.\n", "Issue-B"), encoding="utf-8")
 
     service, lifecycle, invalidations = _service(vault)
-    alpha_id = document_id_for_relative_path("4_salida/Issue-A/Alpha.md")
+    alpha_id = document_id_for_relative_path("4_procesado/Issue-A/Alpha.md")
 
     first = service.reflow_links(ReflowScope(document_id=alpha_id))
     assert first.processed_notes == 1
@@ -274,11 +274,11 @@ def test_reflow_rejects_path_shaped_ids_and_symlink_aliases(temp_vault_path):
     service, _lifecycle, _invalidations = _service(vault)
 
     with pytest.raises(PathAuthorizationError):
-        service.reflow_links(ReflowScope(document_id="4_salida/Issue-A/Target.md"))
+        service.reflow_links(ReflowScope(document_id="4_procesado/Issue-A/Target.md"))
     with pytest.raises(PathAuthorizationError):
         service.reflow_links(
             ReflowScope(
-                document_id=document_id_for_relative_path("4_salida/Issue-A/Alias.md")
+                document_id=document_id_for_relative_path("4_procesado/Issue-A/Alias.md")
             )
         )
     with pytest.raises(PathAuthorizationError):

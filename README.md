@@ -64,6 +64,27 @@ detalla fases, revisiones Terra, commits y pruebas; la evidencia final conserva
 el último `HEAD` medido. La validación manual de PyWebView, micrófono y
 despliegue remoto queda expresamente fuera de esa medición.
 
+### Resultado de prueba real instalada — 2026-08-25
+
+Prueba sobre `/Applications/Fuente.app`, sin Chrome, con Vault real:
+`/Users/emiliosevillaortego/Desktop/Nuevo Vault`.
+
+- DMG: `32.085.275` bytes.
+- ZIP: `32.464.912` bytes.
+- DMG SHA-256: `29d529831620932b68dbffb269bc720d8da9561cdeb5ca8d6b822d6a5c6aa33b`.
+- ZIP SHA-256: `d6602034e07fc654714116bc0799ea767e21598a5e2fd605fce5752c55c5b33e`.
+- PASS real: arranque, Vault, ETL, aprobación, audio Tiny local, editor
+  WYSIWYG, exportación, lector, cola durable, Salud y handoff Meetily.
+- Límite real: Meetily se abre como aplicación oficial; no existe bridge
+  embebido distribuido. Windows, proveedor montado y otros motores no se
+  declaran probados.
+- PASO 2 repetido en la build final: un audio reintroducido con los mismos
+  bytes generó un único job `saved_clean/pending/awaiting_clean_approval`,
+  creó su captura y no añadió cuarentena.
+
+Informe:
+[`docs/superpowers/reports/2026-08-25-prueba-real-final.md`](docs/superpowers/reports/2026-08-25-prueba-real-final.md).
+
 ```bash
 fuente --vault /ruta/al/Vault --theme "General" --migrate-layout dry-run
 fuente --vault /ruta/al/Vault --theme "General" --migrate-layout apply --plan-id <plan-id>
@@ -77,11 +98,27 @@ autorizados. La guía completa está en
 
 ### Reuniones con Meetily
 
-`Nueva reunión` abre una captura local embebida con consentimiento obligatorio.
-La plantilla es `standard_meeting`; sus artefactos van a
-`2_copiado/reunion`, `3_capturado/reunion` y `4_procesado/reunion`. La interfaz sólo
-recibe identificadores opacos, hashes y estados, nunca tokens ni rutas
-absolutas. Las notas requieren aprobación antes de compartir.
+`Nueva reunión` abre la aplicación oficial local de Meetily instalada en macOS.
+Meetily gestiona allí el micrófono, el consentimiento, la grabación y sus
+artefactos. Al terminar, vincula desde `Ajustes` la carpeta de grabaciones de
+Meetily —por ejemplo `~/Movies/meetily-recordings`— y pulsa `Actualizar
+entradas`. Fuente importa `audio.mp4`, `metadata.json` y `transcripts.json` a
+`1_volcado/` y continúa con su flujo ETL normal.
+
+La captura real validó la aplicación Meetily, el permiso de micrófono y la
+creación local de esos tres archivos. La transcripción de audio queda sujeta a
+la RAM disponible y a Faster-Whisper/modelo local; si no puede ejecutarse,
+Fuente conserva el archivo y deja el job reanudable en `resource_wait`.
+Fuente no declara un puente HTTP/CLI embebido: el puente histórico
+`/opt/meetily-bridge` no forma parte de la distribución actual.
+
+Para transcribir sin descargar modelos durante la prueba, `Ajustes` permite
+seleccionar `Tiny local CPU` y una carpeta local de Faster-Whisper ya existente
+mediante el selector nativo de macOS. Puede usarse junto a `Eco estricto`:
+ese perfil mantiene BM25 y omite audio automático, pero respeta la elección
+explícita de Tiny local. El job se queda en `resource_wait` si la RAM medida no
+alcanza el presupuesto; nunca se pierde el archivo. Los eventos repetidos de
+un archivo que ya espera aprobación humana tampoco lo envían a cuarentena.
 
 La salida derivada puede quedar en `pending_review`. No se indexa, exporta ni
 se muestra como resultado publicado mientras no cumpla el contrato editorial.
@@ -96,7 +133,7 @@ dependencias instaladas:
 
 - PDF, DOCX/DOC, XLSX/XLS, PPTX, CSV, JSON, HTML, MSG, TXT y Markdown.
 - TeX y TeXmacs.
-- Audio local MP3, WAV y M4A mediante Faster-Whisper opcional.
+- Audio local MP3, WAV, M4A y MP4 mediante Faster-Whisper opcional.
 - OCR local para PNG, JPEG y TIFF mediante Tesseract opcional.
 
 Los errores de procesamiento pasan a la cuarentena sin detener todo el flujo.
@@ -123,8 +160,9 @@ Los jobs son durables, reanudables y tienen estados y razones explícitos.
 - Ollama por loopback (`http://localhost:11434`) como ruta predeterminada.
 - RAM Governor que mide memoria, catálogo local y presupuesto antes de elegir
   un modelo.
-- Perfil `Eco estricto`, que usa BM25, no inicializa Chroma y omite audio por
-  defecto.
+- Perfil `Eco estricto`, que usa BM25, no inicializa Chroma y omite audio
+  automático por defecto; una elección explícita de `Tiny local CPU` permite
+  transcripción local si existe el modelo seleccionado.
 - La selección del modelo depende de la RAM instalada y de la RAM disponible
   al iniciar cada ciclo ETL; no depende del contenido, tamaño, revisión o
   aprobación del Vault.
@@ -240,12 +278,10 @@ certificado Apple Developer ID ni notarizado. Ejecuta el instalador sólo con
 paquetes de Fuente obtenidos de una fuente confiable.
 
 Los instaladores preparan el entorno, comprueban requisitos y crean los
-accesos directos correspondientes. Si eliges los extras completos, también
-ofrecen instalar Tesseract con los idiomas `eng` y `spa`, y verifican el motor
-antes de habilitar OCR. La instalación guiada instala siempre los extras Python
-completos, incluido MiniRAG, y después pide confirmación clara para los
-componentes del sistema y el modelo Qwen que ocupan espacio. La instalación
-del modelo no se ejecuta en segundo plano ni se da por válida sin verificación.
+accesos directos correspondientes. El paquete macOS mantiene el runtime base
+pequeño; las funciones opcionales se descargan sólo al activarlas desde
+`Ajustes` o cuando el flujo las necesita. Tesseract, audio, Docling, MiniRAG y
+modelos no se cargan por reflejo. Cada descarga queda visible y verificable.
 
 Para una instalación guiada, abre el instalador correspondiente desde la
 carpeta de Fuente. El instalador comprueba Python 3.10 o superior, crea el

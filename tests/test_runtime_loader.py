@@ -27,3 +27,19 @@ def test_capability_install_uses_target_directory_and_reports_failure(tmp_path, 
         runtime_loader.ensure_capability("audio", allow_download=True, installer=lambda _args: 1)
 
     assert (tmp_path / "site-packages").is_dir()
+
+
+def test_pip_import_failure_is_reported_as_recoverable_capability_error(tmp_path, monkeypatch):
+    monkeypatch.setattr(runtime_loader, "site_packages_dir", lambda: tmp_path / "site-packages")
+    monkeypatch.setattr(runtime_loader, "_installed", lambda _capability: False)
+
+    def broken_installer(_arguments):
+        raise ModuleNotFoundError("colorsys")
+
+    with pytest.raises(
+        runtime_loader.RuntimeCapabilityError,
+        match="instalador de capacidades no puede cargarse",
+    ):
+        runtime_loader.ensure_capability(
+            "audio", allow_download=True, installer=broken_installer
+        )

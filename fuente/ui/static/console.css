@@ -536,6 +536,8 @@
         .reader-properties-pane {
             grid-area: properties;
             padding: 18px;
+            overflow-y: auto;
+            overflow-x: hidden;
         }
 
         .reader-properties-visual {
@@ -1341,6 +1343,37 @@
     font-size: 0.78rem; color: var(--muted); display: flex; gap: 8px; align-items: flex-start;
 }
 
+#eco-controls {
+    display: grid;
+    grid-template-columns: max-content minmax(0, 1fr);
+    gap: 8px 12px;
+    align-items: center;
+    margin: 0;
+    padding: 12px;
+}
+
+#eco-controls legend,
+#eco-controls #eco-policy-summary {
+    grid-column: 1 / -1;
+}
+
+#eco-controls select,
+#eco-controls input {
+    min-width: 0;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+#eco-controls .console-layout-035 > .console-layout-036 {
+    width: auto;
+    flex: 1 1 auto;
+}
+
+#eco-controls > label[for="setting-whisper-model-path"],
+#eco-controls > .console-layout-035 {
+    grid-column: 1 / -1;
+}
+
 .console-text-018 {
     background-color: var(--bg-card); border: 1px solid var(--border-accent);
 }
@@ -1686,6 +1719,7 @@
 .discussion-event { padding: 10px; border: 1px solid var(--fuente-glass-border); border-radius: 10px; }
 .discussion-event-author { color: var(--fuente-frost-1); font-weight: 700; }
 .discussion-composer input, .discussion-composer textarea { width: 100%; border: 1px solid var(--border); border-radius: 8px; padding: 8px; background: var(--fuente-glass); color: var(--paper); }
+.discussion-composer textarea { max-height: 64px; }
 .meeting-modal-body { display: grid; gap: 12px; }
 .meeting-modal-body input[type="text"] { width: 100%; border: 1px solid var(--border); border-radius: 8px; padding: 8px; background: var(--fuente-glass); color: var(--paper); }
 .meeting-modal-actions { display: flex; flex-wrap: wrap; gap: 8px; }

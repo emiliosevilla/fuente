@@ -1,7 +1,11 @@
+import hashlib
+import json
 import sys
 import logging
+import time
 from pathlib import Path
 from typing import List, Tuple
+from fuente.infrastructure.atomic_files import atomic_write_json
 try:
     import psutil
     HAS_PSUTIL = True
@@ -9,6 +13,30 @@ except ImportError:
     HAS_PSUTIL = False
 
 logger = logging.getLogger(__name__)
+
+
+def register_obsidian_vault(vault_path: Path) -> Path:
+    """Register an already validated local Vault without removing other Vaults."""
+    path = Path(vault_path).expanduser().resolve()
+    registry_path = Path.home() / "Library/Application Support/obsidian/obsidian.json"
+    registry = {}
+    if registry_path.exists():
+        registry = json.loads(registry_path.read_text(encoding="utf-8"))
+    if not isinstance(registry, dict):
+        raise ValueError("El registro de Vaults de Obsidian no es válido.")
+    vaults = registry.setdefault("vaults", {})
+    if not isinstance(vaults, dict):
+        raise ValueError("El registro de Vaults de Obsidian no es válido.")
+    if any(
+        isinstance(entry, dict)
+        and Path(str(entry.get("path", ""))).expanduser().resolve() == path
+        for entry in vaults.values()
+    ):
+        return registry_path
+    vault_id = hashlib.sha256(str(path).encode("utf-8")).hexdigest()[:16]
+    vaults[vault_id] = {"path": str(path), "ts": int(time.time() * 1000)}
+    atomic_write_json(registry_path, registry)
+    return registry_path
 
 # Procesos o palabras clave del sistema y de infraestructura que NO se deben considerar aplicaciones de usuario
 SYSTEM_WHITELIST = {
@@ -517,4 +545,3 @@ def run_async_invariants_check() -> None:
 
     t = threading.Thread(target=_worker, daemon=True, name="AsyncInvariantChecker")
     t.start()
-

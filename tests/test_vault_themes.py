@@ -27,8 +27,8 @@ class TestVaultThemesAndIssues(unittest.TestCase):
         self.assertTrue(theme_dir.exists())
         self.assertEqual(self.vault_mgr.active_theme, "Derecho_Civil")
         self.assertIn("Derecho_Civil", self.vault_mgr.get_available_themes())
-        self.assertTrue((theme_dir / "1_entrada").exists())
-        self.assertTrue((theme_dir / "4_salida" / "_Sin_Cuestion").exists())
+        self.assertTrue((theme_dir / "1_volcado").exists())
+        self.assertTrue((theme_dir / "4_procesado" / "_Sin_Cuestion").exists())
 
     def test_create_issues_in_theme(self):
         self.vault_mgr.create_theme("Historia_Romana")
@@ -54,8 +54,8 @@ class TestVaultThemesAndIssues(unittest.TestCase):
 
     def test_get_all_steps_metrics(self):
         metrics = self.vault_mgr.get_all_steps_metrics()
-        self.assertIn("1_entrada", metrics)
-        self.assertIn("4_salida", metrics)
+        self.assertIn("1_volcado", metrics)
+        self.assertIn("4_procesado", metrics)
         self.assertEqual(metrics["active_theme"], "General")
 
 

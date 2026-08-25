@@ -67,14 +67,14 @@ def test_exact_source_duplicates_score_one_and_are_stable(fusion_harness):
     vault, service, _notes, _store = fusion_harness
     first = _write_note(
         vault,
-        "4_salida/Issue-A/alpha.md",
+        "4_procesado/Issue-A/alpha.md",
         title="Contrato",
         issue="Issue-A",
         body="# Contrato\n\nTexto idéntico.\n",
     )
     second = _write_note(
         vault,
-        "4_salida/Issue-A/beta.md",
+        "4_procesado/Issue-A/beta.md",
         title="Contrato",
         issue="Issue-A",
         body="# Contrato\n\nTexto idéntico.\n",
@@ -95,35 +95,35 @@ def test_title_or_body_similarity_emits_bounded_candidates_and_excludes_unrelate
     vault, service, _notes, _store = fusion_harness
     same_title_a = _write_note(
         vault,
-        "4_salida/Issue-A/same-title-a.md",
+        "4_procesado/Issue-A/same-title-a.md",
         title="Guía de contratos",
         issue="Issue-A",
         body="# Guía\n\nTexto sobre arrendamientos y garantías.\n",
     )
     same_title_b = _write_note(
         vault,
-        "4_salida/Issue-A/same-title-b.md",
+        "4_procesado/Issue-A/same-title-b.md",
         title="Guía de contratos",
         issue="Issue-A",
         body="# Guía\n\nTexto completamente distinto sobre impuestos.\n",
     )
     same_body_a = _write_note(
         vault,
-        "4_salida/Issue-A/same-body-a.md",
+        "4_procesado/Issue-A/same-body-a.md",
         title="Resumen de arrendamientos",
         issue="Issue-A",
         body="# Resumen\n\nContrato obligaciones garantías consentimiento.\n",
     )
     same_body_b = _write_note(
         vault,
-        "4_salida/Issue-A/same-body-b.md",
+        "4_procesado/Issue-A/same-body-b.md",
         title="Notas de procedimiento",
         issue="Issue-A",
         body="# Resumen\n\nContrato obligaciones garantías consentimiento.\n",
     )
     unrelated = _write_note(
         vault,
-        "4_salida/Issue-A/unrelated.md",
+        "4_procesado/Issue-A/unrelated.md",
         title="Meteorología",
         issue="Issue-A",
         body="# Clima\n\nPrevisión de lluvia y viento.\n",
@@ -142,14 +142,14 @@ def test_unscoped_detection_does_not_pair_notes_from_different_issues(fusion_har
     vault, service, _notes, _store = fusion_harness
     issue_a = _write_note(
         vault,
-        "4_salida/Issue-A/contract.md",
+        "4_procesado/Issue-A/contract.md",
         title="Contrato común",
         issue="Issue-A",
         body="# Contrato\n\nMismo texto para revisar.\n",
     )
     issue_b = _write_note(
         vault,
-        "4_salida/Issue-B/contract.md",
+        "4_procesado/Issue-B/contract.md",
         title="Contrato común",
         issue="Issue-B",
         body="# Contrato\n\nMismo texto para revisar.\n",
@@ -167,14 +167,14 @@ def test_two_empty_bodies_do_not_admit_unrelated_titles(fusion_harness):
     vault, service, _notes, _store = fusion_harness
     first = _write_note(
         vault,
-        "4_salida/Issue-A/empty-alpha.md",
+        "4_procesado/Issue-A/empty-alpha.md",
         title="Alpha completamente distinto",
         issue="Issue-A",
         body="",
     )
     second = _write_note(
         vault,
-        "4_salida/Issue-A/empty-beta.md",
+        "4_procesado/Issue-A/empty-beta.md",
         title="Beta completamente distinto",
         issue="Issue-A",
         body="",
@@ -193,7 +193,7 @@ def test_issue_scope_and_limit_are_enforced(fusion_harness):
     issue_a_ids = [
         _write_note(
             vault,
-            f"4_salida/Issue-A/note-{index}.md",
+            f"4_procesado/Issue-A/note-{index}.md",
             title="Duplicado",
             issue="Issue-A",
             body="# Texto\n\nMismo contenido.\n",
@@ -203,7 +203,7 @@ def test_issue_scope_and_limit_are_enforced(fusion_harness):
     issue_b_ids = [
         _write_note(
             vault,
-            f"4_salida/Issue-B/note-{index}.md",
+                f"4_procesado/Issue-B/note-{index}.md",
             title="Duplicado",
             issue="Issue-B",
             body="# Texto\n\nMismo contenido.\n",
@@ -228,12 +228,12 @@ def test_detection_is_read_only_and_does_not_call_note_state_mutation(
     vault, service, notes, store = fusion_harness
     _write_note(
         vault,
-        "4_salida/Issue-A/alpha.md",
+        "4_procesado/Issue-A/alpha.md",
         title="Contrato",
         issue="Issue-A",
         body="# Contrato\n\nTexto.\n",
     )
-    document_id = document_id_for_relative_path("4_salida/Issue-A/alpha.md")
+    document_id = document_id_for_relative_path("4_procesado/Issue-A/alpha.md")
     before = {
         path.relative_to(vault.config.vault_path).as_posix(): path.read_bytes()
         for path in vault.config.vault_path.rglob("*.md")

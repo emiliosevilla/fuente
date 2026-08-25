@@ -21,6 +21,7 @@ import secrets
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Mapping, Optional, Dict, Any, List
+from urllib.parse import quote
 
 if sys.platform == "win32":
     if hasattr(sys.stdout, "reconfigure"):
@@ -38,7 +39,11 @@ from fuente.application.refinement import (
     RefinementApplicationService,
     RefinementSnapshot,
 )
-from fuente.application.ingestion import IngestionApplicationService, SourceNotStableError
+from fuente.application.ingestion import (
+    TERMINAL_STAGES,
+    IngestionApplicationService,
+    SourceNotStableError,
+)
 from fuente.application.lifecycle import ApplicationLifecycle
 from fuente.application.export import (
     ExportApplicationService,
@@ -104,7 +109,11 @@ from fuente.domain.note_catalog import NoteCatalog
 from fuente.rag.chroma_store import ChromaStore
 from fuente.rag.vault_corpus import VaultCorpusProvider
 from fuente.ui.bridge import FuentePyWebViewApi
-from fuente.core.app_checker import check_and_prompt_user_apps_closed, launch_obsidian
+from fuente.core.app_checker import (
+    check_and_prompt_user_apps_closed,
+    launch_obsidian,
+    register_obsidian_vault,
+)
 from fuente.core.anythingllm_config import (
     is_anythingllm_installed,
     launch_anythingllm,
@@ -120,7 +129,11 @@ from fuente.watcher.watcher import ETLPipeline
 from fuente.graph_engine.linker import CANONICAL_MOC_FILENAME, GraphLinker
 from fuente.graph_engine.optimized_loop import OptimizadoGraphLoop
 from fuente.ram_governor.governor import RAMGovernor
-from fuente.ram_governor.budget import select_llm_model
+from fuente.ram_governor.budget import (
+    ResourceKind,
+    evaluate_resource,
+    select_llm_model,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -139,6 +152,24 @@ try:
 except ImportError:
     webview = None
     HAS_WEBVIEW = False
+
+
+def _activate_webview_window() -> None:
+    """Make the post-splash WebView receive mouse and keyboard input on macOS."""
+    if sys.platform != "darwin":
+        return
+    try:
+        from AppKit import (
+            NSApplicationActivateIgnoringOtherApps,
+            NSRunningApplication,
+        )
+
+        NSRunningApplication.currentApplication().activateWithOptions_(
+            NSApplicationActivateIgnoringOtherApps
+        )
+    except Exception:
+        logger.debug("No se pudo activar la ventana nativa de Fuente", exc_info=True)
+
 
 try:
     import psutil
@@ -417,6 +448,12 @@ class FuenteConsoleBackend:
         self.runtime_policy = getattr(
             lifecycle.pipeline, "runtime_policy", self.runtime_policy
         )
+        try:
+            _, measured_policy = self._measure_policy_for_config(self.config)
+            lifecycle.set_runtime_policy(measured_policy)
+            self.runtime_policy = measured_policy
+        except Exception:
+            logger.exception("No se pudo medir la política local al conectar la consola")
         self.quarantine_service = self.vault.quarantine_service
         # Prefer the pipeline chroma + reset chat/retrieval so BM25 shares one cache.
         self._chroma_store = getattr(lifecycle.pipeline, "chroma", None)
@@ -573,7 +610,17 @@ class FuenteConsoleBackend:
             ollama_url=config.ollama_url,
             safety_margin_pct=config.ram_safety_margin_pct,
         )
-        budget = select_llm_model(governor.measure_memory())
+        memory = governor.measure_memory()
+        configured_model = (config.custom_model_override or "").strip()
+        budget = (
+            evaluate_resource(
+                ResourceKind.LLM_INFERENCE,
+                memory,
+                model_id=configured_model,
+            )
+            if configured_model
+            else select_llm_model(memory)
+        )
         snapshot = HealthService(config, budget=budget).snapshot()
         policy = resolve_runtime_policy(
             config,
@@ -1062,6 +1109,43 @@ class FuenteConsoleBackend:
         except PathAuthorizationError as error:
             return {"error": error.code, "message": str(error)}
 
+    def export_note_to_downloads(
+        self, document_id: str, export_format: str
+    ) -> Dict[str, Any]:
+        """Write a prepared Markdown/Word export to the user's Downloads folder."""
+        try:
+            payload = self.get_export_service().prepare_download(document_id, export_format)
+            downloads = Path.home() / "Downloads"
+            downloads.mkdir(parents=True, exist_ok=True)
+            destination = downloads / payload.filename
+            stem = destination.stem
+            suffix = destination.suffix
+            counter = 1
+            while destination.exists():
+                destination = downloads / f"{stem} ({counter}){suffix}"
+                counter += 1
+            if payload.content is not None:
+                atomic_write_text(destination, payload.content)
+            elif payload.content_bytes is not None:
+                destination.write_bytes(payload.content_bytes)
+            else:
+                return {"error": "export_projection_failed", "message": "Export has no content"}
+            return {
+                "status": "exported",
+                "format": payload.format,
+                "filename": destination.name,
+                "path": str(destination),
+                "source": payload.source,
+            }
+        except (
+            CanonicalEligibilityError,
+            OutputApprovalRequiredError,
+            PathAuthorizationError,
+            UnsupportedExportFormatError,
+            OSError,
+        ) as error:
+            return {"error": getattr(error, "code", "export_failed"), "message": str(error)}
+
     def notify_index_changed(self) -> None:
         """Invalidate BM25 caches after ingestion writes (parked Task 4.2 wiring)."""
         if self._retrieval_service is not None:
@@ -1251,8 +1335,11 @@ class FuenteConsoleBackend:
             for f in input_dir.rglob("*")
             if f.is_file() and not f.name.startswith(".")
         ] if input_dir.exists() else []
-        proc_dir = self.vault_path / ".fuente_processed"
-        proc_files = list(proc_dir.glob("*")) if proc_dir.exists() else []
+        proc_files = [
+            path
+            for path in self.vault.output_dir.rglob("*.md")
+            if path.is_file() and path.name != CANONICAL_MOC_FILENAME
+        ] if self.vault.output_dir.exists() else []
         quar_items = self.quarantine_service.list_active_items()
         notes_count = len(self.vault.enumerate_documents("output"))
 
@@ -1308,6 +1395,10 @@ class FuenteConsoleBackend:
     def select_sync_folder(self, title: str = "Vincular carpeta de sincronización") -> Dict[str, Any]:
         """Select a source natively and return only a confirmation token."""
         selected = self.select_folder(title)
+        return self.select_sync_folder_from_path(selected)
+
+    def select_sync_folder_from_path(self, selected: str) -> Dict[str, Any]:
+        """Validate a path selected by the native PyWebView dialog."""
         if not selected:
             return {"status": "cancelled"}
         candidate = Path(selected).expanduser()
@@ -1567,19 +1658,26 @@ class FuenteConsoleBackend:
                         seen_paths.add(resolved_path)
                         content = md_file.read_text(encoding="utf-8", errors="replace")
                         document = MarkdownDocument.from_markdown(content)
-                        if document.metadata["status"] == "pending_review":
+                        is_clean = resolved_path.is_relative_to(self.vault.clean_dir.resolve())
+                        is_output = resolved_path.is_relative_to(self.vault.output_dir.resolve())
+                        document_id = self._note_id_for_path(md_file)
+                        note = self.get_notes_service().get_note(document_id)
+                        output_needs_approval = (
+                            is_output
+                            and not self.get_notes_service().approval_service.is_processed_current(
+                                document_id, note.revision, note.content_hash
+                            )
+                        )
+                        if document.metadata["status"] == "pending_review" or output_needs_approval:
                             rel_path = str(md_file.relative_to(self.vault.current_theme_dir)) if self.vault.current_theme_dir in md_file.parents else md_file.name
                             issue = document.metadata.get("issue") or "_Sin_Cuestion"
                             vault_relative = self._vault_relative_identity(md_file)
-                            document_id = self._note_id_for_path(md_file)
-                            note = self.get_notes_service().get_note(document_id)
                             catalog_record = self.get_notes_service().job_store.get_note(document_id)
                             catalog_status = (
                                 str(catalog_record.get("status"))
                                 if catalog_record is not None
                                 else ""
                             )
-                            is_clean = resolved_path.is_relative_to(self.vault.clean_dir.resolve())
                             if (
                                 is_clean
                                 and catalog_status == "approved"
@@ -1889,11 +1987,11 @@ class FuenteConsoleBackend:
 
         # --- ACCIONES ANTERIORES DE CONSOLA ---
         elif action_name == "flush_sources":
-            copied_count = self.sync_manager.sync_to_input(
+            sync_report = self.sync_manager.sync_to_input(
                 self.vault.input_dir, self.vault.dirty_dir
             )
             return {
-                "log": f"Recopilación completada hacia {self.vault.config.input_dir_name}. Archivos nuevos o actualizados traídos: {copied_count}",
+                "log": f"Recopilación completada hacia {self.vault.config.input_dir_name}. Archivos nuevos o actualizados traídos: {sync_report.copied}",
                 "refresh": True,
                 "stats": self.get_stats_dict()
             }
@@ -1926,6 +2024,26 @@ class FuenteConsoleBackend:
             }
         elif action_name == "copy_reader_note":
             note_title = payload.get("note_title", "seleccionada")
+            note_path = str(payload.get("note_path") or "")
+            if not note_path.strip():
+                return {"error": "invalid_payload", "message": "note_path is required"}
+            try:
+                note_file = self._path_resolver().resolve_note(note_path)
+                content = note_file.read_text(encoding="utf-8")
+                if sys.platform == "darwin":
+                    subprocess.run(
+                        ["/usr/bin/pbcopy"],
+                        input=content,
+                        text=True,
+                        check=True,
+                    )
+                else:
+                    return {
+                        "error": "clipboard_unavailable",
+                        "message": "Native clipboard is only available on macOS",
+                    }
+            except (OSError, subprocess.SubprocessError, PathAuthorizationError) as error:
+                return {"error": "clipboard_failed", "message": str(error)}
             return {"log": f"Nota '{note_title}' copiada al portapapeles."}
         elif action_name == "export_reader_note":
             export_format = str(payload.get("format") or "markdown")
@@ -1967,12 +2085,20 @@ class FuenteConsoleBackend:
         elif action_name == "open_obsidian":
             obsidian_uri = payload.get("obsidian_uri", "")
             note_path = payload.get("note_path", "")
-            if obsidian_uri:
-                import webbrowser
+            if note_path:
                 try:
-                    webbrowser.open(obsidian_uri)
-                except Exception:
-                    pass
+                    note_file = self._path_resolver().resolve_note(note_path)
+                    register_obsidian_vault(self.vault.config.vault_path)
+                    obsidian_uri = "obsidian://open?path=" + quote(
+                        str(note_file), safe=""
+                    )
+                except (PathAuthorizationError, OSError, ValueError, json.JSONDecodeError) as error:
+                    return {"error": "obsidian_note_unavailable", "message": str(error)}
+            if obsidian_uri:
+                try:
+                    subprocess.run(["/usr/bin/open", obsidian_uri], check=True)
+                except (OSError, subprocess.CalledProcessError) as error:
+                    return {"error": "obsidian_launch_failed", "message": str(error)}
             return {"log": f"Abriendo nota '{note_path}' en Obsidian Vault."}
         elif action_name == "open_anything_desktop":
             if not is_anythingllm_installed():
@@ -2014,11 +2140,11 @@ class FuenteConsoleBackend:
             message = f"Telemetría del Grafo consultada: {len(notes)} notas preparadas."
             return {"log": message, "alert": message}
         elif action_name == "step1_flush":
-            copied = self.sync_manager.sync_to_input(
+            sync_report = self.sync_manager.sync_to_input(
                 self.vault.input_dir, self.vault.dirty_dir
             )
             return {
-                "log": f"[PASO 1 RECEPCIÓN] Flush Manual ejecutado. Transferidos {copied} archivos a {self.vault.config.input_dir_name}.",
+                "log": f"[PASO 1 RECEPCIÓN] Flush Manual ejecutado. Transferidos {sync_report.copied} archivos a {self.vault.config.input_dir_name}.",
                 "refresh": True,
                 "stats": self.get_stats_dict()
             }
@@ -2035,7 +2161,7 @@ class FuenteConsoleBackend:
                 input_files = (
                     [
                         f
-                        for f in input_dir.glob("*")
+                        for f in input_dir.rglob("*")
                         if f.is_file() and not is_hidden_or_temporary_file(f)
                     ]
                     if input_dir.exists()
@@ -2046,6 +2172,12 @@ class FuenteConsoleBackend:
                     try:
                         identity = ingestion.vault_relative_identity(file_path)
                         job = ingestion.submit(identity)
+                        if job.stage in TERMINAL_STAGES:
+                            log_lines.append(
+                                f"[REVISIÓN] {file_path.name}: "
+                                f"stage={job.stage} code={job.error_code}"
+                            )
+                            continue
                         if job.stage != "completed":
                             job = ingestion.resume(job.job_id)
                         if job.stage == "completed":
@@ -2124,26 +2256,21 @@ class FuenteConsoleBackend:
         """
         if sys.platform == "darwin":
             try:
-                cmd = [
-                    "osascript",
-                    "-e",
-                    "on run argv",
-                    "-e",
-                    'tell application "System Events" to activate',
-                    "-e",
-                    "return POSIX path of (choose folder with prompt (item 1 of argv))",
-                    "-e",
-                    "end run",
-                    "--",
-                    title,
-                ]
-                res = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
-                if res.returncode == 0:
-                    folder = res.stdout.strip()
-                    if folder:
-                        return folder
+                from AppKit import NSApplication, NSModalResponseOK, NSOpenPanel
+
+                app = NSApplication.sharedApplication()
+                app.activateIgnoringOtherApps_(True)
+                panel = NSOpenPanel.openPanel()
+                panel.setCanChooseFiles_(False)
+                panel.setCanChooseDirectories_(True)
+                panel.setAllowsMultipleSelection_(False)
+                panel.setMessage_(title)
+                if panel.runModal() == NSModalResponseOK:
+                    url = panel.URL()
+                    return str(url.path()) if url is not None else ""
             except Exception as e:
-                logging.error(f"Error en osascript chooser: {e}")
+                logging.error(f"Error en selector AppKit: {e}")
+            return ""
 
         if sys.platform == "win32":
             try:
@@ -2182,6 +2309,36 @@ class FuenteConsoleBackend:
         except Exception as e:
             logging.error(f"Error en fallback Tkinter chooser: {e}")
             return ""
+
+    def select_vault_target(self, title: str = "Elegir ubicación del Vault") -> str:
+        """Use macOS's native save panel for a new Vault path."""
+        if sys.platform != "darwin":
+            return ""
+        try:
+            result = subprocess.run(
+                [
+                    "osascript",
+                    "-e",
+                    "on run argv",
+                    "-e",
+                    'tell application "System Events" to activate',
+                    "-e",
+                    'return POSIX path of (choose file name with prompt (item 1 of argv) default name "Nuevo Vault")',
+                    "-e",
+                    "end run",
+                    "--",
+                    title,
+                ],
+                capture_output=True,
+                text=True,
+                timeout=120,
+                check=False,
+            )
+            if result.returncode == 0:
+                return result.stdout.strip()
+        except (OSError, subprocess.TimeoutExpired):
+            pass
+        return ""
 
     def get_ollama_models(self) -> List[str]:
         models = []
@@ -2487,6 +2644,11 @@ class FuenteConsoleBackend:
         for candidate in sorted(directory.rglob("*")) if directory.exists() else []:
             if not candidate.is_file() or candidate.name.startswith("."):
                 continue
+            if root_name == "output" and (
+                candidate.name == CANONICAL_MOC_FILENAME
+                or candidate.name.startswith("_Cuestion_")
+            ):
+                continue
             try:
                 identity = self._vault_relative_identity(candidate)
                 authorized = resolver.resolve(identity, root_name=root_name)
@@ -2771,7 +2933,13 @@ def launch_control_console(vault_path: Optional[Path] = None):
     before the window opens and stopped — bounded, no leftover threads —
     once the window is closed, regardless of which UI backend was used.
     """
-    html_file = Path(__file__).resolve().parent.parent / "consola_preview.html"
+    bundle_root = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parents[1]))
+    html_candidates = (
+        bundle_root / "consola_preview.html",
+        bundle_root.parent / "Resources" / "consola_preview.html",
+        Path(__file__).resolve().parents[1] / "consola_preview.html",
+    )
+    html_file = next((path for path in html_candidates if path.is_file()), html_candidates[0])
 
     if vault_path is None:
         from fuente.ui.setup_backend import FuenteSetupBackend
@@ -2783,7 +2951,7 @@ def launch_control_console(vault_path: Optional[Path] = None):
         webview.settings["ALLOW_DOWNLOADS"] = True
         window = webview.create_window(
             "Fuente Control Console — Sin Vault conectado",
-            url=html_file.as_uri(),
+            url=str(html_file),
             js_api=api,
             width=1280,
             height=850,
@@ -2791,6 +2959,8 @@ def launch_control_console(vault_path: Optional[Path] = None):
             background_color="#DCD4C7",
         )
         api.set_window(window)
+        window.events.shown += _activate_webview_window
+        window.events.loaded += _activate_webview_window
         webview.start(debug=False)
         return
 
@@ -2849,7 +3019,7 @@ def launch_control_console(vault_path: Optional[Path] = None):
             webview.settings["ALLOW_DOWNLOADS"] = True
             window = webview.create_window(
                 "Fuente Control Console — Estética Papiro",
-                url=html_file.as_uri(),
+                url=str(html_file),
                 js_api=api,
                 width=1280,
                 height=850,
@@ -2857,6 +3027,8 @@ def launch_control_console(vault_path: Optional[Path] = None):
                 background_color="#DCD4C7"
             )
             api.set_window(window)
+            window.events.shown += _activate_webview_window
+            window.events.loaded += _activate_webview_window
             webview.start(debug=False)
         else:
             app = FuenteControlConsole(vault_path, backend=backend)

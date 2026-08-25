@@ -46,6 +46,10 @@ def test_pywebview_ready_recovers_open_reader_and_settings_modals():
     assert "loadReaderNotes();" in recovery
     assert "loadSettingsData();" in recovery
     assert "recoverNativeModalLoads();" in ready_listener
+    assert "if (nativeConsoleInitialized) return;" in ready_listener
+    assert "nativeConsoleInitialized = true;" in ready_listener
+    assert "clearTimeout(nativeReadyTimer);" in ready_listener
+    assert "nativeReadyTimer = setTimeout(function()" in ready_listener
 
 
 def test_console_csp_allows_pywebview_62_to_build_native_api_methods():

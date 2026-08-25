@@ -62,7 +62,7 @@ def test_ui1_styles_define_open_menu_focus_and_active_states():
     assert ".theme-select-trigger:hover" in css
     assert "background: var(--bg-card-hover)" in css
     assert "transform: translateY(-1px)" in css
-    assert "box-shadow: 0 2px 8px rgba(0,0,0,0.08)" in css
+    assert "box-shadow: var(--elevation-low)" in css
     assert ".theme-select-trigger:focus-visible" in css
     assert ".theme-select-option:hover" in css
     assert ".console-layout-073.active" in css

@@ -144,8 +144,6 @@ def test_ocr_setup_is_an_explicit_installation_step(tmp_path, monkeypatch):
         confirm=lambda _title, _message: False,
         install_model=False,
         install_ocr=True,
-        install_anythingllm=False,
-        configure_anythingllm=False,
         create_shortcuts=False,
     )
     monkeypatch.setattr(

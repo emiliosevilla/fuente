@@ -95,7 +95,7 @@ import subprocess
 IGNORED_GUI_APPS = {
     "finder", "dock", "system events", "terminal", "iterm", "iterm2",
     "alacritty", "kitty", "ghostty", "fuente", "fuente_macos", "fuente_windows",
-    "ollama", "anythingllm", "anythingllm desktop", "code", "visual studio code",
+    "ollama", "code", "visual studio code",
     "cursor", "antigravity", "gemini", "python", "python3", "electron"
 }
 

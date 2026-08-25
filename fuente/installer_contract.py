@@ -51,7 +51,6 @@ class PrerequisiteStatus:
     obsidian_installed: bool
     ollama_binary_installed: bool
     ollama_api_ready: bool
-    anythingllm_installed: bool
     tesseract_installed: bool = False
     tesseract_languages: tuple[str, ...] = ()
 
@@ -83,8 +82,6 @@ class InstallationContext:
     on_step_start: Optional[StepStartCallback] = None
     install_model: bool = True
     install_ocr: bool = False
-    install_anythingllm: bool = False
-    configure_anythingllm: bool = False
     create_shortcuts: bool = True
     existing_receipt: Optional[Dict[str, Any]] = None
 
@@ -331,25 +328,14 @@ def start_ollama_service() -> bool:
     return wait_for_ollama_ready()
 
 
-def detect_anythingllm_installed() -> bool:
-    from fuente.core.anythingllm_config import is_anythingllm_installed
-
-    return is_anythingllm_installed()
-
-
 def detect_prerequisites(
     ollama_url: str = DEFAULT_OLLAMA_URL,
-    *,
-    include_anythingllm: bool = False,
 ) -> PrerequisiteStatus:
     ocr = detect_ocr_status()
     return PrerequisiteStatus(
         obsidian_installed=detect_obsidian_installed(),
         ollama_binary_installed=detect_ollama_binary_installed(),
         ollama_api_ready=is_ollama_api_ready(ollama_url),
-        anythingllm_installed=(
-            detect_anythingllm_installed() if include_anythingllm else False
-        ),
         tesseract_installed=ocr.command is not None,
         tesseract_languages=tuple(sorted(ocr.languages)),
     )
@@ -569,87 +555,6 @@ def step_install_model(ctx: InstallationContext) -> InstallStepResult:
     )
 
 
-def step_install_anythingllm(ctx: InstallationContext) -> InstallStepResult:
-    if not ctx.install_anythingllm:
-        return InstallStepResult(
-            name="anythingllm_install",
-            success=True,
-            message="AnythingLLM installation skipped by user",
-            skipped=True,
-        )
-
-    from fuente.core.anythingllm_config import (
-        install_anythingllm_autonomously,
-        is_anythingllm_installed,
-    )
-
-    if is_anythingllm_installed():
-        return InstallStepResult(
-            name="anythingllm_install",
-            success=True,
-            message="AnythingLLM Desktop already installed",
-            skipped=True,
-        )
-
-    if not _user_confirms(
-        ctx,
-        title="Instalar AnythingLLM Desktop",
-        message=(
-            "AnythingLLM Desktop no está instalado.\n\n"
-            "Fuente puede instalarlo con Homebrew/Winget (descarga grande).\n"
-            "¿Deseas continuar con la instalación automática?"
-        ),
-    ):
-        return InstallStepResult(
-            name="anythingllm_install",
-            success=False,
-            message="AnythingLLM not installed (installation declined)",
-            actionable="Install from https://anythingllm.com/desktop",
-        )
-
-    log = ctx.log or _default_log
-    log("[step:anythingllm_install] Installing AnythingLLM Desktop...")
-    if install_anythingllm_autonomously():
-        return InstallStepResult(
-            name="anythingllm_install",
-            success=True,
-            message="AnythingLLM Desktop installed",
-        )
-    return InstallStepResult(
-        name="anythingllm_install",
-        success=False,
-        message="Automatic AnythingLLM installation failed",
-        actionable="Install from https://anythingllm.com/desktop",
-    )
-
-
-def step_configure_anythingllm(ctx: InstallationContext) -> InstallStepResult:
-    if not ctx.configure_anythingllm:
-        return InstallStepResult(
-            name="anythingllm_config",
-            success=True,
-            message="AnythingLLM configuration skipped",
-            skipped=True,
-        )
-
-    from fuente.core.anythingllm_config import configure_anythingllm_integration
-
-    output_dir = VaultLayout(ctx.vault_path).processed_dir
-    ok = configure_anythingllm_integration(output_dir)
-    if ok:
-        return InstallStepResult(
-            name="anythingllm_config",
-            success=True,
-            message="AnythingLLM integration configured",
-        )
-    return InstallStepResult(
-        name="anythingllm_config",
-        success=False,
-        message="Could not configure AnythingLLM integration",
-        actionable="Open AnythingLLM and point it to the vault 4_procesado folder.",
-    )
-
-
 def step_create_shortcuts(ctx: InstallationContext) -> InstallStepResult:
     if ctx.vault_path is None:
         return InstallStepResult(
@@ -756,20 +661,9 @@ def run_installation(ctx: InstallationContext) -> List[InstallStepResult]:
     model_step = _run_named_step("ollama_model", lambda: step_install_model(ctx))
     results.append(model_step)
 
-    results.append(_run_named_step("anythingllm_install", lambda: step_install_anythingllm(ctx)))
-    if ctx.vault_path is None:
-        results.append(_run_named_step("anythingllm_config", lambda: InstallStepResult(
-            name="anythingllm_config", success=True,
-            message="AnythingLLM configuration deferred until a Vault is connected", skipped=True)))
-    else:
-        results.append(_run_named_step("anythingllm_config", lambda: step_configure_anythingllm(ctx)))
     results.append(_run_named_step("shortcuts", lambda: step_create_shortcuts(ctx)))
 
-    prereqs = detect_prerequisites(
-        include_anythingllm=(
-            ctx.install_anythingllm or ctx.configure_anythingllm
-        )
-    )
+    prereqs = detect_prerequisites()
     receipt = build_receipt(ctx, results, prereqs, model_name=model_step.model_name)
     save_receipt(ctx.base_dir, receipt)
     log(f"[+] Installation receipt saved to {receipt_path(ctx.base_dir)}")

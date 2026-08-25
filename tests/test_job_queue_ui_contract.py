@@ -109,7 +109,6 @@ def test_health_panel_renders_measured_status_and_keeps_optional_actions_read_on
         "renderHealthSnapshot",
         "item.status",
         "Opcional/no detectado",
-        'id="anythingllm-optional-panel" hidden',
     ):
         assert literal in source, literal
 

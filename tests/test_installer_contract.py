@@ -24,11 +24,9 @@ from fuente.installer_contract import (
     save_receipt,
     step_save_cloud_folders,
     step_create_shortcuts,
-    step_install_anythingllm,
     step_install_model,
     wait_for_ollama_ready,
 )
-from fuente.core.anythingllm_config import launch_anythingllm
 from fuente.core.folder_sync import FolderSyncManager
 from fuente.domain.sync import ConnectedFolder
 from fuente import installer_gui
@@ -137,7 +135,7 @@ def test_build_receipt_serializes_connected_folder_roots_as_json_safe(tmp_path):
     receipt = build_receipt(
         ctx,
         [],
-        PrerequisiteStatus(False, False, False, False),
+        PrerequisiteStatus(False, False, False),
     )
 
     assert receipt["cloud_folders"] == [str(cloud_root.resolve()), str(manual_root.resolve())]
@@ -209,8 +207,6 @@ def test_run_installation_without_log_does_not_raise(tmp_path):
         confirm=lambda _t, _m: False,
         log=None,
         install_model=False,
-        install_anythingllm=False,
-        configure_anythingllm=False,
         create_shortcuts=False,
     )
     steps = run_installation(ctx)
@@ -236,8 +232,6 @@ def test_receipt_stores_model_name_from_step(tmp_path):
         confirm=lambda _t, _m: True,
         log=None,
         install_model=True,
-        install_anythingllm=False,
-        configure_anythingllm=False,
         create_shortcuts=False,
     )
     model_result = InstallStepResult(
@@ -267,8 +261,6 @@ def test_on_step_start_callback_fires_in_order(tmp_path):
         log=lambda _m: None,
         on_step_start=seen.append,
         install_model=False,
-        install_anythingllm=False,
-        configure_anythingllm=False,
         create_shortcuts=False,
     )
     run_installation(ctx)
@@ -277,46 +269,8 @@ def test_on_step_start_callback_fires_in_order(tmp_path):
         "cloud_folders",
         "ocr_runtime",
         "ollama_model",
-        "anythingllm_install",
-        "anythingllm_config",
         "shortcuts",
     ]
-
-
-def test_anythingllm_requires_confirmation(install_ctx):
-    install_ctx.install_anythingllm = True
-    install_ctx.confirm = lambda _t, _m: False
-
-    with patch(
-        "fuente.core.anythingllm_config.is_anythingllm_installed", return_value=False
-    ), patch(
-        "fuente.core.anythingllm_config.install_anythingllm_autonomously",
-        return_value=True,
-    ):
-        result = step_install_anythingllm(install_ctx)
-
-    assert result.success is False
-    assert "not installed" in result.message.lower()
-
-
-def test_launch_anythingllm_without_install_does_not_open_browser(monkeypatch):
-    monkeypatch.setattr(
-        "fuente.core.anythingllm_config.get_anythingllm_paths",
-        lambda: {"app_path": None, "data_dir": None},
-    )
-    popen = MagicMock()
-    browser = MagicMock()
-    installer = MagicMock()
-    monkeypatch.setattr("fuente.core.anythingllm_config.subprocess.Popen", popen)
-    monkeypatch.setattr("fuente.core.anythingllm_config.webbrowser.open", browser)
-    monkeypatch.setattr(
-        "fuente.core.anythingllm_config.install_anythingllm_autonomously", installer
-    )
-
-    assert launch_anythingllm() is False
-    popen.assert_not_called()
-    browser.assert_not_called()
-    installer.assert_not_called()
 
 
 def test_run_installation_second_run_no_duplicate_cloud_folders(tmp_path):
@@ -337,8 +291,6 @@ def test_run_installation_second_run_no_duplicate_cloud_folders(tmp_path):
         confirm=lambda _t, _m: False,
         log=lambda _m: None,
         install_model=False,
-        install_anythingllm=False,
-        configure_anythingllm=False,
         create_shortcuts=False,
     )
 

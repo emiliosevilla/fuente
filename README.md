@@ -381,8 +381,8 @@ Docker y CI se debe usar `--headless` o `--flush`.
   `ALLOW_NON_LOOPBACK_OLLAMA=true`.
 - No hay descargas automáticas de modelos, credenciales cloud ni servicios
   externos obligatorios durante el runtime.
-- AnythingLLM es una integración externa opcional, no una dependencia del
-  núcleo ni un paso automático de instalación.
+- Fuente ofrece la consulta de notas dentro de la propia aplicación; no delega
+  el acceso al Vault a aplicaciones externas adicionales.
 - La consola usa una política CSP estricta y no carga scripts ni fuentes desde
   CDNs en tiempo de ejecución.
 

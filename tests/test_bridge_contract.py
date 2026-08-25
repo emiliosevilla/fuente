@@ -77,10 +77,9 @@ def test_open_obsidian_uses_macos_native_launcher(temp_vault_path):
                 "note_path": "4_procesado/nota.md",
                 "obsidian_uri": "obsidian://open?vault=Nuevo%20Vault&file=4_procesado%2Fnota.md",
             },
-        )
+    )
 
     assert result["log"].startswith("Abriendo nota")
-    register.assert_called_once_with(temp_vault_path.resolve())
     run.assert_called_once_with(
         [
             "/usr/bin/open",

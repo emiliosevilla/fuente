@@ -84,6 +84,11 @@ def sign_macos_app(app_bundle: Path) -> None:
         subprocess.check_call([
             "/usr/bin/ditto", "--norsrc", str(signing_bundle), str(app_bundle),
         ])
+        # File Provider puede reinyectar metadatos al copiar de vuelta el .app.
+        # Límpialos después de la copia final para que ZIP, DMG y codesign vean
+        # exactamente el mismo bundle.
+        for attribute in ("com.apple.FinderInfo", "com.apple.ResourceFork"):
+            subprocess.run(["/usr/bin/xattr", "-dr", attribute, str(app_bundle)], check=False)
     finally:
         shutil.rmtree(signing_dir, ignore_errors=True)
 

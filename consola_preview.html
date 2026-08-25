@@ -4,8 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; base-uri 'none'; connect-src 'self'; font-src 'self'; img-src 'self' data:; object-src 'none'; script-src 'self' 'nonce-fuente-console' 'unsafe-eval'; style-src 'self'">
-    <title>Fuente Control Console — Estética Papiro</title>
-    <!-- La tipografía global de la consola y sus modales se define en console.css: Arial, sans-serif. -->
+    <title>Fuente — Consola</title>
+    <!-- La tipografía global de la consola y sus modales se define en console.css. -->
     <link rel="stylesheet" data-fuente-tokens="true" href="fuente/ui/static/fuente_tokens.css">
     <link rel="stylesheet" href="fuente/ui/static/console.css">
     <link rel="stylesheet" href="assets/toastui-editor/toastui-editor.css">
@@ -17,7 +17,6 @@
         <div class="masthead-main">
             <div>
                 <h1 class="masthead-title">FUENTE</h1>
-                <div class="masthead-tagline">Formateo Universal de Notas, Estructuración y Síntesis</div>
             </div>
             <div class="console-layout-001">
                 <span class="masthead-link" data-onclick-command="triggerAction('quick_help')">Guía Rápida</span>
@@ -31,21 +30,21 @@
         <!-- STATUS STRIP (ESTADO DE FUENTE EN CABECERA) -->
         <div class="status-strip">
             <div class="status-item">
-                <span class="status-label">● MODO DE RED:</span>
+                    <span class="status-label">● CONEXIÓN:</span>
                 <span class="status-val">
-                    <span id="status-offline-mode" class="offline-badge local-only" title="Inferencia en Ollama loopback">Solo local</span>
+                    <span id="status-offline-mode" class="offline-badge local-only" title="La IA trabaja en este equipo">Solo local</span>
                 </span>
             </div>
             <div class="status-item">
-                <span class="status-label">● MOTOR DE IA LOCAL:</span>
+                    <span class="status-label">● IA LOCAL:</span>
                     <span class="status-val" id="status-ollama">No medido</span>
             </div>
             <div class="status-item">
-                <span class="status-label">● CHAT CON DOCUMENTOS:</span>
+                    <span class="status-label">● CHAT:</span>
                     <span class="status-val" id="status-anything">No medido</span>
             </div>
             <div class="status-item">
-                <span class="status-label">● BIBLIOTECA DE NOTAS:</span>
+                    <span class="status-label">● NOTAS:</span>
                     <span class="status-val" id="status-obsidian">No medido</span>
             </div>
         </div>
@@ -56,7 +55,7 @@
         <!-- BARRA DE HERRAMIENTAS Y ACCIONES (TEMA, FUENTES, BUCLE OPTIMIZADO) -->
         <div class="toolbar-bar">
             <div class="toolbar-group">
-                <span class="console-layout-002">TEMA:</span>
+                <span class="console-layout-002">ESPACIO:</span>
                 <div id="theme-select" class="theme-select-control">
                     <button
                         id="theme-select-trigger"
@@ -72,22 +71,22 @@
                     </button>
                     <div id="theme-select-menu" class="theme-select-menu" role="listbox" aria-labelledby="theme-select-trigger"></div>
                 </div>
-                <button class="btn-secondary" data-onclick-command="promptCreateTheme()">+ Nuevo Tema</button>
+                <button class="btn-secondary" data-onclick-command="promptCreateTheme()">+ Nuevo tema</button>
                 <span class="console-layout-004"></span>
                 <button class="btn-primary" id="btn-run-optimized" data-onclick-command="triggerOptimizedCycle()">
-                    <span id="optimized-spinner" class="is-hidden">⚙️</span> Nuevo Flujo de Trabajo
+                    <span id="optimized-spinner" class="is-hidden">⚙️</span> Procesar material
                 </button>
                 <button class="btn-secondary" data-onclick-command="syncAllInputs()">
                     Actualizar entradas
                 </button>
                 <button class="btn-secondary" data-onclick-command="openApprovalInbox()">
-                    Bandeja de Aprobación
+                    Revisar notas
                 </button>
                 <button class="btn-secondary" id="btn-open-job-queue" data-onclick-command="openModal('modal-job-queue')">
-                    Cola de trabajos
+                    Trabajos
                 </button>
                 <button class="btn-secondary" id="btn-open-health" data-onclick-command="openModal('modal-health')">
-                    Salud medida
+                    Estado del sistema
                 </button>
             </div>
         </div>
@@ -95,41 +94,41 @@
         <!-- STATS GRID -->
         <div class="stats-grid">
             <div class="stat-card" data-onclick-command="openModal('modal-stat-input')">
-                <div class="stat-title">Archivos por Procesar</div>
+                <div class="stat-title">Archivos pendientes</div>
                 <div class="stat-num gold" id="stat-input">0</div>
             </div>
             <div class="stat-card" data-onclick-command="openModal('modal-category')">
-                <div class="stat-title">Archivos Procesados</div>
+                <div class="stat-title">Archivos procesados</div>
                 <div class="stat-num green" id="stat-processed">0</div>
             </div>
             <div class="stat-card" data-onclick-command="openModal('modal-quarantine')">
-                <div class="stat-title">En Cuarentena</div>
+                <div class="stat-title">En cuarentena</div>
                 <div class="stat-num red" id="stat-quarantine">0</div>
             </div>
             <div class="stat-card" data-onclick-command="openModal('modal-stat-notes')">
-                <div class="stat-title">Notas Preparadas</div>
+                <div class="stat-title">Notas preparadas</div>
                 <div class="stat-num" id="stat-notes">0</div>
             </div>
             <div class="stat-card" data-onclick-command="openModal('modal-stat-ram')">
-                <div class="stat-title">Consumo RAM</div>
+                <div class="stat-title">Memoria</div>
                 <div class="stat-num" id="stat-ram">0%</div>
             </div>
         </div>
 
-        <!-- GRAFO VISUAL DE ARQUITECTURA (4 ETAPAS) -->
+        <!-- MAPA SIMPLE DEL FLUJO -->
         <div class="graph-section" id="graph-section">
             <div class="graph-title">FLUJO DE TRABAJO</div>
             
             <div class="subgraphs-container">
                 <div class="subgraph-box">
                     <div class="subgraph-header">
-                        <span class="subgraph-title">1. Recepción</span>
-                        <span class="node-badge" id="badge-step1">Última acción:  --/--/----  --:--:--</span>
+                        <span class="subgraph-title">1. Recopilar</span>
+                        <span class="node-badge" id="badge-step1">Última vez: --/--/---- --:--:--</span>
                     </div>
                     <div class="node-card" data-onclick-command="triggerAction('step1_flush')">
-                        <div class="node-tag">── PASO 1 ──</div>
-                        <div class="node-name">Recopilación de archivos en formato variado</div>
-                        <div class="node-desc">Flush Manual desde carpetas vinculadas hacia 1_volcado</div>
+                        <div class="node-tag">── 1 ──</div>
+                        <div class="node-name">Recopilar archivos</div>
+                        <div class="node-desc">Recoger archivos de las carpetas conectadas</div>
                     </div>
                 </div>
 
@@ -137,13 +136,13 @@
 
                 <div class="subgraph-box">
                     <div class="subgraph-header">
-                        <span class="subgraph-title">2. Transcripción</span>
-                        <span class="node-badge" id="badge-step2">Última acción:  --/--/----  --:--:--</span>
+                        <span class="subgraph-title">2. Convertir</span>
+                        <span class="node-badge" id="badge-step2">Última vez: --/--/---- --:--:--</span>
                     </div>
                     <div class="node-card" data-onclick-command="triggerAction('step2_transcribe')">
-                        <div class="node-tag">── PASO 2 ──</div>
-                        <div class="node-name">Traslado de la información a formato uniforme</div>
-                        <div class="node-desc">Procesado ETL: 1_volcado ➔ 2_copiado ➔ 3_capturado</div>
+                        <div class="node-tag">── 2 ──</div>
+                        <div class="node-name">Convertir a texto</div>
+                        <div class="node-desc">Preparar audios, imágenes y documentos</div>
                     </div>
                 </div>
 
@@ -151,13 +150,13 @@
 
                 <div class="subgraph-box">
                     <div class="subgraph-header">
-                        <span class="subgraph-title">3. Estructuración</span>
-                        <span class="node-badge" id="badge-step3">Última acción:  --/--/----  --:--:--</span>
+                        <span class="subgraph-title">3. Organizar</span>
+                        <span class="node-badge" id="badge-step3">Última vez: --/--/---- --:--:--</span>
                     </div>
                     <div class="node-card" data-onclick-command="triggerAction('step3_structure')">
-                        <div class="node-tag">── PASO 3 ──</div>
-                        <div class="node-name">Preparación de notas inteligentes</div>
-                        <div class="node-desc">Bucle Optimizado + Vectorización ChromaDB ➔ 4_procesado</div>
+                        <div class="node-tag">── 3 ──</div>
+                        <div class="node-name">Organizar notas</div>
+                        <div class="node-desc">Separar, enlazar y ordenar las ideas</div>
                     </div>
                 </div>
 
@@ -165,13 +164,13 @@
 
                 <div class="subgraph-box">
                     <div class="subgraph-header">
-                        <span class="subgraph-title">4. Consulta</span>
-                        <span class="node-badge" id="badge-step4">Última acción:  --/--/----  --:--:--</span>
+                        <span class="subgraph-title">4. Consultar</span>
+                        <span class="node-badge" id="badge-step4">Última vez: --/--/---- --:--:--</span>
                     </div>
                     <div class="node-card" data-onclick-command="openModal('modal-reader')">
-                        <div class="node-tag">── PASO 4 ──</div>
-                        <div class="node-name">Consulta de Notas Finales</div>
-                        <div class="node-desc">Fuente el memorioso (Lector) y Fuente el conversador (Chat)</div>
+                        <div class="node-tag">── 4 ──</div>
+                        <div class="node-name">Consultar notas</div>
+                        <div class="node-desc">Leerlas o preguntar sobre ellas</div>
                     </div>
                 </div>
             </div>
@@ -180,52 +179,55 @@
         <!-- LOG CONSOLE DE AUDITORÍA -->
         <div class="log-section">
             <div class="log-header">
-                <span>── REGISTRO DE ACTIVIDAD ──</span>
+                <span>── ACTIVIDAD ──</span>
                 <div class="log-actions">
-                    <button class="btn-small" id="btn-toggle-path" data-onclick-command="togglePathMode(this)">Rutas: Relativas</button>
-                    <button class="btn-small" data-onclick-command="clearLogView()">Limpiar Registro</button>
+                    <button class="btn-small" id="btn-toggle-path" data-onclick-command="togglePathMode(this)">Rutas cortas</button>
+                    <button class="btn-small" data-onclick-command="clearLogView()">Limpiar</button>
                 </div>
             </div>
             <div class="log-console" id="log-console">
-                <div><span class="log-time">[00:00:00]</span> The Fuente Gazette — Imprenta y registro iniciados correctamente.</div>
+                <div><span class="log-time">[00:00:00]</span> Fuente lista.</div>
             </div>
         </div>
 
         <!-- LÍNEA DE ESTADO MINIMALISTA INFERIOR -->
         <div class="bottom-status-bar">
-            <span id="bottom-status-line">Estado: No medido • Vault: No medido • RAM: No medido</span>
-            <span class="console-text-002">'Fuente' es una creación de Emilio Sevilla Ortego (fuente_2026.1)</span>
+            <span id="bottom-status-line">Estado: sin medir • Notas: sin conectar • Memoria: sin medir</span>
+            <span class="console-text-002">Fuente · Emilio Sevilla Ortego</span>
         </div>
     </div>
 
-    <!-- MODAL LECTOR (FUENTE EL MEMORIOSO) -->
+    <!-- MODAL NOTAS -->
     <div class="modal-overlay" id="modal-reader">
         <div class="modal-container">
             <div class="modal-header">
-                <div class="modal-title">FUENTE EL MEMORIOSO — LECTOR DE NOTAS</div>
+                <div class="modal-title">Notas</div>
                 <div class="console-layout-005">
                     <button class="btn-small" id="btn-reader-back" data-onclick-command="goBackReaderNote()" disabled title="Volver a la nota anterior">◄ Atrás</button>
-                    <button class="btn-small btn-toggle active" id="btn-reader-mode-list" data-onclick-command="switchReaderView('list')">Vista Notas</button>
-                    <button class="btn-small btn-toggle" id="btn-reader-mode-graph" data-onclick-command="switchReaderView('graph')">Vista Gráfico</button>
-                    <button class="btn-small btn-toggle" id="btn-reader-mode-moc" data-onclick-command="openMOCNote()">Mapa MOC</button>
+                    <button class="btn-small btn-toggle active" id="btn-reader-mode-list" data-onclick-command="switchReaderView('list')">Notas</button>
+                    <button class="btn-small btn-toggle" id="btn-reader-mode-graph" data-onclick-command="switchReaderView('graph')">Mapa</button>
+                    <button class="btn-small btn-toggle" id="btn-reader-mode-moc" data-onclick-command="openMOCNote()">Índice</button>
                     <span class="console-layout-006"></span>
                     <button class="btn-small" data-onclick-command="triggerAction('copy_reader_note', {}, this)">Copiar</button>
                     <button class="btn-small" data-onclick-command="triggerAction('export_reader_note', {}, this)">Exportar</button>
                     <button class="btn-small" data-onclick-command="triggerAction('open_obsidian', {}, this)">Abrir en Obsidian</button>
-                    <button class="btn-small" data-onclick-command="openFusionWorkflow()">Fusionar seleccionadas</button>
+                    <button class="btn-small" data-onclick-command="openFusionWorkflow()">Unir seleccionadas</button>
                     <button class="btn-small" data-onclick-command="openMeetilyModal()">Nueva reunión</button>
                     <button class="close-btn" data-onclick-command="closeModal('modal-reader')">&times;</button>
                 </div>
             </div>
             <div class="modal-body">
+                <div class="reader-search-row" role="search">
+                    <label class="reader-search-label" for="reader-search">Buscar notas</label>
+                    <div class="reader-search-wrapper">
+                        <span class="reader-search-icon" aria-hidden="true">🔍</span>
+                        <input type="search" class="reader-search-input" id="reader-search" placeholder="Buscar por título o frase..." autocomplete="off" data-oninput-command="filterReaderNotes()">
+                    </div>
+                </div>
                 <div class="reader-context-grid">
                     <section class="reader-context-content" data-reader-region="content" aria-label="Contenido de la nota">
                         <div class="reader-dual-pane reader-view" id="reader-view-list">
                             <div class="reader-sidebar">
-                                <div class="reader-search-wrapper">
-                                    <span class="reader-search-icon">🔍</span>
-                                    <input type="text" class="reader-search-input" id="reader-search" placeholder="Buscar notas..." data-oninput-command="filterReaderNotes()">
-                                </div>
                                 <div class="reader-pinned-container" id="reader-pinned-moc"></div>
                                 <div class="reader-sidebar-divider">ÍNDICE DE NOTAS</div>
                                 <div class="reader-note-list-scroll">
@@ -240,15 +242,15 @@
                             </div>
                         </div>
                     </section>
-                    <aside class="reader-properties-pane" data-reader-region="properties" role="dialog" aria-modal="false" aria-label="Contexto de la nota">
-                        <div class="workspace-tabs" role="tablist" aria-label="Contexto de la nota">
-                            <button type="button" class="btn-small workspace-tab is-active" id="workspace-tab-assistant" role="tab" aria-selected="true" aria-controls="workspace-panel-assistant" data-onclick-command="switchWorkspaceTab('assistant')">Asistente</button>
+                    <aside class="reader-properties-pane" data-reader-region="properties" role="dialog" aria-modal="false" aria-label="Más sobre la nota">
+                        <div class="workspace-tabs" role="tablist" aria-label="Más sobre la nota">
+                            <button type="button" class="btn-small workspace-tab is-active" id="workspace-tab-assistant" role="tab" aria-selected="true" aria-controls="workspace-panel-assistant" data-onclick-command="switchWorkspaceTab('assistant')">Ayuda</button>
                             <button type="button" class="btn-small workspace-tab" id="workspace-tab-notes" role="tab" aria-selected="false" aria-controls="workspace-panel-notes" data-onclick-command="switchWorkspaceTab('notes')">Notas</button>
                             <button type="button" class="btn-small workspace-tab" id="workspace-tab-discussion" role="tab" aria-selected="false" aria-controls="workspace-panel-discussion" data-onclick-command="switchWorkspaceTab('discussion')">Discusión</button>
                         </div>
                         <div id="workspace-panel-assistant" class="workspace-panel" role="tabpanel" aria-labelledby="workspace-tab-assistant">
                             <div class="reader-properties-visual">
-                                <h2>Propiedades</h2>
+                                <h2>Datos</h2>
                                 <div id="reader-properties" role="list" aria-live="polite"></div>
                             </div>
                             <form id="workspace-chat-form" class="workspace-chat-form">
@@ -260,11 +262,11 @@
                             <div id="workspace-chat-citations" class="workspace-chat-citations" aria-label="Citas de la respuesta"></div>
                         </div>
                         <div id="workspace-panel-notes" class="workspace-panel is-hidden" role="tabpanel" aria-labelledby="workspace-tab-notes">
-                            <h2>Notas de trabajo</h2>
+                            <h2>Preparación</h2>
                             <div id="processed-editor-state" class="workspace-state-card">
-                                <p class="workspace-empty-state">Las notas privadas se editan en 4_procesado.</p>
+                                <p class="workspace-empty-state">Aquí puedes preparar la nota antes de compartirla.</p>
                                 <button type="button" class="btn-primary" id="document-share-button" disabled>Compartir nota</button>
-                                <p id="document-share-reason" class="workspace-help" role="status">Requiere aprobación editorial vigente.</p>
+                                <p id="document-share-reason" class="workspace-help" role="status">Primero revisa la nota.</p>
                                 <p id="document-share-path" class="workspace-help" aria-live="polite"></p>
                             </div>
                         </div>
@@ -284,18 +286,6 @@
                             </form>
                         </div>
                     </aside>
-                    <section class="reader-relations-pane" data-reader-region="relations" aria-label="Relaciones locales de la nota">
-                        <div class="reader-graph-container console-layout-009" id="reader-view-graph">
-                            <canvas id="obsidian-graph-canvas" class="graph-canvas console-layout-010"></canvas>
-                            <div class="console-layout-011" role="note" aria-label="Leyenda del grafo">
-                                <span>Nodos: <b id="graph-nodes-count" class="graph-counter-nodes">0</b></span>
-                                <span>Wikilinks físicos: <b id="graph-wikilinks-count" class="graph-counter-wikilinks">0</b></span>
-                                <span>Procedencias: <b id="graph-origins-count" class="graph-counter-origins">0</b></span>
-                                <span>Los wikilinks salen del texto Markdown/MOC; las líneas discontinuas son origins validados. El MOC es el nodo amarillo.</span>
-                                <span>Haz clic en un nodo para leer la nota. Arrastra los nodos para mover el mapa.</span>
-                            </div>
-                        </div>
-                    </section>
                 </div>
                 <template id="reader-editor-template">
                     <section class="reader-editor-panel" id="reader-editor-panel" aria-label="Editor Markdown">
@@ -303,7 +293,7 @@
                             <span class="reader-editor-mode-hint">Editor visual Markdown</span>
                             <span id="reader-edit-state" class="reader-edit-state" role="status" aria-live="polite">Cargando editor...</span>
                         </div>
-                        <label class="reader-editor-label" for="reader-markdown-editor">Cuerpo de la nota</label>
+                                <label class="reader-editor-label" for="reader-markdown-editor">Texto de la nota</label>
                         <div id="reader-markdown-editor" class="reader-markdown-editor" aria-describedby="reader-edit-state"></div>
                         <div id="reader-editor-conflict" class="reader-editor-conflict is-hidden" role="alert">
                             <p id="reader-editor-conflict-message">La nota cambió en otra sesión.</p>
@@ -322,6 +312,28 @@
         </div>
     </div>
 
+    <!-- MODAL GRAFO: independiente para no reducir el área de lectura -->
+    <div class="modal-overlay" id="modal-reader-graph" role="dialog" aria-modal="true" aria-labelledby="reader-graph-modal-title" aria-hidden="true">
+        <div class="modal-container reader-graph-modal-container">
+            <div class="modal-header">
+                <div class="modal-title" id="reader-graph-modal-title">Grafo</div>
+                <button class="close-btn" data-onclick-command="closeModal('modal-reader-graph')" aria-label="Cerrar grafo">&times;</button>
+            </div>
+            <div class="modal-body reader-graph-modal-body">
+                <div class="reader-graph-container console-layout-009" id="reader-view-graph">
+                    <canvas id="obsidian-graph-canvas" class="graph-canvas console-layout-010"></canvas>
+                    <div class="console-layout-011" role="note" aria-label="Leyenda del grafo">
+                        <span>Nodos: <b id="graph-nodes-count" class="graph-counter-nodes">0</b></span>
+                        <span>Enlaces: <b id="graph-wikilinks-count" class="graph-counter-wikilinks">0</b></span>
+                        <span>Orígenes: <b id="graph-origins-count" class="graph-counter-origins">0</b></span>
+                        <span>Las líneas unen notas relacionadas. El índice sale en amarillo.</span>
+                        <span>Haz clic en una nota para abrirla. Arrastra para mover el mapa.</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div class="modal-overlay" id="meetily-modal" role="dialog" aria-modal="true" aria-labelledby="meetily-modal-title" aria-hidden="true">
         <div class="modal-container meeting-modal-container">
             <div class="modal-header">
@@ -329,8 +341,8 @@
                 <button class="close-btn" data-onclick-command="closeMeetilyModal()" aria-label="Cerrar captura de reunión">&times;</button>
             </div>
             <div class="modal-body meeting-modal-body">
-                <p>Fuente abre la aplicación oficial de Meetily, que gestiona el micrófono, el consentimiento y la grabación.</p>
-                <p class="workspace-help">Cuando termines en Meetily, vincula su carpeta de grabaciones desde Ajustes y pulsa «Actualizar entradas» para incorporarla al Vault.</p>
+                <p>Fuente abre Meetily para grabar la reunión.</p>
+                <p class="workspace-help">Cuando acabes, vuelve aquí, elige la carpeta de grabaciones en Ajustes y pulsa «Actualizar entradas».</p>
                 <div class="meeting-modal-actions">
                     <button type="button" class="btn-primary" data-onclick-command="openMeetilyApplication()">Abrir Meetily</button>
                 </div>
@@ -343,11 +355,11 @@
     <div class="modal-overlay" id="modal-fusion">
         <div class="modal-container modal-wide">
             <div class="modal-header">
-                <div class="modal-title">FUSIÓN REVISABLE — PREVIEW ANTES DE CREAR</div>
+                <div class="modal-title">UNIR NOTAS</div>
                 <button class="close-btn" data-onclick-command="closeModal('modal-fusion')">&times;</button>
             </div>
             <div class="modal-body">
-                <p>Selecciona una propuesta determinista. La previsualización no modifica ningún origen.</p>
+                <p>Elige las notas y mira el resultado antes de crear una nueva.</p>
                 <div id="fusion-candidate-list" role="list" aria-label="Candidatos de fusión"></div>
                 <div id="fusion-source-selection" aria-live="polite"></div>
                 <div class="metadata-field">
@@ -355,21 +367,21 @@
                     <input type="text" id="fusion-title" autocomplete="off">
                 </div>
                 <div class="metadata-field">
-                    <label for="fusion-issue">Cuestión destino</label>
+                    <label for="fusion-issue">Categoría destino</label>
                     <input type="text" id="fusion-issue" value="_Sin_Cuestion" autocomplete="off">
                 </div>
-                <button class="btn-secondary" id="fusion-preview-button" data-onclick-command="previewSelectedFusion()" disabled>Previsualizar fusión</button>
+                <button class="btn-secondary" id="fusion-preview-button" data-onclick-command="previewSelectedFusion()" disabled>Ver antes</button>
                 <section id="fusion-preview-pane" aria-live="polite">
-                    <p>La previsualización aparecerá aquí.</p>
+                    <p>El resultado aparecerá aquí.</p>
                 </section>
                 <label class="fusion-confirmation-label">
                     <input type="checkbox" id="fusion-confirmation">
-                    Confirmo que he revisado los orígenes y quiero crear una nueva nota pendiente.
+                    He revisado las notas y quiero crear una nueva.
                 </label>
                 <div id="fusion-status" role="status" aria-live="polite"></div>
             </div>
             <div class="modal-footer">
-                <button class="btn-primary" id="fusion-commit-button" data-onclick-command="commitSelectedFusion()" disabled>Fusionar y crear pendiente</button>
+                <button class="btn-primary" id="fusion-commit-button" data-onclick-command="commitSelectedFusion()" disabled>Crear nota nueva</button>
             </div>
         </div>
     </div>
@@ -378,22 +390,22 @@
     <div class="modal-overlay console-layer-001" id="modal-create-theme">
         <div class="modal-container console-layout-013">
             <div class="modal-header console-layout-014">
-                <div class="modal-title console-text-005">CREAR NUEVO TEMA INDEPENDIENTE</div>
+                <div class="modal-title console-text-005">CREAR TEMA</div>
                 <button class="close-btn" data-onclick-command="closeModal('modal-create-theme')">&times;</button>
             </div>
             <div class="modal-body console-layout-015">
                 <p class="console-layout-016">
-                    Ingresa el título del Tema para Fuente. Se creará una bóveda Obsidian aislada con su correspondiente estructura de carpetas (1_volcado, 2_copiado, 3_capturado, 4_procesado).
+                    Introduce un nombre. Fuente creará un tema separado para sus notas.
                 </p>
                 <div class="console-layout-017">
-                    <label class="console-text-006">Título del Tema:</label>
+                    <label class="console-text-006">Nombre:</label>
                     <input type="text" id="input-new-theme-name" placeholder="Ej: Derecho Civil, Historia Romana, Física Cuántica..." data-onkeydown-command="if(event.key==='Enter') submitCreateThemeModal()" / class="console-layout-018">
                     <p id="new-theme-status" class="console-text-017" role="alert" aria-live="assertive"></p>
                 </div>
             </div>
             <div class="modal-footer console-layout-019">
                 <button class="btn-secondary" data-onclick-command="closeModal('modal-create-theme')">Cancelar</button>
-                <button class="btn-primary" data-onclick-command="submitCreateThemeModal()">✓ Crear Tema</button>
+                <button class="btn-primary" data-onclick-command="submitCreateThemeModal()">✓ Crear tema</button>
             </div>
         </div>
     </div>
@@ -402,22 +414,22 @@
     <div class="modal-overlay console-layer-001" id="modal-export-options">
         <div class="modal-container console-layout-020">
             <div class="modal-header console-layout-014">
-                <div class="modal-title console-text-007">EXPORTAR NOTA</div>
+                <div class="modal-title console-text-007">SACAR NOTA</div>
                 <button class="close-btn" data-onclick-command="closeModal('modal-export-options')">&times;</button>
             </div>
             <div class="modal-body console-layout-015">
                 <p class="console-layout-021">
-                    Selecciona el formato de exportación para la nota <b id="export-modal-note-title" class="console-text-003">"Nota"</b>:
+                    ¿Cómo quieres guardar la nota <b id="export-modal-note-title" class="console-text-003">"Nota"</b>?
                 </p>
                 <div class="console-layout-022">
                     <button class="btn-primary console-layout-023" data-onclick-command="executeExportFormat('markdown')">
-                        Exportar Markdown (.md)
+                        Texto (.md)
                     </button>
                     <button class="btn-primary console-layout-023" data-onclick-command="executeExportFormat('pdf')">
                         Imprimir / Guardar como PDF
                     </button>
                     <button class="btn-primary console-layout-023" data-onclick-command="executeExportFormat('docx')">
-                        Exportar Word (.docx)
+                        Word (.docx)
                     </button>
                 </div>
             </div>
@@ -431,9 +443,9 @@
     <div class="modal-overlay" id="modal-chat">
         <div class="modal-container console-layout-025">
             <div class="modal-header">
-                <div class="modal-title">FUENTE EL CONVERSADOR — CHAT INTEGRADO</div>
+            <div class="modal-title">CHAT CON NOTAS</div>
                 <div>
-                    <button class="btn-small" data-onclick-command="clearChatHistory()">Limpiar Historial</button>
+                    <button class="btn-small" data-onclick-command="clearChatHistory()">Limpiar charla</button>
                     <div id="anythingllm-optional-panel" hidden aria-hidden="true">
                         <span>Integración externa AnythingLLM (tercero, opcional)</span>
                         <button class="btn-small" data-onclick-command="triggerAction('open_anything_desktop')">Abrir AnythingLLM Desktop</button>
@@ -442,14 +454,14 @@
                 </div>
             </div>
             <div id="chat-context-badge" class="console-layout-026">
-                                <span><b>Contexto Activo:</b> <span id="chat-context-label" class="console-text-008">Toda la Bóveda (4_procesado)</span></span>
-                                <small id="chat-context-subtext" class="console-text-009">Acceso a la totalidad del conocimiento en 4_procesado</small>
+                                <span><b>Buscando en:</b> <span id="chat-context-label" class="console-text-008">Todas las notas</span></span>
+                                <small id="chat-context-subtext" class="console-text-009">Todas las notas de este tema</small>
             </div>
             <div class="modal-body">
                 <div class="chat-container-box">
                     <div class="chat-messages-scroll" id="chat-messages">
                         <div class="chat-bubble ai" id="chat-welcome-bubble">
-                            <strong>Fuente IA:</strong> <span id="chat-welcome-text">Hola. Puedo responder preguntas sobre los documentos procesados en tu Vault usando Ollama en este equipo.</span>
+                            <strong>Fuente:</strong> <span id="chat-welcome-text">Hola. Pregúntame por tus notas.</span>
                         </div>
                     </div>
                     <div class="chat-input-bar">
@@ -459,7 +471,7 @@
                 </div>
             </div>
             <div class="modal-footer">
-                <span id="chat-privacy-footer" class="console-text-002">Modo solo local: inferencia en Ollama loopback (http://localhost:11434).</span>
+                <span id="chat-privacy-footer" class="console-text-002">La charla se queda en este equipo.</span>
             </div>
         </div>
     </div>
@@ -468,12 +480,12 @@
     <div class="modal-overlay" id="modal-quarantine">
         <div class="modal-container">
             <div class="modal-header">
-                <div class="modal-title console-text-010">ARCHIVOS EN CUARENTENA</div>
+                <div class="modal-title console-text-010">ARCHIVOS AISLADOS</div>
                 <button class="close-btn" data-onclick-command="closeModal('modal-quarantine')">&times;</button>
             </div>
             <div class="modal-body" id="quarantine-list"></div>
             <div class="modal-footer">
-                <span class="console-text-011">Aislamiento seguro de archivos ilegibles sin detener el motor.</span>
+                <span class="console-text-011">Aquí quedan los archivos que necesitan una mirada.</span>
             </div>
         </div>
     </div>
@@ -482,20 +494,20 @@
     <div class="modal-overlay" id="modal-stat-input">
         <div class="modal-container console-layout-027">
             <div class="modal-header">
-                <div class="modal-title console-text-003">ARCHIVOS POR PROCESAR (1_VOLCADO)</div>
+                <div class="modal-title console-text-003">ARCHIVOS PENDIENTES</div>
                 <button class="close-btn" data-onclick-command="closeModal('modal-stat-input')">&times;</button>
             </div>
             <div class="modal-body">
                 <div class="console-layout-028">
-                    <div class="console-text-012">Desglose de la Carpeta de Ingesta:</div>
+                    <div class="console-text-012">De dónde vienen:</div>
                     <ul class="console-layout-029">
-                        <li>Archivos locales directos en 1_volcado: <b id="stat-input-direct-count" class="console-text-003">0</b></li>
-                        <li>Entradas externas vinculadas: <b id="stat-input-providers-count" class="console-text-003">0</b></li>
+                        <li>Archivos que has dejado aquí: <b id="stat-input-direct-count" class="console-text-003">0</b></li>
+                        <li>Carpetas conectadas: <b id="stat-input-providers-count" class="console-text-003">0</b></li>
                     </ul>
                 </div>
             </div>
             <div class="modal-footer">
-                <span class="console-text-011">Archivos pendientes de transcripción y estructuración.</span>
+                <span class="console-text-011">Archivos que aún no hemos pasado a texto y ordenado.</span>
             </div>
         </div>
     </div>
@@ -504,21 +516,21 @@
     <div class="modal-overlay" id="modal-stat-notes">
         <div class="modal-container console-layout-027">
             <div class="modal-header">
-                <div class="modal-title">TELEMETRÍA DEL GRAFO DE CONOCIMIENTO</div>
+                <div class="modal-title">CÓMO ESTÁN UNIDAS TUS NOTAS</div>
                 <button class="close-btn" data-onclick-command="closeModal('modal-stat-notes')">&times;</button>
             </div>
             <div class="modal-body">
                 <div class="console-layout-028">
-                    <div class="console-text-012">Resumen de Notas e Interconexiones:</div>
+                    <div class="console-text-012">Resumen:</div>
                     <ul class="console-layout-029">
-                        <li>Sumarios y notas en 4_procesado: <b id="stat-notes-total-count" class="console-text-003">0</b></li>
-                        <li>Hiperenlaces cruzados ([[nota]]): <b id="stat-notes-links-count" class="console-text-004">0</b></li>
-                        <li>Base de datos vectorial: <b class="console-text-013">ChromaDB Activo</b></li>
+                        <li>Notas preparadas: <b id="stat-notes-total-count" class="console-text-003">0</b></li>
+                        <li>Enlaces entre notas: <b id="stat-notes-links-count" class="console-text-004">0</b></li>
+                        <li>Búsqueda rápida: <b class="console-text-013">Lista</b></li>
                     </ul>
                 </div>
             </div>
             <div class="modal-footer">
-                        <span class="console-text-011">Notas atómicas vectorizadas e hiperinterenlazadas en 4_procesado.</span>
+                        <span class="console-text-011">Fuente guarda las relaciones para que encuentres lo que buscas.</span>
             </div>
         </div>
     </div>
@@ -527,22 +539,22 @@
     <div class="modal-overlay" id="modal-stat-ram">
         <div class="modal-container console-layout-027">
             <div class="modal-header">
-                <div class="modal-title">RECURSOS Y MEMORIA RAM DEL SISTEMA</div>
+                <div class="modal-title">MEMORIA DEL EQUIPO</div>
                 <button class="close-btn" data-onclick-command="closeModal('modal-stat-ram')">&times;</button>
             </div>
             <div class="modal-body">
                 <div class="console-layout-030">
-                    <div class="console-text-012">Telemetría de Memoria del Sistema:</div>
+                    <div class="console-text-012">Cómo va el equipo:</div>
                     <ul class="console-layout-029">
-                        <li>Uso actual de memoria RAM: <b id="stat-ram-usage-pct" class="console-text-003">0%</b></li>
-                        <li>Margen de seguridad configurado: <b id="stat-ram-margin-pct" class="console-text-014">20%</b></li>
-                        <li>Estado del recolector de basura (GC): <b class="console-text-013">Optimizado</b></li>
+                        <li>Memoria usada: <b id="stat-ram-usage-pct" class="console-text-003">0%</b></li>
+                        <li>Margen de seguridad: <b id="stat-ram-margin-pct" class="console-text-014">20%</b></li>
+                        <li>Limpieza automática: <b class="console-text-013">Lista</b></li>
                     </ul>
-                    <button class="btn-secondary console-layout-031" data-onclick-command="triggerAction('stat_ram')">Purgar Memoria RAM Ahora</button>
+                    <button class="btn-secondary console-layout-031" data-onclick-command="triggerAction('stat_ram')">Liberar memoria</button>
                 </div>
             </div>
             <div class="modal-footer">
-                <span class="console-text-011">Gestión inteligente de memoria para modelos de IA local.</span>
+                <span class="console-text-011">Fuente cuida la memoria cuando trabaja.</span>
             </div>
         </div>
     </div>
@@ -551,21 +563,21 @@
     <div class="modal-overlay" id="modal-settings">
         <div class="modal-container">
             <div class="modal-header">
-                <div class="modal-title">AJUSTES AVANZADOS Y CONFIGURACIÓN FUENTE</div>
+                <div class="modal-title">AJUSTES</div>
                 <button class="close-btn" data-onclick-command="closeModal('modal-settings')">&times;</button>
             </div>
             <div class="modal-body">
                 <div class="console-layout-032">
-                    <button class="btn-small tab-btn console-text-015" id="tab-btn-routes" data-onclick-command="switchSettingsTab('routes')">Memoria & Conexiones</button>
-                    <button class="btn-small tab-btn" id="tab-btn-server" data-onclick-command="switchSettingsTab('server')">Servidor & IA</button>
+                    <button class="btn-small tab-btn console-text-015" id="tab-btn-routes" data-onclick-command="switchSettingsTab('routes')">Carpetas</button>
+                    <button class="btn-small tab-btn" id="tab-btn-server" data-onclick-command="switchSettingsTab('server')">IA</button>
                 </div>
                 <div id="settings-load-status" class="console-text-017" role="status" aria-live="polite"></div>
                 <div id="setup-vault-panel" class="console-layout-039" hidden>
-                    <strong>Configuración inicial</strong>
+                    <strong>Para empezar</strong>
                     <div id="setup-obsidian-status" class="console-text-017" role="status" aria-live="polite"></div>
                     <div class="console-layout-040">
-                        <button class="btn-secondary" id="setup-install-obsidian" data-onclick-command="installObsidian()">Instalar Obsidian automáticamente</button>
-                        <button class="btn-secondary" id="setup-create-vault" data-onclick-command="createGuidedVault()">Crear Vault guiado</button>
+                        <button class="btn-secondary" id="setup-install-obsidian" data-onclick-command="installObsidian()">Instalar Obsidian</button>
+                        <button class="btn-secondary" id="setup-create-vault" data-onclick-command="createGuidedVault()">Crear tema guiado</button>
                     </div>
                 </div>
 
@@ -573,36 +585,36 @@
                 <div class="tab-panel console-layout-033" id="tab-panel-routes">
                     <!-- BÓVEDA PRINCIPAL -->
                     <div>
-                        <label class="console-layout-034">Ruta Principal de la Memoria de Fuente:</label>
+                        <label class="console-layout-034">Carpeta de notas:</label>
                         <div class="console-layout-035">
                             <input type="text" id="setting-vault-path" value="" readonly class="console-layout-036">
                             <button class="btn-secondary console-layout-037" data-onclick-command="browseVaultFolder()">Explorar...</button>
                         </div>
-                        <span class="console-layout-038">Las carpetas 1_volcado, 2_copiado, 3_capturado y 4_procesado están estructuradas automáticamente por Fuente en esta bóveda.</span>
+                        <span class="console-layout-038">Fuente ordena por dentro sus carpetas de trabajo.</span>
                     </div>
 
                     <!-- CONEXIONES DE INGESTA (1_VOLCADO) -->
                     <div class="console-layout-039">
                         <div class="console-layout-040">
-                            <label class="console-text-016">Entradas vinculadas a 1_volcado (Ingesta):</label>
-                            <button class="btn-small" data-onclick-command="addLinkedInputFolder()">+ Vincular Carpeta de Ingesta</button>
+                            <label class="console-text-016">Carpetas de entrada:</label>
+                            <button class="btn-small" data-onclick-command="addLinkedInputFolder()">+ Añadir carpeta</button>
                         </div>
-                        <span class="console-layout-041">Archivos volcados en estas carpetas locales/compartidas serán recopilados hacia 1_volcado:</span>
+                        <span class="console-layout-041">Fuente recogerá lo que dejes en estas carpetas:</span>
                         <div id="linked-input-folders-list" class="console-layout-042">
-                            <div class="console-text-017">No hay carpetas de ingesta vinculadas.</div>
+                            <div class="console-text-017">No hay carpetas de entrada.</div>
                         </div>
-                        <div id="sync-status-summary" class="console-text-017">Sin sincronización ejecutada en esta sesión.</div>
+                        <div id="sync-status-summary" class="console-text-017">Aún no se han actualizado las entradas.</div>
                     </div>
 
                     <!-- CONEXIONES DE SALIDA (4_SALIDA) -->
                     <div class="console-layout-039">
                         <div class="console-layout-040">
-                            <label class="console-text-016">Destinos Vinculados a 5_compartido (Difusión):</label>
-                            <button class="btn-small" data-onclick-command="addLinkedOutputFolder()">+ Vincular Carpeta de Destino</button>
+                            <label class="console-text-016">Carpetas para compartir:</label>
+                            <button class="btn-small" data-onclick-command="addLinkedOutputFolder()">+ Añadir destino</button>
                         </div>
-                        <span class="console-layout-041">Notas aprobadas en 5_compartido se replicarán en estos destinos locales/compartidos:</span>
+                        <span class="console-layout-041">Las notas que compartas se copiarán aquí:</span>
                         <div id="linked-output-folders-list" class="console-layout-042">
-                            <div class="console-text-017">No hay carpetas de destino vinculadas.</div>
+                            <div class="console-text-017">No hay destinos.</div>
                         </div>
                     </div>
                 </div>
@@ -610,17 +622,17 @@
                 <!-- PESTAÑA 2: SERVIDOR & IA -->
                 <div class="tab-panel console-layout-043" id="tab-panel-server">
                     <div>
-                        <label class="console-layout-034">Modelo LLM Ollama (Qwen Local):</label>
+                        <label class="console-layout-034">Modelo de IA:</label>
                         <select id="setting-ollama-model" class="console-layout-044">
                             <option value="" disabled selected>Modelos no medidos</option>
                         </select>
                     </div>
                     <div>
-                        <label class="console-layout-034">URL Servidor:</label>
+                        <label class="console-layout-034">Dirección local:</label>
                         <input id="setting-ollama-url" type="url" value="http://localhost:11434" class="console-layout-045">
                     </div>
                     <div>
-                        <label class="console-layout-034">Margen de Seguridad RAM:</label>
+                        <label class="console-layout-034">Margen de memoria:</label>
                         <select id="setting-ram-margin" class="console-layout-044">
                             <option value="10%">10%</option>
                             <option value="20%" selected>20%</option>
@@ -632,19 +644,19 @@
                     </div>
                     <label class="console-layout-046">
                         <input id="setting-allow-non-loopback-ollama" type="checkbox">
-                        <span>Permitir Ollama fuera de este equipo. Las solicitudes pueden salir del dispositivo.</span>
+                        <span>Permitir conexiones fuera de este equipo.</span>
                     </label>
-                    <span id="offline-mode-detail">Modo solo local: inferencia en Ollama loopback; la consola no carga recursos de red en tiempo de ejecución.</span>
+                    <span id="offline-mode-detail">Por defecto, la IA trabaja sin salir de este equipo.</span>
                     <div id="runtime-capabilities" class="console-layout-039" hidden>
                         <div class="console-layout-040">
-                            <label class="console-text-016">Funciones instalables:</label>
-                            <span class="console-text-017">Se descargan sólo al necesitarlas.</span>
+                            <label class="console-text-016">Extras:</label>
+                            <span class="console-text-017">Se instalan sólo cuando hacen falta.</span>
                         </div>
                         <div id="runtime-capability-list" class="console-layout-042"></div>
                         <div id="runtime-capability-status" class="console-text-017" role="status" aria-live="polite"></div>
                     </div>
                     <fieldset id="eco-controls" disabled>
-                        <legend>Perfil de ejecución medido</legend>
+                        <legend>Cómo debe trabajar Fuente</legend>
                         <label for="setting-resource-profile">Perfil</label>
                         <select id="setting-resource-profile">
                             <option value="auto">Auto</option>
@@ -656,22 +668,22 @@
                             <option value="skip">Omitir audio</option>
                             <option value="tiny_cpu">Tiny local CPU</option>
                         </select>
-                        <label for="setting-whisper-model-path">Ruta local Whisper (Tiny CPU, obligatoria)</label>
+                        <label for="setting-whisper-model-path">Carpeta del modelo de audio</label>
                         <div class="console-layout-035">
                             <input id="setting-whisper-model-path" type="text" class="console-layout-036" autocomplete="off" placeholder="Selecciona una carpeta o archivo de modelo local">
                             <button type="button" class="btn-secondary console-layout-037" data-onclick-command="browseWhisperModelFolder()">Explorar...</button>
                         </div>
-                        <span class="console-text-017">Tiny local CPU sólo se puede guardar cuando la ruta apunta a un modelo Whisper local ya descargado.</span>
-                        <span id="eco-policy-summary">Esperando la primera medición de salud.</span>
+                        <span class="console-text-017">Usa una carpeta de audio que ya esté en este equipo.</span>
+                        <span id="eco-policy-summary">Esperando la primera medición.</span>
                     </fieldset>
                 </div>
 
             </div>
             <div class="modal-footer">
-                <button class="btn-secondary console-text-018" data-onclick-command="resetDefaultSettings()">Restaurar por Defecto</button>
+                <button class="btn-secondary console-text-018" data-onclick-command="resetDefaultSettings()">Restablecer valores</button>
                 <div class="console-layout-047">
                     <span class="console-text-019">Local por defecto</span>
-                    <button class="btn-secondary console-text-020" data-onclick-command="saveSettings()">Guardar Ajustes</button>
+                    <button class="btn-secondary console-text-020" data-onclick-command="saveSettings()">Guardar</button>
                 </div>
                 <div id="settings-save-status" class="console-text-017" role="alert" aria-live="polite"></div>
             </div>
@@ -682,14 +694,14 @@
     <div class="modal-overlay" id="modal-category">
         <div class="modal-container">
             <div class="modal-header">
-                <div class="modal-title" id="category-modal-title">DESGLOSE DE ARCHIVOS</div>
+                <div class="modal-title" id="category-modal-title">ARCHIVOS LISTOS</div>
                 <button class="close-btn" data-onclick-command="closeModal('modal-category')">&times;</button>
             </div>
             <div class="modal-body" id="category-modal-body">
-                <p class="console-text-021">Cargando listado de archivos...</p>
+                <p class="console-text-021">Cargando archivos...</p>
             </div>
             <div class="modal-footer">
-                <span class="console-text-002">Doble clic abre el archivo con la app nativa del sistema.</span>
+                <span class="console-text-002">Doble clic para abrirlo con su app habitual.</span>
             </div>
         </div>
     </div>
@@ -700,32 +712,32 @@
     <div class="modal-overlay console-layer-002" id="modal-approval">
         <div class="modal-container">
             <div class="modal-header">
-                <div class="modal-title">BANDEJA DE APROBACIÓN — METADATOS SEGUROS</div>
+                <div class="modal-title">REVISAR NOTAS</div>
                 <button class="close-btn" data-onclick-command="closeModal('modal-approval')">&times;</button>
             </div>
             <div class="modal-body">
                 <div class="approval-pending-list" id="approval-pending-list">
-                    <p class="console-layout-048">Cargando notas pendientes...</p>
+                    <p class="console-layout-048">Cargando notas para revisar...</p>
                 </div>
                 <div class="metadata-form-panel" id="approval-metadata-form">
-                    <p class="console-text-022">Selecciona una nota pendiente para revisar sus metadatos.</p>
+                    <p class="console-text-022">Elige una nota para revisarla.</p>
                     <div class="metadata-field is-hidden" id="metadata-field-title">
                         <label for="metadata-title">Título</label>
                         <input type="text" id="metadata-title" autocomplete="off">
                         <span class="metadata-field-error" id="metadata-error-title"></span>
                     </div>
                     <div class="metadata-field is-hidden" id="approval-reviewer-field">
-                        <label for="approval-reviewer">Revisado por</label>
+                        <label for="approval-reviewer">Quién la revisa</label>
                         <input type="text" id="approval-reviewer" autocomplete="name" maxlength="80" placeholder="Nombre del revisor">
                         <span class="metadata-field-error" id="approval-reviewer-error"></span>
                     </div>
                     <div class="metadata-field is-hidden" id="metadata-field-tags">
-                        <label for="metadata-tags">Etiquetas (separadas por comas)</label>
+                        <label for="metadata-tags">Etiquetas</label>
                         <input type="text" id="metadata-tags" autocomplete="off" placeholder="etiqueta1, etiqueta2">
                         <span class="metadata-field-error" id="metadata-error-tags"></span>
                     </div>
                     <div class="metadata-field is-hidden" id="metadata-field-issue">
-                        <label for="metadata-issue">Cuestión</label>
+                        <label for="metadata-issue">Categoría</label>
                         <select id="metadata-issue"></select>
                         <span class="metadata-field-error" id="metadata-error-issue"></span>
                     </div>
@@ -735,7 +747,7 @@
                         <span class="metadata-field-error" id="metadata-error-date"></span>
                     </div>
                     <div class="metadata-field is-hidden" id="metadata-field-origins">
-                        <label for="metadata-origins">Orígenes canónicos</label>
+                        <label for="metadata-origins">De dónde sale</label>
                         <textarea id="metadata-origins" rows="3" readonly placeholder="Sin orígenes"></textarea>
                         <span class="metadata-field-error" id="metadata-error-origins"></span>
                     </div>
@@ -749,7 +761,7 @@
                         <span class="metadata-field-error" id="metadata-error-status"></span>
                     </div>
                     <details class="metadata-diagnostic is-hidden" id="metadata-diagnostic-panel">
-                        <summary class="console-text-023">Vista diagnóstica — frontmatter YAML (solo lectura)</summary>
+                        <summary class="console-text-023">Ver detalles</summary>
                         <pre id="metadata-raw-frontmatter"></pre>
                     </details>
                 </div>
@@ -757,15 +769,15 @@
             <div class="modal-footer console-layout-049">
                 <span id="approval-form-status" class="console-text-024"></span>
                 <div class="console-layout-050">
-                    <button class="btn-secondary" id="btn-save-metadata" data-onclick-command="saveApprovalMetadata()" disabled>Guardar metadatos</button>
-                    <button class="btn-primary" id="btn-approve-note" data-onclick-command="approveSelectedNote()" disabled>Aprobar nota</button>
+                    <button class="btn-secondary" id="btn-save-metadata" data-onclick-command="saveApprovalMetadata()" disabled>Guardar cambios</button>
+                    <button class="btn-primary" id="btn-approve-note" data-onclick-command="approveSelectedNote()" disabled>Dar por buena</button>
                     <select id="approval-export-format" aria-label="Formato de aprobación y exportación">
                         <option value="markdown">Markdown</option>
                         <option value="docx">Word</option>
                         <option value="pdf">PDF</option>
                     </select>
-                    <button class="btn-primary" id="btn-approve-export" data-onclick-command="approveAndExportSelectedNote()" disabled>Aprobar y exportar</button>
-                    <button class="btn-secondary" id="btn-retry-approval-export" data-onclick-command="retryFailedApprovalExport()" hidden>Reintentar exportación</button>
+                    <button class="btn-primary" id="btn-approve-export" data-onclick-command="approveAndExportSelectedNote()" disabled>Dar por buena y sacar</button>
+                    <button class="btn-secondary" id="btn-retry-approval-export" data-onclick-command="retryFailedApprovalExport()" hidden>Intentar de nuevo</button>
                 </div>
             </div>
         </div>
@@ -775,9 +787,9 @@
     <div class="modal-overlay" id="modal-job-queue">
         <div class="modal-container modal-wide">
             <div class="modal-header">
-                <div class="modal-title">COLA DE TRABAJOS — ESTADO DURABLE</div>
+                <div class="modal-title">TRABAJOS</div>
                 <div>
-                    <button class="btn-small" id="job-queue-load" data-onclick-command="loadJobQueue()">Cargar</button>
+                    <button class="btn-small" id="job-queue-load" data-onclick-command="loadJobQueue()">Ver</button>
                     <button class="btn-small" id="job-queue-refresh" data-onclick-command="refreshJobQueue()">Actualizar</button>
                     <button class="close-btn" data-onclick-command="closeModal('modal-job-queue')">&times;</button>
                 </div>
@@ -792,7 +804,7 @@
                 </div>
             </div>
             <div class="modal-footer">
-                <span>Las acciones mutan solo mediante el bridge validado y la revisión esperada.</span>
+                <span>Desde aquí puedes ver qué está haciendo Fuente.</span>
             </div>
         </div>
     </div>
@@ -801,18 +813,18 @@
     <div class="modal-overlay" id="modal-health">
         <div class="modal-container modal-wide">
             <div class="modal-header">
-                <div class="modal-title">SALUD DEL ENTORNO — MEDICIÓN ACTUAL</div>
+                <div class="modal-title">ESTADO DEL SISTEMA</div>
                 <div>
-                    <button class="btn-small" id="health-refresh" data-onclick-command="refreshHealth()">Actualizar medición</button>
+                    <button class="btn-small" id="health-refresh" data-onclick-command="refreshHealth()">Actualizar</button>
                     <button class="close-btn" data-onclick-command="closeModal('modal-health')">&times;</button>
                 </div>
             </div>
             <div class="modal-body">
-                <div id="health-status" role="status">La salud aún no se ha medido.</div>
+                <div id="health-status" role="status">El estado aún no se ha medido.</div>
                 <div id="health-panel" aria-live="polite"></div>
             </div>
             <div class="modal-footer">
-                <span id="health-checked-at">Sin medición.</span>
+                <span id="health-checked-at">Aún no hay datos.</span>
             </div>
         </div>
     </div>
@@ -820,16 +832,16 @@
     <section class="onboarding-panel" id="onboarding-panel" hidden>
         <div class="modal-container modal-wide">
             <div class="modal-header">
-                <div class="modal-title">PRIMER ARRANQUE — VAULT DEMO OFFLINE</div>
+                <div class="modal-title">PRIMERA VEZ</div>
                 <button class="close-btn" data-onclick-command="hideOnboardingPanel()">&times;</button>
             </div>
             <div class="modal-body">
-                <p>Un ejemplo local y pequeño para conocer el flujo de Fuente. No descarga modelos ni activa servicios externos.</p>
+                <p>Un ejemplo pequeño para probar Fuente. No descarga nada ni sale a internet.</p>
                 <div id="onboarding-status" role="status" aria-live="polite"></div>
                 <div id="onboarding-collisions" class="is-hidden" role="alert"></div>
             </div>
             <div class="modal-footer" id="onboarding-actions" hidden>
-                <button class="btn-primary" id="onboarding-create-demo" data-onclick-command="createDemoVault()">Crear Vault demo</button>
+                <button class="btn-primary" id="onboarding-create-demo" data-onclick-command="createDemoVault()">Crear ejemplo</button>
                 <button class="btn-secondary" id="onboarding-dismiss" data-onclick-command="dismissOnboarding()">Ahora no</button>
             </div>
         </div>
@@ -839,69 +851,133 @@
     <div class="modal-overlay" id="modal-help">
         <div class="modal-container console-layout-025">
             <div class="modal-header">
-                <div class="modal-title">GUÍA RÁPIDA DE USO — SISTEMA FUENTE</div>
+                <div class="modal-title">GUÍA RÁPIDA</div>
                 <button class="close-btn" data-onclick-command="closeModal('modal-help')">&times;</button>
             </div>
             <div class="modal-body console-layout-051">
-                <!-- 1. ORGANIZACIÓN EN TEMAS Y CUESTIONES -->
                 <div class="console-layout-052">
-                    <h4 class="console-layout-053">1. Organización en Temas y Cuestiones</h4>
-                    <p class="console-layout-054">
-                        Fuente te permite ordenar tu conocimiento en bloques independientes y asuntos específicos:
-                    </p>
-                    <ul class="console-layout-055">
-                        <li><b>Temas:</b> Grandes bloques de conocimiento independientes elegibles en el menú <code>TEMA</code> de la cabecera. Cada Tema trabaja con su propia bóveda de notas (<code>1_volcado</code>, <code>2_copiado</code>, <code>3_capturado</code>, <code>4_procesado</code>, <code>5_compartido</code>).</li>
-                        <li><b>Cuestiones:</b> Subcarpetas temáticas dentro de <code>4_procesado</code> que agrupan notas relacionadas entre sí. Las notas recién creadas sin clasificar quedan en <code>_Sin_Cuestion</code>.</li>
-                    </ul>
-                </div>
-
-                <!-- 2. PROCESAMIENTO Y NUEVO FLUJO -->
-                <div class="console-layout-052">
-                    <h4 class="console-layout-053">2. Procesamiento de Información y Nuevo Flujo de Trabajo</h4>
-                    <p class="console-layout-054">
-                        Transformación automática del material en bruto en notas inteligentes estructuradas:
-                    </p>
-                    <ul class="console-layout-055">
-                        <li><b>De Volcado a Capturado (1_volcado ➔ 3_capturado):</b> Ingesta de archivos, transcripción de audios y lectura de imágenes para obtener texto claro preservando 100% de la información original.</li>
-                        <li><b>Nuevo Flujo de Trabajo:</b> Generación asistida por Inteligencia Artificial que analiza la información limpia, construye notas atómicas interconectadas, crea la <b>Nota Marco de Cuestión</b> y actualiza el <b>Mapa General de Contenidos (MOC)</b>.</li>
-                    </ul>
-                </div>
-
-                <!-- 3. EDICIÓN, FUSIÓN Y PAPELERA DE CUARENTENA -->
-                <div class="console-layout-052">
-                    <h4 class="console-layout-053">3. Edición, Fusión y Gestión de Notas</h4>
-                    <p class="console-layout-054">
-                        Control total sobre tus notas desde el Lector de Fuente:
-                    </p>
-                    <ul class="console-layout-055">
-                        <li><b>Aprobación:</b> Revisa las notas generadas diferenciando entre notas pendientes de revisión y notas aprobadas.</li>
-                        <li><b>Edición Guiada:</b> Modifica cómodamente el título, etiquetas, resumen ejecutivo y contenido de tus notas.</li>
-                        <li><b>Fusión de Notas:</b> Combina varias notas seleccionadas en una sola sin perder orígenes ni referencias.</li>
-                        <li><b>Papelera de Cuarentena:</b> Los archivos aislados en cuarentena pueden <b>restaurarse en 1 clic</b>. Las salidas inválidas quedan en <b>Revisión manual</b> y no se reintroducen automáticamente.</li>
-                    </ul>
-                </div>
-
-                <!-- 4. CONSULTA E INTERACCIÓN CON IA LOCAL -->
-                <div class="console-layout-052">
-                    <h4 class="console-layout-053">4. Consulta e Interacción con IA Local</h4>
-                    <ul class="console-layout-056">
-                        <li><b>Hablar con esta Nota:</b> Inicia una conversación con la Inteligencia Artificial Local centrada únicamente en la nota actual.</li>
-                        <li><b>Hablar con todas las Notas:</b> Consulta a la Inteligencia Artificial Local buscando respuestas en todas las notas de tu Tema activo.</li>
-                        <li><b>Exportación:</b> Descarga instantáneamente cualquier nota en formato Markdown, PDF o Word.</li>
-                    </ul>
+                    <h4 class="console-layout-053">1. Selecciona un tema</h4>
+                    <p class="console-layout-054">Cada tema mantiene sus notas separadas. Elige uno existente o crea uno nuevo.</p>
+                    <button class="btn-text help-info-button" data-onclick-command="openHelpInfo('1')">+ Info</button>
                 </div>
                 <div class="console-layout-052">
-                    <button class="btn-secondary" data-onclick-command="openOnboardingFromHelp()">Reabrir onboarding</button>
+                    <h4 class="console-layout-053">2. Añade tus fuentes</h4>
+                    <p class="console-layout-054">Conecta carpetas o añade documentos, audios e imágenes para incorporarlos a Fuente.</p>
+                    <button class="btn-text help-info-button" data-onclick-command="openHelpInfo('2')">+ Info</button>
+                </div>
+                <div class="console-layout-052">
+                    <h4 class="console-layout-053">3. Procesa el material</h4>
+                    <p class="console-layout-054">Pulsa «Procesar material» para convertir las fuentes en notas organizadas y relacionadas.</p>
+                    <button class="btn-text help-info-button" data-onclick-command="openHelpInfo('3')">+ Info</button>
+                </div>
+                <div class="console-layout-052">
+                    <h4 class="console-layout-053">4. Consulta tus notas</h4>
+                    <p class="console-layout-054">Abre «Notas» para leer, buscar o consultar una nota concreta o el conjunto del tema.</p>
+                    <button class="btn-text help-info-button" data-onclick-command="openHelpInfo('4')">+ Info</button>
+                </div>
+                <div class="console-layout-052">
+                    <h4 class="console-layout-053">5. Revisa y comparte</h4>
+                    <p class="console-layout-054">Cuando una nota esté lista, revisa su contenido y compártela si procede.</p>
+                    <button class="btn-text help-info-button" data-onclick-command="openHelpInfo('5')">+ Info</button>
+                </div>
+                <div class="console-layout-052">
+                    <button class="btn-secondary" data-onclick-command="openOnboardingFromHelp()">Abrir ejemplo</button>
                 </div>
             </div>
             <div class="modal-footer">
-                <span class="console-text-002">Fuente v2026.1 • Formateo Universal de Notas, Estructuración y Síntesis</span>
+                <span class="console-text-002">Resumen de los cinco pasos.</span>
             </div>
+        </div>
+    </div>
+
+    <!-- EXPLICACIÓN AMPLIADA DE CADA PASO -->
+    <div class="modal-overlay" id="modal-help-info" role="dialog" aria-modal="true" aria-labelledby="help-info-title" aria-hidden="true">
+        <div class="modal-container help-info-modal-container">
+            <div class="modal-header">
+                <div class="modal-title" id="help-info-title">Más información</div>
+                <button class="close-btn" data-onclick-command="closeModal('modal-help-info')" aria-label="Cerrar información">&times;</button>
+            </div>
+            <div class="modal-body" id="help-info-body"></div>
         </div>
     </div>
 
     <script src="assets/toastui-editor/toastui-editor.js"></script>
     <script nonce="fuente-console">
+        if (!window.pywebview && window.location.protocol !== 'file:') {
+            window.__fuenteBrowserBridge = true;
+            window.pywebview = {
+                api: new Proxy({}, {
+                    get: function(_target, methodName) {
+                        return function() {
+                            return fetch('/api', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ method: methodName, args: Array.from(arguments) })
+                            }).then(function(response) {
+                                return response.json().then(function(payload) {
+                                    if (!response.ok) throw new Error(payload.message || 'Error del backend de Fuente.');
+                                    return payload;
+                                });
+                            });
+                        };
+                    }
+                })
+            };
+        }
+
+        const HELP_DETAILS = {
+            '1': {
+                title: '1. Selecciona un tema',
+                paragraphs: [
+                    'Un tema separa un conjunto de notas de otro. Puedes tener uno para cada proyecto, cliente, curso o área de trabajo.',
+                    'Las notas de cada tema se mantienen juntas. Si necesitas empezar de cero, crea un tema nuevo.'
+                ]
+            },
+            '2': {
+                title: '2. Añade tus fuentes',
+                paragraphs: [
+                    'Pulsa «Actualizar entradas» para recoger archivos de las carpetas conectadas. También puedes añadirlos directamente a la carpeta de entrada.',
+                    'Fuente conserva el original y prepara una copia de trabajo. Los audios, imágenes y documentos se convierten a texto cuando es necesario.'
+                ]
+            },
+            '3': {
+                title: '3. Procesa el material',
+                paragraphs: [
+                    '«Procesar material» lee las fuentes preparadas, separa las ideas y crea notas relacionadas entre sí.',
+                    'Si algo no se puede leer o necesita revisión, Fuente lo aísla y te lo muestra. No borra el original.'
+                ]
+            },
+            '4': {
+                title: '4. Consulta tus notas',
+                paragraphs: [
+                    'En «Notas» puedes buscar por palabras o por una frase completa, abrir el mapa y leer cada nota.',
+                    'Puedes consultar la nota abierta o todas las notas del tema. La respuesta se genera en tu equipo cuando la IA local está disponible.'
+                ]
+            },
+            '5': {
+                title: '5. Revisa y comparte',
+                paragraphs: [
+                    'Cuando una nota esté lista, revísala y márcala como aprobada. Después puedes compartirla con las carpetas de destino que hayas elegido.',
+                    'Compartir crea una copia fuera del área de trabajo. La nota original y su historial permanecen en Fuente.'
+                ]
+            }
+        };
+
+        function openHelpInfo(step) {
+            const detail = HELP_DETAILS[String(step)];
+            const title = document.getElementById('help-info-title');
+            const body = document.getElementById('help-info-body');
+            if (!detail || !title || !body) return;
+            title.textContent = detail.title;
+            body.replaceChildren();
+            detail.paragraphs.forEach(function(text) {
+                const paragraph = document.createElement('p');
+                paragraph.textContent = text;
+                body.appendChild(paragraph);
+            });
+            openModal('modal-help-info');
+        }
+
         function runStaticCommand(command, element, event) {
             if (command.startsWith("if(event.key==='Enter')")) {
                 if (event.key !== 'Enter') return;
@@ -910,6 +986,7 @@
             const args = Array.from(command.matchAll(/'([^']*)'/g), match => match[1]);
             if (command.startsWith('triggerAction(')) return triggerAction(args[0], {}, element);
             if (command.startsWith('openModal(')) return openModal(args[0]);
+            if (command.startsWith('openHelpInfo(')) return openHelpInfo(args[0]);
             if (command.startsWith('closeModal(')) return closeModal(args[0]);
             if (command.startsWith('switchReaderView(')) return switchReaderView(args[0]);
             if (command.startsWith('switchSettingsTab(')) return switchSettingsTab(args[0]);
@@ -1012,7 +1089,7 @@
                 } else if (status.status === 'dismissed') {
                     statusEl.textContent = 'El onboarding está pospuesto. Puedes volver a abrirlo desde esta Guía Rápida.';
                 } else {
-                    statusEl.textContent = 'El Vault demo ya está instalado.';
+                    statusEl.textContent = 'El ejemplo ya está instalado.';
                 }
             }
             if (collisionsEl) {
@@ -1048,7 +1125,7 @@
                     collisionsEl.appendChild(item);
                 });
             } else if (result.status === 'demo_installed') {
-                log(result.message || 'Vault demo instalado.');
+                log(result.message || 'Ejemplo instalado.');
                 hideOnboardingPanel();
             }
         }
@@ -1138,7 +1215,7 @@
         function updateStepBadge(badgeId) {
             const el = document.getElementById(badgeId);
             if (el) {
-                el.innerText = 'Última acción: ' + getCleanTimestamp();
+                el.innerText = 'Última ejecución: ' + getCleanTimestamp();
             }
         }
 
@@ -1166,7 +1243,7 @@
         }
 
         function nativeBackendUnavailableMessage() {
-            return 'La interfaz no está conectada al backend de Fuente. Iníciala con “fuente --vault /ruta/al/Vault”.';
+            return 'Fuente no está conectada. Iníciala con “fuente --vault /ruta/al/tema”.';
         }
 
         function renderNativeBackendStatusError(message) {
@@ -1183,7 +1260,7 @@
             document.title = 'Fuente Control Console — Vista previa demo';
             const status = document.getElementById('bottom-status-line');
             if (status) {
-                status.textContent = 'VISTA PREVIA EXPLÍCITA · DATOS DEMO · Ningún Vault está conectado';
+                        status.textContent = 'VISTA PREVIA · DATOS DE EJEMPLO · No hay un tema conectado';
             }
         }
 
@@ -1379,7 +1456,7 @@
             appendQueueField(panel, 'Etapa', job.stage);
             appendQueueField(panel, 'Estado', job.status);
             appendQueueField(panel, 'Razón durable', detail.reason || job.cancel_reason || job.error_message);
-            appendQueueField(panel, 'Revisión', job.revision);
+                appendQueueField(panel, 'Versión', job.revision);
             const eventsHeading = document.createElement('h4');
             eventsHeading.textContent = 'Eventos durables';
             panel.appendChild(eventsHeading);
@@ -1512,7 +1589,7 @@
                 appendQueueField(row, 'Estado', job.status);
                 appendQueueField(row, 'Razón durable', job.reason || job.cancel_reason || job.error_message);
                 appendQueueField(row, 'Actualizado', job.updated_at);
-                appendQueueField(row, 'Revisión', job.revision);
+                appendQueueField(row, 'Versión', job.revision);
 
                 const actions = document.createElement('div');
                 const detailButton = document.createElement('button');
@@ -1633,14 +1710,14 @@
             if (!snapshot || snapshot.error) {
                 panel.replaceChildren();
                 const error = document.createElement('p');
-                error.textContent = queueValue(snapshot && (snapshot.message || snapshot.error), 'No se pudo medir la salud.');
+                error.textContent = queueValue(snapshot && (snapshot.message || snapshot.error), 'No se pudo medir el estado del sistema.');
                 panel.appendChild(error);
                 return;
             }
             if (!isValidHealthSnapshot(snapshot)) {
                 panel.replaceChildren();
                 const error = document.createElement('p');
-                error.textContent = 'Respuesta de salud incompleta; no se ha resuelto el estado.';
+                error.textContent = 'La respuesta está incompleta; no se pudo determinar el estado.';
                 panel.appendChild(error);
                 return;
             }
@@ -1682,7 +1759,7 @@
             if (status) status.textContent = 'Salud medida; cada estado procede del snapshot actual.';
             const bottomStatus = document.getElementById('bottom-status-line');
             if (bottomStatus) {
-                bottomStatus.textContent = 'Estado: Medido • Vault: '
+                bottomStatus.textContent = 'Estado: medido • Notas: '
                     + queueValue(snapshot.vault && snapshot.vault.status, 'unknown')
                     + ' • RAM: Medido';
             }
@@ -1691,13 +1768,13 @@
         function refreshHealth() {
             if (!queueApiAvailable()) {
                 const status = document.getElementById('health-status');
-                if (status) status.textContent = 'Bridge no conectado; la salud no se ha medido.';
+                if (status) status.textContent = 'Fuente no está conectada; no se ha medido el estado.';
                 return;
             }
             const status = document.getElementById('health-status');
-            if (status) status.textContent = 'Midiendo salud...';
+            if (status) status.textContent = 'Midiendo el estado del sistema...';
             window.pywebview.api.get_health().then(renderHealthSnapshot).catch(function(error) {
-                if (status) status.textContent = 'No se pudo medir la salud: ' + String(error);
+                if (status) status.textContent = 'No se pudo medir el estado: ' + String(error);
             });
         }
 
@@ -1785,7 +1862,7 @@
                 return path + ' · rev. ' + revision + ' · ' + hash;
             });
             if (approvalLegacyOriginIds.length) {
-                originLines.push('Migración pendiente: faltan identidades OriginRef completas.');
+                originLines.push('Falta información de origen para completar el cambio.');
             }
             document.getElementById('metadata-origins').value = originLines.join('\n');
             document.getElementById('metadata-status').value = metadata.status || 'pending_review';
@@ -1831,7 +1908,7 @@
             fusionCandidates = Array.isArray(candidates) ? candidates : [];
             if (!fusionCandidates.length) {
                 const empty = document.createElement('p');
-                empty.textContent = 'No hay candidatos deterministas disponibles.';
+                empty.textContent = 'No hay combinaciones disponibles.';
                 list.appendChild(empty);
                 return;
             }
@@ -1881,7 +1958,7 @@
             document.getElementById('fusion-confirmation').checked = false;
             document.getElementById('fusion-commit-button').disabled = true;
             openModal('modal-fusion');
-            fusionStatus('Cargando candidatos deterministas...', false);
+            fusionStatus('Cargando opciones...', false);
             if (window.pywebview && window.pywebview.api) {
                 window.pywebview.api.get_fusion_candidates().then(function(result) {
                     if (result && result.error) {
@@ -1895,7 +1972,7 @@
                 });
             } else {
                 renderFusionCandidates([]);
-                fusionStatus('Vista previa local: el bridge no está conectado.', false);
+                fusionStatus('Vista previa local: Fuente no está conectada.', false);
             }
         }
 
@@ -1907,7 +1984,7 @@
             heading.textContent = preview.title + ' · ' + preview.target_issue;
             pane.appendChild(heading);
             const sourceHeading = document.createElement('h4');
-            sourceHeading.textContent = 'Orígenes y sumarios capturados';
+            sourceHeading.textContent = 'Fuentes y resúmenes';
             pane.appendChild(sourceHeading);
             (preview.sources || []).forEach(function(source) {
                 const details = document.createElement('details');
@@ -1948,7 +2025,7 @@
                 renderFusionPreview(result);
                 document.getElementById('fusion-confirmation').checked = false;
                 document.getElementById('fusion-commit-button').disabled = true;
-                fusionStatus('Preview listo. Marca la confirmación explícita para crear la nota pendiente.', false);
+                fusionStatus('Vista previa lista. Confirma para crear la nota.', false);
             }).catch(function(error) {
                 fusionPreview = null;
                 document.getElementById('fusion-confirmation').checked = false;
@@ -1963,7 +2040,7 @@
                 fusionStatus('Debes revisar el preview y confirmar la creación.', true);
                 return;
             }
-            fusionStatus('Revalidando orígenes y creando nota pendiente...', false);
+            fusionStatus('Comprobando las fuentes y creando la nota...', false);
             if (!(window.pywebview && window.pywebview.api)) return;
             window.pywebview.api.commit_fusion(
                 fusionPreview.preview_id,
@@ -1976,7 +2053,7 @@
                     fusionStatus(result.message || 'Conflicto de revisión: vuelve a previsualizar.', true);
                     return;
                 }
-                fusionStatus('Nota pendiente creada. Los documentos de origen siguen intactos.', false);
+                fusionStatus('Nota creada. Los documentos originales no han cambiado.', false);
                 fusionPreview = null;
                 confirmation.checked = false;
                 document.getElementById('fusion-commit-button').disabled = true;
@@ -2037,7 +2114,7 @@
             setMetadataFormVisible(false);
             document.getElementById('approval-form-status').textContent = '';
             document.getElementById('metadata-raw-frontmatter').textContent = '';
-            setTextMessage(listEl, 'Cargando notas pendientes...', 'console-layout-048');
+            setTextMessage(listEl, 'Cargando notas para revisar...', 'console-layout-048');
 
             if (!window.pywebview || !window.pywebview.api) {
                 setTextMessage(listEl, 'Vista previa sin backend.', 'console-layout-048');
@@ -2051,7 +2128,7 @@
                 const pending = (res && res.pending_notes) ? res.pending_notes : [];
                 listEl.replaceChildren();
                 if (!pending.length) {
-                    setTextMessage(listEl, 'No hay notas pendientes de revisión.', 'console-layout-048');
+                    setTextMessage(listEl, 'No hay notas para revisar.', 'console-layout-048');
                     return;
                 }
                 pending.forEach(function(note) {
@@ -2069,7 +2146,7 @@
                     listEl.appendChild(item);
                 });
             }).catch(function() {
-                setTextMessage(listEl, 'No se pudieron cargar las notas pendientes. Revisa la consola y vuelve a intentarlo.', 'console-layout-048');
+                setTextMessage(listEl, 'No se pudieron cargar las notas. Comprueba el estado y vuelve a intentarlo.', 'console-layout-048');
                 document.getElementById('approval-form-status').textContent = 'La bandeja no está disponible.';
             });
         }
@@ -2086,7 +2163,7 @@
             });
             if (itemEl) itemEl.classList.add('active');
             setMetadataFormVisible(true);
-            document.getElementById('approval-form-status').textContent = 'Cargando metadatos...';
+            document.getElementById('approval-form-status').textContent = 'Cargando datos...';
             document.getElementById('metadata-raw-frontmatter').textContent = '';
 
             window.pywebview.api.get_note_metadata(documentId, false).then(function(res) {
@@ -2097,7 +2174,7 @@
                 }
                 approvalSelectedRevision = res.revision;
                 fillMetadataForm(res.metadata || {});
-                document.getElementById('approval-form-status').textContent = 'Revisión ' + res.revision;
+                document.getElementById('approval-form-status').textContent = 'Versión ' + res.revision;
             });
         }
 
@@ -2116,7 +2193,7 @@
                 if (approvalSelectedNoteId !== saveDocumentId || approvalMetadataLoadGeneration !== saveLoadGeneration) return;
                 if (res && res.field_errors) {
                     showMetadataFieldErrors(res.field_errors);
-                    document.getElementById('approval-form-status').textContent = res.message || 'Metadatos inválidos';
+                    document.getElementById('approval-form-status').textContent = res.message || 'No se pueden guardar estos datos';
                     return;
                 }
                 if (res && res.error) {
@@ -2126,11 +2203,11 @@
                 approvalSelectedRevision = res.revision;
                 if (approvalMetadataEditGeneration === saveGeneration) {
                     fillMetadataForm(res.metadata || metadata);
-                    document.getElementById('approval-form-status').textContent = 'Metadatos guardados (rev. ' + res.revision + ')';
+                    document.getElementById('approval-form-status').textContent = 'Cambios guardados (versión ' + res.revision + ')';
                 } else {
                     approvalMetadataDirty = true;
                     updateApprovalActionButtons(true);
-                    document.getElementById('approval-form-status').textContent = 'Metadatos guardados; quedan cambios posteriores sin guardar (rev. ' + res.revision + ').';
+                    document.getElementById('approval-form-status').textContent = 'Cambios guardados; quedan cambios posteriores sin guardar (versión ' + res.revision + ').';
                 }
                 if (res.log) log(res.log);
             });
@@ -2139,16 +2216,16 @@
         function approveSelectedNote() {
             if (!approvalSelectedNoteId || approvalSelectedRevision === null) return;
             if (approvalMetadataDirty) {
-                document.getElementById('approval-form-status').textContent = 'Guarda los metadatos antes de aprobar.';
+                document.getElementById('approval-form-status').textContent = 'Guarda los cambios antes de darla por buena.';
                 return;
             }
-            document.getElementById('approval-form-status').textContent = 'Aprobando...';
+            document.getElementById('approval-form-status').textContent = 'Guardando revisión...';
             let approvalRequest;
             const requiresReviewer = approvalSelectedScope === 'clean' || approvalSelectedScope === 'output';
             const reviewer = requiresReviewer ? document.getElementById('approval-reviewer').value.trim() : '';
             if (requiresReviewer && !reviewer) {
                 document.getElementById('approval-reviewer-error').textContent = 'Indica quién aprueba esta revisión.';
-                document.getElementById('approval-form-status').textContent = 'Falta el revisor';
+                    document.getElementById('approval-form-status').textContent = 'Falta indicar quién la revisa';
                 return;
             }
             if (approvalSelectedScope === 'clean') {
@@ -2165,13 +2242,13 @@
                 );
             } else {
                 document.getElementById('approval-form-status').textContent =
-                    'No se puede aprobar: no se pudo determinar si la nota es canónica o procesada.';
+                    'No se puede dar por buena: falta saber de dónde procede.';
                 return;
             }
             approvalRequest.then(function(res) {
                 if (res && res.field_errors) {
                     showMetadataFieldErrors(res.field_errors);
-                    document.getElementById('approval-form-status').textContent = res.message || 'No se puede aprobar con metadatos inválidos';
+                    document.getElementById('approval-form-status').textContent = res.message || 'No se puede guardar: revisa los datos';
                     return;
                 }
                 if (res && res.error) {
@@ -2179,7 +2256,7 @@
                     return;
                 }
                 if (res && res.log) log(res.log);
-                document.getElementById('approval-form-status').textContent = 'Nota aprobada';
+                document.getElementById('approval-form-status').textContent = 'Nota revisada y aprobada';
                 loadApprovalInbox();
             });
         }
@@ -2195,7 +2272,7 @@
             const currentSelectedNoteRevision = approvalSelectedRevision;
             const currentSelectedNoteMetadata = collectMetadataFormValues();
             let printWindow = null;
-            document.getElementById('approval-form-status').textContent = 'Aprobando y preparando exportación...';
+            document.getElementById('approval-form-status').textContent = 'Guardando revisión y preparando el archivo...';
             window.pywebview.api.approve_and_export(currentSelectedDocumentId, currentSelectedNoteRevision, format, currentSelectedNoteMetadata).then(function(res) {
                 if (res && res.field_errors) {
                     closePrintWindowOnError(printWindow);
@@ -2212,7 +2289,7 @@
                     failedApprovalExportDocumentId = currentSelectedDocumentId;
                     failedApprovalExportFormat = format;
                     closePrintWindowOnError(printWindow);
-                    document.getElementById('approval-form-status').textContent = 'Aprobada; exportación falló';
+                    document.getElementById('approval-form-status').textContent = 'Revisión guardada; no se pudo preparar el archivo';
                     loadApprovalInbox(true);
                     return;
                 }
@@ -2222,7 +2299,7 @@
                 if (prepared) {
                     failedApprovalExportDocumentId = null;
                     failedApprovalExportFormat = null;
-                    document.getElementById('approval-form-status').textContent = 'Nota aprobada y exportación preparada';
+                    document.getElementById('approval-form-status').textContent = 'Nota aprobada y archivo preparado';
                     loadApprovalInbox(false);
                 } else {
                     closePrintWindowOnError(printWindow);
@@ -2244,13 +2321,13 @@
             const documentId = approvalSelectedNoteId;
             const revision = approvalSelectedRevision;
             const format = document.getElementById('approval-export-format').value;
-            document.getElementById('approval-form-status').textContent = 'Aprobando salida y preparando exportación...';
+            document.getElementById('approval-form-status').textContent = 'Guardando revisión y preparando el archivo...';
             window.pywebview.api.approve_processed_output(documentId, revision, reviewer).then(function(approval) {
                 if (!approval || approval.error) throw new Error((approval && approval.message) || 'No se pudo aprobar la salida.');
                 return window.pywebview.api.export_note(documentId, format);
             }).then(function(result) {
                 if (!handleCanonicalExportResponse(result, format, null)) return;
-                document.getElementById('approval-form-status').textContent = 'Salida aprobada y exportación preparada';
+                document.getElementById('approval-form-status').textContent = 'Nota aprobada y archivo preparado';
                 loadApprovalInbox(false);
             }).catch(function(error) {
                 document.getElementById('approval-form-status').textContent = error.message || 'No se pudo aprobar/exportar la salida.';
@@ -2275,7 +2352,7 @@
                 }
             }).catch(function(error) {
                 closePrintWindowOnError(printWindow);
-                document.getElementById('approval-form-status').textContent = 'Aprobada; exportación falló';
+                document.getElementById('approval-form-status').textContent = 'Revisión guardada; no se pudo preparar el archivo';
                 log('Error al reintentar exportación: ' + String(error));
             });
         }
@@ -2293,7 +2370,7 @@
                 listEl.replaceChildren();
                 const preview = document.createElement('p');
                 preview.classList.add('console-text-028');
-                preview.textContent = 'Vista previa mock: sin bridge de cuarentena (lista vacía).';
+                preview.textContent = 'Vista previa: no hay conexión con Fuente (lista vacía).';
                 listEl.appendChild(preview);
                 return;
             }
@@ -2360,10 +2437,10 @@
                 statusLabel.className = 'quarantine-status';
                 if (status === 'failed_for_review') {
                     statusLabel.classList.add('status-warning');
-                    statusLabel.textContent = 'Estado: Revisión manual';
+                    statusLabel.textContent = 'Estado: necesita revisión';
                 } else if (status === 'quarantined') {
                     statusLabel.classList.add('status-ok');
-                    statusLabel.textContent = 'Estado: En cuarentena';
+                    statusLabel.textContent = 'Estado: aislado';
                 } else {
                     statusLabel.classList.add('status-ok');
                     statusLabel.textContent = 'Estado: ' + status;
@@ -2575,8 +2652,8 @@
             const status = document.getElementById('setup-obsidian-status');
             if (status) {
                 status.textContent = installed
-                    ? 'Obsidian detectado. Selecciona un Vault existente o crea uno nuevo.'
-                    : 'Obsidian no está instalado. Instálalo antes de configurar el Vault.';
+                    ? 'Obsidian está disponible. Selecciona una carpeta de notas o crea un tema nuevo.'
+                    : 'Obsidian no está instalado. Instálalo para usar la biblioteca de notas.';
             }
             const install = document.getElementById('setup-install-obsidian');
             const create = document.getElementById('setup-create-vault');
@@ -2605,11 +2682,11 @@
         function restartWithSelectedVault(result) {
             const setupStatus = document.getElementById('setup-obsidian-status');
             if (!result || !result.restart_required || !result.vault_path) {
-                if (setupStatus) setupStatus.textContent = 'No se recibió una ruta de Vault válida.';
+                if (setupStatus) setupStatus.textContent = 'No se recibió una carpeta válida.';
                 return;
             }
             const status = document.getElementById('settings-save-status');
-            if (status) status.textContent = 'Vault válido. Reiniciando Fuente…';
+                if (status) status.textContent = 'Carpeta válida. Reiniciando Fuente…';
             callNativeLongRequest('restart_with_vault', function() {
                 return window.pywebview.api.restart_with_vault(result.vault_path);
             }).then(function(response) {
@@ -2623,19 +2700,19 @@
 
         function createGuidedVault() {
             callNativeLongRequest('select_vault_target', function() {
-                return window.pywebview.api.select_vault_target('Elige la ubicación y el nombre del nuevo Vault de Obsidian');
+                return window.pywebview.api.select_vault_target('Elige la ubicación y el nombre del nuevo tema');
             }).then(function(targetPath) {
                 const setupStatus = document.getElementById('setup-obsidian-status');
                 if (!targetPath || typeof targetPath !== 'string') {
-                    if (setupStatus) setupStatus.textContent = 'Selección de Vault cancelada o sin ruta.';
+                    if (setupStatus) setupStatus.textContent = 'Selección cancelada o sin carpeta.';
                     return;
                 }
                 const pathInput = document.getElementById('setting-vault-path');
                 if (pathInput) pathInput.value = targetPath;
-                if (setupStatus) setupStatus.textContent = 'Ruta elegida: ' + targetPath;
+                if (setupStatus) setupStatus.textContent = 'Carpeta elegida: ' + targetPath;
                 if (!window.confirm(
-                    'El Vault se creará exactamente en:\n\n' + targetPath +
-                    '\n\nFuente creará esa carpeta y su carpeta .obsidian. ¿Continuar?'
+                    'El tema se creará exactamente en:\n\n' + targetPath +
+                    '\n\nFuente creará esa carpeta y su configuración. ¿Continuar?'
                 )) return;
                 return callNativeRequest('create_vault', function() {
                     return window.pywebview.api.create_vault({
@@ -2645,7 +2722,7 @@
             }).then(function(result) {
                 if (!result) {
                     const status = document.getElementById('setup-obsidian-status');
-                    if (status) status.textContent = 'No se recibió respuesta al crear el Vault.';
+                if (status) status.textContent = 'No se recibió respuesta al crear el tema.';
                     return;
                 }
                 if (result.error) {
@@ -2658,7 +2735,7 @@
                 restartWithSelectedVault(result);
             }).catch(function(err) {
                 const status = document.getElementById('setup-obsidian-status');
-                if (status) status.textContent = String(err || 'No se pudo crear el Vault.');
+                if (status) status.textContent = String(err || 'No se pudo crear el tema.');
             });
         }
 
@@ -2711,17 +2788,17 @@
         }
 
         function browseVaultFolder() {
-            log('Abriendo selector nativo del Finder de macOS para la Bóveda...');
+            log('Abriendo el selector de carpetas...');
             if (window.pywebview && window.pywebview.api) {
                 window.pywebview.api.select_folder("Seleccionar Carpeta de la Memoria de Fuente").then(function(folder) {
                     if (folder) {
                         document.getElementById('setting-vault-path').value = folder;
                         log('Ruta de la Memoria de Fuente actualizada: ' + folder);
                     } else {
-                        log('Selección de Bóveda cancelada.');
+                        log('Selección cancelada.');
                     }
                 }).catch(function(err) {
-                    log('Error en selector de Bóveda: ' + err);
+                        log('No se pudo elegir la carpeta: ' + err);
                 });
             } else {
                 pickBrowserFolder(function(folder) {
@@ -2885,7 +2962,7 @@
             const statusEl = document.getElementById('sync-status-summary');
             if (!statusEl || !result) return;
             if (result.error) {
-                statusEl.textContent = 'Error de sincronización: ' + (result.message || result.error);
+                statusEl.textContent = 'No se pudieron actualizar las entradas: ' + (result.message || result.error);
                 return;
             }
             const copied = Number(result.copied || 0);
@@ -2893,8 +2970,8 @@
             const conflicts = Array.isArray(result.conflicts) ? result.conflicts : [];
             const diagnostics = Array.isArray(result.diagnostics) ? result.diagnostics : [];
             statusEl.textContent = result.last_run_at
-                ? 'Última sincronización: ' + copied + ' nuevos, ' + unchanged + ' sin cambios, ' + conflicts.length + ' conflictos, ' + diagnostics.length + ' avisos.'
-                : 'Sin sincronización ejecutada en esta sesión.';
+                ? 'Última actualización: ' + copied + ' nuevas, ' + unchanged + ' sin cambios, ' + conflicts.length + ' conflictos, ' + diagnostics.length + ' avisos.'
+                : 'Aún no se han actualizado las entradas.';
         }
 
         function updateSyncInputs(result) {
@@ -2906,11 +2983,11 @@
 
         function syncAllInputs() {
             if (!(window.pywebview && window.pywebview.api)) {
-                log('La sincronización requiere la consola nativa de Fuente.');
+                log('La actualización de entradas requiere la consola de Fuente.');
                 return;
             }
             updateStepBadge('badge-step1');
-            log('Sincronizando entradas vinculadas hacia el tema activo...');
+            log('Actualizando las entradas del tema activo...');
             window.pywebview.api.sync_inputs({ connection_ids: [] }).then(function(result) {
                 updateSyncInputs(result);
                 if (result && result.error) {
@@ -2918,7 +2995,7 @@
                     return;
                 }
                 updateDashboardStats(result.stats);
-                log('Sincronización completada: ' + Number(result.copied || 0) + ' archivos nuevos; ' + Number((result.conflicts || []).length) + ' conflictos.');
+                    log('Actualización completada: ' + Number(result.copied || 0) + ' archivos nuevos; ' + Number((result.conflicts || []).length) + ' conflictos.');
             }).catch(function(err) {
                 log('Error sincronizando entradas: ' + err);
             });
@@ -2952,7 +3029,7 @@
                     document.getElementById('setting-vault-path').value = '/Users/emiliosevillaortego/Documents/Fuente_Vault';
                 }
                 if (statusEl) {
-                    statusEl.textContent = 'VISTA PREVIA EXPLÍCITA: valores demo; ningún Vault está conectado.';
+                statusEl.textContent = 'VISTA PREVIA: valores de ejemplo; no hay un tema conectado.';
                 }
                 renderLinkedFolders();
                 renderSyncStatus(null);
@@ -2983,7 +3060,7 @@
                 if (!info.setup_mode) loadCapabilities();
                 renderLinkedFolders();
                 populateOllamaModels(info.models, info.current_model);
-                if (statusEl) statusEl.textContent = 'Ajustes cargados desde el Vault conectado.';
+                if (statusEl) statusEl.textContent = 'Ajustes cargados desde el tema conectado.';
             }).catch(function(err) {
                 const message = String(err || nativeBackendUnavailableMessage());
                 renderSettingsLoadError(message);
@@ -3302,8 +3379,8 @@
                 window.location.reload();
             };
             window.addEventListener('afterprint', restoreConsole, { once: true });
-            document.head.innerHTML = printDocument.head.innerHTML;
-            document.body.innerHTML = printDocument.body.innerHTML;
+            document.head.replaceChildren(...Array.from(printDocument.head.childNodes, node => node.cloneNode(true)));
+            document.body.replaceChildren(...Array.from(printDocument.body.childNodes, node => node.cloneNode(true)));
             document.title = printDocument.title || originalTitle;
             window.print();
             return true;
@@ -3587,29 +3664,34 @@
             if (spinner) spinner.classList.add('is-active');
 
             const activeDisplay = currentActiveTheme.replace(/_/g, ' ');
-            const issueLabel = issueName ? ' para la Cuestión "' + issueName + '"' : ' en el Tema "' + activeDisplay + '"';
-            log('🚀 Iniciando Nuevo Flujo de Trabajo' + issueLabel + '...');
+            const issueLabel = issueName ? ' para la categoría "' + issueName + '"' : ' en el tema "' + activeDisplay + '"';
+            log('Iniciando el procesamiento' + issueLabel + '...');
 
             if (window.pywebview && window.pywebview.api) {
                 window.pywebview.api.run_optimized_cycle(issueName || '').then(function(res) {
                     if (btn) btn.disabled = false;
                     if (spinner) spinner.classList.remove('is-active');
+                    if (res && res.error) {
+                        log('No se pudo procesar: ' + res.error + (res.message ? ' — ' + res.message : ''));
+                        showPapiroToast('Procesamiento detenido: ' + res.error, true);
+                        return;
+                    }
                     if (res && res.log) log(res.log);
                     if (res && res.stats) updateDashboardStats(res.stats);
                     if (typeof loadReaderNotes === 'function') loadReaderNotes();
-                    showPapiroToast('Nuevo Flujo de Trabajo completado exitosamente.');
+                    showPapiroToast('Procesamiento terminado.');
                 }).catch(function(err) {
                     if (btn) btn.disabled = false;
                     if (spinner) spinner.classList.remove('is-active');
-                    log('Error al ejecutar Nuevo Flujo de Trabajo: ' + err);
-                    showPapiroToast('Error al ejecutar Flujo de Trabajo', true);
+                    log('Error durante el procesamiento: ' + err);
+                    showPapiroToast('No se pudo terminar el procesamiento', true);
                 });
             } else {
                 setTimeout(function() {
                     if (btn) btn.disabled = false;
                     if (spinner) spinner.classList.remove('is-active');
-                    log('Nuevo Flujo de Trabajo completado (vista previa). Se generaron notas marco e índice MOC.');
-                    showPapiroToast('Nuevo Flujo de Trabajo completado exitosamente.');
+                    log('Procesamiento de ejemplo terminado. Se generaron notas e índice.');
+                    showPapiroToast('Procesamiento terminado.');
                 }, 1200);
             }
         }
@@ -3625,7 +3707,7 @@
             const title = currentSelectedNoteTitle || noteFile;
 
             showButtonFeedback(btnEl, '✓ Abriendo...');
-            log('Abriendo nota "' + title + '" en Obsidian Vault (4_procesado)...');
+            log('Abriendo la nota "' + title + '" en Obsidian...');
 
             if (window.pywebview && window.pywebview.api) {
                 window.pywebview.api.trigger_action('open_obsidian', { note_path: noteFile, obsidian_uri: obsidianUri });
@@ -3670,7 +3752,7 @@
                 else if (actionName === 'step3_structure') { log('Preparación de notas inteligentes con Bucle Optimizado finalizada.'); }
                 else if (actionName === 'quick_help') { openModal('modal-help'); }
                 else if (actionName === 'stat_ram') { alert('Purga de memoria RAM ejecutada.'); }
-                else if (actionName === 'stat_notes') { alert('Telemetría del Grafo: 142 notas preparadas, 380 interenlaces.'); }
+                else if (actionName === 'stat_notes') { alert('Hay 142 notas preparadas y 380 enlaces entre ellas.'); }
                 else if (actionName === 'stat_input') { alert('Archivos por procesar: 3 en 1_volcado.'); }
                 else if (actionName === 'stat_processed') { openModal('modal-category'); }
             }
@@ -3740,27 +3822,27 @@
             if (window.pywebview && window.pywebview.api) {
                 window.pywebview.api.send_chat_message(msg, contextPayload).then(function(reply) {
                     if (!reply || typeof reply !== 'object') {
-                        appendChatBubble(chatScroll, 'ai', 'Fuente IA:', String(reply || ''), [], {
+                        appendChatBubble(chatScroll, 'ai', 'Fuente:', String(reply || ''), [], {
                             error: { code: 'invalid_reply', message: 'Respuesta de chat inválida' },
                             retrieval_mode: 'none'
                         });
                         return;
                     }
                     if (reply.error && !reply.text && !reply.answer) {
-                        appendChatBubble(chatScroll, 'ai', 'Fuente IA:', reply.message || 'Error de autorización o de chat.', [], {
+                        appendChatBubble(chatScroll, 'ai', 'Fuente:', reply.message || 'No se pudo responder.', [], {
                             error: { code: reply.error, message: reply.message || String(reply.error) },
                             retrieval_mode: 'none'
                         });
                         return;
                     }
                     const answer = reply.text || reply.answer || '';
-                    appendChatBubble(chatScroll, 'ai', 'Fuente IA:', answer, reply.sources, {
+                    appendChatBubble(chatScroll, 'ai', 'Fuente:', answer, reply.sources, {
                         error: (reply.error && typeof reply.error === 'object') ? reply.error : null,
                         retrieval_mode: reply.retrieval_mode || 'none',
                         source_labels: reply.source_labels || []
                     });
                 }).catch(function(err) {
-                    appendChatBubble(chatScroll, 'ai', 'Fuente IA:', 'No se pudo completar la consulta con Ollama.', [], {
+                    appendChatBubble(chatScroll, 'ai', 'Fuente:', 'No se pudo completar la consulta.', [], {
                         error: { code: 'ollama_unavailable', message: String(err || 'bridge failure') },
                         retrieval_mode: 'none'
                     });
@@ -3770,8 +3852,8 @@
                     appendChatBubble(
                         chatScroll,
                         'ai',
-                        'Fuente IA:',
-                        'Vista previa offline: el chat real requiere el bridge PyWebView y Ollama local.',
+                        'Fuente:',
+                        'Vista previa: la charla real necesita la conexión local de Fuente.',
                         [],
                         {
                             error: { code: 'offline_preview', message: 'Bridge no disponible' },
@@ -4046,10 +4128,13 @@
         }
 
         function switchReaderView(view) {
+            if (view === 'graph') {
+                openReaderGraphModal();
+                return;
+            }
             const listBtn = document.getElementById('btn-reader-mode-list');
             const graphBtn = document.getElementById('btn-reader-mode-graph');
             const listView = document.getElementById('reader-view-list');
-            const graphView = document.getElementById('reader-view-graph');
 
             if (view === 'list') {
                 if (listBtn) listBtn.classList.add('active');
@@ -4058,23 +4143,16 @@
                     listView.classList.remove('is-hidden');
                     listView.classList.add('is-active');
                 }
-                if (graphView) {
-                    graphView.classList.remove('is-active');
-                    graphView.classList.add('is-hidden');
-                }
-            } else {
-                if (graphBtn) graphBtn.classList.add('active');
-                if (listBtn) listBtn.classList.remove('active');
-                if (listView) {
-                    listView.classList.remove('is-active');
-                    listView.classList.add('is-hidden');
-                }
-                if (graphView) {
-                    graphView.classList.remove('is-hidden');
-                    graphView.classList.add('is-active');
-                }
-                loadObsidianGraphView();
             }
+        }
+
+        function openReaderGraphModal() {
+            const graphBtn = document.getElementById('btn-reader-mode-graph');
+            const listBtn = document.getElementById('btn-reader-mode-list');
+            if (graphBtn) graphBtn.classList.add('active');
+            if (listBtn) listBtn.classList.remove('active');
+            openModal('modal-reader-graph');
+            loadObsidianGraphView();
         }
 
         let obsidianGraphEngine = null;
@@ -4361,7 +4439,10 @@
                     ctx.globalAlpha = 1.0;
                 });
 
-                // Dibujar nodos y texto con alta definición (HiDPI / Retina) y halo de contraste
+                // Dibujar nodos y texto con alta definición (HiDPI / Retina) y halo de contraste.
+                // Las etiquetas que colisionan se reservan para el hover o el MOC:
+                // el nodo sigue siendo visible y navegable, y el hover revela su nombre.
+                const labelBoxes = [];
                 nodes.forEach(n => {
                     const isHovered = (hoveredNode === n);
                     const isCanonicalOrigin = n.node_type === 'canonical_origin';
@@ -4398,6 +4479,23 @@
                     }
                     if (visibleLabel !== String(n.label || '')) visibleLabel += '…';
                     ctx.textAlign = labelOnRight ? 'left' : 'right';
+
+                    const labelWidth = ctx.measureText(visibleLabel).width;
+                    const labelLeft = labelOnRight ? labelX : labelX - labelWidth;
+                    const labelBox = {
+                        left: labelLeft - 3 / zoom,
+                        right: labelLeft + labelWidth + 3 / zoom,
+                        top: n.y - fontSize - 3 / zoom,
+                        bottom: n.y + 7 / zoom,
+                    };
+                    const overlapsLabel = labelBoxes.some(box => (
+                        labelBox.left < box.right
+                        && labelBox.right > box.left
+                        && labelBox.top < box.bottom
+                        && labelBox.bottom > box.top
+                    ));
+                    if (overlapsLabel && !isHovered && !isCanonicalMoc) return;
+                    labelBoxes.push(labelBox);
 
                     // Stroke / Halo pergamino detrás del texto para que no se mezcle con las líneas
                     ctx.lineWidth = 3.5 / zoom;
@@ -4791,7 +4889,9 @@
                     dirtyBeforeModeChange ? 'Cambios sin guardar' : 'Sin cambios'
                 );
             }
-            readerEditorInstance.off('needChangeMode');
+            if (typeof readerEditorInstance.off === 'function') {
+                readerEditorInstance.off('needChangeMode');
+            }
             readerEditorInstance.on('needChangeMode', changeReaderEditorMode);
             readerEditorInstance.changeMode = changeReaderEditorMode;
             saveButton.addEventListener('click', saveReaderEdit);
@@ -5026,28 +5126,28 @@
             if (activeChatContextMode === 'single_note') {
                 const noteName = activeChatNoteTitle || 'esta nota';
                 if (labelEl) labelEl.innerText = 'Nota activa: "' + noteName + '"';
-                if (subtextEl) subtextEl.innerText = 'Contexto delimitado exclusivamente al archivo .md de esta nota';
+                if (subtextEl) subtextEl.innerText = 'La consulta se limita a esta nota';
 
                 if (scrollBox) {
                     scrollBox.replaceChildren();
                     appendChatBubble(
                         scrollBox,
                         'ai',
-                        'Fuente IA:',
-                        'Hilo de conversación iniciado. Contexto fijado exclusivamente en la nota "' + noteName + '". ¿Qué deseas consultar sobre este documento?'
+                        'Fuente:',
+                        'Puedes consultar la nota "' + noteName + '". ¿Qué quieres saber?'
                     );
                 }
             } else {
-                if (labelEl) labelEl.innerText = 'Toda la Bóveda de Notas (4_procesado)';
-                if (subtextEl) subtextEl.innerText = 'Acceso a la totalidad del conocimiento en 4_procesado';
+                if (labelEl) labelEl.innerText = 'Todas las notas';
+                if (subtextEl) subtextEl.innerText = 'La consulta usa todas las notas del tema';
 
                 if (scrollBox) {
                     scrollBox.replaceChildren();
                     appendChatBubble(
                         scrollBox,
                         'ai',
-                        'Fuente IA:',
-                        'Hilo de conversación iniciado. Contexto fijado en todas las notas de la Bóveda (4_procesado). Puedo responder preguntas relacionando cualquier documento procesado.'
+                        'Fuente:',
+                        'Puedes consultar todas las notas del tema. ¿Qué quieres saber?'
                     );
                 }
             }
@@ -5106,7 +5206,7 @@
                 ['Título', (note && note.title) || currentSelectedNoteTitle || 'Sin título'],
                 ['Ruta', (note && note.path) || currentSelectedNotePath || 'No disponible'],
                 ['Tema', (note && note.theme) || 'General'],
-                ['Cuestión', (note && note.issue) || '_Sin_Cuestion'],
+                ['Categoría', (note && note.issue) || '_Sin_Cuestion'],
                 ['Estado', (note && note.status) || 'pending_review']
             ];
             values.forEach(function(pair) {
@@ -5387,7 +5487,7 @@
                 group.className = 'reader-issue-group';
                 const issueLabel = document.createElement('div');
                 issueLabel.className = 'reader-issue-label';
-                issueLabel.textContent = 'Cuestión: ' + issue;
+                issueLabel.textContent = 'Categoría: ' + issue;
                 group.appendChild(issueLabel);
                 const nested = document.createElement('ul');
                 nested.className = 'reader-note-list';
@@ -5559,14 +5659,19 @@
 
         let lastSearchQuery = '';
 
+        function normalizeReaderSearchText(value) {
+            return String(value || '').toLocaleLowerCase().replace(/\s+/gu, ' ').trim();
+        }
+
         function filterReaderNotes() {
-            const rawInput = document.getElementById('reader-search').value;
-            const query = rawInput.toLowerCase().trim();
+            const searchInput = document.getElementById('reader-search');
+            const rawInput = searchInput ? searchInput.value : '';
+            const query = normalizeReaderSearchText(rawInput);
 
             document.querySelectorAll('.reader-note-item, .reader-pinned-item').forEach(function(el) {
                 el.classList.toggle(
                     'is-filtered-out',
-                    Boolean(query && !el.innerText.toLowerCase().includes(query))
+                    Boolean(query && !normalizeReaderSearchText(el.innerText).includes(query))
                 );
             });
 
@@ -5659,7 +5764,7 @@
                 const statusEl = document.getElementById('settings-save-status');
                 if (statusEl) {
                     statusEl.textContent = res.restart_required
-                        ? 'Vault válido. Reiniciando Fuente…'
+                        ? 'Carpeta válida. Reiniciando Fuente…'
                         : 'Ajustes guardados correctamente.';
                 }
                 if (res.restart_required) {
@@ -5681,7 +5786,7 @@
         }
 
         function resetDefaultSettings() {
-            if (confirm('¿Deseas restaurar todos los ajustes a la configuración por defecto del sistema Fuente?')) {
+                if (confirm('¿Quieres restablecer todos los ajustes de Fuente?')) {
                 triggerAction('reset_default_settings');
                 setTimeout(loadSettingsData, 200);
             }
@@ -5707,8 +5812,8 @@
                     const status = document.getElementById('bottom-status-line');
                     if (status) {
                         status.textContent = state.vault_path
-                            ? 'Conectado al Vault: ' + state.vault_path
-                            : 'Sin Vault conectado. Configúralo desde Ajustes.';
+                            ? 'Tema conectado: ' + state.vault_path
+                            : 'No hay un tema conectado. Configúralo desde Ajustes.';
                         if (state.setup_mode) {
                             renderSetupSettings({
                                 setup_mode: true,
@@ -5743,6 +5848,9 @@
                         renderNativeBackendStatusError(nativeBackendUnavailableMessage());
                     }
                 }, NATIVE_REQUEST_TIMEOUT_MS);
+            }
+            if (window.__fuenteBrowserBridge) {
+                window.dispatchEvent(new Event('pywebviewready'));
             }
             loadThemes();
             document.addEventListener('click', function(event) {

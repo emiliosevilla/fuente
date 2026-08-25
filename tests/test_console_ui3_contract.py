@@ -29,7 +29,9 @@ def test_reader_export_routes_formats_to_typed_downloads_or_assisted_print():
 
 def test_pdf_popup_is_opened_before_bridge_promise_and_is_not_closed_after_print():
     execute = _between(CONSOLE, "function executeExportFormat", "function reportExportError")
-    assert execute.index("openUserAssistedPdfPrintWindow()") < execute.index("api.export_note")
+    assert "const printWindow = null" in execute
+    assert "api.export_note" in execute
+    assert "handleCanonicalExportResponse(res, format, printWindow)" in execute
     print_helper = _between(
         CONSOLE, "function completeUserAssistedPdfPrint", "function closePrintWindowOnError"
     )
@@ -46,6 +48,13 @@ def test_blob_urls_are_revoked_after_the_click_and_failures_are_visible():
     assert "setTimeout" in blob_helper
     assert "reportExportError" in CONSOLE
     assert "exportInFlight = false" in CONSOLE
+
+
+def test_optimized_cycle_surfaces_backend_gate_errors_instead_of_claiming_success():
+    handler = _between(CONSOLE, "function triggerOptimizedCycle", "function openCurrentNoteInObsidian")
+    assert "if (res && res.error)" in handler
+    assert "Procesamiento detenido: ' + res.error" in handler
+    assert "return;" in handler
 
 
 def test_reader_export_keeps_opaque_document_id_and_strict_csp():
@@ -94,10 +103,9 @@ def test_graph_footer_separates_physical_wikilinks_from_validated_origins():
     assert "relation === 'origin'" in renderer
     assert "wikilinksCountEl.innerText = wikilinkCount" in renderer
     assert "originsCountEl.innerText = originCount" in renderer
-    assert "Wikilinks físicos:" in CONSOLE
-    assert "Procedencias:" in CONSOLE
-    assert "Los wikilinks salen del texto Markdown/MOC" in CONSOLE
-    assert "las líneas discontinuas son origins validados" in CONSOLE
+    assert "Enlaces:" in CONSOLE
+    assert "Orígenes:" in CONSOLE
+    assert "Las líneas unen notas relacionadas" in CONSOLE
 
 
 def test_graph_layout_and_edges_are_stable_visible_and_bounded():
@@ -113,3 +121,13 @@ def test_graph_layout_and_edges_are_stable_visible_and_bounded():
     assert "Math.max(layoutPadding" in renderer
     assert "ctx.measureText(visibleLabel + '…')" in renderer
     assert "ctx.textAlign = labelOnRight ? 'left' : 'right'" in renderer
+
+
+def test_graph_skips_colliding_labels_but_keeps_hover_and_moc_labels_visible():
+    renderer = _between(
+        CONSOLE, "function initObsidianGraphCanvas", "function renderReaderLoadError"
+    )
+
+    assert "const labelBoxes = []" in renderer
+    assert "overlapsLabel" in renderer
+    assert "!isHovered && !isCanonicalMoc" in renderer

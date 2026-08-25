@@ -78,7 +78,7 @@ def test_static_preview_is_explicit_and_native_loads_fail_visibly():
     assert "callNativeRequest('get_notes_list'" in reader
     assert content.index("isExplicitPreviewMode()") < content.index("LOCAL_MOCK_NOTES")
     assert "callNativeRequest('get_note_content'" in content
-    assert "callNativeRequest('get_settings_info'" in settings
+    assert "callNativeLongRequest('get_settings_info'" in settings
     assert "callNativeRequest('get_sync_inputs'" in settings
     assert "isExplicitPreviewMode()" in graph
     assert "nativeBackendUnavailableMessage()" in reader
@@ -169,7 +169,7 @@ def test_settings_and_mounted_inputs_load_independently_with_visible_errors():
     loader = _function_source("loadSettingsData", "showButtonFeedback")
 
     assert "Promise.all" not in loader
-    assert "callNativeRequest('get_settings_info'" in loader
+    assert "callNativeLongRequest('get_settings_info'" in loader
     assert "callNativeRequest('get_sync_inputs'" in loader
     assert "renderSettingsLoadError(" in loader
     assert "renderSyncInputsLoadError(" in loader

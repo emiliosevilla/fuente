@@ -1,6 +1,7 @@
 import inspect
 import re
 from pathlib import Path
+from unittest.mock import patch
 
 from fuente.control_console import FuenteConsoleBackend
 from fuente.ui.bridge import FuentePyWebViewApi
@@ -59,6 +60,35 @@ def test_trigger_action_rejects_action_specific_malformed_payloads_before_backen
         "message": "Unsupported payload field",
     }
     assert backend_calls == []
+
+
+def test_open_obsidian_uses_macos_native_launcher(temp_vault_path):
+    backend = FuenteConsoleBackend(temp_vault_path)
+    note_file = temp_vault_path / "4_procesado" / "nota.md"
+    note_file.parent.mkdir(parents=True, exist_ok=True)
+    note_file.write_text("# Nota\n", encoding="utf-8")
+    with (
+        patch("fuente.control_console.subprocess.run") as run,
+        patch("fuente.control_console.register_obsidian_vault") as register,
+    ):
+        result = backend.handle_action(
+            "open_obsidian",
+            {
+                "note_path": "4_procesado/nota.md",
+                "obsidian_uri": "obsidian://open?vault=Nuevo%20Vault&file=4_procesado%2Fnota.md",
+            },
+        )
+
+    assert result["log"].startswith("Abriendo nota")
+    register.assert_called_once_with(temp_vault_path.resolve())
+    run.assert_called_once_with(
+        [
+            "/usr/bin/open",
+            "obsidian://open?path="
+            + str(note_file.resolve()).replace("/", "%2F"),
+        ],
+        check=True,
+    )
 
 
 def test_trigger_action_dispatches_allowlisted_anythingllm_action(temp_vault_path):

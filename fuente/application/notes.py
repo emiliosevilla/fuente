@@ -163,6 +163,8 @@ class NotesApplicationService:
         except (OSError, UnicodeError) as error:
             raise NoteRevisionConflictError(note.document_id) from error
         identity = self.job_store.get_document_identity(note.document_id)
+        if identity is None:
+            identity = self.job_store.get_note(note.document_id)
         if (
             actual_hash != note.content_hash
             or identity is None

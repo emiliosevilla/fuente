@@ -31,8 +31,8 @@ def _note(*, title: str, issue: str, body: str) -> str:
 
 
 def test_corpus_loads_only_authorized_markdown_and_preserves_identity(tmp_path):
-    first_root = tmp_path / "Derecho_Civil" / "4_salida"
-    second_root = tmp_path / "Laboral" / "4_salida"
+    first_root = tmp_path / "Derecho_Civil" / "4_procesado"
+    second_root = tmp_path / "Laboral" / "4_procesado"
     first = first_root / "Contratos" / "nota.md"
     duplicate = second_root / "Contratos" / "nota.md"
     first.parent.mkdir(parents=True)
@@ -77,12 +77,12 @@ def test_corpus_loads_only_authorized_markdown_and_preserves_identity(tmp_path):
     metadata = [chunk["metadata"] for chunk in chunks]
 
     assert {item["relative_path"] for item in metadata} == {
-        "Derecho_Civil/4_salida/Contratos/nota.md",
-        "Laboral/4_salida/Contratos/nota.md",
+        "Derecho_Civil/4_procesado/Contratos/nota.md",
+        "Laboral/4_procesado/Contratos/nota.md",
     }
     assert {item["document_id"] for item in metadata} == {
-        document_id_for_relative_path("Derecho_Civil/4_salida/Contratos/nota.md"),
-        document_id_for_relative_path("Laboral/4_salida/Contratos/nota.md"),
+        document_id_for_relative_path("Derecho_Civil/4_procesado/Contratos/nota.md"),
+        document_id_for_relative_path("Laboral/4_procesado/Contratos/nota.md"),
     }
     assert {item["theme"] for item in metadata} == {"Derecho_Civil", "Laboral"}
     assert {item["issue"] for item in metadata} == {"Contratos"}
@@ -96,7 +96,7 @@ def test_corpus_loads_only_authorized_markdown_and_preserves_identity(tmp_path):
 
 
 def test_corpus_uses_v2_note_id_when_route_changes(tmp_path):
-    output = tmp_path / "4_salida"
+    output = tmp_path / "4_procesado"
     note = output / "Tema" / "antigua.md"
     note.parent.mkdir(parents=True)
     note_id = "4ca13d5c-4d78-4f37-8c3c-d1dc530a4dc9"
@@ -126,14 +126,14 @@ def test_corpus_uses_v2_note_id_when_route_changes(tmp_path):
 
 
 def test_retrieval_preserves_typed_origins_in_sources(tmp_path):
-    output = tmp_path / "4_salida"
+    output = tmp_path / "4_procesado"
     note = output / "Tema" / "derivada.md"
     note.parent.mkdir(parents=True)
     origin = {
         "note_id": "4ca13d5c-4d78-4f37-8c3c-d1dc530a4dc9",
         "revision": 2,
         "content_hash": "a" * 64,
-        "path": "3_limpio/origen.md",
+        "path": "3_capturado/origen.md",
     }
     note.write_text(
         serialize_frontmatter(

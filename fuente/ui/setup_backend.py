@@ -207,11 +207,17 @@ class FuenteSetupBackend:
                 "error": "obsidian_required",
                 "message": "Instala Obsidian antes de crear un Vault.",
             }
-        name = str(payload.get("vault_name") or "").strip()
-        parent_raw = str(payload.get("parent_path") or "").strip()
+        target_raw = str(payload.get("target_path") or "").strip()
+        if target_raw:
+            target = Path(target_raw).expanduser().resolve()
+            name = target.name
+            parent = validate_directory_path(target.parent)
+        else:
+            name = str(payload.get("vault_name") or "").strip()
+            parent_raw = str(payload.get("parent_path") or "").strip()
+            parent = validate_directory_path(parent_raw)
         if not re.fullmatch(r"[^/\\\0]+", name) or name in {".", ".."}:
             return {"error": "invalid_vault_name", "message": "Nombre de Vault no válido."}
-        parent = validate_directory_path(parent_raw)
         if parent is None:
             return {"error": "invalid_parent_path", "message": "La carpeta padre no es válida."}
         target = parent / name
@@ -220,11 +226,19 @@ class FuenteSetupBackend:
             (target / ".obsidian").mkdir()
         except OSError as error:
             return {"error": "vault_creation_failed", "message": str(error)}
-        save_startup_vault(target)
+        try:
+            config_path = save_startup_vault(target)
+        except OSError as error:
+            return {
+                "error": "startup_config_failed",
+                "message": f"El Vault se creó, pero no se pudo guardar su ruta: {error}",
+                "vault_path": str(target),
+            }
         return {
             "status": "restart_required",
             "restart_required": True,
             "vault_path": str(target),
+            "startup_config_path": str(config_path),
             "log": f"Vault '{name}' creado en '{target}'. Reiniciando Fuente…",
         }
 
@@ -250,6 +264,33 @@ class FuenteSetupBackend:
         return {"status": "validated", "vault_path": str(vault_path)}
 
     def select_folder(self, title: str = "Seleccionar Carpeta") -> str:
+        if sys.platform == "darwin":
+            try:
+                result = subprocess.run(
+                    [
+                        "osascript",
+                        "-e",
+                        "on run argv",
+                        "-e",
+                        'tell application "System Events" to activate',
+                        "-e",
+                        "return POSIX path of (choose folder with prompt (item 1 of argv))",
+                        "-e",
+                        "end run",
+                        "--",
+                        title,
+                    ],
+                    capture_output=True,
+                    text=True,
+                    timeout=120,
+                    check=False,
+                )
+                if result.returncode == 0:
+                    return result.stdout.strip()
+            except (OSError, subprocess.TimeoutExpired):
+                return ""
+            return ""
+
         root = tk.Tk()
         root.withdraw()
         try:
@@ -257,6 +298,34 @@ class FuenteSetupBackend:
             return filedialog.askdirectory(title=title) or ""
         finally:
             root.destroy()
+
+    def select_vault_target(self, title: str = "Elegir ubicación del Vault") -> str:
+        """Use macOS's native save panel to choose the final Vault path."""
+        if sys.platform != "darwin":
+            return ""
+        try:
+            result = subprocess.run(
+                [
+                    "osascript",
+                    "-e",
+                    "on run argv",
+                    "-e",
+                    'tell application "System Events" to activate',
+                    "-e",
+                    'return POSIX path of (choose file name with prompt (item 1 of argv) default name "Nuevo Vault")',
+                    "-e",
+                    "end run",
+                    "--",
+                    title,
+                ],
+                capture_output=True,
+                text=True,
+                timeout=120,
+                check=False,
+            )
+            return result.stdout.strip() if result.returncode == 0 else ""
+        except (OSError, subprocess.TimeoutExpired):
+            return ""
 
     def get_health(self) -> dict[str, Any]:
         return {"status": "not_ready", "message": "Sin Vault conectado."}

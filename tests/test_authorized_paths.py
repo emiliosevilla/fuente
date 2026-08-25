@@ -1,4 +1,5 @@
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
@@ -205,6 +206,29 @@ def test_note_handlers_accept_vault_relative_note_identity(temp_vault_path):
 
     assert result["status"] == "saved"
     assert note.read_text(encoding="utf-8") == "updated"
+
+
+def test_copy_reader_note_uses_authorized_note_and_native_clipboard(temp_vault_path):
+    backend = FuenteConsoleBackend(temp_vault_path)
+    note = backend.vault.output_dir / "Cuestion" / "nota.md"
+    note.parent.mkdir()
+    note.write_text("# Nota real\nContenido", encoding="utf-8")
+
+    with patch("fuente.control_console.sys.platform", "darwin"), patch(
+        "fuente.control_console.subprocess.run"
+    ) as run:
+        result = backend.handle_action(
+            "copy_reader_note",
+            {"note_title": "Nota", "note_path": "4_procesado/Cuestion/nota.md"},
+        )
+
+    assert result == {"log": "Nota 'Nota' copiada al portapapeles."}
+    run.assert_called_once_with(
+        ["/usr/bin/pbcopy"],
+        input="# Nota real\nContenido",
+        text=True,
+        check=True,
+    )
 
 
 def test_note_handlers_reject_absolute_paths_without_mutation(temp_vault_path):

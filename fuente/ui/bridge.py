@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 import sqlite3
 import os
+import subprocess
 import sys
 import threading
 from uuid import UUID
@@ -36,6 +37,7 @@ from fuente.domain.errors import (
     CanonicalEligibilityError,
     InvalidNoteTransitionError,
     NoteRevisionConflictError,
+    OutputApprovalRequiredError,
     PathAuthorizationError,
 )
 from fuente.domain.sync import SyncDirection
@@ -264,6 +266,13 @@ class FuentePyWebViewApi:
             return valid_title
         if len(valid_title) > 120:
             return self._error("invalid_payload", "title is too long")
+        if self._window is not None:
+            import webview
+
+            selected = self._window.create_file_dialog(webview.FileDialog.FOLDER)
+            if not selected:
+                return {"status": "cancelled"}
+            return self.backend.select_sync_folder_from_path(selected[0])
         return self.backend.select_sync_folder(valid_title or "Vincular carpeta de sincronización")
 
     def select_sync_input_folder(
@@ -615,11 +624,10 @@ class FuentePyWebViewApi:
         if isinstance(parsed, dict) and "error" in parsed:
             return parsed
         assert isinstance(parsed, dict)
-        if set(parsed) != {"vault_name", "parent_path"}:
-            return self._error("invalid_payload", "Se requiere nombre y carpeta padre del Vault.")
-        for field in ("vault_name", "parent_path"):
-            if not isinstance(parsed[field], str) or not parsed[field].strip():
-                return self._error("invalid_payload", f"{field} debe ser texto no vacío")
+        if set(parsed) != {"target_path"}:
+            return self._error("invalid_payload", "Se requiere la ruta completa del Vault.")
+        if not isinstance(parsed["target_path"], str) or not parsed["target_path"].strip():
+            return self._error("invalid_payload", "target_path debe ser texto no vacío")
         action = getattr(self.backend, "create_vault", None)
         if not callable(action):
             return self._error("setup_not_available", "La creación guiada sólo está disponible durante la configuración inicial.")
@@ -631,7 +639,23 @@ class FuentePyWebViewApi:
             return valid_title
         if len(valid_title) > 120:
             return self._error("invalid_payload", "title is too long")
+        if self._window is not None:
+            import webview
+
+            selected = self._window.create_file_dialog(webview.FileDialog.FOLDER)
+            return selected[0] if selected else ""
         return self.backend.select_folder(valid_title or "Seleccionar Carpeta")
+
+    def select_vault_target(self, title: object = "Elegir ubicación del Vault") -> str | ErrorResult:
+        valid_title = self._text(title, "title", required=False)
+        if isinstance(valid_title, dict):
+            return valid_title
+        if len(valid_title) > 120:
+            return self._error("invalid_payload", "title is too long")
+        action = getattr(self.backend, "select_vault_target", None)
+        if not callable(action):
+            return self._error("setup_not_available", "El selector de Vault no está disponible.")
+        return action(valid_title or "Elegir ubicación del Vault")
 
     def get_capabilities(self) -> dict[str, Any] | ErrorResult:
         action = getattr(self.backend, "get_capabilities", None)
@@ -897,6 +921,57 @@ class FuentePyWebViewApi:
                 "Approval could not be recorded",
             )
 
+    def approve_processed_output(
+        self,
+        document_id: object,
+        expected_revision: object,
+        reviewer: object,
+    ) -> dict[str, Any] | ErrorResult:
+        """Approve a processed note for the independent 5_compartido gate."""
+        note = self._approval_note_id(document_id)
+        if isinstance(note, dict):
+            return note
+        revision_error = self._revision(expected_revision)
+        if revision_error is not None:
+            return revision_error
+        try:
+            normalized_reviewer = normalize_reviewer(reviewer)
+        except ValueError as error:
+            return self._error("invalid_payload", str(error))
+        try:
+            notes = self.backend.get_notes_service()
+            current = notes.get_note(note)
+            if current.revision != int(expected_revision):
+                raise NoteRevisionConflictError(note)
+            if current.status == "pending_review":
+                current = notes.approve(note, int(expected_revision))
+            elif current.status != "approved":
+                raise InvalidNoteTransitionError(
+                    note, f"Note is not reviewable (status={current.status!r})"
+                )
+            approval = notes.approve_processed_output(
+                note, current.revision, normalized_reviewer
+            )
+            return {
+                "log": "Salida procesada APROBADA con éxito.",
+                "status": "approved",
+                "document_id": approval.note_id,
+                "revision": approval.revision,
+                "reviewer": approval.reviewer,
+            }
+        except (
+            CanonicalEligibilityError,
+            InvalidNoteTransitionError,
+            NoteRevisionConflictError,
+            OutputApprovalRequiredError,
+            PathAuthorizationError,
+        ) as error:
+            return {"error": error.code, "message": str(error)}
+        except JobStoreBusyError:
+            return self._error("approval_busy", "Approval storage is busy; retry")
+        except (OSError, sqlite3.Error, TypeError, ValueError):
+            return self._error("approval_failed", "Approval could not be recorded")
+
     def validate_note_metadata(self, metadata: object) -> dict[str, Any]:
         parsed = self._payload(metadata)
         if isinstance(parsed, dict) and "error" in parsed:
@@ -1041,6 +1116,26 @@ class FuentePyWebViewApi:
         from fuente.application.meetings import MeetingCaptureApplicationService
 
         return MeetingCaptureApplicationService(self.backend.config)
+
+    def open_meetily_app(self) -> dict[str, Any]:
+        """Open the supported Meetily desktop app; it owns capture permissions."""
+        if sys.platform != "darwin":
+            return self._error("meetily_unavailable", "Meetily sólo está instalado como app macOS en este equipo")
+        candidates = (
+            Path("/Applications/meetily.app"),
+            Path.home() / "Applications" / "meetily.app",
+        )
+        app_path = next((path for path in candidates if path.is_dir()), None)
+        if app_path is None:
+            return self._error(
+                "meetily_unavailable",
+                "No se encontró Meetily. Instálalo desde su aplicación oficial antes de grabar.",
+            )
+        try:
+            subprocess.Popen(["/usr/bin/open", "-a", str(app_path)])
+        except OSError as error:
+            return self._error("meetily_open_failed", str(error))
+        return {"status": "opened", "app": "meetily"}
 
     def start_meeting_capture(self, payload: object) -> dict[str, Any]:
         data = self._payload(payload)
@@ -1259,6 +1354,19 @@ class FuentePyWebViewApi:
             destination_path=destination,
             confirm_overwrite=confirm_overwrite,
         )
+
+    def save_export_to_downloads(
+        self, note_id: object, export_format: object
+    ) -> dict[str, Any]:
+        note = self._editor_note_id(note_id)
+        export_fmt = self._text(export_format, "format")
+        if isinstance(note, dict):
+            return note
+        if isinstance(export_fmt, dict):
+            return export_fmt
+        if export_fmt not in {"markdown", "docx", "word"}:
+            return self._error("invalid_payload", "format is not supported")
+        return self.backend.export_note_to_downloads(note, export_fmt)
 
     def get_graph_data(self) -> dict[str, Any]:
         return self.backend.get_graph_data()

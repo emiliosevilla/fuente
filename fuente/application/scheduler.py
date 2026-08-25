@@ -77,14 +77,14 @@ TASK_CLASS_RESOURCE: Mapping[TaskClass, ResourceKind] = {
 }
 
 OCR_EXTENSIONS = frozenset({".png", ".jpeg", ".jpg", ".tiff", ".bmp", ".webp"})
-AUDIO_EXTENSIONS = frozenset({".mp3", ".wav", ".m4a", ".ogg", ".flac"})
+AUDIO_EXTENSIONS = frozenset({".mp3", ".wav", ".m4a", ".ogg", ".flac", ".mp4"})
 
 #: Stages whose next work is source extraction (class depends on file type).
 _EXTRACT_STAGES = frozenset({"discovered", "stabilized", "copied_dirty"})
 #: Stages whose next work writes/indexes vectors (not save_clean IO).
 _EMBED_STAGES = frozenset({"saved_clean", "saved_note"})
 #: Stages whose next work calls the LLM.
-_LLM_STAGES = frozenset({"indexed_chunks", "generated_candidate"})
+_LLM_STAGES = frozenset({"indexed_chunks"})
 #: Stages that mutate note/chroma identity for a document.
 _DOCUMENT_MUTATING_STAGES = frozenset(
     {
@@ -164,12 +164,14 @@ def classify_source_path(source_relative_path: str) -> TaskClass:
     return TaskClass.IO_TEXT
 
 
-def task_class_for_job(job: JobRecord) -> TaskClass:
+def task_class_for_job(
+    job: JobRecord, *, vector_index_enabled: bool = True
+) -> TaskClass:
     """Task class required to advance *job* from its current durable stage."""
     stage = job.stage
     if stage in _EXTRACT_STAGES:
         return classify_source_path(job.source_relative_path)
-    if stage in _EMBED_STAGES:
+    if stage in _EMBED_STAGES and vector_index_enabled:
         return TaskClass.EMBEDDING
     if stage in _LLM_STAGES:
         return TaskClass.LLM_GENERATION
@@ -235,6 +237,8 @@ class ResourceScheduler:
         model_override: Optional[str] = None,
         purge_model: Optional[PurgeModel] = None,
         loaded_models: Optional[LoadedModelsProbe] = None,
+        vector_index_enabled: bool = True,
+        audio_mode: str = "auto",
     ) -> None:
         self.job_store = job_store
         self.memory_probe = memory_probe
@@ -242,6 +246,27 @@ class ResourceScheduler:
         self.model_override = model_override
         self._purge_model = purge_model
         self._loaded_models = loaded_models
+        self.vector_index_enabled = vector_index_enabled
+        self.audio_mode = "auto"
+        self.audio_estimated_ram_gb: Optional[float] = None
+        self.set_audio_mode(audio_mode)
+
+    def set_vector_index_enabled(self, enabled: bool) -> None:
+        """Keep queue admission aligned with the active runtime policy."""
+        self.vector_index_enabled = bool(enabled)
+
+    def set_audio_mode(self, mode: object) -> None:
+        """Keep audio admission aligned with the effective runtime policy."""
+        value = getattr(mode, "value", mode)
+        self.audio_mode = value if isinstance(value, str) else "auto"
+        self.audio_estimated_ram_gb = (
+            1.0 if self.audio_mode == "tiny_cpu" else None
+        )
+
+    def _task_class_for_job(self, job: JobRecord) -> TaskClass:
+        return task_class_for_job(
+            job, vector_index_enabled=self.vector_index_enabled
+        )
 
     # -- public API ---------------------------------------------------------
 
@@ -249,7 +274,7 @@ class ResourceScheduler:
         """Stable policy order: priority by task class, then oldest updated_at."""
         decorated = [
             (
-                TASK_CLASS_PRIORITY[task_class_for_job(job)],
+                TASK_CLASS_PRIORITY[self._task_class_for_job(job)],
                 job.updated_at,
                 job.created_at,
                 job.job_id,
@@ -346,7 +371,7 @@ class ResourceScheduler:
         if job.cancel_requested_at:
             decision = ScheduleDecision(
                 job=job,
-                task_class=task_class_for_job(job),
+                task_class=self._task_class_for_job(job),
                 action=ScheduleAction.WAIT,
                 reason="cancellation_requested; waiting for the next safe boundary",
             )
@@ -426,7 +451,7 @@ class ResourceScheduler:
         reserved: Mapping[str, int],
         reserved_docs: set[str],
     ) -> ScheduleDecision:
-        task_class = task_class_for_job(job)
+        task_class = self._task_class_for_job(job)
         resource_kind = TASK_CLASS_RESOURCE[task_class]
         model_id: Optional[str] = None
         purge_models: tuple[str, ...] = ()
@@ -453,7 +478,25 @@ class ResourceScheduler:
             # Keep nomination rationale when the gate allows.
             reason_prefix = model_reason
         else:
-            budget = evaluate_resource(resource_kind, snapshot)
+            if task_class is TaskClass.MEDIA_AUDIO and self.audio_mode == "skip":
+                return ScheduleDecision(
+                    job=job,
+                    task_class=task_class,
+                    action=ScheduleAction.RUN,
+                    reason="audio_disabled_by_policy; extraction will be skipped",
+                    resource_kind=resource_kind,
+                    estimated_ram_gb=0.0,
+                    concurrency_limit=1,
+                )
+            budget = evaluate_resource(
+                resource_kind,
+                snapshot,
+                estimated_ram_gb=(
+                    self.audio_estimated_ram_gb
+                    if task_class is TaskClass.MEDIA_AUDIO
+                    else None
+                ),
+            )
             reason_prefix = ""
             if not budget.allowed:
                 return ScheduleDecision(

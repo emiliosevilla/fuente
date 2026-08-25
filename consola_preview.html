@@ -334,18 +334,29 @@
     <div class="modal-overlay" id="modal-reader-graph" role="dialog" aria-modal="true" aria-labelledby="reader-graph-modal-title" aria-hidden="true">
         <div class="modal-container reader-graph-modal-container">
             <div class="modal-header">
-                <div class="modal-title" id="reader-graph-modal-title">Mapa</div>
-                <button class="close-btn" data-onclick-command="closeModal('modal-reader-graph')" aria-label="Cerrar grafo">&times;</button>
+                <div>
+                    <div class="modal-title" id="reader-graph-modal-title">Mapa</div>
+                    <div class="graph-header-summary">Explora relaciones, orígenes y notas</div>
+                </div>
+                <div class="graph-header-actions">
+                    <button class="btn-small" data-onclick-command="zoomReaderGraph(0.82)" aria-label="Alejar mapa">−</button>
+                    <button class="btn-small" data-onclick-command="zoomReaderGraph(1.22)" aria-label="Acercar mapa">+</button>
+                    <button class="btn-small" data-onclick-command="centerReaderGraph()">Centrar</button>
+                    <button class="close-btn" data-onclick-command="closeModal('modal-reader-graph')" aria-label="Cerrar mapa">&times;</button>
+                </div>
             </div>
             <div class="modal-body reader-graph-modal-body">
                 <div class="reader-graph-container console-layout-009" id="reader-view-graph">
                     <canvas id="obsidian-graph-canvas" class="graph-canvas console-layout-010"></canvas>
+                    <div class="graph-small-hint is-hidden" id="graph-small-hint" role="status">
+                        <strong>Tu mapa acaba de empezar</strong>
+                        <span>Aparecerán nuevas conexiones al procesar y enlazar más notas.</span>
+                    </div>
                     <div class="console-layout-011" role="note" aria-label="Leyenda del grafo">
-                        <span>Nodos: <b id="graph-nodes-count" class="graph-counter-nodes">0</b></span>
-                        <span>Enlaces: <b id="graph-wikilinks-count" class="graph-counter-wikilinks">0</b></span>
-                        <span>Orígenes: <b id="graph-origins-count" class="graph-counter-origins">0</b></span>
-                        <span>Las líneas unen notas relacionadas. El índice sale en amarillo.</span>
-                        <span>Haz clic en una nota para abrirla. Arrastra para mover el mapa.</span>
+                        <span class="graph-metric">Notas <b id="graph-nodes-count" class="graph-counter-nodes">0</b></span>
+                        <span class="graph-metric">Enlaces <b id="graph-wikilinks-count" class="graph-counter-wikilinks">0</b></span>
+                        <span class="graph-metric">Orígenes <b id="graph-origins-count" class="graph-counter-origins">0</b></span>
+                        <span class="graph-help">Las líneas unen notas relacionadas; el índice aparece en amarillo. Haz clic para abrir, arrastra para mover.</span>
                     </div>
                 </div>
             </div>
@@ -1010,6 +1021,7 @@
             if (command.startsWith('switchSettingsTab(')) return switchSettingsTab(args[0]);
             if (command.startsWith('switchWorkspaceTab(')) return switchWorkspaceTab(args[0]);
             if (command.startsWith('executeExportFormat(')) return executeExportFormat(args[0]);
+            if (command.startsWith('zoomReaderGraph(')) return zoomReaderGraph(Number(command.match(/[\d.]+/)[0]));
             if (command.startsWith('changeActiveTheme(')) return changeActiveTheme(element.value);
             if (command === 'handleThemeTriggerKeydown(event)') return handleThemeTriggerKeydown(event);
             if (command === 'togglePathMode(this)') return togglePathMode(element);
@@ -1023,6 +1035,7 @@
                 'openMOCNote()': openMOCNote,
                 'toggleReaderLibrary()': toggleReaderLibrary,
                 'toggleReaderContext()': toggleReaderContext,
+                'centerReaderGraph()': centerReaderGraph,
                 'filterReaderNotes()': filterReaderNotes,
                 'submitCreateThemeModal()': submitCreateThemeModal,
                 'clearChatHistory()': clearChatHistory,
@@ -4177,43 +4190,27 @@
         }
 
         let obsidianGraphEngine = null;
+        let obsidianGraphControls = null;
 
-        function loadObsidianGraphView() {
-            if (window.pywebview && window.pywebview.api) {
-                window.pywebview.api.get_graph_data().then(function(data) {
-                    initObsidianGraphCanvas(data);
-                });
-            } else {
-                const demoData = {
-                    nodes: [
-                        { id: "OptimizedLoop", label: "Bucle Optimizado" },
-                        { id: "Notas_Inteligentes", label: "Notas_Inteligentes" },
-                        { id: "Vectorización_ChromaDB", label: "Vectorización_ChromaDB" },
-                        { id: "Extractores_ETL", label: "Extractores_ETL" },
-                        { id: "Obsidian_Vault", label: "Obsidian_Vault" },
-                        { id: "Ingesta_Fuentes", label: "Ingesta de entradas" },
-                        { id: "Fuente_Gazette", label: "Fuente_Gazette" }
-                    ],
-                    links: [
-                        { source: "OptimizedLoop", target: "Notas_Inteligentes" },
-                        { source: "OptimizedLoop", target: "Vectorización_ChromaDB" },
-                        { source: "Extractores_ETL", target: "OptimizedLoop" },
-                        { source: "Notas_Inteligentes", target: "Obsidian_Vault" },
-                        { source: "Ingesta_Fuentes", target: "Extractores_ETL" },
-                        { source: "Fuente_Gazette", target: "Obsidian_Vault" }
-                    ]
-                };
-                initObsidianGraphCanvas(demoData);
-            }
+        function zoomReaderGraph(factor) {
+            if (obsidianGraphControls) obsidianGraphControls.zoom(factor);
+        }
+
+        function centerReaderGraph() {
+            if (obsidianGraphControls) obsidianGraphControls.center();
         }
 
         function initObsidianGraphCanvas(data) {
             const canvas = document.getElementById('obsidian-graph-canvas');
             if (!canvas) return;
+            if (obsidianGraphEngine) cancelAnimationFrame(obsidianGraphEngine);
+            obsidianGraphEngine = null;
+            obsidianGraphControls = null;
             const ctx = canvas.getContext('2d');
             const nodesCountEl = document.getElementById('graph-nodes-count');
             const wikilinksCountEl = document.getElementById('graph-wikilinks-count');
             const originsCountEl = document.getElementById('graph-origins-count');
+            const smallHint = document.getElementById('graph-small-hint');
             const rootStyles = getComputedStyle(document.documentElement);
             const originColor = rootStyles.getPropertyValue('--fuente-frost-2').trim() || '#81A1C1';
             const mocColor = rootStyles.getPropertyValue('--fuente-warning').trim() || '#EBCB8B';
@@ -4222,8 +4219,8 @@
             const nodeColor = rootStyles.getPropertyValue('--fuente-polar-0').trim() || '#2E3440';
             const hoveredNodeColor = rootStyles.getPropertyValue('--fuente-polar-2').trim() || '#434C5E';
             const nodeBorderColor = rootStyles.getPropertyValue('--fuente-snow-2').trim() || '#ECEFF4';
-            const labelHaloColor = rootStyles.getPropertyValue('--fuente-snow-0').trim() || '#D8DEE9';
-            const labelTextColor = rootStyles.getPropertyValue('--fuente-polar-0').trim() || '#2E3440';
+            const labelHaloColor = rootStyles.getPropertyValue('--fuente-polar-0').trim() || '#071311';
+            const labelTextColor = rootStyles.getPropertyValue('--fuente-snow-2').trim() || '#F1F7F4';
 
             const dpr = window.devicePixelRatio || 1;
             const width = canvas.parentElement.clientWidth || 800;
@@ -4246,6 +4243,7 @@
             });
             if (wikilinksCountEl) wikilinksCountEl.innerText = wikilinkCount;
             if (originsCountEl) originsCountEl.innerText = originCount;
+            if (smallHint) smallHint.classList.toggle('is-hidden', nodes.length > 1);
 
             if (nodes.length === 0) {
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -4294,6 +4292,27 @@
             let hoveredNode = null;
             let dragMoved = false;
             let physicsFramesRemaining = 180;
+
+            function requestGraphRender(frames) {
+                physicsFramesRemaining = Math.max(physicsFramesRemaining, frames || 1);
+                if (!obsidianGraphEngine) obsidianGraphEngine = requestAnimationFrame(render);
+            }
+
+            obsidianGraphControls = {
+                zoom: function(factor) {
+                    const nextZoom = Math.max(0.3, Math.min(4, zoom * factor));
+                    panX = centerX - (centerX - panX) * (nextZoom / zoom);
+                    panY = centerY - (centerY - panY) * (nextZoom / zoom);
+                    zoom = nextZoom;
+                    requestGraphRender(1);
+                },
+                center: function() {
+                    zoom = 1;
+                    panX = 0;
+                    panY = 0;
+                    requestGraphRender(30);
+                }
+            };
 
             function getMousePos(e) {
                 const rect = canvas.getBoundingClientRect();
@@ -4362,6 +4381,7 @@
                     }
                     canvas.classList.toggle('is-hovered', Boolean(hoveredNode));
                 }
+                requestGraphRender(draggedNode || isPanning ? 2 : 1);
             };
 
             canvas.onmouseup = function(e) {
@@ -4373,6 +4393,7 @@
                 isPanning = false;
                 canvas.classList.remove('is-panning');
                 canvas.classList.toggle('is-hovered', Boolean(hoveredNode));
+                requestGraphRender(2);
             };
 
             canvas.onwheel = function(e) {
@@ -4384,6 +4405,7 @@
                 panX = sx - (sx - panX) * (newZoom / zoom);
                 panY = sy - (sy - panY) * (newZoom / zoom);
                 zoom = newZoom;
+                requestGraphRender(2);
             };
 
             function stepPhysics() {
@@ -4430,9 +4452,8 @@
                 });
             }
 
-            if (obsidianGraphEngine) cancelAnimationFrame(obsidianGraphEngine);
-
             function render() {
+                obsidianGraphEngine = null;
                 if (physicsFramesRemaining > 0) {
                     stepPhysics();
                     physicsFramesRemaining -= 1;
@@ -4532,10 +4553,12 @@
 
                 ctx.restore();
 
-                obsidianGraphEngine = requestAnimationFrame(render);
+                if (physicsFramesRemaining > 0) {
+                    obsidianGraphEngine = requestAnimationFrame(render);
+                }
             }
 
-            render();
+            requestGraphRender(180);
         }
 
         /* TASK3_READER_EDITOR_CONTROLLER_START */

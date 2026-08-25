@@ -2314,6 +2314,60 @@ html[data-fuente-style="energy"] .arrow-connector::before {
     height: 88vh;
 }
 
+.graph-header-summary {
+    margin-top: 2px;
+    color: var(--muted);
+    font-size: 0.68rem;
+}
+
+.graph-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.graph-small-hint {
+    position: absolute;
+    top: 20px;
+    left: 20px;
+    display: grid;
+    gap: 4px;
+    max-width: 280px;
+    padding: 12px 14px;
+    border: 1px solid var(--fuente-glass-border);
+    border-radius: 10px;
+    background: var(--fuente-glass-strong);
+    color: var(--paper);
+    pointer-events: none;
+}
+
+.graph-small-hint span {
+    color: var(--muted);
+    font-size: 0.72rem;
+    line-height: 1.4;
+}
+
+.console-layout-011 {
+    align-items: center;
+    gap: 8px;
+    border-color: var(--fuente-glass-border);
+    background: var(--fuente-glass-strong);
+}
+
+.graph-metric {
+    display: inline-flex;
+    gap: 5px;
+    padding: 3px 7px;
+    border: 1px solid var(--fuente-glass-border);
+    border-radius: 999px;
+}
+
+.graph-help {
+    flex: 1;
+    min-width: 260px;
+    text-align: right;
+}
+
 @media (max-width: 1100px) {
     .subgraphs-container {
         grid-template-columns: repeat(5, minmax(0, 1fr));

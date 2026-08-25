@@ -227,13 +227,13 @@ def test_approval_ui_wires_typed_approve_export_and_retry_without_second_approva
     source = CONSOLA_HTML.read_text(encoding="utf-8")
 
     assert 'id="approval-export-format"' in source
-    assert "Aprobar y exportar" in source
+    assert "Dar por buena y sacar" in source
     assert "approveAndExportSelectedNote()" in source
     assert "window.pywebview.api.approve_and_export(" in source
     assert "currentSelectedDocumentId" in source
     assert "currentSelectedNoteRevision" in source
     assert "currentSelectedNoteMetadata" in source
-    assert "Aprobada; exportación falló" in source
+    assert "Revisión guardada; no se pudo preparar el archivo" in source
     assert "loadApprovalInbox(true)" in source
     assert "retryFailedApprovalExport()" in source
     assert "'retryFailedApprovalExport()': retryFailedApprovalExport" in source
@@ -261,14 +261,14 @@ def test_approval_export_ui_consumes_prepared_payload_by_format():
     assert "format === 'pdf'" in source
 
 
-def test_fuente_v3_frontend_uses_origins_summaries_and_input_providers():
+def test_fuente_v3_frontend_uses_origins_notes_and_input_folders():
     source = CONSOLA_HTML.read_text(encoding="utf-8")
 
     assert 'id="metadata-origins"' in source
     assert 'id="metadata-sources"' not in source
     assert "Orígenes" in source
-    assert "Sumarios" in source
-    assert "Entradas vinculadas a 1_volcado" in source
+    assert "Notas preparadas" in source
+    assert "Carpetas de entrada" in source
     assert "window.pywebview.api.get_sync_inputs()" in source
     assert "window.pywebview.api.sync_inputs(" in source
 

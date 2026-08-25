@@ -470,6 +470,10 @@ class FuentePyWebViewApi:
             return self.backend.get_jobs(parsed_filters, limit, cursor)
         except (JobConflictError, JobNotFoundError) as error:
             return self._job_error(error)
+        except RuntimeError:
+            return self._error(
+                "job_queue_unavailable", "La cola de trabajos todavía no está disponible"
+            )
         except (TypeError, ValueError) as error:
             return self._error("invalid_payload", str(error))
 

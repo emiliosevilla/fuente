@@ -142,3 +142,10 @@ def test_console_preserves_cancel_and_operational_footer_actions():
     }
     assert "saveApprovalMetadata()" in approval_commands
     assert "approveSelectedNote()" in approval_commands
+
+
+def test_shared_dialog_controller_owns_keyboard_focus_and_escape():
+    assert "lastDialogTrigger" in HTML
+    assert "getFocusableElements" in HTML
+    assert "lastDialogTrigger.focus()" in HTML
+    assert "event.key === 'Escape'" in HTML

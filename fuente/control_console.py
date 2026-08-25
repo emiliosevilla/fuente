@@ -2499,8 +2499,13 @@ class FuenteConsoleBackend:
             except PathAuthorizationError:
                 pass
 
-        for document_id, relative in self.vault.enumerate_documents("output"):
-            notes.append(self._note_list_entry(document_id, relative))
+        seen = {note["document_id"] for note in notes}
+        for root in ("clean", "output"):
+            for document_id, relative in self.vault.enumerate_documents(root):
+                if document_id in seen:
+                    continue
+                notes.append(self._note_list_entry(document_id, relative))
+                seen.add(document_id)
         return notes
 
     def get_note_content_html(self, note_id: str) -> Dict[str, Any]:

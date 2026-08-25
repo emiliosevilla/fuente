@@ -2950,13 +2950,13 @@ def launch_control_console(vault_path: Optional[Path] = None):
         api = FuentePyWebViewApi(backend)
         webview.settings["ALLOW_DOWNLOADS"] = True
         window = webview.create_window(
-            "Fuente Control Console — Sin Vault conectado",
+            "Fuente — Configuración",
             url=str(html_file),
             js_api=api,
             width=1280,
             height=850,
             min_size=(980, 680),
-            background_color="#DCD4C7",
+            background_color="#071311",
         )
         api.set_window(window)
         window.events.shown += _activate_webview_window
@@ -3018,13 +3018,13 @@ def launch_control_console(vault_path: Optional[Path] = None):
             # before the native window is created.
             webview.settings["ALLOW_DOWNLOADS"] = True
             window = webview.create_window(
-                "Fuente Control Console — Estética Papiro",
+                "Fuente",
                 url=str(html_file),
                 js_api=api,
                 width=1280,
                 height=850,
                 min_size=(980, 680),
-                background_color="#DCD4C7"
+                background_color="#071311"
             )
             api.set_window(window)
             window.events.shown += _activate_webview_window

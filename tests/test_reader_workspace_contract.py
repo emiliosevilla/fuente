@@ -28,14 +28,29 @@ def test_reader_graph_is_independent_and_search_is_above_reader():
     sidebar = html.split('class="reader-sidebar"', 1)[1].split('class="reader-view-pane"', 1)[0]
     assert 'class="reader-search-wrapper"' not in sidebar
     assert "function normalizeReaderSearchText(value)" in html
+    assert ".replace(/[-_]+/gu, ' ')" in html
     assert ".includes(query)" in html
 
 
 def test_reader_layout_is_compact():
     css = Path("fuente/ui/static/console.css").read_text(encoding="utf-8")
-    assert "width: 164px" in css
+    tokens = Path("fuente/ui/static/fuente_tokens.css").read_text(encoding="utf-8")
+    assert "--library-width:" in tokens
+    assert "width: var(--library-width)" in css
+    assert "width: 164px" not in css
     assert ".reader-search-row" in css
     assert ".reader-graph-modal-container" in css
+
+
+def test_notes_is_content_first_and_map_reuses_one_graph_engine():
+    html = Path("consola_preview.html").read_text(encoding="utf-8")
+    notes = html.split('id="workspace-notes"', 1)[1].split('id="workspace-meetings"', 1)[0]
+    assert 'id="reader-workspace-host"' in notes
+    assert "host.appendChild(reader)" in html
+    assert html.index('id="reader-search"') < html.index('class="reader-context-grid"')
+    assert 'data-onclick-command="openReaderGraphModal()"' in html
+    assert html.count("function loadObsidianGraphView()") == 1
+    assert html.count('id="obsidian-graph-canvas"') == 1
 
 
 def test_reader_library_and_context_are_independently_collapsible():

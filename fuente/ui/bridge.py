@@ -69,7 +69,6 @@ class FuentePyWebViewApi:
             "note_title": str,
         },
         "open_obsidian": {"note_path": str, "obsidian_uri": str},
-        "open_anything_desktop": {},
         "reset_default_settings": {},
     }
 

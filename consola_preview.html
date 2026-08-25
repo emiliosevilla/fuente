@@ -40,10 +40,6 @@
                     <span class="status-val" id="status-ollama">No medido</span>
             </div>
             <div class="status-item">
-                    <span class="status-label">Consulta</span>
-                    <span class="status-val" id="status-anything">No medido</span>
-            </div>
-            <div class="status-item">
                     <span class="status-label">Notas</span>
                     <span class="status-val" id="status-obsidian">No medido</span>
             </div>
@@ -499,10 +495,6 @@
             <div class="modal-title">Consultar notas</div>
                 <div>
                     <button class="btn-small" data-onclick-command="clearChatHistory()">Limpiar charla</button>
-                    <div id="anythingllm-optional-panel" hidden aria-hidden="true">
-                        <span>Integración externa AnythingLLM (tercero, opcional)</span>
-                        <button class="btn-small" data-onclick-command="triggerAction('open_anything_desktop')">Abrir AnythingLLM Desktop</button>
-                    </div>
                     <button class="close-btn" data-onclick-command="closeModal('modal-chat')">&times;</button>
                 </div>
             </div>
@@ -1790,16 +1782,6 @@
             const ollamaStatus = document.getElementById('status-ollama');
             if (ollamaStatus) ollamaStatus.textContent = snapshot.ollama && snapshot.ollama.status
                 ? String(snapshot.ollama.status) : 'unknown';
-            const anything = snapshot.tools && snapshot.tools.anythingllm;
-            const anythingStatus = document.getElementById('status-anything');
-            if (anythingStatus) anythingStatus.textContent = anything && anything.status === 'ok'
-                ? 'ok (medido)' : 'Opcional/no detectado';
-            const panelAnything = document.getElementById('anythingllm-optional-panel');
-            const desktopInstalled = Boolean(anything && anything.status === 'ok');
-            if (panelAnything) {
-                panelAnything.hidden = !desktopInstalled;
-                panelAnything.setAttribute('aria-hidden', desktopInstalled ? 'false' : 'true');
-            }
             const policy = snapshot.policy || {};
             const profile = document.getElementById('setting-resource-profile');
             const audio = document.getElementById('setting-audio-mode');
@@ -5413,10 +5395,6 @@
                 path: "Nota_Integracion_Obsidian.md",
             },
             {
-                title: "Integración Desktop AnythingLLM",
-                path: "Nota_AnythingLLM_Conexion.md",
-            },
-            {
                 title: "Registros y Gazette Logging",
                 path: "Nota_Telemetria_y_Logs.md",
             },
@@ -5455,7 +5433,6 @@
                         { id: "Nota_Notas_Atomicas", label: "Notas Atómicas", path: "Nota_Notas_Atomicas.md" },
                         { id: "Nota_Gestor_Cuarentena", label: "Gestor Cuarentena", path: "Nota_Gestor_Cuarentena.md" },
                         { id: "Nota_Integracion_Obsidian", label: "Integración Obsidian", path: "Nota_Integracion_Obsidian.md" },
-                        { id: "Nota_AnythingLLM_Conexion", label: "AnythingLLM Conexión", path: "Nota_AnythingLLM_Conexion.md" },
                         { id: "Nota_Telemetria_y_Logs", label: "Gazette Logs", path: "Nota_Telemetria_y_Logs.md" },
                         { id: "Nota_Seguridad_y_Privacidad", label: "Privacidad Offline", path: "Nota_Seguridad_y_Privacidad.md" },
                         { id: "Nota_Manual_Usuario_Avanzado", label: "Manual de Usuario", path: "Nota_Manual_Usuario_Avanzado.md" }
@@ -5471,7 +5448,6 @@
                         { source: "_Indice_MOC", target: "Nota_Notas_Atomicas" },
                         { source: "_Indice_MOC", target: "Nota_Gestor_Cuarentena" },
                         { source: "_Indice_MOC", target: "Nota_Integracion_Obsidian" },
-                        { source: "_Indice_MOC", target: "Nota_AnythingLLM_Conexion" },
                         { source: "_Indice_MOC", target: "Nota_Telemetria_y_Logs" },
                         { source: "_Indice_MOC", target: "Nota_Seguridad_y_Privacidad" },
                         { source: "_Indice_MOC", target: "Nota_Manual_Usuario_Avanzado" },
@@ -5480,7 +5456,6 @@
                         { source: "Nota_Arquitectura_Fuente", target: "Nota_Base_Datos_Vectorial" },
                         { source: "Nota_ETL_Pipeline_Ingesta", target: "Nota_Gestor_Cuarentena" },
                         { source: "Nota_Motor_IA_Local", target: "Nota_Optimizacion_RAM" },
-                        { source: "Nota_Base_Datos_Vectorial", target: "Nota_AnythingLLM_Conexion" },
                         { source: "Nota_Formato_Papiro", target: "Nota_Graph_Engine_Optimizado" },
                         { source: "Nota_Manual_Usuario_Avanzado", target: "Nota_Seguridad_y_Privacidad" },
                         { source: "Nota_Manual_Usuario_Avanzado", target: "Nota_Integracion_Obsidian" }

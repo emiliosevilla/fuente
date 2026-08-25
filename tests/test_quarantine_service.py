@@ -22,10 +22,10 @@ def quarantine_service(tmp_path):
 
 def test_list_active_items_includes_failed_for_review(quarantine_service):
     vault_root = quarantine_service.vault_root
-    quarantined_source = vault_root / "1_entrada" / "broken.pdf"
+    quarantined_source = vault_root / "1_volcado" / "broken.pdf"
     quarantined_source.parent.mkdir(parents=True)
     quarantined_source.write_bytes(b"%PDF-broken")
-    review_source = vault_root / "1_entrada" / "model-input.pdf"
+    review_source = vault_root / "1_volcado" / "model-input.pdf"
     review_source.write_text("input", encoding="utf-8")
 
     quarantine_service.quarantine(
@@ -44,7 +44,7 @@ def test_list_active_items_includes_failed_for_review(quarantine_service):
 
 def test_quarantine_uses_canonical_location_and_preserves_provenance(tmp_path):
     vault_root = tmp_path / "vault"
-    source = vault_root / "1_entrada" / "report_final.txt"
+    source = vault_root / "1_volcado" / "report_final.txt"
     source.parent.mkdir(parents=True)
     source.write_text("source contents", encoding="utf-8")
 
@@ -55,7 +55,7 @@ def test_quarantine_uses_canonical_location_and_preserves_provenance(tmp_path):
     assert not source.exists()
     assert item["quarantine_id"]
     assert (service.quarantine_dir / item["stored_filename"]).read_text(encoding="utf-8") == "source contents"
-    assert item["original_relative_path"] == "1_entrada/report_final.txt"
+    assert item["original_relative_path"] == "1_volcado/report_final.txt"
     assert item["source_sha256"]
     assert item["error_code"] == "unsupported_content"
     assert item["attempt_count"] == 3
@@ -64,8 +64,8 @@ def test_quarantine_uses_canonical_location_and_preserves_provenance(tmp_path):
 
 def test_quarantine_ids_prevent_same_name_collisions(tmp_path):
     vault_root = tmp_path / "vault"
-    first = vault_root / "1_entrada" / "first" / "duplicate.md"
-    second = vault_root / "1_entrada" / "second" / "duplicate.md"
+    first = vault_root / "1_volcado" / "first" / "duplicate.md"
+    second = vault_root / "1_volcado" / "second" / "duplicate.md"
     first.parent.mkdir(parents=True)
     second.parent.mkdir(parents=True)
     first.write_text("first", encoding="utf-8")
@@ -97,7 +97,7 @@ def test_restore_requires_quarantine_id_and_authorized_issue_destination(tmp_pat
     restored_item = manager.quarantine_service.list_items()[0]
     assert restored_item["quarantine_id"] == item["quarantine_id"]
     assert restored_item["status"] == "restored"
-    assert restored_item["original_relative_path"] == "4_salida/note.md"
+    assert restored_item["original_relative_path"] == "4_procesado/note.md"
     assert restored_item["source_sha256"] == item["source_sha256"]
     with pytest.raises(PathAuthorizationError):
         manager.restore_from_quarantine("../not-an-id", target_issue="Research")
@@ -105,7 +105,7 @@ def test_restore_requires_quarantine_id_and_authorized_issue_destination(tmp_pat
 
 def test_invalid_model_output_preserves_source_for_review(tmp_path):
     vault_root = tmp_path / "vault"
-    source = vault_root / "1_entrada" / "model-input.pdf"
+    source = vault_root / "1_volcado" / "model-input.pdf"
     source.parent.mkdir(parents=True)
     source.write_text("input", encoding="utf-8")
 
@@ -120,7 +120,7 @@ def test_invalid_model_output_preserves_source_for_review(tmp_path):
     assert result["error_code"] == "invalid_model_output"
     assert source.exists()
     assert service.list_items()[0]["status"] == "failed_for_review"
-    assert service.list_items()[0]["original_relative_path"] == "1_entrada/model-input.pdf"
+    assert service.list_items()[0]["original_relative_path"] == "1_volcado/model-input.pdf"
 
 
 def test_failed_for_review_cannot_be_restored(tmp_path):

@@ -290,6 +290,12 @@ class IngestionApplicationService:
 
     def set_runtime_policy(self, policy: RuntimePolicy) -> None:
         self.runtime_policy = policy
+        setter = getattr(self.scheduler, "set_vector_index_enabled", None)
+        if callable(setter):
+            setter(policy.vector_index_enabled)
+        setter = getattr(self.scheduler, "set_audio_mode", None)
+        if callable(setter):
+            setter(policy.audio_mode)
         setter = getattr(self.extractors, "set_runtime_policy", None)
         if callable(setter):
             setter(policy)
@@ -345,6 +351,12 @@ class IngestionApplicationService:
             model_override=getattr(self.config, "custom_model_override", None) or None,
             purge_model=purge_model,
             loaded_models=loaded_models,
+            vector_index_enabled=self._vector_index_enabled(),
+            audio_mode=(
+                getattr(self.runtime_policy.audio_mode, "value", self.runtime_policy.audio_mode)
+                if self.runtime_policy is not None
+                else "auto"
+            ),
         )
 
     # -- public API ---------------------------------------------------------
@@ -463,7 +475,7 @@ class IngestionApplicationService:
                     logger.info(
                         "Job %s deferred on admit: %s", job.job_id, error.reason
                     )
-                    return job
+                    return self._return_to_pending_after_wait(job, error.reason)
                 if decision.action is not ScheduleAction.RUN:
                     logger.info(
                         "Job %s deferred at stage %s (%s): %s",
@@ -472,7 +484,7 @@ class IngestionApplicationService:
                         decision.task_class.value,
                         decision.reason,
                     )
-                    return job
+                    return self._return_to_pending_after_wait(job, decision.reason)
                 leased = True
             try:
                 # Scheduler admission and the handler are separate race
@@ -496,7 +508,7 @@ class IngestionApplicationService:
                     logger.info(
                         "Job %s deferred mid-stage: %s", job.job_id, error.reason
                     )
-                    return job
+                    return self._return_to_pending_after_wait(job, error.reason)
                 except Exception as error:
                     # Stages may persist attempt rows mid-flight (content
                     # retries), so reload before failure handling to avoid a
@@ -515,6 +527,19 @@ class IngestionApplicationService:
                         job.job_id, document_id=self._document_id(job)
                     )
         return job
+
+    def _return_to_pending_after_wait(self, job: JobRecord, reason: str) -> JobRecord:
+        """Make a resource wait resumable instead of leaving a claimed job stuck."""
+        current = self.job_store.get_job(job.job_id)
+        if current.status == DEFAULT_STATUS:
+            return current
+        return self.job_store.update_job(
+            current.job_id,
+            expected_revision=current.revision,
+            status=DEFAULT_STATUS,
+            error_code="resource_wait",
+            error_message=str(reason),
+        )
 
     def cancel_requested(
         self, job_id: str, *, expected_revision: int | None = None
@@ -849,12 +874,13 @@ class IngestionApplicationService:
         )
         # Linking rewrites the note body, so the text that actually reaches
         # disk is validated too, never just the model's candidate.
-        atomic_write_text(note_path, self._validated_markdown(linked))
+        persisted_markdown = self._validated_markdown(linked)
+        atomic_write_text(note_path, persisted_markdown)
         document_id = self._document_id(job)
         self.job_store.upsert_document_identity(
             document_id=document_id,
             relative_path=self.vault_relative_identity(note_path),
-            content_hash=job.source_hash,
+            content_hash=content_hash_for_markdown(persisted_markdown),
         )
         return self._advance(job, "saved_note", note_document_id=document_id)
 
@@ -1219,6 +1245,13 @@ class IngestionApplicationService:
                 "Reusing unfinished job %s at stage %s for %s",
                 existing.job_id,
                 existing.stage,
+                identity,
+            )
+            return existing
+        if existing.stage == "quarantined":
+            logger.info(
+                "Reusing quarantined job %s for repeated source event %s",
+                existing.job_id,
                 identity,
             )
             return existing

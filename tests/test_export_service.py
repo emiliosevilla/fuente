@@ -380,6 +380,21 @@ def test_console_export_note_returns_canonical_payload(temp_vault_manager):
     assert body.startswith("# Backend")
 
 
+def test_console_export_note_to_downloads_writes_real_markdown_file(temp_vault_manager, tmp_path):
+    from fuente.control_console import FuenteConsoleBackend
+
+    document_id, _ = _write_note(temp_vault_manager, body="# Downloads\n")
+    backend = FuenteConsoleBackend(temp_vault_manager.config.vault_path)
+
+    with patch("fuente.control_console.Path.home", return_value=tmp_path):
+        result = backend.export_note_to_downloads(document_id, "markdown")
+
+    exported = Path(result["path"])
+    assert result["status"] == "exported"
+    assert exported.parent == tmp_path / "Downloads"
+    assert exported.read_text(encoding="utf-8").endswith("# Downloads\n")
+
+
 def test_pending_output_cannot_be_exported_before_editorial_approval(export_stack):
     export_service, notes, vault_manager, _resolver = export_stack
     origin = approved_clean_origin(

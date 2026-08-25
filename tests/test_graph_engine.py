@@ -14,7 +14,7 @@ class TestGraphEngine(unittest.TestCase):
 
     def setUp(self):
         self.temp_dir = tempfile.TemporaryDirectory()
-        self.output_dir = Path(self.temp_dir.name) / "4_salida"
+        self.output_dir = Path(self.temp_dir.name) / "4_procesado"
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
     def tearDown(self):
@@ -51,11 +51,39 @@ class TestGraphEngine(unittest.TestCase):
             self.assertIn("# Nota Inteligente", note)
             self.assertNotIn("```markdown", note)
 
+    def test_atomic_generator_structured_ollama_response_becomes_valid_markdown(self):
+        generator = AtomicNoteGenerator()
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = {
+            "response": (
+                '{"title":"Nota real","date":"2026-08-24",'
+                '"author":"Fuente","tags":["qa"],'
+                '"summary":"Resumen","body":"Contenido"}'
+            )
+        }
+
+        with patch("requests.post", return_value=mock_resp) as post:
+            note = generator.generate_atomic_note("Texto de entrada", "qwen2.5:0.5b", "doc.txt")
+
+        metadata, body = parse_frontmatter(note)
+        assert metadata["title"] == "Nota real"
+        assert metadata["status"] == "pending_review"
+        assert "Contenido" in body
+        assert post.call_args.kwargs["json"]["format"]["required"] == [
+            "title",
+            "date",
+            "author",
+            "tags",
+            "summary",
+            "body",
+        ]
+
     # ------------------------------------------------------------------
     # 2. GraphLinker
     # ------------------------------------------------------------------
     def test_linker_autolinking_and_protection(self):
-        # Crear notas de destino en 4_salida
+        # Crear notas de destino en 4_procesado
         target_metadata = {
             "schema_version": 1, "date": "2026-08-07", "author": "Fuente",
             "tags": [], "issue": "_Sin_Cuestion", "status": "approved",
@@ -129,7 +157,7 @@ También mencionamos `Redes Neuronales en código inline`.
             "note_id": "4ca13d5c-4d78-4f37-8c3c-d1dc530a4dc9",
             "revision": 2,
             "content_hash": "a" * 64,
-            "path": "3_limpio/origen.md",
+            "path": "3_capturado/origen.md",
         }
         note_id = "89a2f4fb-1d7b-4aa1-9793-119970502a00"
         path = self.output_dir / "Cuestion" / "derivada.md"

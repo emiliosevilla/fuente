@@ -18,7 +18,7 @@ def test_note_document_uses_text_tokens_for_hostile_markdown(temp_vault_path):
     )
 
     result = backend.get_note_content_html(
-        document_id_for_relative_path(f"4_salida/{note.name}")
+        document_id_for_relative_path(f"4_procesado/{note.name}")
     )
 
     assert result["title"] == "hostile"
@@ -45,8 +45,8 @@ def test_wikilink_ids_escape_quote_breaking_paths(temp_vault_path):
     target.write_text("target", encoding="utf-8")
     source.write_text('[[target"]]', encoding="utf-8")
 
-    source_id = document_id_for_relative_path(f"4_salida/{source.name}")
-    target_id = document_id_for_relative_path(f"4_salida/{target.name}")
+    source_id = document_id_for_relative_path(f"4_procesado/{source.name}")
+    target_id = document_id_for_relative_path(f"4_procesado/{target.name}")
     result = backend.get_note_content_html(source_id)
 
     assert result["title"] == 'source"'

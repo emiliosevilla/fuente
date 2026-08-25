@@ -56,6 +56,29 @@ def test_watcher_retries_corrupt_content_before_quarantining(tmp_path):
     assert "Corrupt or unsupported media after 2 attempts" in item["error_message"]
 
 
+def test_watcher_does_not_duplicate_reintroduced_quarantined_source(tmp_path):
+    config = get_default_config(tmp_path / "vault")
+    pipeline = ETLPipeline(config)
+    pipeline.set_runtime_policy(explicit_test_runtime_policy())
+    patch_abundant_ram(pipeline.ram_governor)
+    patch_test_model_inventory(pipeline.ram_governor, "test-model")
+    source = config.vault.input_dir / "reintroduced.txt"
+    source.write_text("same bytes", encoding="utf-8")
+    pipeline.vault.copy_to_dirty = Mock(return_value=source)
+    pipeline.extractors.extract = Mock(side_effect=ValueError("corrupt document"))
+
+    with patch("fuente.watcher.watcher.wait_until_file_stable", return_value=True):
+        assert pipeline.process_file(source) is False
+        first = list(pipeline.job_store.list_jobs())[0]
+
+        source.write_text("same bytes", encoding="utf-8")
+        assert pipeline.process_file(source) is False
+
+    jobs = list(pipeline.job_store.list_jobs())
+    assert [(job.job_id, job.stage) for job in jobs] == [(first.job_id, "quarantined")]
+    assert pipeline.extractors.extract.call_count == 2
+
+
 def test_invalid_model_output_is_not_converted_to_successful_fallback():
     generator = AtomicNoteGenerator()
     response = Mock(status_code=200)

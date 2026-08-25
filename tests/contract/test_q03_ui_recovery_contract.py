@@ -112,6 +112,15 @@ def test_first_run_stays_unconfigured_until_settings_selects_a_vault():
     assert "restart_with_vault" in SOURCE
 
 
+def test_packaged_macos_resolves_html_from_resources():
+    assert 'bundle_root.parent / "Resources" / "consola_preview.html"' in LAUNCHER_SOURCE
+    bootstrap = (ROOT / "fuente" / "bootstrap.py").read_text(encoding="utf-8")
+    assert 'bundle_root.parent / "Resources" / "consola_preview.html"' in bootstrap
+    assert "url=str(html_file)" in bootstrap
+    assert ".as_uri()" not in bootstrap
+    assert ".as_uri()" not in LAUNCHER_SOURCE
+
+
 def test_onboarding_actions_surface_native_bridge_errors():
     create = _function_source("createDemoVault", "dismissOnboarding")
     dismiss = _function_source("dismissOnboarding", "openOnboardingFromHelp")
@@ -125,6 +134,27 @@ def test_settings_restart_validates_selected_vault_before_relaunch():
     assert "validate_vault_path" in SETUP_SOURCE
     assert "def restart_with_vault" in BRIDGE_SOURCE
     assert "os.execv(sys.executable" in BRIDGE_SOURCE
+
+
+def test_setup_api_exposes_empty_sync_state_before_runtime_connection():
+    setup_api = (ROOT / "fuente" / "ui" / "setup_api.py").read_text(encoding="utf-8")
+    assert "def get_sync_inputs" in setup_api
+    assert "return self.backend.get_sync_inputs()" in setup_api
+    assert "def get_sync_sources" in setup_api
+    assert "return self.backend.get_sync_sources()" in setup_api
+
+
+def test_guided_vault_confirms_the_exact_creation_path():
+    guided = _function_source("createGuidedVault", "renderCapabilities")
+    assert "typeof targetPath !== 'string'" in guided
+    assert "callNativeLongRequest('select_vault_target'" in guided
+    assert "target_path: targetPath" in guided
+    assert "pathInput.value = result.vault_path || ''" in guided
+    assert "Ruta elegida: ' + targetPath" in guided
+    assert "No se recibió respuesta al crear el Vault." in guided
+    assert "Selección de Vault cancelada o sin ruta." in guided
+    assert "El Vault se creará exactamente en:" in guided
+    assert "Fuente creará esa carpeta y su carpeta .obsidian." in guided
 
 
 def test_note_content_rejection_and_malformed_payload_render_visible_error():

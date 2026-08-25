@@ -1,5 +1,6 @@
 # -*- mode: python ; coding: utf-8 -*-
 from pathlib import Path
+from PyInstaller.utils.hooks import collect_submodules
 
 block_cipher = None
 icon = Path("assets/fuente_icon.ico")
@@ -15,11 +16,20 @@ a = Analysis(
     binaries=[],
     datas=[
         ("assets", "assets"),
+        ("fuente/ui/static", "fuente/ui/static"),
         ("consola_preview.html", "."),
         ("build/pip-source.zip", "."),
         ("build/runtime-source.zip", "."),
     ],
-    hiddenimports=["webview.platforms.cocoa"],
+    hiddenimports=[
+        "webview.platforms.cocoa",
+        "optparse",
+        "colorsys",
+        "tkinter.ttk",
+        "tkinter.messagebox",
+        "tkinter.filedialog",
+        *collect_submodules("pip"),
+    ],
     excludes=[
         "av",
         "chromadb",
@@ -33,7 +43,6 @@ a = Analysis(
         "pandas",
         "pdfminer",
         "PIL",
-        "pip",
         "sentence_transformers",
         "setuptools",
         "torch",

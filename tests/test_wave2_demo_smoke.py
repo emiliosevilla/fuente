@@ -73,7 +73,7 @@ def test_wave2_demo_smoke_runs_real_offline_flow_and_is_idempotent(
     store = JobStore(vault_path)
     try:
         origin = approved_clean_origin(vault, store, filename="origen-demo.md")
-        for note_path in sorted((vault_path / "4_salida" / "Demo").glob("*.md")):
+        for note_path in sorted((vault_path / "4_procesado" / "Demo").glob("*.md")):
             legacy_metadata, body = parse_frontmatter(note_path.read_text(encoding="utf-8"))
             relative = note_path.relative_to(vault_path).as_posix()
             note_path.write_text(
@@ -113,7 +113,7 @@ def test_wave2_demo_smoke_runs_real_offline_flow_and_is_idempotent(
         )
         corpus = VaultCorpusProvider(
             vault_path,
-            output_roots=(vault_path / "4_salida",),
+                output_roots=(vault_path / "4_procesado",),
             path_resolver=resolver,
             eligibility_guard=notes.require_eligible_origins,
         )
@@ -124,8 +124,8 @@ def test_wave2_demo_smoke_runs_real_offline_flow_and_is_idempotent(
             str(chunk["metadata"]["relative_path"])
             for chunk in chunks
         } == {
-            "4_salida/Demo/Arquitectura_Local.md",
-            "4_salida/Demo/Flujo_Revision.md",
+                "4_procesado/Demo/Arquitectura_Local.md",
+                "4_procesado/Demo/Flujo_Revision.md",
         }
         retrieval = RetrievalApplicationService(
             chroma_store=None,
@@ -151,7 +151,7 @@ def test_wave2_demo_smoke_runs_real_offline_flow_and_is_idempotent(
         pending_ids = [
             document_id
             for document_id, relative_path in listed
-            if relative_path == "4_salida/Demo/Introduccion.md"
+            if relative_path == "4_procesado/Demo/Introduccion.md"
         ]
         assert len(pending_ids) == 1
         pending = notes.get_note(pending_ids[0])
@@ -167,8 +167,8 @@ def test_wave2_demo_smoke_runs_real_offline_flow_and_is_idempotent(
         assert (docx_payload.content_bytes or b"").startswith(b"PK")
         Document(io.BytesIO(docx_payload.content_bytes or b""))
 
-        markdown_destination = "4_salida/Demo/Export/Introduccion.md"
-        docx_destination = "4_salida/Demo/Export/Introduccion.docx"
+        markdown_destination = "4_procesado/Demo/Export/Introduccion.md"
+        docx_destination = "4_procesado/Demo/Export/Introduccion.docx"
         assert exporter.write_export(
             approved.document_id, "markdown", markdown_destination
         )["status"] == "exported"

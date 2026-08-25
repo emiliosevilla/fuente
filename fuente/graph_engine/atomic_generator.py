@@ -6,9 +6,24 @@ from datetime import datetime
 from typing import Dict, Any, Optional, List
 
 from fuente.domain.documents import MarkdownDocument
+from fuente.domain.frontmatter import FrontmatterError
 from fuente.domain.frontmatter import serialize_frontmatter
 from fuente.domain.quarantine import InvalidModelOutputError
 from fuente.graph_engine.prompts import ATOMIC_NOTE_SYSTEM_PROMPT
+
+
+ATOMIC_NOTE_RESPONSE_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "title": {"type": "string"},
+        "date": {"type": "string"},
+        "author": {"type": "string"},
+        "tags": {"type": "array", "items": {"type": "string"}},
+        "summary": {"type": "string"},
+        "body": {"type": "string"},
+    },
+    "required": ["title", "date", "author", "tags", "summary", "body"],
+}
 
 logger = logging.getLogger(__name__)
 
@@ -55,10 +70,12 @@ class AtomicNoteGenerator:
                 "prompt": prompt,
                 "system": ATOMIC_NOTE_SYSTEM_PROMPT,
                 "stream": False,
+                "format": ATOMIC_NOTE_RESPONSE_SCHEMA,
                 "keep_alive": "0m",
                 "options": {
                     "num_ctx": 2048,
-                    "num_thread": 2
+                    "num_thread": 2,
+                    "temperature": 0,
                 }
             }
             if HAS_REQUESTS:
@@ -69,7 +86,7 @@ class AtomicNoteGenerator:
                 )
                 if resp.status_code == 200:
                     result = resp.json().get("response", "").strip()
-                    return self._validated_llm_candidate_or_raise(result)
+                    return self._validated_response_or_raise(result, file_name)
             else:
                 data = json.dumps(payload).encode("utf-8")
                 req = urllib.request.Request(
@@ -80,8 +97,8 @@ class AtomicNoteGenerator:
                 with urllib.request.urlopen(req, timeout=180) as resp:
                     if resp.status == 200:
                         body = json.loads(resp.read().decode("utf-8"))
-                        return self._validated_llm_candidate_or_raise(
-                            body.get("response", "").strip()
+                        return self._validated_response_or_raise(
+                            body.get("response", "").strip(), file_name
                         )
 
             return self._generate_fallback(clean_md_content, file_name)
@@ -110,6 +127,40 @@ class AtomicNoteGenerator:
             return self._validated_llm_candidate(result)
         except Exception as error:
             raise InvalidModelOutputError(str(error)) from error
+
+    def _validated_response_or_raise(self, result: str, file_name: str) -> str:
+        """Accept structured JSON, while keeping compatibility with old Ollama."""
+        if result.lstrip().startswith("{"):
+            try:
+                payload = json.loads(result)
+                if not isinstance(payload, dict):
+                    raise ValueError("structured response must be an object")
+                title = str(payload["title"]).strip()
+                date = str(payload["date"]).strip()
+                author = str(payload["author"]).strip()
+                tags = payload["tags"]
+                summary = str(payload["summary"]).strip()
+                body = str(payload["body"]).strip()
+                if not title or not date or not author or not isinstance(tags, list):
+                    raise ValueError("structured response contains invalid note fields")
+                markdown = serialize_frontmatter(
+                    {
+                        "schema_version": 1,
+                        "title": title,
+                        "date": date,
+                        "author": author,
+                        "tags": [str(tag) for tag in tags],
+                        "issue": "_Sin_Cuestion",
+                        "status": "pending_review",
+                        "sources": [],
+                        "history": [],
+                    }
+                )
+                markdown += f"# {title}\n\n## Resumen Ejecutivo\n{summary}\n\n{body}\n"
+                return self._validated_llm_candidate_or_raise(markdown)
+            except (KeyError, TypeError, ValueError, json.JSONDecodeError, FrontmatterError) as error:
+                raise InvalidModelOutputError(str(error)) from error
+        return self._validated_llm_candidate_or_raise(result)
 
     def _generate_fallback(self, clean_md_content: str, file_name: str) -> str:
         """Plantilla de reserva dinámica en caso de indisponibilidad del LLM."""

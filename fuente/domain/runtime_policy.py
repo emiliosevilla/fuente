@@ -81,17 +81,25 @@ def resolve_runtime_policy(
     profile = _effective_profile(config)
 
     if profile is ExecutionProfile.ECO_STRICT:
+        requested_audio = _effective_audio_mode(config)
+        requested_path = _normalized_whisper_path(config, requested_audio)
+        explicit_local_audio = (
+            requested_audio is AudioMode.TINY_CPU
+            and requested_path is not None
+            and requested_path.exists()
+        )
         return RuntimePolicy(
             profile=profile,
             retrieval_mode="bm25_vault",
             vector_index_enabled=False,
-            audio_mode=AudioMode.SKIP,
-            whisper_model_path=None,
+            audio_mode=(AudioMode.TINY_CPU if explicit_local_audio else AudioMode.SKIP),
+            whisper_model_path=requested_path if explicit_local_audio else None,
             allow_model_download=False,
             selected_model=None,
             llm_available=False,
             reason=(
-                "eco_strict disables vector indexing and audio by default; "
+                "eco_strict disables vector indexing and automatic audio by default; "
+                "explicit Tiny local CPU remains available when its local model exists; "
                 "BM25 Vault retrieval remains available and no model download "
                 "or unavailable LLM is claimed"
             ),

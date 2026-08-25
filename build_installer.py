@@ -39,28 +39,58 @@ def sign_macos_app(app_bundle: Path) -> None:
     """Make the generated bundle internally coherent for local distribution."""
     if sys.platform != "darwin":
         return
+
+    # Documents may be backed by File Provider, which can reattach
+    # com.apple.FinderInfo while codesign is walking the bundle. Sign from a
+    # metadata-free temporary copy, then copy the verified result back.
+    signing_dir = Path(tempfile.mkdtemp(prefix="fuente-sign-"))
+    signing_bundle = signing_dir / app_bundle.name
+    subprocess.check_call([
+        "/usr/bin/ditto", "--norsrc", str(app_bundle), str(signing_bundle),
+    ])
+
+    def clear_bundle_metadata() -> None:
+        subprocess.check_call(["/usr/bin/xattr", "-cr", str(signing_bundle)])
+        subprocess.run(
+            ["/usr/bin/xattr", "-dr", "com.apple.FinderInfo", str(signing_bundle)],
+            check=False,
+        )
+        subprocess.run(
+            ["/usr/bin/xattr", "-dr", "com.apple.ResourceFork", str(signing_bundle)],
+            check=False,
+        )
+
     identity = os.environ.get("FUENTE_CODESIGN_IDENTITY", "-")
     sign_command = [
         "codesign", "--deep", "--force", "--verbose",
-        "--sign", identity, str(app_bundle),
+        "--sign", identity, str(signing_bundle),
     ]
-    for attempt in range(3):
-        subprocess.check_call(["/usr/bin/xattr", "-cr", str(app_bundle)])
-        subprocess.check_call(sign_command)
-        subprocess.check_call(["/usr/bin/xattr", "-cr", str(app_bundle)])
-        try:
-            subprocess.check_call([
-                "codesign", "--verify", "--deep", "--strict", str(app_bundle),
-            ])
-            return
-        except subprocess.CalledProcessError:
-            if attempt == 2:
-                raise
-            time.sleep(0.5)
+    try:
+        for attempt in range(3):
+            try:
+                clear_bundle_metadata()
+                subprocess.check_call(sign_command)
+                clear_bundle_metadata()
+                subprocess.check_call([
+                    "codesign", "--verify", "--deep", "--strict", str(signing_bundle),
+                ])
+                break
+            except subprocess.CalledProcessError:
+                if attempt == 2:
+                    raise
+                time.sleep(0.5)
+        subprocess.run(["/usr/bin/xattr", "-cr", str(app_bundle)], check=False)
+        shutil.rmtree(app_bundle)
+        subprocess.check_call([
+            "/usr/bin/ditto", "--norsrc", str(signing_bundle), str(app_bundle),
+        ])
+    finally:
+        shutil.rmtree(signing_dir, ignore_errors=True)
 
 
 def write_macos_launcher(dist_dir: Path) -> Path:
     """Create the official macOS entry point for the distributed app."""
+    (dist_dir / "Fuente.command").unlink(missing_ok=True)
     launcher = dist_dir / "Instalador_Fuente.command"
     launcher.write_text(
         '''#!/bin/bash
@@ -87,6 +117,11 @@ def create_macos_dmg(dist_dir: Path, app_bundle: Path, launcher: Path) -> Path:
         staged_app = staging / app_bundle.name
         shutil.copytree(app_bundle, staged_app, symlinks=True)
         subprocess.check_call(["/usr/bin/xattr", "-cr", str(staged_app)])
+        for attribute in ("com.apple.FinderInfo", "com.apple.ResourceFork"):
+            subprocess.run(
+                ["/usr/bin/xattr", "-dr", attribute, str(staged_app)],
+                check=False,
+            )
         shutil.copy2(launcher, staging / launcher.name)
         (staging / "Applications").symlink_to("/Applications")
         dmg_path.unlink(missing_ok=True)

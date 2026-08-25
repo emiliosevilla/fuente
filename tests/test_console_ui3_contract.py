@@ -60,6 +60,16 @@ def test_reader_export_keeps_opaque_document_id_and_strict_csp():
     assert "unsafe-inline" not in csp_line
 
 
+def test_obsidian_reader_uri_uses_configured_vault_path_and_absolute_note_path():
+    opener = _between(CONSOLE, "function openCurrentNoteInObsidian", "function triggerAction")
+    assert "setting-vault-path" in opener
+    assert "absoluteNotePath" in opener
+    assert "encodeURIComponent(absoluteNotePath)" in opener
+    assert "obsidian://open?path=" in opener
+    assert "vault=Vault_Fuente" not in opener
+    assert "vaultName" not in opener
+
+
 def test_graph_draws_canonical_origins_and_provenance_edges_visibly():
     renderer = _between(
         CONSOLE, "function initObsidianGraphCanvas", "function renderReaderLoadError"

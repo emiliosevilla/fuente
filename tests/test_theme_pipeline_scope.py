@@ -45,10 +45,10 @@ def _mock_generate(clean_md_content, model_name, file_name):
 
 def _general_roots(vault_path: Path) -> dict[str, Path]:
     return {
-        "input": vault_path / "1_entrada",
-        "dirty": vault_path / "2_sucio",
-        "clean": vault_path / "3_limpio",
-        "output": vault_path / "4_salida",
+        "input": vault_path / "1_volcado",
+        "dirty": vault_path / "2_copiado",
+        "clean": vault_path / "3_capturado",
+        "output": vault_path / "4_procesado",
     }
 
 
@@ -128,7 +128,7 @@ def test_processing_writes_only_inside_active_theme(mock_gen, themed_pipeline):
 
     # FolderMonitor must poll the Theme input, not config.vault.input_dir.
     monitor = FolderMonitor(pipeline, poll_interval_sec=3600.0)
-    assert monitor.pipeline.vault.input_dir == theme_dir / "1_entrada"
+    assert monitor.pipeline.vault.input_dir == theme_dir / "1_volcado"
     assert monitor.pipeline.vault.input_dir != general["input"]
 
 
@@ -153,7 +153,7 @@ def test_connected_folder_sync_stays_in_active_theme(temp_vault_path, tmp_path):
     assert copied == 1
 
     theme_dest = vault.input_dir / sample.name
-    general_dest = temp_vault_path / "1_entrada" / sample.name
+    general_dest = temp_vault_path / "1_volcado" / sample.name
 
     assert theme_dest.exists()
     assert theme_dest.read_text(encoding="utf-8") == "documento externo del Tema"
@@ -227,7 +227,7 @@ def test_lifecycle_set_active_theme_retargets_monitor_and_graph_loop(temp_vault_
 
         general_input = lifecycle.pipeline.vault.input_dir
         general_output = lifecycle.pipeline.vault.output_dir
-        assert general_input == temp_vault_path / "1_entrada"
+        assert general_input == temp_vault_path / "1_volcado"
         assert lifecycle.graph_loop.output_dir.resolve() == general_output.resolve()
 
         lifecycle.pipeline.vault.create_theme(THEME)
@@ -235,14 +235,14 @@ def test_lifecycle_set_active_theme_retargets_monitor_and_graph_loop(temp_vault_
 
         theme_input = lifecycle.pipeline.vault.input_dir
         theme_output = lifecycle.pipeline.vault.output_dir
-        assert theme_input == temp_vault_path / THEME / "1_entrada"
+        assert theme_input == temp_vault_path / THEME / "1_volcado"
         assert theme_input != general_input
         assert theme_output != general_output
 
         # FolderMonitor reads pipeline.vault each poll / process_existing path.
         assert lifecycle.monitor.pipeline.vault.input_dir == theme_input
         assert lifecycle.monitor.pipeline.vault.input_dir != (
-            temp_vault_path / "1_entrada"
+            temp_vault_path / "1_volcado"
         )
 
         # Graph loop must not keep refining only the General tree.
@@ -284,27 +284,27 @@ def test_console_set_theme_shares_lifecycle_vault_and_retargets_services(temp_va
             temp_vault_path / THEME
         ).resolve()
         assert lifecycle.monitor.pipeline.vault.input_dir == (
-            temp_vault_path / THEME / "1_entrada"
+            temp_vault_path / THEME / "1_volcado"
         )
         assert lifecycle.graph_loop.output_dir.resolve() == (
-            temp_vault_path / THEME / "4_salida"
+            temp_vault_path / THEME / "4_procesado"
         ).resolve()
 
         backend.handle_action("set_theme", {"theme_name": "General"})
         assert lifecycle.pipeline.vault.active_theme == "General"
         assert backend.sync_manager.active_theme == "General"
         assert backend.sync_manager.active_theme_dir == temp_vault_path.resolve()
-        assert lifecycle.monitor.pipeline.vault.input_dir == temp_vault_path / "1_entrada"
+        assert lifecycle.monitor.pipeline.vault.input_dir == temp_vault_path / "1_volcado"
         assert lifecycle.graph_loop.output_dir.resolve() == (
-            temp_vault_path / "4_salida"
+            temp_vault_path / "4_procesado"
         ).resolve()
 
         backend.handle_action("set_theme", {"theme_name": THEME})
         assert lifecycle.monitor.pipeline.vault.input_dir == (
-            temp_vault_path / THEME / "1_entrada"
+            temp_vault_path / THEME / "1_volcado"
         )
         assert lifecycle.graph_loop.output_dir.resolve() == (
-            temp_vault_path / THEME / "4_salida"
+            temp_vault_path / THEME / "4_procesado"
         ).resolve()
         assert backend.sync_manager.active_theme == THEME
         assert backend.sync_manager.active_theme_dir == (

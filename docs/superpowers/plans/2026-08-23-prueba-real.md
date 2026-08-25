@@ -413,6 +413,161 @@ PR-12 R: NOT_RUN. No se repitieron suites completas; la documentación quedó re
 12. PR-02 sintética y real: Windows, si hay máquina disponible.
 13. PR-12 decisión final basada en resultados S/R.
 
+## Anexo — actualización de prueba real instalada 2026-08-25
+
+Este anexo sustituye el estado anterior de PR-07/PR-08 cuando describe la
+misma capacidad ejercitada con el `Fuente.app` recién construido e instalado.
+No convierte en PASS las capacidades no observadas.
+
+### Artefacto realmente instalado
+
+- Aplicación instalada: `/Applications/Fuente.app`.
+- DMG: `32.075.640` bytes, SHA-256
+  `e58c0f091ed0377341e6ffa9f0be9a121889c6455d92bf02e39b59ee624199e4`.
+- ZIP: `32.461.000` bytes, SHA-256
+  `52399bee5854b7e918f19e9e253e0fc2f3cbe9226ee79d398632c75fef5b40d9`.
+- El arranque visual abrió la consola y conectó el Vault real
+  `/Users/emiliosevillaortego/Desktop/Nuevo Vault`.
+- Esta repetición instaló el bundle `dist/Fuente.app` en `/Applications` y
+  aplicó `xattr -cr`; no se presenta como una nueva apertura independiente
+  del DMG/ZIP.
+- Evidencia: `/tmp/fuente-real-stat-fixed.png`.
+
+### Flujo B real cerrado
+
+Se ejecutó con la interfaz instalada, sin invocar el backend para sustituir
+acciones de usuario:
+
+1. `1_volcado/QA_Share_20260825_B.md` llegó a `3_capturado`.
+2. La Bandeja mostró la nota; se seleccionó, se introdujo revisor y se pulsó
+   `Aprobar nota`.
+3. El procesamiento creó
+   `4_procesado/QA_Share_20260825_B.md`.
+4. La Bandeja mostró la salida procesada; se aprobó con `QA Real Output B`.
+5. Lector → `Notas` habilitó `Compartir nota` y mostró
+   `Revisión aprobada; lista para compartir.`
+6. `Compartir nota` creó y publicó
+   `5_compartido/QA_Share_20260825_B.md`.
+7. Lector → `Discusión` permitió publicar un comentario y lo mostró en la
+   interfaz.
+
+Comprobaciones de persistencia posteriores:
+
+- job B: `completed / completed`.
+- `processed_approvals`: salida `9ae95e73-2f7b-575f-a7e1-764a304d0bb9`,
+  revisión 3, revisor `QA Real Output B`.
+- `shared_outputs`: misma salida, revisión y hash, origen
+  `4_procesado/QA_Share_20260825_B.md`, destino
+  `5_compartido/QA_Share_20260825_B.md`.
+- SHA-256 idéntico en origen y destino:
+  `1bff7530306930332c710b79886e8c6c6403317f7f67a0b4dd1d6bc146ef9589`.
+- `get_stats_dict()` real: `processed=4`, `notes=4`, coherente con el Vault;
+  se corrigió la tarjeta que leía la ruta inexistente `.fuente_processed`.
+- La guardia real `require_shareable_output()` permanece válida después de
+  relanzar Fuente.
+- Evidencias: `/tmp/fuente-real-output-selected-latest.png`,
+  `/tmp/fuente-real-share-dialog.png` y
+  `/tmp/fuente-real-discussion-submitted-ui.png`.
+
+### Incidencias detectadas en la prueba real
+
+- Una ejecución anterior del bucle de grafo reescribió una salida aprobada y
+  cambió su hash; eso dejó compartir bloqueado correctamente. Se corrigió el
+  origen: el bucle automático ya no reescribe el cuerpo de
+  `4_procesado`; la prueba B posterior conservó el hash durante el flujo
+  completo.
+- La discusión necesitaba `Page Down` para mostrar el botón en esta ventana.
+  Se redujo la altura inicial del textarea y se habilitó desplazamiento
+  vertical del panel. Tras reconstruir e instalar, el botón se mostró y la
+  publicación pasó.
+- En la automatización de teclado usada para esta sesión, el texto terminó
+  duplicado como autor y comentario en el JSON de discusión. La publicación
+  sí pasó, pero la identidad independiente del autor queda `PARTIAL` y debe
+  repetirse manualmente con el usuario escribiendo cada campo.
+- “Archivos Procesados: 0” fue un defecto real de contador y quedó corregido;
+  la app instalada ahora muestra `4`.
+
+### Estado real vigente
+
+`R REAL: PARTIAL`, con el flujo B de aprobación → procesamiento → compartir
+→ discusión en `PASS` observable y persistido. Siguen fuera de cierre real:
+Meetily con puente configurado y micrófono, motores opcionales bajo sus
+condiciones de hardware, Windows, OneDrive/SharePoint y la repetición manual
+de autor independiente.
+
+Se mantienen como peticiones de producto pendientes, no como resultados
+positivos: spinner/barra durante la preparación del instalador y cierre
+automático de Terminal al terminar `Instalador_Fuente.command` dentro del DMG.
+
+## Anexo — campaña real continuada 2026-08-25: lector, editor y opciones
+
+Esta campaña se ejecutó con el bundle instalado en
+`/Applications/Fuente.app`, sin Chrome y sin sustituir acciones de interfaz
+por llamadas directas al backend. El proceso medido siguió siendo el binario
+de la aplicación instalada (`lsof`: `/Applications/Fuente.app/Contents/MacOS/Fuente`).
+
+### Corrección encontrada y comprobada en el editor
+
+- El cambio de modo WYSIWYG → Markdown generaba internamente un evento
+  `needChangeMode`/`change` de Toast UI y Fuente lo mostraba erróneamente como
+  `Cambios sin guardar`.
+- Se interceptó ese evento antes del listener interno, conservando el estado
+  sucio previo y dejando que una edición real sí lo active.
+- Evidencia real posterior al rebuild y reinstalación:
+  `/tmp/fuente-real-editor-mode3-markdown-fixed.png` y
+  `/tmp/fuente-real-editor-mode3-wysiwyg-back-fixed.png` muestran ambos modos
+  con `Sin cambios`.
+- Se hizo una edición humana real con la marca temporal
+  `QA_EDIT_TEMP_20260825`; la interfaz mostró `Cambios sin guardar`, Guardar
+  actualizó el Markdown procesado y la pantalla reflejó la modificación.
+- La marca se eliminó después desde el propio editor y se volvió a guardar.
+  Comprobación medida: `marker_present=False` en
+  `4_procesado/QA_Ingesta_Vinculada_20260825.md`, que volvió a su contenido
+  original. Evidencias: `/tmp/fuente-real-editor-mode3-real-edit.png`,
+  `/tmp/fuente-real-editor-mode3-save-result.png` y
+  `/tmp/fuente-real-editor-restore-after-save.png`.
+
+### Acciones reales del lector
+
+- Chat de nota: respondió usando recuperación BM25 sobre la nota real; la
+  interfaz informó que no había modelo local disponible y no simuló una
+  respuesta LLM. Evidencia: `/tmp/fuente-real-chat-answer.png`.
+- Chat de bóveda: respondió con contexto de todo `4_procesado`. Evidencia:
+  `/tmp/fuente-real-chat-all-answer.png`.
+- `Abrir en Obsidian`: abrió Obsidian y la nota real
+  `4_procesado/QA_Ingesta_Vinculada_20260825.md`. Evidencia:
+  `/tmp/fuente-real-obsidian-open-result.png`.
+- `Copiar`: el portapapeles recibió el frontmatter y cuerpo Markdown de la
+  nota real; comprobación directa con `pbpaste`. Evidencia:
+  `/tmp/fuente-real-reader-copy-result.png`.
+- `Exportar → Exportar Markdown`: mostró confirmación y creó
+  `/Users/emiliosevillaortego/Downloads/QA_Ingesta_Vinculada_20260825.md`.
+  Evidencia: `/tmp/fuente-real-export-markdown-dialog.png`,
+  `/tmp/fuente-real-reader-export-result.png`.
+- `Fusionar seleccionadas`: abrió la previsualización reversible, informó
+  `No hay candidatos deterministas disponibles` y no modificó el Vault.
+  Evidencia: `/tmp/fuente-real-fusion-open.png`.
+- `Nueva reunión`: el formulario aceptó título, autor y consentimiento. Al
+  iniciar, el modal permaneció operativo y mostró el límite real
+  `Meetily bridge executable is missing`; no hubo cierre inesperado ni falso
+  éxito. Evidencias: `/tmp/fuente-real-meeting-filled.png` y
+  `/tmp/fuente-real-meeting-start-result.png`.
+
+### Artefacto y estado medidos al cerrar esta tanda
+
+- DMG: `32.079.998` bytes, SHA-256
+  `8c980a3cfad34d845dddc09d72d5a6c73ab96d54b216235df4b50d23887baa63`.
+- ZIP: `32.462.138` bytes, SHA-256
+  `0a5b6b8b4c5ec9d084c93867d7d56fa2d4d7dc7167170678b614a0c1be80ed42`.
+- El Vault sigue conectado en
+  `/Users/emiliosevillaortego/Desktop/Nuevo Vault`; `5_compartido` conserva
+  `QA_Ingesta_Vinculada_20260825.md` y `QA_Share_20260825_B.md`.
+- El resultado global continúa `R REAL: PARTIAL`: la cadena principal de
+  instalación, Vault, ETL, aprobación, lector, edición, chat recuperado,
+  Obsidian, exportación, compartición y discusión tiene evidencia real; queda
+  pendiente el puente Meetily configurado, además de motores opcionales,
+  Windows y OneDrive/SharePoint.
+
 ## Autorrevisión
 
 - Todas las capacidades del SDD tienen prueba o límite explícito.
@@ -420,3 +575,373 @@ PR-12 R: NOT_RUN. No se repitieron suites completas; la documentación quedó re
 - Migración real queda bloqueada por IDs duplicados hasta decisión.
 - Windows queda separado de macOS.
 - Evidencia y privacidad tienen reglas explícitas.
+
+## Anexo — campaña real del paquete macOS 2026-08-24
+
+Este anexo prevalece sobre cualquier `R NOT_RUN` anterior cuando describe las
+capacidades que sí se ejercitaron con el artefacto instalado. No convierte las
+capacidades no observadas en PASS.
+
+### Artefacto y arranque observado
+
+- DMG real: `dist/Fuente_Distribucion_macOS.dmg`, 32.028.355 bytes.
+- ZIP real: `dist/Fuente_Distribucion_macOS.zip`, 32.336.244 bytes.
+- Instalación comprobada en `/Applications/Fuente.app`, limpiando atributos
+  de cuarentena mediante `Instalador_Fuente.command`.
+- El primer arranque descargó y preparó la capacidad básica en el runtime del
+  usuario y después llegó a la consola visible de Fuente.
+- Evidencia visual: `/tmp/fuente-real-runtime-success.png`.
+- En la consola se observó el Vault conectado en
+  `/Users/emiliosevillaortego/Desktop/Nuevo Vault`.
+
+### Configuración real de Obsidian y Vault
+
+- Obsidian ya instalado: detectado correctamente.
+- `Crear Vault guiado`: abrió el diálogo nativo de macOS para elegir nombre y
+  ubicación, sin pedir una ruta mediante un cuadro de texto propio.
+- Ruta elegida y confirmada explícitamente:
+  `/Users/emiliosevillaortego/Desktop/Nuevo Vault`.
+- Se verificó en disco la creación de `.obsidian`, la estructura canónica de
+  Fuente y la persistencia en
+  `~/Library/Application Support/Fuente/startup.json`.
+- El relanzamiento automático posterior dejó Fuente abierta y conectada al
+  Vault.
+
+### Flujo real de ingestión
+
+- Se colocó una nota Markdown real en `1_volcado`.
+- La interfaz mostró el contador de archivos por procesar y se observó la
+  copia con nombre hash en `2_copiado`.
+- Después apareció la nota en `3_capturado`, con frontmatter de extracción y
+  contenido conservado por el fallback nativo.
+- Evidencia visual: `/tmp/fuente-real-step3-result.png`.
+- El motor MarkItDown no estaba instalado en este paquete/runtime; quedó
+  registrado como degradación y el fallback nativo sí produjo contenido.
+
+### Fallos reales encontrados y corregidos durante la campaña
+
+- Primer arranque: `No module named 'colorsys'` al cargar el instalador de
+  capacidades.
+- Segundo intento: el instalador de capacidades no podía cargarse dentro del
+  paquete porque `pip` no estaba incluido de forma ejecutable.
+- Tercer intento: `cannot import name 'ttk' from 'tkinter'`.
+- Se reconstruyó el artefacto incluyendo el runtime de `pip` y los módulos Tk
+  requeridos; el arranque posterior llegó a la consola y ejecutó la ingestión
+  real descrita arriba.
+
+### Resultado actual de la prueba real
+
+`R REAL: PARTIAL`.
+
+PASS observado para instalación/arranque macOS, detección de Obsidian,
+selección nativa de ruta, creación guiada de Vault, persistencia de ruta,
+relanzamiento y recorrido real hasta `3_capturado`.
+
+Pendiente: las dos notas reales quedaron en `saved_clean / pending` con el
+motivo `awaiting_clean_approval`. La Bandeja de Aprobación sí se abrió y
+mostró ambas notas en el paquete instalado; la captura visual es
+`/tmp/fuente-real-approval-inbox.png`. No se aprobó ninguna automáticamente,
+porque esa acción exige revisión humana explícita. Por ello todavía no hay
+una nota atómica final en `4_procesado` y el `_Indice_MOC.md` comprobado sigue
+indicando cero notas atómicas. La siguiente prueba real es seleccionar una
+nota, revisar sus metadatos y pulsar `Aprobar nota`; después hay que comprobar
+en disco la creación en `4_procesado`.
+
+Tampoco se han ejercitado en este paquete los motores opcionales, Ollama,
+audio, Meetily, Windows ni OneDrive/SharePoint.
+
+### Observaciones de experiencia de instalación
+
+- Mantener como petición pendiente un spinner o indicador de progreso durante
+  la preparación inicial de capacidades.
+- Mantener como petición pendiente que Terminal desaparezca automáticamente
+  al finalizar el lanzador de distribución; requiere una nueva comprobación
+  específica del `.command` dentro del DMG.
+
+### Corrección y repetición real — PDF, Word y artefacto final — 2026-08-25
+
+- La primera ejecución real de PDF falló porque `window.open()` era bloqueado
+  por PyWebView. Se corrigió la causa: el HTML canónico se imprime en la
+  ventana nativa actual mediante `window.print()` y la consola se restaura al
+  cerrar el diálogo.
+- La build reinstalada en `/Applications/Fuente.app` mostró el diálogo nativo
+  de macOS, permitió `Guardar como PDF`, volvió a la consola y produjo
+  `/Users/emiliosevillaortego/Desktop/v.pdf`.
+- El PDF real medido es de una página, formato PDF 1.3, generado por
+  `Quartz PDFContext`, SHA-256
+  `dcf55c5025396dfe05f700c0c72977d241a6302e2fa6055d4c6ebedcab1dfd232`.
+- La exportación Word real también pasó: dejó
+  `/Users/emiliosevillaortego/Downloads/QA_Ingesta_Vinculada_20260825.docx`,
+  Microsoft OOXML, SHA-256
+  `cdc430fe3d31046684ce56bda0cd298b7c88ad92c42f0126865b322f8c37a8ee`.
+- Evidencias visuales: `/tmp/fuente-real-pdf-native-dialog.png`,
+  `/tmp/fuente-real-pdf-saved.png` y
+  `/tmp/fuente-real-export-word-result-2.png`.
+- El firmador de macOS se ajustó para firmar desde una copia temporal fuera
+  de File Provider; el build final volvió a producir ZIP y DMG sin el fallo
+  de `com.apple.FinderInfo` observado en `Documents`.
+
+El resultado global sigue siendo `R REAL: PARTIAL` por el puente Meetily
+ausente (`Meetily bridge executable is missing`) y por los entornos no
+disponibles; PDF y Word ya tienen evidencia real positiva.
+
+### Auditoría real de consola instalada — controles y estados — 2026-08-25
+
+- Sin Chrome, la build instalada abrió Guía Rápida, Ajustes, Energy, selector
+  de Tema, Nuevo Flujo de Trabajo, Actualizar entradas, Bandeja de
+  Aprobación, Cola, Salud, las cinco tarjetas de estadísticas, selector de
+  rutas del registro y Limpiar Registro.
+- Ajustes mostró las opciones de modelo local y los márgenes RAM
+  `10%/20%/30%/35%/40%/50%`. Se seleccionó `20%`, se restauró `10%`, se guardó
+  desde la interfaz y se comprobó en `.fuente/config.json` que persistieron
+  `ram_safety_margin_pct: 0.1`, `resource_profile: eco_strict` y
+  `audio_mode: auto`, sin alterar el Vault.
+- Energy cambió la consola a `Zen` y volvió a `Energy`. La Guía se abrió y se
+  cerró correctamente. El selector de Tema mostró `General`; el modal de
+  creación se abrió y se canceló sin crear una bóveda adicional.
+- `Nuevo Flujo de Trabajo` produjo el toast de éxito. Después de
+  `Actualizar entradas`, la app detectó una entrada externa vinculada; al
+  repetir el flujo, el contador volvió a `0`, se mantuvieron `5` procesados y
+  la nota real `4_procesado/QA_Ingesta_Vinculada_20260825.md` quedó con SHA-256
+  `cd943d1de58d51fc46ec04235b141dfe7aa387469c9dfa1de1f8338d3018c6f1`.
+- La Cola mostró `8 trabajo(s) medido(s)`, incluyendo el job de la entrada
+  vinculada en `completed/completed`; `Cargar` y `Actualizar` conservaron el
+  estado. Salud midió Vault, Ollama y Tesseract como `ok`; la tarjeta RAM
+  mostró `80%`, margen `10%`, GC `Optimizado`, y `Purgar Memoria RAM Ahora`
+  devolvió un diálogo nativo con `739` objetos liberados.
+- Las tarjetas de entrada, procesados y notas abrieron sus desgloses. La
+  tarjeta de procesados enumeró cinco archivos reales; la de entrada informó
+  un archivo directo y una entrada externa vinculada; la telemetría mostró
+  cinco notas, quince hiperenlaces y ChromaDB activo.
+- La Bandeja sin notas pendientes y sus acciones de aprobación no seleccionada
+  no mutaron el Vault. Esto queda como comportamiento de estado vacío, no como
+  aprobación real.
+- Cuarentena mostró tres entradas reales con estado `failed_for_review` y
+  código `invalid_model_output`. No apareció Restaurar porque el backend
+  bloquea deliberadamente ese estado; la guía se corrigió para distinguirlo de
+  `quarantined`, que sí es restaurable. Tras reconstruir y reinstalar, la Guía
+  instalada mostró la aclaración corregida y la Cuarentena mantuvo los tres
+  registros en revisión manual.
+- El selector del registro cambió a `Rutas: Completas` y `Limpiar Registro`
+  dejó el panel vacío, manteniendo los contadores y el Vault intactos.
+- Capturas: `/tmp/fuente-real-audit-settings-model-options.png`,
+  `/tmp/fuente-real-audit-settings-ram-options.png`,
+  `/tmp/fuente-real-audit-settings-save-result.png`,
+  `/tmp/fuente-real-audit-guide.png`, `/tmp/fuente-real-audit-energy.png`,
+  `/tmp/fuente-real-audit-new-workflow.png`,
+  `/tmp/fuente-real-audit-workflow-linked-run.png`,
+  `/tmp/fuente-real-audit-queue.png`, `/tmp/fuente-real-audit-health.png`,
+  `/tmp/fuente-real-audit-ram-purge.png`,
+  `/tmp/fuente-real-audit-quarantine.png`,
+  `/tmp/fuente-real-audit-processed-stat.png`,
+  `/tmp/fuente-real-audit-input-stat.png`,
+  `/tmp/fuente-real-audit-notes-stat.png`,
+  `/tmp/fuente-real-audit-log-clear.png`.
+
+### Meetily nativo — micrófono y audio — 2026-08-25
+
+- La aplicación nativa `/Applications/meetily.app` abrió correctamente y
+  mostró el estado inicial `Welcome to meetily!`.
+- Al pulsar el micrófono inició una grabación real con estado `Recording`,
+  `Listening for speech...` y el indicador naranja de micrófono de macOS. No
+  apareció un bloqueo de permisos.
+- Tras confirmar `I've Notified Participants` y detener la grabación, Meetily
+  terminó el procesamiento y mostró `Recording saved successfully!`.
+- Se comprobó en la base SQLite de Meetily el registro
+  `meeting-39ab0610-ea83-4912-8c8e-1c1abf378a2d`, y en su carpeta de grabación
+  quedaron `audio.mp4`, `metadata.json` y `transcripts.json`. El audio mide
+  `305606` bytes y el JSON confirma `status: completed`, micrófono `Micrófono
+  del MacBook Air`, frecuencia `48000` y `0` segmentos de transcripción porque
+  no se pronunció ninguna frase durante la prueba.
+- Esto valida Meetily y el acceso real al micrófono de forma independiente.
+  No valida todavía la integración Fuente→Meetily: Fuente sigue mostrando
+  `Meetily bridge executable is missing` porque `/opt/meetily-bridge` no existe.
+- Evidencias: `/tmp/fuente-real-meetily-native.png`,
+  `/tmp/fuente-real-meetily-mic-start.png`,
+  `/tmp/fuente-real-meetily-mic-stop.png` y
+  `/tmp/fuente-real-meetily-finalized.png`.
+
+### Reinstalación final tras auditoría — 2026-08-25
+
+- Se reconstruyó e instaló de nuevo `/Applications/Fuente.app`, conservando la
+  anterior en `/Applications/Fuente.app.before-ui-audit-20260825042500`.
+- La app arrancó con splash y barra de progreso, llegó de nuevo a la consola,
+  conservó el Vault `Nuevo Vault` y volvió a mostrar `5` procesados, `3` en
+  cuarentena y `5` notas preparadas.
+- `codesign --verify --deep --strict /Applications/Fuente.app` terminó sin
+  error. El DMG final mide `32079911` bytes y su SHA-256 es
+  `52e8da21795a7e5664baa0997f3e4db0f875cc66fe971a53516fb12dac7440a7`; el
+  ZIP mide `32462269` bytes y su SHA-256 es
+  `fd8bfd0dc1a176e27cbf59b76886991e4874d89db3771b79238c4360a44d7998`.
+- La Guía instalada ya distingue `quarantined` de `failed_for_review`; la
+  Cuarentena instalada conserva el comportamiento seguro esperado.
+- Evidencias: `/tmp/fuente-real-reinstalled-after-guide-fix.png`,
+  `/tmp/fuente-real-reinstalled-ready-after-guide-fix.png`,
+  `/tmp/fuente-real-reinstalled-guide-fixed.png` y
+  `/tmp/fuente-real-reinstalled-quarantine-fixed-copy.png`.
+- La repetición del formulario de reunión en esta build final se hizo con
+  título, autor y consentimiento reales. Fuente no se cerró: mostró el error
+  explícito `Meetily bridge executable is missing`. El proceso principal siguió
+  vivo y el Vault no recibió artefactos de reunión. Esto confirma un fallo
+  pendiente del bridge empaquetado/configurado, no un fallo silencioso del
+  formulario. Captura: `/tmp/fuente-real-reinstalled-meeting-missing-bridge.png`
+  (SHA-256
+  `096f9f59bc4abc83c1702328365ebf65c1970bac10fa6e6dfe6db25264c94109`).
+- Abrir de nuevo el formulario no inició ninguna captura. Al retirar el
+  consentimiento, `Iniciar grabación` quedó deshabilitado; el intento no creó
+  sesión ni artefactos. La prueba se cierra con el mismo error visible
+  anterior conservado en el estado del formulario, sin caída del proceso.
+  Evidencia: `/tmp/fuente-real-reinstalled-meeting-consent-rejected.png`.
+- La build final ejecutó también `Nuevo Flujo de Trabajo` con el Vault ya
+  procesado. Apareció el toast `Nuevo Flujo de Trabajo completado
+  exitosamente`; los contadores quedaron en `0` pendientes, `5` procesados,
+  `3` en cuarentena y `5` notas, sin cerrar Fuente. Evidencia:
+  `/tmp/fuente-real-reinstalled-workflow-final.png`.
+
+### Campaña real posterior — Meetily, MP4, aprobación exacta y editor visual — 2026-08-25
+
+Esta tanda se ejecutó de nuevo sobre `/Applications/Fuente.app`, sin Chrome,
+mediante clics y capturas de la ventana macOS. El Vault activo fue
+`/Users/emiliosevillaortego/Desktop/Nuevo Vault`.
+
+- `Nueva reunión` abrió la aplicación oficial `/Applications/meetily.app` y
+  mostró `Welcome to meetily!`. Fuente volvió a quedar visible con el mensaje
+  de retorno. La carpeta real `~/Movies/meetily-recordings` se vinculó desde el
+  selector nativo de `Ajustes`; `Actualizar entradas` añadió la reunión y los
+  archivos `metadata.json`, `transcripts.json` y `audio.mp4` a `1_volcado/`.
+  Evidencias: `/tmp/fuente-real-meetily-handoff-start.png`,
+  `/tmp/fuente-real-meetily-return.png`,
+  `/tmp/fuente-real-meetily-folder-dialog-path.png` y
+  `/tmp/fuente-real-meetily-update-entries.png`.
+- La prueba descubrió un defecto real: `audio.mp4` se copiaba antes que los
+  JSON, pero no entraba en el plan ETL. Se corrigió el registro de extensiones
+  de audio en el scheduler y el extractor. Tras reconstruir e instalar, el
+  MP4 apareció en `1_volcado` y generó un job durable propio.
+- El job real del MP4 quedó en `stabilized / pending / resource_wait` porque la
+  medición de RAM no podía reservar los `2.0 GB` estimados con la memoria libre
+  observada. El archivo no se perdió ni fue enviado a cuarentena. Esta parte
+  queda `PARTIAL` hasta procesar audio real en una condición de recursos que
+  permita Faster-Whisper.
+- El job exacto de `metadata.json` se seleccionó en la Bandeja, se aprobó con
+  revisor humano y se reanudó desde la Cola. El estado durable terminó en
+  `completed / completed`, con `note_document_id` persistido y
+  `4_procesado/metadata_json.md` creado. La aprobación anterior de
+  `metadata.md` correspondía a otra reunión; no se contó como sustituto.
+- El editor real mostró los tres estados: `Markdown` con fuente editable,
+  `WYSIWYG` con contenido renderizado y `Preview` de Toast UI. Cancelar desde
+  el editor devolvió el MOC sin modificarlo. Evidencias:
+  `/tmp/fuente-editor-wysiwyg-start.png`,
+  `/tmp/fuente-editor-markdown-click.png`,
+  `/tmp/fuente-editor-wysiwyg-final.png`,
+  `/tmp/fuente-editor-preview-click.png` y
+  `/tmp/fuente-editor-cancelled.png`.
+- La espera de generación local después de aprobar `metadata.json` duró
+  aproximadamente tres minutos con `qwen2.5:0.5b`. El job terminó, pero la
+  interfaz no mostró progreso suficiente durante esa espera. Se conserva como
+  petición de experiencia, no como PASS de rendimiento.
+
+El artefacto distribuible medido al cierre de esta tanda fue:
+
+- DMG: `32.081.156` bytes, SHA-256
+  `48c8945fb64d378d1dedf0a530e9a1ca89f54758350a5a584247ac8c9dda2db7`.
+- ZIP: `32.463.808` bytes, SHA-256
+  `029919d0b8ebfed88f8a69d47f670c216f514a2fb9b3e3b1753d3efa38e594b2`.
+
+El resultado global continúa `R REAL: PARTIAL`: el arranque, Vault, ETL de
+JSON/Markdown, MP4 hasta cola, aprobación exacta, generación de metadata,
+lector, WYSIWYG, exportación, compartición, chat y handoff a Meetily tienen
+evidencia real; audio Faster-Whisper queda pendiente por recursos/modelo, y
+Windows, OneDrive/SharePoint y otros entornos no se han probado. Las
+peticiones de producto todavía abiertas son el spinner/barra durante esperas
+largas y el cierre automático de Terminal al completar el `.command`.
+
+### Corrección y cierre real del audio local — 2026-08-25
+
+La campaña continuó sobre una única instancia limpia de
+`/Applications/Fuente.app`. Se corrigieron dos fallos observados sólo en uso
+real:
+
+- `Tiny local CPU` heredaba el presupuesto genérico de audio de `2.0 GB` y
+  quedaba bloqueado aunque existiera un modelo local. El planificador ahora
+  recibe el modo efectivo: `Tiny local CPU` usa un presupuesto conservador de
+  `1.0 GB`, mientras `Auto` conserva `2.0 GB`; `skip` no queda bloqueado por
+  RAM porque el extractor lo omite de forma explícita.
+- Un evento repetido de un job en `saved_clean` sin aprobación intentaba
+  reiniciarlo desde `extracted` y producía `illegal_job_transition`, enviándolo
+  a cuarentena. El watcher ahora deja el job en revisión humana y reanuda sólo
+  cuando existe la aprobación exacta.
+
+Resultado real medido en el Vault
+`/Users/emiliosevillaortego/Desktop/Nuevo Vault`:
+
+- El MP4 creado por Meetily pasó de `resource_wait` a `saved_clean`, generó
+  `/Users/emiliosevillaortego/Desktop/Nuevo Vault/3_capturado/audio.md` con
+  `formato: .mp4` y salida de Faster-Whisper (`Idioma detectado: en`, marca
+  `[00:00]`), se aprobó desde la Bandeja y terminó en
+  `completed / completed` con derivado en `4_procesado/audio.md`.
+- La prueba específica de reanudación creó
+  `1_volcado/QA_Reanudacion_Aprobacion_20260825.md`, la dejó en
+  `saved_clean / awaiting_clean_approval` y pulsó de nuevo el paso 2. El job
+  permaneció exactamente en ese estado, con `attempt_count=4`, sin cuarentena.
+
+Esto cambia la cobertura real de audio local a `PASS` para el flujo Tiny local
+con un MP4 real y modelo ya descargado en el equipo. Meetily sigue siendo un
+handoff a su aplicación oficial, no un puente embebido; Windows,
+OneDrive/SharePoint y los modelos que no están instalados siguen fuera de esta
+campaña. El resultado global continúa `R REAL: PARTIAL` por esos límites y por
+las peticiones de spinner/barra y cierre automático de Terminal todavía
+abiertas.
+
+Evidencias de esta última vuelta: `/tmp/fuente-audio-complete-real.png`,
+`/tmp/fuente-approval-guard-after-step2.png`,
+`/tmp/fuente-after-tests-current.png` y
+`/tmp/fuente-single-live-after-cleanup.png`. El paquete reconstruido y verificado
+queda medido así:
+
+- DMG: `32.084.762` bytes, SHA-256
+  `5e92c73b4bcca057bc8f2a25c6d68390a5cca0baeb72e66be9689c269c72e962`.
+- ZIP: `32.464.781` bytes, SHA-256
+  `2857bbf151efbd2c00da8e2551195a2524d0c384ce4770b7941f02e82de94b68`.
+
+### Cierre operativo y documental — 2026-08-25
+
+Repetición final sobre `/Applications/Fuente.app`, sin Chrome:
+
+- Ajustes abrió con Vault, carpetas de entrada/salida y modelo Tiny local
+  persistidos. Guardar cerró sin error visible; `config.json` confirmó
+  `resource_profile=eco_strict`, `audio_mode=tiny_cpu` y ruta de modelo válida.
+- Servidor & IA abrió. Nuevo Flujo mostró éxito. Actualizar entradas registró
+  fecha nueva. Cola cargó `17` jobs y mostró el job real de aprobación en
+  `saved_clean / pending / awaiting exact human approval`, sin cuarentena.
+- Salud midió `Vault=ok`, `Ollama=ok`, `Tesseract=ok` y `FFmpeg` disponible.
+- Capturas finales: `/tmp/fuente-final-current-dashboard.png`,
+  `/tmp/fuente-final-settings-open.png`,
+  `/tmp/fuente-final-settings-server.png`,
+  `/tmp/fuente-final-update-entries.png`,
+  `/tmp/fuente-final-queue-open.png` y
+  `/tmp/fuente-final-health-open.png`.
+- Proceso instalado medido:
+  `/Applications/Fuente.app/Contents/MacOS/Fuente`.
+  `codesign --verify --deep --strict` pasó.
+
+Informe final: `docs/superpowers/reports/2026-08-25-prueba-real-final.md`.
+
+### Cierre real final — PASO 2 y artefacto instalado — 2026-08-25
+
+- Build final instalada en `/Applications/Fuente.app`.
+- DMG: `32.085.275` bytes; SHA-256
+  `29d529831620932b68dbffb269bc720d8da9561cdeb5ca8d6b822d6a5c6aa33b`.
+- ZIP: `32.464.912` bytes; SHA-256
+  `d6602034e07fc654714116bc0799ea767e21598a5e2fd605fce5752c55c5b33e`.
+- PASO 2 real pulsado sobre la tarjeta. Audio reintroducido con hash
+  `1da7c0e79751df1714b92610a89a687a881dd8ebda88ebaaec5fa1d443f8ca37`.
+- Resultado durable: job `043166d2-9a0d-4179-bf38-50ccc51b44ca` en
+  `saved_clean/pending/awaiting_clean_approval`; captura creada; cero
+  cuarentena nueva.
+- Captura: `/tmp/fuente-step2-final2-quartz-logical.png`.
+
+El bloque real de instalación, Vault, ETL, aprobación, editor WYSIWYG,
+exportación, lector, cola, salud, audio Tiny local y handoff Meetily queda
+documentado en el informe. El resultado global sigue siendo `R REAL: PARTIAL`
+por el bridge Meetily no distribuido, entornos no disponibles y motores no
+instalados fuera de esta máquina.

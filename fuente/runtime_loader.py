@@ -162,7 +162,12 @@ def _pip_install(arguments: list[str]) -> int:
         pip_main = importlib.import_module(module_name).main
     except (ImportError, AttributeError) as error:
         raise RuntimeCapabilityError("Instalador de capacidades no disponible.") from error
-    return int(pip_main(arguments))
+    try:
+        return int(pip_main(arguments))
+    except ImportError as error:
+        raise RuntimeCapabilityError(
+            "El instalador de capacidades no puede cargarse en este paquete."
+        ) from error
 
 
 def ensure_capability(
@@ -185,14 +190,19 @@ def ensure_capability(
         )
     target = site_packages_dir()
     target.mkdir(parents=True, exist_ok=True)
-    result = installer([
-        "install",
-        "--disable-pip-version-check",
-        "--no-warn-script-location",
-        "--target",
-        str(target),
-        *capability["requirements"],
-    ])
+    try:
+        result = installer([
+            "install",
+            "--disable-pip-version-check",
+            "--no-warn-script-location",
+            "--target",
+            str(target),
+            *capability["requirements"],
+        ])
+    except ImportError as error:
+        raise RuntimeCapabilityError(
+            "El instalador de capacidades no puede cargarse en este paquete."
+        ) from error
     if result != 0 or not _installed(capability):
         raise RuntimeCapabilityError(
             f"No se pudo instalar {capability['label']}. Comprueba conexión y vuelve a intentarlo."

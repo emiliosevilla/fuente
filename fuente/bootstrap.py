@@ -12,7 +12,13 @@ from fuente.ui.setup_backend import FuenteSetupBackend, load_startup_vault
 
 
 def _html_file() -> Path:
-    return Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parents[1])) / "consola_preview.html"
+    bundle_root = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parents[1]))
+    candidates = (
+        bundle_root / "consola_preview.html",
+        bundle_root.parent / "Resources" / "consola_preview.html",
+        Path(__file__).resolve().parents[1] / "consola_preview.html",
+    )
+    return next((path for path in candidates if path.is_file()), candidates[0])
 
 
 def _launch_setup(message: str | None = None) -> None:
@@ -20,10 +26,11 @@ def _launch_setup(message: str | None = None) -> None:
 
     backend = FuenteSetupBackend()
     api = FuenteSetupApi(backend)
+    html_file = _html_file()
     webview.settings["ALLOW_DOWNLOADS"] = True
     window = webview.create_window(
         "Fuente — Configuración inicial",
-        url=_html_file().as_uri(),
+        url=str(html_file),
         js_api=api,
         width=1280,
         height=850,

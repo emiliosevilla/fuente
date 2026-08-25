@@ -494,7 +494,7 @@ def test_fusion_ui_has_explicit_confirmation_and_safe_projection_contract():
         "fusion-confirmation",
         "preview_fusion",
         "commit_fusion",
-        "Fusionar y crear pendiente",
+            "Crear nota nueva",
         "readerMarkdownToProjection",
         "textContent",
     ):

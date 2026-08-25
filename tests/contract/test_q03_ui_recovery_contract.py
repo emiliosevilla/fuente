@@ -112,7 +112,7 @@ def test_first_run_stays_unconfigured_until_settings_selects_a_vault():
     assert "FuenteSetupBackend" in LAUNCHER_SOURCE
     assert "Fuente iniciando servicios" in LAUNCHER_SOURCE
     assert "mode=\"indeterminate\"" in LAUNCHER_SOURCE
-    assert "Sin Vault conectado. Configúralo desde Ajustes." in SOURCE
+    assert "No hay un tema conectado. Configúralo desde Ajustes." in SOURCE
     assert "restart_with_vault" in SOURCE
 
 
@@ -154,11 +154,11 @@ def test_guided_vault_confirms_the_exact_creation_path():
     assert "callNativeLongRequest('select_vault_target'" in guided
     assert "target_path: targetPath" in guided
     assert "pathInput.value = result.vault_path || ''" in guided
-    assert "Ruta elegida: ' + targetPath" in guided
-    assert "No se recibió respuesta al crear el Vault." in guided
-    assert "Selección de Vault cancelada o sin ruta." in guided
-    assert "El Vault se creará exactamente en:" in guided
-    assert "Fuente creará esa carpeta y su carpeta .obsidian." in guided
+    assert "Carpeta elegida: ' + targetPath" in guided
+    assert "No se recibió respuesta al crear el tema." in guided
+    assert "Selección cancelada o sin carpeta." in guided
+    assert "El tema se creará exactamente en:" in guided
+    assert "Fuente creará esa carpeta y su configuración." in guided
 
 
 def test_note_content_rejection_and_malformed_payload_render_visible_error():

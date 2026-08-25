@@ -19,9 +19,28 @@ from fuente.domain.paths import document_id_for_relative_path
 from fuente.domain.runtime_policy import AudioMode, ExecutionProfile, RuntimePolicy
 from fuente.infrastructure.sqlite_store import JobStore
 from fuente.ram_governor.budget import measured_snapshot
+from fuente.rag.minirag_store import MiniRAGUnavailableError
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 REPO_VAULT = REPO_ROOT / "Vault_Fuente"
+
+
+class _OfflineMiniRAG:
+    def __init__(self, *_args, **_kwargs):
+        pass
+
+    def rebuild(self, _records):
+        raise MiniRAGUnavailableError("MiniRAG disabled in offline tests")
+
+    def delete(self, _document_ids):
+        raise MiniRAGUnavailableError("MiniRAG disabled in offline tests")
+
+
+@pytest.fixture(autouse=True)
+def isolate_optional_minirag(monkeypatch):
+    """Keep application tests offline; MiniRAG has its own direct contract tests."""
+    monkeypatch.setattr("fuente.application.ingestion.MiniRAGStore", _OfflineMiniRAG)
+    monkeypatch.setattr("fuente.application.notes.MiniRAGStore", _OfflineMiniRAG)
 
 
 def patch_abundant_ram(governor) -> None:

@@ -83,7 +83,7 @@ include = ["fuente*"]
 [tool.setuptools.package-data]
 "fuente.infrastructure.migrations" = ["*.sql"]
 "fuente.ui.static" = ["*.css"]
-"fuente.resources.demo_vault" = ["manifest.json", "notes/*.md"]
+"fuente.resources.demo_vault" = ["manifest.json", "notes/*.txt"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

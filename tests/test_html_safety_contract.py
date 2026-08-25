@@ -118,7 +118,7 @@ def test_approval_inbox_exposes_partial_approve_export_flow():
         encoding="utf-8"
     )
     assert 'id="approval-export-format"' in source
-    assert 'Aprobar y exportar' in source
+    assert 'Dar por buena y sacar' in source
     assert "approve_and_export(" in source
-    assert "Aprobada; exportación falló" in source
+    assert "Revisión guardada; no se pudo preparar el archivo" in source
     assert "export_payload" in source

@@ -408,7 +408,7 @@
     <div class="modal-overlay" id="modal-fusion">
         <div class="modal-container modal-wide">
             <div class="modal-header">
-                <div class="modal-title">UNIR NOTAS</div>
+                <div class="modal-title">Unir notas</div>
                 <button class="close-btn" data-onclick-command="closeModal('modal-fusion')">&times;</button>
             </div>
             <div class="modal-body">
@@ -441,24 +441,24 @@
 
     <!-- MODAL CREAR NUEVO TEMA -->
     <div class="modal-overlay console-layer-001" id="modal-create-theme">
-        <div class="modal-container console-layout-013">
-            <div class="modal-header console-layout-014">
-                <div class="modal-title console-text-005">CREAR TEMA</div>
+        <div class="modal-container modal-compact">
+            <div class="modal-header">
+                <div class="modal-title">Crear tema</div>
                 <button class="close-btn" data-onclick-command="closeModal('modal-create-theme')">&times;</button>
             </div>
-            <div class="modal-body console-layout-015">
-                <p class="console-layout-016">
+            <div class="modal-body">
+                <p>
                     Introduce un nombre. Fuente creará un tema separado para sus notas.
                 </p>
-                <div class="console-layout-017">
-                    <label class="console-text-006">Nombre:</label>
-                    <input type="text" id="input-new-theme-name" placeholder="Ej: Derecho Civil, Historia Romana, Física Cuántica..." data-onkeydown-command="if(event.key==='Enter') submitCreateThemeModal()" / class="console-layout-018">
+                <div class="metadata-field">
+                    <label for="input-new-theme-name">Nombre</label>
+                    <input type="text" id="input-new-theme-name" placeholder="Ej.: Derecho Civil, Historia Romana…" data-onkeydown-command="if(event.key==='Enter') submitCreateThemeModal()" class="console-layout-018">
                     <p id="new-theme-status" class="console-text-017" role="alert" aria-live="assertive"></p>
                 </div>
             </div>
-            <div class="modal-footer console-layout-019">
+            <div class="modal-footer">
                 <button class="btn-secondary" data-onclick-command="closeModal('modal-create-theme')">Cancelar</button>
-                <button class="btn-primary" data-onclick-command="submitCreateThemeModal()">✓ Crear tema</button>
+                <button class="btn-primary" data-onclick-command="submitCreateThemeModal()">Crear tema</button>
             </div>
         </div>
     </div>
@@ -467,7 +467,7 @@
     <div class="modal-overlay console-layer-001" id="modal-export-options">
         <div class="modal-container console-layout-020">
             <div class="modal-header console-layout-014">
-                <div class="modal-title console-text-007">SACAR NOTA</div>
+                <div class="modal-title">Exportar nota</div>
                 <button class="close-btn" data-onclick-command="closeModal('modal-export-options')">&times;</button>
             </div>
             <div class="modal-body console-layout-015">
@@ -496,7 +496,7 @@
     <div class="modal-overlay" id="modal-chat">
         <div class="modal-container console-layout-025">
             <div class="modal-header">
-            <div class="modal-title">CHAT CON NOTAS</div>
+            <div class="modal-title">Consultar notas</div>
                 <div>
                     <button class="btn-small" data-onclick-command="clearChatHistory()">Limpiar charla</button>
                     <div id="anythingllm-optional-panel" hidden aria-hidden="true">
@@ -533,7 +533,7 @@
     <div class="modal-overlay" id="modal-quarantine">
         <div class="modal-container">
             <div class="modal-header">
-                <div class="modal-title console-text-010">ARCHIVOS AISLADOS</div>
+                <div class="modal-title console-text-010">Archivos aislados</div>
                 <button class="close-btn" data-onclick-command="closeModal('modal-quarantine')">&times;</button>
             </div>
             <div class="modal-body" id="quarantine-list"></div>
@@ -547,7 +547,7 @@
     <div class="modal-overlay" id="modal-stat-input">
         <div class="modal-container console-layout-027">
             <div class="modal-header">
-                <div class="modal-title console-text-003">ARCHIVOS PENDIENTES</div>
+                <div class="modal-title">Archivos pendientes</div>
                 <button class="close-btn" data-onclick-command="closeModal('modal-stat-input')">&times;</button>
             </div>
             <div class="modal-body">
@@ -569,7 +569,7 @@
     <div class="modal-overlay" id="modal-stat-notes">
         <div class="modal-container console-layout-027">
             <div class="modal-header">
-                <div class="modal-title">CÓMO ESTÁN UNIDAS TUS NOTAS</div>
+                <div class="modal-title">Relaciones entre notas</div>
                 <button class="close-btn" data-onclick-command="closeModal('modal-stat-notes')">&times;</button>
             </div>
             <div class="modal-body">
@@ -592,7 +592,7 @@
     <div class="modal-overlay" id="modal-stat-ram">
         <div class="modal-container console-layout-027">
             <div class="modal-header">
-                <div class="modal-title">MEMORIA DEL EQUIPO</div>
+                <div class="modal-title">Memoria del equipo</div>
                 <button class="close-btn" data-onclick-command="closeModal('modal-stat-ram')">&times;</button>
             </div>
             <div class="modal-body">
@@ -616,7 +616,7 @@
     <div class="modal-overlay" id="modal-settings">
         <div class="modal-container">
             <div class="modal-header">
-                <div class="modal-title">AJUSTES</div>
+                <div class="modal-title">Ajustes</div>
                 <button class="close-btn" data-onclick-command="closeModal('modal-settings')">&times;</button>
             </div>
             <div class="modal-body">
@@ -747,7 +747,7 @@
     <div class="modal-overlay" id="modal-category">
         <div class="modal-container">
             <div class="modal-header">
-                <div class="modal-title" id="category-modal-title">ARCHIVOS LISTOS</div>
+                <div class="modal-title" id="category-modal-title">Archivos listos</div>
                 <button class="close-btn" data-onclick-command="closeModal('modal-category')">&times;</button>
             </div>
             <div class="modal-body" id="category-modal-body">
@@ -765,7 +765,7 @@
     <div class="modal-overlay console-layer-002" id="modal-approval">
         <div class="modal-container">
             <div class="modal-header">
-                <div class="modal-title">REVISAR NOTAS</div>
+                <div class="modal-title">Revisar notas</div>
                 <button class="close-btn" data-onclick-command="closeModal('modal-approval')">&times;</button>
             </div>
             <div class="modal-body">
@@ -840,7 +840,7 @@
     <div class="modal-overlay" id="modal-job-queue">
         <div class="modal-container modal-wide">
             <div class="modal-header">
-                <div class="modal-title">TRABAJOS</div>
+                <div class="modal-title">Trabajos</div>
                 <div>
                     <button class="btn-small" id="job-queue-load" data-onclick-command="loadJobQueue()">Ver</button>
                     <button class="btn-small" id="job-queue-refresh" data-onclick-command="refreshJobQueue()">Actualizar</button>
@@ -866,7 +866,7 @@
     <div class="modal-overlay" id="modal-health">
         <div class="modal-container modal-wide">
             <div class="modal-header">
-                <div class="modal-title">ESTADO DEL SISTEMA</div>
+                <div class="modal-title">Estado del sistema</div>
                 <div>
                     <button class="btn-small" id="health-refresh" data-onclick-command="refreshHealth()">Actualizar</button>
                     <button class="close-btn" data-onclick-command="closeModal('modal-health')">&times;</button>
@@ -885,7 +885,7 @@
     <section class="onboarding-panel" id="onboarding-panel" hidden>
         <div class="modal-container modal-wide">
             <div class="modal-header">
-                <div class="modal-title">PRIMERA VEZ</div>
+                <div class="modal-title">Primera vez</div>
                 <button class="close-btn" data-onclick-command="hideOnboardingPanel()">&times;</button>
             </div>
             <div class="modal-body">
@@ -904,7 +904,7 @@
     <div class="modal-overlay" id="modal-help">
         <div class="modal-container console-layout-025">
             <div class="modal-header">
-                <div class="modal-title">GUÍA RÁPIDA</div>
+                <div class="modal-title">Guía rápida</div>
                 <button class="close-btn" data-onclick-command="closeModal('modal-help')">&times;</button>
             </div>
             <div class="modal-body console-layout-051">
@@ -1527,7 +1527,7 @@
             });
             if (!events.childNodes.length) {
                 const empty = document.createElement('li');
-                empty.textContent = 'Sin eventos durables.';
+                empty.textContent = 'Sin actividad registrada.';
                 events.appendChild(empty);
             }
             panel.appendChild(events);
@@ -1536,7 +1536,7 @@
 
         function loadJobDetail(jobId) {
             if (!queueApiAvailable()) {
-                queueStatus('Bridge no conectado; no se ha medido el detalle.', true);
+                queueStatus('Fuente todavía no puede mostrar el detalle.', true);
                 return;
             }
             window.pywebview.api.get_job_detail(jobId).then(renderJobDetail).catch(function(error) {
@@ -1545,7 +1545,7 @@
         }
 
         function cancelQueueJob(jobId, expectedRevision) {
-            const promptedReason = window.prompt('Indica una razón durable para cancelar este trabajo:');
+            const promptedReason = window.prompt('Indica por qué quieres cancelar este trabajo:');
             const reason = typeof promptedReason === 'string' ? promptedReason : '';
             if (!reason.trim()) {
                 queueStatus('La cancelación requiere una razón no vacía.', true);
@@ -1554,7 +1554,7 @@
             const normalizedReason = reason.trim();
             if (!window.confirm('¿Confirmas cancelar el trabajo? La razón quedará registrada.')) return;
             if (!queueApiAvailable()) {
-                queueStatus('Bridge no conectado; no se ha cancelado el trabajo.', true);
+                queueStatus('Fuente todavía no puede cancelar trabajos.', true);
                 return;
             }
             window.pywebview.api.cancel_job(jobId, expectedRevision, normalizedReason).then(function(result) {
@@ -1571,7 +1571,7 @@
 
         function resumeQueueJob(jobId, expectedRevision, authorizeModelLoad) {
             if (!queueApiAvailable()) {
-                queueStatus('Bridge no conectado; no se ha reanudado el trabajo.', true);
+                queueStatus('Fuente todavía no está lista para reanudar trabajos.', true);
                 return;
             }
             window.pywebview.api.resume_job(
@@ -1687,7 +1687,7 @@
             if (cursor === undefined) cursor = queueCursor;
             queueCursor = cursor || null;
             if (!queueApiAvailable()) {
-                queueStatus('Bridge no conectado; la cola no se ha medido.', true);
+                queueStatus('La cola de trabajos todavía no está disponible.', true);
                 return;
             }
             setQueueBusy(true);
@@ -3898,7 +3898,7 @@
                     });
                 }).catch(function(err) {
                     appendChatBubble(chatScroll, 'ai', 'Fuente:', 'No se pudo completar la consulta.', [], {
-                        error: { code: 'ollama_unavailable', message: String(err || 'bridge failure') },
+                        error: { code: 'ollama_unavailable', message: String(err || 'conexión local no disponible') },
                         retrieval_mode: 'none'
                     });
                 });
@@ -3911,7 +3911,7 @@
                         'Vista previa: la charla real necesita la conexión local de Fuente.',
                         [],
                         {
-                            error: { code: 'offline_preview', message: 'Bridge no disponible' },
+                            error: { code: 'offline_preview', message: 'Fuente no está conectada' },
                             retrieval_mode: 'none'
                         }
                     );
@@ -5723,7 +5723,7 @@
 
         function loadCategoryData(category) {
             const titleEl = document.getElementById('category-modal-title');
-            if (titleEl) titleEl.innerText = 'DESGLOSE DE ARCHIVOS PROCESADOS (4_PROCESADO)';
+            if (titleEl) titleEl.innerText = 'Archivos procesados';
             
             if (window.pywebview && window.pywebview.api) {
                 window.pywebview.api.get_category_files(category).then(function(files) {
@@ -5765,7 +5765,7 @@
                 const open = document.createElement('button');
                 open.className = 'btn-small';
                 open.type = 'button';
-                open.textContent = 'Abrir en OS';
+                open.textContent = 'Abrir';
                 li.append(description, open);
                 function openAuthorizedFile() {
                     if (!(window.pywebview && window.pywebview.api)) {

@@ -56,7 +56,15 @@ class ChatProviderError(RuntimeError):
 
 
 class ChatProvider(Protocol):
-    def generate(self, *, model: str, system: str, prompt: str) -> str:
+    def generate(
+        self,
+        *,
+        model: str,
+        system: str,
+        prompt: str,
+        options: Mapping[str, Any] | None = None,
+        think: bool | None = None,
+    ) -> str:
         """Return the model reply text or raise ``ChatProviderError``."""
 
 
@@ -67,19 +75,30 @@ class OllamaChatProvider:
         self.ollama_url = (ollama_url or "").rstrip("/")
         self.timeout = float(timeout)
 
-    def generate(self, *, model: str, system: str, prompt: str) -> str:
+    def generate(
+        self,
+        *,
+        model: str,
+        system: str,
+        prompt: str,
+        options: Mapping[str, Any] | None = None,
+        think: bool | None = None,
+    ) -> str:
         if not self.ollama_url:
             raise ChatProviderError(
                 "ollama_url is not configured", code=ERROR_OLLAMA
             )
-        payload = json.dumps(
-            {
-                "model": model,
-                "system": system,
-                "prompt": prompt,
-                "stream": False,
-            }
-        ).encode("utf-8")
+        request_body: dict[str, Any] = {
+            "model": model,
+            "system": system,
+            "prompt": prompt,
+            "stream": False,
+        }
+        if options:
+            request_body["options"] = dict(options)
+        if think is not None:
+            request_body["think"] = think
+        payload = json.dumps(request_body).encode("utf-8")
         req = urllib.request.Request(
             f"{self.ollama_url}/api/generate",
             data=payload,
@@ -119,7 +138,15 @@ class FakeChatProvider:
         self.error_code = error_code
         self.calls: list[dict[str, str]] = []
 
-    def generate(self, *, model: str, system: str, prompt: str) -> str:
+    def generate(
+        self,
+        *,
+        model: str,
+        system: str,
+        prompt: str,
+        options: Mapping[str, Any] | None = None,
+        think: bool | None = None,
+    ) -> str:
         self.calls.append({"model": model, "system": system, "prompt": prompt})
         if self.fail:
             raise ChatProviderError(self.error_message, code=self.error_code)

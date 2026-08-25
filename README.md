@@ -61,29 +61,31 @@ ejecuta automáticamente ni modifica el Vault al instalar Fuente.
 
 La implementación local de la evolución está cerrada y verificada. El ledger
 detalla fases, revisiones Terra, commits y pruebas; la evidencia final conserva
-el último `HEAD` medido. La validación manual de PyWebView, micrófono y
-despliegue remoto queda expresamente fuera de esa medición.
+el último `HEAD` medido. PyWebView, el bundle instalado y el flujo local de
+Meetily se comprobaron en macOS; Windows y proveedores montados siguen fuera de
+esa medición porque no estuvieron disponibles.
 
 ### Resultado de prueba real instalada — 2026-08-25
 
 Prueba sobre `/Applications/Fuente.app`, sin Chrome, con Vault real:
 `/Users/emiliosevillaortego/Desktop/Nuevo Vault`.
 
-- DMG: `32.085.275` bytes.
-- ZIP: `32.464.912` bytes.
-- DMG SHA-256: `29d529831620932b68dbffb269bc720d8da9561cdeb5ca8d6b822d6a5c6aa33b`.
-- ZIP SHA-256: `d6602034e07fc654714116bc0799ea767e21598a5e2fd605fce5752c55c5b33e`.
-- PASS real: arranque, Vault, ETL, aprobación, audio Tiny local, editor
-  WYSIWYG, exportación, lector, cola durable, Salud y handoff Meetily.
-- Límite real: Meetily se abre como aplicación oficial; no existe bridge
-  embebido distribuido. Windows, proveedor montado y otros motores no se
-  declaran probados.
+- DMG: `32.129.588` bytes; SHA-256
+  `1d1ac3d9276330840c76cbb448fbf9723af223798f6ab4aadf0c1be7aa71ac1e`.
+- ZIP: `32.390.918` bytes; SHA-256
+  `1d46ab53517be54e56897c7af15b0c1e3bdf8f8b7fddcb948adf03eb8b4119d9`.
+- PASS real: arranque en frío, Vault, ETL, aprobación, audio Tiny local,
+  MiniRAG/Ollama, editor, exportación, búsqueda por frase, lector, mapa,
+  trabajos, estado del sistema y biblioteca Meetily.
+- La interfaz es exclusivamente nativa. No existe opción `--browser` ni
+  servidor HTTP de consola.
+- Límites reales: Windows y proveedores montados no se declaran probados.
 - PASO 2 repetido en la build final: un audio reintroducido con los mismos
   bytes generó un único job `saved_clean/pending/awaiting_clean_approval`,
   creó su captura y no añadió cuarentena.
 
 Informe:
-[`docs/superpowers/reports/2026-08-25-prueba-real-final.md`](docs/superpowers/reports/2026-08-25-prueba-real-final.md).
+[`2026-08-25-prueba-real-final.md`](2026-08-25-prueba-real-final.md).
 
 ```bash
 fuente --vault /ruta/al/Vault --theme "General" --migrate-layout dry-run
@@ -93,24 +95,21 @@ fuente --vault /ruta/al/Vault --theme "General" --migrate-layout rollback --plan
 ```
 
 `apply` aborta ante hashes cambiados, colisiones o enlaces simbólicos no
-autorizados. La guía completa está en
-[`docs/migrations/2026-08-22-six-root-vault.md`](docs/migrations/2026-08-22-six-root-vault.md).
+autorizados. Usa siempre `dry-run` antes de aplicar y conserva el `plan-id` para
+verificar o revertir la misma migración.
 
 ### Reuniones con Meetily
 
-`Nueva reunión` abre la aplicación oficial local de Meetily instalada en macOS.
-Meetily gestiona allí el micrófono, el consentimiento, la grabación y sus
-artefactos. Al terminar, vincula desde `Ajustes` la carpeta de grabaciones de
-Meetily —por ejemplo `~/Movies/meetily-recordings`— y pulsa `Actualizar
-entradas`. Fuente importa `audio.mp4`, `metadata.json` y `transcripts.json` a
-`1_volcado/` y continúa con su flujo ETL normal.
+`Reunión` abre Meetily en este Mac y muestra dentro de Fuente la biblioteca
+local de grabaciones detectadas. Meetily gestiona el micrófono, el
+consentimiento y la grabación. Fuente lee su carpeta local —por ejemplo
+`~/Movies/meetily-recordings`— y permite importar cada reunión desde la propia
+biblioteca.
 
-La captura real validó la aplicación Meetily, el permiso de micrófono y la
-creación local de esos tres archivos. La transcripción de audio queda sujeta a
-la RAM disponible y a Faster-Whisper/modelo local; si no puede ejecutarse,
-Fuente conserva el archivo y deja el job reanudable en `resource_wait`.
-Fuente no declara un puente HTTP/CLI embebido: el puente histórico
-`/opt/meetily-bridge` no forma parte de la distribución actual.
+La importación enlaza `audio.mp4`, `metadata.json` y `transcripts.json`, los
+incorpora a `1_volcado/` y continúa con el ETL normal. No hay puente HTTP ni
+servicio paralelo: ambas aplicaciones se coordinan mediante archivos locales.
+La prueba real final mostró tres reuniones y sus acciones de importación.
 
 Para transcribir sin descargar modelos durante la prueba, `Ajustes` permite
 seleccionar `Tiny local CPU` y una carpeta local de Faster-Whisper ya existente
@@ -354,21 +353,10 @@ fuente --flush --vault /ruta/al/Vault
 fuente --headless --vault /ruta/al/Vault
 ```
 
-`consola_preview.html` no inicia Fuente ni conecta un Vault por sí sola. El
-flujo normal puede arrancarse con `fuente --vault ...`; abrir el HTML directamente
-muestra un error de conexión. Para usar Google Chrome con un Vault real se debe
-arrancar el runtime local:
-
-```bash
-fuente --browser --vault /ruta/al/Vault
-```
-
-Ese comando sirve la misma consola por HTTP en loopback y traduce sus llamadas
-al bridge validado del backend. El servidor sólo escucha en `127.0.0.1` o `localhost`.
-`?preview=mock` sigue siendo únicamente una vista previa de diseño con datos
-demo. La prueba real del 2026-08-25 validó Chrome, la ingesta y la cola durable;
-el procesamiento con LLM quedó correctamente en espera porque la RAM medida no
-permitía ningún modelo instalado bajo la política vigente.
+`consola_preview.html` es un recurso interno de la aplicación y no inicia
+Fuente ni conecta un Vault por sí solo. El uso normal se hace desde
+`Fuente.app` o con `fuente --vault ...`; no existe una consola para Chrome ni
+un servidor web alternativo.
 
 Si no se indica Vault, la aplicación usa `~/Documents/Fuente_Vault`. En Linux,
 la consola gráfica necesita `DISPLAY` o `WAYLAND_DISPLAY`; en servidores,

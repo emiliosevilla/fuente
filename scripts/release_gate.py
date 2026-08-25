@@ -83,13 +83,8 @@ _STALE_README_PATTERNS = (
     re.compile(r"checkpoint\s+0\.1", re.IGNORECASE),
 )
 
-REQUIRED_DOCS = (
-    "docs/release-gate.md",
-    "docs/rollback-plan.md",
-    "docs/security-residual-findings.md",
-    "docs/headless-operation.md",
-    "docs/migration-guide.md",
-)
+FINAL_REPORT = "2026-08-25-prueba-real-final.md"
+REQUIRED_DOCS = ("README.md", "LICENSE.md", FINAL_REPORT)
 
 PYTEST_SUITES: tuple[tuple[str, list[str]], ...] = (
     (
@@ -304,7 +299,7 @@ def run_pytest_suite(
 
 
 def check_security_residuals(repo_root: Path = REPO_ROOT) -> GateCheck:
-    path = repo_root / "docs/security-residual-findings.md"
+    path = repo_root / FINAL_REPORT
     if not path.is_file():
         return GateCheck(
             "security_residuals",
@@ -319,13 +314,13 @@ def check_security_residuals(repo_root: Path = REPO_ROOT) -> GateCheck:
         return GateCheck(
             "security_residuals",
             False,
-            "Open P0/P1 findings in security-residual-findings.md:\n"
+            f"Open P0/P1 findings in {FINAL_REPORT}:\n"
             + "\n".join(open_rows),
         )
     return GateCheck(
         "security_residuals",
         True,
-        "No open P0/P1 rows in security-residual-findings.md",
+        f"No open P0/P1 rows in {FINAL_REPORT}",
     )
 
 
@@ -337,7 +332,7 @@ def check_required_docs(repo_root: Path = REPO_ROOT) -> GateCheck:
             False,
             "Missing docs: " + ", ".join(missing),
         )
-    return GateCheck("required_docs", True, "All required operator docs present")
+    return GateCheck("required_docs", True, "Canonical repository documents present")
 
 
 def check_documentation_freshness(repo_root: Path = REPO_ROOT) -> GateCheck:

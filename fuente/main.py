@@ -103,6 +103,46 @@ def run_headless(vault_path: Path, wait_for_shutdown=None) -> None:
         lifecycle.stop()
 
 
+def run_browser_console(
+    vault_path: Path,
+    host: str = "127.0.0.1",
+    port: int = 8765,
+    open_browser: bool = True,
+    wait_for_shutdown=None,
+) -> None:
+    """Serve the real Fuente console to Chrome over a loopback HTTP bridge."""
+    from fuente.browser_server import FuenteBrowserServer
+    from fuente.control_console import FuenteConsoleBackend
+    from fuente.ui.bridge import FuentePyWebViewApi
+
+    bundle_root = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parents[1]))
+    html_file = bundle_root / "consola_preview.html"
+    if not html_file.is_file():
+        raise FileNotFoundError(f"Fuente console not found: {html_file}")
+
+    backend = FuenteConsoleBackend(Path(vault_path).resolve())
+    lifecycle = ApplicationLifecycle(backend.config, mode="continuous")
+    server = None
+    wait = wait_for_shutdown or _wait_for_shutdown_signal
+    try:
+        lifecycle.start()
+        backend.attach_lifecycle(lifecycle)
+        server = FuenteBrowserServer(html_file.parent, FuentePyWebViewApi(backend), host, port)
+        logger.info("=== Fuente browser console: %s (Vault: %s) ===", server.url, vault_path)
+        thread = threading.Thread(target=server.serve_forever, name="fuente-browser-server", daemon=True)
+        thread.start()
+        if open_browser:
+            import webbrowser
+
+            webbrowser.open(server.url)
+        wait()
+    finally:
+        if server is not None:
+            server.shutdown()
+            server.server_close()
+        lifecycle.stop()
+
+
 def run_continuous_console(vault_path: Path | None) -> None:
     """Modo predeterminado: lanza la Consola Central de Control (posee su propio ciclo de vida)."""
     require_graphical_display()
@@ -138,6 +178,13 @@ def main():
             "nunca abre Tkinter ni PyWebView."
         ),
     )
+    parser.add_argument(
+        "--browser",
+        action="store_true",
+        help="Sirve la consola completa en Chrome mediante un bridge local.",
+    )
+    parser.add_argument("--browser-host", default="127.0.0.1", help=argparse.SUPPRESS)
+    parser.add_argument("--browser-port", type=int, default=8765, help=argparse.SUPPRESS)
     args = parser.parse_args()
 
     vault_arg = args.vault or args.vault_pos
@@ -175,6 +222,10 @@ def main():
         vault_path.mkdir(parents=True, exist_ok=True)
         # Modo headless: servicios continuos sin ninguna interfaz gráfica (Docker/CI).
         run_headless(vault_path)
+    elif args.browser:
+        vault_path = vault_path or Path.home() / "Documents" / "Fuente_Vault"
+        vault_path.mkdir(parents=True, exist_ok=True)
+        run_browser_console(vault_path, args.browser_host, args.browser_port)
     else:
         # Modo predeterminado: Lanzar la Consola Central de Control (posee el ciclo de vida de sus servicios).
         run_continuous_console(vault_path)

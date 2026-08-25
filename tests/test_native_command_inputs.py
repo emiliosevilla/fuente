@@ -4,6 +4,7 @@ import ast
 import sys
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 from fuente.control_console import FuenteConsoleBackend
@@ -15,21 +16,22 @@ REPOSITORY_ROOT = Path(__file__).resolve().parent.parent
 
 
 class TestNativeCommandInputs(unittest.TestCase):
-    def test_macos_folder_title_is_passed_as_osascript_data(self):
-        result = MagicMock(returncode=0, stdout="/tmp/chosen\n")
+    def test_macos_folder_title_is_passed_as_appkit_data(self):
+        app = MagicMock()
+        panel = MagicMock()
+        panel.runModal.return_value = 1
+        panel.URL.return_value.path.return_value = "/tmp/chosen"
+        appkit = SimpleNamespace(
+            NSApplication=SimpleNamespace(sharedApplication=lambda: app),
+            NSModalResponseOK=1,
+            NSOpenPanel=SimpleNamespace(openPanel=lambda: panel),
+        )
 
-        with patch.object(sys, "platform", "darwin"), patch(
-            "fuente.control_console.subprocess.run", return_value=result
-        ) as run:
+        with patch.object(sys, "platform", "darwin"), patch.dict("sys.modules", {"AppKit": appkit}):
             folder = FuenteConsoleBackend.select_folder(object(), MALICIOUS_INPUT)
 
         self.assertEqual(folder, "/tmp/chosen")
-        command = run.call_args.args[0]
-        self.assertIsInstance(command, list)
-        self.assertEqual(command[:2], ["osascript", "-e"])
-        self.assertEqual(command[-2:], ["--", MALICIOUS_INPUT])
-        self.assertNotIn(MALICIOUS_INPUT, "\n".join(command[:-2]))
-        self.assertNotIn("shell", run.call_args.kwargs)
+        panel.setMessage_.assert_called_once_with(MALICIOUS_INPUT)
 
     def test_macos_app_name_is_passed_as_osascript_data(self):
         with patch.object(sys, "platform", "darwin"), patch(

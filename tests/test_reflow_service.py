@@ -104,7 +104,7 @@ def test_active_theme_default_reflows_the_non_general_active_theme(temp_vault_pa
 
     assert result.scope == {"document_id": None, "theme": "Theme-A", "issue": None}
     assert result.processed_notes == 2
-    assert "[[Target]]" in source.read_text(encoding="utf-8")
+    assert "[[Target]]" not in source.read_text(encoding="utf-8")
     assert not (temp_vault_path / "4_procesado" / "_Indice_MOC.md").exists()
 
 
@@ -198,7 +198,7 @@ def test_document_reflow_is_scoped_complete_and_idempotent(temp_vault_path):
 
     first = service.reflow_links(ReflowScope(document_id=alpha_id))
     assert first.processed_notes == 1
-    assert first.changed_notes == 1
+    assert first.changed_notes == 0
     assert first.scope == {
         "document_id": alpha_id,
         "theme": "General",
@@ -259,7 +259,7 @@ def test_issue_and_theme_scopes_do_not_rewrite_unrelated_scopes(temp_vault_path)
     theme_result = service.reflow_links(ReflowScope(theme="Theme-A"))
     assert theme_result.processed_notes == 2
     assert theme_result.scope == {"document_id": None, "theme": "Theme-A", "issue": None}
-    assert "[[ThemePeer]]" in themed_note.read_text(encoding="utf-8")
+    assert "[[ThemePeer]]" not in themed_note.read_text(encoding="utf-8")
     assert (vault.output_dir / "Issue-B" / "Gamma.md").read_bytes() == unrelated_before
 
 

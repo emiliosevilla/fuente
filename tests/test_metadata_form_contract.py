@@ -205,7 +205,7 @@ def test_approve_rejects_metadata_and_keeps_editing_separate(
     backend = FuenteConsoleBackend(temp_vault_manager.config.vault_path)
     backend.vault = temp_vault_manager
     result = backend.handle_action(
-        "approve_note",
+        "approve_clean",
         {
             "document_id": document_id,
             "expected_revision": revision,
@@ -213,7 +213,7 @@ def test_approve_rejects_metadata_and_keeps_editing_separate(
         },
     )
 
-    assert result == {"error": "invalid_payload"}
+    assert result == {"error": "action_not_allowed", "message": "Acción no permitida"}
     metadata, body = parse_frontmatter(note_path.read_text(encoding="utf-8"))
     assert body == "# Aprobar\n"
     assert metadata["status"] == "pending_review"
@@ -271,7 +271,7 @@ def test_frontend_metadata_methods_are_exposed_by_bridge():
         "get_available_issues",
         "get_note_metadata",
         "update_note_metadata",
-        "approve_note",
+        "approve_clean",
     }
     assert metadata_calls <= called
     assert metadata_calls <= bridge_methods

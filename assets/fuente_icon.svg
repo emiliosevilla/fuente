@@ -1,10 +1,16 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
-  <rect width="512" height="512" rx="112" fill="#18181b"/>
-  <g fill="none" stroke="#e5e7eb" stroke-width="22" stroke-linecap="round" stroke-linejoin="round">
-    <rect x="80" y="210" width="135" height="115" rx="38"/>
-    <rect x="297" y="210" width="135" height="115" rx="38"/>
-    <path d="M 215 245 Q 256 225 297 245" stroke="#9ca3af" stroke-width="20"/>
-    <path d="M 80 230 C 130 185 170 145 200 135 C 220 128 230 145 225 170 C 220 190 215 210 210 230" stroke="#9ca3af" stroke-width="18"/>
-    <path d="M 432 230 C 460 200 485 175 500 168 C 510 162 516 175 512 192 L 506 220" stroke="#9ca3af" stroke-width="18"/>
+  <clipPath id="pond-clip">
+    <rect x="90" y="108" width="332" height="224" rx="72"/>
+  </clipPath>
+  <g transform="translate(-13.88 16.47) translate(256 256) scale(1.17) translate(-256 -256)">
+  <!-- Capas posteriores: el propio estanque se comporta como un fajo. -->
+  <rect x="96" y="134" width="368" height="260" rx="90" fill="#123348" stroke="#2aaea5" stroke-width="12"/>
+  <rect x="84" y="112" width="368" height="260" rx="90" fill="#174a62" stroke="#5eead4" stroke-width="12"/>
+  <!-- Estanque frontal, grande y centrado. -->
+  <rect x="72" y="90" width="368" height="260" rx="90" fill="#dff8f5" stroke="#2aaea5" stroke-width="12"/>
+  <g clip-path="url(#pond-clip)">
+    <path d="M118 190c46-42 92-42 138 0s92 42 138 0" fill="none" stroke="#168b99" stroke-width="18" stroke-linecap="round"/>
+    <path d="M118 250c46-42 92-42 138 0s92 42 138 0" fill="none" stroke="#2aaea5" stroke-width="18" stroke-linecap="round"/>
+  </g>
   </g>
 </svg>

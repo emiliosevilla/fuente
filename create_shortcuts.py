@@ -1,7 +1,6 @@
 """
 Script autónomo para crear los accesos directos de Fuente:
-1. "Fuente" (Icono de gafas) -> Ejecutable/Lanzador Fuente.
-2. "La Memoria de Fuente" (Icono de archivador) -> Bóveda/Vault Obsidian (./Fuente).
+1. "Fuente" (Icono de estanque) -> Ejecutable/Lanzador Fuente.
 """
 import os
 import sys
@@ -21,7 +20,7 @@ base_dir = Path(__file__).resolve().parent
 if str(base_dir) not in sys.path:
     sys.path.insert(0, str(base_dir))
 
-from fuente.core.icon_generator import ensure_app_icon, ensure_archive_icon
+from fuente.core.icon_generator import ensure_app_icon
 
 
 def prompt_folder_selection(default_desktop: Path) -> Path:
@@ -29,9 +28,8 @@ def prompt_folder_selection(default_desktop: Path) -> Path:
     print("\n=======================================================")
     print("    UBICACIÓN DE ACCESOS DIRECTOS")
     print("=======================================================")
-    print("Se crearán 2 accesos directos en la carpeta que elijas:")
+    print("Se creará 1 acceso directo en la carpeta que elijas:")
     print("  [1] 'Fuente' (Acceso directo al programa)")
-    print("  [2] 'La Memoria de Fuente' (Acceso directo a tu Vault de notas)")
     print("-------------------------------------------------------")
 
     # Intento 1: Tkinter GUI Dialog
@@ -42,7 +40,7 @@ def prompt_folder_selection(default_desktop: Path) -> Path:
         root.withdraw()
         root.attributes("-topmost", True)
         selected = filedialog.askdirectory(
-            title="Elige la carpeta donde crear los accesos directos (Fuente y La Memoria de Fuente)",
+            title="Elige la carpeta donde crear el acceso directo de Fuente",
             initialdir=str(default_desktop)
         )
         root.destroy()
@@ -59,7 +57,7 @@ def prompt_folder_selection(default_desktop: Path) -> Path:
         try:
             cmd = [
                 "osascript", "-e",
-                f'POSIX path of (choose folder with prompt "Selecciona la carpeta donde guardar los accesos directos (Fuente y La Memoria de Fuente):" default location "{default_desktop}")'
+                f'POSIX path of (choose folder with prompt "Selecciona la carpeta donde guardar el acceso directo de Fuente:" default location "{default_desktop}")'
             ]
             res = subprocess.run(cmd, capture_output=True, text=True)
             if res.returncode == 0 and res.stdout.strip():
@@ -90,7 +88,6 @@ def prompt_folder_selection(default_desktop: Path) -> Path:
 def create_shortcuts(base_dir: Path, target_dir: Optional[Path] = None, vault_dir: Optional[Path] = None) -> bool:
     assets_dir = base_dir / "assets"
     ensure_app_icon(assets_dir)
-    ensure_archive_icon(assets_dir)
 
     if vault_dir is None:
         vault_dir = base_dir / "Fuente"
@@ -135,15 +132,12 @@ def create_shortcuts(base_dir: Path, target_dir: Optional[Path] = None, vault_di
 
 
         fuente_ico = (assets_dir / "fuente_icon.ico").resolve()
-        archive_ico = (assets_dir / "archive_icon.ico").resolve()
-
         shortcut_fuente = target_dir / "Fuente.lnk"
-        shortcut_memoria = target_dir / "La Memoria de Fuente.lnk"
 
         ps_script = f"""
         $WshShell = New-Object -comObject WScript.Shell
 
-        # 1. Acceso directo Fuente (Gafas)
+        # Acceso directo único a Fuente
         $s1 = $WshShell.CreateShortcut("{shortcut_fuente}")
         $s1.TargetPath = "{target_path}"
         $s1.Arguments = '{target_args}'
@@ -152,21 +146,12 @@ def create_shortcuts(base_dir: Path, target_dir: Optional[Path] = None, vault_di
         $s1.Description = "Ejecutable Fuente"
         $s1.Save()
 
-        # 2. Acceso directo La Memoria de Fuente (Archivador)
-        $s2 = $WshShell.CreateShortcut("{shortcut_memoria}")
-        $s2.TargetPath = "explorer.exe"
-        $s2.Arguments = '"{vault_dir}"'
-        $s2.WorkingDirectory = "{vault_dir}"
-        $s2.IconLocation = "{archive_ico}"
-        $s2.Description = "Vault de Obsidian - La Memoria de Fuente"
-        $s2.Save()
         """
         try:
             cmd = ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", ps_script]
             subprocess.run(cmd, check=True)
             print(f"\n[+] Accesos directos creados exitosamente en: {target_dir}")
             print(f"    - 'Fuente' -> {shortcut_fuente}")
-            print(f"    - 'La Memoria de Fuente' -> {shortcut_memoria}")
             return True
         except Exception as e:
             print(f"[!] Error creando accesos directos en Windows: {e}")
@@ -174,7 +159,6 @@ def create_shortcuts(base_dir: Path, target_dir: Optional[Path] = None, vault_di
 
     elif is_mac:
         shortcut_fuente = target_dir / "Fuente.command"
-        shortcut_memoria = target_dir / "La Memoria de Fuente.command"
 
         script_fuente_content = f"""#!/bin/bash
 cd "{base_dir}"
@@ -193,27 +177,13 @@ else
     python3 -m fuente.main
 fi
 """
-
-        script_memoria_content = f"""#!/bin/bash
-VAULT_DIR="{vault_dir}"
-if [ -d "/Applications/Obsidian.app" ]; then
-    open -a Obsidian "$VAULT_DIR"
-else
-    open "$VAULT_DIR"
-fi
-"""
         try:
             with open(shortcut_fuente, "w", encoding="utf-8") as f:
                 f.write(script_fuente_content)
             os.chmod(shortcut_fuente, 0o755)
 
-            with open(shortcut_memoria, "w", encoding="utf-8") as f:
-                f.write(script_memoria_content)
-            os.chmod(shortcut_memoria, 0o755)
-
-            print(f"\n[+] Accesos directos ejecutables creados exitosamente en: {target_dir}")
-            print(f"    👓 'Fuente' -> {shortcut_fuente}")
-            print(f"    🗄️ 'La Memoria de Fuente' -> {shortcut_memoria}")
+            print(f"\n[+] Acceso directo ejecutable creado exitosamente en: {target_dir}")
+            print(f"    'Fuente' -> {shortcut_fuente}")
             return True
         except Exception as e:
             print(f"[!] Error creando accesos directos en macOS: {e}")

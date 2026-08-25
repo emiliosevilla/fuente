@@ -210,12 +210,12 @@ También mencionamos `Redes Neuronales en código inline`.
         )
         loop.refine_knowledge_graph()
 
-        # Verificar que se crearon los hipervínculos bidireccionales
+        # Las notas aprobadas son inmutables; el ciclo sólo actualiza el catálogo.
         updated_a = nota_a.read_text(encoding="utf-8")
         updated_b = nota_b.read_text(encoding="utf-8")
 
-        self.assertIn("[[Gestión de Conocimiento]]", updated_a)
-        self.assertIn("[[Obsidian Vault]]", updated_b)
+        self.assertNotIn("[[Gestión de Conocimiento]]", updated_a)
+        self.assertNotIn("[[Obsidian Vault]]", updated_b)
 
     def test_invalid_notes_stay_out_of_generated_moc_but_remain_in_reader_graph(self):
         valid = serialize_frontmatter({

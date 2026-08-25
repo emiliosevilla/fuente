@@ -312,8 +312,7 @@ En Windows, usa `py -3 -m venv venv` y
 Antes de desinstalar, cierra Fuente y cualquier proceso que esté usando el
 Vault. La desinstalación de la aplicación no debe borrar las notas ni el Vault.
 
-1. Elimina los accesos directos `Fuente` y `La Memoria de Fuente` del
-   Escritorio, si fueron creados.
+1. Elimina el acceso directo `Fuente` del Escritorio, si fue creado.
 2. Desde la carpeta de instalación, desinstala el paquete y elimina el
    entorno virtual:
 
@@ -356,9 +355,20 @@ fuente --headless --vault /ruta/al/Vault
 ```
 
 `consola_preview.html` no inicia Fuente ni conecta un Vault por sí sola. El
-flujo normal debe arrancarse con `fuente --vault ...`; abrir o servir el HTML
-directamente muestra un error de conexión. Solo `?preview=mock` habilita la
-vista previa de diseño con datos demo, identificados expresamente como tales.
+flujo normal puede arrancarse con `fuente --vault ...`; abrir el HTML directamente
+muestra un error de conexión. Para usar Google Chrome con un Vault real se debe
+arrancar el runtime local:
+
+```bash
+fuente --browser --vault /ruta/al/Vault
+```
+
+Ese comando sirve la misma consola por HTTP en loopback y traduce sus llamadas
+al bridge validado del backend. El servidor sólo escucha en `127.0.0.1` o `localhost`.
+`?preview=mock` sigue siendo únicamente una vista previa de diseño con datos
+demo. La prueba real del 2026-08-25 validó Chrome, la ingesta y la cola durable;
+el procesamiento con LLM quedó correctamente en espera porque la RAM medida no
+permitía ningún modelo instalado bajo la política vigente.
 
 Si no se indica Vault, la aplicación usa `~/Documents/Fuente_Vault`. En Linux,
 la consola gráfica necesita `DISPLAY` o `WAYLAND_DISPLAY`; en servidores,

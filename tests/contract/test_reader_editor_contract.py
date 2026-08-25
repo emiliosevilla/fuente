@@ -54,6 +54,7 @@ def test_preview_uses_the_safe_projection_renderer_for_all_markdown_shapes():
     assert "createElement('strong')" in SOURCE
     assert "createElement('em')" in SOURCE
     assert "setAttribute('href', href)" in SOURCE
+    assert "readerMarkdownBlock([block.text])" in SOURCE
 
 
 def test_reader_editor_calls_only_typed_bridge_methods_with_opaque_id_and_revision():

@@ -69,8 +69,8 @@ def test_check_source_tree_clean_fails_on_tracked_drift(gate_module, tmp_path):
 
 
 def test_security_residuals_rejects_open_p0(gate_module, tmp_path):
-    doc = tmp_path / "docs" / "security-residual-findings.md"
-    doc.parent.mkdir(parents=True)
+    doc = tmp_path / gate_module.FINAL_REPORT
+    doc.parent.mkdir(parents=True, exist_ok=True)
     doc.write_text(
         "| ID | Severity | Status |\n| a | P0 | open |\n",
         encoding="utf-8",
@@ -80,8 +80,8 @@ def test_security_residuals_rejects_open_p0(gate_module, tmp_path):
 
 
 def test_security_residuals_rejects_open_p1(gate_module, tmp_path):
-    doc = tmp_path / "docs" / "security-residual-findings.md"
-    doc.parent.mkdir(parents=True)
+    doc = tmp_path / gate_module.FINAL_REPORT
+    doc.parent.mkdir(parents=True, exist_ok=True)
     doc.write_text(
         "| ID | Severity | Status |\n| b | P1 | open |\n",
         encoding="utf-8",
@@ -91,8 +91,8 @@ def test_security_residuals_rejects_open_p1(gate_module, tmp_path):
 
 
 def test_security_residuals_accepts_parked_p1(gate_module, tmp_path):
-    doc = tmp_path / "docs" / "security-residual-findings.md"
-    doc.parent.mkdir(parents=True)
+    doc = tmp_path / gate_module.FINAL_REPORT
+    doc.parent.mkdir(parents=True, exist_ok=True)
     doc.write_text(
         "| ID | Severity | Status |\n| c | P1 | parked |\n",
         encoding="utf-8",
@@ -102,13 +102,23 @@ def test_security_residuals_accepts_parked_p1(gate_module, tmp_path):
 
 
 def test_security_residuals_accepts_parked_p2_only(gate_module, tmp_path):
-    doc = tmp_path / "docs" / "security-residual-findings.md"
-    doc.parent.mkdir(parents=True)
+    doc = tmp_path / gate_module.FINAL_REPORT
+    doc.parent.mkdir(parents=True, exist_ok=True)
     doc.write_text(
         "| ID | Severity | Status |\n| a | P2 | parked |\n",
         encoding="utf-8",
     )
     result = gate_module.check_security_residuals(tmp_path)
+    assert result.passed
+
+
+def test_required_docs_accepts_only_canonical_repository_documents(gate_module, tmp_path):
+    for relative_path in gate_module.REQUIRED_DOCS:
+        path = tmp_path / relative_path
+        path.write_text("ok\n", encoding="utf-8")
+
+    result = gate_module.check_required_docs(tmp_path)
+
     assert result.passed
 
 

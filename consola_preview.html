@@ -1282,6 +1282,7 @@
         }
 
         const NATIVE_REQUEST_TIMEOUT_MS = 4000;
+        const NATIVE_INITIAL_STATE_TIMEOUT_MS = 30000;
         let nativeBackendErrorLogged = false;
 
         function isExplicitPreviewMode() {
@@ -1311,13 +1312,14 @@
             }
         }
 
-        function callNativeRequest(methodName, invoke) {
+        function callNativeRequest(methodName, invoke, timeoutMs) {
+            const requestTimeoutMs = timeoutMs || NATIVE_REQUEST_TIMEOUT_MS;
             const startedAt = Date.now();
             const methodReady = new Promise(function(resolve, reject) {
                 function checkMethod() {
                     const api = window.pywebview && window.pywebview.api;
                     if (!api || typeof api[methodName] !== 'function') {
-                        if (Date.now() - startedAt >= NATIVE_REQUEST_TIMEOUT_MS) {
+                        if (Date.now() - startedAt >= requestTimeoutMs) {
                             reject(new Error(nativeBackendUnavailableMessage()));
                             return;
                         }
@@ -1335,7 +1337,7 @@
                 const timeout = new Promise(function(_resolve, reject) {
                     timeoutId = setTimeout(function() {
                         reject(new Error('El backend de Fuente no respondió a ' + methodName + '.'));
-                    }, NATIVE_REQUEST_TIMEOUT_MS);
+                    }, requestTimeoutMs);
                 });
                 return Promise.race([response, timeout]).then(function(result) {
                     clearTimeout(timeoutId);
@@ -1442,6 +1444,76 @@
                 : String(value);
         }
 
+        const QUEUE_STAGE_LABELS = {
+            discovered: 'Detectado', stabilized: 'Preparado', copied_dirty: 'Copiado',
+            extracted: 'Texto extraído', saved_clean: 'Listo para revisar',
+            indexed_chunks: 'Contenido organizado', generated_candidate: 'Nota creada',
+            validated_candidate: 'Nota comprobada', saved_note: 'Nota guardada',
+            indexed_note: 'Nota enlazada', completed: 'Terminado', failed: 'Con error',
+            quarantined: 'En cuarentena', cancelled: 'Cancelado', skipped: 'Omitido'
+        };
+        const QUEUE_STATUS_LABELS = {
+            pending: 'Pendiente', claimed: 'En curso', completed: 'Terminado',
+            failed: 'Con error', quarantined: 'En cuarentena',
+            cancelled: 'Cancelado', skipped: 'Omitido'
+        };
+
+        function queueStageLabel(value) {
+            return QUEUE_STAGE_LABELS[value] || 'Paso registrado';
+        }
+
+        function queueStatusLabel(value) {
+            return QUEUE_STATUS_LABELS[value] || 'Estado registrado';
+        }
+
+        function queueReasonLabel(value) {
+            const reason = queueValue(value, '');
+            if (!reason) return 'Sin incidencias.';
+            if (reason.startsWith('Awaiting exact human approval')) {
+                return 'Esperando que revises y apruebes la nota preparada.';
+            }
+            if (reason.startsWith('Permanent processing failure')) {
+                return 'No se pudo procesar; el archivo quedó en cuarentena.';
+            }
+            if (reason.startsWith('Transient network/I/O error')) {
+                return 'Falló la lectura o conexión; el archivo quedó en cuarentena.';
+            }
+            if (reason.startsWith('Corrupt or unsupported media')) {
+                return 'El archivo está dañado o su formato no es compatible.';
+            }
+            if (reason.startsWith('Model output failed validation')) {
+                return 'La nota generada no pasó la comprobación; se conservó el archivo original.';
+            }
+            if (reason.includes('original source preserved for another try')) {
+                return 'Hubo un problema temporal; se conservó el archivo original para otro intento.';
+            }
+            if (reason.startsWith('Processing failed after')) {
+                return 'No se pudo procesar después de varios intentos.';
+            }
+            if (reason.startsWith('llm_unavailable_under_policy;')) {
+                return reason.split(';', 2).slice(1).join(';').trim();
+            }
+            if (reason.startsWith('queue_limit=')) return 'Está esperando su turno.';
+            if (reason.startsWith('concurrency_limit=')) return 'Está esperando recursos del equipo.';
+            if (reason.startsWith('document_lock held')) return 'Otra tarea está usando esta nota.';
+            if (reason === 'eco_strict_vector_index_disabled') {
+                return 'El modo ligero mantiene la búsqueda básica sin crear el índice avanzado.';
+            }
+            if (/[a-z_]+=|\b(failed|error|invalid|source|model|processing|retry|unsupported|status)\b/i.test(reason)) {
+                return 'Fuente registró una incidencia; consulta el historial técnico si necesitas investigarla.';
+            }
+            return reason;
+        }
+
+        function queueTimestampLabel(value) {
+            const date = new Date(value);
+            return Number.isNaN(date.getTime()) ? queueValue(value, '—') : date.toLocaleString('es-ES');
+        }
+
+        function queueReference(value) {
+            return queueValue(value, 'sin referencia').slice(0, 8);
+        }
+
         function appendQueueField(parent, label, value, className) {
             const field = document.createElement('div');
             if (className) field.classList.add(className);
@@ -1498,23 +1570,22 @@
             }
             const job = detail.job || {};
             const heading = document.createElement('h3');
-            heading.textContent = 'Detalle del trabajo ' + queueValue(job.job_id, 'sin ID');
+            heading.textContent = 'Detalle ' + queueReference(job.job_id);
             panel.appendChild(heading);
-            appendQueueField(panel, 'Etapa', job.stage);
-            appendQueueField(panel, 'Estado', job.status);
-            appendQueueField(panel, 'Razón durable', detail.reason || job.cancel_reason || job.error_message);
-                appendQueueField(panel, 'Versión', job.revision);
+            appendQueueField(panel, 'Paso', queueStageLabel(job.stage));
+            appendQueueField(panel, 'Estado', queueStatusLabel(job.status));
+            appendQueueField(panel, 'Motivo', queueReasonLabel(detail.reason || job.cancel_reason || job.error_message));
             const eventsHeading = document.createElement('h4');
-            eventsHeading.textContent = 'Eventos durables';
+            eventsHeading.textContent = 'Historial';
             panel.appendChild(eventsHeading);
             const events = document.createElement('ul');
             (Array.isArray(detail.events) ? detail.events : []).forEach(function(event) {
                 const item = document.createElement('li');
                 item.textContent = [
-                    queueValue(event.created_at, 'sin fecha'),
-                    queueValue(event.stage, 'sin etapa'),
-                    queueValue(event.status, 'sin estado'),
-                    queueValue(event.error_message || event.error_code, '')
+                    queueTimestampLabel(event.created_at),
+                    queueStageLabel(event.stage),
+                    queueStatusLabel(event.status),
+                    queueReasonLabel(event.error_message || event.error_code)
                 ].filter(Boolean).join(' · ');
                 events.appendChild(item);
             });
@@ -1630,19 +1701,18 @@
             items.forEach(function(job) {
                 const row = document.createElement('article');
                 row.classList.add('graph-section');
-                appendQueueField(row, 'Trabajo', job.job_id);
+                appendQueueField(row, 'Referencia', queueReference(job.job_id));
                 appendQueueField(row, 'Entrada', job.source_relative_path);
-                appendQueueField(row, 'Etapa', job.stage);
-                appendQueueField(row, 'Estado', job.status);
-                appendQueueField(row, 'Razón durable', job.reason || job.cancel_reason || job.error_message);
-                appendQueueField(row, 'Actualizado', job.updated_at);
-                appendQueueField(row, 'Versión', job.revision);
+                appendQueueField(row, 'Paso', queueStageLabel(job.stage));
+                appendQueueField(row, 'Estado', queueStatusLabel(job.status));
+                appendQueueField(row, 'Motivo', queueReasonLabel(job.reason || job.cancel_reason || job.error_message));
+                appendQueueField(row, 'Último cambio', queueTimestampLabel(job.updated_at));
 
                 const actions = document.createElement('div');
                 const detailButton = document.createElement('button');
                 detailButton.type = 'button';
                 detailButton.className = 'btn-small';
-                detailButton.textContent = 'Ver eventos';
+                detailButton.textContent = 'Ver historial';
                 detailButton.addEventListener('click', function() {
                     loadJobDetail(job.job_id);
                 });
@@ -1672,7 +1742,7 @@
                 list.appendChild(row);
             });
             queueNextCursor = page.next_cursor || null;
-            queueStatus(items.length + ' trabajo(s) medido(s).');
+            queueStatus(items.length === 1 ? '1 trabajo encontrado.' : items.length + ' trabajos encontrados.');
             updateQueuePagination();
         }
 
@@ -2127,6 +2197,7 @@
             updateStepBadge('badge-step5');
             bindApprovalDiagnosticPanel();
             openModal('modal-approval');
+            loadApprovalInbox();
         }
 
         function setTextMessage(container, text, className) {
@@ -5911,7 +5982,7 @@
                     recoverNativeModalLoads();
                     callNativeRequest('get_initial_state', function() {
                         return window.pywebview.api.get_initial_state();
-                    }).then(function(state) {
+                    }, NATIVE_INITIAL_STATE_TIMEOUT_MS).then(function(state) {
                         updateDashboardStats(state.stats);
                         if (state.vault_path) {
                             document.getElementById('setting-vault-path').value = state.vault_path;

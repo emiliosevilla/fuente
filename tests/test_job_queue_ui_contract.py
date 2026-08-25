@@ -66,6 +66,23 @@ def test_queue_rows_use_safe_dom_sinks_and_resume_is_action_gated():
     assert re.search(r"if\s*\(\s*isResumeAvailable\(job\)\s*\)", renderer)
 
 
+def test_queue_translates_internal_states_for_people():
+    source = _console_source()
+    renderer = _function_source(source, "renderJobQueue", "loadJobQueue")
+
+    assert "queueStageLabel(job.stage)" in renderer
+    assert "queueStatusLabel(job.status)" in renderer
+    assert "queueReasonLabel(" in renderer
+    assert "queueReference(job.job_id)" in renderer
+    assert "'Razón durable'" not in renderer
+    assert "'Ver historial'" in renderer
+
+    reasons = _function_source(source, "queueReasonLabel", "queueTimestampLabel")
+    assert "Model output failed validation" in reasons
+    assert "queue_limit=" in reasons
+    assert "Fuente registró una incidencia" in reasons
+
+
 def test_low_ram_confirmation_requires_explicit_readiness_projection():
     source = _console_source()
     resume = _function_source(source, "resumeQueueJob", "renderJobQueue")

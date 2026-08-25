@@ -4,11 +4,38 @@ from __future__ import annotations
 import asyncio
 import inspect
 import json
+import re
 from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence
 
 from fuente.infrastructure.atomic_files import atomic_write_json
 from fuente.rag.backend import IndexBuildResult, IndexRecord, RetrievalHit
+
+
+_MINIRAG_RECORD_KIND = re.compile(
+    r'(\(\s*)[\"\u201c\u201d]?(entity|relationship)[\"\u201c\u201d]?(\s*<\|>)',
+    re.IGNORECASE,
+)
+_MINIRAG_RELATIONSHIP = re.compile(
+    r'(\(\"relationship\"<\|>(?:(?!##|<\|COMPLETE\|>).)*?)\)'
+    r'(?=\s*(?:##|<\|COMPLETE\|>|$))',
+    re.DOTALL,
+)
+
+
+def _normalize_minirag_record_kinds(response: str) -> str:
+    normalized = _MINIRAG_RECORD_KIND.sub(
+        lambda match: f'{match.group(1)}\"{match.group(2).lower()}\"{match.group(3)}',
+        response,
+    )
+    return _MINIRAG_RELATIONSHIP.sub(
+        lambda match: (
+            f'{match.group(1)}<|>\"related\"<|>1)'
+            if match.group(1).count("<|>") == 3
+            else match.group(0)
+        ),
+        normalized,
+    )
 
 
 class MiniRAGStore:
@@ -65,6 +92,8 @@ class MiniRAGStore:
             working_dir=str(self.root),
             embedding_func=embedding_func,
             llm_model_func=llm_model_func,
+            entity_extract_max_gleaning=0,
+            llm_model_max_async=1,
         )
         return self._client
 
@@ -86,21 +115,31 @@ class MiniRAGStore:
         selected_model = self.model
         if not selected_model:
             selected_model = RAMGovernor(ollama_url=self.ollama_url).recommend_model()
-        selected_model = selected_model or "qwen2.5:1.5b"
-        provider = OllamaChatProvider(self.ollama_url, timeout=120.0)
+        if not selected_model:
+            raise RuntimeError("No local model fits the current RAM budget; use BM25 fallback")
+        provider = OllamaChatProvider(self.ollama_url, timeout=180.0)
 
-        async def generate(prompt: str, history_messages: list[dict[str, str]] | None = None) -> str:
+        async def generate(
+            prompt: str,
+            system_prompt: str | None = None,
+            history_messages: list[dict[str, str]] | None = None,
+            **_kwargs: Any,
+        ) -> str:
             history = "\n".join(
                 f"{item.get('role', 'user')}: {item.get('content', '')}"
                 for item in (history_messages or [])
             )
             full_prompt = f"{history}\n{prompt}" if history else prompt
-            return await asyncio.to_thread(
+            response = await asyncio.to_thread(
                 provider.generate,
                 model=selected_model,
-                system="Eres el extractor local de entidades de Fuente. Devuelve sólo el formato solicitado.",
+                system=system_prompt
+                or "Eres el extractor local de entidades de Fuente. Devuelve sólo el formato solicitado.",
                 prompt=full_prompt,
+                options={"temperature": 0, "seed": 42, "num_predict": 768},
+                think=False,
             )
+            return _normalize_minirag_record_kinds(response)
 
         return generate
 

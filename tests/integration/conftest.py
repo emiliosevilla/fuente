@@ -18,6 +18,8 @@ from fuente.domain.frontmatter import parse_frontmatter, serialize_frontmatter
 from fuente.extractors.registry import ExtractorRegistry
 from fuente.graph_engine.linker import GraphLinker
 from fuente.infrastructure.sqlite_store import JobStore
+from fuente.rag.chroma_store import ChromaRetrievalBackend
+from fuente.rag.router import RetrievalRouter
 from fuente.rag.semantic_chunker import SemanticChunker
 
 SOURCE_NAME = "informe_trimestral.txt"
@@ -63,6 +65,26 @@ class FakeChroma:
 
     def chunk_ids(self) -> set[str]:
         return set(self.vectors)
+
+
+class MissingMiniRAG:
+    name = "minirag"
+
+    def rebuild(self, _records):
+        raise RuntimeError("MiniRAG is not installed; use BM25 fallback")
+
+    def search(self, _query, _limit):
+        raise RuntimeError("MiniRAG is not installed; use BM25 fallback")
+
+    def delete(self, _document_ids):
+        raise RuntimeError("MiniRAG is not installed; use BM25 fallback")
+
+
+def offline_router(chroma: FakeChroma) -> RetrievalRouter:
+    return RetrievalRouter(
+        primary=MissingMiniRAG(),
+        refinement=ChromaRetrievalBackend(chroma),
+    )
 
 
 class CrashAfterIndexingChroma(FakeChroma):
@@ -220,6 +242,7 @@ def build_harness(
         linker=GraphLinker(vault.output_dir),
         ram_governor=FakeGovernor(),
         stabilize=lambda path: path.is_file() and path.stat().st_size > 0,
+        router=offline_router(chroma),
     )
 
     source_path = vault.input_dir / SOURCE_NAME
@@ -254,6 +277,7 @@ def reopen_harness(
         linker=GraphLinker(harness.vault.output_dir),
         ram_governor=FakeGovernor(),
         stabilize=lambda path: path.is_file() and path.stat().st_size > 0,
+        router=offline_router(harness.chroma),
     )
     return PipelineHarness(
         service=service,
@@ -280,6 +304,7 @@ def attach_service(vault_path: Path, store: JobStore, harness: PipelineHarness) 
         linker=GraphLinker(harness.vault.output_dir),
         ram_governor=FakeGovernor(),
         stabilize=lambda path: path.is_file() and path.stat().st_size > 0,
+        router=offline_router(harness.chroma),
     )
 
 

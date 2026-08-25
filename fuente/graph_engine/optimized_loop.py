@@ -233,21 +233,9 @@ class OptimizadoGraphLoop:
                         else should_rewrite_issue
                     )
                     if should_rewrite:
-                        updated_content = self.linker.auto_link_content(
-                            content,
-                            note.stem,
-                            current_relative_path=note.relative_path,
-                            note_catalog=all_notes,
-                        )
-                        if updated_content != content:
-                            atomic_write_text(note_path, updated_content)
-                            content = updated_content
-                            changed_notes_count += 1
-                            changed_markdown_count += 1
-                            logger.info(
-                                "Bucle Optimizado: Enlaces actualizados en '%s'",
-                                note.relative_path,
-                            )
+                        # ponytail: processed notes are immutable here; explicit
+                        # editor/reflow actions own body changes and re-approval.
+                        # The automatic loop still rebuilds the MOC below.
                         processed_notes_count += 1
                         rewritten_paths.append(note_path)
 

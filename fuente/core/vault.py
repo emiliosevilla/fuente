@@ -358,6 +358,18 @@ class VaultManager:
             clean_filename = f"{safe_stem}_{ext_clean}.md"
             clean_path = self.clean_dir / clean_filename
 
+        stable_metadata = dict(metadata)
+        attempts = stable_metadata.get("extraction_attempts")
+        if isinstance(attempts, list):
+            # Audit timing belongs in SQLite; it must not change the canonical
+            # Markdown hash when the same source is retried.
+            stable_metadata["extraction_attempts"] = [
+                {key: value for key, value in attempt.items() if key != "duration_ms"}
+                if isinstance(attempt, dict)
+                else attempt
+                for attempt in attempts
+            ]
+
         document_metadata = {
             "title": safe_stem,
             "date": "",
@@ -366,7 +378,7 @@ class VaultManager:
             "issue": DEFAULT_ISSUE,
             "status": "pending_review",
             "history": [],
-            **metadata,
+            **stable_metadata,
         }
         document_metadata = enrich_extraction_metadata(document_metadata, content)
         # `3_capturado` is the canonical record.  It needs a stable v3 identity

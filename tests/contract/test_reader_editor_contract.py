@@ -36,6 +36,12 @@ def test_mount_replaces_normal_reader_surface_with_one_editor_surface():
     assert 'id="reader-editor-panel"' in SOURCE
 
 
+def test_reader_editor_is_destroyed_before_its_dom_is_replaced():
+    assert "function disposeReaderEditor()" in SOURCE
+    assert "readerEditorInstance.destroy()" in _function_body("disposeReaderEditor")
+    assert "disposeReaderEditor();" in _function_body("renderNoteDocument")
+
+
 def test_preview_uses_the_safe_projection_renderer_for_all_markdown_shapes():
     assert "readerMarkdownToProjection" in SOURCE
     assert "readerProjectionToDocumentModel" in SOURCE

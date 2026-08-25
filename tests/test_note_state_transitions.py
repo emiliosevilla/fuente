@@ -214,7 +214,7 @@ def test_inbox_lists_pending_canonical_clean_note(temp_vault_manager):
     backend = FuenteConsoleBackend(temp_vault_manager.config.vault_path)
     backend.vault = temp_vault_manager
     note_path = temp_vault_manager.clean_dir / "Aptis.md"
-    relative_path = "3_limpio/Aptis.md"
+    relative_path = "3_capturado/Aptis.md"
     document_id = document_id_for_relative_path(relative_path)
     markdown = serialize_frontmatter(
         {

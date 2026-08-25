@@ -325,24 +325,16 @@
     <div class="modal-overlay" id="meetily-modal" role="dialog" aria-modal="true" aria-labelledby="meetily-modal-title" aria-hidden="true">
         <div class="modal-container meeting-modal-container">
             <div class="modal-header">
-                <div class="modal-title" id="meetily-modal-title">REUNIÓN — CAPTURA LOCAL</div>
+                <div class="modal-title" id="meetily-modal-title">REUNIÓN — MEETILY LOCAL</div>
                 <button class="close-btn" data-onclick-command="closeMeetilyModal()" aria-label="Cerrar captura de reunión">&times;</button>
             </div>
             <div class="modal-body meeting-modal-body">
-                <p>La grabación y sus artefactos se guardan localmente en las carpetas de reunión del tema activo.</p>
-                <label for="meetily-title">Título de la reunión</label>
-                <input id="meetily-title" type="text" required>
-                <label for="meetily-requested-by">Identificador del autor</label>
-                <input id="meetily-requested-by" type="text" required>
-                <label><input id="meetily-recording-consent" type="checkbox"> Consiento la grabación de esta reunión.</label>
+                <p>Fuente abre la aplicación oficial de Meetily, que gestiona el micrófono, el consentimiento y la grabación.</p>
+                <p class="workspace-help">Cuando termines en Meetily, vincula su carpeta de grabaciones desde Ajustes y pulsa «Actualizar entradas» para incorporarla al Vault.</p>
                 <div class="meeting-modal-actions">
-                    <button type="button" class="btn-primary" id="meetily-start-recording" disabled aria-pressed="false" data-onclick-command="startMeetilyRecording()">Iniciar grabación</button>
-                    <button type="button" class="btn-small" id="meetily-stop-recording" disabled data-onclick-command="stopMeetilyRecording()">Detener</button>
-                    <button type="button" class="btn-small" id="meetily-recover-recording" data-onclick-command="recoverMeetilyRecording()">Recuperar</button>
+                    <button type="button" class="btn-primary" data-onclick-command="openMeetilyApplication()">Abrir Meetily</button>
                 </div>
-                <p id="meetily-status" role="status" aria-live="polite">La captura está detenida.</p>
-                <p id="meetily-artifacts" class="workspace-help"></p>
-                <button type="button" class="btn-small is-hidden" id="meetily-open-transcript" data-onclick-command="openMeetilyTranscript()">Abrir transcripción</button>
+                <p id="meetily-status" role="status" aria-live="polite">Meetily está listo para abrirse.</p>
             </div>
         </div>
     </div>
@@ -396,6 +388,7 @@
                 <div class="console-layout-017">
                     <label class="console-text-006">Título del Tema:</label>
                     <input type="text" id="input-new-theme-name" placeholder="Ej: Derecho Civil, Historia Romana, Física Cuántica..." data-onkeydown-command="if(event.key==='Enter') submitCreateThemeModal()" / class="console-layout-018">
+                    <p id="new-theme-status" class="console-text-017" role="alert" aria-live="assertive"></p>
                 </div>
             </div>
             <div class="modal-footer console-layout-019">
@@ -489,7 +482,7 @@
     <div class="modal-overlay" id="modal-stat-input">
         <div class="modal-container console-layout-027">
             <div class="modal-header">
-                <div class="modal-title console-text-003">ARCHIVOS POR PROCESAR (1_ENTRADA)</div>
+                <div class="modal-title console-text-003">ARCHIVOS POR PROCESAR (1_VOLCADO)</div>
                 <button class="close-btn" data-onclick-command="closeModal('modal-stat-input')">&times;</button>
             </div>
             <div class="modal-body">
@@ -565,7 +558,6 @@
                 <div class="console-layout-032">
                     <button class="btn-small tab-btn console-text-015" id="tab-btn-routes" data-onclick-command="switchSettingsTab('routes')">Memoria & Conexiones</button>
                     <button class="btn-small tab-btn" id="tab-btn-server" data-onclick-command="switchSettingsTab('server')">Servidor & IA</button>
-                    <button class="btn-small tab-btn" id="tab-btn-template" data-onclick-command="switchSettingsTab('template')">Plantilla Nota</button>
                 </div>
                 <div id="settings-load-status" class="console-text-017" role="status" aria-live="polite"></div>
                 <div id="setup-vault-panel" class="console-layout-039" hidden>
@@ -633,6 +625,7 @@
                             <option value="10%">10%</option>
                             <option value="20%" selected>20%</option>
                             <option value="30%">30%</option>
+                            <option value="35%">35%</option>
                             <option value="40%">40%</option>
                             <option value="50%">50%</option>
                         </select>
@@ -663,30 +656,16 @@
                             <option value="skip">Omitir audio</option>
                             <option value="tiny_cpu">Tiny local CPU</option>
                         </select>
-                        <label for="setting-whisper-model-path">Ruta local Whisper (Tiny CPU)</label>
-                        <input id="setting-whisper-model-path" type="text" autocomplete="off" placeholder="Ruta local opcional">
+                        <label for="setting-whisper-model-path">Ruta local Whisper (Tiny CPU, obligatoria)</label>
+                        <div class="console-layout-035">
+                            <input id="setting-whisper-model-path" type="text" class="console-layout-036" autocomplete="off" placeholder="Selecciona una carpeta o archivo de modelo local">
+                            <button type="button" class="btn-secondary console-layout-037" data-onclick-command="browseWhisperModelFolder()">Explorar...</button>
+                        </div>
+                        <span class="console-text-017">Tiny local CPU sólo se puede guardar cuando la ruta apunta a un modelo Whisper local ya descargado.</span>
                         <span id="eco-policy-summary">Esperando la primera medición de salud.</span>
                     </fieldset>
                 </div>
 
-                <!-- PESTAÑA 3: PLANTILLA NOTA -->
-                <div class="tab-panel console-layout-043" id="tab-panel-template">
-                    <div>
-                        <label class="console-layout-034">Encabezado Metadatos YAML:</label>
-                        <select id="setting-yaml-header" class="console-layout-044">
-                            <option value="standard">Standard Fuente (Completo con Tags e Interenlaces)</option>
-                            <option value="strict">Obsidian Strict (Estándar Obsidian Core)</option>
-                            <option value="minimal">Minimalista (Sólo Titular y Fecha)</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label class="console-layout-034">Índice MOC Global:</label>
-                        <select id="setting-auto-moc" class="console-layout-044">
-                            <option value="enabled">Generación Automática Activada (Recomendado)</option>
-                            <option value="disabled">Generación Manual Únicamente</option>
-                        </select>
-                    </div>
-                </div>
             </div>
             <div class="modal-footer">
                 <button class="btn-secondary console-text-018" data-onclick-command="resetDefaultSettings()">Restaurar por Defecto</button>
@@ -735,6 +714,11 @@
                         <input type="text" id="metadata-title" autocomplete="off">
                         <span class="metadata-field-error" id="metadata-error-title"></span>
                     </div>
+                    <div class="metadata-field is-hidden" id="approval-reviewer-field">
+                        <label for="approval-reviewer">Revisado por</label>
+                        <input type="text" id="approval-reviewer" autocomplete="name" maxlength="80" placeholder="Nombre del revisor">
+                        <span class="metadata-field-error" id="approval-reviewer-error"></span>
+                    </div>
                     <div class="metadata-field is-hidden" id="metadata-field-tags">
                         <label for="metadata-tags">Etiquetas (separadas por comas)</label>
                         <input type="text" id="metadata-tags" autocomplete="off" placeholder="etiqueta1, etiqueta2">
@@ -763,11 +747,6 @@
                             <option value="archived">Archivada</option>
                         </select>
                         <span class="metadata-field-error" id="metadata-error-status"></span>
-                    </div>
-                    <div class="metadata-field is-hidden" id="approval-reviewer-field">
-                        <label for="approval-reviewer">Revisado por</label>
-                        <input type="text" id="approval-reviewer" autocomplete="name" maxlength="80" placeholder="Nombre del revisor">
-                        <span class="metadata-field-error" id="approval-reviewer-error"></span>
                     </div>
                     <details class="metadata-diagnostic is-hidden" id="metadata-diagnostic-panel">
                         <summary class="console-text-023">Vista diagnóstica — frontmatter YAML (solo lectura)</summary>
@@ -898,7 +877,7 @@
                         <li><b>Aprobación:</b> Revisa las notas generadas diferenciando entre notas pendientes de revisión y notas aprobadas.</li>
                         <li><b>Edición Guiada:</b> Modifica cómodamente el título, etiquetas, resumen ejecutivo y contenido de tus notas.</li>
                         <li><b>Fusión de Notas:</b> Combina varias notas seleccionadas en una sola sin perder orígenes ni referencias.</li>
-                        <li><b>Papelera de Cuarentena:</b> Al eliminar una nota, esta se traslada a la carpeta de seguridad de Cuarentena, pudiendo <b>Restaurarla en 1 clic</b> cuando lo desees.</li>
+                        <li><b>Papelera de Cuarentena:</b> Los archivos aislados en cuarentena pueden <b>restaurarse en 1 clic</b>. Las salidas inválidas quedan en <b>Revisión manual</b> y no se reintroducen automáticamente.</li>
                     </ul>
                 </div>
 
@@ -934,6 +913,7 @@
             if (command.startsWith('closeModal(')) return closeModal(args[0]);
             if (command.startsWith('switchReaderView(')) return switchReaderView(args[0]);
             if (command.startsWith('switchSettingsTab(')) return switchSettingsTab(args[0]);
+            if (command.startsWith('switchWorkspaceTab(')) return switchWorkspaceTab(args[0]);
             if (command.startsWith('executeExportFormat(')) return executeExportFormat(args[0]);
             if (command.startsWith('changeActiveTheme(')) return changeActiveTheme(element.value);
             if (command === 'handleThemeTriggerKeydown(event)') return handleThemeTriggerKeydown(event);
@@ -951,6 +931,7 @@
                 'clearChatHistory()': clearChatHistory,
                 'sendChatMessage()': sendChatMessage,
                 'browseVaultFolder()': browseVaultFolder,
+                'browseWhisperModelFolder()': browseWhisperModelFolder,
                 'addLinkedInputFolder()': addLinkedInputFolder,
                 'addLinkedOutputFolder()': addLinkedOutputFolder,
                 'syncAllInputs()': syncAllInputs,
@@ -964,6 +945,13 @@
                 'approveSelectedNote()': approveSelectedNote,
                 'approveAndExportSelectedNote()': approveAndExportSelectedNote,
                 'retryFailedApprovalExport()': retryFailedApprovalExport,
+                'openMeetilyModal()': openMeetilyModal,
+                'closeMeetilyModal()': closeMeetilyModal,
+                'openMeetilyApplication()': openMeetilyApplication,
+                'startMeetilyRecording()': startMeetilyRecording,
+                'stopMeetilyRecording()': stopMeetilyRecording,
+                'recoverMeetilyRecording()': recoverMeetilyRecording,
+                'openMeetilyTranscript()': openMeetilyTranscript,
                 'loadJobQueue()': loadJobQueue,
                 'refreshJobQueue()': refreshJobQueue,
                 'loadNextJobPage()': loadNextJobPage,
@@ -979,13 +967,13 @@
             if (handlers[command]) handlers[command]();
         }
 
-        ['click', 'change', 'input', 'keydown', 'keypress'].forEach(function(eventName) {
-            document.querySelectorAll(`[data-on${eventName}-command]`).forEach(function(element) {
-                element.addEventListener(eventName, function(event) {
-                    runStaticCommand(element.dataset[`on${eventName}Command`], element, event);
-                });
-            });
-        });
+['click', 'change', 'input', 'keydown', 'keypress'].forEach(function(eventName) {
+    document.addEventListener(eventName, function(event) {
+        const element = event.target.closest(`[data-on${eventName}-command]`);
+        if (!element) return;
+        runStaticCommand(element.dataset[`on${eventName}Command`], element, event);
+    });
+});
 
         function log(msg) {
             const consoleEl = document.getElementById('log-console');
@@ -1269,6 +1257,7 @@
             if (id === 'modal-reader') { loadReaderNotes(); }
             if (id === 'modal-settings') { loadSettingsData(); }
             if (id === 'modal-stat-input') { loadStatInputData(); }
+            if (id === 'modal-category') { loadCategoryData('4_procesado'); }
             if (id === 'modal-stat-notes') { loadStatNotesData(); }
             if (id === 'modal-stat-ram') { loadStatRamData(); }
             if (id === 'modal-approval') { loadApprovalInbox(); }
@@ -1411,6 +1400,7 @@
                 events.appendChild(empty);
             }
             panel.appendChild(events);
+            panel.scrollIntoView({block: 'nearest'});
         }
 
         function loadJobDetail(jobId) {
@@ -1492,6 +1482,13 @@
         function renderJobQueue(page) {
             const list = document.getElementById('job-queue-list');
             if (!list) return;
+            const detail = document.getElementById('job-queue-detail');
+            if (detail) {
+                detail.replaceChildren();
+                detail.classList.add('is-hidden');
+            }
+            const body = list.closest('.modal-body');
+            if (body) body.scrollTop = 0;
             list.replaceChildren();
             if (!page || page.error) {
                 const error = document.createElement('p');
@@ -1751,9 +1748,10 @@
             const reviewerInput = document.getElementById('approval-reviewer');
             const reviewerError = document.getElementById('approval-reviewer-error');
             const isClean = approvalSelectedScope === 'clean';
-            if (reviewerField) reviewerField.classList.toggle('is-hidden', !isClean);
-            if (reviewerField) reviewerField.classList.toggle('is-visible', isClean);
-            if (reviewerInput && !isClean) reviewerInput.value = '';
+            const requiresReviewer = isClean || approvalSelectedScope === 'output';
+            if (reviewerField) reviewerField.classList.toggle('is-hidden', !requiresReviewer);
+            if (reviewerField) reviewerField.classList.toggle('is-visible', requiresReviewer);
+            if (reviewerInput && !requiresReviewer) reviewerInput.value = '';
             if (reviewerError) reviewerError.textContent = '';
             const exportButton = document.getElementById('btn-approve-export');
             if (exportButton) exportButton.disabled = !approvalSelectedNoteId || approvalSelectedScope !== 'output' || approvalMetadataDirty;
@@ -1807,8 +1805,9 @@
                 issue: document.getElementById('metadata-issue').value,
                 date: document.getElementById('metadata-date').value,
                 origins: approvalSelectedOrigins.slice(),
-                status: document.getElementById('metadata-status').value,
             };
+            const status = document.getElementById('metadata-status').value;
+            if (status) metadata.status = status;
             if (approvalSelectedOriginKind) metadata.origin_kind = approvalSelectedOriginKind;
             if (approvalLegacyOriginIds.length) metadata.legacy_origin_ids = approvalLegacyOriginIds.slice();
             return metadata;
@@ -2060,8 +2059,12 @@
                     item.type = 'button';
                     item.className = 'approval-pending-item';
                     item.textContent = note.title || note.filename || note.document_id;
+                    const scope = note.approval_scope || (
+                        String(note.path || '').startsWith('4_procesado/') ? 'output' : 'clean'
+                    );
+                    item.dataset.approvalScope = scope;
                     item.addEventListener('click', function() {
-                        selectApprovalNote(note.document_id, note.revision, item, note.approval_scope);
+                        selectApprovalNote(note.document_id, note.revision, item, scope);
                     });
                     listEl.appendChild(item);
                 });
@@ -2077,7 +2080,7 @@
             approvalMetadataDirty = false;
             approvalSelectedNoteId = documentId;
             approvalSelectedRevision = revision;
-            setApprovalScope(approvalScope);
+            setApprovalScope(approvalScope || (itemEl && itemEl.dataset.approvalScope));
             document.querySelectorAll('.approval-pending-item').forEach(function(el) {
                 el.classList.remove('active');
             });
@@ -2141,23 +2144,29 @@
             }
             document.getElementById('approval-form-status').textContent = 'Aprobando...';
             let approvalRequest;
+            const requiresReviewer = approvalSelectedScope === 'clean' || approvalSelectedScope === 'output';
+            const reviewer = requiresReviewer ? document.getElementById('approval-reviewer').value.trim() : '';
+            if (requiresReviewer && !reviewer) {
+                document.getElementById('approval-reviewer-error').textContent = 'Indica quién aprueba esta revisión.';
+                document.getElementById('approval-form-status').textContent = 'Falta el revisor';
+                return;
+            }
             if (approvalSelectedScope === 'clean') {
-                const reviewer = document.getElementById('approval-reviewer').value.trim();
-                if (!reviewer) {
-                    document.getElementById('approval-reviewer-error').textContent = 'Indica quién aprueba esta revisión.';
-                    document.getElementById('approval-form-status').textContent = 'Falta el revisor';
-                    return;
-                }
                 approvalRequest = window.pywebview.api.approve_clean(
                     approvalSelectedNoteId,
                     approvalSelectedRevision,
                     reviewer
                 );
-            } else {
-                approvalRequest = window.pywebview.api.approve_note(
+            } else if (approvalSelectedScope === 'output') {
+                approvalRequest = window.pywebview.api.approve_processed_output(
                     approvalSelectedNoteId,
-                    approvalSelectedRevision
+                    approvalSelectedRevision,
+                    reviewer
                 );
+            } else {
+                document.getElementById('approval-form-status').textContent =
+                    'No se puede aprobar: no se pudo determinar si la nota es canónica o procesada.';
+                return;
             }
             approvalRequest.then(function(res) {
                 if (res && res.field_errors) {
@@ -2177,12 +2186,15 @@
 
         function approveAndExportSelectedNote() {
             if (!approvalSelectedNoteId || approvalSelectedRevision === null) return;
+            if (approvalSelectedScope === 'output') {
+                approveProcessedOutputAndExport();
+                return;
+            }
             const format = document.getElementById('approval-export-format').value;
             const currentSelectedDocumentId = approvalSelectedNoteId;
             const currentSelectedNoteRevision = approvalSelectedRevision;
             const currentSelectedNoteMetadata = collectMetadataFormValues();
             let printWindow = null;
-            if (format === 'pdf') printWindow = openUserAssistedPdfPrintWindow();
             document.getElementById('approval-form-status').textContent = 'Aprobando y preparando exportación...';
             window.pywebview.api.approve_and_export(currentSelectedDocumentId, currentSelectedNoteRevision, format, currentSelectedNoteMetadata).then(function(res) {
                 if (res && res.field_errors) {
@@ -2222,6 +2234,30 @@
             });
         }
 
+        function approveProcessedOutputAndExport() {
+            const reviewer = document.getElementById('approval-reviewer').value.trim();
+            if (!reviewer) {
+                document.getElementById('approval-reviewer-error').textContent = 'Indica quién aprueba esta revisión.';
+                document.getElementById('approval-form-status').textContent = 'Falta el revisor';
+                return;
+            }
+            const documentId = approvalSelectedNoteId;
+            const revision = approvalSelectedRevision;
+            const format = document.getElementById('approval-export-format').value;
+            document.getElementById('approval-form-status').textContent = 'Aprobando salida y preparando exportación...';
+            window.pywebview.api.approve_processed_output(documentId, revision, reviewer).then(function(approval) {
+                if (!approval || approval.error) throw new Error((approval && approval.message) || 'No se pudo aprobar la salida.');
+                return window.pywebview.api.export_note(documentId, format);
+            }).then(function(result) {
+                if (!handleCanonicalExportResponse(result, format, null)) return;
+                document.getElementById('approval-form-status').textContent = 'Salida aprobada y exportación preparada';
+                loadApprovalInbox(false);
+            }).catch(function(error) {
+                document.getElementById('approval-form-status').textContent = error.message || 'No se pudo aprobar/exportar la salida.';
+                log('Error de aprobación/exportación de salida: ' + String(error));
+            });
+        }
+
         function retryFailedApprovalExport() {
             if (!failedApprovalExportDocumentId || !failedApprovalExportFormat
                 || !window.pywebview || !window.pywebview.api
@@ -2229,7 +2265,6 @@
             const format = failedApprovalExportFormat;
             const documentId = failedApprovalExportDocumentId;
             let printWindow = null;
-            if (format === 'pdf') printWindow = openUserAssistedPdfPrintWindow();
             window.pywebview.api.export_note(documentId, format).then(function(res) {
                 if (handleCanonicalExportResponse(res, format, printWindow)) {
                     failedApprovalExportDocumentId = null;
@@ -2291,7 +2326,24 @@
                 listEl.appendChild(empty);
                 return;
             }
+            const groups = new Map();
             notes.forEach(function(note) {
+                const sourceKey = note.source_sha256 || note.original_relative_path || note.original_filename || note.quarantine_id;
+                const key = sourceKey + '::' + (note.status || 'quarantined');
+                if (!groups.has(key)) groups.set(key, []);
+                groups.get(key).push(note);
+            });
+            if (groups.size !== notes.length) {
+                const summary = document.createElement('p');
+                summary.classList.add('console-text-028');
+                summary.textContent = groups.size + ' archivo(s) · ' + notes.length + ' incidencias registradas; los intentos repetidos se agrupan.';
+                listEl.appendChild(summary);
+            }
+            Array.from(groups.values()).forEach(function(history) {
+                history.sort(function(left, right) {
+                    return String(right.timestamp || '').localeCompare(String(left.timestamp || ''));
+                });
+                const note = history[0];
                 const card = document.createElement('div');
                 card.classList.add('console-layout-064');
 
@@ -2320,6 +2372,12 @@
                 card.appendChild(filename);
                 card.appendChild(errorCode);
                 card.appendChild(statusLabel);
+                if (history.length > 1) {
+                    const attempts = document.createElement('div');
+                    attempts.classList.add('quarantine-status', 'status-warning');
+                    attempts.textContent = 'Intentos registrados: ' + history.length;
+                    card.appendChild(attempts);
+                }
 
                 if (status === 'quarantined') {
                     const restoreBtn = document.createElement('button');
@@ -2545,11 +2603,17 @@
         }
 
         function restartWithSelectedVault(result) {
-            if (!result || !result.restart_required || !result.vault_path) return;
+            const setupStatus = document.getElementById('setup-obsidian-status');
+            if (!result || !result.restart_required || !result.vault_path) {
+                if (setupStatus) setupStatus.textContent = 'No se recibió una ruta de Vault válida.';
+                return;
+            }
             const status = document.getElementById('settings-save-status');
             if (status) status.textContent = 'Vault válido. Reiniciando Fuente…';
             callNativeLongRequest('restart_with_vault', function() {
                 return window.pywebview.api.restart_with_vault(result.vault_path);
+            }).then(function(response) {
+                if (response && response.error) throw new Error(response.message || response.error);
             }).catch(function(err) {
                 const message = String(err || nativeBackendUnavailableMessage());
                 renderSettingsSaveError(message);
@@ -2558,25 +2622,39 @@
         }
 
         function createGuidedVault() {
-            const name = window.prompt('Nombre del nuevo Vault de Obsidian:');
-            if (!name || !name.trim()) return;
-            callNativeRequest('select_folder', function() {
-                return window.pywebview.api.select_folder('Elige dónde crear el Vault de Obsidian');
-            }).then(function(parentPath) {
-                if (!parentPath) return;
+            callNativeLongRequest('select_vault_target', function() {
+                return window.pywebview.api.select_vault_target('Elige la ubicación y el nombre del nuevo Vault de Obsidian');
+            }).then(function(targetPath) {
+                const setupStatus = document.getElementById('setup-obsidian-status');
+                if (!targetPath || typeof targetPath !== 'string') {
+                    if (setupStatus) setupStatus.textContent = 'Selección de Vault cancelada o sin ruta.';
+                    return;
+                }
+                const pathInput = document.getElementById('setting-vault-path');
+                if (pathInput) pathInput.value = targetPath;
+                if (setupStatus) setupStatus.textContent = 'Ruta elegida: ' + targetPath;
+                if (!window.confirm(
+                    'El Vault se creará exactamente en:\n\n' + targetPath +
+                    '\n\nFuente creará esa carpeta y su carpeta .obsidian. ¿Continuar?'
+                )) return;
                 return callNativeRequest('create_vault', function() {
                     return window.pywebview.api.create_vault({
-                        vault_name: name.trim(),
-                        parent_path: parentPath,
+                        target_path: targetPath,
                     });
                 });
             }).then(function(result) {
-                if (!result) return;
+                if (!result) {
+                    const status = document.getElementById('setup-obsidian-status');
+                    if (status) status.textContent = 'No se recibió respuesta al crear el Vault.';
+                    return;
+                }
                 if (result.error) {
                     const status = document.getElementById('setup-obsidian-status');
                     if (status) status.textContent = result.message || result.error;
                     return;
                 }
+                const pathInput = document.getElementById('setting-vault-path');
+                if (pathInput) pathInput.value = result.vault_path || '';
                 restartWithSelectedVault(result);
             }).catch(function(err) {
                 const status = document.getElementById('setup-obsidian-status');
@@ -2653,6 +2731,24 @@
                     }
                 });
             }
+        }
+
+        function browseWhisperModelFolder() {
+            const input = document.getElementById('setting-whisper-model-path');
+            if (!window.pywebview || !window.pywebview.api) {
+                if (input) input.focus();
+                return;
+            }
+            window.pywebview.api.select_folder('Seleccionar carpeta local del modelo Whisper Tiny').then(function(folder) {
+                if (folder) {
+                    if (input) input.value = folder;
+                    log('Ruta local de Whisper seleccionada: ' + folder);
+                } else {
+                    log('Selección del modelo Whisper cancelada.');
+                }
+            }).catch(function(err) {
+                log('Error en selector del modelo Whisper: ' + err);
+            });
         }
 
         function addLinkedInputFolder() {
@@ -2865,7 +2961,7 @@
             }
 
             if (statusEl) statusEl.textContent = 'Cargando ajustes desde el backend de Fuente...';
-            callNativeRequest('get_settings_info', function() {
+            callNativeLongRequest('get_settings_info', function() {
                 return window.pywebview.api.get_settings_info();
             }).then(function(info) {
                 if (!info || typeof info !== 'object' || Array.isArray(info) || info.error) {
@@ -2972,6 +3068,19 @@
 
             const title = currentSelectedNoteTitle || 'seleccionada';
 
+            if (window.pywebview && window.pywebview.api) {
+                window.pywebview.api.trigger_action('copy_reader_note', { note_title: title, note_path: currentSelectedNotePath }).then(function(result) {
+                    if (result && result.error) {
+                        throw new Error(result.message || result.error);
+                    }
+                    showButtonFeedback(btnEl, '✓ ¡Copiado!');
+                    log('Nota "' + title + '" copiada al portapapeles.');
+                }).catch(function(error) {
+                    alert('No se pudo copiar la nota: ' + error.message);
+                });
+                return;
+            }
+
             if (navigator.clipboard && navigator.clipboard.writeText) {
                 navigator.clipboard.writeText(textToCopy).then(function() {
                     showButtonFeedback(btnEl, '✓ ¡Copiado!');
@@ -2983,9 +3092,6 @@
                 fallbackCopyText(textToCopy, btnEl, title);
             }
 
-            if (window.pywebview && window.pywebview.api) {
-                window.pywebview.api.trigger_action('copy_reader_note', { note_title: title, note_path: currentSelectedNotePath });
-            }
         }
 
         function fallbackCopyText(text, btnEl, title) {
@@ -3049,15 +3155,21 @@
             if (exportInFlight) return;
             exportInFlight = true;
 
-            // Open the print window inside the user gesture. Opening it after
-            // the async bridge response is vulnerable to popup blocking.
-            let printWindow = null;
-            if (format === 'pdf') {
-                printWindow = openUserAssistedPdfPrintWindow();
-                if (!printWindow) {
+            // PyWebView's native WebKit supports window.print(), but blocks
+            // window.open(). PDF therefore prints in this window after the
+            // asynchronous canonical response arrives.
+            const printWindow = null;
+
+            if (window.pywebview && window.pywebview.api && window.pywebview.api.save_export_to_downloads && format !== 'pdf') {
+                window.pywebview.api.save_export_to_downloads(currentSelectedDocumentId, format).then(function(res) {
+                    handleCanonicalExportResponse(res, format, printWindow);
                     exportInFlight = false;
-                    return;
-                }
+                }).catch(function(error) {
+                    closePrintWindowOnError(printWindow);
+                    exportInFlight = false;
+                    reportExportError('No se pudo guardar la exportación en Descargas.', error);
+                });
+                return;
             }
 
             if (window.pywebview && window.pywebview.api && window.pywebview.api.export_note) {
@@ -3159,23 +3271,41 @@
         function openUserAssistedPdfPrintWindow() {
             const printWindow = window.open('', '_blank', 'width=850,height=950');
             if (!printWindow) {
-                reportExportError('Permite ventanas emergentes para imprimir o guardar la nota como PDF.');
+                reportExportError('La impresión PDF nativa no permite abrir una ventana secundaria.');
                 return null;
             }
             return printWindow;
         }
 
         function completeUserAssistedPdfPrint(printWindow, printHtml) {
-            if (!printWindow || printWindow.closed) return false;
-            printWindow.document.open();
-            printWindow.document.write(printHtml);
-            printWindow.document.close();
-            printWindow.focus();
-            // The popup was opened synchronously; defer only one event turn so
-            // the canonical HTML is present before invoking the native dialog.
-            setTimeout(function() {
-                if (!printWindow.closed) printWindow.print();
-            }, 0);
+            if (printWindow && !printWindow.closed) {
+                printWindow.document.open();
+                printWindow.document.write(printHtml);
+                printWindow.document.close();
+                printWindow.focus();
+                setTimeout(function() {
+                    if (!printWindow.closed) printWindow.print();
+                }, 0);
+                return true;
+            }
+
+            if (typeof window.print !== 'function') return false;
+            const printDocument = new DOMParser().parseFromString(printHtml, 'text/html');
+            const originalTitle = document.title;
+            let restored = false;
+            const restoreConsole = function() {
+                if (restored) return;
+                restored = true;
+                window.removeEventListener('afterprint', restoreConsole);
+                // Reloading restores the live bridge and all console handlers
+                // after the native print panel has closed.
+                window.location.reload();
+            };
+            window.addEventListener('afterprint', restoreConsole, { once: true });
+            document.head.innerHTML = printDocument.head.innerHTML;
+            document.body.innerHTML = printDocument.body.innerHTML;
+            document.title = printDocument.title || originalTitle;
+            window.print();
             return true;
         }
 
@@ -3412,6 +3542,8 @@
         function promptCreateTheme() {
             const input = document.getElementById('input-new-theme-name');
             if (input) input.value = '';
+            const status = document.getElementById('new-theme-status');
+            if (status) status.textContent = '';
             openModal('modal-create-theme');
             setTimeout(() => { if (input) input.focus(); }, 150);
         }
@@ -3420,7 +3552,14 @@
             const input = document.getElementById('input-new-theme-name');
             if (!input) return;
             const rawTitle = input.value.trim();
-            if (!rawTitle) return;
+            if (!rawTitle) {
+                const status = document.getElementById('new-theme-status');
+                if (status) status.textContent = 'Escribe un título para crear el Tema.';
+                input.focus();
+                return;
+            }
+            const status = document.getElementById('new-theme-status');
+            if (status) status.textContent = '';
 
             closeModal('modal-create-theme');
             log('Creando nuevo Tema: "' + rawTitle + '"...');
@@ -3476,8 +3615,13 @@
         }
 
         function openCurrentNoteInObsidian(btnEl) {
-            const noteFile = currentSelectedNotePath ? (currentSelectedNotePath.endsWith('.md') ? currentSelectedNotePath : currentSelectedNotePath + '.md') : '_Indice_MOC.md';
-            const obsidianUri = 'obsidian://open?vault=Vault_Fuente&file=4_procesado%2F' + encodeURIComponent(noteFile);
+            let noteFile = currentSelectedNotePath ? currentSelectedNotePath : '4_procesado/_Indice_MOC.md';
+            noteFile = noteFile.replace(/^\/+/, '');
+            if (!noteFile.endsWith('.md')) noteFile += '.md';
+            if (!noteFile.startsWith('4_procesado/')) noteFile = '4_procesado/' + noteFile;
+            const vaultPath = (document.getElementById('setting-vault-path') || {}).value || '';
+            const absoluteNotePath = vaultPath.replace(/[\\/]+$/, '') + '/' + noteFile;
+            const obsidianUri = 'obsidian://open?path=' + encodeURIComponent(absoluteNotePath);
             const title = currentSelectedNoteTitle || noteFile;
 
             showButtonFeedback(btnEl, '✓ Abriendo...');
@@ -3793,6 +3937,22 @@
         function setMeetilyStatus(message) {
             const status = document.getElementById('meetily-status');
             if (status) status.textContent = message;
+        }
+
+        function openMeetilyApplication() {
+            if (!(window.pywebview && window.pywebview.api && window.pywebview.api.open_meetily_app)) {
+                setMeetilyStatus('No se pudo conectar con el backend de Fuente.');
+                return;
+            }
+            window.pywebview.api.open_meetily_app().then(function(result) {
+                if (result && result.error) {
+                    setMeetilyStatus(result.message || 'No se pudo abrir Meetily.');
+                    return;
+                }
+                setMeetilyStatus('Meetily se ha abierto. Graba allí y vuelve después a Fuente para importar la carpeta.');
+            }).catch(function() {
+                setMeetilyStatus('No se pudo abrir Meetily.');
+            });
         }
 
         function renderMeetilyResult(result) {
@@ -4270,17 +4430,27 @@
         let readerEditorDocumentId = '';
         let readerEditorRevision = null;
         let readerEditorBody = '';
+        let readerEditorBodyBeforeLastChange = '';
         let readerEditorOriginalBody = '';
         let readerEditorOriginalDocumentModel = [];
         let readerEditorProjection = null;
         let readerEditorConflictBody = '';
         let readerEditorInstance = null;
         let readerEditorState = { status: 'saved', dirty: false };
+        let readerEditorRestoringMode = false;
         let readerEditorSession = 0;
         let readerEditorSaveOperation = null;
 
         function readerEditorElement(id) {
             return document.getElementById(id);
+        }
+
+        function disposeReaderEditor() {
+            if (!readerEditorInstance) return;
+            if (typeof readerEditorInstance.destroy === 'function') {
+                readerEditorInstance.destroy();
+            }
+            readerEditorInstance = null;
         }
 
         function setReaderEditorState(status, message) {
@@ -4300,9 +4470,17 @@
             return readerEditorInstance ? readerEditorInstance.getMarkdown() : '';
         }
 
+        function readerEditorContentSignature(markdown) {
+            return JSON.stringify(readerMarkdownToProjection(String(markdown || '')));
+        }
+
         function updateReaderEditorDirtyState() {
+            if (readerEditorRestoringMode) return;
+            const previousBody = readerEditorBody;
             readerEditorBody = getReaderEditorMarkdown();
-            readerEditorState.dirty = readerEditorBody !== readerEditorOriginalBody;
+            readerEditorBodyBeforeLastChange = previousBody;
+            readerEditorState.dirty = readerEditorContentSignature(readerEditorBody)
+                !== readerEditorContentSignature(readerEditorOriginalBody);
             if (readerEditorState.status !== 'loading' && readerEditorState.status !== 'conflict') {
                 setReaderEditorState(
                     readerEditorState.dirty ? 'dirty' : 'saved',
@@ -4548,9 +4726,8 @@
         }
 
         function setReaderEditorMode(mode) {
-            if (readerEditorInstance) {
-                readerEditorInstance.changeMode(mode === 'markdown' ? 'markdown' : 'wysiwyg');
-            }
+            if (!readerEditorInstance) return;
+            readerEditorInstance.changeMode(mode === 'markdown' ? 'markdown' : 'wysiwyg');
         }
 
         function showReaderEditorConflict() {
@@ -4596,6 +4773,27 @@
             readerEditorInstance.on('change', function() {
                 updateReaderEditorDirtyState();
             });
+            readerEditorInstance.on('changeMode', function() {
+                if (readerEditorRestoringMode) return;
+                updateReaderEditorDirtyState();
+            });
+            const nativeChangeMode = readerEditorInstance.changeMode.bind(readerEditorInstance);
+            function changeReaderEditorMode(mode, withoutFocus) {
+                const dirtyBeforeModeChange = readerEditorState.dirty;
+                readerEditorRestoringMode = true;
+                nativeChangeMode(mode, withoutFocus);
+                readerEditorRestoringMode = false;
+                readerEditorBody = getReaderEditorMarkdown();
+                readerEditorBodyBeforeLastChange = readerEditorBody;
+                readerEditorState.dirty = dirtyBeforeModeChange;
+                setReaderEditorState(
+                    dirtyBeforeModeChange ? 'dirty' : 'saved',
+                    dirtyBeforeModeChange ? 'Cambios sin guardar' : 'Sin cambios'
+                );
+            }
+            readerEditorInstance.off('needChangeMode');
+            readerEditorInstance.on('needChangeMode', changeReaderEditorMode);
+            readerEditorInstance.changeMode = changeReaderEditorMode;
             saveButton.addEventListener('click', saveReaderEdit);
             cancelButton.addEventListener('click', cancelReaderEdit);
             if (conflict) {
@@ -4661,11 +4859,11 @@
                 readerEditorDocumentId = editorDocument.document_id;
                 readerEditorRevision = editorDocument.revision;
                 readerEditorBody = editorDocument.body_markdown;
+                readerEditorBodyBeforeLastChange = readerEditorBody;
                 readerEditorOriginalBody = editorDocument.body_markdown;
                 readerEditorProjection = editorDocument.projection;
                 if (readerEditorInstance) readerEditorInstance.setMarkdown(readerEditorBody, false);
                 readerEditorState = { status: 'saved', dirty: false };
-                setReaderEditorMode('wysiwyg');
                 setReaderEditorState('saved', 'Sin cambios');
             }).catch(function(error) {
                 if (currentSelectedDocumentId === documentId && readerEditorSession === editorSession) {
@@ -4681,7 +4879,7 @@
                 ? readerProjectionToDocumentModel(readerEditorProjection)
                 : readerEditorOriginalDocumentModel;
             readerEditorState = { status: 'saved', dirty: false };
-            readerEditorInstance = null;
+            disposeReaderEditor();
             renderNoteDocument(currentSelectedNoteTitle || 'Nota', documentModel);
         }
 
@@ -4689,7 +4887,8 @@
             const documentId = currentSelectedDocumentId;
             if (!readerEditorInstance || !documentId || readerEditorDocumentId !== documentId || readerEditorRevision === null || readerEditorSaveOperation) return;
             readerEditorBody = getReaderEditorMarkdown();
-            readerEditorState.dirty = readerEditorBody !== readerEditorOriginalBody;
+            readerEditorState.dirty = readerEditorContentSignature(readerEditorBody)
+                !== readerEditorContentSignature(readerEditorOriginalBody);
             if (!readerEditorState.dirty) {
                 setReaderEditorState('saved', 'Sin cambios');
                 return;
@@ -4722,10 +4921,12 @@
                     setReaderEditorState('error', (result && result.message) || 'No se pudo guardar la nota.');
                     return;
                 }
-                const newerDraft = getReaderEditorMarkdown() !== operation.body;
+                const newerDraft = readerEditorContentSignature(getReaderEditorMarkdown())
+                    !== readerEditorContentSignature(operation.body);
                 readerEditorSaveOperation = null;
                 readerEditorRevision = result.revision;
                 readerEditorBody = newerDraft ? getReaderEditorMarkdown() : result.body_markdown;
+                readerEditorBodyBeforeLastChange = readerEditorBody;
                 readerEditorOriginalBody = result.body_markdown;
                 readerEditorProjection = result.projection;
                 readerEditorState = { status: newerDraft ? 'dirty' : 'saved', dirty: newerDraft };
@@ -4886,6 +5087,7 @@
 
         function renderNoteDocument(title, documentModel) {
             const reader = document.getElementById('reader-content');
+            disposeReaderEditor();
             currentSelectedNoteDocumentModel = documentModel || [];
             reader.replaceChildren(createNoteActionBar(title));
             reader.appendChild(createNoteContent(documentModel));
@@ -5290,7 +5492,7 @@
 
         function loadCategoryData(category) {
             const titleEl = document.getElementById('category-modal-title');
-            if (titleEl) titleEl.innerText = 'DESGLOSE DE ARCHIVOS PROCESADOS (2_SUCIO Y 3_LIMPIO)';
+            if (titleEl) titleEl.innerText = 'DESGLOSE DE ARCHIVOS PROCESADOS (4_PROCESADO)';
             
             if (window.pywebview && window.pywebview.api) {
                 window.pywebview.api.get_category_files(category).then(function(files) {
@@ -5417,6 +5619,12 @@
             const model = document.getElementById('setting-ollama-model').value;
             const ollamaUrl = document.getElementById('setting-ollama-url') ? document.getElementById('setting-ollama-url').value : 'http://localhost:11434';
             const ramMargin = document.getElementById('setting-ram-margin') ? document.getElementById('setting-ram-margin').value : '20%';
+            const audioMode = document.getElementById('setting-audio-mode').value;
+            const whisperModelPath = (document.getElementById('setting-whisper-model-path') || {}).value || null;
+            if (audioMode === 'tiny_cpu' && !String(whisperModelPath || '').trim()) {
+                renderSettingsSaveError('Tiny local CPU requiere seleccionar una ruta local de modelo Whisper.');
+                return;
+            }
             const settings = {
                 vault_path: document.getElementById('setting-vault-path').value,
                 custom_model_override: model,
@@ -5424,8 +5632,8 @@
                 ram_safety_margin_pct: Number.parseFloat(ramMargin) / 100,
                 allow_non_loopback_ollama: document.getElementById('setting-allow-non-loopback-ollama').checked,
                 resource_profile: document.getElementById('setting-resource-profile').value,
-                audio_mode: document.getElementById('setting-audio-mode').value,
-                whisper_model_path: (document.getElementById('setting-whisper-model-path') || {}).value || null,
+                audio_mode: audioMode,
+                whisper_model_path: whisperModelPath,
                 output_connected_folders: linkedOutputFolders
             };
             if (isExplicitPreviewMode()) {
@@ -5524,11 +5732,6 @@
             if (discussionForm) discussionForm.addEventListener('submit', submitDiscussionReply);
             const workspaceChatForm = document.getElementById('workspace-chat-form');
             if (workspaceChatForm) workspaceChatForm.addEventListener('submit', submitWorkspaceChat);
-            const consent = document.getElementById('meetily-recording-consent');
-            if (consent) consent.addEventListener('change', function() {
-                const start = document.getElementById('meetily-start-recording');
-                if (start) start.disabled = !consent.checked;
-            });
             if (isExplicitPreviewMode()) {
                 markExplicitPreviewMode();
             } else {

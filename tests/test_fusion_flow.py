@@ -162,7 +162,7 @@ def _two_sources(
     return (
         _write_note(
             vault,
-            "4_salida/Issue-A/alpha.md",
+            "4_procesado/Issue-A/alpha.md",
             title="Alpha",
             issue="Issue-A",
             body="# Alpha\n\nContenido A.\n",
@@ -170,7 +170,7 @@ def _two_sources(
         ),
         _write_note(
             vault,
-            "4_salida/Issue-A/beta.md",
+            "4_procesado/Issue-A/beta.md",
             title="Beta",
             issue="Issue-A",
             body="# Beta\n\nContenido B.\n",
@@ -309,7 +309,7 @@ def test_concurrent_commits_to_same_destination_leave_one_pending_note_intact(
     sources = [
         _write_note(
             vault,
-            f"4_salida/Issue-A/concurrent-{index}.md",
+            f"4_procesado/Issue-A/concurrent-{index}.md",
             title=f"Concurrent {index}",
             issue="Issue-A",
             body=f"# Concurrent {index}\n\nSource {index}.\n",
@@ -376,7 +376,7 @@ def test_bridge_preview_and_commit_are_document_id_only(fusion_harness):
     assert preview["source_revisions"] == {first_id: 1, second_id: 1}
     assert "preview_id" in preview
 
-    assert bridge.preview_fusion(["4_salida/Issue-A/alpha.md", second_id], "x", "Issue-A")["error"] == "path_not_authorized"
+    assert bridge.preview_fusion(["4_procesado/Issue-A/alpha.md", second_id], "x", "Issue-A")["error"] == "path_not_authorized"
     assert bridge.commit_fusion(preview["preview_id"], preview["source_revisions"])["status"] == "pending_review"
 
 
@@ -407,7 +407,7 @@ def test_fusion_does_not_write_when_one_origin_is_unapproved(fusion_harness):
     }
     first_id, first_path = _write_note(
         vault,
-        "4_salida/Issue-A/approved.md",
+        "4_procesado/Issue-A/approved.md",
         title="Approved derivative",
         issue="Issue-A",
         body="# Approved\n",
@@ -415,7 +415,7 @@ def test_fusion_does_not_write_when_one_origin_is_unapproved(fusion_harness):
     )
     second_id, second_path = _write_note(
         vault,
-        "4_salida/Issue-A/unapproved.md",
+        "4_procesado/Issue-A/unapproved.md",
         title="Unapproved derivative",
         issue="Issue-A",
         body="# Unapproved\n",
@@ -445,13 +445,13 @@ def test_fusion_blocks_unmigrated_legacy_origins_before_writing(fusion_harness):
     vault, service, _notes, _store, approved_origin = fusion_harness
     approved_id, _approved_path = _write_note(
         vault,
-        "4_salida/Issue-A/typed.md",
+        "4_procesado/Issue-A/typed.md",
         title="Typed derivative",
         issue="Issue-A",
         body="# Typed\n",
         origins=[approved_origin],
     )
-    legacy_relative = "4_salida/Issue-A/legacy.md"
+    legacy_relative = "4_procesado/Issue-A/legacy.md"
     legacy_id = document_id_for_relative_path(legacy_relative)
     legacy_path = vault.config.vault_path / legacy_relative
     legacy_path.write_text(

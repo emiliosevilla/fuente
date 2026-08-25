@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import asyncio
 import sys
 import types
 from pathlib import Path
 
-from fuente.rag.minirag_store import MiniRAGStore
+import pytest
+
+from fuente.rag.minirag_store import MiniRAGStore, _normalize_minirag_record_kinds
 
 
 def record(document_id="note-1", revision=2, content_hash="abc"):
@@ -183,3 +186,80 @@ def test_default_client_receives_explicit_embedding_and_llm(tmp_path: Path, monk
 
     assert captured["embedding_func"] is embedding
     assert captured["llm_model_func"] is llm
+    assert captured["entity_extract_max_gleaning"] == 0
+    assert captured["llm_model_max_async"] == 1
+
+
+def test_default_llm_callback_accepts_official_minirag_arguments(tmp_path, monkeypatch):
+    calls = []
+    provider_options = []
+
+    class Provider:
+        def __init__(self, *args, **kwargs):
+            provider_options.append((args, kwargs))
+
+        def generate(self, **kwargs):
+            calls.append(kwargs)
+            return "respuesta"
+
+    monkeypatch.setattr("fuente.application.chat.OllamaChatProvider", Provider)
+    callback = MiniRAGStore(
+        tmp_path / "minirag", model="qwen2.5:0.5b"
+    )._default_llm_model_func()
+
+    result = asyncio.run(
+        callback(
+            "pregunta",
+            system_prompt="instrucción MiniRAG",
+            history_messages=[{"role": "user", "content": "contexto"}],
+            hashing_kv=object(),
+            keyword_extraction=True,
+        )
+    )
+
+    assert result == "respuesta"
+    assert provider_options == [(('http://localhost:11434',), {'timeout': 180.0})]
+    assert calls == [
+        {
+            "model": "qwen2.5:0.5b",
+            "system": "instrucción MiniRAG",
+            "prompt": "user: contexto\npregunta",
+            "options": {"temperature": 0, "seed": 42, "num_predict": 768},
+            "think": False,
+        }
+    ]
+
+
+def test_default_llm_callback_preserves_bm25_only_budget(tmp_path, monkeypatch):
+    monkeypatch.setattr(
+        "fuente.ram_governor.governor.RAMGovernor.recommend_model",
+        lambda _self: "",
+    )
+
+    with pytest.raises(RuntimeError, match="BM25 fallback"):
+        MiniRAGStore(tmp_path / "minirag")._default_llm_model_func()
+
+
+def test_minirag_record_kinds_are_normalized_without_touching_content():
+    response = (
+        '(entity<|>"Ana"<|>"person"<|>"Dirige Fuente")##'
+        '(“RELATIONSHIP”<|>"Ana"<|>"Fuente"<|>"Dirige"<|>"trabajo"<|>9)'
+    )
+
+    assert _normalize_minirag_record_kinds(response) == (
+        '("entity"<|>"Ana"<|>"person"<|>"Dirige Fuente")##'
+        '("relationship"<|>"Ana"<|>"Fuente"<|>"Dirige"<|>"trabajo"<|>9)'
+    )
+
+
+def test_minirag_incomplete_relationship_gets_neutral_parser_fields():
+    response = (
+        '("relationship"<|>"Ana"<|>"Bruno"<|>"Trabajan juntos")##\n'
+        '("content_keywords"<|>"colaboración")<|COMPLETE|>'
+    )
+
+    assert _normalize_minirag_record_kinds(response) == (
+        '("relationship"<|>"Ana"<|>"Bruno"<|>"Trabajan juntos"'
+        '<|>"related"<|>1)##\n'
+        '("content_keywords"<|>"colaboración")<|COMPLETE|>'
+    )

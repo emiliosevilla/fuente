@@ -30,21 +30,21 @@
         <!-- STATUS STRIP (ESTADO DE FUENTE EN CABECERA) -->
         <div class="status-strip">
             <div class="status-item">
-                    <span class="status-label">● CONEXIÓN:</span>
+                    <span class="status-label">Conexión</span>
                 <span class="status-val">
                     <span id="status-offline-mode" class="offline-badge local-only" title="La IA trabaja en este equipo">Solo local</span>
                 </span>
             </div>
             <div class="status-item">
-                    <span class="status-label">● IA LOCAL:</span>
+                    <span class="status-label">IA local</span>
                     <span class="status-val" id="status-ollama">No medido</span>
             </div>
             <div class="status-item">
-                    <span class="status-label">● CHAT:</span>
+                    <span class="status-label">Consulta</span>
                     <span class="status-val" id="status-anything">No medido</span>
             </div>
             <div class="status-item">
-                    <span class="status-label">● NOTAS:</span>
+                    <span class="status-label">Notas</span>
                     <span class="status-val" id="status-obsidian">No medido</span>
             </div>
         </div>
@@ -55,7 +55,7 @@
         <!-- BARRA DE HERRAMIENTAS Y ACCIONES (TEMA, FUENTES, BUCLE OPTIMIZADO) -->
         <div class="toolbar-bar">
             <div class="toolbar-group">
-                <span class="console-layout-002">ESPACIO:</span>
+                <span class="console-layout-002">Espacio</span>
                 <div id="theme-select" class="theme-select-control">
                     <button
                         id="theme-select-trigger"
@@ -117,7 +117,7 @@
 
         <!-- MAPA SIMPLE DEL FLUJO -->
         <div class="graph-section" id="graph-section">
-            <div class="graph-title">FLUJO DE TRABAJO</div>
+            <div class="graph-title">De archivos a notas útiles</div>
             
             <div class="subgraphs-container">
                 <div class="subgraph-box">
@@ -171,6 +171,20 @@
                         <div class="node-tag">── 4 ──</div>
                         <div class="node-name">Consultar notas</div>
                         <div class="node-desc">Leerlas o preguntar sobre ellas</div>
+                    </div>
+                </div>
+
+                <div class="arrow-connector" aria-hidden="true"></div>
+
+                <div class="subgraph-box">
+                    <div class="subgraph-header">
+                        <span class="subgraph-title">5. Compartir</span>
+                        <span class="node-badge" id="badge-step5">Última vez: --/--/---- --:--:--</span>
+                    </div>
+                    <div class="node-card" data-onclick-command="openApprovalInbox()">
+                        <div class="node-tag">── 5 ──</div>
+                        <div class="node-name">Revisar y compartir</div>
+                        <div class="node-desc">Dar por buenas las notas y preparar su salida</div>
                     </div>
                 </div>
             </div>
@@ -2087,6 +2101,7 @@
         });
 
         function openApprovalInbox() {
+            updateStepBadge('badge-step5');
             bindApprovalDiagnosticPanel();
             openModal('modal-approval');
         }

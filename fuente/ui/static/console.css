@@ -14,8 +14,8 @@
             --green: var(--fuente-success);
             --amber: var(--fuente-warning);
             --red: var(--fuente-danger);
-            --font-mono: Arial, sans-serif;
-            --card-radius: 6px;
+            --font-mono: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            --card-radius: 10px;
             --border-width: 1px;
             --shadow: 0 4px 18px rgba(0,0,0,0.06);
         }
@@ -1809,21 +1809,27 @@
 .quarantine-status.status-error { color: var(--muted); }
 .clipboard-buffer { position: fixed; opacity: 0; pointer-events: none; }
 
-/* Modern glass layer: progressive enhancement over the existing semantic UI. */
+/* Native knowledge-studio layer. */
 body {
     background-color: var(--bg-root);
     background-image: var(--fuente-app-gradient);
     background-attachment: fixed;
+    padding: 18px 24px;
+    gap: 12px;
 }
 
 .masthead-container {
-    border-bottom: 1px solid color-mix(in srgb, var(--border-accent) 62%, transparent);
-    padding: 12px 4px 18px;
+    gap: 10px;
+    border-bottom: 1px solid var(--fuente-glass-border);
+    padding: 4px 2px 12px;
 }
 
+.masthead-main { align-items: center; }
+
 .masthead-title {
-    letter-spacing: 0.18em;
-    text-shadow: 0 10px 28px color-mix(in srgb, var(--accent) 18%, transparent);
+    font-size: 1.7rem;
+    letter-spacing: 0.24em;
+    color: var(--paper);
 }
 
 .status-strip,
@@ -1838,16 +1844,13 @@ body {
 .node-card {
     background: var(--fuente-glass);
     border-color: var(--fuente-glass-border);
-    box-shadow: var(--fuente-shadow-glass), inset 0 1px 0 rgba(255, 255, 255, 0.54);
-    backdrop-filter: blur(18px) saturate(125%);
-    -webkit-backdrop-filter: blur(18px) saturate(125%);
+    box-shadow: var(--fuente-shadow-glass);
 }
 
-.status-strip,
 .graph-section,
 .log-section,
 .modal-container {
-    border-radius: 22px;
+    border-radius: 14px;
 }
 
 .stat-card,
@@ -1855,17 +1858,54 @@ body {
 .node-card,
 .reader-sidebar,
 .reader-properties-pane {
-    border-radius: 16px;
+    border-radius: 10px;
+}
+
+.status-strip {
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    justify-content: flex-start;
+    gap: 22px;
+}
+
+.status-item {
+    gap: 6px;
+}
+
+.status-label {
+    color: var(--muted);
+    font-size: 0.72rem;
+    font-weight: 600;
+}
+
+.status-val {
+    font-size: 0.72rem;
+}
+
+.offline-badge {
+    padding: 1px 7px;
+    background: transparent;
 }
 
 .toolbar-bar {
-    padding: 8px 10px;
+    justify-content: flex-start;
+    padding: 8px;
     border: 1px solid var(--fuente-glass-border);
-    border-radius: 18px;
+    border-radius: 12px;
     background: var(--fuente-glass);
-    box-shadow: 0 14px 38px rgba(31, 41, 55, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.58);
-    backdrop-filter: blur(16px) saturate(120%);
-    -webkit-backdrop-filter: blur(16px) saturate(120%);
+    box-shadow: var(--fuente-shadow-glass);
+}
+
+.toolbar-group {
+    width: 100%;
+    flex-wrap: wrap;
+}
+
+.layout-full {
+    gap: 12px;
 }
 
 .btn-secondary,
@@ -1877,10 +1917,10 @@ body {
 .console-layout-044,
 .console-layout-045,
 .console-layout-036 {
-    border-radius: 12px;
-    border-color: color-mix(in srgb, var(--border-accent) 58%, transparent);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5);
-    transition: transform 180ms ease, box-shadow 180ms ease, background-color 180ms ease, border-color 180ms ease;
+    border-radius: 8px;
+    border-color: var(--fuente-glass-border);
+    box-shadow: none;
+    transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease;
 }
 
 .btn-secondary:hover,
@@ -1889,42 +1929,73 @@ body {
 .theme-select-trigger:hover,
 .stat-card:hover,
 .node-card:hover {
-    transform: translateY(-3px);
-    box-shadow: 0 16px 30px rgba(31, 41, 55, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.64);
+    transform: none;
+    border-color: var(--accent);
+    box-shadow: none;
 }
 
 .btn-primary {
-    background: var(--fuente-glass-strong);
+    background: var(--accent);
     border-color: var(--accent);
+    color: #06201D;
+}
+
+.btn-primary:hover {
+    background: var(--accent-hover);
+    color: #041714;
+}
+
+.stats-grid {
+    gap: 8px;
+}
+
+.stat-card {
+    min-height: 74px;
+    padding: 11px 14px;
+    gap: 2px;
+}
+
+.stat-title {
+    font-size: 0.72rem;
+}
+
+.stat-num {
+    font-size: 1.55rem;
 }
 
 .graph-title {
-    padding-bottom: 14px;
-    border-bottom-color: color-mix(in srgb, var(--border) 58%, transparent);
-    letter-spacing: 0.12em;
+    padding-bottom: 10px;
+    border-bottom-color: var(--fuente-glass-border);
+    text-align: left;
+    font-size: 0.78rem;
+    letter-spacing: 0.02em;
+    text-transform: none;
 }
 
+.graph-section { padding: 14px; }
+
 .subgraphs-container {
-    gap: 16px;
+    grid-template-columns: repeat(4, minmax(0, 1fr) 24px) minmax(0, 1fr);
+    gap: 6px;
 }
 
 .subgraph-box {
     position: relative;
-    padding: 16px;
-    border-color: color-mix(in srgb, var(--border) 72%, var(--fuente-glass-border));
+    padding: 10px;
+    border-color: var(--fuente-glass-border);
 }
 
 .subgraph-header {
-    border-bottom-color: color-mix(in srgb, var(--border) 54%, transparent);
-    padding-bottom: 10px;
+    border-bottom: 0;
+    padding-bottom: 5px;
 }
 
 .arrow-connector {
     position: relative;
-    width: clamp(34px, 4vw, 64px);
-    height: 32px;
+    width: 24px;
+    height: 24px;
     color: var(--accent);
-    opacity: 0.82;
+    opacity: 0.55;
 }
 
 .arrow-connector::before {
@@ -1933,12 +2004,11 @@ body {
     top: 50%;
     left: 2px;
     right: 7px;
-    height: 2px;
+    height: 1px;
     border-radius: 999px;
     background: var(--accent);
     transform: translateY(-50%);
-    box-shadow: 0 0 12px color-mix(in srgb, var(--accent) 38%, transparent);
-    animation: flowPulse 2.4s ease-in-out infinite;
+    box-shadow: none;
 }
 
 .arrow-connector::after {
@@ -1946,59 +2016,102 @@ body {
     position: absolute;
     top: 50%;
     right: 1px;
-    width: 11px;
-    height: 11px;
-    border-top: 2px solid var(--accent);
-    border-right: 2px solid var(--accent);
+    width: 7px;
+    height: 7px;
+    border-top: 1px solid var(--accent);
+    border-right: 1px solid var(--accent);
     transform: translateY(-50%) rotate(45deg);
-    filter: drop-shadow(0 0 6px color-mix(in srgb, var(--accent) 32%, transparent));
+}
+
+html[data-fuente-style="energy"] .arrow-connector::before {
+    animation: flowPulse 2.4s ease-in-out infinite;
 }
 
 @keyframes flowPulse {
-    0%, 100% { opacity: 0.48; transform: translateY(-50%) scaleX(0.92); transform-origin: right center; }
+    0%, 100% { opacity: 0.42; transform: translateY(-50%) scaleX(0.9); transform-origin: right center; }
     50% { opacity: 1; transform: translateY(-50%) scaleX(1); }
 }
 
 .node-card {
-    padding: 14px;
-    border-color: color-mix(in srgb, var(--accent) 48%, var(--fuente-glass-border));
+    min-height: 94px;
+    padding: 10px;
+    border-color: var(--fuente-glass-border);
+    background: var(--bg-card);
 }
 
-.node-tag,
 .subgraph-title,
 .log-header {
-    letter-spacing: 0.08em;
+    letter-spacing: 0.02em;
 }
 
+.subgraph-title {
+    color: var(--accent);
+    font-size: 0.72rem;
+}
+
+.node-tag {
+    color: var(--muted);
+    font-size: 0.62rem;
+    letter-spacing: 0;
+}
+
+.node-name {
+    font-size: 0.82rem;
+}
+
+.node-desc,
+.node-badge {
+    font-size: 0.65rem;
+}
+
+.log-section { padding: 10px 14px; }
+
 .log-console {
-    border-radius: 14px;
-    background: color-mix(in srgb, var(--bg-root) 58%, transparent);
-    border-color: color-mix(in srgb, var(--border) 62%, transparent);
+    min-height: 68px;
+    max-height: 112px;
+    border-radius: 8px;
+    padding: 9px 12px;
+    font-size: 0.72rem;
+    background: var(--bg-root);
+    border-color: var(--fuente-glass-border);
 }
 
 .modal-overlay {
-    background: color-mix(in srgb, var(--fuente-polar-0) 42%, rgba(17, 24, 39, 0.42));
-    backdrop-filter: blur(12px) saturate(125%);
-    -webkit-backdrop-filter: blur(12px) saturate(125%);
+    background: rgba(2, 10, 9, 0.78);
 }
 
 .modal-header,
 .modal-footer {
     background: var(--fuente-glass-strong);
-    border-color: color-mix(in srgb, var(--border) 58%, transparent);
+    border-color: var(--fuente-glass-border);
 }
 
 .modal-header {
-    padding: 18px 22px;
+    padding: 14px 18px;
 }
 
 .modal-body {
-    padding: 22px;
+    padding: 18px;
 }
 
 .close-btn:hover {
     color: var(--accent);
-    transform: rotate(8deg) scale(1.08);
+    transform: none;
+}
+
+@media (max-width: 1100px) {
+    .subgraphs-container {
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+    }
+
+    .arrow-connector { display: none; }
+}
+
+@media (max-width: 720px) {
+    body { padding: 12px; }
+    .stats-grid,
+    .subgraphs-container { grid-template-columns: 1fr; }
+    .status-strip { gap: 10px 18px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

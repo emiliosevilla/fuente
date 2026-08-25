@@ -1,41 +1,41 @@
-/* Fuente visual tokens — Zen and Energy, selected independently from Vault themes. */
+/* Fuente visual tokens — native knowledge studio, independent from Vault themes. */
 :root,
 html[data-fuente-style="zen"] {
-    --fuente-polar-0: #CED3DA;
-    --fuente-polar-1: #F4F5F7;
-    --fuente-polar-2: #B8BEC8;
-    --fuente-snow-2: #1F2937;
-    --fuente-snow-0: #465464;
-    --fuente-frost-2: #163D80;
-    --fuente-frost-1: #1E4FA0;
-    --fuente-success: #2F7D4A;
-    --fuente-warning: #7D4C00;
-    --fuente-danger: #B33A3A;
-    --fuente-selection: #B9D1F5;
-    --fuente-focus: #1E4FA0;
-    --fuente-glass: rgba(244, 245, 247, 0.62);
-    --fuente-glass-strong: rgba(255, 255, 255, 0.78);
-    --fuente-glass-border: rgba(255, 255, 255, 0.72);
-    --fuente-app-gradient: radial-gradient(circle at 12% 0%, rgba(255, 255, 255, 0.72), transparent 34%), radial-gradient(circle at 100% 20%, rgba(185, 209, 245, 0.32), transparent 38%);
-    --fuente-shadow-glass: 0 24px 64px rgba(30, 79, 160, 0.13);
+    --fuente-polar-0: #071311;
+    --fuente-polar-1: #0D211E;
+    --fuente-polar-2: #294640;
+    --fuente-snow-2: #F1F7F4;
+    --fuente-snow-0: #9EB5AF;
+    --fuente-frost-2: #5AD8C8;
+    --fuente-frost-1: #2CB5A6;
+    --fuente-success: #76D69B;
+    --fuente-warning: #F2C66D;
+    --fuente-danger: #FF7C78;
+    --fuente-selection: #183F3A;
+    --fuente-focus: #5AD8C8;
+    --fuente-glass: rgba(13, 33, 30, 0.9);
+    --fuente-glass-strong: rgba(18, 43, 39, 0.97);
+    --fuente-glass-border: rgba(135, 222, 209, 0.16);
+    --fuente-app-gradient: radial-gradient(circle at 82% -12%, rgba(44, 181, 166, 0.15), transparent 34%), linear-gradient(145deg, #071311 0%, #091916 58%, #06100F 100%);
+    --fuente-shadow-glass: 0 16px 46px rgba(0, 0, 0, 0.24);
 }
 
 html[data-fuente-style="energy"] {
-    --fuente-polar-0: #D6D5D0;
-    --fuente-polar-1: #F5F1EA;
-    --fuente-polar-2: #BDB5AA;
-    --fuente-snow-2: #2F2925;
-    --fuente-snow-0: #635B55;
-    --fuente-frost-2: #8B3A26;
-    --fuente-frost-1: #8B3A26;
-    --fuente-success: #397A51;
-    --fuente-warning: #7D4C00;
-    --fuente-danger: #B33A3A;
-    --fuente-selection: #F3C2AE;
-    --fuente-focus: #8B3A26;
-    --fuente-glass: rgba(245, 241, 234, 0.64);
-    --fuente-glass-strong: rgba(255, 251, 245, 0.82);
-    --fuente-glass-border: rgba(255, 255, 255, 0.76);
-    --fuente-app-gradient: radial-gradient(circle at 10% 0%, rgba(255, 255, 255, 0.74), transparent 34%), radial-gradient(circle at 100% 22%, rgba(243, 194, 174, 0.3), transparent 38%);
-    --fuente-shadow-glass: 0 24px 64px rgba(139, 58, 38, 0.14);
+    --fuente-polar-0: #E8EFEB;
+    --fuente-polar-1: #F8FAF8;
+    --fuente-polar-2: #B7C9C3;
+    --fuente-snow-2: #152723;
+    --fuente-snow-0: #536A64;
+    --fuente-frost-2: #0F766E;
+    --fuente-frost-1: #118A80;
+    --fuente-success: #27784A;
+    --fuente-warning: #8A5A00;
+    --fuente-danger: #B83D3A;
+    --fuente-selection: #BCEBE3;
+    --fuente-focus: #0F766E;
+    --fuente-glass: rgba(248, 250, 248, 0.92);
+    --fuente-glass-strong: rgba(255, 255, 255, 0.98);
+    --fuente-glass-border: rgba(15, 118, 110, 0.16);
+    --fuente-app-gradient: radial-gradient(circle at 82% -12%, rgba(20, 184, 166, 0.16), transparent 35%), linear-gradient(145deg, #EEF4F0 0%, #E4ECE8 100%);
+    --fuente-shadow-glass: 0 16px 42px rgba(21, 39, 35, 0.1);
 }

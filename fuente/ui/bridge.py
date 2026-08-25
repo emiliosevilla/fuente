@@ -15,7 +15,6 @@ from typing import TYPE_CHECKING, Any, Mapping, Optional
 from fuente.application.approval import ApprovalApplicationService
 from fuente.application.discussion import DiscussionApplicationService
 from fuente.application.sharing import SharingApplicationService
-from fuente.application.meetings import MeetingCaptureRequest
 from fuente.application.job_control import (
     decode_cursor,
     validate_expected_revision,
@@ -1113,9 +1112,9 @@ class FuentePyWebViewApi:
         lifecycle = getattr(self.backend, "lifecycle", None)
         if lifecycle is not None:
             return lifecycle.meeting_service
-        from fuente.application.meetings import MeetingCaptureApplicationService
+        from fuente.application.meetings import MeetilyLibraryApplicationService
 
-        return MeetingCaptureApplicationService(self.backend.config)
+        return MeetilyLibraryApplicationService(self.backend.config)
 
     def open_meetily_app(self) -> dict[str, Any]:
         """Open the supported Meetily desktop app; it owns capture permissions."""
@@ -1137,61 +1136,22 @@ class FuentePyWebViewApi:
             return self._error("meetily_open_failed", str(error))
         return {"status": "opened", "app": "meetily"}
 
-    def start_meeting_capture(self, payload: object) -> dict[str, Any]:
-        data = self._payload(payload)
-        if isinstance(data, dict) and "error" in data:
-            return data
-        consent = data.get("consent")
-        if consent is not True:
-            return self._error("consent_required", "El consentimiento de grabación es obligatorio")
-        theme_id = self._text(data.get("theme_id"), "theme_id")
-        title = self._text(data.get("title"), "title")
-        requested_by = self._text(data.get("requested_by"), "requested_by")
-        if any(isinstance(value, dict) for value in (theme_id, title, requested_by)):
-            return next(value for value in (theme_id, title, requested_by) if isinstance(value, dict))
+    def list_meetily_recordings(self) -> dict[str, Any]:
         try:
-            session_id = self._meeting_service().start(
-                MeetingCaptureRequest(theme_id=theme_id, title=title, requested_by=requested_by),
-                consent=True,
-            )
-            return {"session_id": session_id, "status": "recording"}
+            return {"status": "ready", "recordings": self._meeting_service().list_recordings()}
         except Exception as error:
-            return self._error("meeting_start_failed", str(error))
+            return self._error("meetily_library_failed", str(error))
 
-    def stop_meeting_capture(self, session_id: object) -> dict[str, Any]:
-        value = self._text(session_id, "session_id")
+    def import_meetily_recording(self, recording_id: object) -> dict[str, Any]:
+        value = self._text(recording_id, "recording_id")
         if isinstance(value, dict):
             return value
+        if not re.fullmatch(r"meetily_[0-9a-f]{24}", value):
+            return self._error("invalid_payload", "recording_id is not valid")
         try:
-            return self._meeting_service().stop(value)
+            return self._meeting_service().import_recording(value)
         except Exception as error:
-            return self._error("meeting_stop_failed", str(error))
-
-    def recover_meeting_capture(self, session_id: object) -> dict[str, Any]:
-        value = self._text(session_id, "session_id")
-        if isinstance(value, dict):
-            return value
-        try:
-            return self._meeting_service().recover(value)
-        except Exception as error:
-            return self._error("meeting_recover_failed", str(error))
-
-    def get_meeting_session(self, session_id: object) -> dict[str, Any]:
-        value = self._text(session_id, "session_id")
-        if isinstance(value, dict):
-            return value
-        try:
-            service = self._meeting_service()
-            payload = service.manifest(value)
-            status = service.status(value)
-            payload["session_id"] = value
-            payload["status"] = status.status
-            payload["recoverable"] = status.recoverable
-            if status.error_code:
-                payload["error_code"] = status.error_code
-            return payload
-        except Exception as error:
-            return self._error("meeting_session_failed", str(error))
+            return self._error("meetily_import_failed", str(error))
 
     def process_workspace_chat(self, document_id: object, message: object) -> dict[str, Any]:
         note = self._text(document_id, "document_id")

@@ -625,7 +625,10 @@ class MeetingImportApplicationService:
         session_id = artifacts.session_id
         manifest_path = self._preparation_path(session_id, "manifest.json")
         recording_path = self._vault_path(
-            self.vault.dirty_dir / "reunion" / session_id / "recording.m4a"
+            self.vault.dirty_dir
+            / "reunion"
+            / session_id
+            / f"recording{artifacts.recording_path.suffix.lower()}"
         )
         transcript_path = self._vault_path(
             self.vault.clean_dir / "reunion" / f"{session_id}.md"
@@ -714,6 +717,7 @@ class MeetingImportApplicationService:
         )
         created_targets: list[Path] = []
         created_directories: list[Path] = []
+        created_catalog_rows: list[tuple[str, str, str, str, str | None]] = []
         session_created = False
         try:
             self._write_import_files(files_to_write, created_targets, created_directories)
@@ -721,8 +725,38 @@ class MeetingImportApplicationService:
                 session_was_absent = self.store.get_meeting_session(session_id) is None
                 self.store.create_meeting_session(session)
                 session_created = session_was_absent
+                self._register_catalog_note(
+                    transcript_relative,
+                    transcript_hash,
+                    "original",
+                    None,
+                    "pending_review",
+                    created_catalog_rows,
+                )
+                if notes_relative is not None and notes_hash is not None:
+                    self._register_catalog_note(
+                        notes_relative,
+                        notes_hash,
+                        "summary",
+                        "meeting",
+                        "pending_review",
+                        created_catalog_rows,
+                    )
             self._write_manifest_once(manifest_path, manifest)
         except BaseException:
+            for note_id, relative, content_hash, note_type, origin_kind in reversed(
+                created_catalog_rows
+            ):
+                self.store.rollback_note_vocabulary(
+                    note_id=note_id,
+                    relative_path=relative,
+                    revision=1,
+                    pre_content_hash=content_hash,
+                    post_content_hash=content_hash,
+                    note_type=note_type,
+                    origin_kind=origin_kind,
+                    catalog_existed=False,
+                )
             self._rollback_files(created_targets, created_directories)
             if session_created:
                 self.store.delete_meeting_session(session_id)
@@ -771,9 +805,14 @@ class MeetingImportApplicationService:
         source = self._vault_path(
             self.vault.config.vault_path / artifacts.recording_path
         )
-        expected = self._preparation_path(artifacts.session_id, "recording.m4a")
-        if source != expected or source.suffix.lower() != ".m4a":
-            raise MeetingContractError("recording must be the prepared recording.m4a")
+        suffix = artifacts.recording_path.suffix.lower()
+        if suffix not in {".m4a", ".mp3", ".mp4", ".wav"}:
+            raise MeetingContractError("recording format is not supported")
+        expected = self._preparation_path(
+            artifacts.session_id, f"recording{suffix}"
+        )
+        if source != expected:
+            raise MeetingContractError("recording must be prepared for this session")
         if source.is_symlink() or not source.is_file():
             raise MeetingContractError(
                 "prepared recording is missing or is not a regular file"
@@ -831,12 +870,14 @@ class MeetingImportApplicationService:
     def _canonical_transcript(
         session_id: str, body: str, relative_path: str
     ) -> str:
+        title_match = re.search(r"(?m)^#\s+(.+?)\s*$", body)
+        title = title_match.group(1) if title_match else f"Meeting transcript {session_id}"
         return serialize_frontmatter(
             {
                 "schema_version": 3,
                 "note_id": document_id_for_relative_path(relative_path),
                 "note_type": "original",
-                "title": f"Meeting transcript {session_id}",
+                "title": title,
                 "date": "",
                 "author": "Meetily",
                 "tags": ["meeting", session_id],
@@ -850,6 +891,38 @@ class MeetingImportApplicationService:
                 "template_id": MEETING_TEMPLATE_ID,
             }
         ) + body
+
+    def _register_catalog_note(
+        self,
+        relative_path: str,
+        content_hash: str,
+        note_type: str,
+        origin_kind: str | None,
+        status: str,
+        created: list[tuple[str, str, str, str, str | None]],
+    ) -> None:
+        note_id = document_id_for_relative_path(relative_path)
+        existing = self.store.get_note(note_id)
+        if existing is not None:
+            if (
+                existing["relative_path"] != relative_path
+                or existing["content_hash"] != content_hash
+                or existing["note_type"] != note_type
+                or existing["status"] != status
+            ):
+                raise MeetingContractError("meeting note conflicts with the catalog")
+            return
+        self.store.register_note(
+            note_id=note_id,
+            relative_path=relative_path,
+            content_hash=content_hash,
+            note_type=note_type,
+            origin_kind=origin_kind,
+            theme=self.vault.active_theme,
+            issue=DEFAULT_ISSUE,
+            status=status,
+        )
+        created.append((note_id, relative_path, content_hash, note_type, origin_kind))
 
     @staticmethod
     def _canonical_notes(

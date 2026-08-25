@@ -366,16 +366,40 @@
     <div class="modal-overlay" id="meetily-modal" role="dialog" aria-modal="true" aria-labelledby="meetily-modal-title" aria-hidden="true">
         <div class="modal-container meeting-modal-container">
             <div class="modal-header">
-                <div class="modal-title" id="meetily-modal-title">REUNIÓN — MEETILY LOCAL</div>
+                <div>
+                    <div class="modal-kicker">Reuniones locales</div>
+                    <div class="modal-title" id="meetily-modal-title">De la conversación a tus notas</div>
+                </div>
                 <button class="close-btn" data-onclick-command="closeMeetilyModal()" aria-label="Cerrar captura de reunión">&times;</button>
             </div>
             <div class="modal-body meeting-modal-body">
-                <p>Fuente abre Meetily para grabar la reunión.</p>
-                <p class="workspace-help">Cuando acabes, vuelve aquí, elige la carpeta de grabaciones en Ajustes y pulsa «Actualizar entradas».</p>
-                <div class="meeting-modal-actions">
-                    <button type="button" class="btn-primary" data-onclick-command="openMeetilyApplication()">Abrir Meetily</button>
+                <section class="meeting-hero">
+                    <div class="meeting-hero-copy">
+                        <span class="meeting-local-badge">Privado · en este Mac</span>
+                        <h2>Graba en Meetily. Fuente convierte la reunión en conocimiento.</h2>
+                        <p>La grabación y la transcripción se quedan en tu equipo. Al terminar, vuelve y recoge la reunión aquí.</p>
+                        <div class="meeting-modal-actions">
+                            <button type="button" class="btn-primary meeting-open-button" data-onclick-command="openMeetilyApplication()">
+                                <span class="meeting-record-dot" aria-hidden="true"></span> Abrir Meetily
+                            </button>
+                            <button type="button" class="btn-secondary" data-onclick-command="refreshMeetilyRecordings()">Actualizar reuniones</button>
+                        </div>
+                    </div>
+                    <ol class="meeting-flow" aria-label="Recorrido de una reunión">
+                        <li><span>1</span><div><strong>Graba</strong><small>Meetily escucha y transcribe.</small></div></li>
+                        <li><span>2</span><div><strong>Vuelve</strong><small>Fuente detecta el resultado.</small></div></li>
+                        <li><span>3</span><div><strong>Importa</strong><small>Audio y texto quedan enlazados.</small></div></li>
+                    </ol>
+                </section>
+                <div class="meeting-library-header">
+                    <div>
+                        <span class="meeting-section-label">Biblioteca de Meetily</span>
+                        <h3>Reuniones recientes</h3>
+                    </div>
+                    <span class="meeting-count" id="meetily-recording-count">0</span>
                 </div>
-                <p id="meetily-status" role="status" aria-live="polite">Meetily está listo para abrirse.</p>
+                <p id="meetily-status" class="meeting-status" role="status" aria-live="polite">Buscando reuniones en este Mac…</p>
+                <div id="meetily-recording-list" class="meeting-recording-list" aria-live="polite"></div>
             </div>
         </div>
     </div>
@@ -1058,10 +1082,7 @@
                 'openMeetilyModal()': openMeetilyModal,
                 'closeMeetilyModal()': closeMeetilyModal,
                 'openMeetilyApplication()': openMeetilyApplication,
-                'startMeetilyRecording()': startMeetilyRecording,
-                'stopMeetilyRecording()': stopMeetilyRecording,
-                'recoverMeetilyRecording()': recoverMeetilyRecording,
-                'openMeetilyTranscript()': openMeetilyTranscript,
+                'refreshMeetilyRecordings()': refreshMeetilyRecordings,
                 'loadJobQueue()': loadJobQueue,
                 'refreshJobQueue()': refreshJobQueue,
                 'loadNextJobPage()': loadNextJobPage,
@@ -4010,8 +4031,6 @@
                 .catch(function() { renderWorkspaceChatReply({error: {message: 'No se pudo consultar la nota.'}}); });
         }
 
-        let currentMeetingSessionId = null;
-
         let meetilyInvoker = null;
         let meetilyFocusHandler = null;
 
@@ -4020,15 +4039,9 @@
             openModal('meetily-modal');
             const modal = document.getElementById('meetily-modal');
             if (modal) modal.setAttribute('aria-hidden', 'false');
-            const consent = document.getElementById('meetily-recording-consent');
-            if (consent) consent.focus();
-            if (window.pywebview && window.pywebview.api) {
-                const saved = window.localStorage.getItem('fuente.meeting.session_id');
-                if (saved) {
-                    currentMeetingSessionId = saved;
-                    window.pywebview.api.get_meeting_session(saved).then(renderMeetilyResult);
-                }
-            }
+            const openButton = modal && modal.querySelector('.meeting-open-button');
+            if (openButton) openButton.focus();
+            refreshMeetilyRecordings();
             meetilyFocusHandler = function(event) {
                 if (event.key === 'Escape') { closeMeetilyModal(); return; }
                 if (event.key !== 'Tab' || !modal) return;
@@ -4065,70 +4078,113 @@
                     setMeetilyStatus(result.message || 'No se pudo abrir Meetily.');
                     return;
                 }
-                setMeetilyStatus('Meetily se ha abierto. Graba allí y vuelve después a Fuente para importar la carpeta.');
+                setMeetilyStatus('Meetily está abierto. Cuando termines, vuelve y pulsa «Actualizar reuniones».');
             }).catch(function() {
                 setMeetilyStatus('No se pudo abrir Meetily.');
             });
         }
 
-        function renderMeetilyResult(result) {
-            if (!result || result.error) {
-                setMeetilyStatus((result && result.message) || 'No se pudo completar la operación. Recupera la sesión si es necesario.');
-                return;
-            }
-            currentMeetingSessionId = result.session_id || currentMeetingSessionId;
-            if (currentMeetingSessionId && window.localStorage) window.localStorage.setItem('fuente.meeting.session_id', currentMeetingSessionId);
-            const statusMessage = result.status === 'imported'
-                ? 'Artefactos importados en las carpetas de reunión.'
-                : (result.status === 'recoverable' ? 'La sesión necesita recuperación.' : 'Grabación activa.');
-            setMeetilyStatus(statusMessage);
-            const stop = document.getElementById('meetily-stop-recording');
-            if (stop) stop.disabled = result.status !== 'recording';
-            const start = document.getElementById('meetily-start-recording');
-            if (start) start.setAttribute('aria-pressed', result.status === 'recording' ? 'true' : 'false');
-            const artifacts = document.getElementById('meetily-artifacts');
-            if (artifacts && result.transcript_status) artifacts.textContent = 'Transcripción: ' + result.transcript_status + ' · Notas: ' + (result.notes_status || 'pendientes');
-            const transcript = document.getElementById('meetily-open-transcript');
-            if (transcript) {
-                transcript.classList.toggle('is-hidden', !result.transcript_document_id);
-                transcript.dataset.documentId = result.transcript_document_id || '';
-            }
+        function meetilyDateLabel(value) {
+            if (!value) return 'Fecha sin registrar';
+            const date = new Date(value);
+            return Number.isNaN(date.getTime()) ? value : new Intl.DateTimeFormat('es', {dateStyle: 'medium', timeStyle: 'short'}).format(date);
         }
 
-        function startMeetilyRecording() {
-            const consent = document.getElementById('meetily-recording-consent');
-            const title = document.getElementById('meetily-title');
-            const requestedBy = document.getElementById('meetily-requested-by');
-            if (!(consent && consent.checked && title && title.value.trim() && requestedBy && requestedBy.value.trim())) {
-                setMeetilyStatus('Completa título, autor y consentimiento antes de iniciar.');
-                return;
-            }
-            window.pywebview.api.start_meeting_capture({
-                theme_id: currentActiveTheme || 'General', title: title.value.trim(),
-                requested_by: requestedBy.value.trim(), consent: true
-            }).then(renderMeetilyResult).catch(function() { setMeetilyStatus('No se pudo iniciar; revisa permisos y recupera la sesión.'); });
+        function meetilyDurationLabel(seconds) {
+            if (!(typeof seconds === 'number' && Number.isFinite(seconds))) return 'Duración no disponible';
+            const total = Math.max(0, Math.round(seconds));
+            return Math.floor(total / 60) + ' min ' + String(total % 60).padStart(2, '0') + ' s';
         }
 
-        function stopMeetilyRecording() {
-            if (!currentMeetingSessionId || !(window.pywebview && window.pywebview.api)) return;
-            window.pywebview.api.stop_meeting_capture(currentMeetingSessionId).then(renderMeetilyResult).catch(function() { setMeetilyStatus('No se pudo detener; recupera la sesión.'); });
-        }
-
-        function openMeetilyTranscript() {
-            const button = document.getElementById('meetily-open-transcript');
-            const documentId = button && button.dataset.documentId;
+        function openMeetilyTranscript(documentId) {
             if (!documentId) return;
             closeMeetilyModal();
             openModal('modal-reader');
             loadNoteContent(documentId);
         }
 
-        function recoverMeetilyRecording() {
-            if (!currentMeetingSessionId || !(window.pywebview && window.pywebview.api)) {
-                setMeetilyStatus('Indica una sesión activa para recuperar.');
+        function importMeetilyRecording(recordingId, button) {
+            if (!(window.pywebview && window.pywebview.api && window.pywebview.api.import_meetily_recording)) return;
+            if (button) button.disabled = true;
+            setMeetilyStatus('Importando audio y transcripción…');
+            window.pywebview.api.import_meetily_recording(recordingId).then(function(result) {
+                if (!result || result.error) {
+                    setMeetilyStatus((result && result.message) || 'No se pudo importar la reunión.');
+                    if (button) button.disabled = false;
+                    return;
+                }
+                setMeetilyStatus('«' + result.title + '» ya forma parte de Fuente.');
+                refreshMeetilyRecordings({quiet: true});
+            }).catch(function() {
+                setMeetilyStatus('No se pudo importar la reunión.');
+                if (button) button.disabled = false;
+            });
+        }
+
+        function renderMeetilyRecordings(recordings) {
+            const list = document.getElementById('meetily-recording-list');
+            const count = document.getElementById('meetily-recording-count');
+            if (!list) return;
+            list.replaceChildren();
+            if (count) count.textContent = String(recordings.length);
+            if (!recordings.length) {
+                const empty = document.createElement('div');
+                empty.className = 'meeting-empty';
+                const title = document.createElement('strong');
+                title.textContent = 'Aún no hay reuniones terminadas';
+                const copy = document.createElement('span');
+                copy.textContent = 'Abre Meetily, graba una conversación y vuelve aquí.';
+                empty.append(title, copy);
+                list.appendChild(empty);
                 return;
             }
-            window.pywebview.api.recover_meeting_capture(currentMeetingSessionId).then(renderMeetilyResult).catch(function() { setMeetilyStatus('No se pudo recuperar la sesión.'); });
+            recordings.forEach(function(recording) {
+                const card = document.createElement('article');
+                card.className = 'meeting-recording-card';
+                const state = document.createElement('span');
+                state.className = 'meeting-recording-state ' + (recording.imported ? 'is-imported' : (recording.ready ? 'is-ready' : 'is-waiting'));
+                state.textContent = recording.imported ? 'En Fuente' : (recording.ready ? 'Lista' : 'Pendiente');
+                const body = document.createElement('div');
+                body.className = 'meeting-recording-copy';
+                const title = document.createElement('h4');
+                title.textContent = recording.title;
+                const meta = document.createElement('p');
+                meta.textContent = [meetilyDateLabel(recording.created_at), meetilyDurationLabel(recording.duration_seconds), recording.segment_count + ' fragmentos'].join(' · ');
+                body.append(title, meta);
+                if (recording.reason) {
+                    const reason = document.createElement('small');
+                    reason.textContent = recording.reason;
+                    body.appendChild(reason);
+                }
+                const action = document.createElement('button');
+                action.type = 'button';
+                action.className = recording.imported ? 'btn-secondary' : 'btn-primary';
+                action.textContent = recording.imported ? 'Abrir nota' : 'Importar';
+                action.disabled = !recording.ready;
+                action.addEventListener('click', function() {
+                    if (recording.imported) openMeetilyTranscript(recording.transcript_document_id);
+                    else importMeetilyRecording(recording.recording_id, action);
+                });
+                card.append(state, body, action);
+                list.appendChild(card);
+            });
+        }
+
+        function refreshMeetilyRecordings(options) {
+            if (!(window.pywebview && window.pywebview.api && window.pywebview.api.list_meetily_recordings)) {
+                setMeetilyStatus('Fuente no puede leer la biblioteca local de Meetily.');
+                return;
+            }
+            if (!(options && options.quiet)) setMeetilyStatus('Buscando reuniones en este Mac…');
+            window.pywebview.api.list_meetily_recordings().then(function(result) {
+                if (!result || result.error) {
+                    setMeetilyStatus((result && result.message) || 'No se pudo leer la biblioteca de Meetily.');
+                    return;
+                }
+                const recordings = Array.isArray(result.recordings) ? result.recordings : [];
+                renderMeetilyRecordings(recordings);
+                if (!(options && options.quiet)) setMeetilyStatus(recordings.length ? 'Biblioteca actualizada.' : 'No hay reuniones disponibles todavía.');
+            }).catch(function() { setMeetilyStatus('No se pudo leer la biblioteca de Meetily.'); });
         }
 
         function submitDiscussionReply(event) {

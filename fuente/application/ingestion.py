@@ -80,7 +80,7 @@ from fuente.infrastructure.sqlite_store import JobStore
 from fuente.ram_governor.budget import unavailable_snapshot
 from fuente.rag.chroma_store import ChromaRetrievalBackend
 from fuente.rag.router import RetrievalRouter
-from fuente.rag.minirag_store import MiniRAGStore
+from fuente.rag.minirag_store import MiniRAGStore, MiniRAGUnavailableError
 
 logger = logging.getLogger(__name__)
 
@@ -308,9 +308,7 @@ class IngestionApplicationService:
         """Treat the contract's ``None`` delete result as successful."""
         try:
             return self.router.primary().delete(chunk_ids) is not False
-        except RuntimeError as error:
-            if "MiniRAG is not installed" not in str(error):
-                raise
+        except MiniRAGUnavailableError:
             return self.router.refinement().delete(chunk_ids) is not False
 
     def _delete_refinement_chunks(self, chunk_ids) -> bool:
@@ -818,9 +816,7 @@ class IngestionApplicationService:
             self._delete_primary_chunks(obsolete)
         try:
             result = self.router.primary().rebuild(chunks)
-        except RuntimeError as error:
-            if "MiniRAG is not installed" not in str(error):
-                raise
+        except MiniRAGUnavailableError:
             logger.info("MiniRAG unavailable; using Chroma refinement backend for this run")
             result = self.router.refinement().rebuild(chunks)
         if not result.success:

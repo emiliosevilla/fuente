@@ -19,6 +19,7 @@ from fuente.extractors.registry import ExtractorRegistry
 from fuente.graph_engine.linker import GraphLinker
 from fuente.infrastructure.sqlite_store import JobStore
 from fuente.rag.chroma_store import ChromaRetrievalBackend
+from fuente.rag.minirag_store import MiniRAGUnavailableError
 from fuente.rag.router import RetrievalRouter
 from fuente.rag.semantic_chunker import SemanticChunker
 
@@ -71,13 +72,13 @@ class MissingMiniRAG:
     name = "minirag"
 
     def rebuild(self, _records):
-        raise RuntimeError("MiniRAG is not installed; use BM25 fallback")
+        raise MiniRAGUnavailableError("MiniRAG is not installed; use BM25 fallback")
 
     def search(self, _query, _limit):
-        raise RuntimeError("MiniRAG is not installed; use BM25 fallback")
+        raise MiniRAGUnavailableError("MiniRAG is not installed; use BM25 fallback")
 
     def delete(self, _document_ids):
-        raise RuntimeError("MiniRAG is not installed; use BM25 fallback")
+        raise MiniRAGUnavailableError("MiniRAG is not installed; use BM25 fallback")
 
 
 def offline_router(chroma: FakeChroma) -> RetrievalRouter:

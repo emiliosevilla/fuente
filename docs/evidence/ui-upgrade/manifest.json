@@ -1,0 +1,77 @@
+{
+  "plan": "/Users/emiliosevillaortego/.codex/visualizations/2026/08/25/01a039a2-5104-78b3-bc9a-11fc91d90d40/2026-08-25-fuente-ui-upgrade-sdd.md",
+  "runtime": "PyWebView/WebKit",
+  "chrome_used": false,
+  "gates": {
+    "G0": {
+      "status": "PASS",
+      "command_exit": 0,
+      "branch": "dev",
+      "head": "8b6d154563fbbd9acba1e26358f73ff5ee43efae",
+      "divergence_origin_dev_vs_dev": [0, 0],
+      "tree": "clean before execution",
+      "remote": "origin https://github.com/emiliosevilla/fuente.git"
+    },
+    "G1": {
+      "status": "PASS",
+      "command_exit": 0,
+      "design_search": [
+        {"query": "desktop knowledge productivity local-first content-first", "verdict": "rejected: FAQ landing, remote font, off-topic"},
+        {"query": "native desktop knowledge studio notes meetings graph", "verdict": "rejected: scroll storytelling, GSAP/remote fonts, off-topic"}
+      ],
+      "source_of_truth": "design-system/fuente/MASTER.md",
+      "pages": ["inicio", "notas", "reuniones", "mapa"]
+    },
+    "G2": {
+      "status": "PASS",
+      "commit": "7e53c81ec43eaf20172296bb98907b84092c7483",
+      "result": "7 expected failures for the old shell; 16 preserved contracts passed"
+    },
+    "G3": {
+      "status": "PASS",
+      "focused_contracts": "33 passed in 0.11s; exit 0",
+      "visual_sizes": "PASS",
+      "keyboard_navigation": "PASS: Tab entered PyWebView, exposed AXButton focus, showed a visible focus indicator on Buscar, and keyboard activation changed the active workspace to Notas."
+    },
+    "G4": {"status": "PENDING"},
+    "G5": {"status": "PENDING"},
+    "G6": {"status": "PENDING"},
+    "G7": {"status": "PENDING"},
+    "G8": {"status": "PENDING"},
+    "G9": {"status": "PENDING"}
+  },
+  "native_shell": {
+    "launch": "python3 -m fuente.main --vault /tmp/fuente-ui-shell.okezTX",
+    "runtime": "PyWebView/WebKit using the current working tree",
+    "screenshots": {
+      "1024x700": {"path": "docs/evidence/ui-upgrade/shell-1024x700.png", "sha256": "709a49503dbfe52758c685678ad57b2d3fa7f22d1fec97ab8cac33264413f5b1", "window": [0, 30, 1024, 700], "visual": "PASS"},
+      "1280x850": {"path": "docs/evidence/ui-upgrade/shell-1280x850.png", "sha256": "c0409ba66c187b99ea0cfcb2ca4006065d48d619aaf60a552793c7b55227f52e", "window": [0, 30, 1280, 850], "visual": "PASS"},
+      "1440x900": {"path": "docs/evidence/ui-upgrade/shell-1440x900.png", "sha256": "ee95e0ab3a607979992eab8ad8d07bddf9d91da10d7aa8a3506d3405d19bfd05", "window": [0, 30, 1440, 900], "visual": "PASS"},
+      "maximized": {"path": "docs/evidence/ui-upgrade/shell-maximized.png", "sha256": "b8a58ec09b34459e5d496c56d1d8069a4207baa83922b80caa0d1a243cede9de", "window": [0, 30, 1920, 1170], "visual": "PASS"}
+    },
+    "display": {
+      "temporary_mode": "1920x1200 logical",
+      "restored_mode": "1280x828 logical / 2560x1656 pixels"
+    },
+    "keyboard_walkthrough": {
+      "status": "PASS_FOR_G3",
+      "system_setting": "AppleKeyboardUIMode=3; System Events UI elements enabled=true",
+      "focus_evidence": {"path": "docs/evidence/ui-upgrade/shell-keyboard-tab2.png", "sha256": "0ecec5f7be3cb7270a1557566569904985c8ce541d4586060b78dd659aa12f8c", "focused_role": "AXButton", "visible_control": "Buscar"},
+      "activation_evidence": {"path": "docs/evidence/ui-upgrade/shell-keyboard-notes.png", "sha256": "bc6fa23177990ab7290ceee8ec9e58eb9091ae72e65e1cadb822caa2a52d5056", "result": "Notas workspace active after keyboard traversal and Return"},
+      "scope": "Shell navigation required by Task 3. The complete workspace and 18-dialog walkthrough remains a Task 7 requirement."
+    }
+  },
+  "baseline": {
+    "capture_command": "screencapture -x -R0,26,1280,802 <path>",
+    "window": {"logical_position": [0, 26], "logical_size": [1280, 802]},
+    "screenshots": {
+      "main": {"path": "docs/evidence/ui-upgrade/before-main.png", "sha256": "e4c57f7236b1bc6f6af00e95f0cb5af0e1c004f0df9702b710dc453b4e5cb83a"},
+      "notes": {"path": "docs/evidence/ui-upgrade/before-notes.png", "sha256": "54bc29e21be33936ef0c053700bdc21f3dd35f2be9c17221d95736d95a60de2b"},
+      "meetings": {"path": "docs/evidence/ui-upgrade/before-meetings.png", "sha256": "03d4c469c05d67499f359086becf4143a76e41236e7e4af643f98b9068b22ba6"},
+      "map": {"path": "docs/evidence/ui-upgrade/before-map.png", "sha256": "15adc9a1153ae9eb50ffb3cbf32e9e594bfd858b8fa17ec66e2dac7a40d74bc5"},
+      "review": {"path": "docs/evidence/ui-upgrade/before-review.png", "sha256": "4bfe513fd7d0036d167b0709ab05ee9fd1eac81f21586f3f683f16e9f7157705"},
+      "settings": {"path": "docs/evidence/ui-upgrade/before-settings.png", "sha256": "c498c41fa9075ce8eeab397ef9f19d65f9e315bdcee98e313475b05c44dc7eee"},
+      "quick_guide": {"path": "docs/evidence/ui-upgrade/before-quick-guide.png", "sha256": "84625ed91d918050584a28405d32ddacbea555e069fb89c363e3f2f9b351017f"}
+    }
+  }
+}

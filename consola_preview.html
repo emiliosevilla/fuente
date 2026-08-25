@@ -12,13 +12,24 @@
 </head>
 <body>
 
+    <nav id="primary-navigation" class="primary-navigation" aria-label="Espacios de Fuente">
+        <button type="button" class="workspace-trigger is-active" data-workspace-target="home" data-onclick-command="switchWorkspace('home')" aria-current="page"><span aria-hidden="true">F</span><span>Inicio</span></button>
+        <button type="button" class="workspace-trigger" data-workspace-target="notes" data-onclick-command="switchWorkspace('notes')" aria-current="false"><span aria-hidden="true">N</span><span>Notas</span></button>
+        <button type="button" class="workspace-trigger" data-workspace-target="meetings" data-onclick-command="switchWorkspace('meetings')" aria-current="false"><span aria-hidden="true">R</span><span>Reuniones</span></button>
+        <button type="button" class="workspace-trigger" data-workspace-target="map" data-onclick-command="switchWorkspace('map')" aria-current="false"><span aria-hidden="true">M</span><span>Mapa</span></button>
+    </nav>
+
+    <main class="workspace-stage" role="main">
+    <section id="workspace-home" class="workspace-panel-root is-active" data-workspace="home" tabindex="-1" aria-labelledby="workspace-home-title">
+
     <!-- CABECERA EDITORIAL PAPIRO -->
-    <div class="masthead-container">
+    <div class="masthead-container" id="contextual-header">
         <div class="masthead-main">
             <div>
-                <h1 class="masthead-title">FUENTE</h1>
+                <h1 class="masthead-title" id="workspace-home-title">Inicio</h1>
             </div>
             <div class="console-layout-001">
+                <button type="button" class="masthead-link icon-button" data-onclick-command="switchWorkspace('notes')" aria-label="Buscar en Fuente">Buscar</button>
                 <span class="masthead-link" data-onclick-command="triggerAction('quick_help')">Guía Rápida</span>
                 <span class="console-text-001">|</span>
                 <span class="masthead-link" data-onclick-command="openModal('modal-settings')">Ajustes</span>
@@ -88,31 +99,31 @@
         </div>
 
         <!-- STATS GRID -->
-        <div class="stats-grid">
-            <div class="stat-card" data-onclick-command="openModal('modal-stat-input')">
+        <div class="current-work-strip" aria-label="Trabajo actual">
+            <div class="current-work-item" data-onclick-command="openModal('modal-stat-input')">
                 <div class="stat-title">Archivos pendientes</div>
                 <div class="stat-num gold" id="stat-input">0</div>
             </div>
-            <div class="stat-card" data-onclick-command="openModal('modal-category')">
+            <div class="current-work-item" data-onclick-command="openModal('modal-category')">
                 <div class="stat-title">Archivos procesados</div>
                 <div class="stat-num green" id="stat-processed">0</div>
             </div>
-            <div class="stat-card" data-onclick-command="openModal('modal-quarantine')">
+            <div class="current-work-item" data-onclick-command="openModal('modal-quarantine')">
                 <div class="stat-title">En cuarentena</div>
                 <div class="stat-num red" id="stat-quarantine">0</div>
             </div>
-            <div class="stat-card" data-onclick-command="openModal('modal-stat-notes')">
+            <div class="current-work-item" data-onclick-command="openModal('modal-stat-notes')">
                 <div class="stat-title">Notas preparadas</div>
                 <div class="stat-num" id="stat-notes">0</div>
             </div>
-            <div class="stat-card" data-onclick-command="openModal('modal-stat-ram')">
+            <div class="current-work-item" data-onclick-command="openModal('modal-stat-ram')">
                 <div class="stat-title">Memoria</div>
                 <div class="stat-num" id="stat-ram">0%</div>
             </div>
         </div>
 
         <!-- MAPA SIMPLE DEL FLUJO -->
-        <div class="graph-section" id="graph-section">
+        <div class="graph-section fuente-flow" id="fuente-flow">
             <div class="graph-title">De archivos a notas útiles</div>
             
             <div class="subgraphs-container">
@@ -206,6 +217,35 @@
             <span class="console-text-002">Fuente · Emilio Sevilla Ortego</span>
         </div>
     </div>
+    </section>
+
+    <section id="workspace-notes" class="workspace-panel-root" data-workspace="notes" tabindex="-1" aria-labelledby="workspace-notes-title" hidden>
+        <header class="workspace-heading">
+            <p class="workspace-kicker">Biblioteca local</p>
+            <h1 id="workspace-notes-title">Notas</h1>
+            <p>Busca, lee y prepara tus notas sin perder el contexto.</p>
+        </header>
+        <div id="reader-workspace-host"></div>
+    </section>
+
+    <section id="workspace-meetings" class="workspace-panel-root" data-workspace="meetings" tabindex="-1" aria-labelledby="workspace-meetings-title" hidden>
+        <div class="workspace-placeholder">
+            <p class="workspace-kicker">Biblioteca local</p>
+            <h1 id="workspace-meetings-title">Reuniones</h1>
+            <p>Importa una conversación de Meetily y conviértela en notas.</p>
+            <button type="button" class="btn-primary" data-onclick-command="openMeetilyModal()">Ver reuniones</button>
+        </div>
+    </section>
+
+    <section id="workspace-map" class="workspace-panel-root" data-workspace="map" tabindex="-1" aria-labelledby="workspace-map-title" hidden>
+        <div class="workspace-placeholder">
+            <p class="workspace-kicker">Conocimiento conectado</p>
+            <h1 id="workspace-map-title">Mapa</h1>
+            <p>Explora relaciones, orígenes y notas en un espacio independiente.</p>
+            <button type="button" class="btn-primary" data-onclick-command="openReaderGraphModal()">Abrir mapa</button>
+        </div>
+    </section>
+    </main>
 
     <!-- MODAL NOTAS -->
     <div class="modal-overlay" id="modal-reader">
@@ -1034,6 +1074,7 @@
             if (command.startsWith('openModal(')) return openModal(args[0]);
             if (command.startsWith('openHelpInfo(')) return openHelpInfo(args[0]);
             if (command.startsWith('closeModal(')) return closeModal(args[0]);
+            if (command.startsWith('switchWorkspace(')) return switchWorkspace(args[0]);
             if (command.startsWith('switchReaderView(')) return switchReaderView(args[0]);
             if (command.startsWith('switchSettingsTab(')) return switchSettingsTab(args[0]);
             if (command.startsWith('switchWorkspaceTab(')) return switchWorkspaceTab(args[0]);
@@ -1097,6 +1138,30 @@
         if (!element) return;
         runStaticCommand(element.dataset[`on${eventName}Command`], element, event);
     });
+});
+
+document.addEventListener('keydown', function(event) {
+    const openDialogs = Array.from(document.querySelectorAll('.modal-overlay.is-open'));
+    const dialog = openDialogs[openDialogs.length - 1];
+    if (!dialog) return;
+    if (event.key === 'Escape') {
+        event.preventDefault();
+        if (dialog.id === 'meetily-modal') closeMeetilyModal();
+        else closeModal(dialog.id);
+        return;
+    }
+    if (event.key !== 'Tab') return;
+    const focusable = getFocusableElements(dialog);
+    if (!focusable.length) return;
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+    }
 });
 
         function log(msg) {
@@ -1281,6 +1346,42 @@
             }
         }
 
+        const WORKSPACE_IDS = ['home', 'notes', 'meetings', 'map'];
+
+        function switchWorkspace(workspaceId) {
+            if (!WORKSPACE_IDS.includes(workspaceId)) return;
+            document.querySelectorAll('[data-workspace]').forEach(function(panel) {
+                const active = panel.dataset.workspace === workspaceId;
+                panel.hidden = !active;
+                panel.classList.toggle('is-active', active);
+            });
+            document.querySelectorAll('[data-workspace-target]').forEach(function(button) {
+                const active = button.dataset.workspaceTarget === workspaceId;
+                button.classList.toggle('is-active', active);
+                button.setAttribute('aria-current', active ? 'page' : 'false');
+            });
+            document.getElementById('workspace-' + workspaceId)?.focus({preventScroll: true});
+            if (workspaceId === 'notes') loadReaderNotes();
+        }
+
+        function mountReaderWorkspace() {
+            const host = document.getElementById('reader-workspace-host');
+            const reader = document.getElementById('modal-reader');
+            if (!host || !reader) return;
+            host.appendChild(reader);
+            reader.classList.add('reader-workspace-embedded');
+            reader.setAttribute('aria-hidden', 'false');
+            reader.querySelector('.close-btn')?.setAttribute('data-onclick-command', "switchWorkspace('home')");
+        }
+
+        let lastDialogTrigger = null;
+
+        function getFocusableElements(dialog) {
+            if (!dialog) return [];
+            return Array.from(dialog.querySelectorAll('button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [href], [tabindex]:not([tabindex="-1"])'))
+                .filter(function(element) { return element.offsetParent !== null; });
+        }
+
         const NATIVE_REQUEST_TIMEOUT_MS = 4000;
         const NATIVE_INITIAL_STATE_TIMEOUT_MS = 30000;
         let nativeBackendErrorLogged = false;
@@ -1372,9 +1473,20 @@
         }
 
         function openModal(id) {
+            if (id === 'modal-reader') {
+                switchWorkspace('notes');
+                updateStepBadge('badge-step4');
+                return;
+            }
             const el = document.getElementById(id);
             if (el) {
+                lastDialogTrigger = document.activeElement;
                 el.classList.add('is-open');
+                el.setAttribute('aria-hidden', 'false');
+                requestAnimationFrame(function() {
+                    const focusable = getFocusableElements(el);
+                    if (focusable.length) focusable[0].focus();
+                });
             }
             updateModalBodyLock();
             if (id === 'modal-reader' || id === 'modal-chat') {
@@ -2662,8 +2774,12 @@
             const el = document.getElementById(id);
             if (el) {
                 el.classList.remove('is-open');
+                el.setAttribute('aria-hidden', 'true');
             }
             updateModalBodyLock();
+            if (lastDialogTrigger && typeof lastDialogTrigger.focus === 'function') {
+                lastDialogTrigger.focus();
+            }
         }
 
         function populateOllamaModels(models, currentModel) {
@@ -5838,7 +5954,7 @@
         let lastSearchQuery = '';
 
         function normalizeReaderSearchText(value) {
-            return String(value || '').toLocaleLowerCase().replace(/\s+/gu, ' ').trim();
+            return String(value || '').toLocaleLowerCase().replace(/[-_]+/gu, ' ').replace(/\s+/gu, ' ').trim();
         }
 
         function filterReaderNotes() {
@@ -6016,6 +6132,7 @@
 
         document.addEventListener('DOMContentLoaded', function() {
             applyVisualStyle(readVisualStyle());
+            mountReaderWorkspace();
             const shareButton = document.getElementById('document-share-button');
             if (shareButton) shareButton.addEventListener('click', shareCurrentDocument);
             const discussionForm = document.getElementById('discussion-reply-form');

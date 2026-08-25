@@ -5792,41 +5792,48 @@
             }
         }
 
+        let nativeReadyTimer = null;
+        let nativeConsoleInitialized = false;
         window.addEventListener('pywebviewready', function() {
-            log('Conexión nativa PyWebView establecida con la Consola Fuente');
-            if (window.pywebview && window.pywebview.api) {
-                recoverNativeModalLoads();
-                callNativeRequest('get_initial_state', function() {
-                    return window.pywebview.api.get_initial_state();
-                }).then(function(state) {
-                    updateDashboardStats(state.stats);
-                    if (state.vault_path) {
-                        document.getElementById('setting-vault-path').value = state.vault_path;
-                    }
-                    if (state.offline_mode) {
-                        applyOfflineModeState(state.offline_mode);
-                    }
-                    if (state.onboarding) {
-                        renderOnboarding(state.onboarding);
-                    }
-                    const status = document.getElementById('bottom-status-line');
-                    if (status) {
-                        status.textContent = state.vault_path
-                            ? 'Tema conectado: ' + state.vault_path
-                            : 'No hay un tema conectado. Configúralo desde Ajustes.';
-                        if (state.setup_mode) {
-                            renderSetupSettings({
-                                setup_mode: true,
-                                obsidian_installed: Boolean(state.obsidian_installed),
-                            });
-                            openModal('modal-settings');
+            if (nativeConsoleInitialized) return;
+            clearTimeout(nativeReadyTimer);
+            nativeReadyTimer = setTimeout(function() {
+                nativeConsoleInitialized = true;
+                log('Conexión nativa PyWebView establecida con la Consola Fuente');
+                if (window.pywebview && window.pywebview.api) {
+                    recoverNativeModalLoads();
+                    callNativeRequest('get_initial_state', function() {
+                        return window.pywebview.api.get_initial_state();
+                    }).then(function(state) {
+                        updateDashboardStats(state.stats);
+                        if (state.vault_path) {
+                            document.getElementById('setting-vault-path').value = state.vault_path;
                         }
-                    }
-                }).catch(function(err) {
-                    renderNativeBackendStatusError(String(err || nativeBackendUnavailableMessage()));
-                });
-                loadThemes();
-            }
+                        if (state.offline_mode) {
+                            applyOfflineModeState(state.offline_mode);
+                        }
+                        if (state.onboarding) {
+                            renderOnboarding(state.onboarding);
+                        }
+                        const status = document.getElementById('bottom-status-line');
+                        if (status) {
+                            status.textContent = state.vault_path
+                                ? 'Tema conectado: ' + state.vault_path
+                                : 'No hay un tema conectado. Configúralo desde Ajustes.';
+                            if (state.setup_mode) {
+                                renderSetupSettings({
+                                    setup_mode: true,
+                                    obsidian_installed: Boolean(state.obsidian_installed),
+                                });
+                                openModal('modal-settings');
+                            }
+                        }
+                    }).catch(function(err) {
+                        renderNativeBackendStatusError(String(err || nativeBackendUnavailableMessage()));
+                    });
+                    loadThemes();
+                }
+            }, 50);
         });
 
         document.addEventListener('DOMContentLoaded', function() {

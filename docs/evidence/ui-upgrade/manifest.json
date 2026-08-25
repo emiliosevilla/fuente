@@ -1,0 +1,47 @@
+{
+  "plan": "/Users/emiliosevillaortego/.codex/visualizations/2026/08/25/01a039a2-5104-78b3-bc9a-11fc91d90d40/2026-08-25-fuente-ui-upgrade-sdd.md",
+  "runtime": "PyWebView/WebKit",
+  "chrome_used": false,
+  "gates": {
+    "G0": {
+      "status": "PASS",
+      "command_exit": 0,
+      "branch": "dev",
+      "head": "8b6d154563fbbd9acba1e26358f73ff5ee43efae",
+      "divergence_origin_dev_vs_dev": [0, 0],
+      "tree": "clean before execution",
+      "remote": "origin https://github.com/emiliosevilla/fuente.git"
+    },
+    "G1": {
+      "status": "PASS",
+      "command_exit": 0,
+      "design_search": [
+        {"query": "desktop knowledge productivity local-first content-first", "verdict": "rejected: FAQ landing, remote font, off-topic"},
+        {"query": "native desktop knowledge studio notes meetings graph", "verdict": "rejected: scroll storytelling, GSAP/remote fonts, off-topic"}
+      ],
+      "source_of_truth": "design-system/fuente/MASTER.md",
+      "pages": ["inicio", "notas", "reuniones", "mapa"]
+    },
+    "G2": {"status": "PENDING"},
+    "G3": {"status": "PENDING"},
+    "G4": {"status": "PENDING"},
+    "G5": {"status": "PENDING"},
+    "G6": {"status": "PENDING"},
+    "G7": {"status": "PENDING"},
+    "G8": {"status": "PENDING"},
+    "G9": {"status": "PENDING"}
+  },
+  "baseline": {
+    "capture_command": "screencapture -x -R0,26,1280,802 <path>",
+    "window": {"logical_position": [0, 26], "logical_size": [1280, 802]},
+    "screenshots": {
+      "main": {"path": "docs/evidence/ui-upgrade/before-main.png", "sha256": "e4c57f7236b1bc6f6af00e95f0cb5af0e1c004f0df9702b710dc453b4e5cb83a"},
+      "notes": {"path": "docs/evidence/ui-upgrade/before-notes.png", "sha256": "54bc29e21be33936ef0c053700bdc21f3dd35f2be9c17221d95736d95a60de2b"},
+      "meetings": {"path": "docs/evidence/ui-upgrade/before-meetings.png", "sha256": "03d4c469c05d67499f359086becf4143a76e41236e7e4af643f98b9068b22ba6"},
+      "map": {"path": "docs/evidence/ui-upgrade/before-map.png", "sha256": "15adc9a1153ae9eb50ffb3cbf32e9e594bfd858b8fa17ec66e2dac7a40d74bc5"},
+      "review": {"path": "docs/evidence/ui-upgrade/before-review.png", "sha256": "4bfe513fd7d0036d167b0709ab05ee9fd1eac81f21586f3f683f16e9f7157705"},
+      "settings": {"path": "docs/evidence/ui-upgrade/before-settings.png", "sha256": "c498c41fa9075ce8eeab397ef9f19d65f9e315bdcee98e313475b05c44dc7eee"},
+      "quick_guide": {"path": "docs/evidence/ui-upgrade/before-quick-guide.png", "sha256": "84625ed91d918050584a28405d32ddacbea555e069fb89c363e3f2f9b351017f"}
+    }
+  }
+}

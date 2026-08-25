@@ -220,12 +220,12 @@
     </section>
 
     <section id="workspace-notes" class="workspace-panel-root" data-workspace="notes" tabindex="-1" aria-labelledby="workspace-notes-title" hidden>
-        <div class="workspace-placeholder">
+        <header class="workspace-heading">
             <p class="workspace-kicker">Biblioteca local</p>
             <h1 id="workspace-notes-title">Notas</h1>
             <p>Busca, lee y prepara tus notas sin perder el contexto.</p>
-            <button type="button" class="btn-primary" data-onclick-command="openModal('modal-reader')">Abrir notas</button>
-        </div>
+        </header>
+        <div id="reader-workspace-host"></div>
     </section>
 
     <section id="workspace-meetings" class="workspace-panel-root" data-workspace="meetings" tabindex="-1" aria-labelledby="workspace-meetings-title" hidden>
@@ -1361,6 +1361,17 @@ document.addEventListener('keydown', function(event) {
                 button.setAttribute('aria-current', active ? 'page' : 'false');
             });
             document.getElementById('workspace-' + workspaceId)?.focus({preventScroll: true});
+            if (workspaceId === 'notes') loadReaderNotes();
+        }
+
+        function mountReaderWorkspace() {
+            const host = document.getElementById('reader-workspace-host');
+            const reader = document.getElementById('modal-reader');
+            if (!host || !reader) return;
+            host.appendChild(reader);
+            reader.classList.add('reader-workspace-embedded');
+            reader.setAttribute('aria-hidden', 'false');
+            reader.querySelector('.close-btn')?.setAttribute('data-onclick-command', "switchWorkspace('home')");
         }
 
         let lastDialogTrigger = null;
@@ -1462,6 +1473,11 @@ document.addEventListener('keydown', function(event) {
         }
 
         function openModal(id) {
+            if (id === 'modal-reader') {
+                switchWorkspace('notes');
+                updateStepBadge('badge-step4');
+                return;
+            }
             const el = document.getElementById(id);
             if (el) {
                 lastDialogTrigger = document.activeElement;
@@ -5938,7 +5954,7 @@ document.addEventListener('keydown', function(event) {
         let lastSearchQuery = '';
 
         function normalizeReaderSearchText(value) {
-            return String(value || '').toLocaleLowerCase().replace(/\s+/gu, ' ').trim();
+            return String(value || '').toLocaleLowerCase().replace(/[-_]+/gu, ' ').replace(/\s+/gu, ' ').trim();
         }
 
         function filterReaderNotes() {
@@ -6116,6 +6132,7 @@ document.addEventListener('keydown', function(event) {
 
         document.addEventListener('DOMContentLoaded', function() {
             applyVisualStyle(readVisualStyle());
+            mountReaderWorkspace();
             const shareButton = document.getElementById('document-share-button');
             if (shareButton) shareButton.addEventListener('click', shareCurrentDocument);
             const discussionForm = document.getElementById('discussion-reply-form');

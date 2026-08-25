@@ -105,7 +105,20 @@ def read_sdd_statuses(repo_root: Path) -> tuple[dict[str, str], dict[str, str]]:
     """Read P checkbox states and Q table states from the authoritative SDD."""
     plan_path = _sdd_plan_path(repo_root)
     if not plan_path.is_file():
-        raise ValueError(f"Missing SDD source of truth: {plan_path}")
+        evidence_path = repo_root / EVIDENCE_RELATIVE_PATH
+        try:
+            previous = json.loads(evidence_path.read_text(encoding="utf-8"))
+            p_status = previous["p_status"]
+            q_status = previous["q_status"]
+        except (OSError, UnicodeError, json.JSONDecodeError, KeyError, TypeError) as error:
+            raise ValueError(f"Missing SDD source of truth: {plan_path}") from error
+        if not all(
+            isinstance(statuses, dict)
+            and all(isinstance(key, str) and isinstance(value, str) for key, value in statuses.items())
+            for statuses in (p_status, q_status)
+        ):
+            raise ValueError(f"Invalid preserved SDD statuses: {evidence_path}")
+        return dict(p_status), dict(q_status)
 
     p_status: dict[str, str] = {}
     q_status: dict[str, str] = {}

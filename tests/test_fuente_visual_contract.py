@@ -52,7 +52,9 @@ def test_console_consumes_fuente_tokens_instead_of_literal_nord_palette() -> Non
 
 def test_workflow_uses_css_arrow_connectors_and_modern_motion_layer() -> None:
     html, css, tokens = _read(HTML_PATH), _read(CONSOLE_CSS_PATH), _read(TOKENS_CSS_PATH)
-    assert 'class="arrow-connector" aria-hidden="true"></div>' in html
+    assert html.count('class="arrow-connector" aria-hidden="true"></div>') == 4
+    assert all(f'id="badge-step{step}"' in html for step in range(1, 6))
+    assert "Revisar y compartir" in html
     assert "═►" not in html
     assert "--fuente-glass:" in tokens
     assert "--fuente-shadow-glass:" in tokens

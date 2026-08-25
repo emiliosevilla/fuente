@@ -14,7 +14,7 @@ def test_quarantine_modal_wires_bridge_calls():
 def test_quarantine_list_shows_review_status_without_restore():
   """Restore is only offered for quarantined items; failed_for_review shows label."""
   assert "failed_for_review" in HTML
-  assert "Revisión manual" in HTML
+  assert "Estado: necesita revisión" in HTML
   assert "status === 'quarantined'" in HTML
   # Restore button is created inside the quarantined branch only.
   idx = HTML.index("if (status === 'quarantined')")

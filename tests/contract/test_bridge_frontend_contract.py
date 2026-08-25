@@ -246,7 +246,7 @@ def test_approval_ui_distinguishes_clean_and_derived_manual_approval():
     assert 'id="approval-reviewer"' in source
     assert "approval_scope" in source
     assert "window.pywebview.api.approve_clean(" in source
-    assert "window.pywebview.api.approve_note(" in source
+    assert "window.pywebview.api.approve_processed_output(" in source
     assert "approvalSelectedScope === 'clean'" in source
 
 

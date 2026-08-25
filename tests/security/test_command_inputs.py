@@ -4,6 +4,7 @@ from __future__ import annotations
 import ast
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -19,21 +20,22 @@ from tests.security.conftest import MALICIOUS_APPLESCRIPT_INPUT
 REPOSITORY_ROOT = Path(__file__).resolve().parent.parent.parent
 
 
-def test_macos_folder_dialog_passes_title_as_osascript_argv_data():
-    result = MagicMock(returncode=0, stdout="/tmp/chosen\n")
+def test_macos_folder_dialog_passes_title_as_appkit_data():
+    app = MagicMock()
+    panel = MagicMock()
+    panel.runModal.return_value = 1
+    panel.URL.return_value.path.return_value = "/tmp/chosen"
+    appkit = SimpleNamespace(
+        NSApplication=SimpleNamespace(sharedApplication=lambda: app),
+        NSModalResponseOK=1,
+        NSOpenPanel=SimpleNamespace(openPanel=lambda: panel),
+    )
 
-    with patch.object(sys, "platform", "darwin"), patch(
-        "fuente.control_console.subprocess.run", return_value=result
-    ) as run:
+    with patch.object(sys, "platform", "darwin"), patch.dict("sys.modules", {"AppKit": appkit}):
         folder = FuenteConsoleBackend.select_folder(object(), MALICIOUS_APPLESCRIPT_INPUT)
 
     assert folder == "/tmp/chosen"
-    command = run.call_args.args[0]
-    assert isinstance(command, list)
-    assert command[:2] == ["osascript", "-e"]
-    assert command[-2:] == ["--", MALICIOUS_APPLESCRIPT_INPUT]
-    assert MALICIOUS_APPLESCRIPT_INPUT not in "\n".join(command[:-2])
-    assert "shell" not in run.call_args.kwargs
+    panel.setMessage_.assert_called_once_with(MALICIOUS_APPLESCRIPT_INPUT)
 
 
 def test_macos_app_close_passes_name_as_osascript_argv_data():

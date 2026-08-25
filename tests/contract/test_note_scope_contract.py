@@ -85,7 +85,7 @@ def test_bridge_approval_changes_state_and_history(bridge_backend):
     original_body = note_path.read_text(encoding="utf-8")
     _, body_before = parse_frontmatter(original_body)
 
-    result = bridge.approve_note(document_id, revision)
+    result = bridge.approve_processed_output(document_id, revision, "qa-reviewer")
 
     assert result.get("status") == "approved"
     assert result.get("document_id") == document_id

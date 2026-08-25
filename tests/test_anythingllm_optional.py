@@ -38,6 +38,15 @@ def test_step3_never_configures_anythingllm(backend, monkeypatch):
     assert result["refresh"] is True
 
 
+def test_step3_log_excludes_generated_moc_from_processed_note_count(backend):
+    backend.vault.output_dir.mkdir(parents=True, exist_ok=True)
+    (backend.vault.output_dir / "_Indice_MOC.md").write_text("# MOC\n", encoding="utf-8")
+
+    result = backend.handle_action("step3_structure", {})
+
+    assert "Notas en 4_procesado: 0" in result["log"]
+
+
 def test_default_run_installation_skips_anythingllm_without_side_effects(tmp_path):
     ctx = InstallationContext(
         base_dir=tmp_path,

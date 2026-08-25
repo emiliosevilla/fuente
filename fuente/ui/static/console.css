@@ -508,13 +508,38 @@
         .reader-context-grid {
             display: grid;
             grid-template-columns: minmax(0, 1.8fr) minmax(280px, 0.9fr);
-            grid-template-rows: minmax(0, 1fr) minmax(220px, 1fr);
-            grid-template-areas:
-                "content properties"
-                "content relations";
+            grid-template-rows: minmax(0, 1fr);
+            grid-template-areas: "content properties";
             gap: 16px;
-            height: 100%;
+            flex: 1;
+            height: auto;
             min-height: 0;
+        }
+
+        .reader-search-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex: 0 0 auto;
+            min-width: 0;
+            padding: 0 0 10px;
+        }
+
+        .reader-search-label {
+            flex: 0 0 auto;
+            color: var(--muted);
+            font-size: 0.72rem;
+            font-weight: 800;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+        }
+
+        .reader-search-row .reader-search-wrapper {
+            flex: 1 1 auto;
+            min-width: 0;
+            padding: 0;
+            border: 0;
+            background: transparent;
         }
 
         .reader-context-content {
@@ -523,8 +548,7 @@
             min-height: 0;
         }
 
-        .reader-properties-pane,
-        .reader-relations-pane {
+        .reader-properties-pane {
             min-width: 0;
             min-height: 0;
             background: var(--fuente-polar-1);
@@ -578,26 +602,14 @@
             text-transform: uppercase;
         }
 
-        .reader-relations-pane {
-            grid-area: relations;
-            position: relative;
-        }
-
-        .reader-relations-pane .reader-graph-container {
-            display: block;
-            width: 100%;
-            height: 100%;
-        }
-
-        .reader-relations-pane .reader-graph-container.is-hidden,
         .reader-context-content #reader-view-list.is-hidden {
             display: none !important;
         }
 
         .reader-sidebar {
-            width: 310px;
-            min-width: 310px;
-            max-width: 310px;
+            width: 190px;
+            min-width: 190px;
+            max-width: 190px;
             flex-shrink: 0;
             background-color: var(--bg-card);
             border: 1px solid var(--border);
@@ -643,16 +655,14 @@
         .reader-search-wrapper {
             position: relative;
             width: 100%;
-            padding: 8px 10px;
+            padding: 0;
             box-sizing: border-box;
-            background-color: var(--bg-root);
-            border-bottom: 1px solid var(--border-accent);
             flex-shrink: 0;
         }
 
         .reader-search-icon {
             position: absolute;
-            left: 20px;
+            left: 10px;
             top: 50%;
             transform: translateY(-50%);
             color: var(--gold);
@@ -664,11 +674,11 @@
 
         .reader-search-input {
             width: 100%;
-            padding: 8px 12px 8px 36px !important;
+            padding: 7px 10px 7px 30px !important;
             background-color: var(--bg-card) !important;
             border: 1px solid var(--border-accent) !important;
             border-radius: 6px !important;
-            font-size: 0.82rem;
+            font-size: 0.78rem;
             color: var(--paper);
             outline: none;
             box-shadow: inset 0 1px 3px rgba(0,0,0,0.06);
@@ -692,12 +702,12 @@
 
         .reader-pinned-container {
             flex-shrink: 0;
-            padding: 8px 10px 4px 10px;
+            padding: 6px 6px 3px;
         }
 
         .reader-pinned-item {
-            padding: 10px 12px;
-            font-size: 0.82rem;
+            padding: 6px 7px;
+            font-size: 0.68rem;
             font-weight: 700;
             cursor: pointer;
             background-color: var(--bg-card-hover);
@@ -718,11 +728,11 @@
         }
 
         .reader-sidebar-divider {
-            font-size: 0.68rem;
+            font-size: 0.56rem;
             font-weight: 800;
             letter-spacing: 1px;
             color: var(--muted);
-            padding: 8px 12px 4px 12px;
+            padding: 6px 7px 3px;
             flex-shrink: 0;
         }
 
@@ -730,7 +740,7 @@
             flex: 1;
             overflow-y: scroll;
             overscroll-behavior: contain;
-            padding: 0 10px 10px 10px;
+            padding: 0 6px 6px;
             scrollbar-width: thin;
             scrollbar-color: var(--border-accent) var(--bg-card);
         }
@@ -739,18 +749,18 @@
             list-style: none;
             display: flex;
             flex-direction: column;
-            gap: 4px;
+            gap: 3px;
         }
 
         .reader-note-item {
-            padding: 9px 12px;
-            font-size: 0.82rem;
+            padding: 5px 6px;
+            font-size: 0.68rem;
             cursor: pointer;
             border: 1px solid var(--border);
             border-radius: 4px;
             background-color: var(--bg-card);
             transition: background 0.15s;
-            line-height: 1.35;
+            line-height: 1.2;
         }
 
         .reader-note-item:hover, .reader-note-item.active {
@@ -761,7 +771,7 @@
         }
 
         .reader-theme-label {
-            font-size: 0.72rem;
+            font-size: 0.58rem;
             font-weight: 800;
             letter-spacing: 0.8px;
             color: var(--gold);
@@ -775,14 +785,43 @@
         }
 
         .reader-issue-label {
-            font-size: 0.74rem;
+            font-size: 0.6rem;
             font-weight: 700;
             color: var(--muted);
             padding: 6px 8px 2px 8px;
         }
 
         .reader-issue-group .reader-note-item {
-            margin-left: 8px;
+            margin-left: 5px;
+        }
+
+        .reader-graph-modal-container {
+            width: 92vw;
+            max-width: 1200px;
+            height: 84vh;
+            max-height: 92vh;
+        }
+
+        .reader-graph-modal-body {
+            display: flex;
+            min-height: 0;
+            max-height: none;
+            overflow: hidden;
+            padding: 12px 16px;
+        }
+
+        .reader-graph-modal-body .reader-graph-container {
+            display: flex;
+            flex: 1;
+            flex-direction: column;
+            min-height: 0;
+            width: 100%;
+            height: 100%;
+        }
+
+        .reader-graph-modal-body .graph-canvas {
+            flex: 1;
+            min-height: 0;
         }
 
         .reader-view-pane {
@@ -1430,6 +1469,34 @@
     background: var(--bg-card); padding: 14px 18px; border: 1px solid var(--border); border-radius: var(--card-radius);
 }
 
+.help-info-button {
+    display: inline-block;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--gold);
+    font: inherit;
+    font-size: 0.78rem;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.help-info-button:hover {
+    color: var(--paper);
+    text-decoration: underline;
+}
+
+.help-info-modal-container {
+    width: 560px;
+    max-width: 92vw;
+}
+
+#help-info-body p {
+    margin: 0;
+    color: var(--paper);
+    line-height: 1.55;
+}
+
 .console-layout-053 {
     margin: 0 0 6px 0; color: var(--gold); font-size: 0.9rem;
 }
@@ -1767,7 +1834,6 @@ body {
 .modal-container,
 .reader-sidebar,
 .reader-properties-pane,
-.reader-relations-pane,
 .subgraph-box,
 .node-card {
     background: var(--fuente-glass);
@@ -1788,8 +1854,7 @@ body {
 .subgraph-box,
 .node-card,
 .reader-sidebar,
-.reader-properties-pane,
-.reader-relations-pane {
+.reader-properties-pane {
     border-radius: 16px;
 }
 
@@ -1947,11 +2012,10 @@ body {
 
     .reader-context-grid {
         grid-template-columns: minmax(0, 1fr);
-        grid-template-rows: minmax(440px, auto) minmax(180px, auto) minmax(260px, auto);
+        grid-template-rows: minmax(440px, auto) minmax(180px, auto);
         grid-template-areas:
             "content"
-            "properties"
-            "relations";
+            "properties";
         height: auto;
     }
 
@@ -1959,9 +2023,6 @@ body {
         min-height: 440px;
     }
 
-    .reader-relations-pane {
-        min-height: 260px;
-    }
 }
 
 @media (max-width: 1024px) {
@@ -1984,8 +2045,12 @@ body {
         grid-template-columns: minmax(0, 1fr);
     }
     #modal-reader .reader-properties-pane,
-    #modal-reader .reader-relations-pane {
+    #modal-reader .reader-search-row {
         width: 100%;
+    }
+
+    #modal-reader .reader-search-label {
+        font-size: 0.62rem;
     }
 }
 

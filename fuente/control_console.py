@@ -2000,7 +2000,7 @@ class FuenteConsoleBackend:
                 res = self._refine_graph()
                 if "error" in res:
                     return res
-                notes_count = len(list(self.vault.output_dir.rglob("*.md"))) if self.vault.output_dir.exists() else 0
+                notes_count = self.get_stats_dict()["processed"]
                 return {
                     "log": f"Se regeneró el mapa de notas e interconexiones. Total notas preparadas: {notes_count}",
                     "refresh": True,
@@ -2215,7 +2215,7 @@ class FuenteConsoleBackend:
                 res = self._refine_graph()
                 if "error" in res:
                     return res
-                notes_count = len(list(self.vault.output_dir.rglob("*.md"))) if self.vault.output_dir.exists() else 0
+                notes_count = self.get_stats_dict()["processed"]
                 return {
                     "log": f"[PASO 3 ESTRUCTURACIÓN] Grafo refinado e hiperinterenlazado. Notas en {self.vault.config.output_dir_name}: {notes_count}.",
                     "refresh": True,
@@ -2252,7 +2252,7 @@ class FuenteConsoleBackend:
     def select_folder(self, title: str = "Seleccionar Carpeta") -> str:
         """
         Despliega la ventana nativa del sistema operativo para elegir carpeta en PRIMER PLANO.
-        100% compatible con macOS (osascript + activate), Windows y Linux.
+        100% compatible con macOS (AppKit), Windows y Linux.
         """
         if sys.platform == "darwin":
             try:

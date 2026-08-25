@@ -50,6 +50,8 @@ def test_pywebview_ready_recovers_open_reader_and_settings_modals():
     assert "nativeConsoleInitialized = true;" in ready_listener
     assert "clearTimeout(nativeReadyTimer);" in ready_listener
     assert "nativeReadyTimer = setTimeout(function()" in ready_listener
+    assert "NATIVE_INITIAL_STATE_TIMEOUT_MS" in ready_listener
+    assert "}, NATIVE_INITIAL_STATE_TIMEOUT_MS).then(function(state)" in ready_listener
 
 
 def test_console_csp_allows_pywebview_62_to_build_native_api_methods():
@@ -132,6 +134,13 @@ def test_onboarding_actions_surface_native_bridge_errors():
     assert "callNativeRequest('dismiss_onboarding'" in dismiss
     assert create.count(".catch(function(err)") == 1
     assert dismiss.count(".catch(function(err)") == 1
+
+
+def test_approval_inbox_loads_when_opened():
+    opener = _function_source("openApprovalInbox", "setTextMessage")
+
+    assert "openModal('modal-approval');" in opener
+    assert "loadApprovalInbox();" in opener
 
 
 def test_settings_restart_validates_selected_vault_before_relaunch():

@@ -114,11 +114,6 @@ from fuente.core.app_checker import (
     launch_obsidian,
     register_obsidian_vault,
 )
-from fuente.core.anythingllm_config import (
-    is_anythingllm_installed,
-    launch_anythingllm,
-    configure_anythingllm_integration
-)
 from fuente.core.folder_sync import (
     FolderSyncManager,
     FolderSyncModal,
@@ -2100,18 +2095,6 @@ class FuenteConsoleBackend:
                 except (OSError, subprocess.CalledProcessError) as error:
                     return {"error": "obsidian_launch_failed", "message": str(error)}
             return {"log": f"Abriendo nota '{note_path}' en Obsidian Vault."}
-        elif action_name == "open_anything_desktop":
-            if not is_anythingllm_installed():
-                return {
-                    "error": "anythingllm_unavailable",
-                    "message": "AnythingLLM Desktop is not installed",
-                }
-            if not launch_anythingllm():
-                return {
-                    "error": "anythingllm_launch_failed",
-                    "message": "AnythingLLM Desktop could not be opened",
-                }
-            return {"log": "AnythingLLM Desktop abierto."}
         elif action_name == "stat_ram":
             import gc
             collected = gc.collect()

@@ -90,17 +90,6 @@ def test_open_obsidian_uses_macos_native_launcher(temp_vault_path):
     )
 
 
-def test_trigger_action_dispatches_allowlisted_anythingllm_action(temp_vault_path):
-    bridge = FuentePyWebViewApi(FuenteConsoleBackend(temp_vault_path))
-    backend_calls = []
-    bridge.backend.handle_action = lambda action, payload: backend_calls.append(
-        (action, payload)
-    ) or {"status": "handled"}
-
-    assert bridge.trigger_action("open_anything_desktop", {}) == {"status": "handled"}
-    assert backend_calls == [("open_anything_desktop", {})]
-
-
 def test_note_mutation_methods_use_identifiers_not_absolute_path_parameters():
     mutation_methods = (
         "approve_note",

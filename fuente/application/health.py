@@ -13,7 +13,6 @@ from pathlib import Path
 from typing import Any, Callable, Literal, Mapping
 
 from fuente.config import AppConfig, is_loopback_ollama_url
-from fuente.core.anythingllm_config import get_anythingllm_paths
 from fuente.domain.runtime_policy import resolve_runtime_policy
 from fuente.ram_governor.budget import BudgetDecision
 
@@ -154,7 +153,6 @@ class HealthService:
                 "ffmpeg": self._probe_tool(
                     "ffmpeg", "FFmpeg", required=False
                 ),
-                "anythingllm": self._probe_anythingllm(),
             },
             extras=self._probe_extras(),
             policy=self._probe_policy(installed_models),
@@ -353,20 +351,6 @@ class HealthService:
             detail=f"{label} no está instalado; la capacidad es opcional.",
             required=required,
         )
-
-    def _probe_anythingllm(self) -> HealthItem:
-        try:
-            app_path = get_anythingllm_paths().get("app_path")
-            if app_path is not None and self._path_exists(app_path):
-                return HealthItem(
-                    status="ok",
-                    label="AnythingLLM",
-                    detail=f"Aplicación encontrada en {app_path}.",
-                    required=False,
-                )
-        except OSError:
-            pass
-        return self._probe_tool("anythingllm", "AnythingLLM", required=False)
 
     def _probe_extras(self) -> dict[str, HealthItem]:
         extras: dict[str, HealthItem] = {}

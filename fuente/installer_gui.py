@@ -49,9 +49,7 @@ class FuenteInstallerWizard(tk.Tk):
         self.obsidian_status_var = tk.StringVar(value="Comprobando...")
         self.ollama_status_var = tk.StringVar(value="Comprobando...")
         self.ocr_status_var = tk.StringVar(value="Comprobando...")
-        self.anythingllm_status_var = tk.StringVar(value="Opcional, no configurado")
 
-        self.anythingllm_opt_in_var = tk.BooleanVar(value=False)
         self.ocr_opt_in_var = tk.BooleanVar(
             value=os.environ.get("FUENTE_INSTALL_OCR", "0") == "1"
         )
@@ -281,28 +279,6 @@ class FuenteInstallerWizard(tk.Tk):
         )
         lbl_oll_stat.pack(side="left")
 
-        # Estado AnythingLLM
-        any_frame = tk.Frame(req_box, bg="#FFFFFF")
-        any_frame.pack(fill="x", pady=8)
-
-        tk.Label(
-            any_frame,
-            text="• AnythingLLM Desktop:",
-            font=("Helvetica", 11, "bold"),
-            bg="#FFFFFF",
-            width=18,
-            anchor="w"
-        ).pack(side="left")
-
-        lbl_any_stat = tk.Label(
-            any_frame,
-            textvariable=self.anythingllm_status_var,
-            font=("Helvetica", 11, "bold"),
-            bg="#FFFFFF",
-            fg="#2563EB"
-        )
-        lbl_any_stat.pack(side="left")
-
         ocr_frame = tk.Frame(req_box, bg="#FFFFFF")
         ocr_frame.pack(fill="x", pady=8)
         tk.Label(
@@ -333,36 +309,11 @@ class FuenteInstallerWizard(tk.Tk):
         )
         ocr_opt_in.pack(fill="x", pady=(8, 0))
 
-        anythingllm_opt_in = tk.Checkbutton(
-            req_box,
-            text="Integración externa AnythingLLM",
-            variable=self.anythingllm_opt_in_var,
-            command=self._check_requirements,
-            font=("Helvetica", 10, "bold"),
-            fg="#1F2937",
-            bg="#FFFFFF",
-            anchor="w",
-        )
-        anythingllm_opt_in.pack(fill="x", pady=(8, 0))
-        tk.Label(
-            req_box,
-            text=(
-                "Opcional y desmarcada por defecto. Solo se instalará y configurará "
-                "si la seleccionas."
-            ),
-            font=("Helvetica", 9),
-            fg="#6B7280",
-            bg="#FFFFFF",
-            anchor="w",
-            justify="left",
-        ).pack(fill="x", pady=(2, 0))
-
         # Verificar requisitos inmediatamente
         self._check_requirements()
 
     def _check_requirements(self):
-        opt_in = self.anythingllm_opt_in_var.get()
-        prereqs = detect_prerequisites(include_anythingllm=opt_in)
+        prereqs = detect_prerequisites()
 
         if prereqs.obsidian_installed:
             self.obsidian_status_var.set("✓ Detectado correctamente")
@@ -375,13 +326,6 @@ class FuenteInstallerWizard(tk.Tk):
             self.ollama_status_var.set("⚠️ Instalado pero no activo (se intentará iniciar)")
         else:
             self.ollama_status_var.set("⚠️ No detectado (instalación solo con confirmación)")
-
-        if not opt_in:
-            self.anythingllm_status_var.set("Opcional, no configurado")
-        elif prereqs.anythingllm_installed:
-            self.anythingllm_status_var.set("✓ Detectado correctamente")
-        else:
-            self.anythingllm_status_var.set("⚠️ No detectado (se pedirá confirmación)")
 
         if prereqs.tesseract_installed and {"eng", "spa"}.issubset(
             set(prereqs.tesseract_languages)
@@ -483,8 +427,6 @@ class FuenteInstallerWizard(tk.Tk):
                 confirm=self._confirm_on_main_thread,
                 log=self._log,
                 install_ocr=self.ocr_opt_in_var.get(),
-                install_anythingllm=self.anythingllm_opt_in_var.get(),
-                configure_anythingllm=self.anythingllm_opt_in_var.get(),
                 existing_receipt=self._existing_receipt,
             )
 
@@ -493,14 +435,10 @@ class FuenteInstallerWizard(tk.Tk):
                 "cloud_folders": ("3. Dejando las conexiones para el modal Ajustes...", 40),
                 "ocr_runtime": ("4. Comprobando OCR Tesseract...", 50),
                 "ollama_model": ("5. Evaluando modelo LLM recomendado...", 60),
-                "anythingllm_install": ("Opcional: verificando AnythingLLM Desktop...", 70),
-                "anythingllm_config": ("Opcional: configurando integración AnythingLLM...", 80),
                 "shortcuts": ("5. Generando acceso directo en el Escritorio...", 90),
             }
 
             def _on_step_start(step_name: str):
-                if step_name.startswith("anythingllm_") and not self.anythingllm_opt_in_var.get():
-                    return
                 label, pct = step_labels.get(
                     step_name,
                     (f"Ejecutando paso {step_name}...", 50),
@@ -569,23 +507,11 @@ class FuenteInstallerWizard(tk.Tk):
             box_fg = "#92400E"
             box_bg = "#FEF3C7"
         else:
-            anythingllm_configured = any(
-                step.name == "anythingllm_config"
-                and step.success
-                and not step.skipped
-                for step in self.install_steps
-            )
-            anythingllm_summary = (
-                "• Integración externa AnythingLLM: configurada explícitamente."
-                if anythingllm_configured
-                else "• Integración externa AnythingLLM: Opcional, no configurado."
-            )
             use_instructions = (
                 "📌 Tu entorno ha sido configurado por completo:\n\n"
                 "• Vault de Obsidian: se selecciona o crea desde 'Ajustes' en el primer arranque.\n"
                 "• No se crea ni se asume ningún Vault durante la instalación.\n"
                 "• Ollama AI: Modelo configurado según tu memoria RAM.\n"
-                f"{anythingllm_summary}\n"
                 "• Acceso Directo: se habilita después de conectar un Vault desde 'Ajustes'.\n\n"
                 "Al hacer clic en 'Finalizar', se abrirá tu Consola Central de Control."
             )

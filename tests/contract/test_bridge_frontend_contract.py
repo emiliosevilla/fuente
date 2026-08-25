@@ -59,7 +59,6 @@ VALID_ACTION_PAYLOADS: dict[str, dict] = {
         "note_path": "4_procesado/nota.md",
         "obsidian_uri": "obsidian://open?vault=fuente&file=nota",
     },
-    "open_anything_desktop": {},
     "reset_default_settings": {},
 }
 

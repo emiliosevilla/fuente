@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import builtins
 import json
-import sqlite3
 import subprocess
 import urllib.request
 import webbrowser
@@ -10,7 +9,6 @@ from pathlib import Path
 
 from fuente.application.health import HealthService
 import fuente.application.health as health_module
-import fuente.core.anythingllm_config as anythingllm_config
 from fuente.config import AppConfig, VaultConfig
 from fuente.control_console import FuenteConsoleBackend
 from fuente.ui.bridge import FuentePyWebViewApi
@@ -205,10 +203,6 @@ def test_health_snapshot_calls_no_mutating_or_external_helpers(tmp_path, monkeyp
         return _fail
 
     forbidden = {
-        "install": fail("install"),
-        "launch": fail("launch"),
-        "configure": fail("configure"),
-        "sqlite3.connect": fail("sqlite3.connect"),
         "subprocess.Popen": fail("subprocess.Popen"),
         "subprocess.run": fail("subprocess.run"),
         "webbrowser.open": fail("webbrowser.open"),
@@ -219,10 +213,6 @@ def test_health_snapshot_calls_no_mutating_or_external_helpers(tmp_path, monkeyp
         "open": fail("open"),
         "urlretrieve": fail("urlretrieve"),
     }
-    monkeypatch.setattr(anythingllm_config, "install_anythingllm_autonomously", forbidden["install"])
-    monkeypatch.setattr(anythingllm_config, "launch_anythingllm", forbidden["launch"])
-    monkeypatch.setattr(anythingllm_config, "configure_anythingllm_integration", forbidden["configure"])
-    monkeypatch.setattr(sqlite3, "connect", forbidden["sqlite3.connect"])
     monkeypatch.setattr(subprocess, "Popen", forbidden["subprocess.Popen"])
     monkeypatch.setattr(subprocess, "run", forbidden["subprocess.run"])
     monkeypatch.setattr(webbrowser, "open", forbidden["webbrowser.open"])
@@ -240,7 +230,7 @@ def test_health_snapshot_calls_no_mutating_or_external_helpers(tmp_path, monkeyp
         find_spec=lambda _name: None,
     ).snapshot()
 
-    assert snapshot.tools["anythingllm"].status in {"ok", "optional"}
+    assert set(snapshot.tools) == {"tesseract", "ffmpeg"}
 
 
 def test_backend_and_bridge_health_are_fresh_and_json_serializable(temp_vault_path, monkeypatch):

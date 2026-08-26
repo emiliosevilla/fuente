@@ -1122,14 +1122,26 @@ document.addEventListener('keydown', handleShellKeydown);
             if (!api || typeof api.ui_state_pending_changed !== 'function') {
                 return Promise.resolve();
             }
-            return Promise.resolve(api.ui_state_pending_changed(pendingUiState.size)).catch(function(error) {
+            return Promise.resolve(api.ui_state_pending_changed(pendingUiState.size)).then(function(result) {
+                if (result && result.error) {
+                    nativeCloseRequested = false;
+                    throw new Error(result.message || 'respuesta inválida');
+                }
+                return result;
+            }).catch(function(error) {
                 reportUiStateFailure('notificar', 'interfaz', 'pendiente', error);
+                throw error;
             });
         }
 
         function persistUiState(owner, key, value, scope) {
             const stateScope = scope || 'persistent';
             const pendingKey = stateScope + '\u0000' + owner + '\u0000' + key;
+            if (nativeCloseRequested && !pendingUiState.has(pendingKey)) {
+                const error = 'Fuente está cerrando; el cambio nuevo no se ha admitido.';
+                reportUiStateFailure('guardar', owner, key, error);
+                return Promise.resolve({error: 'ui_state_closing', message: error});
+            }
             const pending = {scope: stateScope, owner: owner, key: key, value: value};
             pendingUiState.set(pendingKey, pending);
             const api = window.pywebview && window.pywebview.api;
@@ -1137,7 +1149,10 @@ document.addEventListener('keydown', handleShellKeydown);
             return notifyNativeUiStatePending().then(function() {
                 return api.set_ui_state(stateScope, owner, key, value);
             }).then(function(result) {
-                if (!result || result.error) throw new Error((result && result.message) || 'respuesta inválida');
+                if (!result || result.error) {
+                    if (result && result.error === 'ui_state_closing') nativeCloseRequested = false;
+                    throw new Error((result && result.message) || 'respuesta inválida');
+                }
                 if (pendingUiState.get(pendingKey) === pending) {
                     pendingUiState.delete(pendingKey);
                     return notifyNativeUiStatePending().then(function() { return result; });
@@ -1157,14 +1172,13 @@ document.addEventListener('keydown', handleShellKeydown);
                 reportUiStateFailure('completar', 'interfaz', 'cierre', 'bridge nativo no disponible');
                 return;
             }
-            nativeCloseRequested = false;
             Promise.resolve(api.complete_pending_close()).then(function(result) {
                 if (!result || result.error) {
-                    nativeCloseRequested = true;
+                    nativeCloseRequested = false;
                     reportUiStateFailure('completar', 'interfaz', 'cierre', result && result.message);
                 }
             }).catch(function(error) {
-                nativeCloseRequested = true;
+                nativeCloseRequested = false;
                 reportUiStateFailure('completar', 'interfaz', 'cierre', error);
             });
         }
@@ -1179,8 +1193,11 @@ document.addEventListener('keydown', handleShellKeydown);
         }
 
         function prepareUiStateForNativeClose() {
-            if (!pendingUiState.size) return {ready: true, pending: 0};
             nativeCloseRequested = true;
+            if (!pendingUiState.size) {
+                notifyNativeCloseWhenReady();
+                return {ready: false, pending: 0};
+            }
             const message = 'Fuente está guardando cambios pendientes antes de cerrar.';
             log(message);
             const status = document.getElementById('bottom-status-line');

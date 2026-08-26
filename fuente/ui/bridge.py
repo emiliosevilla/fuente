@@ -71,8 +71,10 @@ class FuentePyWebViewApi:
         self._window: Any = None
         self._close_lock = threading.RLock()
         self._pending_close_action: tuple[str, str | None] | None = None
+        self._close_action_scheduled = False
         self._close_authorized = False
         self._ui_state_pending_count = 0
+        self._ui_state_drain_limit = 0
         self._ui_state_writes_inflight = 0
 
     @staticmethod
@@ -127,6 +129,16 @@ class FuentePyWebViewApi:
         if isinstance(count, bool) or not isinstance(count, int) or not 0 <= count <= 64:
             return self._error("invalid_payload", "pending UI state count is invalid")
         with self._close_lock:
+            if (
+                self._pending_close_action is not None
+                and count > self._ui_state_drain_limit
+            ):
+                if not self._close_action_scheduled:
+                    self._cancel_close_action_locked()
+                return self._error(
+                    "ui_state_closing",
+                    "El cierre se canceló porque empezó un cambio nuevo de interfaz.",
+                )
             self._ui_state_pending_count = count
         return {"pending": count}
 
@@ -134,10 +146,29 @@ class FuentePyWebViewApi:
         with self._close_lock:
             return self._ui_state_pending_count > 0 or self._ui_state_writes_inflight > 0
 
-    def _request_ui_state_drain(self) -> None:
+    def _cancel_close_action_locked(self) -> None:
+        self._pending_close_action = None
+        self._close_action_scheduled = False
+        self._close_authorized = False
+        self._ui_state_drain_limit = 0
+
+    def _begin_close_action(self, action: tuple[str, str | None]) -> ErrorResult | None:
+        with self._close_lock:
+            if self._pending_close_action is None:
+                self._pending_close_action = action
+                self._ui_state_drain_limit = self._ui_state_pending_count
+                return None
+            if self._pending_close_action == action:
+                return None
+            return self._error(
+                "close_action_pending",
+                "Fuente ya está completando otra acción de cierre.",
+            )
+
+    def _request_ui_state_drain(self) -> bool:
         runner = getattr(self._window, "run_js", None)
         if not callable(runner):
-            return
+            return False
 
         def drain() -> None:
             try:
@@ -149,13 +180,40 @@ class FuentePyWebViewApi:
                 logger.error("Could not request pending UI state drain: %s", error)
 
         threading.Timer(0.01, drain).start()
+        return True
+
+    @staticmethod
+    def _restart_argv(vault_path: str) -> list[str]:
+        arguments: list[str] = []
+        skip_next = False
+        for argument in sys.argv[1:]:
+            if skip_next:
+                skip_next = False
+                continue
+            if argument == "--vault":
+                skip_next = True
+                continue
+            if argument.startswith("--vault="):
+                continue
+            arguments.append(argument)
+        if getattr(sys, "frozen", False):
+            return [sys.executable, "--runtime", *arguments, "--vault", vault_path]
+        return [sys.executable, sys.argv[0], *arguments, "--vault", vault_path]
 
     def _schedule_close_action(self) -> dict[str, str]:
         with self._close_lock:
             action = self._pending_close_action
             if action is None:
                 return self._error("close_not_pending", "No hay un cierre pendiente.")
-            self._pending_close_action = None
+            if self._ui_state_pending_count or self._ui_state_writes_inflight:
+                return self._error(
+                    "ui_state_pending",
+                    "Fuente sigue guardando cambios de interfaz.",
+                )
+            if self._close_action_scheduled:
+                kind, _vault_path = action
+                return {"status": "restarting" if kind == "restart" else "closing"}
+            self._close_action_scheduled = True
             self._close_authorized = True
 
         kind, vault_path = action
@@ -164,7 +222,7 @@ class FuentePyWebViewApi:
             if self._window is not None:
                 self._window.destroy()
             if kind == "restart" and vault_path is not None:
-                os.execv(sys.executable, [sys.executable, "--vault", vault_path])
+                os.execv(sys.executable, self._restart_argv(vault_path))
 
         threading.Timer(0.15, finish).start()
         return {"status": "restarting" if kind == "restart" else "closing"}
@@ -173,12 +231,17 @@ class FuentePyWebViewApi:
         """PyWebView closing event: False is the documented cancellation signal."""
         with self._close_lock:
             if self._close_authorized:
-                self._close_authorized = False
                 return True
-            self._pending_close_action = ("close", None)
-        if not self._has_pending_ui_state():
+        error = self._begin_close_action(("close", None))
+        if error is not None:
+            self._request_ui_state_drain()
+            return False
+        if not self._has_pending_ui_state() and not callable(
+            getattr(self._window, "run_js", None)
+        ):
             with self._close_lock:
-                self._pending_close_action = None
+                self._close_action_scheduled = True
+                self._close_authorized = True
             return True
         self._request_ui_state_drain()
         return False
@@ -223,6 +286,16 @@ class FuentePyWebViewApi:
         if error is not None:
             return error
         with self._close_lock:
+            if (
+                self._pending_close_action is not None
+                and self._ui_state_pending_count == 0
+            ):
+                if not self._close_action_scheduled:
+                    self._cancel_close_action_locked()
+                return self._error(
+                    "ui_state_closing",
+                    "La escritura no empezó porque Fuente estaba cerrando; el cierre se canceló.",
+                )
             self._ui_state_writes_inflight += 1
         try:
             UIStateStore(self._ui_job_store()).set(*values, value)
@@ -232,6 +305,12 @@ class FuentePyWebViewApi:
         finally:
             with self._close_lock:
                 self._ui_state_writes_inflight -= 1
+                request_drain = (
+                    self._pending_close_action is not None
+                    and self._ui_state_writes_inflight == 0
+                )
+            if request_drain:
+                self._request_ui_state_drain()
 
     def _ui_job_store(self):
         store = getattr(self.backend, "_job_store", None)
@@ -688,15 +767,22 @@ class FuentePyWebViewApi:
         result = validator(vault)
         if result.get("error"):
             return result
-        with self._close_lock:
-            self._pending_close_action = ("restart", result["vault_path"])
-        if self._has_pending_ui_state():
-            self._request_ui_state_drain()
+        action = ("restart", result["vault_path"])
+        action_error = self._begin_close_action(action)
+        if action_error is not None:
+            return action_error
+        pending = self._has_pending_ui_state()
+        requested = self._request_ui_state_drain()
+        if pending:
             return self._error(
                 "ui_state_pending",
                 "Fuente sigue guardando cambios de interfaz; el reinicio está cancelado hasta recuperarlos.",
             )
-        response = self._schedule_close_action()
+        response = (
+            {"status": "restarting"}
+            if requested
+            else self._schedule_close_action()
+        )
         response["vault_path"] = result["vault_path"]
         return response
 

@@ -94,10 +94,11 @@ def test_note_mutation_methods_use_identifiers_not_absolute_path_parameters():
     mutation_methods = (
         "approve_note",
         "restore_note",
-        "update_note_metadata",
     )
 
     assert not hasattr(FuentePyWebViewApi, "merge_notes")
+    assert not hasattr(FuentePyWebViewApi, "update_note_metadata")
+    assert not hasattr(FuentePyWebViewApi, "validate_note_metadata")
 
     for method_name in mutation_methods:
         parameter_names = inspect.signature(
@@ -125,11 +126,6 @@ def test_approve_note_requires_opaque_id_and_revision(temp_vault_path):
 def test_approve_note_signature_has_no_metadata_argument():
     parameters = inspect.signature(FuentePyWebViewApi.approve_note).parameters
     assert tuple(parameters) == ("self", "document_id", "expected_revision")
-
-
-def test_update_note_metadata_signature_uses_document_id():
-    parameters = inspect.signature(FuentePyWebViewApi.update_note_metadata).parameters
-    assert tuple(parameters) == ("self", "document_id", "metadata", "expected_revision")
 
 
 def test_legacy_merge_action_is_not_registered(temp_vault_path):

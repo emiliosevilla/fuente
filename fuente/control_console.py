@@ -85,10 +85,8 @@ from fuente.domain.origins import (
     parse_origins,
 )
 from fuente.domain.metadata_form import (
-    MetadataValidationError,
     metadata_form_snapshot,
     validate_metadata_fields,
-    validate_metadata_save_fields,
 )
 from fuente.domain.paths import AuthorizedPathResolver, document_id_for_relative_path
 from fuente.domain.quarantine import QuarantineRestoreError, QuarantineService
@@ -822,7 +820,6 @@ class FuenteConsoleBackend:
         document_id: str,
         expected_revision: int,
         export_format: str,
-        metadata_patch: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """Approve canonically, then prepare a browser download payload.
 
@@ -834,7 +831,6 @@ class FuenteConsoleBackend:
             document_id,
             expected_revision,
             export_format,
-            metadata_patch=metadata_patch,
         ).as_dict()
 
     def export_note(
@@ -1503,77 +1499,6 @@ class FuenteConsoleBackend:
                 "revision": approved.revision,
             }
 
-        elif action_name == "update_note_metadata":
-            allowed_fields = {"document_id", "metadata", "expected_revision"}
-            if (
-                set(payload) - allowed_fields
-                or not isinstance(payload.get("document_id"), str)
-                or not payload.get("document_id", "").strip()
-                or "expected_revision" not in payload
-            ):
-                return {"error": "invalid_payload"}
-            identifier = payload["document_id"].strip()
-            if "/" in identifier or "\\" in identifier or identifier.endswith(".md"):
-                return {"error": "invalid_payload"}
-            try:
-                notes = self.get_notes_service()
-                document_id = identifier
-                expected_revision = payload.get("expected_revision")
-                if expected_revision is None:
-                    return {"error": "expected_revision is required"}
-                metadata_patch = validate_metadata_save_fields(
-                    payload.get("metadata") or {},
-                    allowed_issues=self.vault.get_issues_in_theme(),
-                )
-                updated = notes.update_metadata(
-                    document_id,
-                    expected_revision=int(expected_revision),
-                    metadata_patch=metadata_patch,
-                )
-            except LegacyOriginsMigrationRequiredError:
-                return {
-                    "error": "legacy_origins_unmigrated",
-                    "message": "Legacy origins require complete OriginRef identity",
-                }
-            except MetadataValidationError as error:
-                return {
-                    "error": error.code,
-                    "message": str(error),
-                    "field_errors": error.field_errors,
-                }
-            except NoteRevisionConflictError as error:
-                return {"error": error.code, "message": str(error)}
-            except PathAuthorizationError as error:
-                return self._path_error(error)
-            except (TypeError, ValueError) as error:
-                return {"error": f"Error al actualizar metadatos: {error}"}
-            return {
-                "log": "Metadatos guardados correctamente.",
-                "status": "saved",
-                "document_id": updated.document_id,
-                "revision": updated.revision,
-                "metadata": metadata_form_snapshot(updated.frontmatter),
-            }
-
-        elif action_name == "validate_note_metadata":
-            try:
-                metadata_patch = validate_metadata_save_fields(
-                    payload.get("metadata") or {},
-                    allowed_issues=self.vault.get_issues_in_theme(),
-                )
-            except LegacyOriginsMigrationRequiredError:
-                return {
-                    "error": "legacy_origins_unmigrated",
-                    "message": "Legacy origins require complete OriginRef identity",
-                }
-            except MetadataValidationError as error:
-                return {
-                    "error": error.code,
-                    "message": str(error),
-                    "field_errors": error.field_errors,
-                }
-            return {"valid": True, "metadata": metadata_patch}
-
         elif action_name == "get_note_metadata":
             identifier = payload.get("document_id") or payload.get("path")
             if not identifier:
@@ -1743,7 +1668,7 @@ class FuenteConsoleBackend:
             return {"log": message, "alert": message}
         elif action_name == "stat_notes":
             notes = self.vault.enumerate_documents("output")
-            message = f"Telemetría del Grafo consultada: {len(notes)} notas preparadas."
+            message = f"Notas preparadas consultadas: {len(notes)}."
             return {"log": message, "alert": message}
         elif action_name == "step1_flush":
             sync_report = self.sync_manager.sync_to_input(

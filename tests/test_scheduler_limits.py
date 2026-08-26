@@ -133,7 +133,6 @@ def test_task_classes_cover_required_vocabulary():
         "media_audio",
         "embedding",
         "llm_generation",
-        "graph_refresh",
     }
 
 
@@ -418,7 +417,6 @@ def test_media_batch_sibling_not_quarantined_on_peer_failure(tmp_path):
     assert "bad.png" in quarantined_names
     assert "sibling.png" not in quarantined_names
     store.close()
-    assert TaskClass.GRAPH_REFRESH.value == "graph_refresh"
     assert resource_key_for(
         TaskClass.LLM_GENERATION, ollama_url="http://x", model_id="m"
     ).startswith("llm:")

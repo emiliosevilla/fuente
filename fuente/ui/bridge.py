@@ -21,12 +21,7 @@ from fuente.application.job_control import (
     validate_reason,
 )
 from fuente.domain.approvals import normalize_reviewer
-from fuente.domain.metadata_form import (
-    MetadataValidationError,
-    normalize_metadata_write_fields,
-    project_metadata_v3,
-)
-from fuente.domain.origins import LegacyOriginsMigrationRequiredError
+from fuente.domain.metadata_form import project_metadata_v3
 from fuente.domain.jobs import JobConflictError, JobNotFoundError, JobStoreBusyError
 from fuente.domain.errors import (
     CanonicalEligibilityError,
@@ -79,25 +74,6 @@ class FuentePyWebViewApi:
         if not all(isinstance(key, str) for key in payload):
             return cls._error("invalid_payload", "Payload keys must be strings")
         return dict(payload)
-
-    @classmethod
-    def _metadata_write_payload(
-        cls, payload: dict[str, Any]
-    ) -> dict[str, Any] | ErrorResult:
-        """Normalize temporary v2 names without allowing incomplete identity."""
-        try:
-            return normalize_metadata_write_fields(payload)
-        except LegacyOriginsMigrationRequiredError:
-            return cls._error(
-                "legacy_origins_unmigrated",
-                "Legacy origins require complete OriginRef identity",
-            )
-        except MetadataValidationError as error:
-            return {
-                "error": error.code,
-                "message": str(error),
-                "field_errors": error.field_errors,
-            }
 
     @classmethod
     def _text(cls, value: object, field: str, *, required: bool = True) -> str | ErrorResult:
@@ -347,7 +323,6 @@ class FuentePyWebViewApi:
         document_id: object,
         expected_revision: object,
         export_format: object,
-        metadata_patch: object = None,
     ) -> dict[str, Any] | ErrorResult:
         """Approve canonically, then prepare a browser download projection."""
         note = self._text(document_id, "document_id")
@@ -363,29 +338,11 @@ class FuentePyWebViewApi:
         }:
             return self._error("invalid_payload", "format is not supported")
 
-        normalized_metadata = None
-        if metadata_patch is not None:
-            if not isinstance(metadata_patch, Mapping):
-                return self._error("invalid_payload", "metadata_patch must be an object")
-            parsed = self._payload(metadata_patch)
-            if isinstance(parsed, dict) and "error" in parsed:
-                return parsed
-            assert isinstance(parsed, dict)
-            normalized = self._metadata_write_payload(parsed)
-            if "error" in normalized:
-                return normalized
-            validated = self.backend.handle_action(
-                "validate_note_metadata", {"metadata": normalized}
-            )
-            if validated.get("error"):
-                return validated
-            normalized_metadata = validated.get("metadata", normalized)
         try:
             return self.backend.approve_and_export(
                 note,
                 int(expected_revision),
                 export_format.strip().lower(),
-                metadata_patch=normalized_metadata,
             )
         except (NoteRevisionConflictError, InvalidNoteTransitionError) as error:
             return {"error": error.code, "message": str(error)}
@@ -767,48 +724,6 @@ class FuentePyWebViewApi:
             return self._error("approval_busy", "Approval storage is busy; retry")
         except (OSError, sqlite3.Error, TypeError, ValueError):
             return self._error("approval_failed", "Approval could not be recorded")
-
-    def validate_note_metadata(self, metadata: object) -> dict[str, Any]:
-        parsed = self._payload(metadata)
-        if isinstance(parsed, dict) and "error" in parsed:
-            return parsed
-        assert isinstance(parsed, dict)
-        normalized = self._metadata_write_payload(parsed)
-        if "error" in normalized:
-            return normalized
-        return self.backend.handle_action(
-            "validate_note_metadata", {"metadata": normalized}
-        )
-
-    def update_note_metadata(
-        self,
-        document_id: object,
-        metadata: object,
-        expected_revision: object,
-    ) -> dict[str, Any]:
-        """Save approval metadata; canonical note bodies remain read-only."""
-        note = self._note_id(document_id)
-        if isinstance(note, dict):
-            return note
-        parsed = self._payload(metadata)
-        if isinstance(parsed, dict) and "error" in parsed:
-            return parsed
-        assert isinstance(parsed, dict)
-        normalized = self._metadata_write_payload(parsed)
-        if "error" in normalized:
-            return normalized
-        if isinstance(expected_revision, bool) or not isinstance(
-            expected_revision, (int, float)
-        ):
-            return self._error("invalid_payload", "expected_revision must be a number")
-        return self.backend.handle_action(
-            "update_note_metadata",
-            {
-                "document_id": note,
-                "metadata": normalized,
-                "expected_revision": int(expected_revision),
-            },
-        )
 
     def approve_note(
         self,

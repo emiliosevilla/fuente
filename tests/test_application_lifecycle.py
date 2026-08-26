@@ -134,7 +134,6 @@ def test_flush_mode_processes_input_without_background_monitor(tmp_path):
     assert lifecycle.last_flush_result == {
         "files_found": 2,
         "files_processed": 2,
-        "refine_result": None,
     }
     lifecycle.stop()
     assert pipeline.closed is True

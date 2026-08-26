@@ -913,12 +913,42 @@
             font-weight: 700;
         }
 
-        .metadata-form-panel {
+        .approval-note-details {
             overflow-y: auto;
             padding-right: 4px;
             display: flex;
             flex-direction: column;
             gap: 12px;
+        }
+
+        .approval-note-properties {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 10px;
+            margin: 0;
+        }
+
+        .approval-note-property {
+            min-width: 0;
+            padding: 10px 12px;
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            background: var(--bg-log);
+        }
+
+        .approval-note-property dt {
+            margin-bottom: 4px;
+            color: var(--muted);
+            font-size: 0.72rem;
+            font-weight: 700;
+        }
+
+        .approval-note-property dd {
+            margin: 0;
+            font-size: 0.82rem;
+            line-height: 1.4;
+            white-space: pre-wrap;
+            overflow-wrap: anywhere;
         }
 
         .metadata-field {
@@ -1508,6 +1538,7 @@
 .is-hidden { display: none !important; }
 .modal-overlay.is-open { display: flex !important; }
 .metadata-field.is-visible { display: flex !important; }
+.approval-note-properties.is-visible { display: grid !important; }
 .metadata-diagnostic.is-visible { display: block !important; }
 .tab-panel.is-active { display: flex !important; }
 .tab-btn.is-active { font-weight: 700 !important; background-color: var(--bg-card-hover) !important; }

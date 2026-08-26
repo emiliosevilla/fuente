@@ -1,4 +1,4 @@
-"""Safe metadata form contract for approval UI (Task 6.2)."""
+"""Read-only metadata contract for approval UI."""
 from __future__ import annotations
 
 import inspect
@@ -10,15 +10,12 @@ import pytest
 from fuente.application.notes import NotesApplicationService
 from fuente.control_console import FuenteConsoleBackend
 from fuente.domain.documents import content_hash_for_markdown
-from fuente.domain.errors import NoteRevisionConflictError
 from fuente.domain.frontmatter import parse_frontmatter, serialize_frontmatter
 from fuente.domain.metadata_form import (
     MetadataValidationError,
     metadata_form_snapshot,
     validate_metadata_fields,
-    validate_metadata_save_fields,
 )
-from fuente.domain.origins import LegacyOriginsMigrationRequiredError
 from fuente.domain.paths import AuthorizedPathResolver, document_id_for_relative_path
 from fuente.infrastructure.sqlite_store import JobStore
 from fuente.ui.bridge import FuentePyWebViewApi
@@ -150,47 +147,6 @@ def test_metadata_snapshot_projects_v2_without_inventing_origin_identity():
     assert "sources" not in snapshot
 
 
-def test_metadata_write_normalizes_only_complete_v2_origins():
-    normalized = validate_metadata_save_fields(
-        {"source_kind": "meeting", "sources": [ORIGIN_REF]},
-        allowed_issues=["_Sin_Cuestion"],
-    )
-
-    assert normalized == {"origin_kind": "meeting", "origins": [ORIGIN_REF]}
-
-    with pytest.raises(LegacyOriginsMigrationRequiredError):
-        validate_metadata_save_fields(
-            {"source_kind": "meeting", "sources": ["legacy-origin-id"]},
-            allowed_issues=["_Sin_Cuestion"],
-        )
-
-
-def test_invalid_metadata_is_not_committed(notes_service, temp_vault_manager):
-    document_id, note_path = _write_pending_note(
-        temp_vault_manager,
-        body="# Cuerpo\n",
-        title="Nota_No_Commit",
-    )
-    revision = notes_service.get_note(document_id).revision
-    original = note_path.read_text(encoding="utf-8")
-
-    with pytest.raises(MetadataValidationError):
-        notes_service.update_metadata(
-            document_id,
-            expected_revision=revision,
-            metadata_patch={"tags": ["bad:\ninject: true"]},
-        )
-
-    assert note_path.read_text(encoding="utf-8") == original
-
-
-def test_bridge_validate_note_metadata_returns_field_errors(temp_vault_path):
-    bridge = FuentePyWebViewApi(FuenteConsoleBackend(temp_vault_path))
-    result = bridge.validate_note_metadata({"tags": ["evil:\nstatus: approved"]})
-    assert result["error"] == "invalid_metadata"
-    assert "tags" in result["field_errors"]
-
-
 def test_approve_rejects_metadata_and_keeps_editing_separate(
     notes_service, temp_vault_manager
 ):
@@ -220,44 +176,50 @@ def test_approve_rejects_metadata_and_keeps_editing_separate(
     assert note_path.read_text(encoding="utf-8") == original
 
 
-def test_approval_html_uses_typed_controls_not_raw_yaml_editor():
+def test_approval_html_shows_note_properties_without_edit_controls():
     source = (Path(__file__).resolve().parent.parent / "consola_preview.html").read_text(
         encoding="utf-8"
     )
     approval_section = source.split('id="modal-approval"', 1)[1].split("<!-- MODAL GUÍA RÁPIDA -->", 1)[0]
 
-    assert 'id="metadata-title"' in approval_section
-    assert 'id="metadata-tags"' in approval_section
-    assert 'id="metadata-issue"' in approval_section
-    assert 'id="metadata-date"' in approval_section
-    assert 'id="metadata-origins"' in approval_section
-    assert 'id="metadata-sources"' not in approval_section
-    assert 'id="metadata-status"' in approval_section
-    assert "metadata-field-error" in approval_section
+    for field in ("title", "tags", "issue", "date", "origins", "status"):
+        assert f'id="metadata-{field}-value"' in approval_section
+        assert f'id="metadata-{field}"' not in approval_section
+    for field in ("title", "tags", "issue", "date", "origins", "status"):
+        assert f'id="metadata-error-{field}"' not in approval_section
     assert 'id="metadata-raw-frontmatter"' in approval_section
-    assert approval_section.count("<textarea") == 1
-    assert '<textarea id="metadata-origins"' in approval_section
+    assert "<textarea" not in approval_section
+    assert 'id="btn-save-metadata"' not in approval_section
+    assert "Guardar cambios" not in approval_section
     assert "<pre id=\"metadata-raw-frontmatter\">" in approval_section
     assert ">Ver detalles</summary>" in approval_section
-    assert 'value="approved"' not in approval_section
-    assert 'value="rejected"' not in approval_section
+    assert 'id="approval-reviewer"' in approval_section
+
+    styles = (Path(__file__).resolve().parent.parent / "fuente/ui/static/console.css").read_text(
+        encoding="utf-8"
+    )
+    assert ".approval-note-properties" in styles
+    assert ".approval-note-property dd" in styles
 
 
-def test_approval_metadata_save_preserves_later_edits_during_async_response():
+def test_approval_metadata_load_ignores_stale_async_response():
     source = (Path(__file__).resolve().parent.parent / "consola_preview.html").read_text(
         encoding="utf-8"
     )
 
-    assert "approvalMetadataEditGeneration" in source
-    assert "const saveGeneration = approvalMetadataEditGeneration" in source
-    assert "approvalMetadataEditGeneration === saveGeneration" in source
-    assert "approvalSelectedNoteId !== saveDocumentId" in source
     assert "approvalMetadataLoadGeneration" in source
     assert "approvalMetadataLoadGeneration !== loadGeneration" in source
-    assert "approvalMetadataLoadGeneration !== saveLoadGeneration" in source
+    for removed_write_state in (
+        "approvalMetadataDirty",
+        "approvalMetadataEditGeneration",
+        "saveApprovalMetadata",
+        "collectMetadataFormValues",
+        "update_note_metadata",
+    ):
+        assert removed_write_state not in source
 
 
-def test_frontend_metadata_methods_are_exposed_by_bridge():
+def test_frontend_exposes_read_only_metadata_and_approval_methods():
     source = (Path(__file__).resolve().parent.parent / "consola_preview.html").read_text(
         encoding="utf-8"
     )
@@ -268,13 +230,14 @@ def test_frontend_metadata_methods_are_exposed_by_bridge():
     }
     metadata_calls = {
         "get_pending_notes",
-        "get_available_issues",
         "get_note_metadata",
-        "update_note_metadata",
         "approve_clean",
     }
     assert metadata_calls <= called
     assert metadata_calls <= bridge_methods
+    assert "update_note_metadata" not in called
+    assert "update_note_metadata" not in bridge_methods
+    assert "validate_note_metadata" not in bridge_methods
 
 
 def test_get_note_metadata_raw_frontmatter_only_when_diagnostic(
@@ -293,62 +256,6 @@ def test_get_note_metadata_raw_frontmatter_only_when_diagnostic(
         {"document_id": document_id, "diagnostic": True},
     )
     assert diagnostic["raw_frontmatter"].startswith("---\n")
-
-
-def test_successful_metadata_update_bumps_revision(notes_service, temp_vault_manager):
-    document_id, note_path = _write_pending_note(
-        temp_vault_manager,
-        body="# Meta\n",
-        title="Nota_Update",
-    )
-    revision = notes_service.get_note(document_id).revision
-    updated = notes_service.update_metadata(
-        document_id,
-        expected_revision=revision,
-        metadata_patch={
-            "title": "Título actualizado",
-            "tags": ["nueva", "etiqueta"],
-            "issue": "_Sin_Cuestion",
-            "date": "2026-08-08",
-            "status": "pending_review",
-        },
-    )
-    metadata, body = parse_frontmatter(note_path.read_text(encoding="utf-8"))
-    assert body == "# Meta\n"
-    assert metadata["title"] == "Título actualizado"
-    assert metadata["tags"] == ["nueva", "etiqueta"]
-    assert updated.revision > revision
-
-
-def test_metadata_save_rejects_approved_status(notes_service, temp_vault_manager):
-    document_id, note_path = _write_pending_note(
-        temp_vault_manager,
-        body="# Guardar\n",
-        title="Nota_No_Approve_Save",
-    )
-    revision = notes_service.get_note(document_id).revision
-    original = note_path.read_text(encoding="utf-8")
-
-    with pytest.raises(MetadataValidationError) as error:
-        notes_service.update_metadata(
-            document_id,
-            expected_revision=revision,
-            metadata_patch={"status": "approved"},
-        )
-
-    assert "status" in error.value.field_errors
-    metadata, _ = parse_frontmatter(note_path.read_text(encoding="utf-8"))
-    assert metadata["status"] == "pending_review"
-    assert note_path.read_text(encoding="utf-8") == original
-
-
-def test_validate_metadata_save_fields_rejects_approved():
-    with pytest.raises(MetadataValidationError) as error:
-        validate_metadata_save_fields(
-            {"status": "approved"},
-            allowed_issues=["_Sin_Cuestion"],
-        )
-    assert "status" in error.value.field_errors
 
 
 def test_approve_still_transitions_and_reindexes(notes_service, temp_vault_manager, monkeypatch):

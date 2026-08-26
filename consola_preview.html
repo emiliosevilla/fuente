@@ -591,46 +591,38 @@
                 <div class="approval-pending-list" id="approval-pending-list">
                     <p class="console-layout-048">Cargando notas para revisar...</p>
                 </div>
-                <div class="metadata-form-panel" id="approval-metadata-form">
-                    <p class="console-text-022">Elige una nota para revisarla.</p>
-                    <div class="metadata-field is-hidden" id="metadata-field-title">
-                        <label for="metadata-title">Título</label>
-                        <input type="text" id="metadata-title" autocomplete="off">
-                        <span class="metadata-field-error" id="metadata-error-title"></span>
-                    </div>
+                <div class="approval-note-details" id="approval-note-details">
+                    <p class="console-text-022" id="approval-note-placeholder">Elige una nota para revisarla.</p>
+                    <dl class="approval-note-properties is-hidden" id="approval-note-properties">
+                        <div class="approval-note-property">
+                            <dt>Título</dt>
+                            <dd id="metadata-title-value">Sin dato</dd>
+                        </div>
+                        <div class="approval-note-property">
+                            <dt>Etiquetas</dt>
+                            <dd id="metadata-tags-value">Sin dato</dd>
+                        </div>
+                        <div class="approval-note-property">
+                            <dt>Categoría</dt>
+                            <dd id="metadata-issue-value">Sin dato</dd>
+                        </div>
+                        <div class="approval-note-property">
+                            <dt>Fecha</dt>
+                            <dd id="metadata-date-value">Sin dato</dd>
+                        </div>
+                        <div class="approval-note-property">
+                            <dt>De dónde sale</dt>
+                            <dd id="metadata-origins-value">Sin dato</dd>
+                        </div>
+                        <div class="approval-note-property">
+                            <dt>Estado</dt>
+                            <dd id="metadata-status-value">Sin dato</dd>
+                        </div>
+                    </dl>
                     <div class="metadata-field is-hidden" id="approval-reviewer-field">
                         <label for="approval-reviewer">Quién la revisa</label>
                         <input type="text" id="approval-reviewer" autocomplete="name" maxlength="80" placeholder="Nombre del revisor">
                         <span class="metadata-field-error" id="approval-reviewer-error"></span>
-                    </div>
-                    <div class="metadata-field is-hidden" id="metadata-field-tags">
-                        <label for="metadata-tags">Etiquetas</label>
-                        <input type="text" id="metadata-tags" autocomplete="off" placeholder="etiqueta1, etiqueta2">
-                        <span class="metadata-field-error" id="metadata-error-tags"></span>
-                    </div>
-                    <div class="metadata-field is-hidden" id="metadata-field-issue">
-                        <label for="metadata-issue">Categoría</label>
-                        <select id="metadata-issue"></select>
-                        <span class="metadata-field-error" id="metadata-error-issue"></span>
-                    </div>
-                    <div class="metadata-field is-hidden" id="metadata-field-date">
-                        <label for="metadata-date">Fecha</label>
-                        <input type="date" id="metadata-date">
-                        <span class="metadata-field-error" id="metadata-error-date"></span>
-                    </div>
-                    <div class="metadata-field is-hidden" id="metadata-field-origins">
-                        <label for="metadata-origins">De dónde sale</label>
-                        <textarea id="metadata-origins" rows="3" readonly placeholder="Sin orígenes"></textarea>
-                        <span class="metadata-field-error" id="metadata-error-origins"></span>
-                    </div>
-                    <div class="metadata-field is-hidden" id="metadata-field-status">
-                        <label for="metadata-status">Estado</label>
-                        <select id="metadata-status">
-                            <option value="pending_review">Pendiente de revisión</option>
-                            <option value="draft">Borrador</option>
-                            <option value="archived">Archivada</option>
-                        </select>
-                        <span class="metadata-field-error" id="metadata-error-status"></span>
                     </div>
                     <details class="metadata-diagnostic is-hidden" id="metadata-diagnostic-panel">
                         <summary class="console-text-023">Ver detalles</summary>
@@ -641,7 +633,6 @@
             <div class="modal-footer console-layout-049">
                 <span id="approval-form-status" class="console-text-024"></span>
                 <div class="console-layout-050">
-                    <button class="btn-secondary" id="btn-save-metadata" data-onclick-command="saveApprovalMetadata()" disabled>Guardar cambios</button>
                     <button class="btn-primary" id="btn-approve-note" data-onclick-command="approveSelectedNote()" disabled>Dar por buena</button>
                     <select id="approval-export-format" aria-label="Formato de aprobación y exportación">
                         <option value="markdown">Markdown</option>
@@ -885,7 +876,6 @@
                 'resetDefaultSettings()': resetDefaultSettings,
                 'saveSettings()': saveSettings,
                 'openApprovalInbox()': openApprovalInbox,
-                'saveApprovalMetadata()': saveApprovalMetadata,
                 'approveSelectedNote()': approveSelectedNote,
                 'approveAndExportSelectedNote()': approveAndExportSelectedNote,
                 'retryFailedApprovalExport()': retryFailedApprovalExport,
@@ -1278,16 +1268,10 @@ document.addEventListener('keydown', function(event) {
         let approvalSelectedNoteId = null;
         let approvalSelectedRevision = null;
         let approvalSelectedScope = null;
-        let approvalSelectedOrigins = [];
-        let approvalSelectedOriginKind = null;
-        let approvalLegacyOriginIds = [];
-        let approvalMetadataDirty = false;
-        let approvalMetadataEditGeneration = 0;
+        let approvalNoteEligible = false;
         let approvalMetadataLoadGeneration = 0;
         let failedApprovalExportDocumentId = null;
         let failedApprovalExportFormat = null;
-        const metadataFieldIds = ['title', 'tags', 'issue', 'date', 'origins', 'status'];
-
         function bindApprovalDiagnosticPanel() {
             const panel = document.getElementById('metadata-diagnostic-panel');
             if (!panel || panel.dataset.diagnosticBound === 'true') return;
@@ -1768,45 +1752,22 @@ document.addEventListener('keydown', function(event) {
             });
         }
 
-        function clearMetadataFieldErrors() {
-            metadataFieldIds.forEach(function(field) {
-                const input = document.getElementById('metadata-' + field);
-                const errorEl = document.getElementById('metadata-error-' + field);
-                if (input) input.classList.remove('invalid');
-                if (errorEl) errorEl.textContent = '';
-            });
-        }
-
-        function showMetadataFieldErrors(fieldErrors) {
-            clearMetadataFieldErrors();
-            if (!fieldErrors) return;
-            Object.keys(fieldErrors).forEach(function(field) {
-                const input = document.getElementById('metadata-' + field);
-                const errorEl = document.getElementById('metadata-error-' + field);
-                if (input) input.classList.add('invalid');
-                if (errorEl) errorEl.textContent = fieldErrors[field];
-            });
-        }
-
-        function setMetadataFormVisible(visible) {
-            metadataFieldIds.forEach(function(field) {
-                const wrapper = document.getElementById('metadata-field-' + field);
-                if (wrapper) {
-                    wrapper.classList.toggle('is-hidden', !visible);
-                    wrapper.classList.toggle('is-visible', visible);
-                }
-            });
+        function setMetadataDetailsVisible(visible) {
+            const properties = document.getElementById('approval-note-properties');
+            properties.classList.toggle('is-hidden', !visible);
+            properties.classList.toggle('is-visible', visible);
+            document.getElementById('approval-note-placeholder').classList.toggle('is-hidden', visible);
             const diagnosticPanel = document.getElementById('metadata-diagnostic-panel');
             diagnosticPanel.classList.toggle('is-hidden', !visible);
             diagnosticPanel.classList.toggle('is-visible', visible);
-            document.getElementById('btn-save-metadata').disabled = !visible;
             updateApprovalActionButtons(visible);
             setApprovalScope(approvalSelectedScope);
         }
 
         function updateApprovalActionButtons(visible) {
-            document.getElementById('btn-approve-note').disabled = !visible || approvalMetadataDirty;
-            document.getElementById('btn-approve-export').disabled = !visible || approvalSelectedScope === 'clean' || approvalMetadataDirty;
+            const ready = visible && approvalNoteEligible;
+            document.getElementById('btn-approve-note').disabled = !ready;
+            document.getElementById('btn-approve-export').disabled = !ready || approvalSelectedScope === 'clean';
         }
 
         function setApprovalScope(scope) {
@@ -1821,80 +1782,34 @@ document.addEventListener('keydown', function(event) {
             if (reviewerInput && !requiresReviewer) reviewerInput.value = '';
             if (reviewerError) reviewerError.textContent = '';
             const exportButton = document.getElementById('btn-approve-export');
-            if (exportButton) exportButton.disabled = !approvalSelectedNoteId || approvalSelectedScope !== 'output' || approvalMetadataDirty;
+            if (exportButton) exportButton.disabled = !approvalSelectedNoteId || approvalSelectedScope !== 'output' || !approvalNoteEligible;
             if (exportButton && isClean) exportButton.title = 'La nota canónica se aprueba antes de generar sumarios; no se exporta desde aquí.';
             if (exportButton && !isClean) exportButton.removeAttribute('title');
         }
 
-        function populateIssueOptions(issues, selectedIssue) {
-            const select = document.getElementById('metadata-issue');
-            select.replaceChildren();
-            (issues || ['_Sin_Cuestion']).forEach(function(issue) {
-                const option = document.createElement('option');
-                option.value = issue;
-                option.textContent = issue;
-                if (issue === selectedIssue) option.selected = true;
-                select.appendChild(option);
-            });
-        }
-
-        function fillMetadataForm(metadata) {
-            document.getElementById('metadata-title').value = metadata.title || '';
-            document.getElementById('metadata-tags').value = (metadata.tags || []).join(', ');
-            document.getElementById('metadata-date').value = metadata.date || '';
-            approvalSelectedOrigins = Array.isArray(metadata.origins) ? metadata.origins.slice() : [];
-            approvalSelectedOriginKind = metadata.origin_kind || null;
-            approvalLegacyOriginIds = Array.isArray(metadata.legacy_origin_ids) ? metadata.legacy_origin_ids.slice() : [];
-            const originLines = approvalSelectedOrigins.map(function(origin) {
+        function fillMetadataDetails(metadata) {
+            const origins = Array.isArray(metadata.origins) ? metadata.origins : [];
+            const legacyOriginIds = Array.isArray(metadata.legacy_origin_ids) ? metadata.legacy_origin_ids : [];
+            const originLines = origins.map(function(origin) {
                 const path = origin && origin.path ? origin.path : '<origen>';
                 const revision = origin && origin.revision ? origin.revision : '?';
                 const hash = origin && origin.content_hash ? origin.content_hash.slice(0, 12) : '?';
                 return path + ' · rev. ' + revision + ' · ' + hash;
             });
-            if (approvalLegacyOriginIds.length) {
+            if (legacyOriginIds.length) {
                 originLines.push('Falta información de origen para completar el cambio.');
             }
-            document.getElementById('metadata-origins').value = originLines.join('\n');
-            document.getElementById('metadata-status').value = metadata.status || 'pending_review';
-            populateIssueOptions(window.approvalIssueOptions || ['_Sin_Cuestion'], metadata.issue || '_Sin_Cuestion');
-            const blocked = metadata.migration_status === 'pending_origins' || approvalLegacyOriginIds.length > 0;
-            approvalMetadataDirty = false;
-            document.getElementById('btn-save-metadata').disabled = blocked;
-            updateApprovalActionButtons(!blocked);
+            document.getElementById('metadata-title-value').textContent = metadata.title || 'Sin dato';
+            document.getElementById('metadata-tags-value').textContent = (metadata.tags || []).join(', ') || 'Sin dato';
+            document.getElementById('metadata-issue-value').textContent = metadata.issue || 'Sin dato';
+            document.getElementById('metadata-date-value').textContent = metadata.date || 'Sin dato';
+            document.getElementById('metadata-origins-value').textContent = originLines.join('\n') || 'Sin dato';
+            document.getElementById('metadata-status-value').textContent = metadata.status || 'pending_review';
+            const blocked = metadata.migration_status === 'pending_origins' || legacyOriginIds.length > 0;
+            approvalNoteEligible = !blocked;
+            updateApprovalActionButtons(true);
             setApprovalScope(approvalSelectedScope);
-            clearMetadataFieldErrors();
         }
-
-        function collectMetadataFormValues() {
-            const metadata = {
-                title: document.getElementById('metadata-title').value,
-                tags: document.getElementById('metadata-tags').value,
-                issue: document.getElementById('metadata-issue').value,
-                date: document.getElementById('metadata-date').value,
-                origins: approvalSelectedOrigins.slice(),
-            };
-            const status = document.getElementById('metadata-status').value;
-            if (status) metadata.status = status;
-            if (approvalSelectedOriginKind) metadata.origin_kind = approvalSelectedOriginKind;
-            if (approvalLegacyOriginIds.length) metadata.legacy_origin_ids = approvalLegacyOriginIds.slice();
-            return metadata;
-        }
-
-        document.addEventListener('change', function(event) {
-            if (event.target && metadataFieldIds.indexOf(event.target.id.replace('metadata-', '')) !== -1) {
-                approvalMetadataEditGeneration += 1;
-                approvalMetadataDirty = true;
-                updateApprovalActionButtons(true);
-            }
-        });
-
-        document.addEventListener('input', function(event) {
-            if (event.target && metadataFieldIds.indexOf(event.target.id.replace('metadata-', '')) !== -1) {
-                approvalMetadataEditGeneration += 1;
-                approvalMetadataDirty = true;
-                updateApprovalActionButtons(true);
-            }
-        });
 
         function openApprovalInbox() {
             updateStepBadge('badge-step5');
@@ -1915,7 +1830,7 @@ document.addEventListener('keydown', function(event) {
             const listEl = document.getElementById('approval-pending-list');
             approvalSelectedNoteId = null;
             approvalSelectedRevision = null;
-            approvalMetadataDirty = false;
+            approvalNoteEligible = false;
             setApprovalScope(null);
             if (!preserveRetry) {
                 failedApprovalExportDocumentId = null;
@@ -1923,7 +1838,7 @@ document.addEventListener('keydown', function(event) {
             }
             const retryButton = document.getElementById('btn-retry-approval-export');
             if (retryButton) retryButton.hidden = !preserveRetry;
-            setMetadataFormVisible(false);
+            setMetadataDetailsVisible(false);
             document.getElementById('approval-form-status').textContent = '';
             document.getElementById('metadata-raw-frontmatter').textContent = '';
             setTextMessage(listEl, 'Cargando notas para revisar...', 'console-layout-048');
@@ -1933,10 +1848,7 @@ document.addEventListener('keydown', function(event) {
                 return;
             }
 
-            window.pywebview.api.get_available_issues().then(function(issueRes) {
-                window.approvalIssueOptions = (issueRes && issueRes.issues) ? issueRes.issues : ['_Sin_Cuestion'];
-                return window.pywebview.api.get_pending_notes();
-            }).then(function(res) {
+            window.pywebview.api.get_pending_notes().then(function(res) {
                 const pending = (res && res.pending_notes) ? res.pending_notes : [];
                 listEl.replaceChildren();
                 if (!pending.length) {
@@ -1965,8 +1877,6 @@ document.addEventListener('keydown', function(event) {
 
         function selectApprovalNote(documentId, revision, itemEl, approvalScope) {
             const loadGeneration = ++approvalMetadataLoadGeneration;
-            approvalMetadataEditGeneration += 1;
-            approvalMetadataDirty = false;
             approvalSelectedNoteId = documentId;
             approvalSelectedRevision = revision;
             setApprovalScope(approvalScope || (itemEl && itemEl.dataset.approvalScope));
@@ -1974,7 +1884,8 @@ document.addEventListener('keydown', function(event) {
                 el.classList.remove('active');
             });
             if (itemEl) itemEl.classList.add('active');
-            setMetadataFormVisible(true);
+            setMetadataDetailsVisible(true);
+            updateApprovalActionButtons(false);
             document.getElementById('approval-form-status').textContent = 'Cargando datos...';
             document.getElementById('metadata-raw-frontmatter').textContent = '';
 
@@ -1985,52 +1896,13 @@ document.addEventListener('keydown', function(event) {
                     return;
                 }
                 approvalSelectedRevision = res.revision;
-                fillMetadataForm(res.metadata || {});
+                fillMetadataDetails(res.metadata || {});
                 document.getElementById('approval-form-status').textContent = 'Versión ' + res.revision;
             });
         }
 
-        function saveApprovalMetadata() {
-            if (!approvalSelectedNoteId || approvalSelectedRevision === null) return;
-            const saveDocumentId = approvalSelectedNoteId;
-            const saveGeneration = approvalMetadataEditGeneration;
-            const saveLoadGeneration = approvalMetadataLoadGeneration;
-            const metadata = collectMetadataFormValues();
-            document.getElementById('approval-form-status').textContent = 'Guardando...';
-            window.pywebview.api.update_note_metadata(
-                approvalSelectedNoteId,
-                metadata,
-                approvalSelectedRevision
-            ).then(function(res) {
-                if (approvalSelectedNoteId !== saveDocumentId || approvalMetadataLoadGeneration !== saveLoadGeneration) return;
-                if (res && res.field_errors) {
-                    showMetadataFieldErrors(res.field_errors);
-                    document.getElementById('approval-form-status').textContent = res.message || 'No se pueden guardar estos datos';
-                    return;
-                }
-                if (res && res.error) {
-                    document.getElementById('approval-form-status').textContent = res.message || res.error;
-                    return;
-                }
-                approvalSelectedRevision = res.revision;
-                if (approvalMetadataEditGeneration === saveGeneration) {
-                    fillMetadataForm(res.metadata || metadata);
-                    document.getElementById('approval-form-status').textContent = 'Cambios guardados (versión ' + res.revision + ')';
-                } else {
-                    approvalMetadataDirty = true;
-                    updateApprovalActionButtons(true);
-                    document.getElementById('approval-form-status').textContent = 'Cambios guardados; quedan cambios posteriores sin guardar (versión ' + res.revision + ').';
-                }
-                if (res.log) log(res.log);
-            });
-        }
-
         function approveSelectedNote() {
-            if (!approvalSelectedNoteId || approvalSelectedRevision === null) return;
-            if (approvalMetadataDirty) {
-                document.getElementById('approval-form-status').textContent = 'Guarda los cambios antes de darla por buena.';
-                return;
-            }
+            if (!approvalSelectedNoteId || approvalSelectedRevision === null || !approvalNoteEligible) return;
             document.getElementById('approval-form-status').textContent = 'Guardando revisión...';
             let approvalRequest;
             const requiresReviewer = approvalSelectedScope === 'clean' || approvalSelectedScope === 'output';
@@ -2058,11 +1930,6 @@ document.addEventListener('keydown', function(event) {
                 return;
             }
             approvalRequest.then(function(res) {
-                if (res && res.field_errors) {
-                    showMetadataFieldErrors(res.field_errors);
-                    document.getElementById('approval-form-status').textContent = res.message || 'No se puede guardar: revisa los datos';
-                    return;
-                }
                 if (res && res.error) {
                     document.getElementById('approval-form-status').textContent = res.message || res.error;
                     return;
@@ -2082,16 +1949,9 @@ document.addEventListener('keydown', function(event) {
             const format = document.getElementById('approval-export-format').value;
             const currentSelectedDocumentId = approvalSelectedNoteId;
             const currentSelectedNoteRevision = approvalSelectedRevision;
-            const currentSelectedNoteMetadata = collectMetadataFormValues();
             let printWindow = null;
             document.getElementById('approval-form-status').textContent = 'Guardando revisión y preparando el archivo...';
-            window.pywebview.api.approve_and_export(currentSelectedDocumentId, currentSelectedNoteRevision, format, currentSelectedNoteMetadata).then(function(res) {
-                if (res && res.field_errors) {
-                    closePrintWindowOnError(printWindow);
-                    showMetadataFieldErrors(res.field_errors);
-                    document.getElementById('approval-form-status').textContent = res.message || 'Metadatos inválidos';
-                    return;
-                }
+            window.pywebview.api.approve_and_export(currentSelectedDocumentId, currentSelectedNoteRevision, format).then(function(res) {
                 if (res && res.error) {
                     closePrintWindowOnError(printWindow);
                     document.getElementById('approval-form-status').textContent = res.message || res.error;

@@ -254,3 +254,64 @@ persistUiState('reader', 'filters', {search: 'no perder'}).then(function(first) 
         [node, "-"], input=program, text=True, capture_output=True, check=False
     )
     assert result.returncode == 0, result.stderr
+
+
+def test_native_close_drain_completes_only_after_sqlite_write_recovers():
+    node = shutil.which("node")
+    assert node is not None, "Node is required to execute the shell behavior contract"
+    functions = "\n".join(
+        _extract_function(name)
+        for name in (
+            "reportUiStateFailure",
+            "scheduleUiStateRetry",
+            "notifyNativeCloseWhenReady",
+            "flushPendingUiState",
+            "persistUiState",
+            "prepareUiStateForNativeClose",
+        )
+    )
+    program = """
+const assert = require('node:assert/strict');
+const pendingUiState = new Map();
+const UI_STATE_RETRY_DELAY_MS = 1500;
+let uiStateRetryTimer = null;
+let nativeCloseRequested = false;
+let retry = null;
+let writes = 0;
+let closeCompletions = 0;
+const status = {textContent: ''};
+global.setTimeout = function(callback) { retry = callback; return 1; };
+global.window = {pywebview: {api: {
+    set_ui_state() {
+        writes += 1;
+        return writes === 1
+            ? Promise.reject(new Error('database temporarily locked'))
+            : Promise.resolve({status: 'saved'});
+    },
+    complete_pending_close() {
+        closeCompletions += 1;
+        return Promise.resolve({status: 'closing'});
+    },
+}}};
+global.document = {getElementById() { return status; }};
+global.log = function() {};
+console.error = function() {};
+__FUNCTIONS__
+persistUiState('reader', 'drafts', {text: 'conservar'}).then(function() {
+    const close = prepareUiStateForNativeClose();
+    assert.equal(close.ready, false);
+    assert.equal(closeCompletions, 0);
+    setImmediate(function() {
+        assert.equal(pendingUiState.size, 1);
+        retry();
+        setImmediate(function() {
+            assert.equal(pendingUiState.size, 0);
+            assert.equal(closeCompletions, 1);
+        });
+    });
+});
+""".replace("__FUNCTIONS__", functions)
+    result = subprocess.run(
+        [node, "-"], input=program, text=True, capture_output=True, check=False
+    )
+    assert result.returncode == 0, result.stderr

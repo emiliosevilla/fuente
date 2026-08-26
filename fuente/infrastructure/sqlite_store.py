@@ -118,48 +118,59 @@ class JobStore:
     def save_review_claim(
         self, values: dict[str, Any], *, claimed_after: datetime
     ) -> dict[str, Any]:
+        with self._immediate_transaction(str(values["artifact_id"])) as connection:
+            return self._save_review_claim_in_transaction(
+                connection, values, claimed_after=claimed_after
+            )
+
+    def _save_review_claim_in_transaction(
+        self,
+        connection: sqlite3.Connection,
+        values: dict[str, Any],
+        *,
+        claimed_after: datetime,
+    ) -> dict[str, Any]:
         identity = tuple(
             values[field]
             for field in (
                 "artifact_id", "source_stage", "target_stage", "revision", "content_hash"
             )
         )
-        with self._immediate_transaction(str(values["artifact_id"])) as connection:
-            existing = connection.execute(
-                """
-                SELECT * FROM review_claims
-                WHERE artifact_id = ? AND source_stage = ? AND target_stage = ?
-                  AND revision = ? AND content_hash = ?
-                """,
-                identity,
-            ).fetchone()
-            if existing is not None and datetime.fromisoformat(existing["expires_at"]) > claimed_after:
-                if existing["reviewer"] != values["reviewer"]:
-                    raise ReviewClaimConflictError(str(values["artifact_id"]))
-                return dict(existing)
-            connection.execute(
-                """
-                INSERT INTO review_claims
-                    (artifact_id, source_stage, target_stage, revision, content_hash,
-                     reviewer, claimed_at, expires_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                ON CONFLICT (artifact_id, source_stage, target_stage, revision, content_hash)
-                DO UPDATE SET reviewer = excluded.reviewer,
-                              claimed_at = excluded.claimed_at,
-                              expires_at = excluded.expires_at
-                """,
-                (*identity, values["reviewer"], values["claimed_at"], values["expires_at"]),
-            )
-            row = connection.execute(
-                """
-                SELECT * FROM review_claims
-                WHERE artifact_id = ? AND source_stage = ? AND target_stage = ?
-                  AND revision = ? AND content_hash = ?
-                """,
-                identity,
-            ).fetchone()
-            assert row is not None
-            return dict(row)
+        existing = connection.execute(
+            """
+            SELECT * FROM review_claims
+            WHERE artifact_id = ? AND source_stage = ? AND target_stage = ?
+              AND revision = ? AND content_hash = ?
+            """,
+            identity,
+        ).fetchone()
+        if existing is not None and datetime.fromisoformat(existing["expires_at"]) > claimed_after:
+            if existing["reviewer"] != values["reviewer"]:
+                raise ReviewClaimConflictError(str(values["artifact_id"]))
+            return dict(existing)
+        connection.execute(
+            """
+            INSERT INTO review_claims
+                (artifact_id, source_stage, target_stage, revision, content_hash,
+                 reviewer, claimed_at, expires_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT (artifact_id, source_stage, target_stage, revision, content_hash)
+            DO UPDATE SET reviewer = excluded.reviewer,
+                          claimed_at = excluded.claimed_at,
+                          expires_at = excluded.expires_at
+            """,
+            (*identity, values["reviewer"], values["claimed_at"], values["expires_at"]),
+        )
+        row = connection.execute(
+            """
+            SELECT * FROM review_claims
+            WHERE artifact_id = ? AND source_stage = ? AND target_stage = ?
+              AND revision = ? AND content_hash = ?
+            """,
+            identity,
+        ).fetchone()
+        assert row is not None
+        return dict(row)
 
     def get_review_claim(
         self,
@@ -182,47 +193,58 @@ class JobStore:
     def save_transition_approval(
         self, values: dict[str, Any], *, claim_expires_after: datetime
     ) -> dict[str, Any] | None:
+        with self._immediate_transaction(str(values["artifact_id"])) as connection:
+            return self._save_transition_approval_in_transaction(
+                connection, values, claim_expires_after=claim_expires_after
+            )
+
+    def _save_transition_approval_in_transaction(
+        self,
+        connection: sqlite3.Connection,
+        values: dict[str, Any],
+        *,
+        claim_expires_after: datetime,
+    ) -> dict[str, Any] | None:
         identity = tuple(
             values[field]
             for field in (
                 "artifact_id", "source_stage", "target_stage", "revision", "content_hash"
             )
         )
-        with self._immediate_transaction(str(values["artifact_id"])) as connection:
-            claim = connection.execute(
-                """
-                SELECT reviewer, expires_at FROM review_claims
-                WHERE artifact_id = ? AND source_stage = ? AND target_stage = ?
-                  AND revision = ? AND content_hash = ?
-                """,
-                identity,
-            ).fetchone()
-            if (
-                claim is None
-                or claim["reviewer"] != values["reviewer"]
-                or datetime.fromisoformat(claim["expires_at"]) <= claim_expires_after
-            ):
-                return None
-            connection.execute(
-                """
-                INSERT INTO transition_approvals
-                    (artifact_id, source_stage, target_stage, revision, content_hash,
-                     reviewer, approved_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-                ON CONFLICT (artifact_id, source_stage, target_stage, revision, content_hash)
-                DO NOTHING
-                """,
-                (*identity, values["reviewer"], values["approved_at"]),
-            )
-            row = connection.execute(
-                """
-                SELECT * FROM transition_approvals
-                WHERE artifact_id = ? AND source_stage = ? AND target_stage = ?
-                  AND revision = ? AND content_hash = ?
-                """,
-                identity,
-            ).fetchone()
-            return dict(row) if row is not None else None
+        claim = connection.execute(
+            """
+            SELECT reviewer, expires_at FROM review_claims
+            WHERE artifact_id = ? AND source_stage = ? AND target_stage = ?
+              AND revision = ? AND content_hash = ?
+            """,
+            identity,
+        ).fetchone()
+        if (
+            claim is None
+            or claim["reviewer"] != values["reviewer"]
+            or datetime.fromisoformat(claim["expires_at"]) <= claim_expires_after
+        ):
+            return None
+        connection.execute(
+            """
+            INSERT INTO transition_approvals
+                (artifact_id, source_stage, target_stage, revision, content_hash,
+                 reviewer, approved_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT (artifact_id, source_stage, target_stage, revision, content_hash)
+            DO NOTHING
+            """,
+            (*identity, values["reviewer"], values["approved_at"]),
+        )
+        row = connection.execute(
+            """
+            SELECT * FROM transition_approvals
+            WHERE artifact_id = ? AND source_stage = ? AND target_stage = ?
+              AND revision = ? AND content_hash = ?
+            """,
+            identity,
+        ).fetchone()
+        return dict(row) if row is not None else None
 
     def get_transition_approval(
         self,
@@ -363,49 +385,161 @@ class JobStore:
     def approve_processed_note(
         self, *, note_id: str, revision: int, content_hash: str, reviewer: str
     ) -> dict[str, Any] | None:
-        identity = self.get_document_identity(note_id)
-        catalog = self.get_note(note_id)
-        current = identity or catalog
+        now = _timestamp()
+        with self._immediate_transaction(note_id) as connection:
+            return self._approve_processed_note_in_transaction(
+                connection,
+                note_id=note_id,
+                revision=revision,
+                content_hash=content_hash,
+                reviewer=reviewer,
+                approved_at=now,
+            )
+
+    def _current_processed_identity_in_transaction(
+        self,
+        connection: sqlite3.Connection,
+        note_id: str,
+    ) -> sqlite3.Row | None:
+        identity = connection.execute(
+            "SELECT * FROM document_identities WHERE document_id = ?",
+            (note_id,),
+        ).fetchone()
+        if identity is not None:
+            return identity
+        return connection.execute(
+            "SELECT * FROM note_catalog WHERE note_id = ?",
+            (note_id,),
+        ).fetchone()
+
+    def _approve_processed_note_in_transaction(
+        self,
+        connection: sqlite3.Connection,
+        *,
+        note_id: str,
+        revision: int,
+        content_hash: str,
+        reviewer: str,
+        approved_at: str,
+    ) -> dict[str, Any] | None:
+        current = self._current_processed_identity_in_transaction(connection, note_id)
         if (
             current is None
             or int(current["revision"]) != revision
-            or str(current.get("content_hash") or "") != content_hash
+            or str(current["content_hash"] or "") != content_hash
         ):
             return None
-        now = _timestamp()
+        existing = connection.execute(
+            "SELECT * FROM processed_approvals WHERE note_id = ?",
+            (note_id,),
+        ).fetchone()
+        if existing is not None:
+            if (
+                int(existing["revision"]) != revision
+                or str(existing["content_hash"]) != content_hash
+            ):
+                connection.execute(
+                    """
+                    UPDATE processed_approvals
+                    SET revision = ?, content_hash = ?, reviewer = ?,
+                        approved_at = ?, invalidated_at = NULL
+                    WHERE note_id = ?
+                    """,
+                    (revision, content_hash, reviewer, approved_at, note_id),
+                )
+                existing = connection.execute(
+                    "SELECT * FROM processed_approvals WHERE note_id = ?",
+                    (note_id,),
+                ).fetchone()
+            return dict(existing)
+        connection.execute(
+            """
+            INSERT INTO processed_approvals
+            (note_id, revision, content_hash, reviewer, approved_at)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (note_id, revision, content_hash, reviewer, approved_at),
+        )
+        row = connection.execute(
+            "SELECT * FROM processed_approvals WHERE note_id = ?", (note_id,)
+        ).fetchone()
+        return dict(row) if row is not None else None
+
+    def approve_processed_note_and_transition(
+        self,
+        *,
+        note_id: str,
+        revision: int,
+        content_hash: str,
+        reviewer: str,
+        claimed_at: str,
+        expires_at: str,
+        approved_at: str,
+    ) -> dict[str, Any] | None:
+        claimed_after = datetime.fromisoformat(claimed_at)
         with self._immediate_transaction(note_id) as connection:
-            existing = connection.execute(
-                "SELECT * FROM processed_approvals WHERE note_id = ?",
-                (note_id,),
-            ).fetchone()
-            if existing is not None:
-                if int(existing["revision"]) != revision or str(existing["content_hash"]) != content_hash:
-                    connection.execute(
-                        """
-                        UPDATE processed_approvals
-                        SET revision = ?, content_hash = ?, reviewer = ?,
-                            approved_at = ?, invalidated_at = NULL
-                        WHERE note_id = ?
-                        """,
-                        (revision, content_hash, reviewer, now, note_id),
-                    )
-                    existing = connection.execute(
-                        "SELECT * FROM processed_approvals WHERE note_id = ?",
-                        (note_id,),
-                    ).fetchone()
-                return dict(existing)
-            connection.execute(
-                """
-                INSERT INTO processed_approvals
-                (note_id, revision, content_hash, reviewer, approved_at)
-                VALUES (?, ?, ?, ?, ?)
-                """,
-                (note_id, revision, content_hash, reviewer, now),
+            current = self._current_processed_identity_in_transaction(
+                connection, note_id
             )
-            row = connection.execute(
-                "SELECT * FROM processed_approvals WHERE note_id = ?", (note_id,)
+            if (
+                current is None
+                or int(current["revision"]) != revision
+                or str(current["content_hash"] or "") != content_hash
+            ):
+                return None
+            existing = connection.execute(
+                """
+                SELECT reviewer FROM processed_approvals
+                WHERE note_id = ? AND revision = ? AND content_hash = ?
+                  AND invalidated_at IS NULL
+                """,
+                (note_id, revision, content_hash),
             ).fetchone()
-            return dict(row) if row is not None else None
+            effective_reviewer = (
+                str(existing["reviewer"]) if existing is not None else reviewer
+            )
+            claim_values = {
+                "artifact_id": note_id,
+                "source_stage": "4_procesado",
+                "target_stage": "5_compartido",
+                "revision": revision,
+                "content_hash": content_hash,
+                "reviewer": effective_reviewer,
+                "claimed_at": claimed_at,
+                "expires_at": expires_at,
+            }
+            self._save_review_claim_in_transaction(
+                connection, claim_values, claimed_after=claimed_after
+            )
+            row = self._approve_processed_note_in_transaction(
+                connection,
+                note_id=note_id,
+                revision=revision,
+                content_hash=content_hash,
+                reviewer=effective_reviewer,
+                approved_at=approved_at,
+            )
+            assert row is not None
+            approval_values = {
+                key: claim_values[key]
+                for key in (
+                    "artifact_id",
+                    "source_stage",
+                    "target_stage",
+                    "revision",
+                    "content_hash",
+                    "reviewer",
+                )
+            }
+            approval_values["approved_at"] = approved_at
+            transition = self._save_transition_approval_in_transaction(
+                connection,
+                approval_values,
+                claim_expires_after=datetime.fromisoformat(approved_at),
+            )
+            if transition is None:
+                raise sqlite3.IntegrityError("transition approval was rejected")
+            return row
 
     def is_processed_approval_current(
         self, note_id: str, revision: int, content_hash: str
@@ -1292,104 +1426,200 @@ class JobStore:
         """Insert approval and update the catalog state in one transaction."""
         approved_at = _timestamp()
         with self._immediate_transaction(note_id) as connection:
-            catalog = connection.execute(
-                """
-                SELECT catalog.*
-                FROM note_catalog AS catalog
-                LEFT JOIN note_tombstones AS tombstone
-                    ON tombstone.note_id = catalog.note_id
-                WHERE catalog.note_id = ? AND tombstone.note_id IS NULL
-                """,
-                (note_id,),
-            ).fetchone()
+            return self._approve_note_revision_in_transaction(
+                connection,
+                note_id=note_id,
+                expected_revision=expected_revision,
+                expected_content_hash=expected_content_hash,
+                reviewer=reviewer,
+                approved_at=approved_at,
+            )
+
+    def _canonical_catalog_in_transaction(
+        self,
+        connection: sqlite3.Connection,
+        note_id: str,
+    ) -> sqlite3.Row | None:
+        return connection.execute(
+            """
+            SELECT catalog.*
+            FROM note_catalog AS catalog
+            LEFT JOIN note_tombstones AS tombstone
+                ON tombstone.note_id = catalog.note_id
+            WHERE catalog.note_id = ? AND tombstone.note_id IS NULL
+            """,
+            (note_id,),
+        ).fetchone()
+
+    def _approve_note_revision_in_transaction(
+        self,
+        connection: sqlite3.Connection,
+        *,
+        note_id: str,
+        expected_revision: int,
+        expected_content_hash: str,
+        reviewer: str,
+        approved_at: str,
+    ) -> dict[str, Any] | None:
+        catalog = self._canonical_catalog_in_transaction(connection, note_id)
+        if (
+            catalog is None
+            or int(catalog["revision"]) != expected_revision
+            or str(catalog["content_hash"]) != expected_content_hash
+        ):
+            return None
+        existing = connection.execute(
+            """
+            SELECT note_id, revision, content_hash, reviewer,
+                   approved_at, invalidated_at
+            FROM note_approvals
+            WHERE note_id = ? AND revision = ? AND content_hash = ?
+            """,
+            (note_id, expected_revision, expected_content_hash),
+        ).fetchone()
+        if existing is not None:
+            if existing["invalidated_at"] is not None:
+                raise sqlite3.IntegrityError(
+                    "an invalidated revision cannot be approved again"
+                )
+            if str(catalog["status"]) != "approved":
+                connection.execute(
+                    """
+                    UPDATE note_catalog
+                    SET status = 'approved', updated_at = ?
+                    WHERE note_id = ? AND revision = ? AND content_hash = ?
+                    """,
+                    (
+                        approved_at,
+                        note_id,
+                        expected_revision,
+                        expected_content_hash,
+                    ),
+                )
+            return {
+                key: existing[key]
+                for key in (
+                    "note_id",
+                    "revision",
+                    "content_hash",
+                    "reviewer",
+                    "approved_at",
+                )
+            }
+        connection.execute(
+            """
+            INSERT INTO note_approvals (
+                note_id, revision, content_hash, reviewer,
+                approved_at, invalidated_at
+            ) VALUES (?, ?, ?, ?, ?, NULL)
+            """,
+            (
+                note_id,
+                expected_revision,
+                expected_content_hash,
+                reviewer,
+                approved_at,
+            ),
+        )
+        changed = connection.execute(
+            """
+            UPDATE note_catalog
+            SET status = 'approved', updated_at = ?
+            WHERE note_id = ? AND revision = ? AND content_hash = ?
+            """,
+            (
+                approved_at,
+                note_id,
+                expected_revision,
+                expected_content_hash,
+            ),
+        )
+        if changed.rowcount != 1:
+            raise sqlite3.IntegrityError("approval catalog state changed concurrently")
+        row = connection.execute(
+            """
+            SELECT note_id, revision, content_hash, reviewer, approved_at
+            FROM note_approvals
+            WHERE note_id = ? AND revision = ? AND content_hash = ?
+            """,
+            (note_id, expected_revision, expected_content_hash),
+        ).fetchone()
+        assert row is not None
+        return dict(row)
+
+    def approve_note_revision_and_transition(
+        self,
+        *,
+        note_id: str,
+        expected_revision: int,
+        expected_content_hash: str,
+        reviewer: str,
+        claimed_at: str,
+        expires_at: str,
+        approved_at: str,
+    ) -> dict[str, Any] | None:
+        claimed_after = datetime.fromisoformat(claimed_at)
+        with self._immediate_transaction(note_id) as connection:
+            catalog = self._canonical_catalog_in_transaction(connection, note_id)
             if (
                 catalog is None
                 or int(catalog["revision"]) != expected_revision
                 or str(catalog["content_hash"]) != expected_content_hash
             ):
                 return None
-
             existing = connection.execute(
                 """
-                SELECT note_id, revision, content_hash, reviewer,
-                       approved_at, invalidated_at
-                FROM note_approvals
+                SELECT reviewer FROM note_approvals
                 WHERE note_id = ? AND revision = ? AND content_hash = ?
+                  AND invalidated_at IS NULL
                 """,
                 (note_id, expected_revision, expected_content_hash),
             ).fetchone()
-            if existing is not None:
-                if existing["invalidated_at"] is not None:
-                    raise sqlite3.IntegrityError(
-                        "an invalidated revision cannot be approved again"
-                    )
-                if str(catalog["status"]) != "approved":
-                    connection.execute(
-                        """
-                        UPDATE note_catalog
-                        SET status = 'approved', updated_at = ?
-                        WHERE note_id = ? AND revision = ? AND content_hash = ?
-                        """,
-                        (
-                            approved_at,
-                            note_id,
-                            expected_revision,
-                            expected_content_hash,
-                        ),
-                    )
-                result = {
-                    key: existing[key]
-                    for key in (
-                        "note_id",
-                        "revision",
-                        "content_hash",
-                        "reviewer",
-                        "approved_at",
-                    )
-                }
-                return result
-
-            connection.execute(
-                """
-                INSERT INTO note_approvals (
-                    note_id, revision, content_hash, reviewer,
-                    approved_at, invalidated_at
-                ) VALUES (?, ?, ?, ?, ?, NULL)
-                """,
-                (
-                    note_id,
-                    expected_revision,
-                    expected_content_hash,
-                    reviewer,
-                    approved_at,
-                ),
+            effective_reviewer = (
+                str(existing["reviewer"]) if existing is not None else reviewer
             )
-            changed = connection.execute(
-                """
-                UPDATE note_catalog
-                SET status = 'approved', updated_at = ?
-                WHERE note_id = ? AND revision = ? AND content_hash = ?
-                """,
-                (
-                    approved_at,
-                    note_id,
-                    expected_revision,
-                    expected_content_hash,
-                ),
+            claim_values = {
+                "artifact_id": note_id,
+                "source_stage": "3_capturado",
+                "target_stage": "4_procesado",
+                "revision": expected_revision,
+                "content_hash": expected_content_hash,
+                "reviewer": effective_reviewer,
+                "claimed_at": claimed_at,
+                "expires_at": expires_at,
+            }
+            self._save_review_claim_in_transaction(
+                connection, claim_values, claimed_after=claimed_after
             )
-            if changed.rowcount != 1:
-                raise sqlite3.IntegrityError("approval catalog state changed concurrently")
-            row = connection.execute(
-                """
-                SELECT note_id, revision, content_hash, reviewer, approved_at
-                FROM note_approvals
-                WHERE note_id = ? AND revision = ? AND content_hash = ?
-                """,
-                (note_id, expected_revision, expected_content_hash),
-            ).fetchone()
+            row = self._approve_note_revision_in_transaction(
+                connection,
+                note_id=note_id,
+                expected_revision=expected_revision,
+                expected_content_hash=expected_content_hash,
+                reviewer=effective_reviewer,
+                approved_at=approved_at,
+            )
             assert row is not None
-            result = dict(row)
-        return result
+            approval_values = {
+                key: claim_values[key]
+                for key in (
+                    "artifact_id",
+                    "source_stage",
+                    "target_stage",
+                    "revision",
+                    "content_hash",
+                    "reviewer",
+                )
+            }
+            approval_values["approved_at"] = approved_at
+            transition = self._save_transition_approval_in_transaction(
+                connection,
+                approval_values,
+                claim_expires_after=datetime.fromisoformat(approved_at),
+            )
+            if transition is None:
+                raise sqlite3.IntegrityError("transition approval was rejected")
+            return row
 
     def is_note_approval_current(
         self, note_id: str, revision: int, content_hash: str
@@ -2029,35 +2259,27 @@ class JobStore:
         """
         if limit < 1:
             return None
-        try:
-            self._connection.execute("BEGIN IMMEDIATE")
-        except sqlite3.OperationalError as error:
-            if _is_lock_contention(error):
-                raise JobStoreBusyError(job_id) from error
-            raise
-        try:
-            existing = self._connection.execute(
+        with self._immediate_transaction(job_id) as connection:
+            existing = connection.execute(
                 "SELECT * FROM resource_leases WHERE job_id = ? AND resource_key = ?",
                 (job_id, resource_key),
             ).fetchone()
             if existing is not None:
-                self._connection.execute("COMMIT")
                 return dict(existing)
 
-            row = self._connection.execute(
+            row = connection.execute(
                 "SELECT COUNT(*) AS n FROM resource_leases "
                 "WHERE resource_key = ? AND job_id != ?",
                 (resource_key, job_id),
             ).fetchone()
             holders = int(row["n"]) if row is not None else 0
             if holders >= limit:
-                self._connection.execute("COMMIT")
                 return None
 
             now = _timestamp()
             lid = lease_id or str(uuid.uuid4())
             try:
-                self._connection.execute(
+                connection.execute(
                     """
                     INSERT INTO resource_leases (
                         lease_id, job_id, task_class, resource_key, acquired_at
@@ -2067,26 +2289,18 @@ class JobStore:
                 )
             except sqlite3.IntegrityError:
                 # UNIQUE(job_id, resource_key) race: treat as idempotent claim.
-                raced = self._connection.execute(
+                raced = connection.execute(
                     "SELECT * FROM resource_leases "
                     "WHERE job_id = ? AND resource_key = ?",
                     (job_id, resource_key),
                 ).fetchone()
-                self._connection.execute("COMMIT")
                 return dict(raced) if raced is not None else None
 
-            claimed = self._connection.execute(
+            claimed = connection.execute(
                 "SELECT * FROM resource_leases WHERE lease_id = ?", (lid,)
             ).fetchone()
-            self._connection.execute("COMMIT")
             assert claimed is not None
             return dict(claimed)
-        except Exception:
-            try:
-                self._connection.execute("ROLLBACK")
-            except sqlite3.Error:
-                pass
-            raise
 
     def release_resource_leases(self, job_id: str) -> int:
         cursor = self._connection.execute(

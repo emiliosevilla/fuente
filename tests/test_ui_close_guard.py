@@ -3,6 +3,7 @@ from __future__ import annotations
 import threading
 from types import SimpleNamespace
 
+from fuente.infrastructure.sqlite_store import JobStore, UIStateStore
 from fuente.ui.bridge import FuentePyWebViewApi
 
 
@@ -143,3 +144,60 @@ def test_native_close_does_not_replace_pending_restart(monkeypatch, tmp_path):
     assert result["status"] == "restarting"
     assert len(exec_calls) == 1
     assert exec_calls[0][1][-1] == str(target)
+
+
+def test_late_ui_write_invalidates_scheduled_restart_then_persists(
+    monkeypatch, tmp_path
+):
+    target = tmp_path.resolve()
+    scheduled = []
+
+    class _QueuedTimer:
+        def __init__(self, _delay, action):
+            self.action = action
+
+        def start(self):
+            scheduled.append(self.action)
+
+    with JobStore(target) as store:
+        bridge = FuentePyWebViewApi(
+            SimpleNamespace(
+                _job_store=store,
+                validate_vault=lambda _path: {"vault_path": str(target)},
+            )
+        )
+        window = _Window([])
+        bridge.set_window(window)
+        exec_calls = []
+        monkeypatch.setattr("fuente.ui.bridge.threading.Timer", _QueuedTimer)
+        monkeypatch.setattr(
+            "fuente.ui.bridge.os.execv",
+            lambda executable, argv: exec_calls.append((executable, argv)),
+        )
+
+        assert bridge.restart_with_vault(str(target))["status"] == "restarting"
+        assert len(scheduled) == 1
+
+        rejected = bridge.ui_state_pending_changed(1)
+        assert rejected["error"] == "ui_state_closing"
+        scheduled.pop(0)()
+        assert window.destroy_calls == 0
+        assert exec_calls == []
+
+        assert bridge.ui_state_pending_changed(1) == {"pending": 1}
+        assert bridge.set_ui_state(
+            "persistent", "reader", "filters", {"search": "late-write"}
+        ) == {"status": "saved"}
+        assert UIStateStore(store).get(
+            "persistent", "reader", "filters"
+        ) == {"search": "late-write"}
+
+        assert bridge.ui_state_pending_changed(0) == {"pending": 0}
+        assert bridge.complete_pending_close()["status"] == "restarting"
+        assert bridge.complete_pending_close()["status"] == "restarting"
+        assert len(scheduled) == 1
+
+        scheduled.pop(0)()
+        assert window.destroy_calls == 1
+        assert len(exec_calls) == 1
+        assert exec_calls[0][1][-1] == str(target)

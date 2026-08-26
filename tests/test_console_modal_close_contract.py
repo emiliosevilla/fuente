@@ -135,7 +135,7 @@ def test_console_preserves_cancel_and_operational_footer_actions():
     approval_commands = {
         button["command"] for button in modals["modal-approval"]["buttons"]
     }
-    assert "saveApprovalMetadata()" in approval_commands
+    assert "saveApprovalMetadata()" not in approval_commands
     assert "approveSelectedNote()" in approval_commands
 
 

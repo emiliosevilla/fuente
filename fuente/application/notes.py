@@ -1,4 +1,4 @@
-"""Note state transitions with revision-checked metadata updates (Task 6.1)."""
+"""Revision-checked note state transitions and read services."""
 from __future__ import annotations
 
 import json
@@ -21,7 +21,7 @@ from fuente.domain.errors import (
     RefinementRejectedError,
 )
 from fuente.domain.frontmatter import FrontmatterError, serialize_human_frontmatter
-from fuente.domain.metadata_form import validate_metadata_fields, validate_metadata_save_fields
+from fuente.domain.metadata_form import validate_metadata_fields
 from fuente.domain.paths import AuthorizedPathResolver, document_id_for_relative_path
 from fuente.infrastructure.atomic_files import atomic_write_text, document_file_lock
 from fuente.infrastructure.sqlite_store import JobStore
@@ -545,8 +545,6 @@ class NotesApplicationService:
         self,
         document_id: str,
         expected_revision: int,
-        *,
-        metadata_patch: Optional[dict[str, Any]] = None,
     ) -> NoteDocument:
         document_id = self.resolve_document_id(document_id)
         if self.job_store.get_note(document_id) is not None:
@@ -567,13 +565,6 @@ class NotesApplicationService:
         self.require_eligible_origins(note)
 
         metadata = dict(note.frontmatter)
-        if metadata_patch:
-            allowed_issues = self.vault.get_issues_in_theme()
-            validated_patch = validate_metadata_save_fields(
-                metadata_patch,
-                allowed_issues=allowed_issues,
-            )
-            metadata.update(validated_patch)
         metadata["status"] = "approved"
         event: dict[str, Any] = {
             "date": time.strftime("%Y-%m-%d %H:%M:%S"),
@@ -585,37 +576,6 @@ class NotesApplicationService:
             expected_revision=expected_revision,
             metadata=metadata,
             reindex=True,
-        )
-
-    def update_metadata(
-        self,
-        document_id: str,
-        *,
-        expected_revision: int,
-        metadata_patch: dict[str, Any],
-    ) -> NoteDocument:
-        document_id = self.resolve_document_id(document_id)
-        note = self.get_note(document_id)
-        if note.revision != expected_revision:
-            raise NoteRevisionConflictError(document_id)
-
-        metadata = dict(note.frontmatter)
-        allowed_issues = self.vault.get_issues_in_theme()
-        validated_patch = validate_metadata_save_fields(
-            metadata_patch,
-            allowed_issues=allowed_issues,
-        )
-        metadata.update(validated_patch)
-        event: dict[str, Any] = {
-            "date": time.strftime("%Y-%m-%d %H:%M:%S"),
-            "action": "metadata_updated",
-        }
-        metadata["history"] = [*metadata.get("history", []), event]
-        return self._persist_note(
-            note,
-            expected_revision=expected_revision,
-            metadata=metadata,
-            reindex=False,
         )
 
     def reject(

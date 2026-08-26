@@ -257,6 +257,8 @@ def test_stat_actions_return_matching_alert_and_log(temp_vault_path):
         assert "alert" in result
         assert result["alert"] == result["log"]
 
+    notes_result = backend.handle_action("stat_notes", {})
+    assert notes_result["log"] == "Notas preparadas consultadas: 4."
     assert backend.get_stats_dict()["notes"] == 4
 
 

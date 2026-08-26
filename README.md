@@ -75,7 +75,7 @@ Prueba sobre `/Applications/Fuente.app`, sin Chrome, con Vault real:
 - ZIP: `32.390.918` bytes; SHA-256
   `1d46ab53517be54e56897c7af15b0c1e3bdf8f8b7fddcb948adf03eb8b4119d9`.
 - PASS real: arranque en frío, Vault, ETL, aprobación, audio Tiny local,
-  MiniRAG/Ollama, exportación, búsqueda por frase, lector, mapa,
+  MiniRAG/Ollama, editor, exportación, búsqueda por frase, lector, mapa,
   trabajos y estado del sistema.
 - La interfaz es exclusivamente nativa. No existe opción `--browser` ni
   servidor HTTP de consola.

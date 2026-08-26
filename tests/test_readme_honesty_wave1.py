@@ -28,6 +28,14 @@ def test_readme_assigns_editing_and_graph_ownership_to_obsidian():
         assert removed_owner not in section
 
 
+def test_readme_preserves_the_2026_08_25_installed_binary_evidence():
+    historical = README.split(
+        "### Resultado de prueba real instalada — 2026-08-25", 1
+    )[1].split("\n### ", 1)[0]
+
+    assert "MiniRAG/Ollama, editor, exportación, búsqueda por frase, lector, mapa," in historical
+
+
 def test_readme_documents_read_only_editorial_workflow_contract():
     section = _editorial_section().lower()
     for claim in ("markdown", "frontmatter", "compare-and-swap", "obsidian"):

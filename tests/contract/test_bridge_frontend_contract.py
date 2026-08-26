@@ -58,14 +58,6 @@ VALID_ACTION_PAYLOADS: dict[str, dict] = {
     "reset_default_settings": {},
 }
 
-ORIGIN_REF = {
-    "note_id": "4ca13d5c-4d78-4f37-8c3c-d1dc530a4dc9",
-    "revision": 2,
-    "content_hash": "a" * 64,
-    "path": "Tema/3_capturado/origen.md",
-}
-
-
 def test_every_frontend_direct_bridge_call_is_exposed():
     called = _frontend_direct_calls()
     exposed = _bridge_public_methods()
@@ -195,7 +187,6 @@ def test_approve_and_export_bridge_contract_has_no_destination_path_parameter():
         "document_id",
         "expected_revision",
         "export_format",
-        "metadata_patch",
     )
     assert "destination_path" not in parameters
 
@@ -209,7 +200,7 @@ def test_approval_ui_wires_typed_approve_export_and_retry_without_second_approva
     assert "window.pywebview.api.approve_and_export(" in source
     assert "currentSelectedDocumentId" in source
     assert "currentSelectedNoteRevision" in source
-    assert "currentSelectedNoteMetadata" in source
+    assert "currentSelectedNoteMetadata" not in source
     assert "Revisión guardada; no se pudo preparar el archivo" in source
     assert "loadApprovalInbox(true)" in source
     assert "retryFailedApprovalExport()" in source
@@ -241,7 +232,7 @@ def test_approval_export_ui_consumes_prepared_payload_by_format():
 def test_fuente_v3_frontend_uses_origins_notes_and_input_folders():
     source = CONSOLA_HTML.read_text(encoding="utf-8")
 
-    assert 'id="metadata-origins"' in source
+    assert 'id="metadata-origins-value"' in source
     assert 'id="metadata-sources"' not in source
     assert "De dónde sale" in source
     assert "Notas preparadas" in source
@@ -271,53 +262,6 @@ def test_bridge_reads_v2_metadata_as_a_pending_v3_projection(temp_vault_path):
         "origins": [],
         "legacy_origin_ids": ["legacy-origin-id"],
         "migration_status": "pending_origins",
-    }
-
-
-def test_bridge_normalizes_complete_v2_metadata_before_a_write(temp_vault_path):
-    bridge = FuentePyWebViewApi(FuenteConsoleBackend(temp_vault_path))
-    calls: list[tuple[str, dict]] = []
-    bridge.backend.handle_action = lambda name, payload: calls.append((name, payload)) or {
-        "status": "saved"
-    }
-
-    result = bridge.update_note_metadata(
-        "opaque-note",
-        {"source_kind": "meeting", "sources": [ORIGIN_REF]},
-        1,
-    )
-
-    assert result == {"status": "saved"}
-    assert calls == [
-        (
-            "update_note_metadata",
-            {
-                "document_id": "opaque-note",
-                "metadata": {
-                    "origin_kind": "meeting",
-                    "origins": [ORIGIN_REF],
-                },
-                "expected_revision": 1,
-            },
-        )
-    ]
-
-
-def test_bridge_rejects_incomplete_v2_metadata_before_a_write(temp_vault_path):
-    bridge = FuentePyWebViewApi(FuenteConsoleBackend(temp_vault_path))
-    bridge.backend.handle_action = lambda *_args: (_ for _ in ()).throw(
-        AssertionError("incomplete legacy metadata reached the backend")
-    )
-
-    result = bridge.update_note_metadata(
-        "opaque-note",
-        {"source_kind": "meeting", "sources": ["legacy-origin-id"]},
-        1,
-    )
-
-    assert result == {
-        "error": "legacy_origins_unmigrated",
-        "message": "Legacy origins require complete OriginRef identity",
     }
 
 

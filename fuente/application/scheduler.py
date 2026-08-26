@@ -48,7 +48,6 @@ class TaskClass(str, Enum):
     MEDIA_AUDIO = "media_audio"
     EMBEDDING = "embedding"
     LLM_GENERATION = "llm_generation"
-    GRAPH_REFRESH = "graph_refresh"
 
 
 class ScheduleAction(str, Enum):
@@ -62,7 +61,6 @@ TASK_CLASS_PRIORITY: Mapping[TaskClass, int] = {
     TaskClass.IO_TEXT: 10,
     TaskClass.EMBEDDING: 20,
     TaskClass.LLM_GENERATION: 30,
-    TaskClass.GRAPH_REFRESH: 40,
     TaskClass.MEDIA_OCR: 50,
     TaskClass.MEDIA_AUDIO: 60,
 }
@@ -73,7 +71,6 @@ TASK_CLASS_RESOURCE: Mapping[TaskClass, ResourceKind] = {
     TaskClass.MEDIA_AUDIO: ResourceKind.AUDIO_TRANSCRIPTION,
     TaskClass.EMBEDDING: ResourceKind.EMBEDDINGS,
     TaskClass.LLM_GENERATION: ResourceKind.LLM_INFERENCE,
-    TaskClass.GRAPH_REFRESH: ResourceKind.TEXT_EXTRACTION,
 }
 
 OCR_EXTENSIONS = frozenset({".png", ".jpeg", ".jpg", ".tiff", ".bmp", ".webp"})

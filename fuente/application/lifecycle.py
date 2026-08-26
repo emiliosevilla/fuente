@@ -180,5 +180,4 @@ class ApplicationLifecycle:
         return {
             "files_found": len(input_files),
             "files_processed": processed,
-            "refine_result": None,
         }

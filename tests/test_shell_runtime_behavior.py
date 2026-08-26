@@ -324,3 +324,76 @@ persistUiState('reader', 'drafts', {text: 'conservar'}).then(function() {
         [node, "-"], input=program, text=True, capture_output=True, check=False
     )
     assert result.returncode == 0, result.stderr
+
+
+def test_ui_write_after_native_action_is_scheduled_stays_queued_and_retries():
+    node = shutil.which("node")
+    assert node is not None, "Node is required to execute the shell behavior contract"
+    functions = "\n".join(
+        _extract_function(name)
+        for name in (
+            "reportUiStateFailure",
+            "scheduleUiStateRetry",
+            "notifyNativeUiStatePending",
+            "notifyNativeCloseWhenReady",
+            "flushPendingUiState",
+            "persistUiState",
+        )
+    )
+    program = """
+const assert = require('node:assert/strict');
+const pendingUiState = new Map();
+const UI_STATE_RETRY_DELAY_MS = 1500;
+let uiStateRetryTimer = null;
+let nativeCloseRequested = true;
+let retry = null;
+let nativeActionScheduled = true;
+let actionExecutions = 0;
+let sqliteValue = null;
+const notifications = [];
+const status = {textContent: ''};
+global.setTimeout = function(callback) { retry = callback; return 1; };
+global.window = {pywebview: {api: {
+    ui_state_pending_changed(count) {
+        notifications.push(count);
+        if (nativeActionScheduled && count > 0) {
+            nativeActionScheduled = false;
+            return Promise.resolve({
+                error: 'ui_state_closing',
+                message: 'scheduled action invalidated',
+            });
+        }
+        return Promise.resolve({pending: count});
+    },
+    set_ui_state(_scope, _owner, _key, value) {
+        sqliteValue = value;
+        return Promise.resolve({status: 'saved'});
+    },
+    complete_pending_close() {
+        actionExecutions += 1;
+        return Promise.resolve({status: 'restarting'});
+    },
+}}};
+global.document = {getElementById() { return status; }};
+global.log = function() {};
+console.error = function() {};
+__FUNCTIONS__
+persistUiState('reader', 'filters', {search: 'late-write'}).then(function(first) {
+    assert.equal(first.error, 'ui_state_persistence_failed');
+    assert.equal(pendingUiState.size, 1);
+    assert.equal(sqliteValue, null);
+    assert.equal(actionExecutions, 0);
+    assert.equal(typeof retry, 'function');
+    retry();
+    setImmediate(function() {
+        assert.deepEqual(sqliteValue, {search: 'late-write'});
+        assert.equal(pendingUiState.size, 0);
+        assert.equal(actionExecutions, 1);
+        assert.deepEqual(notifications, [1, 1, 0]);
+    });
+});
+""".replace("__FUNCTIONS__", functions)
+    result = subprocess.run(
+        [node, "-"], input=program, text=True, capture_output=True, check=False
+    )
+    assert result.returncode == 0, result.stderr

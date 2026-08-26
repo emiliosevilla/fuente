@@ -334,6 +334,7 @@ def _child(phase: str, vault: Path, restart_proof: Path | None = None) -> int:
     from fuente.ui.bridge import FuentePyWebViewApi
 
     original_connect = sqlite3.connect
+    original_execv = os.execv
     connection_count = 0
 
     def measured_connect(*args, **kwargs):
@@ -372,8 +373,22 @@ def _child(phase: str, vault: Path, restart_proof: Path | None = None) -> int:
             self.cancelled_closes = 0
             self.completion_calls = 0
             self.scheduled_actions = 0
+            self.late_closing_responses = 0
+            self.late_write_result: str | None = None
+            self.late_pending_count: int | None = None
             self.restart_response: dict[str, Any] = {}
             self.environment: dict[str, Any] = {}
+
+        def ui_state_pending_changed(self, count):
+            action_was_scheduled = self._close_action_scheduled
+            response = super().ui_state_pending_changed(count)
+            if (
+                phase == "restart"
+                and action_was_scheduled
+                and response.get("error") == "ui_state_closing"
+            ):
+                self.late_closing_responses += 1
+            return response
 
         def set_ui_state(self, scope, owner, key, value):
             if self.block_writes and owner == "reader" and key == "filters":
@@ -420,6 +435,11 @@ def _child(phase: str, vault: Path, restart_proof: Path | None = None) -> int:
             }
             return {"status": "recorded"}
 
+        def probe_late_ui_write(self, result_error, pending_count):
+            self.late_write_result = result_error
+            self.late_pending_count = pending_count
+            return {"status": "recorded"}
+
         def complete_pending_close(self):
             self.completion_calls += 1
             response = super().complete_pending_close()
@@ -442,6 +462,15 @@ def _child(phase: str, vault: Path, restart_proof: Path | None = None) -> int:
             response = super()._schedule_close_action()
             if not already_scheduled and self._close_action_scheduled:
                 self.scheduled_actions += 1
+                if phase == "restart" and self.scheduled_actions == 1:
+                    assert self._window is not None
+                    self._window.run_js(
+                        "persistUiState('reader', 'filters', "
+                        "{search: 'exec-restart-late'}).then(function(result) {"
+                        "return window.pywebview.api.probe_late_ui_write("
+                        "result && result.error, pendingUiState.size);"
+                        "});"
+                    )
             return response
 
     api = (
@@ -461,6 +490,32 @@ def _child(phase: str, vault: Path, restart_proof: Path | None = None) -> int:
     assert window is not None
     api.set_window(window)
     window.events.closing += api._handle_window_closing
+
+    if phase == "restart" and not after_restart_exec and restart_proof is not None:
+
+        def measured_execv(executable, argv):
+            proof = json.loads(restart_proof.read_text(encoding="utf-8"))
+            filters = UIStateStore(store).get("persistent", "reader", "filters")
+            proof.update(
+                {
+                    "action_executions": proof.get("action_executions", 0) + 1,
+                    "completion_calls": api.completion_calls,
+                    "scheduled_actions": api.scheduled_actions,
+                    "late_closing_responses": api.late_closing_responses,
+                    "late_write_result": api.late_write_result,
+                    "late_pending_count": api.late_pending_count,
+                    "filter_before_exec": (
+                        filters.get("search") if isinstance(filters, dict) else None
+                    ),
+                    "exec_vault": argv[-1],
+                }
+            )
+            restart_proof.write_text(
+                json.dumps(proof, sort_keys=True), encoding="utf-8"
+            )
+            original_execv(executable, argv)
+
+        os.execv = measured_execv
 
     def finish(value):
         result.update(value or {})
@@ -589,6 +644,7 @@ def _child(phase: str, vault: Path, restart_proof: Path | None = None) -> int:
         timer.cancel()
         store.close()
         sqlite3.connect = original_connect
+        os.execv = original_execv
     if phase == "guard":
         result.update(api.environment)
         result.update(
@@ -706,11 +762,21 @@ def _run() -> int:
             and restarted.get("completion_response", {}).get("status")
             == "restarting"
             and restarted.get("completion_calls", 0) >= 1
-            and restarted.get("scheduled_actions") == 1,
+            and restarted.get("scheduled_actions") == 2
+            and restarted.get("action_executions") == 1,
+            "late_write_after_scheduled_restart": restarted.get(
+                "late_closing_responses"
+            )
+            == 1
+            and restarted.get("late_write_result")
+            == "ui_state_persistence_failed"
+            and restarted.get("late_pending_count") == 1
+            and restarted.get("filter_before_exec") == "exec-restart-late",
             "native_restart_restored": restarted.get("filter_search")
-            == "exec-restart"
+            == "exec-restart-late"
             and restarted.get("workspace") == "flow"
-            and restarted.get("target_vault") == str(vault),
+            and restarted.get("target_vault") == str(vault)
+            and restarted.get("exec_vault") == str(vault),
             "one_state_database": len(list(vault.rglob("state.db"))) == 1,
         }
         output = {

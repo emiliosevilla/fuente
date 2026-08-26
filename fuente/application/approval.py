@@ -169,21 +169,27 @@ class ApprovalApplicationService:
                 or str(row["content_hash"]) != document.content_hash
             ):
                 raise NoteRevisionConflictError(note_id)
-            approved = self.ledger.approve(
-                note_id,
-                expected_revision,
-                document.content_hash,
-                reviewer,
+            claimed_at = self.transition_approvals._now()
+            row = self.ledger.store.approve_note_revision_and_transition(
+                note_id=note_id,
+                expected_revision=expected_revision,
+                expected_content_hash=document.content_hash,
+                reviewer=reviewer,
+                claimed_at=claimed_at.isoformat(),
+                expires_at=(
+                    claimed_at + self.transition_approvals.claim_ttl
+                ).isoformat(),
+                approved_at=claimed_at.isoformat(),
             )
-            self._approve_transition(
-                note_id,
-                "3_capturado",
-                "4_procesado",
-                expected_revision,
-                document.content_hash,
-                approved.reviewer,
+            if row is None:
+                raise NoteRevisionConflictError(note_id)
+            return ApprovalRecord(
+                note_id=str(row["note_id"]),
+                revision=int(row["revision"]),
+                content_hash=str(row["content_hash"]),
+                reviewer=str(row["reviewer"]),
+                approved_at=str(row["approved_at"]),
             )
-            return approved
 
     def is_eligible(self, note_id: str, revision: int, content_hash: str) -> bool:
         """The single approval decision consumed by generation in Task 5."""
@@ -208,11 +214,15 @@ class ApprovalApplicationService:
         note_id = validate_approval_note_id(note_id)
         expected_revision = validate_revision(expected_revision)
         reviewer = normalize_reviewer(reviewer)
-        row = self.ledger.store.approve_processed_note(
+        claimed_at = self.transition_approvals._now()
+        row = self.ledger.store.approve_processed_note_and_transition(
             note_id=note_id,
             revision=expected_revision,
             content_hash=content_hash,
             reviewer=reviewer,
+            claimed_at=claimed_at.isoformat(),
+            expires_at=(claimed_at + self.transition_approvals.claim_ttl).isoformat(),
+            approved_at=claimed_at.isoformat(),
         )
         if row is None:
             raise NoteRevisionConflictError(note_id)
@@ -222,14 +232,6 @@ class ApprovalApplicationService:
             content_hash=str(row["content_hash"]),
             reviewer=str(row["reviewer"]),
             approved_at=str(row["approved_at"]),
-        )
-        self._approve_transition(
-            note_id,
-            "4_procesado",
-            "5_compartido",
-            expected_revision,
-            content_hash,
-            approved.reviewer,
         )
         return approved
 
@@ -249,32 +251,6 @@ class ApprovalApplicationService:
         except OutputApprovalRequiredError:
             return False
         return True
-
-    def _approve_transition(
-        self,
-        artifact_id: str,
-        source_stage: str,
-        target_stage: str,
-        revision: int,
-        content_hash: str,
-        reviewer: str,
-    ) -> None:
-        self.transition_approvals.begin_review(
-            artifact_id,
-            source_stage,
-            target_stage,
-            revision,
-            content_hash,
-            reviewer,
-        )
-        self.transition_approvals.approve(
-            artifact_id,
-            source_stage,
-            target_stage,
-            revision,
-            content_hash,
-            reviewer,
-        )
 
     @property
     def _lock_directory(self):

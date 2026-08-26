@@ -201,6 +201,7 @@ def test_transition_approval_uses_only_job_store_connection(
 
 def test_resource_lease_waits_for_the_shared_transaction_lock(tmp_path) -> None:
     store = JobStore(tmp_path)
+    job = store.create_job(source_hash="a" * 64, source_relative_path="1_volcado/a.txt")
     started = Event()
     finished = Event()
     result = []
@@ -208,8 +209,8 @@ def test_resource_lease_waits_for_the_shared_transaction_lock(tmp_path) -> None:
     def claim_lease() -> None:
         started.set()
         result.append(
-            store.claim_resource_lease(
-                job_id="job-lease",
+                store.claim_resource_lease(
+                    job_id=job.job_id,
                 task_class="light",
                 resource_key="cpu",
                 limit=1,
@@ -225,7 +226,7 @@ def test_resource_lease_waits_for_the_shared_transaction_lock(tmp_path) -> None:
             assert not finished.wait(timeout=0.1)
         worker.join(timeout=2)
         assert finished.is_set()
-        assert result[0]["job_id"] == "job-lease"
+        assert result[0]["job_id"] == job.job_id
     finally:
         worker.join(timeout=2)
         store.close()

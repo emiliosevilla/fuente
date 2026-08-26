@@ -25,11 +25,14 @@ def test_runtime_verifier_uses_real_html_bridge_and_two_processes() -> None:
     source = SCRIPT.read_text(encoding="utf-8")
     assert "FuentePyWebViewApi" in source
     assert "webview.create_window" in source
-    assert 'for phase in ("write", "read")' in source
+    assert 'for phase in ("write", "read", "guard", "recover")' in source
     assert "window.localStorage.length" in source
     assert "sqlite_connect_calls" in source
     assert "IngestionApplicationService" in source
     assert "SharingApplicationService" in source
     assert "four_production_boundaries" in source
+    assert "native_close_guard" in source
+    assert "probe_close" in source
+    assert "restart_with_vault" in source
     assert "subprocess.run" in source
     assert '"-m", "pytest"' not in source

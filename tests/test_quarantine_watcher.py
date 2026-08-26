@@ -8,6 +8,7 @@ from fuente.application.note_generation import AtomicNoteGenerator
 from fuente.watcher.watcher import ETLPipeline
 from tests.conftest import (
     approve_saved_clean_job,
+    auto_approve_early_transitions,
     explicit_test_runtime_policy,
     patch_abundant_ram,
     patch_test_model_inventory,
@@ -17,6 +18,7 @@ from tests.conftest import (
 def test_watcher_quarantines_exhausted_io_with_actual_attempt_count(tmp_path):
     config = get_default_config(tmp_path / "vault")
     pipeline = ETLPipeline(config)
+    auto_approve_early_transitions(pipeline.ingestion)
     pipeline.set_runtime_policy(explicit_test_runtime_policy())
     patch_abundant_ram(pipeline.ram_governor)
     patch_test_model_inventory(pipeline.ram_governor, "test-model")
@@ -38,6 +40,7 @@ def test_watcher_quarantines_exhausted_io_with_actual_attempt_count(tmp_path):
 def test_watcher_retries_corrupt_content_before_quarantining(tmp_path):
     config = get_default_config(tmp_path / "vault")
     pipeline = ETLPipeline(config)
+    auto_approve_early_transitions(pipeline.ingestion)
     pipeline.set_runtime_policy(explicit_test_runtime_policy())
     patch_abundant_ram(pipeline.ram_governor)
     patch_test_model_inventory(pipeline.ram_governor, "test-model")
@@ -59,6 +62,7 @@ def test_watcher_retries_corrupt_content_before_quarantining(tmp_path):
 def test_watcher_does_not_duplicate_reintroduced_quarantined_source(tmp_path):
     config = get_default_config(tmp_path / "vault")
     pipeline = ETLPipeline(config)
+    auto_approve_early_transitions(pipeline.ingestion)
     pipeline.set_runtime_policy(explicit_test_runtime_policy())
     patch_abundant_ram(pipeline.ram_governor)
     patch_test_model_inventory(pipeline.ram_governor, "test-model")
@@ -92,6 +96,7 @@ def test_invalid_model_output_is_not_converted_to_successful_fallback():
 def test_watcher_preserves_source_when_model_output_is_invalid(tmp_path):
     config = get_default_config(tmp_path / "vault")
     pipeline = ETLPipeline(config)
+    auto_approve_early_transitions(pipeline.ingestion)
     pipeline.set_runtime_policy(explicit_test_runtime_policy())
     patch_abundant_ram(pipeline.ram_governor)
     patch_test_model_inventory(pipeline.ram_governor, "test-model")

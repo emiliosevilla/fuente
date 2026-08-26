@@ -717,6 +717,26 @@ historial: []
         source_path = vault.input_dir / ingest_source
         source_path.write_text(ingest_text, encoding="utf-8")
         job = ingestion.submit(ingest_identity)
+        for source_stage, target_stage in (
+            ("1_volcado", "2_copiado"),
+            ("2_copiado", "3_capturado"),
+        ):
+            ingestion.transition_approvals.begin_review(
+                job.job_id,
+                source_stage,
+                target_stage,
+                1,
+                job.source_hash,
+                "release-gate",
+            )
+            ingestion.transition_approvals.approve(
+                job.job_id,
+                source_stage,
+                target_stage,
+                1,
+                job.source_hash,
+                "release-gate",
+            )
         completed = ingestion.resume(job.job_id)
         if completed.stage == "saved_clean":
             if completed.clean_artifact is None:

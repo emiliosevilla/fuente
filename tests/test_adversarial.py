@@ -35,9 +35,11 @@ class TestAdversarial(unittest.TestCase):
                 explicit_test_runtime_policy,
                 patch_abundant_ram,
                 patch_test_model_inventory,
+                auto_approve_early_transitions,
             )
 
             self.pipeline = ETLPipeline(self.config)
+            auto_approve_early_transitions(self.pipeline.ingestion)
             self.pipeline.set_runtime_policy(explicit_test_runtime_policy())
             patch_abundant_ram(self.pipeline.ram_governor)
             patch_test_model_inventory(self.pipeline.ram_governor, "test-model")
@@ -123,6 +125,8 @@ E = mc^2
             ram_governor=FakeGovernor(),
             stabilize=lambda path: path.is_file() and path.stat().st_size > 0,
         )
+        from tests.conftest import auto_approve_early_transitions
+        auto_approve_early_transitions(service)
         source_identity = service.vault_relative_identity(junk_file)
 
         try:

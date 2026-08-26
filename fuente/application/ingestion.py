@@ -734,7 +734,13 @@ class IngestionApplicationService:
             job.source_hash,
         )
         if self._copy_to_dirty is not None:
-            dirty_path = self._copy_to_dirty(source_path)
+            dirty_path = self._copy_to_dirty(
+                source_path,
+                transition_approvals=self.transition_approvals,
+                artifact_id=job.job_id,
+                revision=1,
+                content_hash=job.source_hash,
+            )
         else:
             dirty_path = self.vault.copy_to_dirty(
                 source_path,

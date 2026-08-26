@@ -625,3 +625,101 @@ temporary Vault.
 - The suite retains one pre-existing skip and 227 dependency warnings. No user
   Vault was opened, no localStorage fallback or second database was introduced,
   and no push or PR was made.
+
+## Fix round 5
+
+### Finding closed
+
+Every UI mutation now enters `pendingUiState` before its first native call. If
+the native bridge reports `ui_state_closing`, JavaScript keeps that exact value
+queued, keeps the original close/restart request active and retries through the
+existing loop.
+
+The bridge keeps the exact pending action tuple while invalidating only its
+scheduled generation. Each timer captures its generation and, under the shared
+`RLock`, rechecks the generation, action, mirrored queue and in-flight SQLite
+writes immediately before authorizing `destroy()` or `os.execv`. A stale timer
+therefore does nothing. Once SQLite confirms the queue is empty, duplicate
+completion callbacks idempotently schedule the original action again.
+
+### Commits
+
+- `489886d` `test: expose scheduled UI state loss`
+- `585678d` `fix: retry UI writes before scheduled restart`
+- `b19f831` `test: prove late UI write survives Cocoa restart`
+- `e33310a` `docs: refresh Task 5 round five snapshot`
+
+The final report commit appends this section only.
+
+### TDD and verification
+
+1. RED:
+
+   `python3 -m pytest tests/test_shell_runtime_behavior.py::test_ui_write_after_native_action_is_scheduled_stays_queued_and_retries tests/test_ui_close_guard.py::test_late_ui_write_invalidates_scheduled_restart_then_persists -q`
+
+   Result before implementation: `2 failed in 0.26s`. JavaScript returned
+   before adding the value to its pending map, and the already scheduled native
+   callback destroyed the window.
+
+2. Close, bridge and UI consumers:
+
+   `python3 -m pytest tests/test_ui_close_guard.py tests/test_shell_runtime_behavior.py tests/test_ui_state_store.py tests/test_settings_service.py tests/contract/test_settings_contract.py tests/contract/test_q03_ui_recovery_contract.py tests/contract/test_bridge_frontend_contract.py tests/test_task5_runtime_contract.py -q`
+
+   Result: `110 passed, 103 warnings in 6.72s`.
+
+3. First complete suite after executable changes:
+
+   `python3 -m pytest -q`
+
+   Result: `1 failed, 1201 passed, 1 skipped, 227 warnings in 67.96s`.
+   The only failure was the expected stale source-tree digest in
+   `current-sdd.json`; no product test failed.
+
+4. Complete suite after refreshing the measured snapshot:
+
+   `python3 -m pytest -q`
+
+   Result: `1202 passed, 1 skipped, 227 warnings in 67.64s`.
+
+5. Final critical replay:
+
+   `python3 -m pytest tests/test_ui_close_guard.py::test_late_ui_write_invalidates_scheduled_restart_then_persists tests/test_shell_runtime_behavior.py::test_ui_write_after_native_action_is_scheduled_stays_queued_and_retries tests/test_task5_runtime_contract.py -q`
+
+   Result: `5 passed in 1.03s`.
+
+6. Freshness: `7 passed in 0.18s`.
+
+7. `git diff --check`: PASS.
+
+### Reproducible real Cocoa race and restart evidence
+
+Command:
+
+`python3 scripts/verify_task5_runtime.py`
+
+Final result: `PASS`. After the first restart action was scheduled, the real
+WebKit page started a new `reader/filters` mutation. It observed one
+`ui_state_closing` response, retained one pending entry and returned the
+retryable `ui_state_persistence_failed` result. The first scheduled callback
+was invalidated and did not execute.
+
+The existing retry then stored `search = exec-restart-late` in the sole SQLite
+database. Only after that value was read back immediately before execution did
+the bridge schedule the exact same restart again. The verifier measured two
+schedule attempts and exactly one action execution. That execution called the
+real `os.execv`; PID `72641` and the disposable Vault path were identical before
+and after replacement, and the replacement process restored
+`exec-restart-late` from SQLite.
+
+The same run also kept all four transition boundaries, native close recovery,
+empty localStorage, one SQLite connection per process and exactly one
+`.fuente/state.db` green.
+
+### Concerns and deliberate limits
+
+- The final locked generation check is the close/restart linearization point;
+  every UI write admitted before it invalidates that execution.
+- A force-kill still cannot run the normal close protocol.
+- The suite retains one pre-existing skip and 227 dependency warnings. No user
+  Vault was opened, no second database or localStorage fallback was added, and
+  no push or PR was made.

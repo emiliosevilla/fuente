@@ -101,10 +101,11 @@ def test_manifest_rejects_missing_runtime_signal(tmp_path: Path):
     assert "runtime signal" in verify_manifest(manifest, "a" * 40)[0]
 
 
-def test_manifest_rejects_boolean_dimensions(tmp_path: Path):
+@pytest.mark.parametrize(("field", "message"), [("width", "width"), ("height", "height")])
+def test_manifest_rejects_boolean_dimensions(tmp_path: Path, field: str, message: str):
     image = tmp_path / "home.png"
     image.write_bytes(b"\x89PNG\r\n\x1a\nsource")
     manifest = tmp_path / "manifest.json"
-    manifest.write_text(json.dumps([_entry(image, width=True)]), encoding="utf-8")
+    manifest.write_text(json.dumps([_entry(image, **{field: True})]), encoding="utf-8")
 
-    assert "width must be positive" in verify_manifest(manifest, "a" * 40)[0]
+    assert f"{message} must be positive" in verify_manifest(manifest, "a" * 40)[0]

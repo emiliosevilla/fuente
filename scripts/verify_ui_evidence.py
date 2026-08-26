@@ -12,6 +12,8 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
 ALLOWED_OWNERS = {"Python", "Fuente"}
+BASELINE_FILE = "00-baseline.png"
+BASELINE_HEAD = "a3b8c23020ab56e846703308bb787df062f97d87"
 
 
 def _error(index: int, message: str) -> str:
@@ -37,6 +39,11 @@ def verify_manifest(path: Path, expected_head: str) -> list[str]:
             errors.append(_error(index, f"browser capture or untrusted owner: {owner!r}"))
             continue
         scenario = entry.get("scenario")
+        if scenario == "baseline" and (
+            entry.get("file") != BASELINE_FILE or entry.get("git_head") != BASELINE_HEAD
+        ):
+            errors.append(_error(index, "baseline is reserved for the historical baseline record"))
+            continue
         expected_title = "Fuente" if scenario == "baseline" else "Fuente y Caudal"
         if entry.get("window_title") != expected_title:
             errors.append(_error(index, f"window title must be {expected_title!r}"))
@@ -47,10 +54,16 @@ def verify_manifest(path: Path, expected_head: str) -> list[str]:
         if entry.get("git_head") != expected_head:
             errors.append(_error(index, "git head does not match the expected head"))
             continue
-        if not isinstance(entry.get("width"), int) or entry["width"] <= 0:
+        if entry.get("runtime_signal") != "vmmap:WebKit.framework":
+            errors.append(_error(index, "runtime signal must prove WebKit in the window process"))
+            continue
+        if type(entry.get("window_owner_pid")) is not int or entry["window_owner_pid"] <= 0:
+            errors.append(_error(index, "window owner PID must be positive"))
+            continue
+        if type(entry.get("width")) is not int or entry["width"] <= 0:
             errors.append(_error(index, "width must be positive"))
             continue
-        if not isinstance(entry.get("height"), int) or entry["height"] <= 0:
+        if type(entry.get("height")) is not int or entry["height"] <= 0:
             errors.append(_error(index, "height must be positive"))
             continue
         filename = entry.get("file")

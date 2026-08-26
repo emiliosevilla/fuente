@@ -36,3 +36,11 @@ def test_runtime_verifier_uses_real_html_bridge_and_two_processes() -> None:
     assert "restart_with_vault" in source
     assert "subprocess.run" in source
     assert '"-m", "pytest"' not in source
+
+
+def test_runtime_verifier_proves_restart_by_process_replacement() -> None:
+    source = SCRIPT.read_text(encoding="utf-8")
+    assert "restart_exec_replaced_process" in source
+    assert '"before_pid"' in source
+    assert '"after_pid"' in source
+    assert '"restart", "--vault"' not in source

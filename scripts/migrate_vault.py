@@ -148,11 +148,6 @@ def _build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Skip Chroma index rebuild after migration",
     )
-    parser.add_argument(
-        "--skip-moc",
-        action="store_true",
-        help="Skip MOC rebuild after migration",
-    )
     return parser
 
 
@@ -384,7 +379,6 @@ def main(argv: list[str] | None = None) -> int:
         manifest = migrator.apply(
             args.manifest.resolve() if args.manifest else None,
             rebuild_index=not args.skip_index,
-            rebuild_moc=not args.skip_moc,
             force=args.force,
         )
     except MigrationBlockedError as error:
@@ -416,7 +410,6 @@ def main(argv: list[str] | None = None) -> int:
                 "status": manifest.status,
                 "manifest": str(manifest_path),
                 "entries_applied": sum(1 for entry in manifest.entries if entry.applied),
-                "moc_rebuilt": manifest.moc_rebuilt,
                 "index_rebuilt": manifest.index_rebuilt,
             },
             indent=2,

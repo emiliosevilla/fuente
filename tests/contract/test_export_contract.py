@@ -14,7 +14,6 @@ from fuente.application.notes import NotesApplicationService
 from fuente.control_console import FuenteConsoleBackend
 from fuente.domain.errors import NoteRevisionConflictError
 from fuente.domain.frontmatter import parse_frontmatter
-from fuente.domain.metadata_form import MetadataValidationError
 from fuente.domain.paths import AuthorizedPathResolver
 from fuente.infrastructure.sqlite_store import JobStore
 from fuente.ui.bridge import FuentePyWebViewApi
@@ -262,7 +261,6 @@ def test_backend_approve_and_export_returns_review_result_without_destination_pa
         document_id,
         revision,
         "markdown",
-        metadata_patch={"title": "  Título actualizado  "},
     )
 
     assert result["approval_status"] == "approved"
@@ -274,56 +272,48 @@ def test_backend_approve_and_export_returns_review_result_without_destination_pa
     assert "path" not in result["export_payload"]
 
 
-def test_bridge_approve_and_export_normalizes_typed_metadata_before_backend(
+def test_bridge_approve_and_export_delegates_typed_approval_before_backend(
     temp_vault_path,
 ):
     bridge = FuentePyWebViewApi(FuenteConsoleBackend(temp_vault_path))
     calls = []
     bridge.backend.approve_and_export = (
-        lambda document_id, expected_revision, export_format, metadata_patch=None: (
-            calls.append(
-                (document_id, expected_revision, export_format, metadata_patch)
-            )
+        lambda document_id, expected_revision, export_format: (
+            calls.append((document_id, expected_revision, export_format))
             or {"approval_status": "approved"}
         )
     )
 
-    result = bridge.approve_and_export(
-        "doc-id", 1, "markdown", metadata_patch={"title": "  Título  "}
-    )
+    result = bridge.approve_and_export("doc-id", 1, "markdown")
 
     assert result == {"approval_status": "approved"}
-    assert calls == [("doc-id", 1, "markdown", {"title": "Título"})]
+    assert calls == [("doc-id", 1, "markdown")]
 
 
 @pytest.mark.parametrize(
     "arguments,expected",
     [
         (
-            ("folder/note.md", 1, "markdown", None),
+            ("folder/note.md", 1, "markdown"),
             {"error": "path_not_authorized", "message": "Path is not authorized"},
         ),
         (
-            ("doc-id", 0, "markdown", None),
+            ("doc-id", 0, "markdown"),
             {
                 "error": "invalid_payload",
                 "message": "expected_revision must be a positive integer",
             },
         ),
         (
-            ("doc-id", True, "markdown", None),
+            ("doc-id", True, "markdown"),
             {
                 "error": "invalid_payload",
                 "message": "expected_revision must be a positive integer",
             },
         ),
         (
-            ("doc-id", 1, "rtf", None),
+            ("doc-id", 1, "rtf"),
             {"error": "invalid_payload", "message": "format is not supported"},
-        ),
-        (
-            ("doc-id", 1, "markdown", []),
-            {"error": "invalid_payload", "message": "metadata_patch must be an object"},
         ),
     ],
 )
@@ -338,18 +328,6 @@ def test_bridge_approve_and_export_rejects_invalid_boundary_inputs(
 
     assert bridge.approve_and_export(*arguments) == expected
     assert backend_calls == []
-
-
-def test_bridge_approve_and_export_maps_metadata_validation_to_stable_error(
-    temp_vault_path,
-):
-    bridge = FuentePyWebViewApi(FuenteConsoleBackend(temp_vault_path))
-    result = bridge.approve_and_export(
-        "doc-id", 1, "markdown", metadata_patch={"tags": ["bad:\nstatus: approved"]}
-    )
-
-    assert result["error"] == "invalid_metadata"
-    assert "tags" in result["field_errors"]
 
 
 def test_bridge_approve_and_export_maps_revision_conflict_to_stable_error(

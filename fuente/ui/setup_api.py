@@ -27,6 +27,11 @@ class FuenteSetupApi:
     def get_initial_state(self) -> dict[str, Any]:
         return self.backend.get_initial_state_dict()
 
+    def get_setup_status(self) -> dict[str, object]:
+        from fuente.ui.setup_backend import get_setup_status
+
+        return get_setup_status()
+
     def get_settings_info(self) -> dict[str, Any]:
         return self.backend.get_settings_info()
 
@@ -65,7 +70,7 @@ class FuenteSetupApi:
 
             selected = self._window.create_file_dialog(
                 webview.FileDialog.SAVE,
-                save_filename="Nuevo Vault",
+                save_filename="Fuente",
             )
             if isinstance(selected, str):
                 return selected

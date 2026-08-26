@@ -40,7 +40,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Optional
 
-from fuente.application.approval import ApprovalApplicationService
+from fuente.application.approval import (
+    ApprovalApplicationService,
+    TransitionApprovalService,
+)
 from fuente.application.scheduler import (
     BudgetDeferredError,
     ResourceScheduler,
@@ -53,7 +56,7 @@ from fuente.config import DEFAULT_ISSUE, AppConfig
 from fuente.core.vault import VaultManager
 from fuente.domain.approvals import ApprovalLedger
 from fuente.domain.documents import MarkdownDocument, NoteDocument, content_hash_for_markdown
-from fuente.domain.errors import PathAuthorizationError
+from fuente.domain.errors import OutputApprovalRequiredError, PathAuthorizationError
 from fuente.domain.frontmatter import FrontmatterError, parse_frontmatter, serialize_frontmatter
 from fuente.domain.jobs import (
     CLAIMED_STATUS,
@@ -97,6 +100,7 @@ NOTE_ARTIFACT_KIND = "note_index"
 # next resume must re-check the exact approval before it can publish vectors
 # or generate a derivative.
 AWAITING_CLEAN_APPROVAL = "awaiting_clean_approval"
+AWAITING_TRANSITION_APPROVAL = "awaiting_transition_approval"
 
 # Any stage below can publish an artifact derived from ``3_capturado`` or delete
 # the original input.  It therefore needs a fresh approval check, rather than
@@ -237,7 +241,6 @@ class IngestionApplicationService:
         chunker: Any,
         chroma: Any,
         atomic_generator: Any,
-        linker: Any,
         runtime_policy: RuntimePolicy | None = None,
         ram_governor: Any = None,
         scheduler: Optional[ResourceScheduler] = None,
@@ -263,7 +266,6 @@ class IngestionApplicationService:
             refinement=ChromaRetrievalBackend(chroma),
         )
         self.atomic_generator = atomic_generator
-        self.linker = linker
         self.runtime_policy = runtime_policy
         self.ram_governor = ram_governor
         self._copy_to_dirty = copy_to_dirty
@@ -279,9 +281,11 @@ class IngestionApplicationService:
             clean_root=self.vault.clean_dir,
             derived_root=self.vault.output_dir,
         )
+        self.transition_approvals = TransitionApprovalService(self.job_store)
         self.approval_service = ApprovalApplicationService(
             vault=self.vault,
             ledger=approval_ledger,
+            transition_approvals=self.transition_approvals,
         )
 
     def refresh_approval_scope(self) -> None:
@@ -507,6 +511,8 @@ class IngestionApplicationService:
                         "Job %s deferred mid-stage: %s", job.job_id, error.reason
                     )
                     return self._return_to_pending_after_wait(job, error.reason)
+                except OutputApprovalRequiredError:
+                    return self._wait_for_transition_approval(job)
                 except Exception as error:
                     # Stages may persist attempt rows mid-flight (content
                     # retries), so reload before failure handling to avoid a
@@ -719,8 +725,30 @@ class IngestionApplicationService:
     def _run_copy_to_dirty(self, job: JobRecord, context: _RunContext) -> JobRecord:
         if self._recorded_artifact(job.dirty_artifact) is not None:
             return self._advance(job, "copied_dirty")
-        copy = self._copy_to_dirty or self.vault.copy_to_dirty
-        dirty_path = copy(self._source_path(job))
+        source_path = self._source_path(job)
+        self.transition_approvals.require_current(
+            job.job_id,
+            "1_volcado",
+            "2_copiado",
+            1,
+            job.source_hash,
+        )
+        if self._copy_to_dirty is not None:
+            dirty_path = self._copy_to_dirty(
+                source_path,
+                transition_approvals=self.transition_approvals,
+                artifact_id=job.job_id,
+                revision=1,
+                content_hash=job.source_hash,
+            )
+        else:
+            dirty_path = self.vault.copy_to_dirty(
+                source_path,
+                transition_approvals=self.transition_approvals,
+                artifact_id=job.job_id,
+                revision=1,
+                content_hash=job.source_hash,
+            )
         return self._advance(
             job,
             "copied_dirty",
@@ -753,6 +781,16 @@ class IngestionApplicationService:
     def _run_save_clean(self, job: JobRecord, context: _RunContext) -> JobRecord:
         if self._recorded_artifact(job.clean_artifact) is not None:
             return self._advance(job, "saved_clean")
+        dirty_path = self._recorded_artifact(job.dirty_artifact)
+        if dirty_path is None:
+            raise MissingArtifactError(job.job_id, "dirty copy")
+        self.transition_approvals.require_current(
+            job.job_id,
+            "2_copiado",
+            "3_capturado",
+            1,
+            self.vault.calculate_file_hash(dirty_path),
+        )
         content = self._content(job, context)
         clean_path = self.vault.save_clean_md(
             self._source_name(job), content, dict(context.metadata)
@@ -859,24 +897,23 @@ class IngestionApplicationService:
         validated = context.validated or self._validated_markdown(
             self._candidate(job, context)
         )
-        note_path = self._target_note_path(job)
-        current_relative_path = note_path.resolve().relative_to(
-            self.vault.output_dir.resolve()
-        ).as_posix()
-        linked = self.linker.auto_link_content(
-            validated,
-            self._source_stem(job),
-            current_relative_path=current_relative_path,
+        origin = context.approved_origin or self._approved_clean_origin(job)
+        if origin is None:
+            raise OutputApprovalRequiredError(job.job_id)
+        self.transition_approvals.require_current(
+            origin.note_id,
+            "3_capturado",
+            "4_procesado",
+            origin.revision,
+            origin.content_hash,
         )
-        # Linking rewrites the note body, so the text that actually reaches
-        # disk is validated too, never just the model's candidate.
-        persisted_markdown = self._validated_markdown(linked)
-        atomic_write_text(note_path, persisted_markdown)
+        note_path = self._target_note_path(job)
+        atomic_write_text(note_path, validated)
         document_id = self._document_id(job)
         self.job_store.upsert_document_identity(
             document_id=document_id,
             relative_path=self.vault_relative_identity(note_path),
-            content_hash=content_hash_for_markdown(persisted_markdown),
+            content_hash=content_hash_for_markdown(validated),
         )
         return self._advance(job, "saved_note", note_document_id=document_id)
 
@@ -1473,6 +1510,22 @@ class IngestionApplicationService:
             status=DEFAULT_STATUS,
             error_code=AWAITING_CLEAN_APPROVAL,
             error_message="Awaiting exact human approval of canonical 3_capturado Markdown",
+        )
+
+    def _wait_for_transition_approval(self, job: JobRecord) -> JobRecord:
+        """Leave a denied transition at its last durable stage."""
+        current = self.job_store.get_job(job.job_id)
+        if (
+            current.status == DEFAULT_STATUS
+            and current.error_code == AWAITING_TRANSITION_APPROVAL
+        ):
+            return current
+        return self.job_store.update_job(
+            current.job_id,
+            expected_revision=current.revision,
+            status=DEFAULT_STATUS,
+            error_code=AWAITING_TRANSITION_APPROVAL,
+            error_message="Awaiting exact human approval of pipeline transition",
         )
 
     def _selected_model(

@@ -1,29 +1,30 @@
 /* Fuente semantic tokens for the local native knowledge studio. */
 :root,
 html[data-fuente-style="nord"] {
-    --surface-canvas: #2E3440;
-    --surface-raised: #3B4252;
-    --surface-sunken: #272C36;
-    --surface-overlay: #434C5E;
-    --text-primary: #ECEFF4;
-    --text-secondary: #D8DEE9;
-    --border-subtle: #4C566A;
-    --accent-primary: #81A1C1;
-    --accent-selection: rgba(129, 161, 193, 0.24);
-    --focus-ring: #88C0D0;
-    --state-success: #A3BE8C;
-    --state-warning: #EBCB8B;
-    --state-danger: #D98990;
-    --surface-glass: rgba(59, 66, 82, 0.92);
-    --surface-glass-strong: rgba(67, 76, 94, 0.97);
-    --border-glass: rgba(136, 192, 208, 0.18);
-    --background-app: linear-gradient(145deg, #2E3440 0%, #272C36 100%);
-    --elevation-overlay: 0 16px 46px rgba(20, 24, 32, 0.28);
-    --elevation-low: 0 2px 8px rgba(20, 24, 32, 0.18);
-    --elevation-medium: 0 8px 18px rgba(20, 24, 32, 0.26);
-    --surface-scrim: rgba(20, 24, 32, 0.78);
-    --surface-dim: rgba(20, 24, 32, 0.42);
-    --focus-shadow: 0 0 0 2px rgba(136, 192, 208, 0.28);
+    color-scheme: light;
+    --surface-canvas: #ECEFF4;
+    --surface-raised: #FFFFFF;
+    --surface-sunken: #E5E9F0;
+    --surface-overlay: #FFFFFF;
+    --text-primary: #2E3440;
+    --text-secondary: #434C5E;
+    --border-subtle: #D8DEE9;
+    --accent-primary: #4C6C94;
+    --accent-selection: rgba(94, 129, 172, 0.16);
+    --focus-ring: #5E81AC;
+    --state-success: #4F6F41;
+    --state-warning: #7A5E00;
+    --state-danger: #A83B46;
+    --surface-glass: rgba(255, 255, 255, 0.94);
+    --surface-glass-strong: rgba(255, 255, 255, 0.98);
+    --border-glass: rgba(76, 86, 106, 0.18);
+    --background-app: var(--surface-canvas);
+    --elevation-overlay: 0 16px 46px rgba(46, 52, 64, 0.18);
+    --elevation-low: 0 2px 8px rgba(46, 52, 64, 0.10);
+    --elevation-medium: 0 8px 18px rgba(46, 52, 64, 0.14);
+    --surface-scrim: rgba(46, 52, 64, 0.46);
+    --surface-dim: rgba(46, 52, 64, 0.18);
+    --focus-shadow: 0 0 0 2px rgba(94, 129, 172, 0.24);
     --fuente-polar-0: #2E3440;
     --fuente-polar-1: #3B4252;
     --fuente-polar-2: #4C566A;
@@ -44,6 +45,7 @@ html[data-fuente-style="nord"] {
 }
 
 html[data-fuente-style="gruvbox"] {
+    color-scheme: dark;
     --surface-canvas: #282828;
     --surface-raised: #32302F;
     --surface-sunken: #1D2021;
@@ -104,9 +106,13 @@ html[data-fuente-style="gruvbox"] {
     --control-standard: 40px;
     --control-prominent: 44px;
     --rail-width: 68px;
+    --header-height: 64px;
     --library-width: 176px;
     --content-measure: 76rem;
     --reading-measure: 68ch;
+    --font-size-base: 16px;
+    --font-size-document: 17px;
+    --font-size-control: 14px;
     --motion-fast: 120ms;
     --motion-standard: 200ms;
 }

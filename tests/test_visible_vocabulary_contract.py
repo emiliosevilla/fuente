@@ -2,7 +2,7 @@ from pathlib import Path
 
 
 CURRENT_UI_FILES = (
-    "fuente/chat_modal.py",
+    "consola_preview.html",
     "fuente/installer_gui.py",
     "fuente/core/folder_sync.py",
 )
@@ -10,11 +10,11 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def test_current_ui_uses_complete_current_labels():
-    chat = (ROOT / CURRENT_UI_FILES[0]).read_text(encoding="utf-8")
+    console = (ROOT / CURRENT_UI_FILES[0]).read_text(encoding="utf-8")
     installer = (ROOT / CURRENT_UI_FILES[1]).read_text(encoding="utf-8")
     sync = (ROOT / CURRENT_UI_FILES[2]).read_text(encoding="utf-8")
 
-    assert 'return "Orígenes: " + ", ".join(labels)' in chat
+    assert 'id="workspace-chat-citations"' in console
     assert 'text="Conexión de entradas — SharePoint y OneDrive"' in installer
     assert 'self.title("Entradas y carpetas compartidas — Fuente")' in sync
     assert 'text="Entradas vinculadas a \'1_volcado\'"' in sync

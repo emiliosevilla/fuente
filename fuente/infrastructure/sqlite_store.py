@@ -19,6 +19,7 @@ are stored as plain text and every change is recorded as a `StageEvent`.
 from __future__ import annotations
 
 import sqlite3
+import threading
 import uuid
 import json
 from contextlib import contextmanager, suppress
@@ -37,7 +38,7 @@ from fuente.domain.jobs import (
     JobStoreBusyError,
     StageEvent,
 )
-from fuente.domain.meetings import MeetingSession
+from fuente.domain.errors import ReviewClaimConflictError
 from fuente.domain.refinement import RefinementCandidate, RefinementVerdict
 from fuente.domain.note_catalog import IdentityCollisionError
 from fuente.domain.sync import SyncManifestEntry
@@ -55,13 +56,14 @@ CLEARABLE_JOB_FIELDS: frozenset[str] = frozenset(
     }
 )
 
+UI_STATE_KEYS: frozenset[str] = frozenset(
+    {"workspace", "filters", "sort", "panels", "cursor", "drafts", "visual_style"}
+)
+MAX_UI_STATE_BYTES = 64 * 1024
+
 
 def _timestamp() -> str:
     return datetime.now(timezone.utc).isoformat()
-
-
-def _timestamp_after(seconds: float) -> str:
-    return (datetime.now(timezone.utc) + timedelta(seconds=seconds)).isoformat()
 
 
 def _is_lock_contention(error: sqlite3.OperationalError) -> bool:
@@ -95,6 +97,7 @@ class JobStore:
         self.state_dir.mkdir(parents=True, exist_ok=True)
         self.db_path = self.state_dir / "state.db"
         self.pipeline_version = pipeline_version
+        self._transaction_lock = threading.RLock()
 
         self._connection = sqlite3.connect(
             self.db_path,
@@ -109,6 +112,157 @@ class JobStore:
 
     def close(self) -> None:
         self._connection.close()
+
+    # -- UI state and transition approvals ------------------------------
+
+    def save_review_claim(
+        self, values: dict[str, Any], *, claimed_after: datetime
+    ) -> dict[str, Any]:
+        with self._immediate_transaction(str(values["artifact_id"])) as connection:
+            return self._save_review_claim_in_transaction(
+                connection, values, claimed_after=claimed_after
+            )
+
+    def _save_review_claim_in_transaction(
+        self,
+        connection: sqlite3.Connection,
+        values: dict[str, Any],
+        *,
+        claimed_after: datetime,
+    ) -> dict[str, Any]:
+        identity = tuple(
+            values[field]
+            for field in (
+                "artifact_id", "source_stage", "target_stage", "revision", "content_hash"
+            )
+        )
+        existing = connection.execute(
+            """
+            SELECT * FROM review_claims
+            WHERE artifact_id = ? AND source_stage = ? AND target_stage = ?
+              AND revision = ? AND content_hash = ?
+            """,
+            identity,
+        ).fetchone()
+        if existing is not None and datetime.fromisoformat(existing["expires_at"]) > claimed_after:
+            if existing["reviewer"] != values["reviewer"]:
+                raise ReviewClaimConflictError(str(values["artifact_id"]))
+            return dict(existing)
+        connection.execute(
+            """
+            INSERT INTO review_claims
+                (artifact_id, source_stage, target_stage, revision, content_hash,
+                 reviewer, claimed_at, expires_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT (artifact_id, source_stage, target_stage, revision, content_hash)
+            DO UPDATE SET reviewer = excluded.reviewer,
+                          claimed_at = excluded.claimed_at,
+                          expires_at = excluded.expires_at
+            """,
+            (*identity, values["reviewer"], values["claimed_at"], values["expires_at"]),
+        )
+        row = connection.execute(
+            """
+            SELECT * FROM review_claims
+            WHERE artifact_id = ? AND source_stage = ? AND target_stage = ?
+              AND revision = ? AND content_hash = ?
+            """,
+            identity,
+        ).fetchone()
+        assert row is not None
+        return dict(row)
+
+    def get_review_claim(
+        self,
+        artifact_id: str,
+        source_stage: str,
+        target_stage: str,
+        revision: int,
+        content_hash: str,
+    ) -> dict[str, Any] | None:
+        row = self._connection.execute(
+            """
+            SELECT * FROM review_claims
+            WHERE artifact_id = ? AND source_stage = ? AND target_stage = ?
+              AND revision = ? AND content_hash = ?
+            """,
+            (artifact_id, source_stage, target_stage, revision, content_hash),
+        ).fetchone()
+        return dict(row) if row is not None else None
+
+    def save_transition_approval(
+        self, values: dict[str, Any], *, claim_expires_after: datetime
+    ) -> dict[str, Any] | None:
+        with self._immediate_transaction(str(values["artifact_id"])) as connection:
+            return self._save_transition_approval_in_transaction(
+                connection, values, claim_expires_after=claim_expires_after
+            )
+
+    def _save_transition_approval_in_transaction(
+        self,
+        connection: sqlite3.Connection,
+        values: dict[str, Any],
+        *,
+        claim_expires_after: datetime,
+    ) -> dict[str, Any] | None:
+        identity = tuple(
+            values[field]
+            for field in (
+                "artifact_id", "source_stage", "target_stage", "revision", "content_hash"
+            )
+        )
+        claim = connection.execute(
+            """
+            SELECT reviewer, expires_at FROM review_claims
+            WHERE artifact_id = ? AND source_stage = ? AND target_stage = ?
+              AND revision = ? AND content_hash = ?
+            """,
+            identity,
+        ).fetchone()
+        if (
+            claim is None
+            or claim["reviewer"] != values["reviewer"]
+            or datetime.fromisoformat(claim["expires_at"]) <= claim_expires_after
+        ):
+            return None
+        connection.execute(
+            """
+            INSERT INTO transition_approvals
+                (artifact_id, source_stage, target_stage, revision, content_hash,
+                 reviewer, approved_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT (artifact_id, source_stage, target_stage, revision, content_hash)
+            DO NOTHING
+            """,
+            (*identity, values["reviewer"], values["approved_at"]),
+        )
+        row = connection.execute(
+            """
+            SELECT * FROM transition_approvals
+            WHERE artifact_id = ? AND source_stage = ? AND target_stage = ?
+              AND revision = ? AND content_hash = ?
+            """,
+            identity,
+        ).fetchone()
+        return dict(row) if row is not None else None
+
+    def get_transition_approval(
+        self,
+        artifact_id: str,
+        source_stage: str,
+        target_stage: str,
+        revision: int,
+        content_hash: str,
+    ) -> dict[str, Any] | None:
+        row = self._connection.execute(
+            """
+            SELECT * FROM transition_approvals
+            WHERE artifact_id = ? AND source_stage = ? AND target_stage = ?
+              AND revision = ? AND content_hash = ?
+            """,
+            (artifact_id, source_stage, target_stage, revision, content_hash),
+        ).fetchone()
+        return dict(row) if row is not None else None
 
     # -- refinement identity and verdicts --------------------------------
 
@@ -231,49 +385,161 @@ class JobStore:
     def approve_processed_note(
         self, *, note_id: str, revision: int, content_hash: str, reviewer: str
     ) -> dict[str, Any] | None:
-        identity = self.get_document_identity(note_id)
-        catalog = self.get_note(note_id)
-        current = identity or catalog
+        now = _timestamp()
+        with self._immediate_transaction(note_id) as connection:
+            return self._approve_processed_note_in_transaction(
+                connection,
+                note_id=note_id,
+                revision=revision,
+                content_hash=content_hash,
+                reviewer=reviewer,
+                approved_at=now,
+            )
+
+    def _current_processed_identity_in_transaction(
+        self,
+        connection: sqlite3.Connection,
+        note_id: str,
+    ) -> sqlite3.Row | None:
+        identity = connection.execute(
+            "SELECT * FROM document_identities WHERE document_id = ?",
+            (note_id,),
+        ).fetchone()
+        if identity is not None:
+            return identity
+        return connection.execute(
+            "SELECT * FROM note_catalog WHERE note_id = ?",
+            (note_id,),
+        ).fetchone()
+
+    def _approve_processed_note_in_transaction(
+        self,
+        connection: sqlite3.Connection,
+        *,
+        note_id: str,
+        revision: int,
+        content_hash: str,
+        reviewer: str,
+        approved_at: str,
+    ) -> dict[str, Any] | None:
+        current = self._current_processed_identity_in_transaction(connection, note_id)
         if (
             current is None
             or int(current["revision"]) != revision
-            or str(current.get("content_hash") or "") != content_hash
+            or str(current["content_hash"] or "") != content_hash
         ):
             return None
-        now = _timestamp()
+        existing = connection.execute(
+            "SELECT * FROM processed_approvals WHERE note_id = ?",
+            (note_id,),
+        ).fetchone()
+        if existing is not None:
+            if (
+                int(existing["revision"]) != revision
+                or str(existing["content_hash"]) != content_hash
+            ):
+                connection.execute(
+                    """
+                    UPDATE processed_approvals
+                    SET revision = ?, content_hash = ?, reviewer = ?,
+                        approved_at = ?, invalidated_at = NULL
+                    WHERE note_id = ?
+                    """,
+                    (revision, content_hash, reviewer, approved_at, note_id),
+                )
+                existing = connection.execute(
+                    "SELECT * FROM processed_approvals WHERE note_id = ?",
+                    (note_id,),
+                ).fetchone()
+            return dict(existing)
+        connection.execute(
+            """
+            INSERT INTO processed_approvals
+            (note_id, revision, content_hash, reviewer, approved_at)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (note_id, revision, content_hash, reviewer, approved_at),
+        )
+        row = connection.execute(
+            "SELECT * FROM processed_approvals WHERE note_id = ?", (note_id,)
+        ).fetchone()
+        return dict(row) if row is not None else None
+
+    def approve_processed_note_and_transition(
+        self,
+        *,
+        note_id: str,
+        revision: int,
+        content_hash: str,
+        reviewer: str,
+        claimed_at: str,
+        expires_at: str,
+        approved_at: str,
+    ) -> dict[str, Any] | None:
+        claimed_after = datetime.fromisoformat(claimed_at)
         with self._immediate_transaction(note_id) as connection:
-            existing = connection.execute(
-                "SELECT * FROM processed_approvals WHERE note_id = ?",
-                (note_id,),
-            ).fetchone()
-            if existing is not None:
-                if int(existing["revision"]) != revision or str(existing["content_hash"]) != content_hash:
-                    connection.execute(
-                        """
-                        UPDATE processed_approvals
-                        SET revision = ?, content_hash = ?, reviewer = ?,
-                            approved_at = ?, invalidated_at = NULL
-                        WHERE note_id = ?
-                        """,
-                        (revision, content_hash, reviewer, now, note_id),
-                    )
-                    existing = connection.execute(
-                        "SELECT * FROM processed_approvals WHERE note_id = ?",
-                        (note_id,),
-                    ).fetchone()
-                return dict(existing)
-            connection.execute(
-                """
-                INSERT INTO processed_approvals
-                (note_id, revision, content_hash, reviewer, approved_at)
-                VALUES (?, ?, ?, ?, ?)
-                """,
-                (note_id, revision, content_hash, reviewer, now),
+            current = self._current_processed_identity_in_transaction(
+                connection, note_id
             )
-            row = connection.execute(
-                "SELECT * FROM processed_approvals WHERE note_id = ?", (note_id,)
+            if (
+                current is None
+                or int(current["revision"]) != revision
+                or str(current["content_hash"] or "") != content_hash
+            ):
+                return None
+            existing = connection.execute(
+                """
+                SELECT reviewer FROM processed_approvals
+                WHERE note_id = ? AND revision = ? AND content_hash = ?
+                  AND invalidated_at IS NULL
+                """,
+                (note_id, revision, content_hash),
             ).fetchone()
-            return dict(row) if row is not None else None
+            effective_reviewer = (
+                str(existing["reviewer"]) if existing is not None else reviewer
+            )
+            claim_values = {
+                "artifact_id": note_id,
+                "source_stage": "4_procesado",
+                "target_stage": "5_compartido",
+                "revision": revision,
+                "content_hash": content_hash,
+                "reviewer": effective_reviewer,
+                "claimed_at": claimed_at,
+                "expires_at": expires_at,
+            }
+            self._save_review_claim_in_transaction(
+                connection, claim_values, claimed_after=claimed_after
+            )
+            row = self._approve_processed_note_in_transaction(
+                connection,
+                note_id=note_id,
+                revision=revision,
+                content_hash=content_hash,
+                reviewer=effective_reviewer,
+                approved_at=approved_at,
+            )
+            assert row is not None
+            approval_values = {
+                key: claim_values[key]
+                for key in (
+                    "artifact_id",
+                    "source_stage",
+                    "target_stage",
+                    "revision",
+                    "content_hash",
+                    "reviewer",
+                )
+            }
+            approval_values["approved_at"] = approved_at
+            transition = self._save_transition_approval_in_transaction(
+                connection,
+                approval_values,
+                claim_expires_after=datetime.fromisoformat(approved_at),
+            )
+            if transition is None:
+                raise sqlite3.IntegrityError("transition approval was rejected")
+            return row
 
     def is_processed_approval_current(
         self, note_id: str, revision: int, content_hash: str
@@ -361,39 +627,25 @@ class JobStore:
 
     @contextmanager
     def _immediate_transaction(self, busy_id: str):
-        """Run a multi-statement write on a dedicated SQLite connection.
-
-        The store's main connection remains in autocommit mode for its legacy
-        one-statement operations. A separate ``BEGIN IMMEDIATE`` connection
-        prevents another thread using that shared connection from interleaving
-        with an approval transaction.
-        """
-        connection = sqlite3.connect(
-            self.db_path,
-            isolation_level=None,
-            timeout=5.0,
-        )
-        connection.row_factory = sqlite3.Row
-        connection.execute("PRAGMA foreign_keys = ON")
-        connection.execute("PRAGMA busy_timeout = 5000")
-        try:
-            connection.execute("BEGIN IMMEDIATE")
-            yield connection
-            connection.execute("COMMIT")
-        except sqlite3.OperationalError as error:
-            if connection.in_transaction:
-                with suppress(sqlite3.Error):
-                    connection.execute("ROLLBACK")
-            if _is_lock_contention(error):
-                raise JobStoreBusyError(busy_id) from error
-            raise
-        except BaseException:
-            if connection.in_transaction:
-                with suppress(sqlite3.Error):
-                    connection.execute("ROLLBACK")
-            raise
-        finally:
-            connection.close()
+        """Serialize a multi-statement write on this store's sole connection."""
+        connection = self._connection
+        with self._transaction_lock:
+            try:
+                connection.execute("BEGIN IMMEDIATE")
+                yield connection
+                connection.execute("COMMIT")
+            except sqlite3.OperationalError as error:
+                if connection.in_transaction:
+                    with suppress(sqlite3.Error):
+                        connection.execute("ROLLBACK")
+                if _is_lock_contention(error):
+                    raise JobStoreBusyError(busy_id) from error
+                raise
+            except BaseException:
+                if connection.in_transaction:
+                    with suppress(sqlite3.Error):
+                        connection.execute("ROLLBACK")
+                raise
 
     # -- inbound sync manifest -------------------------------------------
 
@@ -436,84 +688,6 @@ class JobStore:
             "SELECT * FROM sync_manifest ORDER BY source_key ASC"
         ).fetchall()
         return [SyncManifestEntry.from_row(row) for row in rows]
-
-    # -- meeting sessions --------------------------------------------------
-
-    def create_meeting_session(self, session: MeetingSession) -> dict[str, Any]:
-        """Persist one meeting identity without replacing an existing one."""
-        if not isinstance(session, MeetingSession):
-            raise TypeError("session must be a MeetingSession")
-        values = (
-            session.session_id,
-            session.provider,
-            session.provider_revision,
-            session.template_id,
-            session.status,
-            session.manifest_relative_path or f".fuente/reunion/{session.session_id}/manifest.json",
-            session.recording_relative_path or "",
-            session.transcript_relative_path or "",
-            session.notes_relative_path,
-            session.recording_sha256.lower() if session.recording_sha256 else None,
-            session.transcript_sha256.lower() if session.transcript_sha256 else None,
-            session.notes_sha256.lower() if session.notes_sha256 else None,
-            session.created_at,
-            session.updated_at,
-        )
-        try:
-            self._connection.execute(
-                """
-                INSERT INTO meeting_sessions (
-                    session_id, provider, provider_revision, template_id, status,
-                    manifest_relative_path, recording_relative_path,
-                    transcript_relative_path, notes_relative_path,
-                    recording_sha256, transcript_sha256, notes_sha256,
-                    created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                values,
-            )
-        except sqlite3.IntegrityError as error:
-            existing = self.get_meeting_session(session.session_id)
-            if existing is None:
-                raise
-            immutable_values = {
-                "provider": session.provider,
-                "provider_revision": session.provider_revision,
-                "template_id": session.template_id,
-                "manifest_relative_path": values[5],
-                "recording_relative_path": values[6],
-                "transcript_relative_path": values[7],
-                "notes_relative_path": values[8],
-                "recording_sha256": values[9],
-                "transcript_sha256": values[10],
-                "notes_sha256": values[11].lower() if values[11] else None,
-            }
-            if any(existing[field] != value for field, value in immutable_values.items()):
-                raise ValueError("meeting session identity already exists with different artifacts") from error
-            return existing
-        stored = self.get_meeting_session(session.session_id)
-        assert stored is not None
-        return stored
-
-    record_meeting_session = create_meeting_session
-    save_meeting_session = create_meeting_session
-
-    def get_meeting_session(self, session_id: str) -> dict[str, Any] | None:
-        row = self._connection.execute(
-            "SELECT * FROM meeting_sessions WHERE session_id = ?", (session_id,)
-        ).fetchone()
-        return dict(row) if row is not None else None
-
-    def list_meeting_sessions(self) -> list[dict[str, Any]]:
-        rows = self._connection.execute(
-            "SELECT * FROM meeting_sessions ORDER BY created_at ASC, session_id ASC"
-        ).fetchall()
-        return [dict(row) for row in rows]
-
-    def delete_meeting_session(self, session_id: str) -> None:
-        self._connection.execute(
-            "DELETE FROM meeting_sessions WHERE session_id = ?", (session_id,)
-        )
 
     # -- Vault layout migration -----------------------------------------
 
@@ -1252,104 +1426,200 @@ class JobStore:
         """Insert approval and update the catalog state in one transaction."""
         approved_at = _timestamp()
         with self._immediate_transaction(note_id) as connection:
-            catalog = connection.execute(
-                """
-                SELECT catalog.*
-                FROM note_catalog AS catalog
-                LEFT JOIN note_tombstones AS tombstone
-                    ON tombstone.note_id = catalog.note_id
-                WHERE catalog.note_id = ? AND tombstone.note_id IS NULL
-                """,
-                (note_id,),
-            ).fetchone()
+            return self._approve_note_revision_in_transaction(
+                connection,
+                note_id=note_id,
+                expected_revision=expected_revision,
+                expected_content_hash=expected_content_hash,
+                reviewer=reviewer,
+                approved_at=approved_at,
+            )
+
+    def _canonical_catalog_in_transaction(
+        self,
+        connection: sqlite3.Connection,
+        note_id: str,
+    ) -> sqlite3.Row | None:
+        return connection.execute(
+            """
+            SELECT catalog.*
+            FROM note_catalog AS catalog
+            LEFT JOIN note_tombstones AS tombstone
+                ON tombstone.note_id = catalog.note_id
+            WHERE catalog.note_id = ? AND tombstone.note_id IS NULL
+            """,
+            (note_id,),
+        ).fetchone()
+
+    def _approve_note_revision_in_transaction(
+        self,
+        connection: sqlite3.Connection,
+        *,
+        note_id: str,
+        expected_revision: int,
+        expected_content_hash: str,
+        reviewer: str,
+        approved_at: str,
+    ) -> dict[str, Any] | None:
+        catalog = self._canonical_catalog_in_transaction(connection, note_id)
+        if (
+            catalog is None
+            or int(catalog["revision"]) != expected_revision
+            or str(catalog["content_hash"]) != expected_content_hash
+        ):
+            return None
+        existing = connection.execute(
+            """
+            SELECT note_id, revision, content_hash, reviewer,
+                   approved_at, invalidated_at
+            FROM note_approvals
+            WHERE note_id = ? AND revision = ? AND content_hash = ?
+            """,
+            (note_id, expected_revision, expected_content_hash),
+        ).fetchone()
+        if existing is not None:
+            if existing["invalidated_at"] is not None:
+                raise sqlite3.IntegrityError(
+                    "an invalidated revision cannot be approved again"
+                )
+            if str(catalog["status"]) != "approved":
+                connection.execute(
+                    """
+                    UPDATE note_catalog
+                    SET status = 'approved', updated_at = ?
+                    WHERE note_id = ? AND revision = ? AND content_hash = ?
+                    """,
+                    (
+                        approved_at,
+                        note_id,
+                        expected_revision,
+                        expected_content_hash,
+                    ),
+                )
+            return {
+                key: existing[key]
+                for key in (
+                    "note_id",
+                    "revision",
+                    "content_hash",
+                    "reviewer",
+                    "approved_at",
+                )
+            }
+        connection.execute(
+            """
+            INSERT INTO note_approvals (
+                note_id, revision, content_hash, reviewer,
+                approved_at, invalidated_at
+            ) VALUES (?, ?, ?, ?, ?, NULL)
+            """,
+            (
+                note_id,
+                expected_revision,
+                expected_content_hash,
+                reviewer,
+                approved_at,
+            ),
+        )
+        changed = connection.execute(
+            """
+            UPDATE note_catalog
+            SET status = 'approved', updated_at = ?
+            WHERE note_id = ? AND revision = ? AND content_hash = ?
+            """,
+            (
+                approved_at,
+                note_id,
+                expected_revision,
+                expected_content_hash,
+            ),
+        )
+        if changed.rowcount != 1:
+            raise sqlite3.IntegrityError("approval catalog state changed concurrently")
+        row = connection.execute(
+            """
+            SELECT note_id, revision, content_hash, reviewer, approved_at
+            FROM note_approvals
+            WHERE note_id = ? AND revision = ? AND content_hash = ?
+            """,
+            (note_id, expected_revision, expected_content_hash),
+        ).fetchone()
+        assert row is not None
+        return dict(row)
+
+    def approve_note_revision_and_transition(
+        self,
+        *,
+        note_id: str,
+        expected_revision: int,
+        expected_content_hash: str,
+        reviewer: str,
+        claimed_at: str,
+        expires_at: str,
+        approved_at: str,
+    ) -> dict[str, Any] | None:
+        claimed_after = datetime.fromisoformat(claimed_at)
+        with self._immediate_transaction(note_id) as connection:
+            catalog = self._canonical_catalog_in_transaction(connection, note_id)
             if (
                 catalog is None
                 or int(catalog["revision"]) != expected_revision
                 or str(catalog["content_hash"]) != expected_content_hash
             ):
                 return None
-
             existing = connection.execute(
                 """
-                SELECT note_id, revision, content_hash, reviewer,
-                       approved_at, invalidated_at
-                FROM note_approvals
+                SELECT reviewer FROM note_approvals
                 WHERE note_id = ? AND revision = ? AND content_hash = ?
+                  AND invalidated_at IS NULL
                 """,
                 (note_id, expected_revision, expected_content_hash),
             ).fetchone()
-            if existing is not None:
-                if existing["invalidated_at"] is not None:
-                    raise sqlite3.IntegrityError(
-                        "an invalidated revision cannot be approved again"
-                    )
-                if str(catalog["status"]) != "approved":
-                    connection.execute(
-                        """
-                        UPDATE note_catalog
-                        SET status = 'approved', updated_at = ?
-                        WHERE note_id = ? AND revision = ? AND content_hash = ?
-                        """,
-                        (
-                            approved_at,
-                            note_id,
-                            expected_revision,
-                            expected_content_hash,
-                        ),
-                    )
-                result = {
-                    key: existing[key]
-                    for key in (
-                        "note_id",
-                        "revision",
-                        "content_hash",
-                        "reviewer",
-                        "approved_at",
-                    )
-                }
-                return result
-
-            connection.execute(
-                """
-                INSERT INTO note_approvals (
-                    note_id, revision, content_hash, reviewer,
-                    approved_at, invalidated_at
-                ) VALUES (?, ?, ?, ?, ?, NULL)
-                """,
-                (
-                    note_id,
-                    expected_revision,
-                    expected_content_hash,
-                    reviewer,
-                    approved_at,
-                ),
+            effective_reviewer = (
+                str(existing["reviewer"]) if existing is not None else reviewer
             )
-            changed = connection.execute(
-                """
-                UPDATE note_catalog
-                SET status = 'approved', updated_at = ?
-                WHERE note_id = ? AND revision = ? AND content_hash = ?
-                """,
-                (
-                    approved_at,
-                    note_id,
-                    expected_revision,
-                    expected_content_hash,
-                ),
+            claim_values = {
+                "artifact_id": note_id,
+                "source_stage": "3_capturado",
+                "target_stage": "4_procesado",
+                "revision": expected_revision,
+                "content_hash": expected_content_hash,
+                "reviewer": effective_reviewer,
+                "claimed_at": claimed_at,
+                "expires_at": expires_at,
+            }
+            self._save_review_claim_in_transaction(
+                connection, claim_values, claimed_after=claimed_after
             )
-            if changed.rowcount != 1:
-                raise sqlite3.IntegrityError("approval catalog state changed concurrently")
-            row = connection.execute(
-                """
-                SELECT note_id, revision, content_hash, reviewer, approved_at
-                FROM note_approvals
-                WHERE note_id = ? AND revision = ? AND content_hash = ?
-                """,
-                (note_id, expected_revision, expected_content_hash),
-            ).fetchone()
+            row = self._approve_note_revision_in_transaction(
+                connection,
+                note_id=note_id,
+                expected_revision=expected_revision,
+                expected_content_hash=expected_content_hash,
+                reviewer=effective_reviewer,
+                approved_at=approved_at,
+            )
             assert row is not None
-            result = dict(row)
-        return result
+            approval_values = {
+                key: claim_values[key]
+                for key in (
+                    "artifact_id",
+                    "source_stage",
+                    "target_stage",
+                    "revision",
+                    "content_hash",
+                    "reviewer",
+                )
+            }
+            approval_values["approved_at"] = approved_at
+            transition = self._save_transition_approval_in_transaction(
+                connection,
+                approval_values,
+                claim_expires_after=datetime.fromisoformat(approved_at),
+            )
+            if transition is None:
+                raise sqlite3.IntegrityError("transition approval was rejected")
+            return row
 
     def is_note_approval_current(
         self, note_id: str, revision: int, content_hash: str
@@ -1989,35 +2259,27 @@ class JobStore:
         """
         if limit < 1:
             return None
-        try:
-            self._connection.execute("BEGIN IMMEDIATE")
-        except sqlite3.OperationalError as error:
-            if _is_lock_contention(error):
-                raise JobStoreBusyError(job_id) from error
-            raise
-        try:
-            existing = self._connection.execute(
+        with self._immediate_transaction(job_id) as connection:
+            existing = connection.execute(
                 "SELECT * FROM resource_leases WHERE job_id = ? AND resource_key = ?",
                 (job_id, resource_key),
             ).fetchone()
             if existing is not None:
-                self._connection.execute("COMMIT")
                 return dict(existing)
 
-            row = self._connection.execute(
+            row = connection.execute(
                 "SELECT COUNT(*) AS n FROM resource_leases "
                 "WHERE resource_key = ? AND job_id != ?",
                 (resource_key, job_id),
             ).fetchone()
             holders = int(row["n"]) if row is not None else 0
             if holders >= limit:
-                self._connection.execute("COMMIT")
                 return None
 
             now = _timestamp()
             lid = lease_id or str(uuid.uuid4())
             try:
-                self._connection.execute(
+                connection.execute(
                     """
                     INSERT INTO resource_leases (
                         lease_id, job_id, task_class, resource_key, acquired_at
@@ -2027,26 +2289,18 @@ class JobStore:
                 )
             except sqlite3.IntegrityError:
                 # UNIQUE(job_id, resource_key) race: treat as idempotent claim.
-                raced = self._connection.execute(
+                raced = connection.execute(
                     "SELECT * FROM resource_leases "
                     "WHERE job_id = ? AND resource_key = ?",
                     (job_id, resource_key),
                 ).fetchone()
-                self._connection.execute("COMMIT")
                 return dict(raced) if raced is not None else None
 
-            claimed = self._connection.execute(
+            claimed = connection.execute(
                 "SELECT * FROM resource_leases WHERE lease_id = ?", (lid,)
             ).fetchone()
-            self._connection.execute("COMMIT")
             assert claimed is not None
             return dict(claimed)
-        except Exception:
-            try:
-                self._connection.execute("ROLLBACK")
-            except sqlite3.Error:
-                pass
-            raise
 
     def release_resource_leases(self, job_id: str) -> int:
         cursor = self._connection.execute(
@@ -2099,289 +2353,6 @@ class JobStore:
         ).fetchone()
         return dict(row) if row is not None else None
 
-    # -- durable reflow requests -------------------------------------------
-
-    def create_reflow_request(
-        self,
-        *,
-        request_id: str,
-        document_id: str,
-        expected_revision: int,
-        mode: str,
-    ) -> dict[str, Any]:
-        """Insert one reflow request, returning the existing equivalent row."""
-        now = _timestamp()
-        try:
-            self._connection.execute(
-                """
-                INSERT INTO reflow_requests (
-                    request_id, document_id, expected_revision, mode, status,
-                    created_at, updated_at, result_json, error_code, revision,
-                    claim_token, claim_epoch, lease_expires_at,
-                    candidate_document_id, candidate_path, candidate_content_hash,
-                    candidate_markdown
-                ) VALUES (?, ?, ?, ?, 'pending', ?, ?, NULL, NULL, 1,
-                          NULL, 0, NULL, NULL, NULL, NULL, NULL)
-                """,
-                (request_id, document_id, expected_revision, mode, now, now),
-            )
-        except sqlite3.IntegrityError:
-            # The uniqueness key is the idempotency key. A UUID collision is
-            # vanishingly unlikely and is handled by the same lookup safely.
-            existing = self._connection.execute(
-                """
-                SELECT * FROM reflow_requests
-                WHERE document_id = ? AND expected_revision = ? AND mode = ?
-                """,
-                (document_id, expected_revision, mode),
-            ).fetchone()
-            if existing is None:
-                raise
-            return dict(existing)
-        row = self._connection.execute(
-            "SELECT * FROM reflow_requests WHERE request_id = ?", (request_id,)
-        ).fetchone()
-        assert row is not None
-        return dict(row)
-
-    def get_reflow_request(self, request_id: str) -> Optional[dict[str, Any]]:
-        row = self._connection.execute(
-            "SELECT * FROM reflow_requests WHERE request_id = ?", (request_id,)
-        ).fetchone()
-        return dict(row) if row is not None else None
-
-    def claim_reflow_request(
-        self, request_id: str, *, lease_seconds: float = 30.0
-    ) -> Optional[dict[str, Any]]:
-        """Claim a pending request exactly once and return its fencing token."""
-        if not isinstance(lease_seconds, (int, float)) or lease_seconds < 0:
-            raise ValueError("lease_seconds must be non-negative")
-        now = _timestamp()
-        lease_expires_at = _timestamp_after(float(lease_seconds))
-        claim_token = str(uuid.uuid4())
-        try:
-            cursor = self._connection.execute(
-                """
-                UPDATE reflow_requests
-                SET status = 'running', claim_token = ?,
-                    claim_epoch = claim_epoch + 1, lease_expires_at = ?,
-                    revision = revision + 1, updated_at = ?
-                WHERE request_id = ? AND status = 'pending'
-                """,
-                (claim_token, lease_expires_at, now, request_id),
-            )
-        except sqlite3.OperationalError as error:
-            if _is_lock_contention(error):
-                raise JobStoreBusyError(request_id) from error
-            raise
-        if cursor.rowcount != 1:
-            return None
-        return self.get_reflow_request(request_id)
-
-    def heartbeat_reflow_request(
-        self,
-        request_id: str,
-        *,
-        claim_token: str,
-        lease_seconds: float = 30.0,
-    ) -> Optional[dict[str, Any]]:
-        """Renew a live claim only when its token still owns the request."""
-        if not isinstance(lease_seconds, (int, float)) or lease_seconds < 0:
-            raise ValueError("lease_seconds must be non-negative")
-        cursor = self._connection.execute(
-            """
-            UPDATE reflow_requests
-            SET lease_expires_at = ?, revision = revision + 1, updated_at = ?
-            WHERE request_id = ? AND status = 'running' AND claim_token = ?
-            """,
-            (_timestamp_after(float(lease_seconds)), _timestamp(), request_id, claim_token),
-        )
-        if cursor.rowcount != 1:
-            return None
-        return self.get_reflow_request(request_id)
-
-    def cancel_reflow_request(self, request_id: str) -> Optional[dict[str, Any]]:
-        """Cancel a request before its result is persisted."""
-        now = _timestamp()
-        try:
-            self._connection.execute(
-                """
-                UPDATE reflow_requests
-                SET status = 'cancelled', error_code = 'cancelled',
-                    claim_token = NULL, lease_expires_at = NULL,
-                    revision = revision + 1, updated_at = ?
-                WHERE request_id = ?
-                  AND status IN ('pending', 'running')
-                  AND candidate_document_id IS NULL
-                """,
-                (now, request_id),
-            )
-        except sqlite3.OperationalError as error:
-            if _is_lock_contention(error):
-                raise JobStoreBusyError(request_id) from error
-            raise
-        return self.get_reflow_request(request_id)
-
-    def complete_reflow_request(
-        self, request_id: str, *, claim_token: str, result_json: str
-    ) -> Optional[dict[str, Any]]:
-        """Commit a result only for the worker that claimed the request."""
-        now = _timestamp()
-        cursor = self._connection.execute(
-            """
-            UPDATE reflow_requests
-            SET status = 'completed', result_json = ?, error_code = NULL,
-                claim_token = NULL, lease_expires_at = NULL,
-                revision = revision + 1, updated_at = ?
-            WHERE request_id = ? AND status = 'running' AND claim_token = ?
-            """,
-            (result_json, now, request_id, claim_token),
-        )
-        if cursor.rowcount != 1:
-            return None
-        return self.get_reflow_request(request_id)
-
-    def fail_reflow_request(
-        self,
-        request_id: str,
-        *,
-        claim_token: str,
-        error_code: str,
-        result_json: Optional[str] = None,
-    ) -> Optional[dict[str, Any]]:
-        """Persist a stable failure without changing the source note."""
-        now = _timestamp()
-        cursor = self._connection.execute(
-            """
-            UPDATE reflow_requests
-            SET status = 'failed', result_json = ?, error_code = ?,
-                claim_token = NULL, lease_expires_at = NULL,
-                revision = revision + 1, updated_at = ?
-            WHERE request_id = ? AND status = 'running' AND claim_token = ?
-            """,
-            (result_json, error_code, now, request_id, claim_token),
-        )
-        if cursor.rowcount != 1:
-            return None
-        return self.get_reflow_request(request_id)
-
-    def recover_reflow_request(self, request_id: str) -> Optional[dict[str, Any]]:
-        """Explicitly make an interrupted running request retryable."""
-        now = _timestamp()
-        cursor = self._connection.execute(
-            """
-            UPDATE reflow_requests
-            SET status = 'pending', claim_token = NULL, lease_expires_at = NULL,
-                claim_epoch = claim_epoch + 1,
-                revision = revision + 1, updated_at = ?
-            WHERE request_id = ? AND status = 'running'
-              AND (lease_expires_at IS NULL OR lease_expires_at <= ?)
-            """,
-            (now, request_id, now),
-        )
-        if cursor.rowcount != 1:
-            return self.get_reflow_request(request_id)
-        return self.get_reflow_request(request_id)
-
-    def retry_reflow_request(self, request_id: str) -> Optional[dict[str, Any]]:
-        """Explicitly retry a failed request, clearing its prior result."""
-        now = _timestamp()
-        cursor = self._connection.execute(
-            """
-            UPDATE reflow_requests
-            SET status = 'pending', result_json = NULL, error_code = NULL,
-                claim_token = NULL, lease_expires_at = NULL,
-                revision = revision + 1, updated_at = ?
-            WHERE request_id = ? AND status = 'failed'
-            """,
-            (now, request_id),
-        )
-        if cursor.rowcount != 1:
-            return self.get_reflow_request(request_id)
-        return self.get_reflow_request(request_id)
-
-    def record_reflow_candidate(
-        self,
-        request_id: str,
-        *,
-        claim_token: str,
-        candidate_document_id: str,
-        candidate_path: str,
-        candidate_content_hash: str,
-    ) -> Optional[dict[str, Any]]:
-        """Durably record an idempotent candidate before final completion."""
-        cursor = self._connection.execute(
-            """
-            UPDATE reflow_requests
-            SET candidate_document_id = ?, candidate_path = ?,
-                candidate_content_hash = ?, revision = revision + 1,
-                updated_at = ?
-            WHERE request_id = ? AND status = 'running' AND claim_token = ?
-            """,
-            (
-                candidate_document_id,
-                candidate_path,
-                candidate_content_hash,
-                _timestamp(),
-                request_id,
-                claim_token,
-            ),
-        )
-        if cursor.rowcount != 1:
-            return None
-        return self.get_reflow_request(request_id)
-
-    def reserve_reflow_candidate(
-        self,
-        request_id: str,
-        *,
-        claim_token: str,
-        candidate_document_id: str,
-        candidate_path: str,
-        candidate_content_hash: str,
-        candidate_markdown: str,
-    ) -> Optional[dict[str, Any]]:
-        """Reserve candidate bytes before filesystem persistence.
-
-        Cancellation can win only while no candidate reservation exists. Once
-        this token-fenced CAS succeeds, the exact candidate body is durable in
-        SQLite and a later crash can materialize it without regenerating.
-        """
-        cursor = self._connection.execute(
-            """
-            UPDATE reflow_requests
-            SET candidate_document_id = ?, candidate_path = ?,
-                candidate_content_hash = ?, candidate_markdown = ?,
-                revision = revision + 1, updated_at = ?
-            WHERE request_id = ? AND status = 'running' AND claim_token = ?
-              AND (
-                    candidate_document_id IS NULL
-                    OR (
-                        candidate_document_id = ?
-                        AND candidate_path = ?
-                        AND candidate_content_hash = ?
-                        AND (candidate_markdown IS NULL OR candidate_markdown = ?)
-                    )
-                  )
-            """,
-            (
-                candidate_document_id,
-                candidate_path,
-                candidate_content_hash,
-                candidate_markdown,
-                _timestamp(),
-                request_id,
-                claim_token,
-                candidate_document_id,
-                candidate_path,
-                candidate_content_hash,
-                candidate_markdown,
-            ),
-        )
-        if cursor.rowcount != 1:
-            return None
-        return self.get_reflow_request(request_id)
-
     # -- row mapping ---------------------------------------------------------
 
     def _job_row(self, job_id: str) -> Optional[sqlite3.Row]:
@@ -2422,4 +2393,73 @@ class JobStore:
             error_message=row["error_message"],
             revision=row["revision"],
             created_at=row["created_at"],
+        )
+
+
+class UIStateStore:
+    """Validated JSON UI state stored through an existing ``JobStore`` connection."""
+
+    def __init__(
+        self,
+        job_store: JobStore,
+        *,
+        session_ttl: timedelta = timedelta(hours=24),
+    ) -> None:
+        if session_ttl <= timedelta(0):
+            raise ValueError("session_ttl must be positive")
+        self.job_store = job_store
+        self.session_ttl = session_ttl
+
+    @staticmethod
+    def _validate(scope: str, owner: str, key: str) -> None:
+        if scope not in {"session", "persistent"}:
+            raise ValueError("scope must be session or persistent")
+        if not isinstance(owner, str) or not owner.strip() or len(owner) > 128:
+            raise ValueError("owner is required and must not exceed 128 characters")
+        if key not in UI_STATE_KEYS:
+            raise ValueError("unknown UI state key")
+
+    def get(self, scope: str, owner: str, key: str) -> object | None:
+        self._validate(scope, owner, key)
+        row = self.job_store._connection.execute(
+            "SELECT value_json, expires_at FROM ui_state "
+            "WHERE scope = ? AND owner = ? AND state_key = ?",
+            (scope, owner.strip(), key),
+        ).fetchone()
+        if row is None:
+            return None
+        if (
+            row["expires_at"] is not None
+            and datetime.fromisoformat(row["expires_at"]) <= datetime.now(timezone.utc)
+        ):
+            self.job_store._connection.execute(
+                "DELETE FROM ui_state WHERE scope = ? AND owner = ? AND state_key = ?",
+                (scope, owner.strip(), key),
+            )
+            return None
+        return json.loads(row["value_json"])
+
+    def set(self, scope: str, owner: str, key: str, value: object) -> None:
+        self._validate(scope, owner, key)
+        try:
+            value_json = json.dumps(value, ensure_ascii=False, separators=(",", ":"))
+        except (TypeError, ValueError) as error:
+            raise ValueError("UI state value must be JSON serializable") from error
+        if len(value_json.encode("utf-8")) > MAX_UI_STATE_BYTES:
+            raise ValueError("UI state value exceeds 64 KiB")
+        now = datetime.now(timezone.utc)
+        expires_at = (
+            (now + self.session_ttl).isoformat() if scope == "session" else None
+        )
+        self.job_store._connection.execute(
+            """
+            INSERT INTO ui_state
+                (scope, owner, state_key, value_json, expires_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT (scope, owner, state_key) DO UPDATE SET
+                value_json = excluded.value_json,
+                expires_at = excluded.expires_at,
+                updated_at = excluded.updated_at
+            """,
+            (scope, owner.strip(), key, value_json, expires_at, now.isoformat()),
         )

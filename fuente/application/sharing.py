@@ -68,6 +68,14 @@ class SharingApplicationService:
             ):
                 raise NoteRevisionConflictError(note.document_id)
 
+            self.notes_service.transition_approvals.require_current(
+                note.document_id,
+                "4_procesado",
+                "5_compartido",
+                note.revision,
+                content_hash,
+            )
+
             target = self._shared_path(source.relative_to(self.vault.processed_dir))
             relative_path = target.relative_to(self.vault.config.vault_path).as_posix()
             existing = self.store.get_shared_output(note.document_id, note.revision)

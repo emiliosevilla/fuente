@@ -15,10 +15,9 @@ from fuente.domain.errors import (
     InvalidNoteTransitionError,
     NoteRevisionConflictError,
     PathAuthorizationError,
+    ReviewClaimConflictError,
 )
 from fuente.domain.frontmatter import parse_frontmatter, serialize_frontmatter
-from fuente.control_console import FuenteConsoleBackend
-from fuente.ui.bridge import FuentePyWebViewApi
 from fuente.infrastructure.sqlite_store import JobStore
 
 
@@ -140,6 +139,7 @@ def test_ledger_schema_has_exact_identity_key_fk_and_no_markdown_copy(
     assert {"markdown", "body", "body_markdown", "content"}.isdisjoint(columns)
     assert any(row[2] == "note_catalog" and row[3] == "note_id" for row in foreign_keys)
     assert ("note_id", "revision", "content_hash") in unique_column_sets
+    assert "seal" not in columns
 
     with sqlite3.connect(store.db_path) as connection:
         connection.execute("PRAGMA foreign_keys = ON")
@@ -260,132 +260,55 @@ def test_approval_and_catalog_state_roll_back_in_one_sqlite_transaction(
     ) is False
 
 
-def test_editing_approved_clean_note_invalidates_approval_and_marks_derivative(
+def test_clean_claim_conflict_leaves_no_partial_ledger_approval(
     approval_services,
 ) -> None:
-    approvals, ledger, notes, store, clean_path, relative_path = approval_services
-    old_hash = content_hash_for_markdown(clean_path.read_text(encoding="utf-8"))
-    derived_markdown = _markdown(
-        note_id=DERIVED_NOTE_ID,
-        title="Derivado",
-        body="# Derivado\n",
-        origins=[
-            {
-                "note_id": NOTE_ID,
-                "revision": 1,
-                "content_hash": old_hash,
-                "path": relative_path,
-            }
-        ],
+    approvals, _ledger, _notes, store, _path, _relative = approval_services
+    request = approvals.request_approval(NOTE_ID)
+    transition = approvals.transition_approvals
+    transition.begin_review(
+        NOTE_ID,
+        "3_capturado",
+        "4_procesado",
+        request.revision,
+        request.content_hash,
+        "otra-persona",
     )
-    derived_path = notes.vault.output_dir / "derivado.md"
-    derived_path.write_text(derived_markdown, encoding="utf-8")
-    derived_relative = derived_path.relative_to(
-        notes.vault.config.vault_path
-    ).as_posix()
-    _register(
-        store,
-        note_id=DERIVED_NOTE_ID,
-        relative_path=derived_relative,
-        markdown=derived_markdown,
-    )
-    approvals.approve_clean(NOTE_ID, 1, "emilio")
 
-    updated = notes.update_note_body(NOTE_ID, 1, "# Cambio semántico\n")
+    with pytest.raises(ReviewClaimConflictError):
+        approvals.approve_clean(NOTE_ID, request.revision, "emilio")
 
-    assert updated.revision == 2
-    assert updated.content_hash != old_hash
-    metadata, _body = parse_frontmatter(clean_path.read_text(encoding="utf-8"))
-    assert metadata["revision"] == updated.revision
-    assert metadata["revision"] == store.get_note(NOTE_ID)["revision"]
-    assert ledger.is_current(NOTE_ID, 1, old_hash) is False
-    assert approvals.is_eligible(NOTE_ID, 2, updated.content_hash) is False
+    assert store._connection.execute(
+        "SELECT COUNT(*) FROM note_approvals WHERE note_id = ?", (NOTE_ID,)
+    ).fetchone()[0] == 0
+    assert store._connection.execute(
+        "SELECT COUNT(*) FROM transition_approvals WHERE artifact_id = ?", (NOTE_ID,)
+    ).fetchone()[0] == 0
     assert store.get_note(NOTE_ID)["status"] == "pending_review"
-    staleness = store.list_derived_staleness(NOTE_ID)
-    assert staleness == [
-        {
-            "origin_note_id": NOTE_ID,
-            "derived_note_id": DERIVED_NOTE_ID,
-            "marked_at": staleness[0]["marked_at"],
-        }
-    ]
 
 
-def test_console_edit_of_approved_clean_note_persists_pending_review_and_lists_it(
+def test_transition_rejection_rolls_back_clean_ledger_and_catalog(
     approval_services,
+    monkeypatch,
 ) -> None:
-    approvals, ledger, notes, store, clean_path, _relative = approval_services
-    backend = FuenteConsoleBackend(notes.vault.config.vault_path)
-    bridge = FuentePyWebViewApi(backend)
-    try:
-        pending_markdown = clean_path.read_text(encoding="utf-8")
-        approved_markdown = pending_markdown.replace(
-            "status: pending_review", "status: approved", 1
-        )
-        clean_path.write_text(approved_markdown, encoding="utf-8")
-        store._connection.execute(
-            "UPDATE note_catalog SET content_hash = ? WHERE note_id = ?",
-            (content_hash_for_markdown(approved_markdown), NOTE_ID),
-        )
-        store._connection.commit()
-        approvals.approve_clean(NOTE_ID, 1, "emilio")
-        before_bytes = clean_path.read_bytes()
-        editor = bridge.get_note_editor(NOTE_ID)
-
-        updated = bridge.update_note_body(
-            NOTE_ID,
-            editor["revision"],
-            editor["body_markdown"] + "\nCambio desde la bandeja.\n",
-        )
-
-        after_bytes = clean_path.read_bytes()
-        metadata, _body = parse_frontmatter(
-            clean_path.read_text(encoding="utf-8")
-        )
-        catalog = store.get_note(NOTE_ID)
-        current_note = notes.get_note(NOTE_ID)
-
-        assert updated["revision"] == 2
-        assert before_bytes != after_bytes
-        assert metadata["revision"] == updated["revision"]
-        assert metadata["status"] == "pending_review"
-        assert catalog["status"] == "pending_review"
-        assert catalog["revision"] == 2
-        assert ledger.is_current(
-            NOTE_ID, 1, content_hash_for_markdown(before_bytes.decode("utf-8"))
-        ) is False
-        pending = bridge.get_pending_notes()
-        assert any(item["document_id"] == NOTE_ID for item in pending["pending_notes"])
-        assert current_note.status == "pending_review"
-    finally:
-        backend._job_store.close()
-
-
-def test_failed_invalidation_transaction_restores_markdown_and_approval(
-    approval_services,
-) -> None:
-    approvals, ledger, notes, store, clean_path, _relative = approval_services
-    approved = approvals.approve_clean(NOTE_ID, 1, "emilio")
-    original_bytes = clean_path.read_bytes()
-    store._connection.execute(
-        """
-        CREATE TRIGGER fail_approval_invalidation
-        BEFORE UPDATE OF status ON note_catalog
-        WHEN NEW.status = 'pending_review'
-        BEGIN
-            SELECT RAISE(ABORT, 'forced invalidation rollback');
-        END
-        """
+    approvals, _ledger, _notes, store, _path, _relative = approval_services
+    monkeypatch.setattr(
+        store,
+        "_save_transition_approval_in_transaction",
+        lambda *_args, **_kwargs: None,
     )
 
-    with pytest.raises(sqlite3.IntegrityError, match="forced invalidation rollback"):
-        notes.update_note_body(NOTE_ID, 1, "# Cambio rechazado\n")
+    with pytest.raises(sqlite3.IntegrityError, match="transition approval was rejected"):
+        approvals.approve_clean(NOTE_ID, 1, "emilio")
 
-    assert clean_path.read_bytes() == original_bytes
-    assert store.get_note(NOTE_ID)["revision"] == 1
-    assert store.get_note(NOTE_ID)["status"] == "approved"
-    assert ledger.is_current(NOTE_ID, 1, approved.content_hash) is True
-    assert store.list_derived_staleness(NOTE_ID) == []
+    assert store._connection.execute(
+        "SELECT COUNT(*) FROM note_approvals WHERE note_id = ?", (NOTE_ID,)
+    ).fetchone()[0] == 0
+    assert store._connection.execute(
+        "SELECT COUNT(*) FROM transition_approvals WHERE artifact_id = ?", (NOTE_ID,)
+    ).fetchone()[0] == 0
+    assert store.get_note(NOTE_ID)["status"] == "pending_review"
+
 
 
 def test_direct_markdown_edit_fails_closed_without_trusting_stale_catalog(

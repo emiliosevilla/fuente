@@ -4,13 +4,11 @@ from unittest.mock import patch
 import pytest
 
 from fuente.domain.errors import PathAuthorizationError
-from fuente.domain.frontmatter import parse_frontmatter, serialize_frontmatter
 from fuente.domain.note_catalog import NoteCatalog
 from fuente.domain.paths import AuthorizedPathResolver, document_id_for_relative_path
 from fuente.control_console import FuenteConsoleBackend
 from fuente.core.vault import VaultManager
 from fuente.config import VaultConfig
-from fuente.graph_engine.linker import GraphLinker
 from fuente.infrastructure.sqlite_store import JobStore
 
 
@@ -92,37 +90,6 @@ def test_resolver_uses_canonical_catalog_id_and_legacy_alias_after_move(
         store.close()
 
 
-def test_candidate_identity_outside_reflow_review_remains_rejected(
-    resolver, temp_vault_path
-):
-    relative = "4_procesado/_Other_Review/_candidate.md"
-    document_id = document_id_for_relative_path(relative)
-    candidate = temp_vault_path / relative
-    candidate.parent.mkdir(parents=True)
-    candidate.write_text(
-        serialize_frontmatter(
-            {
-                "schema_version": 3,
-                "note_id": document_id,
-                "note_type": "concept",
-                "title": "Not a reflow candidate",
-                "date": "2026-08-18",
-                "author": "test",
-                "tags": [],
-                "issue": "_Sin_Cuestion",
-                "status": "pending_review",
-                "origins": [],
-                "history": [],
-            }
-        )
-        + "# Not a reflow candidate\n",
-        encoding="utf-8",
-    )
-
-    with pytest.raises(PathAuthorizationError):
-        resolver.resolve_note_id(document_id)
-
-
 def test_path_qualified_wikilink_disambiguates_duplicate_basenames(resolver, temp_vault_path):
     first = temp_vault_path / "4_procesado" / "tema-a" / "nota.md"
     second = temp_vault_path / "4_procesado" / "tema-b" / "nota.md"
@@ -193,21 +160,6 @@ def test_rejects_non_basename_quarantine_identifier(resolver, quarantine_id):
         resolver.resolve_quarantine(quarantine_id)
 
 
-def test_note_handlers_accept_vault_relative_note_identity(temp_vault_path):
-    backend = FuenteConsoleBackend(temp_vault_path)
-    note = backend.vault.output_dir / "Cuestion" / "nota.md"
-    note.parent.mkdir()
-    note.write_text("original", encoding="utf-8")
-
-    result = backend.handle_action(
-        "save_note",
-        {"path": "4_procesado/Cuestion/nota.md", "content": "updated"},
-    )
-
-    assert result["status"] == "saved"
-    assert note.read_text(encoding="utf-8") == "updated"
-
-
 def test_copy_reader_note_uses_authorized_note_and_native_clipboard(temp_vault_path):
     backend = FuenteConsoleBackend(temp_vault_path)
     note = backend.vault.output_dir / "Cuestion" / "nota.md"
@@ -229,23 +181,6 @@ def test_copy_reader_note_uses_authorized_note_and_native_clipboard(temp_vault_p
         text=True,
         check=True,
     )
-
-
-def test_note_handlers_reject_absolute_paths_without_mutation(temp_vault_path):
-    backend = FuenteConsoleBackend(temp_vault_path)
-    external = temp_vault_path.parent / "outside.md"
-    external.write_text("secret", encoding="utf-8")
-
-    result = backend.handle_action(
-        "save_note",
-        {"path": str(external), "content": "changed"},
-    )
-
-    assert result == {
-        "error": "path_not_authorized",
-        "message": "Path is not authorized",
-    }
-    assert external.read_text(encoding="utf-8") == "secret"
 
 
 def test_note_content_rejects_absolute_path(temp_vault_path):
@@ -272,70 +207,6 @@ def test_restore_rejects_absolute_quarantine_identifier_without_mutation(temp_va
     assert external.read_text(encoding="utf-8") == "secret"
 
 
-def test_save_note_creation_rejects_escaping_issue_symlink(temp_vault_path):
-    backend = FuenteConsoleBackend(temp_vault_path)
-    external_dir = temp_vault_path.parent / "external_notes"
-    external_dir.mkdir()
-    (backend.vault.output_dir / "Escaping").symlink_to(external_dir, target_is_directory=True)
-
-    result = backend.handle_action(
-        "save_note",
-        {"title": "nota", "issue": "Escaping", "content": "content"},
-    )
-
-    assert result == {
-        "error": "path_not_authorized",
-        "message": "Path is not authorized",
-    }
-    assert not (external_dir / "nota.md").exists()
-
-
-def _new_v3_summary() -> str:
-    return serialize_frontmatter(
-        {
-            "schema_version": 3,
-            "note_id": "4ca13d5c-4d78-4f37-8c3c-d1dc530a4dc9",
-            "note_type": "summary",
-            "origin_kind": "meeting",
-            "origins": [
-                {
-                    "note_id": "89a2f4fb-1d7b-4aa1-9793-119970502a00",
-                    "revision": 1,
-                    "content_hash": "a" * 64,
-                    "path": "3_capturado/origen.md",
-                }
-            ],
-        }
-    ) + "# Sumario\n"
-
-
-def test_save_note_creation_without_origin_rejects_before_writing(temp_vault_path):
-    backend = FuenteConsoleBackend(temp_vault_path)
-
-    result = backend.handle_action(
-        "save_note", {"title": "sin origen", "content": "texto"}
-    )
-
-    assert result["error"] == "origin_required"
-    assert list(backend.vault.output_dir.rglob("*.md")) == []
-
-
-def test_save_note_creation_preserves_complete_v3_origins(temp_vault_path):
-    backend = FuenteConsoleBackend(temp_vault_path)
-    content = _new_v3_summary()
-
-    result = backend.handle_action(
-        "save_note", {"title": "sumario", "content": content}
-    )
-
-    assert result["status"] == "created"
-    path = temp_vault_path / result["path"]
-    metadata, _body = parse_frontmatter(path.read_text(encoding="utf-8"))
-    assert metadata["schema_version"] == 3
-    assert metadata["origins"] == parse_frontmatter(content)[0]["origins"]
-    assert "sources" not in metadata
-
-
 def test_legacy_merge_alias_is_removed_and_fails_closed(temp_vault_path):
     backend = FuenteConsoleBackend(temp_vault_path)
 
@@ -345,26 +216,6 @@ def test_legacy_merge_alias_is_removed_and_fails_closed(temp_vault_path):
         "error": "action_not_allowed",
         "message": "Acción no permitida",
     }
-
-
-def test_move_rejects_escaping_destination_symlink_with_stable_error(temp_vault_path):
-    backend = FuenteConsoleBackend(temp_vault_path)
-    source = backend.vault.output_dir / "nota.md"
-    source.write_text("content", encoding="utf-8")
-    external_dir = temp_vault_path.parent / "external_notes"
-    external_dir.mkdir()
-    (backend.vault.output_dir / "Escaping").symlink_to(external_dir, target_is_directory=True)
-
-    result = backend.handle_action(
-        "move_note",
-        {"path": "4_procesado/nota.md", "target_issue": "Escaping"},
-    )
-
-    assert result == {
-        "error": "path_not_authorized",
-        "message": "Path is not authorized",
-    }
-    assert source.read_text(encoding="utf-8") == "content"
 
 
 def test_restore_rejects_escaping_destination_symlink_with_stable_error(temp_vault_path):
@@ -436,41 +287,3 @@ def test_wikilink_rejects_ambiguous_basename(temp_vault_path):
     assert children[0]["type"] == "wikilink"
     assert children[0]["document_id"] == ""
     assert children[0].get("broken") is True
-
-
-def test_wikilink_callback_resolves_graph_qualified_target_end_to_end(temp_vault_path):
-    backend = FuenteConsoleBackend(temp_vault_path)
-    output = backend.vault.output_dir
-    contratos = output / "Contratos" / "Obligaciones.md"
-    historia = output / "Historia" / "Obligaciones.md"
-    source = output / "Contratos" / "Referencia.md"
-    contratos.parent.mkdir(parents=True)
-    historia.parent.mkdir(parents=True)
-    contratos.write_text(
-        serialize_frontmatter({"title": "Obligaciones", "issue": "Contratos", "status": "approved"})
-        + "# Obligaciones\n\nContrato A.\n",
-        encoding="utf-8",
-    )
-    historia.write_text(
-        serialize_frontmatter({"title": "Obligaciones", "issue": "Historia", "status": "approved"})
-        + "# Obligaciones\n\nHecho B.\n",
-        encoding="utf-8",
-    )
-
-    linked = GraphLinker(output).auto_link_content(
-        serialize_frontmatter({"title": "Referencia", "issue": "Contratos", "status": "approved"})
-        + "Referencia a Obligaciones.",
-        "Referencia",
-        current_relative_path="Contratos/Referencia.md",
-    )
-    assert "[[Contratos/Obligaciones" in linked
-    source.write_text(linked, encoding="utf-8")
-
-    source_id = document_id_for_relative_path("4_procesado/Contratos/Referencia.md")
-    target_id = document_id_for_relative_path("4_procesado/Contratos/Obligaciones.md")
-    result = backend.get_note_content_html(source_id)
-
-    assert result["document"][0]["children"][1]["document_id"] == target_id
-    assert result["document"][0]["children"][1].get("broken") is not True
-    assert f'data-document-id="{target_id}"' in result["html"]
-    assert "broken-link" not in result["html"]

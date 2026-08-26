@@ -27,8 +27,7 @@ from fuente.infrastructure.sqlite_store import JobStore
 from fuente.ram_governor.governor import RAMGovernor
 from fuente.rag.chroma_store import ChromaStore
 from fuente.rag.semantic_chunker import SemanticChunker
-from fuente.graph_engine.atomic_generator import AtomicNoteGenerator
-from fuente.graph_engine.linker import GraphLinker
+from fuente.application.note_generation import AtomicNoteGenerator
 
 logger = logging.getLogger(__name__)
 
@@ -131,7 +130,7 @@ class ETLPipeline:
     """Orquestador del pipeline ETL de Fuente sobre trabajos (jobs) durables.
 
     Owns the collaborators the pipeline needs (Vault, extractors, index,
-    generator, linker) and wires them into `IngestionApplicationService`, which
+    generator) and wires them into `IngestionApplicationService`, which
     holds the actual stage logic. `process_file` stays as the entry point the
     folder monitor and the console call, but it no longer processes a path
     in-memory: it submits the source as a job and advances that job, so an
@@ -154,11 +153,6 @@ class ETLPipeline:
         )
         self.chunker = SemanticChunker()
         self.atomic_gen = AtomicNoteGenerator(ollama_url=config.ollama_url)
-        # Theme-aware output root — never the flat AppConfig General path.
-        self.linker = GraphLinker(
-            self.vault.output_dir,
-            vault_root=self.vault.config.vault_path,
-        )
         self.job_store = JobStore(config.vault.vault_path)
         self.ingestion = IngestionApplicationService(
             config=config,
@@ -168,7 +162,6 @@ class ETLPipeline:
             chunker=self.chunker,
             chroma=self.chroma,
             atomic_generator=self.atomic_gen,
-            linker=self.linker,
             runtime_policy=self.runtime_policy,
             ram_governor=self.ram_governor,
             copy_to_dirty=self._safe_copy_to_dirty,
@@ -217,13 +210,8 @@ class ETLPipeline:
         self.ingestion.ram_governor = self.ram_governor
 
     def set_active_theme(self, theme_name: str) -> Path:
-        """Switch the Vault theme and rebind collaborators that cache roots."""
+        """Switch the Vault theme and refresh approval paths."""
         theme_dir = self.vault.set_active_theme(theme_name)
-        self.linker = GraphLinker(
-            self.vault.output_dir,
-            vault_root=self.vault.config.vault_path,
-        )
-        self.ingestion.linker = self.linker
         self.ingestion.refresh_approval_scope()
         return theme_dir
 
@@ -320,8 +308,8 @@ class ETLPipeline:
         max_retries=QuarantineService.TRANSIENT_IO_MAX_ATTEMPTS,
         delay_sec=QuarantineService.TRANSIENT_IO_INITIAL_BACKOFF_SECONDS,
     )
-    def _safe_copy_to_dirty(self, raw_file_path: Path) -> Path:
-        return self.vault.copy_to_dirty(raw_file_path)
+    def _safe_copy_to_dirty(self, raw_file_path: Path, **approval) -> Path:
+        return self.vault.copy_to_dirty(raw_file_path, **approval)
 
 
 if HAS_WATCHDOG:

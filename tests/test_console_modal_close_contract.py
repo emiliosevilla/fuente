@@ -9,11 +9,8 @@ HTML = (ROOT / "consola_preview.html").read_text(encoding="utf-8")
 
 EXPECTED_MODAL_IDS = {
     "modal-reader",
-    "modal-reader-graph",
-    "modal-fusion",
     "modal-create-theme",
     "modal-export-options",
-    "modal-chat",
     "modal-quarantine",
     "modal-stat-input",
     "modal-stat-notes",
@@ -46,7 +43,12 @@ class _ModalAuditParser(HTMLParser):
             assert modal_id not in self.modals, f"modal duplicado: {modal_id}"
             self.current_modal = modal_id
             self.modal_depth = 1
-            self.modals[modal_id] = {"close_buttons": [], "buttons": []}
+            self.modals[modal_id] = {
+                "attributes": attributes,
+                "close_buttons": [],
+                "buttons": [],
+                "title_id": None,
+            }
             return
 
         if self.current_modal is None:
@@ -54,12 +56,19 @@ class _ModalAuditParser(HTMLParser):
 
         if tag == "div":
             self.modal_depth += 1
+            if "modal-title" in classes:
+                self.modals[self.current_modal]["title_id"] = attributes.get("id")
         elif tag == "button":
             self._button = {
                 "class": classes,
                 "command": attributes.get("data-onclick-command", ""),
+                "aria_label": attributes.get("aria-label"),
+                "type": attributes.get("type"),
+                "svg_count": 0,
                 "text": [],
             }
+        elif tag == "svg" and self._button is not None:
+            self._button["svg_count"] += 1
 
     def handle_data(self, data):
         if self._button is not None:
@@ -89,14 +98,25 @@ def _audit_modals():
     return parser.modals
 
 
-def test_console_contains_complete_modal_inventory_with_one_x_close_each():
+def test_console_contains_complete_accessible_modal_inventory():
     modals = _audit_modals()
 
     assert set(modals) == EXPECTED_MODAL_IDS
     for modal_id, modal in modals.items():
+        attributes = modal["attributes"]
+        assert attributes.get("role") == "dialog", modal_id
+        assert attributes.get("aria-modal") == "true", modal_id
+        assert attributes.get("aria-hidden") == "true", modal_id
+        assert attributes.get("aria-labelledby") == modal["title_id"], modal_id
+        assert modal["title_id"], modal_id
         assert len(modal["close_buttons"]) == 1, modal_id
         close_button = modal["close_buttons"][0]
         assert close_button["command"] == f"closeModal('{modal_id}')"
+        assert close_button["type"] == "button", modal_id
+        assert close_button["aria_label"], modal_id
+        assert close_button["aria_label"].startswith("Cerrar "), modal_id
+        assert close_button["svg_count"] == 1, modal_id
+        assert close_button["text"] == "", modal_id
 
 
 def test_console_has_no_redundant_text_close_buttons():
@@ -138,7 +158,7 @@ def test_console_preserves_cancel_and_operational_footer_actions():
     approval_commands = {
         button["command"] for button in modals["modal-approval"]["buttons"]
     }
-    assert "saveApprovalMetadata()" in approval_commands
+    assert "saveApprovalMetadata()" not in approval_commands
     assert "approveSelectedNote()" in approval_commands
 
 

@@ -7,12 +7,14 @@ import sqlite3
 import os
 import sys
 import threading
-from uuid import UUID
-from pathlib import Path, PureWindowsPath
+import logging
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, Mapping, Optional
 
-from fuente.application.approval import ApprovalApplicationService
-from fuente.application.discussion import DiscussionApplicationService
+from fuente.application.approval import (
+    ApprovalApplicationService,
+    TransitionApprovalService,
+)
 from fuente.application.sharing import SharingApplicationService
 from fuente.application.job_control import (
     decode_cursor,
@@ -22,14 +24,8 @@ from fuente.application.job_control import (
     validate_limit,
     validate_reason,
 )
-from fuente.application.notes import MAX_BODY_MARKDOWN_CHARS
 from fuente.domain.approvals import normalize_reviewer
-from fuente.domain.metadata_form import (
-    MetadataValidationError,
-    normalize_metadata_write_fields,
-    project_metadata_v3,
-)
-from fuente.domain.origins import LegacyOriginsMigrationRequiredError
+from fuente.domain.metadata_form import project_metadata_v3
 from fuente.domain.jobs import JobConflictError, JobNotFoundError, JobStoreBusyError
 from fuente.domain.errors import (
     CanonicalEligibilityError,
@@ -37,14 +33,17 @@ from fuente.domain.errors import (
     NoteRevisionConflictError,
     OutputApprovalRequiredError,
     PathAuthorizationError,
+    ReviewClaimConflictError,
 )
 from fuente.domain.sync import SyncDirection
+from fuente.infrastructure.sqlite_store import UIStateStore
 
 if TYPE_CHECKING:
     from fuente.control_console import FuenteConsoleBackend
 
 
 ErrorResult = dict[str, str]
+logger = logging.getLogger(__name__)
 
 
 class FuentePyWebViewApi:
@@ -55,10 +54,6 @@ class FuentePyWebViewApi:
         "flush_sources": {},
         "step1_flush": {},
         "step2_transcribe": {},
-        "step3_structure": {},
-        "reflow_links": {},
-        "evaluate_refinement": {"candidate_id": str, "expected_revision": int},
-        "reindex_notes": {},
         "stat_ram": {},
         "stat_input": {},
         "stat_notes": {},
@@ -74,6 +69,14 @@ class FuentePyWebViewApi:
     def __init__(self, backend: FuenteConsoleBackend):
         self.backend = backend
         self._window: Any = None
+        self._close_lock = threading.RLock()
+        self._pending_close_action: tuple[str, str | None] | None = None
+        self._close_action_scheduled = False
+        self._close_action_generation = 0
+        self._close_authorized = False
+        self._ui_state_pending_count = 0
+        self._ui_state_drain_limit = 0
+        self._ui_state_writes_inflight = 0
 
     @staticmethod
     def _error(code: str, message: str) -> ErrorResult:
@@ -88,25 +91,6 @@ class FuentePyWebViewApi:
         return dict(payload)
 
     @classmethod
-    def _metadata_write_payload(
-        cls, payload: dict[str, Any]
-    ) -> dict[str, Any] | ErrorResult:
-        """Normalize temporary v2 names without allowing incomplete identity."""
-        try:
-            return normalize_metadata_write_fields(payload)
-        except LegacyOriginsMigrationRequiredError:
-            return cls._error(
-                "legacy_origins_unmigrated",
-                "Legacy origins require complete OriginRef identity",
-            )
-        except MetadataValidationError as error:
-            return {
-                "error": error.code,
-                "message": str(error),
-                "field_errors": error.field_errors,
-            }
-
-    @classmethod
     def _text(cls, value: object, field: str, *, required: bool = True) -> str | ErrorResult:
         if not isinstance(value, str):
             return cls._error("invalid_payload", f"{field} must be a string")
@@ -116,8 +100,8 @@ class FuentePyWebViewApi:
         return value
 
     @classmethod
-    def _editor_note_id(cls, value: object) -> str | ErrorResult:
-        """Validate an opaque editor ID without normalizing or resolving paths."""
+    def _note_id(cls, value: object) -> str | ErrorResult:
+        """Validate an opaque note ID without normalizing or resolving paths."""
         if not isinstance(value, str):
             return cls._error("invalid_payload", "document_id must be a string")
         if not value.strip() or "\x00" in value or value.strip() in {".", ".."}:
@@ -138,60 +122,268 @@ class FuentePyWebViewApi:
             return cls._error("path_not_authorized", "Path is not authorized")
         return value
 
-    @classmethod
-    def _editor_body(cls, value: object) -> str | ErrorResult:
-        if not isinstance(value, str):
-            return cls._error("invalid_payload", "body_markdown must be a string")
-        if len(value) > MAX_BODY_MARKDOWN_CHARS:
-            return cls._error(
-                "invalid_payload",
-                "body_markdown exceeds maximum length of "
-                f"{MAX_BODY_MARKDOWN_CHARS} characters",
-            )
-        return value
-
-    @classmethod
-    def _validate_reflow_scope_payload(
-        cls, payload: dict[str, Any]
-    ) -> ErrorResult | None:
-        scope_payload = payload
-        if "scope" in payload:
-            if set(payload) != {"scope"} or not isinstance(payload["scope"], Mapping):
-                return cls._error("invalid_payload", "scope must be an object")
-            scope_payload = dict(payload["scope"])
-        allowed = {"document_id", "theme", "issue", "candidate_id", "candidate_revision"}
-        if set(scope_payload) - allowed:
-            return cls._error("invalid_payload", "Unsupported scope field")
-        for field, value in scope_payload.items():
-            if value is None:
-                continue
-            if field == "candidate_revision":
-                if isinstance(value, bool) or not isinstance(value, int) or value < 1:
-                    return cls._error("invalid_payload", "candidate_revision must be a positive integer")
-                continue
-            if not isinstance(value, str):
-                return cls._error("invalid_payload", "Scope values must be strings")
-            if not value.strip():
-                return cls._error("invalid_payload", f"{field} cannot be empty")
-            path = Path(value)
-            if (
-                path.is_absolute()
-                or PureWindowsPath(value).drive
-                or path.name != value
-                or value in {".", ".."}
-                or "/" in value
-                or "\\" in value
-                or "\x00" in value
-                or (field == "document_id" and value.endswith(".md"))
-            ):
-                return cls._error("path_not_authorized", "Path is not authorized")
-        return None
-
     def set_window(self, window: Any) -> None:
         self._window = window
 
-    def get_initial_state(self) -> dict[str, Any]:
+    def ui_state_pending_changed(self, count: object) -> dict[str, int] | ErrorResult:
+        """Mirror only queue length so native close never blocks the WebKit thread."""
+        if isinstance(count, bool) or not isinstance(count, int) or not 0 <= count <= 64:
+            return self._error("invalid_payload", "pending UI state count is invalid")
+        with self._close_lock:
+            started_during_close = (
+                self._pending_close_action is not None
+                and count > self._ui_state_drain_limit
+            )
+            self._ui_state_pending_count = count
+            self._ui_state_drain_limit = count
+            if started_during_close:
+                self._invalidate_close_schedule_locked()
+                return self._error(
+                    "ui_state_closing",
+                    "El cierre se aplazó porque empezó un cambio nuevo de interfaz.",
+                )
+        return {"pending": count}
+
+    def _has_pending_ui_state(self) -> bool:
+        with self._close_lock:
+            return self._ui_state_pending_count > 0 or self._ui_state_writes_inflight > 0
+
+    def _invalidate_close_schedule_locked(self) -> None:
+        self._close_action_generation += 1
+        self._close_action_scheduled = False
+        self._close_authorized = False
+
+    def _begin_close_action(self, action: tuple[str, str | None]) -> ErrorResult | None:
+        with self._close_lock:
+            if self._pending_close_action is None:
+                self._pending_close_action = action
+                self._ui_state_drain_limit = self._ui_state_pending_count
+                return None
+            if self._pending_close_action == action:
+                return None
+            return self._error(
+                "close_action_pending",
+                "Fuente ya está completando otra acción de cierre.",
+            )
+
+    def _request_ui_state_drain(self) -> bool:
+        runner = getattr(self._window, "run_js", None)
+        if not callable(runner):
+            return False
+
+        def drain() -> None:
+            try:
+                runner(
+                    "if (typeof prepareUiStateForNativeClose === 'function') "
+                    "prepareUiStateForNativeClose();"
+                )
+            except Exception as error:
+                logger.error("Could not request pending UI state drain: %s", error)
+
+        threading.Timer(0.01, drain).start()
+        return True
+
+    @staticmethod
+    def _restart_argv(vault_path: str) -> list[str]:
+        arguments: list[str] = []
+        skip_next = False
+        for argument in sys.argv[1:]:
+            if skip_next:
+                skip_next = False
+                continue
+            if argument == "--vault":
+                skip_next = True
+                continue
+            if argument.startswith("--vault="):
+                continue
+            arguments.append(argument)
+        if getattr(sys, "frozen", False):
+            return [sys.executable, "--runtime", *arguments, "--vault", vault_path]
+        return [sys.executable, sys.argv[0], *arguments, "--vault", vault_path]
+
+    def _schedule_close_action(self) -> dict[str, str]:
+        with self._close_lock:
+            action = self._pending_close_action
+            if action is None:
+                return self._error("close_not_pending", "No hay un cierre pendiente.")
+            if self._ui_state_pending_count or self._ui_state_writes_inflight:
+                return self._error(
+                    "ui_state_pending",
+                    "Fuente sigue guardando cambios de interfaz.",
+                )
+            if self._close_action_scheduled:
+                kind, _vault_path = action
+                return {"status": "restarting" if kind == "restart" else "closing"}
+            self._close_action_scheduled = True
+            self._close_action_generation += 1
+            generation = self._close_action_generation
+
+        kind, vault_path = action
+
+        def finish() -> None:
+            with self._close_lock:
+                if (
+                    generation != self._close_action_generation
+                    or not self._close_action_scheduled
+                    or self._pending_close_action != action
+                    or self._ui_state_pending_count
+                    or self._ui_state_writes_inflight
+                ):
+                    return
+                self._close_authorized = True
+            if self._window is not None:
+                self._window.destroy()
+            if kind == "restart" and vault_path is not None:
+                os.execv(sys.executable, self._restart_argv(vault_path))
+
+        threading.Timer(0.15, finish).start()
+        return {"status": "restarting" if kind == "restart" else "closing"}
+
+    def _handle_window_closing(self) -> bool:
+        """PyWebView closing event: False is the documented cancellation signal."""
+        with self._close_lock:
+            if self._close_authorized:
+                return True
+        error = self._begin_close_action(("close", None))
+        if error is not None:
+            self._request_ui_state_drain()
+            return False
+        if not self._has_pending_ui_state() and not callable(
+            getattr(self._window, "run_js", None)
+        ):
+            with self._close_lock:
+                self._close_action_scheduled = True
+                self._close_authorized = True
+            return True
+        self._request_ui_state_drain()
+        return False
+
+    def complete_pending_close(self) -> dict[str, str] | ErrorResult:
+        """Complete a native close/restart only after JS reports an empty queue."""
+        if self._has_pending_ui_state():
+            self._request_ui_state_drain()
+            return self._error(
+                "ui_state_pending",
+                "Fuente sigue guardando cambios de interfaz; el cierre continúa cancelado.",
+            )
+        return self._schedule_close_action()
+
+    def get_initial_state(self) -> dict[str, object]:
         return self.backend.get_initial_state_dict()
+
+    def get_ui_state(self, scope: object, owner: object, key: object) -> dict[str, Any]:
+        values = [
+            self._text(scope, "scope"),
+            self._text(owner, "owner"),
+            self._text(key, "key"),
+        ]
+        error = next((value for value in values if isinstance(value, dict)), None)
+        if error is not None:
+            return error
+        try:
+            state = UIStateStore(self._ui_job_store())
+            return {"value": state.get(*values)}
+        except (TypeError, ValueError) as error:
+            return self._error("invalid_payload", str(error))
+
+    def set_ui_state(
+        self, scope: object, owner: object, key: object, value: object
+    ) -> dict[str, Any]:
+        values = [
+            self._text(scope, "scope"),
+            self._text(owner, "owner"),
+            self._text(key, "key"),
+        ]
+        error = next((item for item in values if isinstance(item, dict)), None)
+        if error is not None:
+            return error
+        with self._close_lock:
+            if (
+                self._pending_close_action is not None
+                and self._ui_state_pending_count == 0
+            ):
+                self._invalidate_close_schedule_locked()
+                return self._error(
+                    "ui_state_closing",
+                    "La escritura no empezó porque Fuente estaba cerrando; el cierre se aplazó.",
+                )
+            self._ui_state_writes_inflight += 1
+        try:
+            UIStateStore(self._ui_job_store()).set(*values, value)
+            return {"status": "saved"}
+        except (TypeError, ValueError) as error:
+            return self._error("invalid_payload", str(error))
+        finally:
+            with self._close_lock:
+                self._ui_state_writes_inflight -= 1
+                request_drain = (
+                    self._pending_close_action is not None
+                    and self._ui_state_writes_inflight == 0
+                )
+            if request_drain:
+                self._request_ui_state_drain()
+
+    def _ui_job_store(self):
+        store = getattr(self.backend, "_job_store", None)
+        lifecycle = getattr(self.backend, "lifecycle", None)
+        pipeline = getattr(lifecycle, "pipeline", None)
+        return (
+            store
+            or getattr(pipeline, "job_store", None)
+            or self.backend.get_notes_service().job_store
+        )
+
+    def begin_transition_review(
+        self,
+        artifact_id: object,
+        source_stage: object,
+        target_stage: object,
+        revision: object,
+        content_hash: object,
+        reviewer: object,
+    ) -> dict[str, Any]:
+        """Claim one exact adjacent transition for human review."""
+        try:
+            claim = TransitionApprovalService(self._ui_job_store()).begin_review(
+                artifact_id,
+                source_stage,
+                target_stage,
+                revision,
+                content_hash,
+                reviewer,
+            )
+            return dict(claim.__dict__)
+        except ReviewClaimConflictError as error:
+            return self._error(error.code, str(error))
+        except (TypeError, ValueError) as error:
+            return self._error("invalid_payload", str(error))
+
+    def approve_transition(
+        self,
+        artifact_id: object,
+        source_stage: object,
+        target_stage: object,
+        revision: object,
+        content_hash: object,
+        reviewer: object,
+    ) -> dict[str, Any]:
+        """Approve the exact transition currently claimed by this reviewer."""
+        try:
+            approval = TransitionApprovalService(self._ui_job_store()).approve(
+                artifact_id,
+                source_stage,
+                target_stage,
+                revision,
+                content_hash,
+                reviewer,
+            )
+            return dict(approval.__dict__)
+        except OutputApprovalRequiredError as error:
+            return self._error(error.code, str(error))
+        except JobStoreBusyError:
+            return self._error("approval_busy", "Approval storage is busy; retry")
+        except (sqlite3.Error, TypeError, ValueError) as error:
+            return self._error("approval_failed", str(error))
 
     def get_settings_info(self) -> dict[str, Any]:
         return self.backend.get_settings_info()
@@ -403,7 +595,6 @@ class FuentePyWebViewApi:
         document_id: object,
         expected_revision: object,
         export_format: object,
-        metadata_patch: object = None,
     ) -> dict[str, Any] | ErrorResult:
         """Approve canonically, then prepare a browser download projection."""
         note = self._text(document_id, "document_id")
@@ -419,29 +610,11 @@ class FuentePyWebViewApi:
         }:
             return self._error("invalid_payload", "format is not supported")
 
-        normalized_metadata = None
-        if metadata_patch is not None:
-            if not isinstance(metadata_patch, Mapping):
-                return self._error("invalid_payload", "metadata_patch must be an object")
-            parsed = self._payload(metadata_patch)
-            if isinstance(parsed, dict) and "error" in parsed:
-                return parsed
-            assert isinstance(parsed, dict)
-            normalized = self._metadata_write_payload(parsed)
-            if "error" in normalized:
-                return normalized
-            validated = self.backend.handle_action(
-                "validate_note_metadata", {"metadata": normalized}
-            )
-            if validated.get("error"):
-                return validated
-            normalized_metadata = validated.get("metadata", normalized)
         try:
             return self.backend.approve_and_export(
                 note,
                 int(expected_revision),
                 export_format.strip().lower(),
-                metadata_patch=normalized_metadata,
             )
         except (NoteRevisionConflictError, InvalidNoteTransitionError) as error:
             return {"error": error.code, "message": str(error)}
@@ -605,14 +778,24 @@ class FuentePyWebViewApi:
         result = validator(vault)
         if result.get("error"):
             return result
-
-        def relaunch() -> None:
-            if self._window is not None:
-                self._window.destroy()
-            os.execv(sys.executable, [sys.executable, "--vault", result["vault_path"]])
-
-        threading.Timer(0.15, relaunch).start()
-        return {"status": "restarting", "vault_path": result["vault_path"]}
+        action = ("restart", result["vault_path"])
+        action_error = self._begin_close_action(action)
+        if action_error is not None:
+            return action_error
+        pending = self._has_pending_ui_state()
+        requested = self._request_ui_state_drain()
+        if pending:
+            return self._error(
+                "ui_state_pending",
+                "Fuente sigue guardando cambios de interfaz; el reinicio está cancelado hasta recuperarlos.",
+            )
+        response = (
+            {"status": "restarting"}
+            if requested
+            else self._schedule_close_action()
+        )
+        response["vault_path"] = result["vault_path"]
+        return response
 
     def install_obsidian(self) -> dict[str, Any]:
         action = getattr(self.backend, "install_obsidian", None)
@@ -625,10 +808,12 @@ class FuentePyWebViewApi:
         if isinstance(parsed, dict) and "error" in parsed:
             return parsed
         assert isinstance(parsed, dict)
-        if set(parsed) != {"target_path"}:
-            return self._error("invalid_payload", "Se requiere la ruta completa del Vault.")
+        if set(parsed) != {"target_path", "consent"}:
+            return self._error("invalid_payload", "Se requieren la ruta completa y el consentimiento.")
         if not isinstance(parsed["target_path"], str) or not parsed["target_path"].strip():
             return self._error("invalid_payload", "target_path debe ser texto no vacío")
+        if parsed["consent"] is not True:
+            return self._error("consent_required", "Debes confirmar la configuración de Obsidian.")
         action = getattr(self.backend, "create_vault", None)
         if not callable(action):
             return self._error("setup_not_available", "La creación guiada sólo está disponible durante la configuración inicial.")
@@ -691,25 +876,6 @@ class FuentePyWebViewApi:
             return theme
         return self.backend.handle_action("create_theme", {"theme_name": theme})
 
-    def run_optimized_cycle(self, issue_id: object = "") -> dict[str, Any]:
-        issue = self._text(issue_id, "issue_id", required=False)
-        if isinstance(issue, dict):
-            return issue
-        return self.backend.handle_action("run_optimized_cycle", {"target_issue": issue or None})
-
-    def reflow_links(self, scope_payload: object) -> dict[str, Any]:
-        """Run one validated, on-demand link reflow scope."""
-        parsed = self._payload(scope_payload)
-        if isinstance(parsed, dict) and "error" in parsed:
-            return parsed
-        assert isinstance(parsed, dict)
-        validation_error = self._validate_reflow_scope_payload(parsed)
-        if validation_error is not None:
-            return validation_error
-        if "scope" in parsed:
-            parsed = dict(parsed["scope"])
-        return self.backend.reflow_links(parsed)
-
     def get_pending_notes(self) -> dict[str, Any]:
         return self.backend.handle_action("get_pending_notes", {})
 
@@ -734,136 +900,6 @@ class FuentePyWebViewApi:
             response = dict(response)
             response["metadata"] = project_metadata_v3(metadata)
         return response
-
-    def get_note_editor(self, note_id: object) -> dict[str, Any]:
-        """Return the canonical revisioned Markdown editor payload."""
-        document_id = self._editor_note_id(note_id)
-        if isinstance(document_id, dict):
-            return document_id
-        try:
-            return self.backend.get_notes_service().get_editor_document(document_id)
-        except PathAuthorizationError as error:
-            return {"error": error.code, "message": str(error)}
-        except (TypeError, ValueError) as error:
-            return self._error("invalid_payload", str(error))
-
-    def get_fusion_candidates(self, issue: object = None, limit: object = 25) -> dict[str, Any]:
-        """Return deterministic fusion candidates for the guided reader flow."""
-        normalized_issue = None
-        if issue is not None:
-            normalized_issue = self._text(issue, "issue")
-            if isinstance(normalized_issue, dict):
-                return normalized_issue
-        if isinstance(limit, bool) or not isinstance(limit, int) or limit < 0:
-            return self._error("invalid_payload", "limit must be a non-negative integer")
-        try:
-            return self.backend.get_fusion_candidates(
-                issue=normalized_issue,
-                limit=limit,
-            )
-        except PathAuthorizationError as error:
-            return {"error": error.code, "message": str(error)}
-        except (TypeError, ValueError) as error:
-            return self._error("invalid_payload", str(error))
-
-    def preview_fusion(
-        self, document_ids: object, title: object, issue_id: object
-    ) -> dict[str, Any] | ErrorResult:
-        """Build a read-only fusion preview from opaque source IDs."""
-        if not isinstance(document_ids, list):
-            return self._error("invalid_payload", "document_ids must be a list")
-        if len(document_ids) < 2:
-            return self._error("invalid_payload", "document_ids must contain at least two IDs")
-        normalized_ids: list[str] = []
-        for document_id in document_ids:
-            normalized = self._editor_note_id(document_id)
-            if isinstance(normalized, dict):
-                return normalized
-            normalized_ids.append(normalized)
-        normalized_title = self._text(title, "title")
-        normalized_issue = self._text(issue_id, "issue_id")
-        if isinstance(normalized_title, dict):
-            return normalized_title
-        if isinstance(normalized_issue, dict):
-            return normalized_issue
-        try:
-            return self.backend.preview_fusion(
-                normalized_ids,
-                normalized_title,
-                normalized_issue,
-            )
-        except (PathAuthorizationError, NoteRevisionConflictError) as error:
-            return {"error": error.code, "message": str(error)}
-        except (TypeError, ValueError) as error:
-            return self._error("invalid_payload", str(error))
-
-    def commit_fusion(
-        self, preview_id: object, source_revisions: object
-    ) -> dict[str, Any] | ErrorResult:
-        """Commit a preview only with the exact source revision map it recorded."""
-        normalized_preview_id = self._text(preview_id, "preview_id")
-        if isinstance(normalized_preview_id, dict):
-            return normalized_preview_id
-        if not isinstance(source_revisions, Mapping):
-            return self._error("invalid_payload", "source_revisions must be an object")
-        revisions = dict(source_revisions)
-        if not all(isinstance(key, str) for key in revisions):
-            return self._error("invalid_payload", "source revision keys must be strings")
-        for document_id, revision in revisions.items():
-            normalized_id = self._editor_note_id(document_id)
-            if isinstance(normalized_id, dict):
-                return normalized_id
-            revision_error = self._revision(revision)
-            if revision_error is not None:
-                return revision_error
-        try:
-            return self.backend.commit_fusion(normalized_preview_id, revisions)
-        except (
-            CanonicalEligibilityError,
-            PathAuthorizationError,
-            NoteRevisionConflictError,
-        ) as error:
-            return {"error": error.code, "message": str(error)}
-        except (TypeError, ValueError) as error:
-            return self._error("invalid_payload", str(error))
-
-    def update_note_body(
-        self,
-        note_id: object,
-        expected_revision: object,
-        body_markdown: object,
-    ) -> dict[str, Any]:
-        """Replace only a note body through the revisioned service CAS."""
-        document_id = self._editor_note_id(note_id)
-        if isinstance(document_id, dict):
-            return document_id
-        revision_error = self._revision(expected_revision)
-        if revision_error is not None:
-            return revision_error
-        body = self._editor_body(body_markdown)
-        if isinstance(body, dict):
-            return body
-        try:
-            notes = self.backend.get_notes_service()
-            notes.update_note_body(document_id, expected_revision, body)
-            return notes.get_editor_document(document_id)
-        except (PathAuthorizationError, NoteRevisionConflictError) as error:
-            return {"error": error.code, "message": str(error)}
-        except JobStoreBusyError:
-            return self._error(
-                "edit_busy",
-                "Note edit storage is busy; retry",
-            )
-        except (OSError, sqlite3.Error):
-            return self._error(
-                "edit_failed",
-                "Note edit could not be saved",
-            )
-        except (TypeError, ValueError):
-            return self._error(
-                "edit_failed",
-                "Note edit could not be saved",
-            )
 
     def approve_clean(
         self,
@@ -973,53 +1009,12 @@ class FuentePyWebViewApi:
         except (OSError, sqlite3.Error, TypeError, ValueError):
             return self._error("approval_failed", "Approval could not be recorded")
 
-    def validate_note_metadata(self, metadata: object) -> dict[str, Any]:
-        parsed = self._payload(metadata)
-        if isinstance(parsed, dict) and "error" in parsed:
-            return parsed
-        assert isinstance(parsed, dict)
-        normalized = self._metadata_write_payload(parsed)
-        if "error" in normalized:
-            return normalized
-        return self.backend.handle_action(
-            "validate_note_metadata", {"metadata": normalized}
-        )
-
-    def update_note_metadata(
-        self,
-        document_id: object,
-        metadata: object,
-        expected_revision: object,
-    ) -> dict[str, Any]:
-        note = self._editor_note_id(document_id)
-        if isinstance(note, dict):
-            return note
-        parsed = self._payload(metadata)
-        if isinstance(parsed, dict) and "error" in parsed:
-            return parsed
-        assert isinstance(parsed, dict)
-        normalized = self._metadata_write_payload(parsed)
-        if "error" in normalized:
-            return normalized
-        if isinstance(expected_revision, bool) or not isinstance(
-            expected_revision, (int, float)
-        ):
-            return self._error("invalid_payload", "expected_revision must be a number")
-        return self.backend.handle_action(
-            "update_note_metadata",
-            {
-                "document_id": note,
-                "metadata": normalized,
-                "expected_revision": int(expected_revision),
-            },
-        )
-
     def approve_note(
         self,
         document_id: object,
         expected_revision: object,
     ) -> dict[str, Any]:
-        document = self._editor_note_id(document_id)
+        document = self._note_id(document_id)
         if isinstance(document, dict):
             return document
         if isinstance(expected_revision, bool) or not isinstance(
@@ -1038,51 +1033,6 @@ class FuentePyWebViewApi:
             )
         except PathAuthorizationError as error:
             return {"error": error.code, "message": str(error)}
-
-    def save_draft(self, note_id: object, content: object) -> dict[str, Any]:
-        note = self._text(note_id, "note_id")
-        body = self._text(content, "content", required=False)
-        if isinstance(note, dict):
-            return note
-        if isinstance(body, dict):
-            return body
-        if "/" in note or "\\" in note or note.endswith(".md"):
-            return self._error("path_not_authorized", "Path is not authorized")
-        return self.backend.handle_action(
-            "save_note", {"document_id": note, "content": body}
-        )
-
-    def create_note(
-        self, title: object, content: object, issue_id: object = "_Sin_Cuestion"
-    ) -> dict[str, Any]:
-        note_title = self._text(title, "title")
-        body = self._text(content, "content", required=False)
-        issue = self._text(issue_id, "issue_id")
-        if isinstance(note_title, dict):
-            return note_title
-        if isinstance(body, dict):
-            return body
-        if isinstance(issue, dict):
-            return issue
-        return self.backend.handle_action(
-            "save_note", {"title": note_title, "content": body, "issue": issue}
-        )
-
-    def delete_note(self, note_id: object) -> dict[str, Any]:
-        return self._note_action("delete_note", note_id)
-
-    def move_note(self, note_id: object, issue_id: object) -> dict[str, Any]:
-        note = self._text(note_id, "note_id")
-        issue = self._text(issue_id, "issue_id")
-        if isinstance(note, dict):
-            return note
-        if isinstance(issue, dict):
-            return issue
-        if "/" in note or "\\" in note or note.endswith(".md"):
-            return self._error("path_not_authorized", "Path is not authorized")
-        return self.backend.handle_action(
-            "move_note", {"document_id": note, "target_issue": issue}
-        )
 
     def get_quarantine(self) -> dict[str, Any]:
         return self.backend.handle_action("get_quarantine", {})
@@ -1137,8 +1087,8 @@ class FuentePyWebViewApi:
         return self.backend.get_note_content_html(note)
 
     def get_document_workspace(self, document_id: object) -> dict[str, Any]:
-        """Return a path-free reader/editor/share/discussion projection."""
-        note = self._editor_note_id(document_id)
+        """Return a path-free read-only note and sharing projection."""
+        note = self._note_id(document_id)
         if isinstance(note, dict):
             return note
         try:
@@ -1153,9 +1103,6 @@ class FuentePyWebViewApi:
                 share_reason = "Revisión aprobada; lista para compartir."
             except (PathAuthorizationError, NoteRevisionConflictError, ValueError):
                 pass
-            discussion = DiscussionApplicationService(
-                vault=notes.vault, store=notes.job_store
-            )
             return {
                 "note": {
                     "document_id": document.document_id,
@@ -1169,7 +1116,6 @@ class FuentePyWebViewApi:
                 "can_share": can_share,
                 "share_reason": share_reason,
                 "shared_output": shared,
-                "discussion": [event.to_dict() for event in discussion.read_discussion(document.document_id)],
             }
         except (PathAuthorizationError, NoteRevisionConflictError) as error:
             return {"error": error.code, "message": str(error)}
@@ -1179,7 +1125,7 @@ class FuentePyWebViewApi:
     def share_processed_note(
         self, document_id: object, expected_revision: object, publisher: object
     ) -> dict[str, Any]:
-        note = self._editor_note_id(document_id)
+        note = self._note_id(document_id)
         if isinstance(note, dict):
             return note
         revision_error = self._revision(expected_revision)
@@ -1198,47 +1144,6 @@ class FuentePyWebViewApi:
             return {"error": error.code, "message": str(error)}
         except (OSError, ValueError) as error:
             return self._error("share_failed", str(error))
-
-    def get_discussion(self, shared_note_id: object) -> dict[str, Any]:
-        note = self._editor_note_id(shared_note_id)
-        if isinstance(note, dict):
-            return note
-        try:
-            notes = self.backend.get_notes_service()
-            service = DiscussionApplicationService(vault=notes.vault, store=notes.job_store)
-            return {"events": [event.to_dict() for event in service.read_discussion(note)]}
-        except (OSError, ValueError) as error:
-            return self._error("discussion_unavailable", str(error))
-
-    def add_discussion_reply(self, shared_note_id: object, payload: object) -> dict[str, Any]:
-        note = self._editor_note_id(shared_note_id)
-        if isinstance(note, dict):
-            return note
-        parsed = self._payload(payload)
-        if isinstance(parsed, dict) and "error" in parsed:
-            return parsed
-        assert isinstance(parsed, dict)
-        if set(parsed) - {"author", "body", "parent_id"} or "author" not in parsed or "body" not in parsed:
-            return self._error("validation_error", "author and body are required")
-        author = self._text(parsed["author"], "author")
-        body = self._text(parsed["body"], "body")
-        parent_id = parsed.get("parent_id")
-        if isinstance(author, dict) or isinstance(body, dict):
-            return self._error("validation_error", "author and body are required")
-        if parent_id is not None and not isinstance(parent_id, str):
-            return self._error("validation_error", "parent_id must be a string")
-        if parent_id is not None:
-            try:
-                UUID(parent_id)
-            except (ValueError, AttributeError):
-                return self._error("validation_error", "parent_id must be a valid event id")
-        try:
-            notes = self.backend.get_notes_service()
-            service = DiscussionApplicationService(vault=notes.vault, store=notes.job_store)
-            event = service.add_reply(note, author, body, parent_id)
-            return event.to_dict()
-        except (OSError, ValueError) as error:
-            return self._error("validation_error", str(error))
 
     def export_note(
         self,
@@ -1275,7 +1180,7 @@ class FuentePyWebViewApi:
     def save_export_to_downloads(
         self, note_id: object, export_format: object
     ) -> dict[str, Any]:
-        note = self._editor_note_id(note_id)
+        note = self._note_id(note_id)
         export_fmt = self._text(export_format, "format")
         if isinstance(note, dict):
             return note
@@ -1284,9 +1189,6 @@ class FuentePyWebViewApi:
         if export_fmt not in {"markdown", "docx", "word"}:
             return self._error("invalid_payload", "format is not supported")
         return self.backend.export_note_to_downloads(note, export_fmt)
-
-    def get_graph_data(self) -> dict[str, Any]:
-        return self.backend.get_graph_data()
 
     def get_category_files(self, category_id: object) -> list[dict[str, Any]] | ErrorResult:
         category = self._text(category_id, "category_id")
@@ -1320,8 +1222,6 @@ class FuentePyWebViewApi:
     def _validate_action_payload(
         cls, action: str, payload: dict[str, Any], schema: dict[str, type]
     ) -> ErrorResult | None:
-        if action == "reflow_links":
-            return cls._validate_reflow_scope_payload(payload)
         extra_fields = set(payload) - set(schema)
         optional_export_fields = {"destination_path", "confirm_overwrite", "note_path", "document_id"}
         if action == "export_reader_note":

@@ -93,13 +93,12 @@ def test_open_obsidian_uses_macos_native_launcher(temp_vault_path):
 def test_note_mutation_methods_use_identifiers_not_absolute_path_parameters():
     mutation_methods = (
         "approve_note",
-        "save_draft",
-        "delete_note",
         "restore_note",
-        "move_note",
     )
 
     assert not hasattr(FuentePyWebViewApi, "merge_notes")
+    assert not hasattr(FuentePyWebViewApi, "update_note_metadata")
+    assert not hasattr(FuentePyWebViewApi, "validate_note_metadata")
 
     for method_name in mutation_methods:
         parameter_names = inspect.signature(
@@ -129,11 +128,6 @@ def test_approve_note_signature_has_no_metadata_argument():
     assert tuple(parameters) == ("self", "document_id", "expected_revision")
 
 
-def test_update_note_metadata_signature_uses_document_id():
-    parameters = inspect.signature(FuentePyWebViewApi.update_note_metadata).parameters
-    assert tuple(parameters) == ("self", "document_id", "metadata", "expected_revision")
-
-
 def test_legacy_merge_action_is_not_registered(temp_vault_path):
     bridge = FuentePyWebViewApi(FuenteConsoleBackend(temp_vault_path))
 
@@ -148,7 +142,7 @@ def test_bridge_rejects_absolute_note_identifier_without_mutation(temp_vault_pat
     external = temp_vault_path.parent / "outside.md"
     external.write_text("private", encoding="utf-8")
 
-    assert bridge.save_draft(str(external), "changed") == {
+    assert bridge.approve_note(str(external), 1) == {
         "error": "path_not_authorized",
         "message": "Path is not authorized",
     }

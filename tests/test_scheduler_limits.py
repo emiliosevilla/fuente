@@ -25,7 +25,6 @@ from fuente.domain.frontmatter import serialize_frontmatter
 from fuente.domain.jobs import JobRecord
 from fuente.domain.runtime_policy import ExecutionProfile, RuntimePolicy
 from fuente.extractors.registry import ExtractorRegistry
-from fuente.graph_engine.linker import GraphLinker
 from fuente.infrastructure.sqlite_store import JobStore
 from fuente.rag.semantic_chunker import SemanticChunker
 from fuente.ram_governor.budget import (
@@ -134,7 +133,6 @@ def test_task_classes_cover_required_vocabulary():
         "media_audio",
         "embedding",
         "llm_generation",
-        "graph_refresh",
     }
 
 
@@ -373,10 +371,8 @@ def test_media_batch_sibling_not_quarantined_on_peer_failure(tmp_path):
         chunker=SemanticChunker(),
         chroma=chroma,
         atomic_generator=_FakeGenerator(),
-        linker=GraphLinker(vault.output_dir),
         ram_governor=governor,
         stabilize=lambda _p: True,
-        copy_to_dirty=lambda p: vault.copy_to_dirty(p),
     )
 
     entrada = vault.input_dir
@@ -392,9 +388,37 @@ def test_media_batch_sibling_not_quarantined_on_peer_failure(tmp_path):
     j_bad = service.submit("1_volcado/bad.png")
     j_sib = service.submit("1_volcado/sibling.png")
 
+    for job in (j_good, j_bad, j_sib):
+        for source_stage, target_stage in (
+            ("1_volcado", "2_copiado"),
+            ("2_copiado", "3_capturado"),
+        ):
+            service.transition_approvals.begin_review(
+                job.job_id,
+                source_stage,
+                target_stage,
+                1,
+                job.source_hash,
+                "pytest",
+            )
+            service.transition_approvals.approve(
+                job.job_id,
+                source_stage,
+                target_stage,
+                1,
+                job.source_hash,
+                "pytest",
+            )
+
     # Force extract stage for media jobs (submit advances to stabilized).
     for job in (j_bad, j_sib):
-        dirty = vault.copy_to_dirty(entrada / Path(job.source_relative_path).name)
+        dirty = vault.copy_to_dirty(
+            entrada / Path(job.source_relative_path).name,
+            transition_approvals=service.transition_approvals,
+            artifact_id=job.job_id,
+            revision=1,
+            content_hash=job.source_hash,
+        )
         store.update_job(
             job.job_id,
             expected_revision=store.get_job(job.job_id).revision,
@@ -420,7 +444,6 @@ def test_media_batch_sibling_not_quarantined_on_peer_failure(tmp_path):
     assert "bad.png" in quarantined_names
     assert "sibling.png" not in quarantined_names
     store.close()
-    assert TaskClass.GRAPH_REFRESH.value == "graph_refresh"
     assert resource_key_for(
         TaskClass.LLM_GENERATION, ollama_url="http://x", model_id="m"
     ).startswith("llm:")
@@ -441,7 +464,6 @@ def test_process_pending_respects_budget_and_stays_resumable(tmp_path):
         chunker=SemanticChunker(),
         chroma=_FakeChroma(),
         atomic_generator=_FakeGenerator(),
-        linker=GraphLinker(vault.output_dir),
         ram_governor=governor,
         stabilize=lambda _p: True,
     )
@@ -449,6 +471,16 @@ def test_process_pending_respects_budget_and_stays_resumable(tmp_path):
     source = vault.input_dir / "note.txt"
     source.write_text("contenido", encoding="utf-8")
     job = service.submit("1_volcado/note.txt")
+    for source_stage, target_stage in (
+        ("1_volcado", "2_copiado"),
+        ("2_copiado", "3_capturado"),
+    ):
+        service.transition_approvals.begin_review(
+            job.job_id, source_stage, target_stage, 1, job.source_hash, "pytest"
+        )
+        service.transition_approvals.approve(
+            job.job_id, source_stage, target_stage, 1, job.source_hash, "pytest"
+        )
     # Produce the canonical record through the real path, then park at its
     # approval boundary before exercising the scheduler.
     job = service.resume(job.job_id)
@@ -496,7 +528,6 @@ def test_orphaned_own_lease_does_not_block_resume(tmp_path):
         chunker=SemanticChunker(),
         chroma=_FakeChroma(),
         atomic_generator=_FakeGenerator(),
-        linker=GraphLinker(vault.output_dir),
         ram_governor=governor,
         stabilize=lambda _p: True,
     )
@@ -504,6 +535,16 @@ def test_orphaned_own_lease_does_not_block_resume(tmp_path):
     source = vault.input_dir / "resume_me.txt"
     source.write_text("hola", encoding="utf-8")
     job = service.submit("1_volcado/resume_me.txt")
+    for source_stage, target_stage in (
+        ("1_volcado", "2_copiado"),
+        ("2_copiado", "3_capturado"),
+    ):
+        service.transition_approvals.begin_review(
+            job.job_id, source_stage, target_stage, 1, job.source_hash, "pytest"
+        )
+        service.transition_approvals.approve(
+            job.job_id, source_stage, target_stage, 1, job.source_hash, "pytest"
+        )
     job = service.resume(job.job_id)
     assert job.stage == "saved_clean"
     from tests.conftest import approve_saved_clean_job
@@ -632,7 +673,6 @@ def test_unavailable_policy_llm_waits_at_indexed_chunks_without_fake_success(tmp
         chunker=SemanticChunker(),
         chroma=_FakeChroma(),
         atomic_generator=_FakeGenerator(),
-        linker=GraphLinker(vault.output_dir),
         runtime_policy=policy,
         ram_governor=_ProbeGovernor(
             measured_snapshot(total_gb=32.0, available_gb=20.0, safety_margin_pct=0.35)

@@ -1,46 +1,29 @@
-import os
 import re
 import shutil
 import hashlib
 import json
-import tempfile
-from datetime import datetime, timezone
+from datetime import datetime
 from pathlib import Path
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 import logging
 
 from fuente.config import (
     DEFAULT_ISSUE,
     VaultConfig,
 )
-from fuente.domain.documents import MarkdownDocument, content_hash_for_markdown
+from fuente.domain.documents import MarkdownDocument
 from fuente.domain.frontmatter import FrontmatterError, serialize_frontmatter
 from fuente.domain.errors import PathAuthorizationError
-from fuente.domain.meetings import (
-    MEETING_NOTES_SECTIONS,
-    MEETING_PROVIDER,
-    MEETING_PROVIDER_REVISION,
-    MEETING_STATUS_BLOCKED,
-    MEETING_TEMPLATE_ID,
-    MeetingArtifacts,
-    MeetingContractError,
-    MeetingImportResult,
-    MeetingSession,
-    validate_markdown,
-    validate_session_id,
-    validate_sha256,
-)
-from fuente.domain.paths import (
-    REFLOW_REVIEW_DIR_NAME,
-    AuthorizedPathResolver,
-    document_id_for_relative_path,
-)
+from fuente.domain.paths import AuthorizedPathResolver, document_id_for_relative_path
 from fuente.extractors.base import enrich_extraction_metadata
 from fuente.domain.quarantine import QuarantineService
 from fuente.domain.vault_layout import VaultLayout
 from fuente.infrastructure.atomic_files import atomic_write_json, atomic_write_text
 
 logger = logging.getLogger(__name__)
+
+if TYPE_CHECKING:
+    from fuente.application.approval import TransitionApprovalService
 
 WINDOWS_RESERVED_NAMES = {
     "CON", "PRN", "AUX", "NUL",
@@ -195,7 +178,7 @@ class VaultManager:
         return document_id_for_relative_path(self._vault_relative_identity(path))
 
     def _is_excluded_from_note_lists(self, path: Path) -> bool:
-        """Exclude system, hidden, quarantine and MOC/metadata artifacts."""
+        """Exclude system, hidden and quarantine artifacts."""
         vault_root = self.config.vault_path.resolve()
         try:
             relative = path.resolve().relative_to(vault_root)
@@ -206,20 +189,12 @@ class VaultManager:
             return True
         if SYSTEM_DIR_NAME in relative.parts:
             return True
-        if REFLOW_REVIEW_DIR_NAME in relative.parts:
-            return True
-
         try:
             path.resolve().relative_to(self.quarantine_dir.resolve())
             return True
         except ValueError:
             pass
 
-        # MOC / metadata artifacts: underscore-prefixed Markdown such as
-        # `_Indice_MOC.md`. Notes that live *inside* `_Sin_Cuestion/` keep
-        # normal names and remain part of the note list.
-        if path.name.startswith("_") and path.suffix.lower() == ".md":
-            return True
         return False
 
     def enumerate_documents(
@@ -231,8 +206,7 @@ class VaultManager:
         """Recursively list documents under an active-theme root.
 
         Returns ``(document_id, vault_relative_path)`` pairs. Hidden files,
-        ``.fuente``, quarantine, and underscore-prefixed MOC/metadata Markdown
-        are omitted from normal note lists.
+        ``.fuente`` and quarantine are omitted from normal note lists.
         """
         base = self.theme_root(root)
         if not base.exists():
@@ -331,12 +305,29 @@ class VaultManager:
         logger.info(f"Cuestión creada en Tema '{self.active_theme}': {sanitized_issue}")
         return issue_dir
 
-    def copy_to_dirty(self, source_path: Path) -> Path:
+    def copy_to_dirty(
+        self,
+        source_path: Path,
+        *,
+        transition_approvals: "TransitionApprovalService",
+        artifact_id: str,
+        revision: int,
+        content_hash: str,
+    ) -> Path:
         """Copia un archivo crudo desde 1_volcado hacia 2_copiado manteniendo el hash original."""
         if not source_path.exists():
             raise FileNotFoundError(f"Archivo de entrada no encontrado: {source_path}")
 
         file_hash = self.calculate_file_hash(source_path)
+        if file_hash != content_hash:
+            raise ValueError("Source bytes changed after transition approval")
+        transition_approvals.require_current(
+            artifact_id,
+            "1_volcado",
+            "2_copiado",
+            revision,
+            file_hash,
+        )
         safe_stem = self.sanitize_filename(source_path.stem)
         dest_filename = f"{safe_stem}_{file_hash[:8]}{source_path.suffix}"
         dest_path = self.dirty_dir / dest_filename
@@ -546,21 +537,6 @@ class VaultManager:
             }
         }
 
-    def import_meeting_artifacts(
-        self,
-        artifacts: MeetingArtifacts,
-        *,
-        expected_session_id: str,
-        store=None,
-        max_recording_bytes: int = 64 * 1024 * 1024,
-    ) -> MeetingImportResult:
-        """Import one prepared meeting through the F02.3 contract."""
-        return MeetingImportApplicationService(
-            vault=self,
-            store=store,
-            max_recording_bytes=max_recording_bytes,
-        ).import_artifacts(artifacts, expected_session_id=expected_session_id)
-
     @staticmethod
     def sanitize_filename(name: str) -> str:
         """Saneador estricto de nombres de archivo compatible con Windows, macOS y Linux."""
@@ -586,534 +562,3 @@ class VaultManager:
             while chunk := f.read(65536):
                 hasher.update(chunk)
         return hasher.hexdigest()
-
-
-class MeetingImportApplicationService:
-    """Validate and publish meeting artifacts to the three private stages."""
-
-    def __init__(
-        self,
-        vault: VaultManager,
-        store=None,
-        *,
-        max_recording_bytes: int = 64 * 1024 * 1024,
-    ) -> None:
-        if max_recording_bytes < 1:
-            raise ValueError("max_recording_bytes must be positive")
-        self.vault = vault
-        self.store = store
-        self.max_recording_bytes = max_recording_bytes
-
-    def import_artifacts(
-        self, artifacts: MeetingArtifacts, *, expected_session_id: str
-    ) -> MeetingImportResult:
-        if not isinstance(artifacts, MeetingArtifacts):
-            raise TypeError("artifacts must be MeetingArtifacts")
-        validate_session_id(expected_session_id)
-        if artifacts.session_id != expected_session_id:
-            raise MeetingContractError("session_id does not match expected_session_id")
-
-        recording_bytes = self._validate_and_read_recording(artifacts)
-        transcript_body = validate_markdown(
-            artifacts.transcript_markdown, "transcript_markdown"
-        )
-        notes_body = artifacts.notes_markdown
-        if notes_body is not None:
-            validate_markdown(notes_body, "notes_markdown")
-            self._validate_standard_notes(notes_body)
-
-        session_id = artifacts.session_id
-        manifest_path = self._preparation_path(session_id, "manifest.json")
-        recording_path = self._vault_path(
-            self.vault.dirty_dir
-            / "reunion"
-            / session_id
-            / f"recording{artifacts.recording_path.suffix.lower()}"
-        )
-        transcript_path = self._vault_path(
-            self.vault.clean_dir / "reunion" / f"{session_id}.md"
-        )
-        notes_path = (
-            self._vault_path(
-                self.vault.processed_dir / "reunion" / f"{session_id}.md"
-            )
-            if notes_body is not None
-            else None
-        )
-        recording_relative = self._relative_to_vault(recording_path)
-        transcript_relative = self._relative_to_vault(transcript_path)
-        notes_relative = self._relative_to_vault(notes_path) if notes_path else None
-        transcript_markdown = self._canonical_transcript(
-            session_id, transcript_body, transcript_relative
-        )
-        transcript_hash = content_hash_for_markdown(transcript_markdown)
-        notes_markdown = (
-            self._canonical_notes(
-                session_id,
-                notes_body,
-                notes_relative,
-                transcript_relative,
-                transcript_hash,
-            )
-            if notes_body is not None
-            else None
-        )
-        notes_hash = (
-            content_hash_for_markdown(notes_markdown)
-            if notes_markdown is not None
-            else None
-        )
-        manifest = {
-            "schema_version": 1,
-            "session_id": session_id,
-            "provider": MEETING_PROVIDER,
-            "provider_revision": MEETING_PROVIDER_REVISION,
-            "template_id": MEETING_TEMPLATE_ID,
-            "status": "imported",
-            "created_at": datetime.now(timezone.utc).isoformat(),
-            "updated_at": datetime.now(timezone.utc).isoformat(),
-            "recording": {
-                "source_relative_path": artifacts.recording_path.as_posix(),
-                "relative_path": recording_relative,
-                "sha256": artifacts.recording_sha256.lower(),
-                "size": len(recording_bytes),
-            },
-            "transcript": {
-                "relative_path": transcript_relative,
-                "sha256": transcript_hash,
-                "status": "pending_review",
-            },
-            "notes": (
-                {
-                    "relative_path": notes_relative,
-                    "sha256": notes_hash,
-                    "status": MEETING_STATUS_BLOCKED,
-                }
-                if notes_relative is not None
-                else None
-            ),
-        }
-        session = MeetingSession(
-            session_id=session_id,
-            status="imported",
-            manifest_relative_path=self._relative_to_vault(manifest_path),
-            recording_relative_path=recording_relative,
-            transcript_relative_path=transcript_relative,
-            notes_relative_path=notes_relative,
-            recording_sha256=artifacts.recording_sha256.lower(),
-            transcript_sha256=transcript_hash,
-            notes_sha256=notes_hash,
-        )
-        files: list[tuple[Path, bytes]] = [
-            (recording_path, recording_bytes),
-            (transcript_path, transcript_markdown.encode("utf-8")),
-        ]
-        if notes_path is not None and notes_markdown is not None:
-            files.append((notes_path, notes_markdown.encode("utf-8")))
-        self._validate_existing_manifest(manifest_path, manifest)
-        files_to_write = self._validate_existing_targets(files)
-        previous_manifest = (
-            manifest_path.read_bytes() if manifest_path.exists() else None
-        )
-        created_targets: list[Path] = []
-        created_directories: list[Path] = []
-        created_catalog_rows: list[tuple[str, str, str, str, str | None]] = []
-        session_created = False
-        try:
-            self._write_import_files(files_to_write, created_targets, created_directories)
-            if self.store is not None:
-                session_was_absent = self.store.get_meeting_session(session_id) is None
-                self.store.create_meeting_session(session)
-                session_created = session_was_absent
-                self._register_catalog_note(
-                    transcript_relative,
-                    transcript_hash,
-                    "original",
-                    None,
-                    "pending_review",
-                    created_catalog_rows,
-                )
-                if notes_relative is not None and notes_hash is not None:
-                    self._register_catalog_note(
-                        notes_relative,
-                        notes_hash,
-                        "summary",
-                        "meeting",
-                        "pending_review",
-                        created_catalog_rows,
-                    )
-            self._write_manifest_once(manifest_path, manifest)
-        except BaseException:
-            for note_id, relative, content_hash, note_type, origin_kind in reversed(
-                created_catalog_rows
-            ):
-                self.store.rollback_note_vocabulary(
-                    note_id=note_id,
-                    relative_path=relative,
-                    revision=1,
-                    pre_content_hash=content_hash,
-                    post_content_hash=content_hash,
-                    note_type=note_type,
-                    origin_kind=origin_kind,
-                    catalog_existed=False,
-                )
-            self._rollback_files(created_targets, created_directories)
-            if session_created:
-                self.store.delete_meeting_session(session_id)
-            self._restore_manifest(manifest_path, previous_manifest)
-            raise
-
-        return MeetingImportResult(
-            session_id=session_id,
-            provider=MEETING_PROVIDER,
-            provider_revision=MEETING_PROVIDER_REVISION,
-            template_id=MEETING_TEMPLATE_ID,
-            manifest_relative_path=self._relative_to_vault(manifest_path),
-            recording_relative_path=recording_relative,
-            transcript_relative_path=transcript_relative,
-            notes_relative_path=notes_relative,
-            transcript_status="pending_review",
-            notes_status=MEETING_STATUS_BLOCKED if notes_path else None,
-            recording_sha256=artifacts.recording_sha256.lower(),
-            transcript_sha256=transcript_hash,
-            notes_sha256=notes_hash,
-        )
-
-    def _preparation_path(self, session_id: str, filename: str) -> Path:
-        return self._vault_path(
-            self.vault.config.system_dir / "reunion" / session_id / filename
-        )
-
-    def _vault_path(self, path: Path) -> Path:
-        root = self.vault.config.vault_path.resolve()
-        candidate = path.resolve(strict=False)
-        if not candidate.is_relative_to(root):
-            raise PathAuthorizationError()
-        current = root
-        for part in candidate.relative_to(root).parts:
-            current /= part
-            if current.is_symlink():
-                raise PathAuthorizationError()
-        return candidate
-
-    def _relative_to_vault(self, path: Path | None) -> str | None:
-        if path is None:
-            return None
-        return path.relative_to(self.vault.config.vault_path.resolve()).as_posix()
-
-    def _validate_and_read_recording(self, artifacts: MeetingArtifacts) -> bytes:
-        source = self._vault_path(
-            self.vault.config.vault_path / artifacts.recording_path
-        )
-        suffix = artifacts.recording_path.suffix.lower()
-        if suffix not in {".m4a", ".mp3", ".mp4", ".wav"}:
-            raise MeetingContractError("recording format is not supported")
-        expected = self._preparation_path(
-            artifacts.session_id, f"recording{suffix}"
-        )
-        if source != expected:
-            raise MeetingContractError("recording must be prepared for this session")
-        if source.is_symlink() or not source.is_file():
-            raise MeetingContractError(
-                "prepared recording is missing or is not a regular file"
-            )
-        size = source.stat().st_size
-        if size < 1 or size > self.max_recording_bytes:
-            raise MeetingContractError("recording size is outside the permitted bounds")
-        recording_bytes = source.read_bytes()
-        actual_hash = hashlib.sha256(recording_bytes).hexdigest()
-        expected_hash = validate_sha256(artifacts.recording_sha256, "recording_sha256")
-        if actual_hash != expected_hash:
-            raise MeetingContractError("recording SHA-256 does not match the artifact")
-        return recording_bytes
-
-    @staticmethod
-    def _validate_standard_notes(markdown: str) -> None:
-        headings = {
-            match.group(1)
-            for match in re.finditer(
-                r"(?im)^#{1,6}\s+(Summary|Key Decisions|Action Items|Discussion Highlights)\s*$",
-                markdown,
-            )
-        }
-        missing = set(MEETING_NOTES_SECTIONS) - headings
-        if missing:
-            raise MeetingContractError(
-                "meeting notes are missing standard sections: "
-                + ", ".join(sorted(missing))
-            )
-        action_match = re.search(
-            r"(?ims)^#{1,6}\s+Action Items\s*$\n(.*?)(?=^#{1,6}\s+|\Z)",
-            markdown,
-        )
-        action_items = action_match.group(1) if action_match else ""
-        lower = action_items.lower()
-        required_groups = (
-            ("attribution", ("owner", "responsible", "assignee", "assigned", "responsable")),
-            ("task", ("action", "task", "item", "tarea")),
-            ("deadline", ("due", "deadline", "plazo", "fecha")),
-            ("segment", ("segment", "tramo", "segmento")),
-            ("timestamp", ("timestamp", "timecode", "time", "marca temporal")),
-        )
-        missing_fields = [
-            name
-            for name, aliases in required_groups
-            if not any(alias in lower for alias in aliases)
-        ]
-        if missing_fields:
-            raise MeetingContractError(
-                "Action Items must retain attribution and timestamp fields: "
-                + ", ".join(missing_fields)
-            )
-
-    @staticmethod
-    def _canonical_transcript(
-        session_id: str, body: str, relative_path: str
-    ) -> str:
-        title_match = re.search(r"(?m)^#\s+(.+?)\s*$", body)
-        title = title_match.group(1) if title_match else f"Meeting transcript {session_id}"
-        return serialize_frontmatter(
-            {
-                "schema_version": 3,
-                "note_id": document_id_for_relative_path(relative_path),
-                "note_type": "original",
-                "title": title,
-                "date": "",
-                "author": "Meetily",
-                "tags": ["meeting", session_id],
-                "issue": DEFAULT_ISSUE,
-                "status": "pending_review",
-                "history": [],
-                "origins": [],
-                "meeting_session_id": session_id,
-                "provider": MEETING_PROVIDER,
-                "provider_revision": MEETING_PROVIDER_REVISION,
-                "template_id": MEETING_TEMPLATE_ID,
-            }
-        ) + body
-
-    def _register_catalog_note(
-        self,
-        relative_path: str,
-        content_hash: str,
-        note_type: str,
-        origin_kind: str | None,
-        status: str,
-        created: list[tuple[str, str, str, str, str | None]],
-    ) -> None:
-        note_id = document_id_for_relative_path(relative_path)
-        existing = self.store.get_note(note_id)
-        if existing is not None:
-            if (
-                existing["relative_path"] != relative_path
-                or existing["content_hash"] != content_hash
-                or existing["note_type"] != note_type
-                or existing["status"] != status
-            ):
-                raise MeetingContractError("meeting note conflicts with the catalog")
-            return
-        self.store.register_note(
-            note_id=note_id,
-            relative_path=relative_path,
-            content_hash=content_hash,
-            note_type=note_type,
-            origin_kind=origin_kind,
-            theme=self.vault.active_theme,
-            issue=DEFAULT_ISSUE,
-            status=status,
-        )
-        created.append((note_id, relative_path, content_hash, note_type, origin_kind))
-
-    @staticmethod
-    def _canonical_notes(
-        session_id: str,
-        body: str,
-        relative_path: str | None,
-        transcript_relative_path: str,
-        transcript_hash: str,
-    ) -> str:
-        assert relative_path is not None
-        return serialize_frontmatter(
-            {
-                "schema_version": 3,
-                "note_id": document_id_for_relative_path(relative_path),
-                "note_type": "summary",
-                "title": f"Meeting notes {session_id}",
-                "date": "",
-                "author": "Meetily",
-                "tags": ["meeting", session_id],
-                "issue": DEFAULT_ISSUE,
-                "status": "pending_review",
-                "meeting_status": MEETING_STATUS_BLOCKED,
-                "history": [],
-                "origin_kind": "meeting",
-                "origins": [
-                    {
-                        "note_id": document_id_for_relative_path(transcript_relative_path),
-                        "revision": 1,
-                        "content_hash": transcript_hash,
-                        "path": transcript_relative_path,
-                    }
-                ],
-                "meeting_session_id": session_id,
-                "provider": MEETING_PROVIDER,
-                "provider_revision": MEETING_PROVIDER_REVISION,
-                "template_id": MEETING_TEMPLATE_ID,
-            }
-        ) + body
-
-    def _validate_existing_manifest(self, path: Path, expected: dict) -> dict | None:
-        if not path.exists():
-            return None
-        if path.is_symlink() or not path.is_file():
-            raise MeetingContractError("meeting manifest is not a regular file")
-        try:
-            payload = json.loads(path.read_text(encoding="utf-8"))
-        except (OSError, UnicodeError, json.JSONDecodeError) as error:
-            raise MeetingContractError("meeting manifest is invalid") from error
-        if not isinstance(payload, dict):
-            raise MeetingContractError("meeting manifest must be a JSON object")
-        self._assert_manifest_compatible(payload, expected)
-        return payload
-
-    @classmethod
-    def _assert_manifest_compatible(
-        cls, existing: dict, expected: dict, prefix: str = "meeting manifest"
-    ) -> None:
-        for key, value in expected.items():
-            if key in {"created_at", "updated_at"} or key not in existing:
-                continue
-            current = existing[key]
-            if isinstance(value, dict):
-                if not isinstance(current, dict):
-                    raise MeetingContractError(f"{prefix} {key} does not match artifacts")
-                cls._assert_manifest_compatible(current, value, f"{prefix} {key}")
-            elif current != value:
-                raise MeetingContractError(f"{prefix} {key} does not match artifacts")
-
-    @classmethod
-    def _manifest_is_complete(
-        cls, manifest: dict, expected: dict, *, root: bool = False
-    ) -> bool:
-        for key, value in expected.items():
-            if key not in manifest:
-                return False
-            current = manifest[key]
-            if isinstance(value, dict):
-                if not isinstance(current, dict) or not cls._manifest_is_complete(current, value):
-                    return False
-        return not root or all(
-            isinstance(manifest.get(key), str) and manifest[key]
-            for key in ("created_at", "updated_at")
-        )
-
-    @classmethod
-    def _complete_manifest(cls, existing: dict, expected: dict) -> dict:
-        completed = dict(existing)
-        for key, value in expected.items():
-            if isinstance(value, dict):
-                current = existing.get(key)
-                completed[key] = cls._complete_manifest(
-                    current if isinstance(current, dict) else {}, value
-                )
-            else:
-                completed[key] = value
-        if isinstance(existing.get("created_at"), str) and existing["created_at"]:
-            completed["created_at"] = existing["created_at"]
-        return completed
-
-    def _write_manifest_once(self, path: Path, payload: dict) -> dict:
-        existing = self._validate_existing_manifest(path, payload)
-        if existing is not None:
-            if self._manifest_is_complete(existing, payload, root=True):
-                return existing
-            payload = self._complete_manifest(existing, payload)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        atomic_write_json(path, payload, sort_keys=True)
-        return payload
-
-    @staticmethod
-    def _restore_manifest(path: Path, previous: bytes | None) -> None:
-        if previous is None:
-            path.unlink(missing_ok=True)
-            return
-        atomic_write_text(path, previous.decode("utf-8"))
-
-    def _validate_existing_targets(
-        self, files: list[tuple[Path, bytes]]
-    ) -> list[tuple[Path, bytes]]:
-        missing: list[tuple[Path, bytes]] = []
-        for target, expected in files:
-            self._vault_path(target)
-            if not target.exists() and not target.is_symlink():
-                missing.append((target, expected))
-                continue
-            if target.is_symlink() or not target.is_file():
-                raise MeetingContractError(
-                    f"meeting artifact target already exists: {target.name}"
-                )
-            try:
-                current = target.read_bytes()
-            except OSError as error:
-                raise MeetingContractError(
-                    f"meeting artifact target cannot be read: {target.name}"
-                ) from error
-            if current != expected:
-                raise MeetingContractError(
-                    f"meeting artifact target conflicts with imported content: {target.name}"
-                )
-        return missing
-
-    @staticmethod
-    def _write_import_files(
-        files: list[tuple[Path, bytes]],
-        created_targets: list[Path],
-        created_directories: list[Path],
-    ) -> None:
-        temporary_paths: list[tuple[Path, Path]] = []
-        try:
-            for target, content in files:
-                parent = target.parent
-                missing: list[Path] = []
-                cursor = parent
-                while not cursor.exists():
-                    missing.append(cursor)
-                    cursor = cursor.parent
-                for directory in reversed(missing):
-                    directory.mkdir()
-                    created_directories.append(directory)
-                with tempfile.NamedTemporaryFile(
-                    mode="wb",
-                    dir=parent,
-                    prefix=f".{target.name}.",
-                    suffix=".tmp",
-                    delete=False,
-                ) as temporary:
-                    temporary.write(content)
-                    temporary.flush()
-                    os.fsync(temporary.fileno())
-                    temporary_path = Path(temporary.name)
-                temporary_paths.append((temporary_path, target))
-            for temporary_path, target in temporary_paths:
-                os.link(temporary_path, target)
-                created_targets.append(target)
-                temporary_path.unlink()
-        except BaseException:
-            for temporary_path, _target in temporary_paths:
-                temporary_path.unlink(missing_ok=True)
-            raise
-
-    @staticmethod
-    def _rollback_files(
-        created_targets: list[Path], created_directories: list[Path]
-    ) -> None:
-        for target in reversed(created_targets):
-            target.unlink(missing_ok=True)
-        for directory in reversed(created_directories):
-            try:
-                directory.rmdir()
-            except OSError:
-                pass
-
-
-__all__.append("MeetingImportApplicationService")

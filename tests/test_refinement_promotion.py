@@ -11,7 +11,7 @@ from fuente.infrastructure.sqlite_store import JobStore
 from tests.conftest import approved_clean_origin, save_v3_summary_note
 
 
-def _service(tmp_path):
+def _service(tmp_path, *, approve_transition: bool = True):
     vault = VaultManager(get_default_config(tmp_path / "vault").vault)
     store = JobStore(vault.config.vault_path)
     origin = approved_clean_origin(vault, store)
@@ -35,6 +35,25 @@ def _service(tmp_path):
         "base", 1, candidate.content_hash,
         RefinementVerdict(candidate_id, "accepted", 0.4, 0.7, 0.0, 0.1, "mejora"),
     )
+    if approve_transition:
+        candidate = notes.get_note(candidate_id)
+        transition = notes.transition_approvals
+        transition.begin_review(
+            candidate.document_id,
+            "3_capturado",
+            "4_procesado",
+            candidate.revision,
+            candidate.content_hash,
+            "pytest",
+        )
+        transition.approve(
+            candidate.document_id,
+            "3_capturado",
+            "4_procesado",
+            candidate.revision,
+            candidate.content_hash,
+            "pytest",
+        )
     return vault, store, notes, candidate_id
 
 

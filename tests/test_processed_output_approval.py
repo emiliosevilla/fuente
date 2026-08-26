@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 
 from fuente.application.sharing import SharingApplicationService
-from fuente.domain.errors import OutputApprovalRequiredError
+from fuente.domain.errors import OutputApprovalRequiredError, ReviewClaimConflictError
 from tests.test_refinement_promotion import _service
 
 
@@ -15,8 +15,6 @@ def test_clean_approval_alone_cannot_share_processed_note(tmp_path):
             notes.require_shareable_output(processed.document_id)
     finally:
         store.close()
-
-
 def test_processed_approval_binds_revision_hash_and_reviewer(tmp_path):
     _vault, store, notes, candidate_id = _service(tmp_path)
     try:
@@ -29,19 +27,32 @@ def test_processed_approval_binds_revision_hash_and_reviewer(tmp_path):
         store.close()
 
 
-def test_manual_processed_edit_invalidates_shareability(tmp_path):
-    vault, store, notes, candidate_id = _service(tmp_path)
+def test_processed_claim_conflict_leaves_no_partial_ledger_approval(tmp_path):
+    _vault, store, notes, candidate_id = _service(tmp_path)
     try:
         processed = notes.promote_refinement_candidate(candidate_id, expected_revision=1)
-        notes.approve_processed_output(processed.document_id, 1, "emilio")
-        edited = notes.update_note_body(
+        transition = notes.transition_approvals
+        transition.begin_review(
             processed.document_id,
-            expected_revision=1,
-            body_markdown=processed.body_markdown + "\nedit\n",
+            "4_procesado",
+            "5_compartido",
+            processed.revision,
+            processed.content_hash,
+            "otra-persona",
         )
-        sharing = SharingApplicationService(notes_service=notes)
-        with pytest.raises(OutputApprovalRequiredError):
-            sharing.share_processed_note(processed.document_id, edited.revision, "emilio")
-        assert list(vault.shared_dir.rglob("*.md")) == []
+
+        with pytest.raises(ReviewClaimConflictError):
+            notes.approve_processed_output(
+                processed.document_id, processed.revision, "emilio"
+            )
+
+        assert store._connection.execute(
+            "SELECT COUNT(*) FROM processed_approvals WHERE note_id = ?",
+            (processed.document_id,),
+        ).fetchone()[0] == 0
+        assert store._connection.execute(
+            "SELECT COUNT(*) FROM transition_approvals WHERE artifact_id = ?",
+            (processed.document_id,),
+        ).fetchone()[0] == 0
     finally:
         store.close()

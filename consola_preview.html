@@ -3231,6 +3231,14 @@ document.addEventListener('keydown', handleShellKeydown);
 
         const FUENTE_STYLES = new Set(['nord', 'gruvbox']);
 
+        function clearLegacyLocalState() {
+            try {
+                window.localStorage.removeItem('fuente.visual-style');
+            } catch (error) {
+                // Some WebKit origins disable storage; there is no state to migrate there.
+            }
+        }
+
         function readVisualStyle() {
             const active = document.documentElement.dataset.fuenteStyle;
             return FUENTE_STYLES.has(active) ? active : 'nord';
@@ -4484,6 +4492,7 @@ document.addEventListener('keydown', handleShellKeydown);
         });
 
         document.addEventListener('DOMContentLoaded', function() {
+            clearLegacyLocalState();
             applyVisualStyle(readVisualStyle(), false);
             mountReaderWorkspace();
             const shareButton = document.getElementById('document-share-button');

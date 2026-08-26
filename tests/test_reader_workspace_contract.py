@@ -44,7 +44,7 @@ def test_reader_layout_is_compact():
 
 def test_notes_is_content_first_and_map_reuses_one_graph_engine():
     html = Path("consola_preview.html").read_text(encoding="utf-8")
-    notes = html.split('id="workspace-notes"', 1)[1].split('id="workspace-meetings"', 1)[0]
+    notes = html.split('id="workspace-notes"', 1)[1].split('id="workspace-map"', 1)[0]
     assert 'id="reader-workspace-host"' in notes
     assert "host.appendChild(reader)" in html
     assert html.index('id="reader-search"') < html.index('class="reader-context-grid"')
@@ -82,3 +82,18 @@ def test_console_labels_are_plain_without_internal_flow_names():
     assert "Revisar notas" in html
     assert ">Nuevo Flujo de Trabajo<" not in html
     assert "TELEMETRÍA DEL GRAFO DE CONOCIMIENTO" not in html
+
+
+def test_preserve_modernization_keeps_navigation_and_removes_visual_noise():
+    html = Path("consola_preview.html").read_text(encoding="utf-8")
+    css = Path("fuente/ui/static/console.css").read_text(encoding="utf-8")
+    tokens = Path("fuente/ui/static/fuente_tokens.css").read_text(encoding="utf-8")
+
+    for label in ("Inicio", "Notas", "Mapa"):
+        assert f"<span>{label}</span>" in html
+    assert html.count('class="subgraph-box"') == 5
+    assert 'class="node-tag"' not in html
+    assert "── ACTIVIDAD ──" not in html
+    assert "—" not in html + css + tokens
+    assert "grid-template-columns: repeat(5, minmax(0, 1fr));" in css
+    assert "#reader-workspace-host .reader-workspace-embedded .close-btn" in css

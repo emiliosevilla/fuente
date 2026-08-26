@@ -126,3 +126,75 @@ assert.equal(workspace.classList.contains('is-context-hidden'), false);
         check=False,
     )
     assert result.returncode == 0, result.stderr
+
+
+def test_restore_loads_filter_and_sort_before_workspace_and_reapplies_filter():
+    node = shutil.which("node")
+    assert node is not None, "Node is required to execute the shell behavior contract"
+    functions = "\n".join(
+        _extract_function(name) for name in ("setReaderSort", "restoreUiState")
+    )
+    render = _extract_function("renderNoteList")
+    assert render.index("ul.appendChild(group)") < render.rindex("filterReaderNotes(false)")
+    program = f"""
+const assert = require('node:assert/strict');
+const WORKSPACE_IDS = ['home', 'source', 'flow'];
+const FUENTE_STYLES = new Set(['nord', 'gruvbox']);
+let readerSort = {{field: 'title', direction: 'asc'}};
+let queueCursor = null;
+let queueCursorHistory = [];
+const search = {{value: ''}};
+const observations = [];
+global.document = {{
+    getElementById(id) {{ return id === 'reader-search' ? search : null; }},
+}};
+global.persistUiState = function() {{ return Promise.resolve(); }};
+global.filterReaderNotes = function() {{ observations.push(['filter', search.value]); }};
+global.switchWorkspace = function(value) {{ observations.push(['workspace', value, search.value, readerSort.direction]); }};
+global.applyVisualStyle = function() {{}};
+global.setReaderContextVisibility = function() {{}};
+global.switchWorkspaceTab = function() {{}};
+global.readUiState = function(owner, key) {{
+    if (owner === 'main-window' && key === 'workspace') return Promise.resolve('source');
+    if (owner === 'reader' && key === 'filters') return new Promise(resolve => setTimeout(() => resolve({{search: 'persistida'}}), 20));
+    if (owner === 'reader' && key === 'sort') return Promise.resolve({{field: 'title', direction: 'desc'}});
+    return Promise.resolve(null);
+}};
+{functions}
+restoreUiState();
+setTimeout(function() {{
+    assert.deepEqual(observations[0], ['workspace', 'source', 'persistida', 'desc']);
+}}, 40);
+"""
+    result = subprocess.run(
+        [node, "-"], input=program, text=True, capture_output=True, check=False
+    )
+    assert result.returncode == 0, result.stderr
+
+
+def test_failed_ui_state_write_is_visible_and_remains_queued():
+    node = shutil.which("node")
+    assert node is not None, "Node is required to execute the shell behavior contract"
+    functions = "\n".join(
+        _extract_function(name)
+        for name in ("reportUiStateFailure", "persistUiState")
+    )
+    program = """
+const assert = require('node:assert/strict');
+const pendingUiState = new Map();
+const status = {textContent: ''};
+global.window = {pywebview: {api: {set_ui_state() { return Promise.reject(new Error('disk full')); }}}};
+global.document = {getElementById() { return status; }};
+global.log = function() {};
+console.error = function() {};
+__FUNCTIONS__
+persistUiState('reader', 'drafts', {workspaceChat: 'sin perder'}).then(function(result) {
+    assert.equal(result.error, 'ui_state_persistence_failed');
+    assert.equal(pendingUiState.size, 1);
+    assert.match(status.textContent, /disk full/);
+});
+""".replace("__FUNCTIONS__", functions)
+    result = subprocess.run(
+        [node, "-"], input=program, text=True, capture_output=True, check=False
+    )
+    assert result.returncode == 0, result.stderr

@@ -22,7 +22,7 @@ import sqlite3
 import uuid
 import json
 from contextlib import contextmanager, suppress
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Iterable, Optional, Sequence
 
@@ -53,6 +53,11 @@ CLEARABLE_JOB_FIELDS: frozenset[str] = frozenset(
         "note_document_id",
     }
 )
+
+UI_STATE_KEYS: frozenset[str] = frozenset(
+    {"workspace", "filters", "sort", "panels", "cursor", "drafts", "visual_style"}
+)
+MAX_UI_STATE_BYTES = 64 * 1024
 
 
 def _timestamp() -> str:
@@ -104,6 +109,92 @@ class JobStore:
 
     def close(self) -> None:
         self._connection.close()
+
+    # -- UI state and transition approvals ------------------------------
+
+    def save_review_claim(self, values: dict[str, Any]) -> dict[str, Any]:
+        self._connection.execute(
+            """
+            INSERT INTO review_claims
+                (artifact_id, source_stage, target_stage, revision, content_hash,
+                 reviewer, claimed_at, expires_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT (artifact_id, source_stage, target_stage, revision, content_hash)
+            DO UPDATE SET reviewer = excluded.reviewer,
+                          claimed_at = excluded.claimed_at,
+                          expires_at = excluded.expires_at
+            """,
+            tuple(
+                values[field]
+                for field in (
+                    "artifact_id", "source_stage", "target_stage", "revision",
+                    "content_hash", "reviewer", "claimed_at", "expires_at",
+                )
+            ),
+        )
+        return self.get_review_claim(
+            values["artifact_id"], values["source_stage"], values["target_stage"],
+            values["revision"], values["content_hash"],
+        ) or values
+
+    def get_review_claim(
+        self,
+        artifact_id: str,
+        source_stage: str,
+        target_stage: str,
+        revision: int,
+        content_hash: str,
+    ) -> dict[str, Any] | None:
+        row = self._connection.execute(
+            """
+            SELECT * FROM review_claims
+            WHERE artifact_id = ? AND source_stage = ? AND target_stage = ?
+              AND revision = ? AND content_hash = ?
+            """,
+            (artifact_id, source_stage, target_stage, revision, content_hash),
+        ).fetchone()
+        return dict(row) if row is not None else None
+
+    def save_transition_approval(self, values: dict[str, Any]) -> dict[str, Any]:
+        self._connection.execute(
+            """
+            INSERT INTO transition_approvals
+                (artifact_id, source_stage, target_stage, revision, content_hash,
+                 reviewer, approved_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT (artifact_id, source_stage, target_stage, revision, content_hash)
+            DO NOTHING
+            """,
+            tuple(
+                values[field]
+                for field in (
+                    "artifact_id", "source_stage", "target_stage", "revision",
+                    "content_hash", "reviewer", "approved_at",
+                )
+            ),
+        )
+        return self.get_transition_approval(
+            values["artifact_id"], values["source_stage"], values["target_stage"],
+            values["revision"], values["content_hash"],
+        ) or values
+
+    def get_transition_approval(
+        self,
+        artifact_id: str,
+        source_stage: str,
+        target_stage: str,
+        revision: int,
+        content_hash: str,
+    ) -> dict[str, Any] | None:
+        row = self._connection.execute(
+            """
+            SELECT * FROM transition_approvals
+            WHERE artifact_id = ? AND source_stage = ? AND target_stage = ?
+              AND revision = ? AND content_hash = ?
+            """,
+            (artifact_id, source_stage, target_stage, revision, content_hash),
+        ).fetchone()
+        return dict(row) if row is not None else None
 
     # -- refinement identity and verdicts --------------------------------
 
@@ -2056,4 +2147,71 @@ class JobStore:
             error_message=row["error_message"],
             revision=row["revision"],
             created_at=row["created_at"],
+        )
+
+
+class UIStateStore:
+    """Validated JSON UI state stored through an existing ``JobStore`` connection."""
+
+    def __init__(
+        self,
+        job_store: JobStore,
+        *,
+        session_ttl: timedelta = timedelta(hours=24),
+    ) -> None:
+        self.job_store = job_store
+        self.session_ttl = session_ttl
+
+    @staticmethod
+    def _validate(scope: str, owner: str, key: str) -> None:
+        if scope not in {"session", "persistent"}:
+            raise ValueError("scope must be session or persistent")
+        if not isinstance(owner, str) or not owner.strip() or len(owner) > 128:
+            raise ValueError("owner is required and must not exceed 128 characters")
+        if key not in UI_STATE_KEYS:
+            raise ValueError("unknown UI state key")
+
+    def get(self, scope: str, owner: str, key: str) -> object | None:
+        self._validate(scope, owner, key)
+        row = self.job_store._connection.execute(
+            "SELECT value_json, expires_at FROM ui_state "
+            "WHERE scope = ? AND owner = ? AND state_key = ?",
+            (scope, owner.strip(), key),
+        ).fetchone()
+        if row is None:
+            return None
+        if (
+            row["expires_at"] is not None
+            and datetime.fromisoformat(row["expires_at"]) <= datetime.now(timezone.utc)
+        ):
+            self.job_store._connection.execute(
+                "DELETE FROM ui_state WHERE scope = ? AND owner = ? AND state_key = ?",
+                (scope, owner.strip(), key),
+            )
+            return None
+        return json.loads(row["value_json"])
+
+    def set(self, scope: str, owner: str, key: str, value: object) -> None:
+        self._validate(scope, owner, key)
+        try:
+            value_json = json.dumps(value, ensure_ascii=False, separators=(",", ":"))
+        except (TypeError, ValueError) as error:
+            raise ValueError("UI state value must be JSON serializable") from error
+        if len(value_json.encode("utf-8")) > MAX_UI_STATE_BYTES:
+            raise ValueError("UI state value exceeds 64 KiB")
+        now = datetime.now(timezone.utc)
+        expires_at = (
+            (now + self.session_ttl).isoformat() if scope == "session" else None
+        )
+        self.job_store._connection.execute(
+            """
+            INSERT INTO ui_state
+                (scope, owner, state_key, value_json, expires_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT (scope, owner, state_key) DO UPDATE SET
+                value_json = excluded.value_json,
+                expires_at = excluded.expires_at,
+                updated_at = excluded.updated_at
+            """,
+            (scope, owner.strip(), key, value_json, expires_at, now.isoformat()),
         )

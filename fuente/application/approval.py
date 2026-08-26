@@ -1,17 +1,131 @@
 """Application boundary for human approval of canonical clean Markdown."""
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
+from typing import Callable
+
 from fuente.core.vault import VaultManager
 from fuente.domain.approvals import (
     ApprovalLedger,
     ApprovalRecord,
     ApprovalRequest,
+    ReviewClaim,
+    TransitionApproval,
     normalize_reviewer,
     validate_approval_note_id,
     validate_revision,
+    validate_transition_identity,
 )
 from fuente.domain.errors import NoteRevisionConflictError, OutputApprovalRequiredError
 from fuente.infrastructure.atomic_files import document_file_lock
+from fuente.infrastructure.sqlite_store import JobStore
+
+
+class TransitionApprovalService:
+    """Human review and exact approval for one adjacent pipeline transition."""
+
+    def __init__(
+        self,
+        store: JobStore,
+        *,
+        clock: Callable[[], datetime] = lambda: datetime.now(timezone.utc),
+        claim_ttl: timedelta = timedelta(minutes=30),
+    ) -> None:
+        if claim_ttl <= timedelta(0):
+            raise ValueError("claim_ttl must be positive")
+        self.store = store
+        self.clock = clock
+        self.claim_ttl = claim_ttl
+
+    def begin_review(
+        self,
+        artifact_id: str,
+        source_stage: str,
+        target_stage: str,
+        revision: int,
+        content_hash: str,
+        reviewer: str,
+    ) -> ReviewClaim:
+        identity = validate_transition_identity(
+            artifact_id, source_stage, target_stage, revision, content_hash
+        )
+        reviewer = normalize_reviewer(reviewer)
+        claimed_at = self._now()
+        claim = ReviewClaim(
+            *identity,
+            reviewer=reviewer,
+            claimed_at=claimed_at.isoformat(),
+            expires_at=(claimed_at + self.claim_ttl).isoformat(),
+        )
+        return ReviewClaim(**self.store.save_review_claim(claim.__dict__))
+
+    def approve(
+        self,
+        artifact_id: str,
+        source_stage: str,
+        target_stage: str,
+        revision: int,
+        content_hash: str,
+        reviewer: str,
+    ) -> TransitionApproval:
+        identity = validate_transition_identity(
+            artifact_id, source_stage, target_stage, revision, content_hash
+        )
+        reviewer = normalize_reviewer(reviewer)
+        claim = self.store.get_review_claim(*identity)
+        if (
+            claim is None
+            or claim["reviewer"] != reviewer
+            or datetime.fromisoformat(claim["expires_at"]) <= self._now()
+        ):
+            raise OutputApprovalRequiredError(identity[0])
+        approval = TransitionApproval(
+            *identity, reviewer=reviewer, approved_at=self._now().isoformat()
+        )
+        return TransitionApproval(
+            **self.store.save_transition_approval(approval.__dict__)
+        )
+
+    def require_current(
+        self,
+        artifact_id: str,
+        source_stage: str,
+        target_stage: str,
+        revision: int,
+        content_hash: str,
+    ) -> None:
+        identity = validate_transition_identity(
+            artifact_id, source_stage, target_stage, revision, content_hash
+        )
+        if self.store.get_transition_approval(*identity) is None:
+            raise OutputApprovalRequiredError(identity[0])
+
+    def seal(
+        self,
+        artifact_id: str,
+        source_stage: str,
+        target_stage: str,
+        revision: int,
+        content_hash: str,
+    ) -> str:
+        identity = validate_transition_identity(
+            artifact_id, source_stage, target_stage, revision, content_hash
+        )
+        if self.store.get_transition_approval(*identity) is not None:
+            return "approved"
+        claim = self.store.get_review_claim(*identity)
+        if (
+            claim is not None
+            and datetime.fromisoformat(claim["expires_at"]) > self._now()
+        ):
+            return "in_review"
+        return "pending_review"
+
+    def _now(self) -> datetime:
+        value = self.clock()
+        if value.tzinfo is None:
+            raise ValueError("clock must return a timezone-aware datetime")
+        return value
 
 
 class ApprovalApplicationService:

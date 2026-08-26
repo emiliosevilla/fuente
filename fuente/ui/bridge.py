@@ -72,6 +72,8 @@ class FuentePyWebViewApi:
         self._close_lock = threading.RLock()
         self._pending_close_action: tuple[str, str | None] | None = None
         self._close_authorized = False
+        self._ui_state_pending_count = 0
+        self._ui_state_writes_inflight = 0
 
     @staticmethod
     def _error(code: str, message: str) -> ErrorResult:
@@ -120,26 +122,33 @@ class FuentePyWebViewApi:
     def set_window(self, window: Any) -> None:
         self._window = window
 
-    def _ui_state_ready_to_close(self) -> bool:
-        """Ask the loaded page to drain pending SQLite writes before closing."""
-        evaluator = getattr(self._window, "evaluate_js", None)
-        if not callable(evaluator):
-            return True
-        try:
-            result = evaluator(
-                """
-                (function() {
-                    if (typeof window.prepareUiStateForNativeClose !== 'function') {
-                        return {ready: true, reason: 'ui_state_not_initialized'};
-                    }
-                    return window.prepareUiStateForNativeClose();
-                })()
-                """
-            )
-        except Exception as error:
-            logger.error("Could not inspect pending UI state before close: %s", error)
-            return False
-        return isinstance(result, Mapping) and result.get("ready") is True
+    def ui_state_pending_changed(self, count: object) -> dict[str, int] | ErrorResult:
+        """Mirror only queue length so native close never blocks the WebKit thread."""
+        if isinstance(count, bool) or not isinstance(count, int) or not 0 <= count <= 64:
+            return self._error("invalid_payload", "pending UI state count is invalid")
+        with self._close_lock:
+            self._ui_state_pending_count = count
+        return {"pending": count}
+
+    def _has_pending_ui_state(self) -> bool:
+        with self._close_lock:
+            return self._ui_state_pending_count > 0 or self._ui_state_writes_inflight > 0
+
+    def _request_ui_state_drain(self) -> None:
+        runner = getattr(self._window, "run_js", None)
+        if not callable(runner):
+            return
+
+        def drain() -> None:
+            try:
+                runner(
+                    "if (typeof prepareUiStateForNativeClose === 'function') "
+                    "prepareUiStateForNativeClose();"
+                )
+            except Exception as error:
+                logger.error("Could not request pending UI state drain: %s", error)
+
+        threading.Timer(0.01, drain).start()
 
     def _schedule_close_action(self) -> dict[str, str]:
         with self._close_lock:
@@ -167,15 +176,17 @@ class FuentePyWebViewApi:
                 self._close_authorized = False
                 return True
             self._pending_close_action = ("close", None)
-        if self._ui_state_ready_to_close():
+        if not self._has_pending_ui_state():
             with self._close_lock:
                 self._pending_close_action = None
             return True
+        self._request_ui_state_drain()
         return False
 
     def complete_pending_close(self) -> dict[str, str] | ErrorResult:
         """Complete a native close/restart only after JS reports an empty queue."""
-        if not self._ui_state_ready_to_close():
+        if self._has_pending_ui_state():
+            self._request_ui_state_drain()
             return self._error(
                 "ui_state_pending",
                 "Fuente sigue guardando cambios de interfaz; el cierre continúa cancelado.",
@@ -211,11 +222,16 @@ class FuentePyWebViewApi:
         error = next((item for item in values if isinstance(item, dict)), None)
         if error is not None:
             return error
+        with self._close_lock:
+            self._ui_state_writes_inflight += 1
         try:
             UIStateStore(self._ui_job_store()).set(*values, value)
             return {"status": "saved"}
         except (TypeError, ValueError) as error:
             return self._error("invalid_payload", str(error))
+        finally:
+            with self._close_lock:
+                self._ui_state_writes_inflight -= 1
 
     def _ui_job_store(self):
         store = getattr(self.backend, "_job_store", None)
@@ -674,7 +690,8 @@ class FuentePyWebViewApi:
             return result
         with self._close_lock:
             self._pending_close_action = ("restart", result["vault_path"])
-        if not self._ui_state_ready_to_close():
+        if self._has_pending_ui_state():
+            self._request_ui_state_drain()
             return self._error(
                 "ui_state_pending",
                 "Fuente sigue guardando cambios de interfaz; el reinicio está cancelado hasta recuperarlos.",

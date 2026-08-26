@@ -1117,6 +1117,16 @@ document.addEventListener('keydown', handleShellKeydown);
             }, UI_STATE_RETRY_DELAY_MS);
         }
 
+        function notifyNativeUiStatePending() {
+            const api = window.pywebview && window.pywebview.api;
+            if (!api || typeof api.ui_state_pending_changed !== 'function') {
+                return Promise.resolve();
+            }
+            return Promise.resolve(api.ui_state_pending_changed(pendingUiState.size)).catch(function(error) {
+                reportUiStateFailure('notificar', 'interfaz', 'pendiente', error);
+            });
+        }
+
         function persistUiState(owner, key, value, scope) {
             const stateScope = scope || 'persistent';
             const pendingKey = stateScope + '\u0000' + owner + '\u0000' + key;
@@ -1124,9 +1134,14 @@ document.addEventListener('keydown', handleShellKeydown);
             pendingUiState.set(pendingKey, pending);
             const api = window.pywebview && window.pywebview.api;
             if (!api || typeof api.set_ui_state !== 'function') return Promise.resolve({status: 'queued'});
-            return api.set_ui_state(stateScope, owner, key, value).then(function(result) {
+            return notifyNativeUiStatePending().then(function() {
+                return api.set_ui_state(stateScope, owner, key, value);
+            }).then(function(result) {
                 if (!result || result.error) throw new Error((result && result.message) || 'respuesta inválida');
-                if (pendingUiState.get(pendingKey) === pending) pendingUiState.delete(pendingKey);
+                if (pendingUiState.get(pendingKey) === pending) {
+                    pendingUiState.delete(pendingKey);
+                    return notifyNativeUiStatePending().then(function() { return result; });
+                }
                 return result;
             }).catch(function(error) {
                 reportUiStateFailure('guardar', owner, key, error);

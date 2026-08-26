@@ -59,7 +59,11 @@ def _assert_under_theme(path: Path, theme_dir: Path) -> None:
 
 @pytest.fixture
 def themed_pipeline(temp_vault_path):
-    from tests.conftest import patch_abundant_ram, patch_test_model_inventory
+    from tests.conftest import (
+        auto_approve_early_transitions,
+        patch_abundant_ram,
+        patch_test_model_inventory,
+    )
 
     config = get_default_config(temp_vault_path)
     # Ensure General roots exist so a silent write would be detectable.
@@ -67,6 +71,7 @@ def themed_pipeline(temp_vault_path):
         root.mkdir(parents=True, exist_ok=True)
 
     pipeline = ETLPipeline(config)
+    auto_approve_early_transitions(pipeline.ingestion)
     pipeline.set_runtime_policy(
         RuntimePolicy(
             profile=ExecutionProfile.AUTO,

@@ -164,6 +164,7 @@ class ETLPipeline:
             atomic_generator=self.atomic_gen,
             runtime_policy=self.runtime_policy,
             ram_governor=self.ram_governor,
+            copy_to_dirty=self._safe_copy_to_dirty,
             stabilize=self._wait_until_stable,
         )
 
@@ -302,6 +303,14 @@ class ETLPipeline:
 
     def _wait_until_stable(self, raw_file_path: Path) -> bool:
         return wait_until_file_stable(raw_file_path)
+
+    @retry_on_io_error(
+        max_retries=QuarantineService.TRANSIENT_IO_MAX_ATTEMPTS,
+        delay_sec=QuarantineService.TRANSIENT_IO_INITIAL_BACKOFF_SECONDS,
+    )
+    def _safe_copy_to_dirty(self, raw_file_path: Path, **approval) -> Path:
+        return self.vault.copy_to_dirty(raw_file_path, **approval)
+
 
 if HAS_WATCHDOG:
     class IngestionWatcher(FileSystemEventHandler):

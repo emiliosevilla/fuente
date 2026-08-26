@@ -12,7 +12,7 @@ from fuente.extractors.registry import ExtractorRegistry
 from fuente.infrastructure.sqlite_store import JobStore
 from fuente.rag.semantic_chunker import SemanticChunker
 from tests.integration.conftest import FakeChroma, FakeGenerator, FakeGovernor
-from tests.conftest import approve_saved_clean_job
+from tests.conftest import approve_saved_clean_job, auto_approve_early_transitions
 
 
 def _build_offline_ingestion(vault_root: Path) -> tuple[IngestionApplicationService, JobStore]:
@@ -30,6 +30,7 @@ def _build_offline_ingestion(vault_root: Path) -> tuple[IngestionApplicationServ
         ram_governor=FakeGovernor(),
         stabilize=lambda path: path.is_file() and path.stat().st_size > 0,
     )
+    auto_approve_early_transitions(service)
     return service, store
 
 

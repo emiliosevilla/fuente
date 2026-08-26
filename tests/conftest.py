@@ -237,6 +237,43 @@ def approve_saved_clean_job(service, vault: VaultManager, job, *, reviewer: str 
     )
 
 
+def approve_early_job_transitions(service, job, *, reviewer: str = "pytest"):
+    """Approve the exact source bytes for the two pre-canonical test boundaries."""
+    for source_stage, target_stage in (
+        ("1_volcado", "2_copiado"),
+        ("2_copiado", "3_capturado"),
+    ):
+        service.transition_approvals.begin_review(
+            job.job_id,
+            source_stage,
+            target_stage,
+            1,
+            job.source_hash,
+            reviewer,
+        )
+        service.transition_approvals.approve(
+            job.job_id,
+            source_stage,
+            target_stage,
+            1,
+            job.source_hash,
+            reviewer,
+        )
+    return job
+
+
+def auto_approve_early_transitions(service, *, reviewer: str = "pytest") -> None:
+    """Wrap submit explicitly for tests whose subject is beyond the early gates."""
+    original_submit = service.submit
+
+    def approved_submit(*args, **kwargs):
+        return approve_early_job_transitions(
+            service, original_submit(*args, **kwargs), reviewer=reviewer
+        )
+
+    service.submit = approved_submit
+
+
 @pytest.fixture
 def temp_vault_path(tmp_path):
     """Isolated Vault directory; never the repository Vault_Fuente."""

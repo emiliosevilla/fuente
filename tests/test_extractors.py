@@ -86,8 +86,8 @@ Fin del documento.
             self.assertEqual(meta["type"], "audio")
             self.assertIn("Transcripción de audio pendiente", extracted)
 
-    def test_audio_extractor_accepts_meetily_mp4(self):
-        audio_file = self.temp_path / "meetily.mp4"
+    def test_audio_extractor_accepts_mp4(self):
+        audio_file = self.temp_path / "recording.mp4"
         audio_file.write_bytes(b"mock-mp4-audio")
         self.assertTrue(AudioExtractor().can_handle(audio_file))
 

@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Caudal - Mockup Nord claro v2</title>
+  <link rel="stylesheet" href="mockup-v2.css">
+</head>
+<body>
+  <main class="desktop caudal-shell">
+    <aside class="rail">
+      <div class="traffic" aria-hidden="true"><i></i><i></i><i></i></div>
+      <nav aria-label="Espacios">
+        <a href="#"><svg viewBox="0 0 24 24"><path d="m3 11 9-8 9 8"/><path d="M5 10v10h14V10M9 20v-6h6v6"/></svg><span>Inicio</span></a>
+        <a href="fuente-v2.html"><svg viewBox="0 0 24 24"><path d="M5 4h14v16H5zM8 8h8M8 12h8M8 16h8"/></svg><span>Fuente</span></a>
+        <a class="active" href="#"><svg viewBox="0 0 24 24"><path d="M4 7h10M17 7h3M4 12h3M10 12h10M4 17h8M15 17h5"/><circle cx="15" cy="7" r="2"/><circle cx="8" cy="12" r="2"/><circle cx="13" cy="17" r="2"/></svg><span>Caudal</span></a>
+      </nav>
+      <a class="rail-settings" href="#"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6v.2h-4V21a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H2.8v-4H3a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.2 7 7 4.2l.1.1A1.7 1.7 0 0 0 9 4.6 1.7 1.7 0 0 0 10 3v-.2h4V3a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.2v4H21a1.7 1.7 0 0 0-1.6 1z"/></svg><span>Ajustes</span></a>
+    </aside>
+
+    <header class="topbar">
+      <div class="back-forward"><span>‹</span><span>›</span></div><h1>Caudal</h1>
+      <div class="topbar-actions">
+        <button class="button"><svg viewBox="0 0 24 24"><path d="M12 16V3m0 0L7 8m5-5 5 5M4 14v6h16v-6"/></svg>Importar</button>
+        <button class="button"><svg viewBox="0 0 24 24"><path d="M12 3v13m0 0-5-5m5 5 5-5M4 20h16"/></svg>Exportar</button>
+        <button class="button"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>Buscar</button>
+        <button class="button"><svg viewBox="0 0 24 24"><path d="M4 5h16l-6 7v6l-4 2v-8z"/></svg>Filtros</button>
+      </div>
+      <div class="import-menu"><div>Archivos</div><div>Carpeta</div><div>SharePoint sincronizado</div></div>
+    </header>
+
+    <section class="caudal-body">
+      <div class="pipeline" aria-label="Pipeline">
+        <div class="pipeline-step"><b>1</b>Volcado<small class="num">134</small></div>
+        <div class="pipeline-step"><b>2</b>Copiado<small class="num">98</small></div>
+        <div class="pipeline-step"><b>3</b>Capturado<small class="num">76</small></div>
+        <div class="pipeline-step active"><b>4</b>Procesado<small class="num">58</small></div>
+        <div class="pipeline-step"><b>5</b>Compartido<small class="num">42</small></div>
+      </div>
+
+      <section class="queue">
+        <div class="queue-tabs"><button class="active">Pendientes</button><button>En revisión</button><button>Terminados</button></div>
+        <table>
+          <thead><tr><th>Archivo</th><th>Etapa</th><th>Sello</th><th>Actualizado</th></tr></thead>
+          <tbody>
+            <tr><td><span class="file-name"><svg viewBox="0 0 24 24"><path d="M6 3h9l4 4v14H6zM14 3v5h5"/></svg>Acta_2024-05-14.pdf</span></td><td>Procesado</td><td><span class="status-cell"><span class="dot orange"></span>Naranja · En revisión</span></td><td class="num">13/05/2024 11:32</td></tr>
+            <tr class="selected"><td><span class="file-name"><svg viewBox="0 0 24 24"><path d="M6 3h9l4 4v14H6zM14 3v5h5"/></svg>Contrato_Servicios_v3.docx</span></td><td>Procesado</td><td><span class="status-cell"><span class="dot orange"></span>Naranja · En revisión</span></td><td class="num">13/05/2024 10:47</td></tr>
+            <tr><td><span class="file-name"><svg viewBox="0 0 24 24"><path d="M6 3h9l4 4v14H6zM14 3v5h5"/></svg>Informe_Mensual_Abril.xlsx</span></td><td>Procesado</td><td><span class="status-cell"><span class="dot orange"></span>Naranja · En revisión</span></td><td class="num">12/05/2024 17:21</td></tr>
+            <tr><td><span class="file-name"><svg viewBox="0 0 24 24"><path d="M6 3h9l4 4v14H6zM14 3v5h5"/></svg>Poliza_Seguros_2024.pdf</span></td><td>Procesado</td><td><span class="status-cell"><span class="dot orange"></span>Naranja · En revisión</span></td><td class="num">12/05/2024 09:58</td></tr>
+            <tr><td><span class="file-name"><svg viewBox="0 0 24 24"><path d="M6 3h9l4 4v14H6zM14 3v5h5"/></svg>Presentacion_Comite.pptx</span></td><td>Procesado</td><td><span class="status-cell"><span class="dot orange"></span>Naranja · En revisión</span></td><td class="num">11/05/2024 16:05</td></tr>
+            <tr><td><span class="file-name"><svg viewBox="0 0 24 24"><path d="M6 3h9l4 4v14H6zM14 3v5h5"/></svg>Reporte_Auditoria_Q1.pdf</span></td><td>Procesado</td><td><span class="status-cell"><span class="dot orange"></span>Naranja · En revisión</span></td><td class="num">11/05/2024 08:42</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <aside class="file-detail">
+        <div class="detail-head"><h2>Detalle del archivo</h2><span>×</span></div>
+        <dl><dt>Archivo</dt><dd>Contrato_Servicios_v3.docx</dd><dt>Origen</dt><dd>SharePoint sincronizado<br><span class="link">/Legal/Contratos/2024/</span></dd><dt>Revisión</dt><dd>3&nbsp; (13/05/2024 10:47)</dd><dt>Hash (SHA-256)</dt><dd>3b8f2c6e6b5d9f3a7e9c1d4b2a7f3e9d<br>8c7a1b2d3e4f5a6b7c8d9e0f1a2b3c4</dd><dt>Sello actual</dt><dd><span class="status-cell"><span class="dot orange"></span>Naranja · En revisión</span></dd><dt>Próxima aprobación<br>requerida</dt><dd>Aprobador Legal</dd></dl>
+        <div class="detail-actions"><button class="button primary">Aprobar paso</button><button class="button outline">Abrir en Fuente</button></div>
+        <div class="detail-accordion"><details open><summary>Linaje</summary><p>Volcado &nbsp;›&nbsp; Copiado &nbsp;›&nbsp; Capturado &nbsp;›&nbsp; Procesado<br><span class="muted">12/05/2024 16:02&nbsp; · &nbsp;sistema</span></p></details><details><summary>Errores</summary></details><details><summary>Notas generadas</summary></details></div>
+      </aside>
+    </section>
+
+    <aside class="vertical-tab activity-tab">Registro de actividad&nbsp;&nbsp; ›</aside>
+    <footer class="caudal-footer"><a><span class="dot red"></span><u>Rojos&nbsp; 12</u></a><a><span class="dot orange"></span><u>En revisión&nbsp; 7</u></a><a><span class="dot green"></span><u>Verdes&nbsp; 86</u></a><a><span class="dot slate"></span><u>Cuarentena&nbsp; 3</u></a><button class="button">Ver registro</button></footer>
+  </main>
+</body>
+</html>

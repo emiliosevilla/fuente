@@ -142,7 +142,7 @@ def test_classify_source_path_by_extension():
     assert classify_source_path("1_entrada/a.txt") is TaskClass.IO_TEXT
     assert classify_source_path("1_entrada/scan.png") is TaskClass.MEDIA_OCR
     assert classify_source_path("1_entrada/voice.mp3") is TaskClass.MEDIA_AUDIO
-    assert classify_source_path("1_entrada/meetily/audio.mp4") is TaskClass.MEDIA_AUDIO
+    assert classify_source_path("1_entrada/recordings/audio.mp4") is TaskClass.MEDIA_AUDIO
 
 
 def test_task_class_for_job_maps_pipeline_stages(tmp_path):

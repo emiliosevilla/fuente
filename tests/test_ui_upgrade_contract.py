@@ -10,12 +10,17 @@ CSS = (ROOT / "fuente/ui/static/console.css").read_text(encoding="utf-8")
 TOKENS = (ROOT / "fuente/ui/static/fuente_tokens.css").read_text(encoding="utf-8")
 
 
-def test_native_shell_has_four_primary_workspaces_and_one_main_region():
+def test_native_shell_has_three_primary_workspaces_and_one_main_region():
     assert 'id="primary-navigation"' in HTML
     assert 'aria-label="Espacios de Fuente"' in HTML
-    for workspace in ("home", "notes", "meetings", "map"):
+    for workspace in ("home", "notes", "map"):
         assert f'data-workspace-target="{workspace}"' in HTML
         assert f'id="workspace-{workspace}"' in HTML
+    assert 'data-workspace-target="meetings"' not in HTML
+    assert 'id="workspace-meetings"' not in HTML
+    assert "Meetily" not in HTML
+    assert "meetily" not in HTML.lower()
+    assert "meeting-" not in CSS
     assert HTML.count('role="main"') == 1
 
 

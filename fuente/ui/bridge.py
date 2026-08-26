@@ -5,7 +5,6 @@ from __future__ import annotations
 import re
 import sqlite3
 import os
-import subprocess
 import sys
 import threading
 from uuid import UUID
@@ -1110,51 +1109,6 @@ class FuentePyWebViewApi:
         if context is not None and not isinstance(context, Mapping):
             return self._error("invalid_payload", "context must be an object")
         return self.backend.process_chat(text, context=dict(context or {}))
-
-    def _meeting_service(self):
-        lifecycle = getattr(self.backend, "lifecycle", None)
-        if lifecycle is not None:
-            return lifecycle.meeting_service
-        from fuente.application.meetings import MeetilyLibraryApplicationService
-
-        return MeetilyLibraryApplicationService(self.backend.config)
-
-    def open_meetily_app(self) -> dict[str, Any]:
-        """Open the supported Meetily desktop app; it owns capture permissions."""
-        if sys.platform != "darwin":
-            return self._error("meetily_unavailable", "Meetily sólo está instalado como app macOS en este equipo")
-        candidates = (
-            Path("/Applications/meetily.app"),
-            Path.home() / "Applications" / "meetily.app",
-        )
-        app_path = next((path for path in candidates if path.is_dir()), None)
-        if app_path is None:
-            return self._error(
-                "meetily_unavailable",
-                "No se encontró Meetily. Instálalo desde su aplicación oficial antes de grabar.",
-            )
-        try:
-            subprocess.Popen(["/usr/bin/open", "-a", str(app_path)])
-        except OSError as error:
-            return self._error("meetily_open_failed", str(error))
-        return {"status": "opened", "app": "meetily"}
-
-    def list_meetily_recordings(self) -> dict[str, Any]:
-        try:
-            return {"status": "ready", "recordings": self._meeting_service().list_recordings()}
-        except Exception as error:
-            return self._error("meetily_library_failed", str(error))
-
-    def import_meetily_recording(self, recording_id: object) -> dict[str, Any]:
-        value = self._text(recording_id, "recording_id")
-        if isinstance(value, dict):
-            return value
-        if not re.fullmatch(r"meetily_[0-9a-f]{24}", value):
-            return self._error("invalid_payload", "recording_id is not valid")
-        try:
-            return self._meeting_service().import_recording(value)
-        except Exception as error:
-            return self._error("meetily_import_failed", str(error))
 
     def process_workspace_chat(self, document_id: object, message: object) -> dict[str, Any]:
         note = self._text(document_id, "document_id")

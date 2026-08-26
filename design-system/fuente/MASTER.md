@@ -1,10 +1,10 @@
 # Fuente design system
 
-Fuente is a local-first macOS knowledge studio. The interface puts the note, meeting, or graph being worked on ahead of system statistics. The source plan is the authority; two local design searches were rejected because they returned a FAQ landing and a scroll-driven marketing story with forbidden remote fonts and GSAP.
+Fuente is a local-first macOS knowledge studio. The interface puts the note or graph being worked on ahead of system statistics. The source plan is the authority; two local design searches were rejected because they returned a FAQ landing and a scroll-driven marketing story with forbidden remote fonts and GSAP.
 
 ## Product direction
 
-- Audience: one person turning local files and meetings into connected, reviewed knowledge.
+- Audience: one person turning local files into connected, reviewed knowledge.
 - Primary job: move material through `1_volcado`, `2_copiado`, `3_capturado`, `4_procesado`, and `5_compartido` without losing provenance.
 - Layout: compact 68 px rail, one contextual header, one dominant workspace, quiet utility access.
 - Signature: a restrained ripple connects the five-step flow and marks an active workspace transition. It never becomes background decoration.
@@ -12,21 +12,23 @@ Fuente is a local-first macOS knowledge studio. The interface puts the note, mee
 
 ## Semantic color tokens
 
-| Token | Energy | Zen | Purpose |
+| Token | Nord | Gruvbox | Purpose |
 |---|---:|---:|---|
-| `--surface-canvas` | `#F2F6F4` | `#071311` | App canvas |
-| `--surface-raised` | `#FFFFFF` | `#0D211E` | Main content |
-| `--surface-sunken` | `#E6EEEB` | `#081A17` | Recessed controls |
-| `--surface-overlay` | `#FFFFFF` | `#122B27` | Dialogs |
-| `--text-primary` | `#102421` | `#F1F7F4` | Main text |
-| `--text-secondary` | `#506762` | `#AFC3BE` | Supporting text |
-| `--border-subtle` | `#CBD8D4` | `#31504A` | Dividers |
-| `--accent-primary` | `#147D73` | `#5AD8C8` | Primary action |
-| `--accent-selection` | `#C9EEE8` | `#183F3A` | Current selection |
-| `--focus-ring` | `#0B6F66` | `#7CE5D8` | Keyboard focus |
-| `--state-success` | `#267A4B` | `#76D69B` | Successful state |
-| `--state-warning` | `#8A5A00` | `#F2C66D` | Needs attention |
-| `--state-danger` | `#B53B3B` | `#FF8D89` | Failure or danger |
+| `--surface-canvas` | `#2E3440` | `#282828` | App canvas |
+| `--surface-raised` | `#3B4252` | `#32302F` | Main content |
+| `--surface-sunken` | `#272C36` | `#1D2021` | Recessed controls |
+| `--surface-overlay` | `#434C5E` | `#3C3836` | Dialogs |
+| `--text-primary` | `#ECEFF4` | `#FBF1C7` | Main text |
+| `--text-secondary` | `#D8DEE9` | `#D5C4A1` | Supporting text |
+| `--border-subtle` | `#4C566A` | `#504945` | Dividers |
+| `--accent-primary` | `#81A1C1` | `#8EC07C` | Primary action |
+| `--accent-selection` | Frost blue 24% | Aqua 22% | Current selection |
+| `--focus-ring` | `#88C0D0` | `#83A598` | Keyboard focus |
+| `--state-success` | `#A3BE8C` | `#B8BB26` | Successful state |
+| `--state-warning` | `#EBCB8B` | `#FABD2F` | Needs attention |
+| `--state-danger` | `#D98990` | `#FF5D48` | Contrast-safe danger derived from each palette |
+
+The palettes and Obsidian interaction references are adapted from Eric Davis's MIT-licensed [Obsidian Nord](https://github.com/insanum/obsidian_nord) and [Obsidian Gruvbox](https://github.com/insanum/obsidian_gruvbox) themes. Fuente keeps its own layout, typography, spacing, accessibility and component contracts.
 
 Acceptance requires 4.5:1 for normal text and 3:1 for focus and meaningful non-text states. Values may change only after a recorded measurement and explicit approval.
 
@@ -52,7 +54,7 @@ Acceptance requires 4.5:1 for normal text and 3:1 for focus and meaningful non-t
 ## Distinctiveness review
 
 - Generic choice found: the old uniform statistics row and equal-weight toolbar read as an admin dashboard.
-- Replacement specific to Fuente: the five-step material flow becomes Inicio's spine; current notes, meetings, and connections become primary workspaces.
+- Replacement specific to Fuente: the five-step material flow becomes Inicio's spine; current notes and connections become primary workspaces.
 - One justified aesthetic risk: the ripple briefly carries attention between a selected step and its connected workspace, then becomes still.
 - Decorations removed: stat-card grid, marketing hero copy, repeated borders, and animation without state meaning.
 - How the ripple signature communicates state: one ring expands from the active flow node or rail item toward the newly active region; reduced motion shows the selected ring statically.

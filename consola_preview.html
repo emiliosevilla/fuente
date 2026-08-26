@@ -1,10 +1,10 @@
 <!DOCTYPE html>
-<html lang="es" data-fuente-style="zen">
+<html lang="es" data-fuente-style="nord">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; base-uri 'none'; connect-src 'self'; font-src 'self'; img-src 'self' data:; object-src 'none'; script-src 'self' 'nonce-fuente-console' 'unsafe-eval'; style-src 'self'">
-    <title>Fuente — Consola</title>
+    <title>Fuente | Consola</title>
     <!-- La tipografía global de la consola y sus modales se define en console.css. -->
     <link rel="stylesheet" data-fuente-tokens="true" href="fuente/ui/static/fuente_tokens.css">
     <link rel="stylesheet" href="fuente/ui/static/console.css">
@@ -15,7 +15,6 @@
     <nav id="primary-navigation" class="primary-navigation" aria-label="Espacios de Fuente">
         <button type="button" class="workspace-trigger is-active" data-workspace-target="home" data-onclick-command="switchWorkspace('home')" aria-current="page"><span aria-hidden="true">F</span><span>Inicio</span></button>
         <button type="button" class="workspace-trigger" data-workspace-target="notes" data-onclick-command="switchWorkspace('notes')" aria-current="false"><span aria-hidden="true">N</span><span>Notas</span></button>
-        <button type="button" class="workspace-trigger" data-workspace-target="meetings" data-onclick-command="switchWorkspace('meetings')" aria-current="false"><span aria-hidden="true">R</span><span>Reuniones</span></button>
         <button type="button" class="workspace-trigger" data-workspace-target="map" data-onclick-command="switchWorkspace('map')" aria-current="false"><span aria-hidden="true">M</span><span>Mapa</span></button>
     </nav>
 
@@ -34,7 +33,7 @@
                 <span class="console-text-001">|</span>
                 <span class="masthead-link" data-onclick-command="openModal('modal-settings')">Ajustes</span>
                 <span class="console-text-001">|</span>
-                <button id="style-toggle" type="button" class="masthead-link masthead-style-button" data-onclick-command="toggleVisualStyle()" aria-label="Activar estilo visual Energy">Energy</button>
+                <button id="style-toggle" type="button" class="masthead-link masthead-style-button" data-onclick-command="toggleVisualStyle()" aria-label="Activar estilo visual Gruvbox">Gruvbox</button>
             </div>
         </div>
 
@@ -129,11 +128,10 @@
             <div class="subgraphs-container">
                 <div class="subgraph-box">
                     <div class="subgraph-header">
-                        <span class="subgraph-title">1. Recopilar</span>
+                        <span class="subgraph-title">Recopilar</span>
                         <span class="node-badge" id="badge-step1">Última vez: --/--/---- --:--:--</span>
                     </div>
                     <div class="node-card" data-onclick-command="triggerAction('step1_flush')">
-                        <div class="node-tag">── 1 ──</div>
                         <div class="node-name">Recopilar archivos</div>
                         <div class="node-desc">Recoger archivos de las carpetas conectadas</div>
                     </div>
@@ -143,11 +141,10 @@
 
                 <div class="subgraph-box">
                     <div class="subgraph-header">
-                        <span class="subgraph-title">2. Convertir</span>
+                        <span class="subgraph-title">Convertir</span>
                         <span class="node-badge" id="badge-step2">Última vez: --/--/---- --:--:--</span>
                     </div>
                     <div class="node-card" data-onclick-command="triggerAction('step2_transcribe')">
-                        <div class="node-tag">── 2 ──</div>
                         <div class="node-name">Convertir a texto</div>
                         <div class="node-desc">Preparar audios, imágenes y documentos</div>
                     </div>
@@ -157,11 +154,10 @@
 
                 <div class="subgraph-box">
                     <div class="subgraph-header">
-                        <span class="subgraph-title">3. Organizar</span>
+                        <span class="subgraph-title">Organizar</span>
                         <span class="node-badge" id="badge-step3">Última vez: --/--/---- --:--:--</span>
                     </div>
                     <div class="node-card" data-onclick-command="triggerAction('step3_structure')">
-                        <div class="node-tag">── 3 ──</div>
                         <div class="node-name">Organizar notas</div>
                         <div class="node-desc">Separar, enlazar y ordenar las ideas</div>
                     </div>
@@ -171,11 +167,10 @@
 
                 <div class="subgraph-box">
                     <div class="subgraph-header">
-                        <span class="subgraph-title">4. Consultar</span>
+                        <span class="subgraph-title">Consultar</span>
                         <span class="node-badge" id="badge-step4">Última vez: --/--/---- --:--:--</span>
                     </div>
                     <div class="node-card" data-onclick-command="openModal('modal-reader')">
-                        <div class="node-tag">── 4 ──</div>
                         <div class="node-name">Consultar notas</div>
                         <div class="node-desc">Leerlas o preguntar sobre ellas</div>
                     </div>
@@ -185,11 +180,10 @@
 
                 <div class="subgraph-box">
                     <div class="subgraph-header">
-                        <span class="subgraph-title">5. Compartir</span>
+                        <span class="subgraph-title">Compartir</span>
                         <span class="node-badge" id="badge-step5">Última vez: --/--/---- --:--:--</span>
                     </div>
                     <div class="node-card" data-onclick-command="openApprovalInbox()">
-                        <div class="node-tag">── 5 ──</div>
                         <div class="node-name">Revisar y compartir</div>
                         <div class="node-desc">Dar por buenas las notas y preparar su salida</div>
                     </div>
@@ -200,7 +194,7 @@
         <!-- LOG CONSOLE DE AUDITORÍA -->
         <div class="log-section">
             <div class="log-header">
-                <span>── ACTIVIDAD ──</span>
+                <span>Actividad</span>
                 <div class="log-actions">
                     <button class="btn-small" id="btn-toggle-path" data-onclick-command="togglePathMode(this)">Rutas cortas</button>
                     <button class="btn-small" data-onclick-command="clearLogView()">Limpiar</button>
@@ -221,25 +215,14 @@
 
     <section id="workspace-notes" class="workspace-panel-root" data-workspace="notes" tabindex="-1" aria-labelledby="workspace-notes-title" hidden>
         <header class="workspace-heading">
-            <p class="workspace-kicker">Biblioteca local</p>
             <h1 id="workspace-notes-title">Notas</h1>
             <p>Busca, lee y prepara tus notas sin perder el contexto.</p>
         </header>
         <div id="reader-workspace-host"></div>
     </section>
 
-    <section id="workspace-meetings" class="workspace-panel-root" data-workspace="meetings" tabindex="-1" aria-labelledby="workspace-meetings-title" hidden>
-        <div class="workspace-placeholder">
-            <p class="workspace-kicker">Biblioteca local</p>
-            <h1 id="workspace-meetings-title">Reuniones</h1>
-            <p>Importa una conversación de Meetily y conviértela en notas.</p>
-            <button type="button" class="btn-primary" data-onclick-command="openMeetilyModal()">Ver reuniones</button>
-        </div>
-    </section>
-
     <section id="workspace-map" class="workspace-panel-root" data-workspace="map" tabindex="-1" aria-labelledby="workspace-map-title" hidden>
         <div class="workspace-placeholder">
-            <p class="workspace-kicker">Conocimiento conectado</p>
             <h1 id="workspace-map-title">Mapa</h1>
             <p>Explora relaciones, orígenes y notas en un espacio independiente.</p>
             <button type="button" class="btn-primary" data-onclick-command="openReaderGraphModal()">Abrir mapa</button>
@@ -266,7 +249,6 @@
                     <button class="btn-small" data-onclick-command="triggerAction('export_reader_note', {}, this)">Exportar</button>
                     <button class="btn-small" data-onclick-command="triggerAction('open_obsidian', {}, this)">Obsidian</button>
                     <button class="btn-small" data-onclick-command="openFusionWorkflow()">Unir</button>
-                    <button class="btn-small" data-onclick-command="openMeetilyModal()">Reunión</button>
                     <button class="close-btn" data-onclick-command="closeModal('modal-reader')">&times;</button>
                 </div>
             </div>
@@ -396,47 +378,6 @@
                         <span class="graph-help">Las líneas unen notas relacionadas; el índice aparece en amarillo. Haz clic para abrir, arrastra para mover.</span>
                     </div>
                 </div>
-            </div>
-        </div>
-    </div>
-
-    <div class="modal-overlay" id="meetily-modal" role="dialog" aria-modal="true" aria-labelledby="meetily-modal-title" aria-hidden="true">
-        <div class="modal-container meeting-modal-container">
-            <div class="modal-header">
-                <div>
-                    <div class="modal-kicker">Reuniones locales</div>
-                    <div class="modal-title" id="meetily-modal-title">De la conversación a tus notas</div>
-                </div>
-                <button class="close-btn" data-onclick-command="closeMeetilyModal()" aria-label="Cerrar captura de reunión">&times;</button>
-            </div>
-            <div class="modal-body meeting-modal-body">
-                <section class="meeting-hero">
-                    <div class="meeting-hero-copy">
-                        <span class="meeting-local-badge">Privado · en este Mac</span>
-                        <h2>Graba en Meetily. Fuente convierte la reunión en conocimiento.</h2>
-                        <p>La grabación y la transcripción se quedan en tu equipo. Al terminar, vuelve y recoge la reunión aquí.</p>
-                        <div class="meeting-modal-actions">
-                            <button type="button" class="btn-primary meeting-open-button" data-onclick-command="openMeetilyApplication()">
-                                <span class="meeting-record-dot" aria-hidden="true"></span> Abrir Meetily
-                            </button>
-                            <button type="button" class="btn-secondary" data-onclick-command="refreshMeetilyRecordings()">Actualizar reuniones</button>
-                        </div>
-                    </div>
-                    <ol class="meeting-flow" aria-label="Recorrido de una reunión">
-                        <li><span>1</span><div><strong>Graba</strong><small>Meetily escucha y transcribe.</small></div></li>
-                        <li><span>2</span><div><strong>Vuelve</strong><small>Fuente detecta el resultado.</small></div></li>
-                        <li><span>3</span><div><strong>Importa</strong><small>Audio y texto quedan enlazados.</small></div></li>
-                    </ol>
-                </section>
-                <div class="meeting-library-header">
-                    <div>
-                        <span class="meeting-section-label">Biblioteca de Meetily</span>
-                        <h3>Reuniones recientes</h3>
-                    </div>
-                    <span class="meeting-count" id="meetily-recording-count">0</span>
-                </div>
-                <p id="meetily-status" class="meeting-status" role="status" aria-live="polite">Buscando reuniones en este Mac…</p>
-                <div id="meetily-recording-list" class="meeting-recording-list" aria-live="polite"></div>
             </div>
         </div>
     </div>
@@ -1113,10 +1054,6 @@
                 'approveSelectedNote()': approveSelectedNote,
                 'approveAndExportSelectedNote()': approveAndExportSelectedNote,
                 'retryFailedApprovalExport()': retryFailedApprovalExport,
-                'openMeetilyModal()': openMeetilyModal,
-                'closeMeetilyModal()': closeMeetilyModal,
-                'openMeetilyApplication()': openMeetilyApplication,
-                'refreshMeetilyRecordings()': refreshMeetilyRecordings,
                 'loadJobQueue()': loadJobQueue,
                 'refreshJobQueue()': refreshJobQueue,
                 'loadNextJobPage()': loadNextJobPage,
@@ -1146,8 +1083,7 @@ document.addEventListener('keydown', function(event) {
     if (!dialog) return;
     if (event.key === 'Escape') {
         event.preventDefault();
-        if (dialog.id === 'meetily-modal') closeMeetilyModal();
-        else closeModal(dialog.id);
+        closeModal(dialog.id);
         return;
     }
     if (event.key !== 'Tab') return;
@@ -1346,7 +1282,7 @@ document.addEventListener('keydown', function(event) {
             }
         }
 
-        const WORKSPACE_IDS = ['home', 'notes', 'meetings', 'map'];
+        const WORKSPACE_IDS = ['home', 'notes', 'map'];
 
         function switchWorkspace(workspaceId) {
             if (!WORKSPACE_IDS.includes(workspaceId)) return;
@@ -1406,7 +1342,7 @@ document.addEventListener('keydown', function(event) {
         }
 
         function markExplicitPreviewMode() {
-            document.title = 'Fuente Control Console — Vista previa demo';
+            document.title = 'Fuente Control Console | Vista previa demo';
             const status = document.getElementById('bottom-status-line');
             if (status) {
                         status.textContent = 'VISTA PREVIA · DATOS DE EJEMPLO · No hay un tema conectado';
@@ -1619,7 +1555,7 @@ document.addEventListener('keydown', function(event) {
 
         function queueTimestampLabel(value) {
             const date = new Date(value);
-            return Number.isNaN(date.getTime()) ? queueValue(value, '—') : date.toLocaleString('es-ES');
+            return Number.isNaN(date.getTime()) ? queueValue(value, 'Sin datos') : date.toLocaleString('es-ES');
         }
 
         function queueReference(value) {
@@ -1632,7 +1568,7 @@ document.addEventListener('keydown', function(event) {
             const labelEl = document.createElement('strong');
             labelEl.textContent = label + ': ';
             const valueEl = document.createElement('span');
-            valueEl.textContent = queueValue(value, '—');
+            valueEl.textContent = queueValue(value, 'Sin datos');
             field.append(labelEl, valueEl);
             parent.appendChild(field);
             return field;
@@ -3169,7 +3105,7 @@ document.addEventListener('keydown', function(event) {
                         const item = document.createElement('div');
                         item.classList.add('console-layout-067');
                         const label = document.createElement('span');
-                        label.textContent = (input.display_name || 'Entrada') + ' [' + (input.provider || 'local') + ']' + (input.enabled ? '' : ' — desactivada');
+                        label.textContent = (input.display_name || 'Entrada') + ' [' + (input.provider || 'local') + ']' + (input.enabled ? '' : ' - desactivada');
                         const remove = document.createElement('button');
                         remove.type = 'button';
                         remove.classList.add('console-text-031');
@@ -3662,24 +3598,24 @@ document.addEventListener('keydown', function(event) {
         }
 
         const FUENTE_STYLE_STORAGE_KEY = 'fuente.visual-style';
-        const FUENTE_STYLES = new Set(['zen', 'energy']);
+        const FUENTE_STYLES = new Set(['nord', 'gruvbox']);
 
         function readVisualStyle() {
             try {
                 const stored = window.localStorage.getItem(FUENTE_STYLE_STORAGE_KEY);
-                return FUENTE_STYLES.has(stored) ? stored : 'zen';
+                return FUENTE_STYLES.has(stored) ? stored : 'nord';
             } catch (error) {
-                return 'zen';
+                return 'nord';
             }
         }
 
         function applyVisualStyle(styleName) {
-            const activeStyle = FUENTE_STYLES.has(styleName) ? styleName : 'zen';
+            const activeStyle = FUENTE_STYLES.has(styleName) ? styleName : 'nord';
             document.documentElement.dataset.fuenteStyle = activeStyle;
             const styleToggle = document.getElementById('style-toggle');
             if (styleToggle) {
-                const nextStyle = activeStyle === 'energy' ? 'zen' : 'energy';
-                styleToggle.textContent = nextStyle === 'energy' ? 'Energy' : 'Zen';
+                const nextStyle = activeStyle === 'nord' ? 'gruvbox' : 'nord';
+                styleToggle.textContent = nextStyle === 'gruvbox' ? 'Gruvbox' : 'Nord';
                 styleToggle.setAttribute('aria-label', 'Activar estilo visual ' + styleToggle.textContent);
             }
             try {
@@ -3692,7 +3628,7 @@ document.addEventListener('keydown', function(event) {
 
         function toggleVisualStyle() {
             const currentStyle = document.documentElement.dataset.fuenteStyle || readVisualStyle();
-            applyVisualStyle(currentStyle === 'energy' ? 'zen' : 'energy');
+            applyVisualStyle(currentStyle === 'nord' ? 'gruvbox' : 'nord');
         }
 
         let availableThemes = ['General'];
@@ -3897,7 +3833,7 @@ document.addEventListener('keydown', function(event) {
                     if (btn) btn.disabled = false;
                     if (spinner) spinner.classList.remove('is-active');
                     if (res && res.error) {
-                        log('No se pudo procesar: ' + res.error + (res.message ? ' — ' + res.message : ''));
+                        log('No se pudo procesar: ' + res.error + (res.message ? ' - ' + res.message : ''));
                         showPapiroToast('Procesamiento detenido: ' + res.error, true);
                         return;
                     }
@@ -4002,7 +3938,7 @@ document.addEventListener('keydown', function(event) {
             bubble.className = 'chat-bubble ' + kind;
             const sender = document.createElement('strong');
             sender.textContent = label;
-            // Never assign model/chat text via innerHTML — textContent only.
+            // Never assign model/chat text via innerHTML. Use textContent only.
             bubble.append(sender, document.createTextNode(' ' + String(text == null ? '' : text)));
             if (meta && meta.error) {
                 const err = document.createElement('div');
@@ -4199,162 +4135,6 @@ document.addEventListener('keydown', function(event) {
             window.pywebview.api.process_workspace_chat(currentDocumentWorkspace.note.document_id, input.value.trim())
                 .then(renderWorkspaceChatReply)
                 .catch(function() { renderWorkspaceChatReply({error: {message: 'No se pudo consultar la nota.'}}); });
-        }
-
-        let meetilyInvoker = null;
-        let meetilyFocusHandler = null;
-
-        function openMeetilyModal() {
-            meetilyInvoker = document.activeElement;
-            openModal('meetily-modal');
-            const modal = document.getElementById('meetily-modal');
-            if (modal) modal.setAttribute('aria-hidden', 'false');
-            const openButton = modal && modal.querySelector('.meeting-open-button');
-            if (openButton) openButton.focus();
-            refreshMeetilyRecordings();
-            meetilyFocusHandler = function(event) {
-                if (event.key === 'Escape') { closeMeetilyModal(); return; }
-                if (event.key !== 'Tab' || !modal) return;
-                const focusable = Array.from(modal.querySelectorAll('button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])')).filter(function(element) { return element.offsetParent !== null; });
-                if (!focusable.length) return;
-                const first = focusable[0], last = focusable[focusable.length - 1];
-                if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
-                else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
-            };
-            document.addEventListener('keydown', meetilyFocusHandler);
-        }
-
-        function closeMeetilyModal() {
-            const modal = document.getElementById('meetily-modal');
-            closeModal('meetily-modal');
-            if (modal) modal.setAttribute('aria-hidden', 'true');
-            if (meetilyFocusHandler) document.removeEventListener('keydown', meetilyFocusHandler);
-            if (meetilyInvoker && typeof meetilyInvoker.focus === 'function') meetilyInvoker.focus();
-            meetilyFocusHandler = null;
-        }
-
-        function setMeetilyStatus(message) {
-            const status = document.getElementById('meetily-status');
-            if (status) status.textContent = message;
-        }
-
-        function openMeetilyApplication() {
-            if (!(window.pywebview && window.pywebview.api && window.pywebview.api.open_meetily_app)) {
-                setMeetilyStatus('No se pudo conectar con el backend de Fuente.');
-                return;
-            }
-            window.pywebview.api.open_meetily_app().then(function(result) {
-                if (result && result.error) {
-                    setMeetilyStatus(result.message || 'No se pudo abrir Meetily.');
-                    return;
-                }
-                setMeetilyStatus('Meetily está abierto. Cuando termines, vuelve y pulsa «Actualizar reuniones».');
-            }).catch(function() {
-                setMeetilyStatus('No se pudo abrir Meetily.');
-            });
-        }
-
-        function meetilyDateLabel(value) {
-            if (!value) return 'Fecha sin registrar';
-            const date = new Date(value);
-            return Number.isNaN(date.getTime()) ? value : new Intl.DateTimeFormat('es', {dateStyle: 'medium', timeStyle: 'short'}).format(date);
-        }
-
-        function meetilyDurationLabel(seconds) {
-            if (!(typeof seconds === 'number' && Number.isFinite(seconds))) return 'Duración no disponible';
-            const total = Math.max(0, Math.round(seconds));
-            return Math.floor(total / 60) + ' min ' + String(total % 60).padStart(2, '0') + ' s';
-        }
-
-        function openMeetilyTranscript(documentId) {
-            if (!documentId) return;
-            closeMeetilyModal();
-            openModal('modal-reader');
-            loadNoteContent(documentId);
-        }
-
-        function importMeetilyRecording(recordingId, button) {
-            if (!(window.pywebview && window.pywebview.api && window.pywebview.api.import_meetily_recording)) return;
-            if (button) button.disabled = true;
-            setMeetilyStatus('Importando audio y transcripción…');
-            window.pywebview.api.import_meetily_recording(recordingId).then(function(result) {
-                if (!result || result.error) {
-                    setMeetilyStatus((result && result.message) || 'No se pudo importar la reunión.');
-                    if (button) button.disabled = false;
-                    return;
-                }
-                setMeetilyStatus('«' + result.title + '» ya forma parte de Fuente.');
-                refreshMeetilyRecordings({quiet: true});
-            }).catch(function() {
-                setMeetilyStatus('No se pudo importar la reunión.');
-                if (button) button.disabled = false;
-            });
-        }
-
-        function renderMeetilyRecordings(recordings) {
-            const list = document.getElementById('meetily-recording-list');
-            const count = document.getElementById('meetily-recording-count');
-            if (!list) return;
-            list.replaceChildren();
-            if (count) count.textContent = String(recordings.length);
-            if (!recordings.length) {
-                const empty = document.createElement('div');
-                empty.className = 'meeting-empty';
-                const title = document.createElement('strong');
-                title.textContent = 'Aún no hay reuniones terminadas';
-                const copy = document.createElement('span');
-                copy.textContent = 'Abre Meetily, graba una conversación y vuelve aquí.';
-                empty.append(title, copy);
-                list.appendChild(empty);
-                return;
-            }
-            recordings.forEach(function(recording) {
-                const card = document.createElement('article');
-                card.className = 'meeting-recording-card';
-                const state = document.createElement('span');
-                state.className = 'meeting-recording-state ' + (recording.imported ? 'is-imported' : (recording.ready ? 'is-ready' : 'is-waiting'));
-                state.textContent = recording.imported ? 'En Fuente' : (recording.ready ? 'Lista' : 'Pendiente');
-                const body = document.createElement('div');
-                body.className = 'meeting-recording-copy';
-                const title = document.createElement('h4');
-                title.textContent = recording.title;
-                const meta = document.createElement('p');
-                meta.textContent = [meetilyDateLabel(recording.created_at), meetilyDurationLabel(recording.duration_seconds), recording.segment_count + ' fragmentos'].join(' · ');
-                body.append(title, meta);
-                if (recording.reason) {
-                    const reason = document.createElement('small');
-                    reason.textContent = recording.reason;
-                    body.appendChild(reason);
-                }
-                const action = document.createElement('button');
-                action.type = 'button';
-                action.className = recording.imported ? 'btn-secondary' : 'btn-primary';
-                action.textContent = recording.imported ? 'Abrir nota' : 'Importar';
-                action.disabled = !recording.ready;
-                action.addEventListener('click', function() {
-                    if (recording.imported) openMeetilyTranscript(recording.transcript_document_id);
-                    else importMeetilyRecording(recording.recording_id, action);
-                });
-                card.append(state, body, action);
-                list.appendChild(card);
-            });
-        }
-
-        function refreshMeetilyRecordings(options) {
-            if (!(window.pywebview && window.pywebview.api && window.pywebview.api.list_meetily_recordings)) {
-                setMeetilyStatus('Fuente no puede leer la biblioteca local de Meetily.');
-                return;
-            }
-            if (!(options && options.quiet)) setMeetilyStatus('Buscando reuniones en este Mac…');
-            window.pywebview.api.list_meetily_recordings().then(function(result) {
-                if (!result || result.error) {
-                    setMeetilyStatus((result && result.message) || 'No se pudo leer la biblioteca de Meetily.');
-                    return;
-                }
-                const recordings = Array.isArray(result.recordings) ? result.recordings : [];
-                renderMeetilyRecordings(recordings);
-                if (!(options && options.quiet)) setMeetilyStatus(recordings.length ? 'Biblioteca actualizada.' : 'No hay reuniones disponibles todavía.');
-            }).catch(function() { setMeetilyStatus('No se pudo leer la biblioteca de Meetily.'); });
         }
 
         function submitDiscussionReply(event) {
@@ -5539,7 +5319,7 @@ document.addEventListener('keydown', function(event) {
 
         const LOCAL_MOCK_NOTES = [
             {
-                title: "Índice MOC — Mapa de Conocimiento Global",
+                title: "Índice MOC | Mapa de Conocimiento Global",
                 path: "_Indice_MOC.md",
             },
             {
@@ -5684,7 +5464,7 @@ document.addEventListener('keydown', function(event) {
             const notice = document.createElement('li');
             notice.className = 'reader-note-item';
             notice.setAttribute('role', 'status');
-            notice.textContent = 'VISTA PREVIA EXPLÍCITA — LAS NOTAS SIGUIENTES SON DATOS DEMO';
+            notice.textContent = 'VISTA PREVIA EXPLÍCITA - LAS NOTAS SIGUIENTES SON DATOS DEMO';
             ul.prepend(notice);
         }
 
@@ -6162,8 +5942,7 @@ document.addEventListener('keydown', function(event) {
             document.querySelectorAll('.modal-overlay').forEach(function(overlay) {
                 overlay.addEventListener('click', function(e) {
                     if (e.target === overlay) {
-                        if (overlay.id === 'meetily-modal') closeMeetilyModal();
-                        else closeModal(overlay.id);
+                        closeModal(overlay.id);
                     }
                 });
                 overlay.addEventListener('wheel', function(e) {

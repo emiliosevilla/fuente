@@ -61,8 +61,8 @@ ejecuta automáticamente ni modifica el Vault al instalar Fuente.
 
 La implementación local de la evolución está cerrada y verificada. El ledger
 detalla fases, revisiones Terra, commits y pruebas; la evidencia final conserva
-el último `HEAD` medido. PyWebView, el bundle instalado y el flujo local de
-Meetily se comprobaron en macOS; Windows y proveedores montados siguen fuera de
+el último `HEAD` medido. PyWebView y el bundle instalado se comprobaron en
+macOS; Windows y proveedores montados siguen fuera de
 esa medición porque no estuvieron disponibles.
 
 ### Resultado de prueba real instalada — 2026-08-25
@@ -76,7 +76,7 @@ Prueba sobre `/Applications/Fuente.app`, sin Chrome, con Vault real:
   `1d46ab53517be54e56897c7af15b0c1e3bdf8f8b7fddcb948adf03eb8b4119d9`.
 - PASS real: arranque en frío, Vault, ETL, aprobación, audio Tiny local,
   MiniRAG/Ollama, editor, exportación, búsqueda por frase, lector, mapa,
-  trabajos, estado del sistema y biblioteca Meetily.
+  trabajos y estado del sistema.
 - La interfaz es exclusivamente nativa. No existe opción `--browser` ni
   servidor HTTP de consola.
 - Límites reales: Windows y proveedores montados no se declaran probados.
@@ -97,19 +97,6 @@ fuente --vault /ruta/al/Vault --theme "General" --migrate-layout rollback --plan
 `apply` aborta ante hashes cambiados, colisiones o enlaces simbólicos no
 autorizados. Usa siempre `dry-run` antes de aplicar y conserva el `plan-id` para
 verificar o revertir la misma migración.
-
-### Reuniones con Meetily
-
-`Reunión` abre Meetily en este Mac y muestra dentro de Fuente la biblioteca
-local de grabaciones detectadas. Meetily gestiona el micrófono, el
-consentimiento y la grabación. Fuente lee su carpeta local —por ejemplo
-`~/Movies/meetily-recordings`— y permite importar cada reunión desde la propia
-biblioteca.
-
-La importación enlaza `audio.mp4`, `metadata.json` y `transcripts.json`, los
-incorpora a `1_volcado/` y continúa con el ETL normal. No hay puente HTTP ni
-servicio paralelo: ambas aplicaciones se coordinan mediante archivos locales.
-La prueba real final mostró tres reuniones y sus acciones de importación.
 
 Para transcribir sin descargar modelos durante la prueba, `Ajustes` permite
 seleccionar `Tiny local CPU` y una carpeta local de Faster-Whisper ya existente

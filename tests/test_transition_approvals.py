@@ -2,11 +2,13 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
+from concurrent.futures import ThreadPoolExecutor
+from threading import Barrier
 
 import pytest
 
 from fuente.application.approval import TransitionApprovalService
-from fuente.domain.errors import OutputApprovalRequiredError
+from fuente.domain.errors import OutputApprovalRequiredError, ReviewClaimConflictError
 from fuente.infrastructure.sqlite_store import JobStore
 
 
@@ -136,3 +138,61 @@ def test_transition_service_rejects_non_adjacent_stages(service, artifact) -> No
             artifact.content_hash,
             reviewer="emilio",
         )
+
+
+def test_active_claim_has_one_owner_under_a_race(tmp_path, artifact) -> None:
+    store = JobStore(tmp_path)
+    service = TransitionApprovalService(store)
+    barrier = Barrier(2)
+    args = (
+        artifact.id,
+        "1_volcado",
+        "2_copiado",
+        artifact.revision,
+        artifact.content_hash,
+    )
+
+    def claim(reviewer):
+        barrier.wait()
+        try:
+            return service.begin_review(*args, reviewer=reviewer).reviewer
+        except ReviewClaimConflictError:
+            return "conflict"
+
+    try:
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            results = list(pool.map(claim, ("emilio", "otra-persona")))
+        assert sorted(results).count("conflict") == 1
+        owner = service.store.get_review_claim(*args)["reviewer"]
+        assert sorted(results) == sorted([owner, "conflict"])
+    finally:
+        store.close()
+
+
+def test_transition_approval_uses_only_job_store_connection(
+    tmp_path, artifact, monkeypatch
+) -> None:
+    import sqlite3
+
+    real_connect = sqlite3.connect
+    connections = []
+
+    def counted_connect(*args, **kwargs):
+        connection = real_connect(*args, **kwargs)
+        connections.append(connection)
+        return connection
+
+    monkeypatch.setattr(sqlite3, "connect", counted_connect)
+    with JobStore(tmp_path) as store:
+        service = TransitionApprovalService(store)
+        args = (
+            artifact.id,
+            "1_volcado",
+            "2_copiado",
+            artifact.revision,
+            artifact.content_hash,
+        )
+        service.begin_review(*args, reviewer="emilio")
+        service.approve(*args, reviewer="emilio")
+
+    assert len(connections) == 1

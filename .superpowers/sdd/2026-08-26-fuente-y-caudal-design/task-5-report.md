@@ -397,3 +397,123 @@ presented as Cocoa runtime proof.
   its existing deterministic sort state without inventing a new control.
 - All native and transition evidence used a disposable temporary Vault. No
   user Vault was read or mutated, and no push or PR was made.
+
+## Fix round 3
+
+### Finding closed
+
+Normal window close now uses PyWebView's documented cancellable
+`window.events.closing` event. Both configured and first-run windows subscribe
+the same bridge guard. The handler never waits on WebKit: JavaScript mirrors
+only its in-memory pending-write count to the bridge, and the bridge also
+tracks writes currently executing against `JobStore`. Neither value is a
+second persistence authority.
+
+When a native close or Vault restart finds either count non-zero, it:
+
+1. records the requested close/restart action;
+2. returns `False` from `closing` or returns visible
+   `ui_state_pending` from `restart_with_vault`;
+3. asks the still-open page to flush its existing pending map;
+4. leaves the existing visible SQLite error and retry loop active;
+5. completes the recorded action only after JavaScript reports an empty map.
+
+The restart path no longer schedules `destroy()` plus `execv()` until this
+same guard is clear. An uninitialized/test window with no pending state keeps
+the normal lifecycle and closes immediately. `localStorage` is not used and
+`<Vault>/.fuente/state.db` remains the only durable store.
+
+### Commits
+
+- `19bb7d0` `test: expose native close state loss`
+- `7bc0a0f` `fix: guard native close until UI state is saved`
+- `cf45925` `test: require real native close recovery proof`
+- `be4bae8` `fix: cancel Cocoa close without blocking WebKit`
+- `7d388d4` `test: prove native close recovery in Cocoa`
+- `13932d6` `docs: refresh Task 5 native close snapshot`
+- `8b820e3` `docs: mark Task 5 native close ready`
+
+The final report commit appends this section only.
+
+### TDD and synthetic evidence
+
+1. RED:
+
+   `python3 -m pytest tests/test_ui_close_guard.py tests/test_shell_runtime_behavior.py::test_native_close_drain_completes_only_after_sqlite_write_recovers tests/contract/test_q03_ui_recovery_contract.py::test_native_window_close_routes_through_cancellable_ui_state_guard -q`
+
+   Result: `5 failed in 0.74s`. The bridge lacked a native close guard and
+   completion API, the page lacked the drain function, and neither window
+   subscribed `events.closing`.
+
+2. Native guard and frontend behavior GREEN:
+
+   `python3 -m pytest tests/test_ui_close_guard.py tests/test_shell_runtime_behavior.py tests/test_ui_state_store.py tests/test_settings_service.py tests/contract/test_settings_contract.py tests/contract/test_q03_ui_recovery_contract.py tests/contract/test_bridge_frontend_contract.py tests/test_task5_runtime_contract.py -q`
+
+   Result: `105 passed, 103 warnings in 7.24s`.
+
+   This includes a real threaded in-flight `set_ui_state` test: while the
+   SQLite call is held open, `_handle_window_closing()` returns `False`.
+
+3. Full suite:
+
+   `python3 -m pytest -q`
+
+   Result: `1197 passed, 1 skipped, 227 warnings in 66.92s`.
+
+4. Freshness:
+
+   `python3 -m pytest tests/test_documentation_freshness.py -q`
+
+   Result: `7 passed in 0.19s`.
+
+5. `git diff --check`: PASS.
+
+### Reproducible real Cocoa evidence
+
+Command:
+
+`python3 scripts/verify_task5_runtime.py`
+
+Final result: `PASS`. The versioned verifier now uses four separate real
+Cocoa/PyWebView processes over one temporary Vault: initial write, restart
+read, native close guard, and recovery read. In the guard process it forces a
+post-`pywebviewready` failure for the `reader/filters` SQLite write, invokes
+the real Cocoa `NSWindow.performClose_` path twice, and attempts the production
+`restart_with_vault` method while the write remains pending.
+
+Measured guard output:
+
+- `write_failures: 5`;
+- `closing_events: 2`, `cancelled_closes: 2`;
+- `restart_error: ui_state_pending` and no premature restart;
+- `completion_calls: 1` only after writes were unblocked;
+- `filter_search: guarded-recovery` after the successful retry;
+- `timed_out: false`, `guard_errors: []`;
+- `local_storage_length: 0`, `sqlite_connect_calls: 1`.
+
+The fourth process reopened the same Vault and read
+`filter_search: guarded-recovery` from SQLite. The complete verifier also kept
+all round-2 checks green: AppleWebKit/Cocoa, two-process workspace restart,
+the four production transition boundaries, byte-mutation red seal, one
+connection per process, and exactly one `.fuente/state.db`.
+
+Two earlier native attempts are explicitly excluded from successful evidence:
+
+- Calling `evaluate_js` from the blocking Cocoa `closing` handler deadlocked
+  the renderer and the guard child exceeded its 35-second limit. Production
+  code was changed to the non-blocking mirrored counter before retrying.
+- Calling PyWebView `window.destroy()` programmatically bypassed the native
+  `closing` event on this Cocoa runtime (`cancelled_closes: 0`), so it did not
+  prove close-button behavior. The final verifier uses Cocoa's real
+  `performClose_` path and measures two actual cancelled events.
+
+### Concerns and deliberate limits
+
+- A force-kill or operating-system process termination cannot run a close
+  handler. Normal close buttons and application-requested Vault restarts are
+  guarded and recover automatically.
+- The mirrored pending count is process memory only and never treated as
+  stored UI state; SQLite remains authoritative after restart.
+- The suite retains one pre-existing skip and 227 dependency deprecation
+  warnings. No user Vault was opened, no second database was created, and no
+  push or PR was made.

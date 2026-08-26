@@ -98,3 +98,48 @@ def test_native_close_is_cancelled_while_sqlite_write_is_inflight(monkeypatch):
     release.set()
     writer.join(2)
     assert not writer.is_alive()
+
+
+def test_native_close_blocks_write_start_after_its_empty_check(monkeypatch):
+    writes = []
+    monkeypatch.setattr(
+        "fuente.ui.bridge.UIStateStore.set",
+        lambda *_args: writes.append("started"),
+    )
+    bridge = FuentePyWebViewApi(SimpleNamespace(_job_store=SimpleNamespace()))
+    bridge.set_window(SimpleNamespace())
+
+    assert bridge._handle_window_closing() is True
+
+    result = bridge.set_ui_state(
+        "persistent", "reader", "filters", {"search": "too-late"}
+    )
+
+    assert result["error"] == "ui_state_closing"
+    assert writes == []
+
+
+def test_native_close_does_not_replace_pending_restart(monkeypatch, tmp_path):
+    target = tmp_path.resolve()
+    bridge = FuentePyWebViewApi(
+        SimpleNamespace(validate_vault=lambda _path: {"vault_path": str(target)})
+    )
+    window = _Window([])
+    bridge.set_window(window)
+    exec_calls = []
+    monkeypatch.setattr("fuente.ui.bridge.threading.Timer", _ImmediateTimer)
+    monkeypatch.setattr(
+        "fuente.ui.bridge.os.execv",
+        lambda executable, argv: exec_calls.append((executable, argv)),
+    )
+    bridge.ui_state_pending_changed(1)
+
+    assert bridge.restart_with_vault(str(target))["error"] == "ui_state_pending"
+    assert bridge._handle_window_closing() is False
+
+    bridge.ui_state_pending_changed(0)
+    result = bridge.complete_pending_close()
+
+    assert result["status"] == "restarting"
+    assert len(exec_calls) == 1
+    assert exec_calls[0][1][-1] == str(target)

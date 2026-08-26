@@ -28,4 +28,8 @@ def test_runtime_verifier_uses_real_html_bridge_and_two_processes() -> None:
     assert 'for phase in ("write", "read")' in source
     assert "window.localStorage.length" in source
     assert "sqlite_connect_calls" in source
-    assert "test_transition_approval_boundaries.py" in source
+    assert "IngestionApplicationService" in source
+    assert "SharingApplicationService" in source
+    assert "four_production_boundaries" in source
+    assert "subprocess.run" in source
+    assert '"-m", "pytest"' not in source

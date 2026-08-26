@@ -1,0 +1,13 @@
+[
+  {
+    "file": "00-baseline.png",
+    "git_head": "a3b8c23020ab56e846703308bb787df062f97d87",
+    "window_owner": "Python",
+    "window_title": "Fuente",
+    "engine": "PyWebView WebKit",
+    "width": 1280,
+    "height": 802,
+    "sha256": "76bdc95db928d98fdbdac98e69d6635f0442ae7666549cccbc394d7f8e16bac6",
+    "scenario": "baseline"
+  }
+]

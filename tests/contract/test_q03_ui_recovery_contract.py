@@ -147,6 +147,13 @@ def test_settings_restart_validates_selected_vault_before_relaunch():
     assert "os.execv(sys.executable" in BRIDGE_SOURCE
 
 
+def test_native_window_close_routes_through_cancellable_ui_state_guard():
+    assert LAUNCHER_SOURCE.count("window.events.closing += api._handle_window_closing") == 2
+    assert "prepareUiStateForNativeClose" in SOURCE
+    assert "complete_pending_close" in SOURCE
+    assert "def _handle_window_closing" in BRIDGE_SOURCE
+
+
 def test_setup_api_exposes_empty_sync_state_before_runtime_connection():
     setup_api = (ROOT / "fuente" / "ui" / "setup_api.py").read_text(encoding="utf-8")
     assert "def get_sync_inputs" in setup_api

@@ -75,9 +75,9 @@ def test_console_exposes_independent_nord_gruvbox_visual_style_toggle() -> None:
     assert "const nextStyleLabel = nextStyle === 'gruvbox' ? 'Gruvbox' : 'Nord'" in html
     assert "styleLabel.textContent = nextStyleLabel" in html
     assert "styleToggle.setAttribute('aria-pressed'" not in html
-    assert "FUENTE_STYLE_STORAGE_KEY = 'fuente.visual-style'" in html
     assert "document.documentElement.dataset.fuenteStyle = activeStyle" in html
-    assert "localStorage.setItem(FUENTE_STYLE_STORAGE_KEY, activeStyle)" in html
+    assert "persistUiState('main-window', 'visual_style', activeStyle)" in html
+    assert "localStorage" not in html
     assert "function toggleVisualStyle()" in html
     assert "'toggleVisualStyle()': toggleVisualStyle" in html
 

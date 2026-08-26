@@ -89,6 +89,7 @@ global.document = {{
     }},
 }};
 global.getFocusableElements = function() {{ return []; }};
+global.persistUiState = function() {{ return Promise.resolve(); }};
 let lastDrawerTrigger = null;
 
 {functions}

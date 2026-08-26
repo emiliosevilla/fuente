@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sqlite3
 import subprocess
 import sys
@@ -326,7 +327,7 @@ def _integrated_transitions(vault_path: Path) -> dict[str, Any]:
         sqlite3.connect = original_connect
 
 
-def _child(phase: str, vault: Path) -> int:
+def _child(phase: str, vault: Path, restart_proof: Path | None = None) -> int:
     import webview
 
     from fuente.infrastructure.sqlite_store import JobStore, UIStateStore
@@ -342,6 +343,11 @@ def _child(phase: str, vault: Path) -> int:
 
     sqlite3.connect = measured_connect
     store = JobStore(vault)
+    after_restart_exec = (
+        phase == "restart"
+        and restart_proof is not None
+        and restart_proof.is_file()
+    )
     guard_write_failed = threading.Event()
     guard_retry_failed = threading.Event()
     backend = SimpleNamespace(
@@ -353,7 +359,7 @@ def _child(phase: str, vault: Path) -> int:
         get_notes_service=lambda: SimpleNamespace(job_store=store),
         get_initial_state_dict=lambda: {},
     )
-    backend.validate_vault = lambda _path: {"vault_path": str(vault)}
+    backend.validate_vault = lambda path: {"vault_path": str(Path(path).resolve())}
 
     class GuardProbeApi(FuentePyWebViewApi):
         def __init__(self, probe_backend):
@@ -365,6 +371,7 @@ def _child(phase: str, vault: Path) -> int:
             self.closing_events = 0
             self.cancelled_closes = 0
             self.completion_calls = 0
+            self.scheduled_actions = 0
             self.restart_response: dict[str, Any] = {}
             self.environment: dict[str, Any] = {}
 
@@ -415,9 +422,33 @@ def _child(phase: str, vault: Path) -> int:
 
         def complete_pending_close(self):
             self.completion_calls += 1
-            return super().complete_pending_close()
+            response = super().complete_pending_close()
+            if phase == "restart" and restart_proof is not None:
+                proof = json.loads(restart_proof.read_text(encoding="utf-8"))
+                proof.update(
+                    {
+                        "completion_calls": self.completion_calls,
+                        "completion_response": response,
+                        "scheduled_actions": self.scheduled_actions,
+                    }
+                )
+                restart_proof.write_text(
+                    json.dumps(proof, sort_keys=True), encoding="utf-8"
+                )
+            return response
 
-    api = GuardProbeApi(backend) if phase == "guard" else FuentePyWebViewApi(backend)
+        def _schedule_close_action(self):
+            already_scheduled = self._close_action_scheduled
+            response = super()._schedule_close_action()
+            if not already_scheduled and self._close_action_scheduled:
+                self.scheduled_actions += 1
+            return response
+
+    api = (
+        GuardProbeApi(backend)
+        if phase in {"guard", "restart"} and not after_restart_exec
+        else FuentePyWebViewApi(backend)
+    )
     result: dict[str, object] = {}
     window = webview.create_window(
         f"Fuente Task 5 {phase}",
@@ -435,6 +466,13 @@ def _child(phase: str, vault: Path) -> int:
         result.update(value or {})
         result["vault"] = str(vault)
         result["sqlite_connect_calls"] = connection_count
+        if after_restart_exec and restart_proof is not None:
+            proof = json.loads(restart_proof.read_text(encoding="utf-8"))
+            result.update(proof)
+            result["after_pid"] = os.getpid()
+            result["restart_exec_replaced_process"] = (
+                proof.get("before_pid") == os.getpid()
+            )
         window.destroy()
 
     def loaded():
@@ -454,7 +492,7 @@ def _child(phase: str, vault: Path) -> int:
                     };
                 });
             """
-        elif phase in {"read", "recover"}:
+        elif phase == "read" or after_restart_exec:
             script = """
                 window.pywebview.api.get_ui_state(
                     'persistent', 'main-window', 'workspace'
@@ -470,16 +508,22 @@ def _child(phase: str, vault: Path) -> int:
                 });
             """
         else:
+            search = "guarded-recovery" if phase == "guard" else "exec-restart"
             script = """
                 window.pywebview.api.probe_environment(
                     window.localStorage.length, navigator.userAgent
                 ).then(function() {
                     return persistUiState(
-                        'reader', 'filters', {search: 'guarded-recovery'}
+                        'reader', 'filters', {search: '__SEARCH__'}
                     );
                 });
-            """
-        window.evaluate_js(script, callback=None if phase == "guard" else finish)
+            """.replace("__SEARCH__", search)
+        window.evaluate_js(
+            script,
+            callback=None
+            if phase in {"guard", "restart"} and not after_restart_exec
+            else finish,
+        )
 
     window.events.loaded += loaded
     timed_out = False
@@ -494,36 +538,46 @@ def _child(phase: str, vault: Path) -> int:
     timer.start()
     guard_errors: list[str] = []
 
-    def exercise_native_close_guard() -> None:
+    def exercise_deferred_action() -> None:
         try:
             if not guard_write_failed.wait(10):
                 raise RuntimeError("post-ready write failure was not observed")
-            api.probe_close()
-            for _attempt in range(100):
-                if api.cancelled_closes >= 1:
-                    break
-                threading.Event().wait(0.02)
-            if api.cancelled_closes < 1:
-                raise RuntimeError("native close was not cancelled")
+            if phase == "guard":
+                api.probe_close()
+                for _attempt in range(100):
+                    if api.cancelled_closes >= 1:
+                        break
+                    threading.Event().wait(0.02)
+                if api.cancelled_closes < 1:
+                    raise RuntimeError("native close was not cancelled")
+            else:
+                if restart_proof is None:
+                    raise RuntimeError("restart proof path is required")
+                response = api.restart_with_vault(str(vault))
+                restart_proof.write_text(
+                    json.dumps(
+                        {
+                            "before_pid": os.getpid(),
+                            "before_sqlite_connect_calls": connection_count,
+                            "restart_response": response,
+                            "target_vault": str(vault),
+                            "pre_exec_environment": api.environment,
+                        },
+                        sort_keys=True,
+                    ),
+                    encoding="utf-8",
+                )
             if not guard_retry_failed.wait(5):
-                raise RuntimeError("cancelled close did not retry the pending write")
-            api.restart_with_vault(str(vault))
-            api.probe_close()
-            for _attempt in range(100):
-                if api.cancelled_closes >= 2:
-                    break
-                threading.Event().wait(0.02)
-            if api.cancelled_closes < 2:
-                raise RuntimeError("second native close was not cancelled")
+                raise RuntimeError("deferred action did not retry the pending write")
             api.probe_unblock_ui_state()
             window.run_js("flushPendingUiState();")
         except Exception as error:
             guard_errors.append(f"{type(error).__name__}: {error}")
 
-    if phase == "guard":
+    if phase in {"guard", "restart"} and not after_restart_exec:
         threading.Thread(
-            target=exercise_native_close_guard,
-            name="task5-native-close-probe",
+            target=exercise_deferred_action,
+            name=f"task5-{phase}-probe",
             daemon=True,
         ).start()
     guard_filters = None
@@ -545,7 +599,7 @@ def _child(phase: str, vault: Path) -> int:
                 "closing_events": api.closing_events,
                 "cancelled_closes": api.cancelled_closes,
                 "completion_calls": api.completion_calls,
-                "restart_error": api.restart_response.get("error"),
+                "scheduled_actions": api.scheduled_actions,
                 "filter_search": (
                     guard_filters.get("search")
                     if isinstance(guard_filters, dict)
@@ -567,7 +621,7 @@ def _run() -> int:
     with tempfile.TemporaryDirectory(prefix="fuente-task5-runtime-") as directory:
         vault = Path(directory).resolve()
         phases = []
-        for phase in ("write", "read", "guard", "recover"):
+        for phase in ("write", "read", "guard"):
             process = subprocess.run(
                 [sys.executable, __file__, "--child", phase, "--vault", str(vault)],
                 cwd=ROOT,
@@ -580,10 +634,32 @@ def _run() -> int:
                 raise RuntimeError(process.stderr or process.stdout)
             phases.append(json.loads(process.stdout.strip().splitlines()[-1]))
 
+        restart_proof = vault / "restart-exec-proof.json"
+        process = subprocess.run(
+            [
+                sys.executable,
+                __file__,
+                "--child",
+                "restart",
+                "--restart-proof",
+                str(restart_proof),
+                "--vault",
+                str(vault),
+            ],
+            cwd=ROOT,
+            text=True,
+            capture_output=True,
+            check=False,
+            timeout=35,
+        )
+        if process.returncode != 0:
+            raise RuntimeError(process.stderr or process.stdout)
+        phases.append(json.loads(process.stdout.strip().splitlines()[-1]))
+
         transition_contract = _integrated_transitions(vault)
 
         initial_restart = phases[:2]
-        guard, recovered = phases[2], phases[3]
+        guard, restarted = phases[2], phases[3]
         checks = {
             "two_process_restart": len(initial_restart) == 2,
             "workspace_restored": [item.get("workspace") for item in initial_restart]
@@ -611,16 +687,30 @@ def _run() -> int:
             )
             == "pending_review",
             "native_close_guard": guard.get("write_failures", 0) >= 2
-            and guard.get("close_attempts") == 2
-            and guard.get("close_returns") == 2
-            and guard.get("cancelled_closes") == 2
-            and guard.get("restart_error") == "ui_state_pending"
-            and guard.get("completion_calls") == 1
+            and guard.get("close_attempts") == 1
+            and guard.get("close_returns") == 1
+            and guard.get("cancelled_closes") == 1
+            and guard.get("completion_calls", 0) >= 1
+            and guard.get("scheduled_actions") == 1
             and guard.get("timed_out") is False
             and guard.get("guard_errors") == [],
             "native_close_recovery_restored": guard.get("filter_search")
-            == "guarded-recovery"
-            and recovered.get("filter_search") == "guarded-recovery",
+            == "guarded-recovery",
+            "restart_exec_replaced_process": restarted.get(
+                "restart_exec_replaced_process"
+            )
+            is True
+            and restarted.get("before_sqlite_connect_calls") == 1
+            and restarted.get("restart_response", {}).get("error")
+            == "ui_state_pending"
+            and restarted.get("completion_response", {}).get("status")
+            == "restarting"
+            and restarted.get("completion_calls", 0) >= 1
+            and restarted.get("scheduled_actions") == 1,
+            "native_restart_restored": restarted.get("filter_search")
+            == "exec-restart"
+            and restarted.get("workspace") == "flow"
+            and restarted.get("target_vault") == str(vault),
             "one_state_database": len(list(vault.rglob("state.db"))) == 1,
         }
         output = {
@@ -635,13 +725,18 @@ def _run() -> int:
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--child", choices=("write", "read", "guard", "recover"))
+    parser.add_argument("--child", choices=("write", "read", "guard", "restart"))
     parser.add_argument("--vault", type=Path)
+    parser.add_argument("--restart-proof", type=Path)
     args = parser.parse_args()
     if args.child:
         if args.vault is None:
             parser.error("--vault is required with --child")
-        return _child(args.child, args.vault.resolve())
+        return _child(
+            args.child,
+            args.vault.resolve(),
+            args.restart_proof.resolve() if args.restart_proof else None,
+        )
     return _run()
 
 

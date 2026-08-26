@@ -110,7 +110,7 @@ class FuentePyWebViewApi:
     def set_window(self, window: Any) -> None:
         self._window = window
 
-    def get_initial_state(self) -> dict[str, Any]:
+    def get_initial_state(self) -> dict[str, object]:
         return self.backend.get_initial_state_dict()
 
     def get_settings_info(self) -> dict[str, Any]:

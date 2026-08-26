@@ -6,7 +6,7 @@ Fuente is a local-first macOS knowledge studio. The interface puts the note or g
 
 - Audience: one person turning local files into connected, reviewed knowledge.
 - Primary job: move material through `1_volcado`, `2_copiado`, `3_capturado`, `4_procesado`, and `5_compartido` without losing provenance.
-- Layout: compact 68 px rail, one contextual header, one dominant workspace, quiet utility access.
+- Layout: compact 68 px rail, one contextual header no taller than 64 px, one dominant workspace, quiet utility access.
 - Signature: a restrained ripple connects the five-step flow and marks an active workspace transition. It never becomes background decoration.
 - Type: local macOS system stacks only. Display uses the system rounded/display face where available; body and utility use the standard system sans stack.
 
@@ -14,21 +14,21 @@ Fuente is a local-first macOS knowledge studio. The interface puts the note or g
 
 | Token | Nord | Gruvbox | Purpose |
 |---|---:|---:|---|
-| `--surface-canvas` | `#2E3440` | `#282828` | App canvas |
-| `--surface-raised` | `#3B4252` | `#32302F` | Main content |
-| `--surface-sunken` | `#272C36` | `#1D2021` | Recessed controls |
-| `--surface-overlay` | `#434C5E` | `#3C3836` | Dialogs |
-| `--text-primary` | `#ECEFF4` | `#FBF1C7` | Main text |
-| `--text-secondary` | `#D8DEE9` | `#D5C4A1` | Supporting text |
-| `--border-subtle` | `#4C566A` | `#504945` | Dividers |
-| `--accent-primary` | `#81A1C1` | `#8EC07C` | Primary action |
-| `--accent-selection` | Frost blue 24% | Aqua 22% | Current selection |
-| `--focus-ring` | `#88C0D0` | `#83A598` | Keyboard focus |
-| `--state-success` | `#A3BE8C` | `#B8BB26` | Successful state |
-| `--state-warning` | `#EBCB8B` | `#FABD2F` | Needs attention |
-| `--state-danger` | `#D98990` | `#FF5D48` | Contrast-safe danger derived from each palette |
+| `--surface-canvas` | `#ECEFF4` | `#282828` | App canvas |
+| `--surface-raised` | `#FFFFFF` | `#32302F` | Main content |
+| `--surface-sunken` | `#E5E9F0` | `#1D2021` | Recessed controls |
+| `--surface-overlay` | `#FFFFFF` | `#3C3836` | Dialogs |
+| `--text-primary` | `#2E3440` | `#FBF1C7` | Main text |
+| `--text-secondary` | `#434C5E` | `#D5C4A1` | Supporting text |
+| `--border-subtle` | `#D8DEE9` | `#504945` | Dividers |
+| `--accent-primary` | `#4C6C94` | `#8EC07C` | Contrast-safe primary action |
+| `--accent-selection` | Frost blue 16% | Aqua 22% | Current selection |
+| `--focus-ring` | `#5E81AC` | `#83A598` | Keyboard focus |
+| `--state-success` | `#4F6F41` | `#B8BB26` | Successful state |
+| `--state-warning` | `#7A5E00` | `#FABD2F` | Needs attention |
+| `--state-danger` | `#A83B46` | `#FF5D48` | Contrast-safe danger derived from each palette |
 
-The palettes and Obsidian interaction references are adapted from Eric Davis's MIT-licensed [Obsidian Nord](https://github.com/insanum/obsidian_nord) and [Obsidian Gruvbox](https://github.com/insanum/obsidian_gruvbox) themes. Fuente keeps its own layout, typography, spacing, accessibility and component contracts.
+Nord light is the initial theme for the whole window. Gruvbox is the one global alternative. The palettes and Obsidian interaction references are adapted from Eric Davis's MIT-licensed [Obsidian Nord](https://github.com/insanum/obsidian_nord) and [Obsidian Gruvbox](https://github.com/insanum/obsidian_gruvbox) themes. Fuente keeps its own layout, typography, spacing, accessibility and component contracts.
 
 Acceptance requires 4.5:1 for normal text and 3:1 for focus and meaningful non-text states. Values may change only after a recorded measurement and explicit approval.
 
@@ -39,6 +39,7 @@ Acceptance requires 4.5:1 for normal text and 3:1 for focus and meaningful non-t
 - Controls: 32 px compact, 40 px standard, 44 px prominent.
 - Icons: 16, 20, 24 px; one outline SVG/CSS language, no emoji controls.
 - Content: reading measure 68ch; workspace maximum 76rem; rail 68px.
+- Type: 16 px base, 17 px document, at least 14 px for controls and tables; headings use 22, 28 and 36 px.
 - Motion: 120ms fast and 200ms standard, transform/opacity only, final state immediate under reduced motion.
 - Elevation: canvas, raised panel, overlay. Shadows are reserved for overlays.
 
@@ -54,7 +55,7 @@ Acceptance requires 4.5:1 for normal text and 3:1 for focus and meaningful non-t
 ## Distinctiveness review
 
 - Generic choice found: the old uniform statistics row and equal-weight toolbar read as an admin dashboard.
-- Replacement specific to Fuente: the five-step material flow becomes Inicio's spine; current notes and connections become primary workspaces.
+- Replacement specific to Fuente and Caudal: Inicio exposes two clear product entrances, Fuente keeps reading dominant, and Caudal owns the five-step spine.
 - One justified aesthetic risk: the ripple briefly carries attention between a selected step and its connected workspace, then becomes still.
 - Decorations removed: stat-card grid, marketing hero copy, repeated borders, and animation without state meaning.
 - How the ripple signature communicates state: one ring expands from the active flow node or rail item toward the newly active region; reduced motion shows the selected ring statically.

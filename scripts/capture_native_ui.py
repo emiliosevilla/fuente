@@ -6,14 +6,23 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
+import time
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 BASELINE_FILE = "00-baseline.png"
 BASELINE_HEAD = "a3b8c23020ab56e846703308bb787df062f97d87"
+
+
+def _window_size(value: str) -> tuple[int, int]:
+    match = re.fullmatch(r"([1-9][0-9]*)x([1-9][0-9]*)", value)
+    if match is None:
+        raise ValueError("window size must use WIDTHxHEIGHT")
+    return int(match.group(1)), int(match.group(2))
 
 
 def _git_head() -> str:
@@ -49,6 +58,8 @@ def _find_window(title: str) -> dict[str, object]:
             "window_owner": str(window.get(Quartz.kCGWindowOwnerName, "")),
             "window_owner_pid": int(window[Quartz.kCGWindowOwnerPID]),
             "window_title": window_title,
+            "x": int(bounds.get("X", 0)),
+            "y": int(bounds.get("Y", 0)),
             "width": width,
             "height": height,
         }
@@ -67,20 +78,91 @@ def _runtime_signal(process_id: int) -> str:
     return "vmmap:WebKit.framework"
 
 
-def capture_window(title: str, output: Path) -> dict[str, object]:
+def _configure_window(
+    title: str,
+    *,
+    resize: tuple[int, int] | None,
+    maximize: bool,
+) -> tuple[dict[str, object], tuple[int, int] | None]:
+    window = _find_window(title)
+    requested = resize
+    position: tuple[int, int] | None = None
+    if maximize:
+        from AppKit import NSScreen
+
+        screen = NSScreen.mainScreen()
+        frame = screen.frame()
+        visible = screen.visibleFrame()
+        requested = int(visible.size.width), int(visible.size.height)
+        position = (
+            int(visible.origin.x),
+            int(frame.size.height - visible.origin.y - visible.size.height),
+        )
+    if requested is None:
+        return window, None
+
+    statements = [
+        'tell application "System Events"',
+        f'tell first application process whose unix id is {window["window_owner_pid"]}',
+        "set frontmost to true",
+    ]
+    if position is not None:
+        statements.append(f"set position of front window to {{{position[0]}, {position[1]}}}")
+    statements.extend(
+        (
+            f"set size of front window to {{{requested[0]}, {requested[1]}}}",
+            "end tell",
+            "end tell",
+        )
+    )
+    command = ["/usr/bin/osascript"]
+    for statement in statements:
+        command.extend(("-e", statement))
+    subprocess.run(command, check=True, capture_output=True, text=True)
+    for _ in range(20):
+        window = _find_window(title)
+        if (window["width"], window["height"]) == requested:
+            break
+        time.sleep(0.05)
+    time.sleep(0.2)
+    return window, requested
+
+
+def _capture_command(
+    window: dict[str, object],
+    output: Path,
+    *,
+    maximize: bool,
+) -> list[str]:
+    command = ["/usr/sbin/screencapture", "-x"]
+    if maximize:
+        region = ",".join(
+            str(window[field]) for field in ("x", "y", "width", "height")
+        )
+        command.append(f"-R{region}")
+    else:
+        command.extend(("-l", str(window["window_id"])))
+    command.append(str(output))
+    return command
+
+
+def capture_window(
+    title: str,
+    output: Path,
+    *,
+    resize: tuple[int, int] | None = None,
+    maximize: bool = False,
+) -> dict[str, object]:
     """Capture the native window matching ``title`` and return measured metadata."""
     if output.suffix.lower() != ".png":
         raise ValueError("Native UI evidence output must be a PNG file")
-    window = _find_window(title)
+    window, requested = _configure_window(title, resize=resize, maximize=maximize)
     runtime_signal = _runtime_signal(window["window_owner_pid"])
     output.parent.mkdir(parents=True, exist_ok=True)
-    subprocess.run(
-        ["/usr/sbin/screencapture", "-x", "-l", str(window["window_id"]), str(output)],
-        check=True,
-    )
+    subprocess.run(_capture_command(window, output, maximize=maximize), check=True)
     if not output.is_file() or not output.read_bytes().startswith(b"\x89PNG\r\n\x1a\n"):
         raise RuntimeError(f"Native capture did not produce a PNG file: {output}")
-    return {
+    record: dict[str, object] = {
         "file": output.name,
         "git_head": _git_head(),
         "window_owner": window["window_owner"],
@@ -92,6 +174,12 @@ def capture_window(title: str, output: Path) -> dict[str, object]:
         "height": window["height"],
         "sha256": hashlib.sha256(output.read_bytes()).hexdigest(),
     }
+    if requested is not None:
+        record["requested_width"] = requested[0]
+        record["requested_height"] = requested[1]
+    if maximize:
+        record["window_mode"] = "maximized"
+    return record
 
 
 def _write_manifest(path: Path, entries: list[dict[str, object]]) -> None:
@@ -109,13 +197,21 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--title", required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--scenario", required=True)
+    size_group = parser.add_mutually_exclusive_group()
+    size_group.add_argument("--resize", type=_window_size)
+    size_group.add_argument("--maximize", action="store_true")
     args = parser.parse_args(argv)
     if args.scenario == "baseline" and (
         args.output.name != BASELINE_FILE or _git_head() != BASELINE_HEAD
     ):
         parser.error("baseline is reserved for the historical 00-baseline.png at its base HEAD")
 
-    record = capture_window(args.title, args.output)
+    record = capture_window(
+        args.title,
+        args.output,
+        resize=args.resize,
+        maximize=args.maximize,
+    )
     record["scenario"] = args.scenario
     manifest = args.output.parent / "manifest.json"
     if manifest.exists():

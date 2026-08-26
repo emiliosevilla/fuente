@@ -177,12 +177,19 @@ def test_failed_ui_state_write_is_visible_and_remains_queued():
     assert node is not None, "Node is required to execute the shell behavior contract"
     functions = "\n".join(
         _extract_function(name)
-        for name in ("reportUiStateFailure", "persistUiState")
+        for name in (
+            "reportUiStateFailure",
+            "scheduleUiStateRetry",
+            "persistUiState",
+        )
     )
     program = """
 const assert = require('node:assert/strict');
 const pendingUiState = new Map();
+const UI_STATE_RETRY_DELAY_MS = 1500;
+let uiStateRetryTimer = null;
 const status = {textContent: ''};
+global.setTimeout = function() { return 1; };
 global.window = {pywebview: {api: {set_ui_state() { return Promise.reject(new Error('disk full')); }}}};
 global.document = {getElementById() { return status; }};
 global.log = function() {};

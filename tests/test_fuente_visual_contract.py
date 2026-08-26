@@ -31,6 +31,11 @@ def _token_hex(tokens_css: str, token: str) -> str:
     assert match is not None
     return match.group(1)
 
+def _theme_token_hex(tokens_css: str, theme: str, token: str) -> str:
+    block = re.search(rf'html\[data-fuente-style="{theme}"\]\s*\{{(.*?)\n\}}', tokens_css, re.DOTALL)
+    assert block is not None
+    return _token_hex(block.group(1), token)
+
 def test_fuente_tokens_file_declares_semantic_nord_tokens() -> None:
     tokens_css = _read(TOKENS_CSS_PATH)
     for token in FUENTE_TOKENS:
@@ -63,14 +68,14 @@ def test_workflow_uses_css_arrow_connectors_and_modern_motion_layer() -> None:
     assert "@keyframes flowPulse" in css
     assert "prefers-reduced-motion" in css
 
-def test_console_exposes_independent_zen_energy_visual_style_toggle() -> None:
+def test_console_exposes_independent_nord_gruvbox_visual_style_toggle() -> None:
     html = _read(HTML_PATH)
-    assert '<html lang="es" data-fuente-style="zen">' in html
+    assert '<html lang="es" data-fuente-style="nord">' in html
     assert 'id="style-toggle"' in html
     assert 'class="masthead-link masthead-style-button"' in html
-    assert '>Energy</button>' in html
-    assert "const nextStyle = activeStyle === 'energy' ? 'zen' : 'energy'" in html
-    assert "styleToggle.textContent = nextStyle === 'energy' ? 'Energy' : 'Zen'" in html
+    assert '>Gruvbox</button>' in html
+    assert "const nextStyle = activeStyle === 'nord' ? 'gruvbox' : 'nord'" in html
+    assert "styleToggle.textContent = nextStyle === 'gruvbox' ? 'Gruvbox' : 'Nord'" in html
     assert "styleToggle.setAttribute('aria-pressed'" not in html
     assert "FUENTE_STYLE_STORAGE_KEY = 'fuente.visual-style'" in html
     assert "document.documentElement.dataset.fuenteStyle = activeStyle" in html
@@ -78,11 +83,26 @@ def test_console_exposes_independent_zen_energy_visual_style_toggle() -> None:
     assert "function toggleVisualStyle()" in html
     assert "'toggleVisualStyle()': toggleVisualStyle" in html
 
+def test_nord_and_gruvbox_text_tokens_meet_normal_text_contrast() -> None:
+    tokens = _read(TOKENS_CSS_PATH)
+    for theme in ("nord", "gruvbox"):
+        canvas = _theme_token_hex(tokens, theme, "--surface-canvas")
+        for token in (
+            "--text-primary",
+            "--text-secondary",
+            "--accent-primary",
+            "--focus-ring",
+            "--state-success",
+            "--state-warning",
+            "--state-danger",
+        ):
+            assert _contrast_ratio(canvas, _theme_token_hex(tokens, theme, token)) >= 4.5
+
 def test_visual_style_toggle_does_not_reuse_vault_theme_bridge() -> None:
     html = _read(HTML_PATH)
     style_change, vault_theme_bridge = html.index("function toggleVisualStyle()"), html.index("set_theme(themeName)")
     assert style_change < vault_theme_bridge
-    assert "applyVisualStyle(currentStyle === 'energy' ? 'zen' : 'energy')" in html
+    assert "applyVisualStyle(currentStyle === 'nord' ? 'gruvbox' : 'nord')" in html
     assert 'id="style-select"' not in html
     assert 'id="settings-style-select"' not in html
 

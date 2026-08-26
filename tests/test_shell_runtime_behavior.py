@@ -278,15 +278,16 @@ let uiStateRetryTimer = null;
 let nativeCloseRequested = false;
 let retry = null;
 let writes = 0;
+let canWrite = false;
 let closeCompletions = 0;
 const status = {textContent: ''};
 global.setTimeout = function(callback) { retry = callback; return 1; };
 global.window = {pywebview: {api: {
     set_ui_state() {
         writes += 1;
-        return writes === 1
-            ? Promise.reject(new Error('database temporarily locked'))
-            : Promise.resolve({status: 'saved'});
+        return canWrite
+            ? Promise.resolve({status: 'saved'})
+            : Promise.reject(new Error('database temporarily locked'));
     },
     complete_pending_close() {
         closeCompletions += 1;
@@ -303,6 +304,7 @@ persistUiState('reader', 'drafts', {text: 'conservar'}).then(function() {
     assert.equal(closeCompletions, 0);
     setImmediate(function() {
         assert.equal(pendingUiState.size, 1);
+        canWrite = true;
         retry();
         setImmediate(function() {
             assert.equal(pendingUiState.size, 0);

@@ -7,6 +7,7 @@ import sqlite3
 import os
 import sys
 import threading
+import logging
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Mapping, Optional
 
@@ -42,6 +43,7 @@ if TYPE_CHECKING:
 
 
 ErrorResult = dict[str, str]
+logger = logging.getLogger(__name__)
 
 
 class FuentePyWebViewApi:
@@ -67,6 +69,9 @@ class FuentePyWebViewApi:
     def __init__(self, backend: FuenteConsoleBackend):
         self.backend = backend
         self._window: Any = None
+        self._close_lock = threading.RLock()
+        self._pending_close_action: tuple[str, str | None] | None = None
+        self._close_authorized = False
 
     @staticmethod
     def _error(code: str, message: str) -> ErrorResult:
@@ -114,6 +119,68 @@ class FuentePyWebViewApi:
 
     def set_window(self, window: Any) -> None:
         self._window = window
+
+    def _ui_state_ready_to_close(self) -> bool:
+        """Ask the loaded page to drain pending SQLite writes before closing."""
+        evaluator = getattr(self._window, "evaluate_js", None)
+        if not callable(evaluator):
+            return True
+        try:
+            result = evaluator(
+                """
+                (function() {
+                    if (typeof window.prepareUiStateForNativeClose !== 'function') {
+                        return {ready: true, reason: 'ui_state_not_initialized'};
+                    }
+                    return window.prepareUiStateForNativeClose();
+                })()
+                """
+            )
+        except Exception as error:
+            logger.error("Could not inspect pending UI state before close: %s", error)
+            return False
+        return isinstance(result, Mapping) and result.get("ready") is True
+
+    def _schedule_close_action(self) -> dict[str, str]:
+        with self._close_lock:
+            action = self._pending_close_action
+            if action is None:
+                return self._error("close_not_pending", "No hay un cierre pendiente.")
+            self._pending_close_action = None
+            self._close_authorized = True
+
+        kind, vault_path = action
+
+        def finish() -> None:
+            if self._window is not None:
+                self._window.destroy()
+            if kind == "restart" and vault_path is not None:
+                os.execv(sys.executable, [sys.executable, "--vault", vault_path])
+
+        threading.Timer(0.15, finish).start()
+        return {"status": "restarting" if kind == "restart" else "closing"}
+
+    def _handle_window_closing(self) -> bool:
+        """PyWebView closing event: False is the documented cancellation signal."""
+        with self._close_lock:
+            if self._close_authorized:
+                self._close_authorized = False
+                return True
+            self._pending_close_action = ("close", None)
+        if self._ui_state_ready_to_close():
+            with self._close_lock:
+                self._pending_close_action = None
+            return True
+        return False
+
+    def complete_pending_close(self) -> dict[str, str] | ErrorResult:
+        """Complete a native close/restart only after JS reports an empty queue."""
+        if not self._ui_state_ready_to_close():
+            return self._error(
+                "ui_state_pending",
+                "Fuente sigue guardando cambios de interfaz; el cierre continúa cancelado.",
+            )
+        return self._schedule_close_action()
 
     def get_initial_state(self) -> dict[str, object]:
         return self.backend.get_initial_state_dict()
@@ -605,14 +672,16 @@ class FuentePyWebViewApi:
         result = validator(vault)
         if result.get("error"):
             return result
-
-        def relaunch() -> None:
-            if self._window is not None:
-                self._window.destroy()
-            os.execv(sys.executable, [sys.executable, "--vault", result["vault_path"]])
-
-        threading.Timer(0.15, relaunch).start()
-        return {"status": "restarting", "vault_path": result["vault_path"]}
+        with self._close_lock:
+            self._pending_close_action = ("restart", result["vault_path"])
+        if not self._ui_state_ready_to_close():
+            return self._error(
+                "ui_state_pending",
+                "Fuente sigue guardando cambios de interfaz; el reinicio está cancelado hasta recuperarlos.",
+            )
+        response = self._schedule_close_action()
+        response["vault_path"] = result["vault_path"]
+        return response
 
     def install_obsidian(self) -> dict[str, Any]:
         action = getattr(self.backend, "install_obsidian", None)

@@ -31,6 +31,7 @@ from fuente.domain.errors import (
     PathAuthorizationError,
 )
 from fuente.domain.sync import SyncDirection
+from fuente.infrastructure.sqlite_store import UIStateStore
 
 if TYPE_CHECKING:
     from fuente.control_console import FuenteConsoleBackend
@@ -112,6 +113,38 @@ class FuentePyWebViewApi:
 
     def get_initial_state(self) -> dict[str, object]:
         return self.backend.get_initial_state_dict()
+
+    def get_ui_state(self, scope: object, owner: object, key: object) -> dict[str, Any]:
+        values = [
+            self._text(scope, "scope"),
+            self._text(owner, "owner"),
+            self._text(key, "key"),
+        ]
+        error = next((value for value in values if isinstance(value, dict)), None)
+        if error is not None:
+            return error
+        try:
+            state = UIStateStore(self.backend.get_notes_service().job_store)
+            return {"value": state.get(*values)}
+        except (TypeError, ValueError) as error:
+            return self._error("invalid_payload", str(error))
+
+    def set_ui_state(
+        self, scope: object, owner: object, key: object, value: object
+    ) -> dict[str, Any]:
+        values = [
+            self._text(scope, "scope"),
+            self._text(owner, "owner"),
+            self._text(key, "key"),
+        ]
+        error = next((item for item in values if isinstance(item, dict)), None)
+        if error is not None:
+            return error
+        try:
+            UIStateStore(self.backend.get_notes_service().job_store).set(*values, value)
+            return {"status": "saved"}
+        except (TypeError, ValueError) as error:
+            return self._error("invalid_payload", str(error))
 
     def get_settings_info(self) -> dict[str, Any]:
         return self.backend.get_settings_info()

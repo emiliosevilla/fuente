@@ -1097,6 +1097,66 @@ document.addEventListener('keydown', handleShellKeydown);
 
         const WORKSPACE_IDS = ['home', 'source', 'flow'];
 
+        function persistUiState(owner, key, value, scope) {
+            const api = window.pywebview && window.pywebview.api;
+            if (!api || typeof api.set_ui_state !== 'function') return Promise.resolve();
+            return api.set_ui_state(scope || 'persistent', owner, key, value).catch(function() {});
+        }
+
+        function readUiState(owner, key, scope) {
+            const api = window.pywebview && window.pywebview.api;
+            if (!api || typeof api.get_ui_state !== 'function') return Promise.resolve(null);
+            return api.get_ui_state(scope || 'persistent', owner, key).then(function(result) {
+                return result && !result.error ? result.value : null;
+            }).catch(function() { return null; });
+        }
+
+        function restoreUiState() {
+            readUiState('main-window', 'workspace').then(function(workspace) {
+                if (WORKSPACE_IDS.includes(workspace)) switchWorkspace(workspace);
+            });
+            readUiState('main-window', 'visual_style').then(function(style) {
+                if (FUENTE_STYLES.has(style)) applyVisualStyle(style, false);
+            });
+            readUiState('reader', 'filters').then(function(filters) {
+                const search = document.getElementById('reader-search');
+                if (search && filters && typeof filters.search === 'string') {
+                    search.value = filters.search;
+                    filterReaderNotes(false);
+                }
+            });
+            readUiState('reader-library', 'panels').then(function(panels) {
+                const workspace = document.getElementById('reader-view-list');
+                const button = document.getElementById('btn-reader-library');
+                if (!workspace || !button || !panels || typeof panels.visible !== 'boolean') return;
+                workspace.classList.toggle('is-library-hidden', !panels.visible);
+                button.setAttribute('aria-pressed', String(panels.visible));
+            });
+            readUiState('reader-context', 'panels').then(function(panels) {
+                if (panels && typeof panels.visible === 'boolean') {
+                    setReaderContextVisibility(panels.visible);
+                }
+            });
+            readUiState('reader-workspace', 'panels').then(function(panels) {
+                if (panels && ['assistant', 'notes'].includes(panels.tab)) {
+                    switchWorkspaceTab(panels.tab, false);
+                }
+            });
+            readUiState('job-queue', 'cursor', 'session').then(function(cursor) {
+                if (!cursor || typeof cursor !== 'object') return;
+                queueCursor = typeof cursor.current === 'string' ? cursor.current : null;
+                queueCursorHistory = Array.isArray(cursor.history) ? cursor.history.filter(function(item) {
+                    return typeof item === 'string';
+                }) : [];
+            });
+            readUiState('reader', 'drafts').then(function(drafts) {
+                const input = document.getElementById('workspace-chat-input');
+                if (input && drafts && typeof drafts.workspaceChat === 'string') {
+                    input.value = drafts.workspaceChat;
+                }
+            });
+        }
+
         function switchWorkspace(workspaceId) {
             if (!WORKSPACE_IDS.includes(workspaceId)) return;
             document.querySelectorAll('[data-workspace]').forEach(function(panel) {
@@ -1112,6 +1172,7 @@ document.addEventListener('keydown', handleShellKeydown);
             const heading = document.querySelector('#workspace-' + workspaceId + ' h1');
             if (heading) heading.focus({preventScroll: true});
             if (workspaceId === 'source') loadReaderNotes();
+            persistUiState('main-window', 'workspace', workspaceId);
         }
 
         let lastDrawerTrigger = null;
@@ -1662,6 +1723,10 @@ document.addEventListener('keydown', handleShellKeydown);
         function loadJobQueue(cursor) {
             if (cursor === undefined) cursor = queueCursor;
             queueCursor = cursor || null;
+            persistUiState('job-queue', 'cursor', {
+                current: queueCursor,
+                history: queueCursorHistory
+            }, 'session');
             if (!queueApiAvailable()) {
                 queueStatus('La cola de trabajos todavía no está disponible.', true);
                 return;
@@ -3164,19 +3229,14 @@ document.addEventListener('keydown', handleShellKeydown);
             }, 3800);
         }
 
-        const FUENTE_STYLE_STORAGE_KEY = 'fuente.visual-style';
         const FUENTE_STYLES = new Set(['nord', 'gruvbox']);
 
         function readVisualStyle() {
-            try {
-                const stored = window.localStorage.getItem(FUENTE_STYLE_STORAGE_KEY);
-                return FUENTE_STYLES.has(stored) ? stored : 'nord';
-            } catch (error) {
-                return 'nord';
-            }
+            const active = document.documentElement.dataset.fuenteStyle;
+            return FUENTE_STYLES.has(active) ? active : 'nord';
         }
 
-        function applyVisualStyle(styleName) {
+        function applyVisualStyle(styleName, persist) {
             const activeStyle = FUENTE_STYLES.has(styleName) ? styleName : 'nord';
             document.documentElement.dataset.fuenteStyle = activeStyle;
             const styleToggle = document.getElementById('style-toggle');
@@ -3187,11 +3247,7 @@ document.addEventListener('keydown', handleShellKeydown);
                 if (styleLabel) styleLabel.textContent = nextStyleLabel;
                 styleToggle.setAttribute('aria-label', 'Activar estilo visual ' + nextStyleLabel);
             }
-            try {
-                window.localStorage.setItem(FUENTE_STYLE_STORAGE_KEY, activeStyle);
-            } catch (error) {
-                // The webview may disable storage; the active style still applies.
-            }
+            if (persist !== false) persistUiState('main-window', 'visual_style', activeStyle);
             return activeStyle;
         }
 
@@ -3449,7 +3505,7 @@ document.addEventListener('keydown', handleShellKeydown);
             }
         }
 
-        function switchWorkspaceTab(tabId) {
+        function switchWorkspaceTab(tabId, persist) {
             const allowed = ['assistant', 'notes'];
             if (allowed.indexOf(tabId) === -1) return;
             allowed.forEach(function(id) {
@@ -3462,6 +3518,9 @@ document.addEventListener('keydown', handleShellKeydown);
                 }
                 if (panel) panel.classList.toggle('is-hidden', !active);
             });
+            if (persist !== false) {
+                persistUiState('reader-workspace', 'panels', {tab: tabId});
+            }
         }
 
         let currentDocumentWorkspace = null;
@@ -3842,6 +3901,7 @@ document.addEventListener('keydown', handleShellKeydown);
             if (!workspace || !button) return;
             const visible = workspace.classList.toggle('is-library-hidden') === false;
             button.setAttribute('aria-pressed', String(visible));
+            persistUiState('reader-library', 'panels', {visible: visible});
         }
 
         function toggleReaderContext() {
@@ -3851,6 +3911,7 @@ document.addEventListener('keydown', handleShellKeydown);
             const visible = drawer.hidden || drawer.getAttribute('aria-hidden') === 'true';
             if (visible) lastDrawerTrigger = button;
             setReaderContextVisibility(visible);
+            persistUiState('reader-context', 'panels', {visible: visible});
         }
 
         function createNoteActionBar(noteTitle) {
@@ -4246,10 +4307,13 @@ document.addEventListener('keydown', handleShellKeydown);
             return String(value || '').toLocaleLowerCase().replace(/[-_]+/gu, ' ').replace(/\s+/gu, ' ').trim();
         }
 
-        function filterReaderNotes() {
+        function filterReaderNotes(persist) {
             const searchInput = document.getElementById('reader-search');
             const rawInput = searchInput ? searchInput.value : '';
             const query = normalizeReaderSearchText(rawInput);
+            if (persist !== false) {
+                persistUiState('reader', 'filters', {search: rawInput});
+            }
 
             document.querySelectorAll('.reader-note-item').forEach(function(el) {
                 el.classList.toggle(
@@ -4384,6 +4448,7 @@ document.addEventListener('keydown', handleShellKeydown);
                 log('Conexión nativa PyWebView establecida con la Consola Fuente');
                 if (window.pywebview && window.pywebview.api) {
                     recoverNativeModalLoads();
+                    restoreUiState();
                     callNativeRequest('get_initial_state', function() {
                         return window.pywebview.api.get_initial_state();
                     }, NATIVE_INITIAL_STATE_TIMEOUT_MS).then(function(state) {
@@ -4421,12 +4486,16 @@ document.addEventListener('keydown', handleShellKeydown);
         });
 
         document.addEventListener('DOMContentLoaded', function() {
-            applyVisualStyle(readVisualStyle());
+            applyVisualStyle(readVisualStyle(), false);
             mountReaderWorkspace();
             const shareButton = document.getElementById('document-share-button');
             if (shareButton) shareButton.addEventListener('click', shareCurrentDocument);
             const workspaceChatForm = document.getElementById('workspace-chat-form');
             if (workspaceChatForm) workspaceChatForm.addEventListener('submit', submitWorkspaceChat);
+            const workspaceChatInput = document.getElementById('workspace-chat-input');
+            if (workspaceChatInput) workspaceChatInput.addEventListener('input', function() {
+                persistUiState('reader', 'drafts', {workspaceChat: workspaceChatInput.value});
+            });
             if (isExplicitPreviewMode()) {
                 markExplicitPreviewMode();
             } else {

@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 import sqlite3
+from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
 from fuente.infrastructure.sqlite_store import JobStore, UIStateStore
+from fuente.ui.bridge import FuentePyWebViewApi
 
 
 def test_persistent_ui_state_survives_store_restart(tmp_path) -> None:
@@ -42,3 +45,26 @@ def test_ui_state_schema_does_not_create_a_second_database(tmp_path) -> None:
         }
     assert {"ui_state", "transition_approvals", "review_claims"} <= tables
     assert list(tmp_path.rglob("*.db")) == [tmp_path / ".fuente" / "state.db"]
+
+
+def test_bridge_round_trips_ui_state_through_existing_job_store(tmp_path) -> None:
+    with JobStore(tmp_path) as store:
+        backend = SimpleNamespace(
+            get_notes_service=lambda: SimpleNamespace(job_store=store)
+        )
+        api = FuentePyWebViewApi(backend)
+        assert api.set_ui_state(
+            "persistent", "reader", "filters", {"search": "SQLite"}
+        ) == {"status": "saved"}
+        assert api.get_ui_state("persistent", "reader", "filters") == {
+            "value": {"search": "SQLite"}
+        }
+
+
+def test_console_keeps_business_state_out_of_local_storage() -> None:
+    html = (Path(__file__).parents[1] / "consola_preview.html").read_text(
+        encoding="utf-8"
+    )
+    assert "localStorage" not in html
+    assert "api.get_ui_state" in html
+    assert "api.set_ui_state" in html

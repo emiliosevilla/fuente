@@ -2328,6 +2328,7 @@ def launch_control_console(vault_path: Optional[Path] = None):
             background_color="#ECEFF4",
         )
         api.set_window(window)
+        window.events.closing += api._handle_window_closing
         window.events.shown += _activate_webview_window
         window.events.loaded += _activate_webview_window
         webview.start(debug=False)
@@ -2396,6 +2397,7 @@ def launch_control_console(vault_path: Optional[Path] = None):
                 background_color="#ECEFF4"
             )
             api.set_window(window)
+            window.events.closing += api._handle_window_closing
             window.events.shown += _activate_webview_window
             window.events.loaded += _activate_webview_window
             webview.start(debug=False)

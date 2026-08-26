@@ -1099,6 +1099,7 @@ document.addEventListener('keydown', handleShellKeydown);
         const pendingUiState = new Map();
         const UI_STATE_RETRY_DELAY_MS = 1500;
         let uiStateRetryTimer = null;
+        let nativeCloseRequested = false;
 
         function reportUiStateFailure(operation, owner, key, error) {
             const message = 'No se pudo ' + operation + ' el estado de ' + owner + '/' + key + ': ' + String(error || 'error SQLite');
@@ -1134,10 +1135,43 @@ document.addEventListener('keydown', handleShellKeydown);
             });
         }
 
+        function notifyNativeCloseWhenReady() {
+            if (!nativeCloseRequested || pendingUiState.size) return;
+            const api = window.pywebview && window.pywebview.api;
+            if (!api || typeof api.complete_pending_close !== 'function') {
+                reportUiStateFailure('completar', 'interfaz', 'cierre', 'bridge nativo no disponible');
+                return;
+            }
+            nativeCloseRequested = false;
+            Promise.resolve(api.complete_pending_close()).then(function(result) {
+                if (!result || result.error) {
+                    nativeCloseRequested = true;
+                    reportUiStateFailure('completar', 'interfaz', 'cierre', result && result.message);
+                }
+            }).catch(function(error) {
+                nativeCloseRequested = true;
+                reportUiStateFailure('completar', 'interfaz', 'cierre', error);
+            });
+        }
+
         function flushPendingUiState() {
             return Promise.all(Array.from(pendingUiState.values()).map(function(pending) {
                 return persistUiState(pending.owner, pending.key, pending.value, pending.scope);
-            }));
+            })).then(function(results) {
+                notifyNativeCloseWhenReady();
+                return results;
+            });
+        }
+
+        function prepareUiStateForNativeClose() {
+            if (!pendingUiState.size) return {ready: true, pending: 0};
+            nativeCloseRequested = true;
+            const message = 'Fuente está guardando cambios pendientes antes de cerrar.';
+            log(message);
+            const status = document.getElementById('bottom-status-line');
+            if (status) status.textContent = message;
+            flushPendingUiState();
+            return {ready: false, pending: pendingUiState.size};
         }
 
         window.addEventListener('beforeunload', function(event) {

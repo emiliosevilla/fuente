@@ -29,6 +29,25 @@
 
         [hidden] { display: none !important; }
 
+        #ui-icon-definitions {
+            position: absolute;
+            width: 0;
+            height: 0;
+            overflow: hidden;
+            pointer-events: none;
+        }
+
+        .ui-icon {
+            width: 18px;
+            height: 18px;
+            flex: none;
+            fill: none;
+            stroke: currentColor;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+            stroke-width: 2;
+        }
+
         input, select, option, textarea, button {
             font-family: var(--font-mono) !important;
             color: var(--paper);
@@ -485,13 +504,9 @@
             color: var(--muted);
         }
 
-        .close-btn svg {
+        .close-btn .ui-icon {
             width: 18px;
             height: 18px;
-            fill: none;
-            stroke: currentColor;
-            stroke-linecap: round;
-            stroke-width: 2;
         }
 
         /* ESTILOS ESPECÍFICOS PARA LECTOR DE NOTAS */
@@ -679,9 +694,10 @@
             position: absolute;
             left: 10px;
             top: 50%;
+            width: 18px;
+            height: 18px;
             transform: translateY(-50%);
             color: var(--gold);
-            font-size: 0.82rem;
             pointer-events: none;
             opacity: 0.85;
             z-index: 5;
@@ -1928,7 +1944,6 @@ html[data-fuente-style="energy"] .arrow-connector::before {
 
 .reader-search-icon {
     color: var(--accent);
-    font-size: 1rem;
 }
 
 .reader-context-grid {

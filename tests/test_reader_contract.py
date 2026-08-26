@@ -183,7 +183,7 @@ def test_load_note_by_document_id_supports_nested_navigation_and_history(temp_va
 
 
 def test_webview_reader_exposes_back_control_that_pops_history():
-    """WebView must wire ◄ Atrás to pop readerNoteHistory and reload by id."""
+    """WebView must wire Atrás to pop readerNoteHistory and reload by id."""
     source = (
         Path(__file__).resolve().parent.parent / "consola_preview.html"
     ).read_text(encoding="utf-8")

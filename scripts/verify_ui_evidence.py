@@ -67,6 +67,25 @@ def verify_manifest(path: Path, expected_head: str) -> list[str]:
         if type(entry.get("height")) is not int or entry["height"] <= 0:
             errors.append(_error(index, "height must be positive"))
             continue
+        requested_width = entry.get("requested_width")
+        requested_height = entry.get("requested_height")
+        if (requested_width is None) != (requested_height is None):
+            errors.append(_error(index, "requested dimensions must be provided together"))
+            continue
+        if requested_width is not None:
+            if (
+                type(requested_width) is not int
+                or requested_width <= 0
+                or type(requested_height) is not int
+                or requested_height <= 0
+            ):
+                errors.append(_error(index, "requested dimensions must be positive integers"))
+                continue
+            if requested_width != entry["width"] or requested_height != entry["height"]:
+                errors.append(
+                    _error(index, "requested dimensions do not match measured dimensions")
+                )
+                continue
         filename = entry.get("file")
         if not isinstance(filename, str) or Path(filename).name != filename or not filename.endswith(".png"):
             errors.append(_error(index, "file must name a PNG beside the manifest"))

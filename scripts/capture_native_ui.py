@@ -157,6 +157,13 @@ def capture_window(
     if output.suffix.lower() != ".png":
         raise ValueError("Native UI evidence output must be a PNG file")
     window, requested = _configure_window(title, resize=resize, maximize=maximize)
+    measured = int(window["width"]), int(window["height"])
+    if requested is not None and measured != requested:
+        raise RuntimeError(
+            "Native window size mismatch: "
+            f"requested {requested[0]}x{requested[1]}, "
+            f"measured {measured[0]}x{measured[1]}"
+        )
     runtime_signal = _runtime_signal(window["window_owner_pid"])
     output.parent.mkdir(parents=True, exist_ok=True)
     subprocess.run(_capture_command(window, output, maximize=maximize), check=True)
@@ -222,6 +229,7 @@ def main(argv: list[str] | None = None) -> int:
         entries = []
     entries = [entry for entry in entries if entry.get("file") != record["file"]]
     entries.append(record)
+    entries.sort(key=lambda entry: str(entry.get("file", "")))
     _write_manifest(manifest, entries)
     print(json.dumps(record, ensure_ascii=False, indent=2))
     return 0

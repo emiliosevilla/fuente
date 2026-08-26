@@ -528,7 +528,7 @@ def launch_obsidian(vault_path: Path) -> bool:
 
 
 def run_async_invariants_check() -> None:
-    """Ejecuta la verificación de invariantes del sistema (RAM, integridad de grafo, whitelist) en un hilo secundario asíncrono."""
+    """Verifica RAM y aplicaciones fuera de la whitelist en segundo plano."""
     import threading
 
     def _worker():

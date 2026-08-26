@@ -72,7 +72,6 @@ def test_static_preview_is_explicit_and_native_loads_fail_visibly():
     reader = _function_source("loadReaderNotes", "highlightSidebarNote")
     content = _function_source("loadNoteContent", "loadCategoryData")
     settings = _function_source("loadSettingsData", "showButtonFeedback")
-    graph = _function_source("loadObsidianGraphView", "renderReaderLoadError")
 
     assert "new URLSearchParams(window.location.search)" in preview_mode
     assert "params.get('preview') === 'mock'" in preview_mode
@@ -86,7 +85,6 @@ def test_static_preview_is_explicit_and_native_loads_fail_visibly():
     assert "callNativeRequest('get_note_content'" in content
     assert "callNativeLongRequest('get_settings_info'" in settings
     assert "callNativeRequest('get_sync_inputs'" in settings
-    assert "isExplicitPreviewMode()" in graph
     assert "nativeBackendUnavailableMessage()" in reader
     assert "nativeBackendUnavailableMessage()" in settings
 
@@ -114,7 +112,7 @@ def test_first_run_stays_unconfigured_until_settings_selects_a_vault():
     assert "FuenteSetupBackend" in LAUNCHER_SOURCE
     assert "Fuente iniciando servicios" in LAUNCHER_SOURCE
     assert "mode=\"indeterminate\"" in LAUNCHER_SOURCE
-    assert "No hay un tema conectado. Configúralo desde Ajustes." in SOURCE
+    assert "No hay un Vault conectado. Configúralo desde Ajustes." in SOURCE
     assert "restart_with_vault" in SOURCE
 
 
@@ -149,6 +147,13 @@ def test_settings_restart_validates_selected_vault_before_relaunch():
     assert "os.execv(sys.executable" in BRIDGE_SOURCE
 
 
+def test_native_window_close_routes_through_cancellable_ui_state_guard():
+    assert LAUNCHER_SOURCE.count("window.events.closing += api._handle_window_closing") == 2
+    assert "prepareUiStateForNativeClose" in SOURCE
+    assert "complete_pending_close" in SOURCE
+    assert "def _handle_window_closing" in BRIDGE_SOURCE
+
+
 def test_setup_api_exposes_empty_sync_state_before_runtime_connection():
     setup_api = (ROOT / "fuente" / "ui" / "setup_api.py").read_text(encoding="utf-8")
     assert "def get_sync_inputs" in setup_api
@@ -162,12 +167,14 @@ def test_guided_vault_confirms_the_exact_creation_path():
     assert "typeof targetPath !== 'string'" in guided
     assert "callNativeLongRequest('select_vault_target'" in guided
     assert "target_path: targetPath" in guided
+    assert "consent: true" in guided
     assert "pathInput.value = result.vault_path || ''" in guided
     assert "Carpeta elegida: ' + targetPath" in guided
-    assert "No se recibió respuesta al crear el tema." in guided
+    assert "No se recibió respuesta al crear el Vault." in guided
     assert "Selección cancelada o sin carpeta." in guided
-    assert "El tema se creará exactamente en:" in guided
-    assert "Fuente creará esa carpeta y su configuración." in guided
+    assert "El Vault Fuente se creará exactamente en:" in guided
+    assert "Fuente configurará los recursos ocultos y consultará la CLI de Obsidian." in guided
+    assert "result.setup.setup_ready" in guided
 
 
 def test_note_content_rejection_and_malformed_payload_render_visible_error():

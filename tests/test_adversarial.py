@@ -11,7 +11,6 @@ from fuente.core.vault import VaultManager
 from fuente.extractors.registry import ExtractorRegistry
 from fuente.extractors.office_pdf import TextAndOfficeExtractor
 from fuente.extractors.tex_tm import TeXAndTeXmacsExtractor
-from fuente.graph_engine.linker import GraphLinker
 from fuente.infrastructure.sqlite_store import JobStore
 from fuente.ram_governor.governor import RAMGovernor
 from fuente.rag.chroma_store import ChromaStore
@@ -36,9 +35,11 @@ class TestAdversarial(unittest.TestCase):
                 explicit_test_runtime_policy,
                 patch_abundant_ram,
                 patch_test_model_inventory,
+                auto_approve_early_transitions,
             )
 
             self.pipeline = ETLPipeline(self.config)
+            auto_approve_early_transitions(self.pipeline.ingestion)
             self.pipeline.set_runtime_policy(explicit_test_runtime_policy())
             patch_abundant_ram(self.pipeline.ram_governor)
             patch_test_model_inventory(self.pipeline.ram_governor, "test-model")
@@ -121,10 +122,11 @@ E = mc^2
             chunker=SemanticChunker(),
             chroma=FakeChroma(),
             atomic_generator=FakeGenerator(),
-            linker=GraphLinker(self.vault.output_dir),
             ram_governor=FakeGovernor(),
             stabilize=lambda path: path.is_file() and path.stat().st_size > 0,
         )
+        from tests.conftest import auto_approve_early_transitions
+        auto_approve_early_transitions(service)
         source_identity = service.vault_relative_identity(junk_file)
 
         try:
@@ -172,28 +174,6 @@ E = mc^2
         content, meta = extractor.extract(bad_utf8_file)
         self.assertIn("Texto valido", content)
 
-    def test_adversarial_unbalanced_codeblocks_linker(self):
-        """Prueba el linker de WikiLinks contra Markdown roto con bloques de código no cerrados."""
-        existing_note = self.config.vault.output_dir / "Sistema Principal.md"
-        with open(existing_note, "w", encoding="utf-8") as f:
-            f.write("Nota de Sistema Principal")
-
-        linker = GraphLinker(self.config.vault.output_dir)
-
-        broken_markdown = """---
-title: "Prueba Rota"
----
-
-# Titulo
-
-```python
-# Bloque de codigo sin cerrar nunca!
-x = "Sistema Principal"
-y = 100
-"""
-        linked = linker.auto_link_content(broken_markdown, "Otra Nota")
-        self.assertIsInstance(linked, str)
-
     def test_adversarial_chromadb_complex_metadata(self):
         """Prueba inserción en ChromaStore de metadatos con objetos no primitivos, listas y None."""
         store = ChromaStore(self.config.vault.chroma_dir)
@@ -223,31 +203,6 @@ y = 100
         self.assertTrue(len(chunks) > 1)
         for c in chunks:
             self.assertLessEqual(len(c["content"]), 700)
-
-    def test_adversarial_title_matching_common_words(self):
-        """Prueba que el linker no rompa si el título de una nota es una palabra común de Markdown o HTML."""
-        common_titles = ["Http", "Https", "Title", "Date", "Tags", "File", "Nota"]
-        for title in common_titles:
-            p = self.config.vault.output_dir / f"{title}.md"
-            with open(p, "w", encoding="utf-8") as f:
-                f.write(f"Contenido de {title}")
-
-        linker = GraphLinker(self.config.vault.output_dir)
-
-        test_doc = """---
-title: "Mi Nota"
-date: "2026-07-28"
-tags: [http, file]
----
-
-# Encabezado
-
-Visit https://example.com or file://path/to/file.
-Esta es una Nota normal.
-"""
-        linked = linker.auto_link_content(test_doc, "Mi Nota")
-        self.assertNotIn("h[[Http]]s", linked)
-        self.assertNotIn("f[[File]]://", linked)
 
     @patch("fuente.watcher.watcher.AtomicNoteGenerator.generate_atomic_note")
     def test_adversarial_concurrent_batch_ingestion(self, mock_gen):

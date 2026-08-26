@@ -294,7 +294,7 @@ def test_saved_model_and_url_apply_to_generation_and_chat(temp_vault_path, monke
         status_code = 500
 
     monkeypatch.setattr(
-        "fuente.graph_engine.atomic_generator.requests.post",
+        "fuente.application.note_generation.requests.post",
         lambda url, json, timeout: generation_calls.append((url, json, timeout))
         or GenerationResponse(),
     )

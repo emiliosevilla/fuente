@@ -53,11 +53,10 @@ class ReviewExportApplicationService:
         document_id: str,
         expected_revision: int,
         export_format: str,
-        metadata_patch: dict[str, Any] | None = None,
     ) -> ReviewExportResult:
         """Approve first; report only known projection failures as partial success.
 
-        Revision, transition, path, and metadata errors from the canonical approval
+        Revision, transition, and path errors from the canonical approval
         are deliberately outside the export exception handler and therefore remain
         visible to callers. Once approval succeeds, a projection failure cannot
         undo the durable approval.
@@ -79,7 +78,6 @@ class ReviewExportApplicationService:
         approved = self.notes_service.approve(
             document_id,
             expected_revision,
-            metadata_patch=metadata_patch,
         )
 
         try:

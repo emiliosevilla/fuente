@@ -10,7 +10,6 @@ from fuente.domain.frontmatter import (
     serialize_frontmatter,
 )
 from fuente.domain.origins import LegacyOriginsMigrationRequiredError
-from fuente.graph_engine.linker import GraphLinker
 
 
 class TestFrontmatterSchema(unittest.TestCase):
@@ -485,43 +484,6 @@ Separador de cuerpo.
             parse_frontmatter("---\ntitle: [not, text]\n---\nbody")
         with self.assertRaises(FrontmatterError):
             parse_frontmatter("---\ntags: not-a-list\n---\nbody")
-
-    def test_linker_preserves_valid_serialized_frontmatter(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            output = Path(tmp)
-            related = serialize_frontmatter(
-                {
-                    "schema_version": 1,
-                    "title": "Nota relacionada",
-                    "date": "2026-08-07",
-                    "author": "Fuente",
-                    "tags": [],
-                    "issue": "_Sin_Cuestion",
-                    "status": "approved",
-                    "sources": [],
-                    "history": [],
-                }
-            ) + "# Nota relacionada\n"
-            (output / "Nota relacionada.md").write_text(related, encoding="utf-8")
-
-            linker = GraphLinker(output)
-            note = serialize_frontmatter(
-                {
-                    "schema_version": 1,
-                    "title": "Origen",
-                    "date": "2026-08-07",
-                    "author": "Fuente",
-                    "tags": ["Nota relacionada"],
-                    "issue": "_Sin_Cuestion",
-                    "status": "pending_review",
-                    "sources": [],
-                    "history": [],
-                }
-            ) + "Hablamos de Nota relacionada.\n"
-            result = linker.auto_link_content(note, "Origen")
-            metadata, body = parse_frontmatter(result)
-            self.assertEqual(metadata["tags"], ["Nota relacionada"])
-            self.assertIn("[[Nota relacionada]]", body)
 
 
 if __name__ == "__main__":

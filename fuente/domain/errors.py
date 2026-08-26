@@ -37,6 +37,16 @@ class OutputApprovalRequiredError(ValueError):
         super().__init__(f"Output note is not approved: {document_id}")
 
 
+class ReviewClaimConflictError(ValueError):
+    """Raised when another reviewer owns the still-current review claim."""
+
+    code = "review_claim_conflict"
+
+    def __init__(self, document_id: str) -> None:
+        self.document_id = document_id
+        super().__init__(f"Review is already claimed: {document_id}")
+
+
 class SharedOutputConflictError(ValueError):
     """Raised when a shared projection conflicts with an existing receipt."""
 

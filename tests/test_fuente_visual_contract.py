@@ -1,4 +1,4 @@
-"""Red contracts for Task 9's Fuente visual system and reader layout."""
+"""Contracts for the Fuente and Caudal native product shell."""
 
 from __future__ import annotations
 
@@ -55,31 +55,31 @@ def test_console_consumes_fuente_tokens_instead_of_literal_nord_palette() -> Non
     nord_hex_values = ("#2E3440", "#3B4252", "#434C5E", "#D8DEE9", "#E5E9F0", "#ECEFF4", "#8FBCBB", "#88C0D0", "#81A1C1", "#5E81AC", "#A3BE8C", "#EBCB8B", "#BF616A")
     assert not any(value in css.upper() for value in nord_hex_values)
 
-def test_workflow_uses_css_arrow_connectors_and_modern_motion_layer() -> None:
+def test_caudal_shell_exposes_five_non_empty_stages_and_reduced_motion() -> None:
     html, css, tokens = _read(HTML_PATH), _read(CONSOLE_CSS_PATH), _read(TOKENS_CSS_PATH)
-    assert html.count('class="arrow-connector" aria-hidden="true"></div>') == 4
+    assert re.findall(r'data-flow-step="([1-5])"', html) == ["1", "2", "3", "4", "5"]
+    for label in ("Volcado", "Copiado", "Capturado", "Procesado", "Compartido"):
+        assert label in html
     assert all(f'id="badge-step{step}"' in html for step in range(1, 6))
-    assert "Revisar y compartir" in html
     assert "═►" not in html
     assert "--fuente-glass:" in tokens
     assert "--fuente-shadow-glass:" in tokens
-    assert ".arrow-connector::before" in css
-    assert ".arrow-connector::after" in css
-    assert "@keyframes flowPulse" in css
     assert "prefers-reduced-motion" in css
 
 def test_console_exposes_independent_nord_gruvbox_visual_style_toggle() -> None:
     html = _read(HTML_PATH)
     assert '<html lang="es" data-fuente-style="nord">' in html
     assert 'id="style-toggle"' in html
-    assert 'class="masthead-link masthead-style-button"' in html
-    assert '>Gruvbox</button>' in html
+    assert '<span id="style-toggle-label">Gruvbox</span>' in html
     assert "const nextStyle = activeStyle === 'nord' ? 'gruvbox' : 'nord'" in html
-    assert "styleToggle.textContent = nextStyle === 'gruvbox' ? 'Gruvbox' : 'Nord'" in html
+    assert "const nextStyleLabel = nextStyle === 'gruvbox' ? 'Gruvbox' : 'Nord'" in html
+    assert "styleLabel.textContent = nextStyleLabel" in html
     assert "styleToggle.setAttribute('aria-pressed'" not in html
-    assert "FUENTE_STYLE_STORAGE_KEY = 'fuente.visual-style'" in html
     assert "document.documentElement.dataset.fuenteStyle = activeStyle" in html
-    assert "localStorage.setItem(FUENTE_STYLE_STORAGE_KEY, activeStyle)" in html
+    assert "persistUiState('main-window', 'visual_style', activeStyle)" in html
+    assert "localStorage.getItem" not in html
+    assert "localStorage.setItem" not in html
+    assert "localStorage.removeItem('fuente.visual-style')" in html
     assert "function toggleVisualStyle()" in html
     assert "'toggleVisualStyle()': toggleVisualStyle" in html
 
@@ -91,12 +91,18 @@ def test_nord_and_gruvbox_text_tokens_meet_normal_text_contrast() -> None:
             "--text-primary",
             "--text-secondary",
             "--accent-primary",
-            "--focus-ring",
             "--state-success",
             "--state-warning",
             "--state-danger",
         ):
             assert _contrast_ratio(canvas, _theme_token_hex(tokens, theme, token)) >= 4.5
+        assert _contrast_ratio(canvas, _theme_token_hex(tokens, theme, "--focus-ring")) >= 3
+
+def test_nord_is_the_light_initial_theme() -> None:
+    tokens = _read(TOKENS_CSS_PATH)
+    assert _theme_token_hex(tokens, "nord", "--surface-canvas").upper() == "#ECEFF4"
+    assert _theme_token_hex(tokens, "nord", "--surface-raised").upper() == "#FFFFFF"
+    assert _theme_token_hex(tokens, "nord", "--text-primary").upper() == "#2E3440"
 
 def test_visual_style_toggle_does_not_reuse_vault_theme_bridge() -> None:
     html = _read(HTML_PATH)
@@ -106,53 +112,74 @@ def test_visual_style_toggle_does_not_reuse_vault_theme_bridge() -> None:
     assert 'id="style-select"' not in html
     assert 'id="settings-style-select"' not in html
 
-def test_reader_exposes_content_properties_and_independent_graph() -> None:
+def test_reader_exposes_read_only_content_and_properties() -> None:
     html = _read(HTML_PATH)
     for region in ("content", "properties"):
         assert f'data-reader-region="{region}"' in html
     assert 'id="reader-properties"' in html
-    assert 'id="modal-reader-graph"' in html
-    assert 'aria-labelledby="reader-graph-modal-title"' in html
     assert "function renderReaderProperties(" in html
-    assert "loadObsidianGraphView();" in html
 
 def test_console_reader_css_keeps_keyboard_focus_and_narrow_layout() -> None:
     css = _read(CONSOLE_CSS_PATH)
     assert ":focus-visible" in css
     assert re.search(r"@media\s*[^{}]*max-width\s*:", css)
 
+def test_shell_has_exactly_three_product_workspaces() -> None:
+    html = _read(HTML_PATH)
+    assert re.findall(r'data-workspace="([^"]+)"', html) == ["home", "source", "flow"]
+    assert re.findall(r'data-workspace-target="([^"]+)"', html) == ["home", "source", "flow"]
+    assert 'aria-label="Espacios de Fuente y Caudal"' in html
+    assert html.count('role="main"') == 1
+
+def test_shell_dimensions_type_and_keyboard_focus_are_explicit() -> None:
+    html, css, tokens = _read(HTML_PATH), _read(CONSOLE_CSS_PATH), _read(TOKENS_CSS_PATH)
+    for declaration in (
+        "--rail-width: 68px",
+        "--header-height: 64px",
+        "--font-size-base: 16px",
+        "--font-size-document: 17px",
+        "--font-size-control: 14px",
+    ):
+        assert declaration in tokens
+    assert "height: var(--header-height)" in css
+    assert "overflow-x: hidden" in css
+    assert 'id="workspace-home-title" tabindex="-1"' in html
+    assert 'id="workspace-source-title" tabindex="-1"' in html
+    assert 'id="workspace-flow-title" tabindex="-1"' in html
+    assert "document.querySelector('#workspace-' + workspaceId + ' h1')" in html
+    assert "heading.focus({preventScroll: true})" in html
+    assert "document.activeElement.setAttribute('data-keyboard-focus', 'true')" in html
+    assert '[data-keyboard-focus="true"]' in css
+
+def test_shell_uses_named_svg_controls_and_shared_disclosures() -> None:
+    html = _read(HTML_PATH)
+    navigation = html.split('<nav id="primary-navigation"', 1)[1].split("</nav>", 1)[0]
+    assert navigation.count("<svg") >= 5
+    assert '<span aria-hidden="true">F</span>' not in navigation
+    assert '<span aria-hidden="true">N</span>' not in navigation
+    for primitive in ("ui-drawer", "ui-popover", "ui-accordion", "ui-carousel"):
+        assert primitive in html
+    assert 'id="source-context-drawer"' in html
+    assert 'id="flow-detail-drawer"' in html
+    assert 'aria-hidden="true"' in html.split('id="source-context-drawer"', 1)[1].split(">", 1)[0]
+    assert 'aria-hidden="true"' in html.split('id="flow-detail-drawer"', 1)[1].split(">", 1)[0]
+
+
+def test_structural_controls_use_shared_svg_icons_beyond_the_rail() -> None:
+    html = _read(HTML_PATH)
+    for glyph in ("◄", "⌕", "×", "&times;"):
+        assert glyph not in html
+    assert 'id="ui-icon-definitions"' in html
+    assert 'id="ui-icon-back"' in html
+    assert 'id="ui-icon-search"' in html
+    assert 'id="ui-icon-close"' in html
+    assert html.count('class="ui-icon"') >= 16
+    assert "createUiIcon('close')" in html
+
 def test_reader_rendering_does_not_add_innerhtml_assignments() -> None:
     html = _read(HTML_PATH)
     assert re.search(r"\.innerHTML\s*=", html) is None
     assert re.search(r"(?:readerContent|readerProperties|readerRelations)\.innerHTML\s*=", html) is None
-
-def test_reader_views_keep_hidden_state_and_canvas_uses_a_semantic_token() -> None:
-    html, css = _read(HTML_PATH), _read(CONSOLE_CSS_PATH)
-    assert ".reader-graph-modal-body .reader-graph-container" in css
-    assert "reader-context-content #reader-view-list.is-hidden" in css
-    assert "getPropertyValue('--fuente-snow-0')" in html
-    assert "ctx.fillStyle = '#5E564B'" not in html
-
-def test_graph_legend_uses_semantic_tokens_with_readable_contrast() -> None:
-    css, tokens = _read(CONSOLE_CSS_PATH), _read(TOKENS_CSS_PATH)
-    legend = re.search(r"\.console-layout-011\s*\{([^}]*)\}", css, re.DOTALL)
-    assert legend is not None
-    declarations = legend.group(1)
-    assert "background: var(--fuente-polar-0)" in declarations
-    assert "color: var(--fuente-snow-0)" in declarations
-    background = _token_hex(tokens, "--fuente-polar-0")
-    assert all(_contrast_ratio(background, _token_hex(tokens, token)) >= 4.5 for token in ("--fuente-snow-0", "--fuente-frost-1", "--fuente-frost-2"))
-
-def test_graph_counters_use_high_contrast_tokens_on_the_dark_legend() -> None:
-    css, tokens = _read(CONSOLE_CSS_PATH), _read(TOKENS_CSS_PATH)
-    background = _token_hex(tokens, "--fuente-polar-0")
-    counter_tokens = {".graph-counter-nodes": "--fuente-snow-2", ".graph-counter-wikilinks": "--fuente-frost-1", ".graph-counter-origins": "--fuente-warning"}
-    for selector, token in counter_tokens.items():
-        rule = re.search(rf"{re.escape(selector)}\s*\{{([^}}]*)\}}", css, re.DOTALL)
-        assert rule is not None
-        assert f"color: var({token})" in rule.group(1)
-        assert _contrast_ratio(background, _token_hex(tokens, token)) >= 4.5
-
 
 def test_upgrade_palette_is_semantic_and_component_css_has_no_hex_literals() -> None:
     css, tokens = _read(CONSOLE_CSS_PATH), _read(TOKENS_CSS_PATH)

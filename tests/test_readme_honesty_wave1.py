@@ -1,21 +1,15 @@
-"""Wave 1 README claims must match measured lifecycle behaviour (Task 7)."""
+"""README claims must match the Obsidian ownership boundary."""
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 README = (ROOT / "README.md").read_text(encoding="utf-8")
 
-# Legacy bullet implied an unconditional always-on background thread in the GUI.
-_MISLEADING_UNQUALIFIED_CLAIMS = (
-    "Hilo autónomo en segundo plano",
-    "de forma continua el mapa de contenidos global",
-)
-
-
-def _graph_loop_section() -> str:
-    marker = "Bucle de Grafo"
+def _obsidian_boundary_section() -> str:
+    marker = "Frontera con Obsidian"
     start = README.find(marker)
-    assert start != -1, "README must document OptimizadoGraphLoop"
-    return README[start : start + 1600]
+    assert start != -1, "README must document the Obsidian boundary"
+    end = README.find("\n### ", start + len(marker))
+    return README[start:] if end == -1 else README[start:end]
 
 
 def _editorial_section() -> str:
@@ -26,42 +20,32 @@ def _editorial_section() -> str:
     return README[start:] if end == -1 else README[start:end]
 
 
-def test_readme_does_not_claim_graph_loop_always_on_in_gui():
-    """Forbid unqualified always-on background-thread wording in the graph-loop section."""
-    section = _graph_loop_section()
-    for phrase in _MISLEADING_UNQUALIFIED_CLAIMS:
-        assert phrase not in section, (
-            f"README graph-loop section must not claim {phrase!r} without lifecycle context"
-        )
+def test_readme_assigns_editing_and_graph_ownership_to_obsidian():
+    section = _obsidian_boundary_section().lower()
+    for claim in ("solo lectura", "abrir en obsidian", "editor", "grafo global"):
+        assert claim in section
+    for removed_owner in ("optimizadographloop", "toast ui", "preview-then-commit"):
+        assert removed_owner not in section
 
 
-def test_readme_graph_loop_documents_lifecycle_and_on_demand_paths():
-    """Graph refine must be tied to lifecycle modes and explicit console/flush hooks."""
-    section = _graph_loop_section().lower()
-    assert "applicationlifecycle" in section or "lifecycle" in section
-    assert "headless" in section or "continuous" in section or "continuo" in section
-    assert "paso 3" in section or "step 3" in section or "step3" in section or "flush" in section
+def test_readme_preserves_the_2026_08_25_installed_binary_evidence():
+    historical = README.split(
+        "### Resultado de prueba real instalada — 2026-08-25", 1
+    )[1].split("\n### ", 1)[0]
+
+    assert "MiniRAG/Ollama, editor, exportación, búsqueda por frase, lector, mapa," in historical
 
 
-def test_readme_documents_editorial_workflow_contract():
-    """The README must describe only the editorial surfaces delivered in Tasks 1–7."""
+def test_readme_documents_read_only_editorial_workflow_contract():
     section = _editorial_section().lower()
-
-    for claim in (
-        "markdown",
-        "frontmatter",
-        "compare-and-swap",
-        "reflow",
-        "durable",
-        "candidate",
-        "fusion",
-        "source-preserving",
-    ):
-        assert claim in section, f"README editorial section must mention {claim!r}"
+    for claim in ("markdown", "frontmatter", "compare-and-swap", "obsidian"):
+        assert claim in section
+    for removed_owner in ("reflow", "preview-then-commit", "editor wysiwyg"):
+        assert removed_owner not in section
 
 
 def test_readme_marks_currently_excluded_integrations_out_of_scope():
-    """The README distinguishes planned WYSIWYG work from excluded cloud integrations."""
+    """The README keeps cloud integrations outside Fuente's local boundary."""
     text = README.lower()
     section = _editorial_section().lower()
     marker = "fuera de alcance"

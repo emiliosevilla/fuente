@@ -14,7 +14,6 @@ from fuente.core.vault import VaultManager
 from fuente.domain.approvals import ApprovalLedger
 from fuente.domain.documents import content_hash_for_markdown
 from fuente.domain.frontmatter import FrontmatterError, parse_frontmatter, serialize_frontmatter
-from fuente.graph_engine.linker import CANONICAL_MOC_FILENAME
 from fuente.domain.paths import document_id_for_relative_path
 from fuente.infrastructure.sqlite_store import JobStore
 from fuente.infrastructure.vault_migration import MigrationBlockedError, VaultMigrator
@@ -199,7 +198,7 @@ def test_identity_backfill_refuses_retired_v2_source_serialization(vault_tree: P
 def test_identity_backfill_rollback_refuses_human_edit(vault_tree: Path):
     note = _write_note(vault_tree, "4_salida/_Sin_Cuestion/legacy.md", LEGACY_NOTE)
     migrator = VaultMigrator(vault_tree)
-    manifest = migrator.apply(rebuild_index=False, rebuild_moc=False)
+    manifest = migrator.apply(rebuild_index=False)
     manifest_path = migrator._manifest_file(manifest)
     note.write_text(note.read_text(encoding="utf-8") + "\nEdición humana.\n", encoding="utf-8")
 
@@ -251,7 +250,7 @@ def test_scan_blocks_real_like_duplicate_note_ids(vault_tree: Path):
     duplicate_findings = [item for item in report.findings if item.kind == "duplicate_note_id"]
     assert len(duplicate_findings) == 2
     with pytest.raises(MigrationBlockedError, match="duplicate_note_id"):
-        VaultMigrator(vault_tree).apply(rebuild_index=False, rebuild_moc=False)
+        VaultMigrator(vault_tree).apply(rebuild_index=False)
 
 
 def test_scan_reports_unsafe_symlink(vault_tree: Path, tmp_path: Path):
@@ -265,7 +264,7 @@ def test_scan_reports_unsafe_symlink(vault_tree: Path, tmp_path: Path):
     assert any(finding.kind == "unsafe_path" for finding in report.findings)
 
 
-def test_apply_writes_manifest_migrates_and_rebuilds_moc(vault_tree: Path):
+def test_apply_writes_manifest_migrates_and_rebuilds_index(vault_tree: Path):
     note = _write_note(vault_tree, "4_salida/_Sin_Cuestion/legacy.md", LEGACY_NOTE)
     migrator = VaultMigrator(vault_tree, chroma=FakeChroma())
 
@@ -277,29 +276,20 @@ def test_apply_writes_manifest_migrates_and_rebuilds_moc(vault_tree: Path):
     assert metadata["status"] == "pending_review"
     assert body == "# Cuerpo legacy\n"
     assert manifest.status == "completed"
-    assert manifest.moc_rebuilt is True
     assert manifest.index_rebuilt is True
     assert any(entry.applied for entry in manifest.entries)
     manifest_path = migrator._manifest_file(manifest)
     assert manifest_path.is_file()
     backup_root = vault_tree / manifest.backup_dir
     assert any(backup_root.iterdir())
-    # A migrated legacy v1 note still has no typed, approved origins. The
-    # generated MOC is nevertheless an auto-approved empty projection; it
-    # must not list the legacy note as approved content.
-    moc = vault_tree / "4_salida" / CANONICAL_MOC_FILENAME
-    assert moc.exists()
-    moc_metadata, moc_body = parse_frontmatter(moc.read_text(encoding="utf-8"))
-    assert moc_metadata["status"] == "approved"
-    assert "legacy" not in moc_body.lower()
 
 
 def test_apply_is_idempotent(vault_tree: Path):
     _write_note(vault_tree, "4_salida/_Sin_Cuestion/legacy.md", LEGACY_NOTE)
     migrator = VaultMigrator(vault_tree, chroma=FakeChroma())
 
-    first = migrator.apply(rebuild_index=False, rebuild_moc=False)
-    second = migrator.apply(rebuild_index=False, rebuild_moc=False)
+    first = migrator.apply(rebuild_index=False)
+    second = migrator.apply(rebuild_index=False)
 
     assert first.entries
     assert not second.entries
@@ -323,7 +313,7 @@ def test_resume_partial_manifest(vault_tree: Path):
     (backup_root / first.backup_name).write_text(LEGACY_NOTE, encoding="utf-8")
     manifest_path = migrator._persist_manifest(manifest)
 
-    resumed = migrator.apply(manifest_path, rebuild_index=False, rebuild_moc=False)
+    resumed = migrator.apply(manifest_path, rebuild_index=False)
 
     assert all(entry.applied for entry in resumed.entries)
     metadata, _ = parse_frontmatter(note_b.read_text(encoding="utf-8"))
@@ -333,7 +323,7 @@ def test_resume_partial_manifest(vault_tree: Path):
 def test_rollback_restores_content_and_paths(vault_tree: Path):
     note = _write_note(vault_tree, "4_salida/_Sin_Cuestion/legacy.md", LEGACY_NOTE)
     migrator = VaultMigrator(vault_tree, chroma=FakeChroma())
-    manifest = migrator.apply(rebuild_index=False, rebuild_moc=False)
+    manifest = migrator.apply(rebuild_index=False)
     manifest_path = migrator._manifest_file(manifest)
     assert note.read_text(encoding="utf-8") != LEGACY_NOTE
 
@@ -344,46 +334,29 @@ def test_rollback_restores_content_and_paths(vault_tree: Path):
     assert note.read_text(encoding="utf-8") == LEGACY_NOTE
 
 
-@pytest.mark.parametrize(
-    ("rebuild_moc", "rebuild_index"),
-    [
-        (False, False),
-        (False, True),
-        (True, False),
-        (True, True),
-    ],
-)
-def test_rollback_side_effects_follow_manifest_flags(
+@pytest.mark.parametrize("rebuild_index", [False, True])
+def test_rollback_side_effects_follow_manifest_index_flag(
     vault_tree: Path,
-    rebuild_moc: bool,
     rebuild_index: bool,
     monkeypatch: pytest.MonkeyPatch,
 ):
     note = _write_note(vault_tree, "4_salida/_Sin_Cuestion/legacy.md", LEGACY_NOTE)
     migrator = VaultMigrator(vault_tree, chroma=FakeChroma())
     manifest = migrator.apply(
-        rebuild_moc=rebuild_moc,
         rebuild_index=rebuild_index,
     )
     manifest_path = migrator._manifest_file(manifest)
     calls: list[tuple[str, list[str] | None]] = []
 
-    def refresh_moc() -> list[str]:
-        calls.append(("moc", None))
-        return []
-
     def rebuild(themes: list[str]) -> bool:
         calls.append(("index", list(themes)))
         return True
 
-    monkeypatch.setattr(migrator, "_refresh_moc_catalog", refresh_moc)
     monkeypatch.setattr(migrator, "_rebuild_index", rebuild)
 
     rolled, restored = migrator.rollback(manifest_path)
 
     expected_calls: list[tuple[str, list[str] | None]] = []
-    if rebuild_moc:
-        expected_calls.append(("moc", None))
     if rebuild_index:
         expected_calls.append(
             (
@@ -447,7 +420,7 @@ def test_canonical_note_not_listed_for_migration(vault_tree: Path):
     _write_note(vault_tree, "4_salida/_Sin_Cuestion/ready.md", CANONICAL_NOTE)
     migrator = VaultMigrator(vault_tree, chroma=FakeChroma())
 
-    manifest = migrator.apply(rebuild_index=False, rebuild_moc=False)
+    manifest = migrator.apply(rebuild_index=False)
 
     assert manifest.entries == []
 
@@ -458,7 +431,7 @@ def test_apply_blocked_without_force_when_scan_has_blocking_findings(vault_tree:
     migrator = VaultMigrator(vault_tree, chroma=FakeChroma())
 
     with pytest.raises(MigrationBlockedError) as raised:
-        migrator.apply(rebuild_index=False, rebuild_moc=False)
+        migrator.apply(rebuild_index=False)
 
     assert any(f.kind == "malformed_frontmatter" for f in raised.value.findings)
 
@@ -468,7 +441,7 @@ def test_apply_with_force_migrates_when_other_notes_block_scan(vault_tree: Path)
     _write_note(vault_tree, "4_salida/_Sin_Cuestion/no-fm.md", "# Sin frontmatter\n")
     migrator = VaultMigrator(vault_tree, chroma=FakeChroma())
 
-    manifest = migrator.apply(force=True, rebuild_index=False, rebuild_moc=False)
+    manifest = migrator.apply(force=True, rebuild_index=False)
 
     assert manifest.status == "completed"
     assert "schema_version" in legacy.read_text(encoding="utf-8")
@@ -481,12 +454,12 @@ def test_apply_rejects_cross_vault_manifest(vault_tree: Path, temp_vault_path: P
     (other / "4_salida" / "_Sin_Cuestion").mkdir(parents=True)
     _write_note(vault_tree, "4_salida/_Sin_Cuestion/legacy.md", LEGACY_NOTE)
     source = VaultMigrator(vault_tree, chroma=FakeChroma())
-    manifest = source.apply(rebuild_index=False, rebuild_moc=False)
+    manifest = source.apply(rebuild_index=False)
     manifest_path = source._manifest_file(manifest)
 
     target = VaultMigrator(other, chroma=FakeChroma())
     with pytest.raises(ValueError, match="vault_path"):
-        target.apply(manifest_path, rebuild_index=False, rebuild_moc=False)
+        target.apply(manifest_path, rebuild_index=False)
 
 
 def test_apply_does_not_mutate_non_manifest_notes(vault_tree: Path):
@@ -495,115 +468,10 @@ def test_apply_does_not_mutate_non_manifest_notes(vault_tree: Path):
     stable_before = stable.read_text(encoding="utf-8")
     migrator = VaultMigrator(vault_tree, chroma=FakeChroma())
 
-    migrator.apply(rebuild_index=False, rebuild_moc=True)
+    migrator.apply(rebuild_index=False)
 
     assert stable.read_text(encoding="utf-8") == stable_before
 
-
-def test_catalog_rebuild_does_not_rewrite_eligible_notes_outside_manifest_or_rollback(
-    vault_tree: Path,
-):
-    vault = VaultManager(get_default_config(vault_tree).vault)
-    store = JobStore(vault_tree)
-    try:
-        origin_path = vault.clean_dir / "origen.md"
-        origin_relative = origin_path.relative_to(vault_tree).as_posix()
-        origin_markdown = serialize_frontmatter(
-            {
-                "schema_version": 3,
-                "note_id": APPROVED_ORIGIN_ID,
-                "note_type": "concept",
-                "title": "Origen aprobado",
-                "date": "2026-08-14",
-                "author": "Fuente",
-                "tags": [],
-                "issue": "Issue-A",
-                "status": "pending_review",
-                "origins": [],
-                "history": [],
-            }
-        ) + "# Origen aprobado\n"
-        origin_path.write_text(origin_markdown, encoding="utf-8")
-        origin_hash = content_hash_for_markdown(origin_markdown)
-        store.register_note(
-            note_id=APPROVED_ORIGIN_ID,
-            relative_path=origin_relative,
-            content_hash=origin_hash,
-            note_type="concept",
-            origin_kind=None,
-            theme="General",
-            issue="Issue-A",
-            status="pending_review",
-        )
-        approved = ApprovalApplicationService(
-            vault=vault,
-            ledger=ApprovalLedger(
-                store,
-                vault_root=vault_tree,
-                clean_root=vault.clean_dir,
-                derived_root=vault.output_dir,
-            ),
-        ).approve_clean(APPROVED_ORIGIN_ID, 1, "emilio")
-        origin = {
-            "note_id": approved.note_id,
-            "revision": approved.revision,
-            "content_hash": approved.content_hash,
-            "path": origin_relative,
-        }
-        first_relative = "4_salida/Issue-A/Alpha.md"
-        second_relative = "4_salida/Issue-A/Beta.md"
-        first_id = document_id_for_relative_path(first_relative)
-        second_id = document_id_for_relative_path(second_relative)
-        first = _write_note(
-            vault_tree,
-            first_relative,
-            _eligible_derived_markdown(
-                note_id=first_id,
-                title="Alpha",
-                body="# Alpha\n\nBeta debe conservarse sin autoenlace.\n",
-                origin=origin,
-            ),
-        )
-        second = _write_note(
-            vault_tree,
-            second_relative,
-            _eligible_derived_markdown(
-                note_id=second_id,
-                title="Beta",
-                body="# Beta\n",
-                origin=origin,
-            ),
-        )
-        for note_id, relative, path in (
-            (first_id, first_relative, first),
-            (second_id, second_relative, second),
-        ):
-            store.register_note(
-                note_id=note_id,
-                relative_path=relative,
-                content_hash=content_hash_for_markdown(path.read_text(encoding="utf-8")),
-                note_type="concept",
-                origin_kind=None,
-                theme="General",
-                issue="Issue-A",
-                status="approved",
-            )
-        before = {path: path.read_bytes() for path in (first, second)}
-        migrator = VaultMigrator(vault_tree)
-
-        manifest = migrator.apply(rebuild_index=False, rebuild_moc=True)
-
-        assert manifest.entries == []
-        assert {path: path.read_bytes() for path in (first, second)} == before
-        legacy_output = vault.current_theme_dir / "4_salida"
-        assert (legacy_output / CANONICAL_MOC_FILENAME).is_file()
-        assert (legacy_output / "Issue-A" / "_Cuestion_Issue-A.md").is_file()
-
-        migrator.rollback(migrator._manifest_file(manifest))
-
-        assert {path: path.read_bytes() for path in (first, second)} == before
-    finally:
-        store.close()
 
 
 def test_unsafe_path_excluded_from_manifest_and_apply(vault_tree: Path, tmp_path: Path):
@@ -615,9 +483,9 @@ def test_unsafe_path_excluded_from_manifest_and_apply(vault_tree: Path, tmp_path
     migrator = VaultMigrator(vault_tree, chroma=FakeChroma())
 
     with pytest.raises(MigrationBlockedError):
-        migrator.apply(rebuild_index=False, rebuild_moc=False)
+        migrator.apply(rebuild_index=False)
 
-    manifest = migrator.apply(force=True, rebuild_index=False, rebuild_moc=False)
+    manifest = migrator.apply(force=True, rebuild_index=False)
 
     assert link.is_symlink()
     assert external.read_text(encoding="utf-8") == LEGACY_NOTE
@@ -630,7 +498,7 @@ def test_rollback_rebuilds_index_when_manifest_had_index(vault_tree: Path):
     note = _write_note(vault_tree, "4_salida/_Sin_Cuestion/legacy.md", LEGACY_NOTE)
     chroma = FakeChroma()
     migrator = VaultMigrator(vault_tree, chroma=chroma)
-    manifest = migrator.apply(rebuild_index=True, rebuild_moc=False)
+    manifest = migrator.apply(rebuild_index=True)
     migrated_ids = set(chroma.vectors)
     assert migrated_ids
 
@@ -655,7 +523,7 @@ def test_rollback_restores_runtime_state_snapshot(vault_tree: Path, monkeypatch:
 
     before_state = state_db.read_bytes()
     before_index = (chroma_dir / "index.bin").read_bytes()
-    manifest = migrator.apply(rebuild_index=True, rebuild_moc=False)
+    manifest = migrator.apply(rebuild_index=True)
     assert (vault_tree / manifest.runtime_backup_dir / ".fuente/state.db").read_bytes() == before_state
     state_db.write_bytes(b"state-after")
     (chroma_dir / "index.bin").write_bytes(b"index-after")

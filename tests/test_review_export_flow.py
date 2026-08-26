@@ -11,7 +11,6 @@ from fuente.application.review_export import (
     ReviewExportApplicationService,
 )
 from fuente.domain.errors import CanonicalEligibilityError, NoteRevisionConflictError
-from fuente.domain.metadata_form import MetadataValidationError
 
 
 @dataclass
@@ -28,11 +27,9 @@ class FakeNotesService:
         if self.eligibility_error is not None:
             raise self.eligibility_error
 
-    def approve(self, document_id, expected_revision, *, metadata_patch=None):
+    def approve(self, document_id, expected_revision):
         if expected_revision != self.note.revision:
             raise NoteRevisionConflictError(document_id)
-        if metadata_patch == {"invalid": True}:
-            raise MetadataValidationError({"title": "invalid"})
         self.note.status = "approved"
         self.note.revision += 1
         return self.note
@@ -74,9 +71,7 @@ def test_approval_and_export_returns_canonical_payload_after_approval():
     exporter = FakeExportService(payload=_payload())
     service = ReviewExportApplicationService(notes, exporter)
 
-    result = service.approve_and_prepare_export(
-        "doc-id", 1, "markdown", metadata_patch={"title": "Nota"}
-    )
+    result = service.approve_and_prepare_export("doc-id", 1, "markdown")
 
     assert result.approval_status == "approved"
     assert result.approved_revision == 2
@@ -110,20 +105,6 @@ def test_revision_conflict_prevents_approval_and_export():
 
     with pytest.raises(NoteRevisionConflictError):
         service.approve_and_prepare_export("doc-id", 0, "markdown")
-
-    assert notes.note.status == "pending_review"
-    assert exporter.calls == []
-
-
-def test_validation_failure_prevents_export_and_is_not_partial_success():
-    notes = FakeNotesService(_note())
-    exporter = FakeExportService(payload=_payload())
-    service = ReviewExportApplicationService(notes, exporter)
-
-    with pytest.raises(MetadataValidationError):
-        service.approve_and_prepare_export(
-            "doc-id", 1, "markdown", metadata_patch={"invalid": True}
-        )
 
     assert notes.note.status == "pending_review"
     assert exporter.calls == []

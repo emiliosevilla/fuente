@@ -16,12 +16,12 @@ from fuente.config import get_default_config
 from fuente.core.vault import VaultManager
 from fuente.domain.frontmatter import parse_frontmatter, serialize_frontmatter
 from fuente.extractors.registry import ExtractorRegistry
-from fuente.graph_engine.linker import GraphLinker
 from fuente.infrastructure.sqlite_store import JobStore
 from fuente.rag.chroma_store import ChromaRetrievalBackend
 from fuente.rag.minirag_store import MiniRAGUnavailableError
 from fuente.rag.router import RetrievalRouter
 from fuente.rag.semantic_chunker import SemanticChunker
+from tests.conftest import auto_approve_early_transitions
 
 SOURCE_NAME = "informe_trimestral.txt"
 SOURCE_IDENTITY = f"1_volcado/{SOURCE_NAME}"
@@ -240,11 +240,11 @@ def build_harness(
         chunker=chunker if chunker is not None else SemanticChunker(),
         chroma=chroma,
         atomic_generator=generator,
-        linker=GraphLinker(vault.output_dir),
         ram_governor=FakeGovernor(),
         stabilize=lambda path: path.is_file() and path.stat().st_size > 0,
         router=offline_router(chroma),
     )
+    auto_approve_early_transitions(service)
 
     source_path = vault.input_dir / SOURCE_NAME
     source_path.write_text(source_text, encoding="utf-8")
@@ -275,7 +275,6 @@ def reopen_harness(
         chunker=chunker if chunker is not None else SemanticChunker(),
         chroma=harness.chroma,
         atomic_generator=harness.generator,
-        linker=GraphLinker(harness.vault.output_dir),
         ram_governor=FakeGovernor(),
         stabilize=lambda path: path.is_file() and path.stat().st_size > 0,
         router=offline_router(harness.chroma),
@@ -302,7 +301,6 @@ def attach_service(vault_path: Path, store: JobStore, harness: PipelineHarness) 
         chunker=SemanticChunker(),
         chroma=harness.chroma,
         atomic_generator=harness.generator,
-        linker=GraphLinker(harness.vault.output_dir),
         ram_governor=FakeGovernor(),
         stabilize=lambda path: path.is_file() and path.stat().st_size > 0,
         router=offline_router(harness.chroma),

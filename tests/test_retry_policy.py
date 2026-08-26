@@ -113,6 +113,8 @@ def test_invalid_model_output_never_quarantines(tmp_path):
 def test_ingestion_persists_each_content_attempt_then_quarantines(tmp_path):
     config = get_default_config(tmp_path / "vault")
     pipeline = ETLPipeline(config)
+    from tests.conftest import auto_approve_early_transitions
+    auto_approve_early_transitions(pipeline.ingestion)
     patch_abundant_ram(pipeline.ram_governor)
     source = config.vault.input_dir / "corrupt.txt"
     source.write_text("input", encoding="utf-8")
@@ -149,6 +151,8 @@ def test_ingestion_persists_each_content_attempt_then_quarantines(tmp_path):
 def test_permanent_extractor_error_does_not_loop(tmp_path):
     config = get_default_config(tmp_path / "vault")
     pipeline = ETLPipeline(config)
+    from tests.conftest import auto_approve_early_transitions
+    auto_approve_early_transitions(pipeline.ingestion)
     patch_abundant_ram(pipeline.ram_governor)
     source = config.vault.input_dir / "weird.txt"
     source.write_text("input", encoding="utf-8")
@@ -170,6 +174,8 @@ def test_permanent_extractor_error_does_not_loop(tmp_path):
 def test_transient_io_exhausted_keeps_distinct_error_code(tmp_path):
     config = get_default_config(tmp_path / "vault")
     pipeline = ETLPipeline(config)
+    from tests.conftest import auto_approve_early_transitions
+    auto_approve_early_transitions(pipeline.ingestion)
     patch_abundant_ram(pipeline.ram_governor)
     source = config.vault.input_dir / "network.txt"
     source.write_text("input", encoding="utf-8")

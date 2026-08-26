@@ -6,7 +6,6 @@ from pathlib import Path
 
 import pytest
 
-from fuente.application.notes import MAX_BODY_MARKDOWN_CHARS
 from fuente.control_console import FuenteConsoleBackend
 from fuente.core.vault import document_id_for_relative_path
 from fuente.domain.frontmatter import serialize_frontmatter
@@ -61,75 +60,13 @@ def test_backend_approve_rejects_legacy_path_payloads(temp_vault_path, legacy_ke
     ) == {"error": "invalid_payload"}
 
 
-@pytest.mark.parametrize("legacy_key", ["path", "file_path"])
-def test_backend_update_metadata_rejects_legacy_path_payloads(temp_vault_path, legacy_key):
+def test_backend_metadata_update_action_is_not_registered(temp_vault_path):
     backend = FuenteConsoleBackend(temp_vault_path)
 
     assert backend.handle_action(
         "update_note_metadata",
-        {legacy_key: "3_limpio/a.md", "metadata": {}, "expected_revision": 1},
-    ) == {"error": "invalid_payload"}
-
-
-def test_editor_bridge_rejects_path_and_legacy_payloads_before_backend_access(
-    temp_vault_path,
-):
-    bridge = FuentePyWebViewApi(FuenteConsoleBackend(temp_vault_path))
-    backend_calls: list[tuple] = []
-    bridge.backend.handle_action = lambda *args: backend_calls.append(args)
-    bridge.backend.get_notes_service = lambda: (_ for _ in ()).throw(
-        AssertionError("invalid editor payload reached NotesApplicationService")
-    )
-
-    assert bridge.get_note_editor("/tmp/outside.md") == {
-        "error": "path_not_authorized",
-        "message": "Path is not authorized",
-    }
-    assert bridge.update_note_body(
-        {"document_id": "opaque-note", "path": "4_salida/evil.md"}, 1, "# Body"
-    ) == {
-        "error": "invalid_payload",
-        "message": "document_id must be a string",
-    }
-    assert bridge.update_note_body("folder/note", True, "# Body") == {
-        "error": "path_not_authorized",
-        "message": "Path is not authorized",
-    }
-    assert backend_calls == []
-
-
-def test_editor_bridge_rejects_oversized_markdown_before_backend_access(temp_vault_path):
-    bridge = FuentePyWebViewApi(FuenteConsoleBackend(temp_vault_path))
-    bridge.backend.get_notes_service = lambda: (_ for _ in ()).throw(
-        AssertionError("oversized editor payload reached NotesApplicationService")
-    )
-
-    assert bridge.update_note_body(
-        "opaque-note", 1, "x" * (MAX_BODY_MARKDOWN_CHARS + 1)
-    ) == {
-        "error": "invalid_payload",
-        "message": (
-            "body_markdown exceeds maximum length of "
-            f"{MAX_BODY_MARKDOWN_CHARS} characters"
-        ),
-    }
-
-
-def test_bridge_mutations_reject_absolute_paths_without_external_mutation(
-    temp_vault_path, external_note_path
-):
-    bridge = FuentePyWebViewApi(FuenteConsoleBackend(temp_vault_path))
-    absolute = str(external_note_path)
-
-    assert bridge.save_draft(absolute, "changed") == {
-        "error": "path_not_authorized",
-        "message": "Path is not authorized",
-    }
-    assert bridge.delete_note(absolute) == {
-        "error": "path_not_authorized",
-        "message": "Path is not authorized",
-    }
-    assert external_note_path.read_text(encoding="utf-8") == "secret"
+        {"document_id": "opaque-note", "metadata": {}, "expected_revision": 1},
+    ) == {"error": "action_not_allowed", "message": "Acción no permitida"}
 
 
 def test_bridge_restore_rejects_traversal_quarantine_id_without_mutation(

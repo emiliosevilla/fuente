@@ -31,8 +31,8 @@ la ruta primaria: se conserva para refinamiento explícito y evaluado.
   comprobaciones de aprobación y revisión editorial.
 - Mantiene el estado de jobs, configuración, cuarentena y catálogos en
   `.fuente/`, fuera del contenido editorial.
-- Construye enlaces `[[WikiLinks]]`, catálogos y el índice MOC cuando el ciclo
-  de vida de la aplicación o una pasada explícita lo solicita.
+- Genera Markdown revisable y deja a Obsidian la edición, los enlaces, el
+  grafo global y la organización del conocimiento.
 - Permite buscar con BM25 y, en el perfil adecuado, combinarlo con un índice
   vectorial local y un modelo Ollama local.
 - Expone la misma lógica mediante consola de escritorio, `--flush` puntual y
@@ -125,14 +125,13 @@ dependencias instaladas:
 Los errores de procesamiento pasan a la cuarentena sin detener todo el flujo.
 Los jobs son durables, reanudables y tienen estados y razones explícitos.
 
-### Edición y revisión editorial
+### Lectura y revisión editorial
 
-- Editor visual Markdown TOAST UI Editor, servido localmente dentro del bundle.
-- Edición compare-and-swap (CAS) para no sobrescribir cambios concurrentes.
+- Lector Markdown de solo lectura en la consola.
+- Apertura segura de la nota seleccionada en Obsidian para editar, enlazar u
+  organizar el conocimiento.
 - Ledger de aprobaciones ligado a identidad, revisión y hash.
-- Reflow de enlaces y enriquecimiento como jobs explícitos y recuperables.
-- Detección determinista de candidatos de fusión.
-- Fusión `preview-then-commit` que conserva las notas de origen.
+- Metadatos de aprobación protegidos mediante compare-and-swap (CAS).
 - Exportación separada de la aprobación y con comprobación de publicación.
 
 ### Búsqueda, RAG y recursos
@@ -156,7 +155,7 @@ Los jobs son durables, reanudables y tienen estados y razones explícitos.
 ### Consola y operación
 
 - Consola central con Health, configuración, cola de jobs, revisión,
-  búsqueda, lector, editor, exportación y acciones de grafo.
+  búsqueda, lector de solo lectura, exportación y apertura en Obsidian.
 - Bridge tipado entre la interfaz y el backend.
 - Configuración del Vault y de las carpetas montadas desde el modal `Ajustes`.
 - Modo continuo con interfaz gráfica.
@@ -165,25 +164,20 @@ Los jobs son durables, reanudables y tienen estados y razones explícitos.
 - Vault demo instalable de forma explícita, offline, idempotente y segura ante
   colisiones.
 
-### Bucle de Grafo
+### Frontera con Obsidian
 
-`OptimizadoGraphLoop` refina enlaces, catálogos y el índice MOC bajo el control
-de `ApplicationLifecycle`. En modo `continuous` de la consola y en modo
-`headless` puede ejecutarse como servicio mientras el ciclo de vida está
-activo; no es un proceso permanente independiente. También puede ejecutarse
-de forma puntual desde el paso 3 de la consola (`step3_structure`) o con
-`--flush`, sin dejar un hilo persistente.
+Fuente no mantiene un editor, mapa, índice MOC ni grafo global propios. La
+consola presenta notas en solo lectura y conserva `Abrir en Obsidian` como el
+único acceso a su edición y organización. El ciclo de vida de Fuente se limita
+al monitor y al pipeline ETL.
 
 ### Flujo editorial
 
-El flujo editorial usa Markdown con `frontmatter` como fuente canónica y
-protege las ediciones mediante `compare-and-swap` (CAS). El `reflow` y el
-enriquecimiento son jobs `durable` y recuperables; la detección de `candidate`
-es determinista; la `fusion` usa `preview-then-commit` y es
-`source-preserving`. El editor WYSIWYG ya está integrado en los modales y guarda
-Markdown mediante el bridge nativo. Quedan
-fuera de alcance actual la integración nativa con Graph API/OAuth y las
-credenciales cloud.
+El flujo editorial usa Markdown con `frontmatter` como fuente canónica. Fuente
+protege las aprobaciones mediante identidad, revisión, hash y
+`compare-and-swap` (CAS), pero no edita el cuerpo de las notas. La edición, el
+grafo, los backlinks y la fusión pertenecen a Obsidian. Quedan fuera de alcance
+actual la integración nativa con Graph API/OAuth y las credenciales cloud.
 
 ### Carpetas montadas
 
@@ -197,12 +191,11 @@ de vuelta al proveedor. La carpeta debe estar montada por el cliente oficial.
 | Módulo | Responsabilidad |
 |---|---|
 | `fuente/main.py` | Entrada CLI, GUI, `--flush` y `--headless`. |
-| `fuente/application/` | Casos de uso: ingesta, jobs, aprobación, edición, reflow, fusión, búsqueda, exportación y ciclo de vida. |
+| `fuente/application/` | Casos de uso: ingesta, jobs, aprobación, generación, búsqueda, exportación y ciclo de vida. |
 | `fuente/domain/` | Contratos de documentos, frontmatter, identidades, paths autorizados, aprobaciones, jobs, orígenes y sincronización. |
 | `fuente/core/` | Gestión del Vault, sincronización de carpetas y comprobaciones de aplicaciones. |
 | `fuente/watcher/` | Monitor de archivos y pipeline ETL reanudable. |
 | `fuente/extractors/` | Extractores nativos y adaptadores opcionales de Office, audio, OCR y TeX. |
-| `fuente/graph_engine/` | Generación de notas derivadas, enlaces, catálogos y MOC. |
 | `fuente/rag/` | Chroma, BM25, chunking, corpus autorizado e índices deterministas. |
 | `fuente/ram_governor/` | Medición de recursos, presupuestos y selección de política/modelo. |
 | `fuente/infrastructure/` | Escrituras atómicas, SQLite, migraciones y manifiestos reversibles. |
@@ -384,10 +377,9 @@ ejecutar la suite o el gate.
 
 ## Límites actuales
 
-Fuente no pretende ser un servicio cloud ni un cliente de Graph API. El editor
-WYSIWYG es una capa local de edición; la fuente de verdad
-es el Markdown aprobado; la base SQLite, el grafo, los índices RAG y la
-interfaz son capas derivadas y reconstruibles.
+Fuente no pretende ser un servicio cloud ni un cliente de Graph API. Obsidian
+es el editor y organizador; la fuente de verdad es el Markdown aprobado. La
+base SQLite, los índices RAG y la interfaz son capas derivadas y reconstruibles.
 
 ## Licencia
 

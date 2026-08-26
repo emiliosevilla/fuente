@@ -21,7 +21,6 @@ MAX_DATE_LENGTH = 32
 _TAG_FORBIDDEN = re.compile(r"[\n\r:#{}[\]&*?<>|\\/]")
 _PATH_LIKE = re.compile(r"(^|[\\/])\.\.([\\/]|$)|[\\/]")
 _DATE_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}$")
-_TRANSITION_STATUSES = frozenset({"approved", "rejected"})
 
 
 class MetadataValidationError(ValueError):
@@ -132,23 +131,6 @@ def validate_metadata_fields(
 
     if errors:
         raise MetadataValidationError(errors)
-    return sanitized
-
-
-def validate_metadata_save_fields(
-    fields: Mapping[str, Any],
-    *,
-    allowed_issues: Collection[str],
-) -> dict[str, Any]:
-    """Validate metadata for save/update — blocks approval/rejection transitions."""
-    sanitized = validate_metadata_fields(fields, allowed_issues=allowed_issues)
-    status = sanitized.get("status")
-    if status in _TRANSITION_STATUSES:
-        raise MetadataValidationError(
-            {
-                "status": "Este estado solo puede cambiarse con Aprobar o Rechazar nota",
-            }
-        )
     return sanitized
 
 

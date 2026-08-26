@@ -17,6 +17,7 @@ a = Analysis(
     datas=[
         ("assets", "assets"),
         ("fuente/ui/static", "fuente/ui/static"),
+        ("fuente/resources", "fuente/resources"),
         ("consola_preview.html", "."),
         ("build/pip-source.zip", "."),
         ("build/runtime-source.zip", "."),

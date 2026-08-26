@@ -1,4 +1,4 @@
-"""F06.3: processed editor/share state hooks."""
+"""Processed sharing state hooks remain available in the read-only reader."""
 from pathlib import Path
 
 
@@ -7,14 +7,13 @@ def test_share_button_explains_approval_block():
     assert 'id="document-share-button"' in source
     assert 'id="document-share-reason"' in source
     assert "function renderShareState(state)" in source
-    assert 'id="discussion-reply-submit"' in source
-    assert '<fieldset id="discussion-reply-fields" disabled>' in source
-    assert "Comparte la nota para abrir la discusión." in source
+    assert 'id="discussion-reply-submit"' not in source
+    assert "Revisión aprobada; lista para compartir." in source
 
 
-def test_shared_revision_is_not_editable_in_discussion_panel():
+def test_share_uses_the_revisioned_processed_note_contract():
     source = Path("consola_preview.html").read_text(encoding="utf-8")
     assert "function shareCurrentDocument()" in source
     assert "share_processed_note" in source
     assert "const publisher = String(note.author || '').trim() || 'Fuente';" in source
-    assert "Edita la nota antes de compartirla; la copia compartida queda cerrada." in source
+    assert "update_note_body" not in source

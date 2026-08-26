@@ -35,7 +35,6 @@ from fuente.domain.frontmatter import parse_frontmatter, serialize_frontmatter
 from fuente.domain.runtime_policy import AudioMode, ExecutionProfile, RuntimePolicy
 from fuente.extractors.base import ExtractionResult
 from fuente.extractors.registry import ExtractorRegistry
-from fuente.graph_engine.linker import GraphLinker
 from fuente.infrastructure.sqlite_store import JobStore
 from fuente.rag.semantic_chunker import SemanticChunker
 
@@ -132,16 +131,6 @@ class _FakeGenerator:
                 "history": [],
             }
         ) + f"# {stem}\n\n{clean_md_content}"
-
-
-class _RecordingLinker(GraphLinker):
-    def __init__(self, output_dir: Path) -> None:
-        super().__init__(output_dir)
-        self.seen_current_relative_path: str | None = None
-
-    def auto_link_content(self, note_content, current_title, **kwargs):
-        self.seen_current_relative_path = kwargs.get("current_relative_path")
-        return super().auto_link_content(note_content, current_title, **kwargs)
 
 
 class _BrokenGenerator:
@@ -264,6 +253,7 @@ def _build_harness(
     source_text: str = SOURCE_TEXT,
     source_name: str = SOURCE_NAME,
     ram_governor: Any = None,
+    approve_early_transitions: bool = True,
 ) -> _Harness:
     config = get_default_config(vault_path)
     vault = VaultManager(config.vault)
@@ -282,7 +272,6 @@ def _build_harness(
         chunker=chunker if chunker is not None else SemanticChunker(),
         chroma=chroma,
         atomic_generator=generator,
-        linker=_RecordingLinker(vault.output_dir),
         ram_governor=ram_governor if ram_governor is not None else _FakeGovernor(),
         # The real stabilizer polls the file size for seconds; ingestion only
         # needs to know the file is present and non-empty.
@@ -291,6 +280,25 @@ def _build_harness(
 
     source_path = vault.input_dir / source_name
     source_path.write_text(source_text, encoding="utf-8")
+    if approve_early_transitions:
+        original_submit = service.submit
+
+        def submit_with_early_approvals(*args, **kwargs):
+            job = original_submit(*args, **kwargs)
+            for source, target in (
+                ("1_volcado", "2_copiado"),
+                ("2_copiado", "3_capturado"),
+            ):
+                transition = service.transition_approvals
+                transition.begin_review(
+                    job.job_id, source, target, 1, job.source_hash, "pytest"
+                )
+                transition.approve(
+                    job.job_id, source, target, 1, job.source_hash, "pytest"
+                )
+            return job
+
+        service.submit = submit_with_early_approvals
     return _Harness(
         service=service,
         vault=vault,
@@ -353,7 +361,6 @@ def _restart_service(harness: _Harness) -> IngestionApplicationService:
         chunker=service.chunker,
         chroma=harness.chroma,
         atomic_generator=harness.generator,
-        linker=service.linker,
         runtime_policy=service.runtime_policy,
         ram_governor=service.ram_governor,
         scheduler=service.scheduler,
@@ -495,14 +502,6 @@ def test_office_pdf_attempts_are_persisted_in_order_before_clean_save(
         assert all(row["duration_ms"] >= 0 for row in observed_rows)
     finally:
         harness.store.close()
-
-
-def test_ingestion_passes_output_relative_path_to_linker(harness):
-    job = _ingest(harness)
-    identity = harness.store.get_document_identity(job.note_document_id)
-    expected = Path(identity["relative_path"]).relative_to("4_procesado").as_posix()
-
-    assert harness.service.linker.seen_current_relative_path == expected
 
 
 def test_ingestion_resolves_target_before_single_atomic_note_write(harness, monkeypatch):

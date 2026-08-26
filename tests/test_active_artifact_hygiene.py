@@ -110,3 +110,28 @@ def test_active_artifact_gate_does_not_modify_checkout(gate_module, tmp_path):
 
     assert result.passed is False
     assert artifact.read_bytes() == before
+
+
+def test_product_shell_has_no_duplicated_obsidian_capabilities():
+    root = Path(__file__).resolve().parents[1]
+    html = (root / "consola_preview.html").read_text(encoding="utf-8")
+    bridge = (root / "fuente/ui/bridge.py").read_text(encoding="utf-8")
+
+    for forbidden in (
+        "-".join(("modal", "reader", "graph")),
+        "-".join(("reader", "markdown", "editor")),
+        "-".join(("modal", "fusion")),
+        "-".join(("discussion", "reply", "form")),
+    ):
+        assert forbidden not in html
+
+    assert "open_obsidian" in html
+    assert "open_obsidian" in bridge
+    assert not (root / "fuente/reader_modal.py").exists()
+    assert not (root / "fuente/chat_modal.py").exists()
+    assert not (root / "fuente/graph_engine").exists()
+
+    removed_import = "fuente." + "graph_engine"
+    for base in (root / "fuente", root / "tests"):
+        for path in base.rglob("*.py"):
+            assert removed_import not in path.read_text(encoding="utf-8")

@@ -43,18 +43,6 @@ def test_theme_selection_paints_before_bridge_and_reverts_on_failure():
     assert "if (requestId !== themeChangeRequest) return;" in source
 
 
-def test_reader_chat_context_buttons_have_exclusive_semantic_state():
-    source = _source()
-
-    assert "button.dataset.chatContextMode = action[0]" in source
-    assert "button.setAttribute('aria-pressed', 'false')" in source
-    assert "function syncChatContextButtons()" in source
-    assert "button.classList.toggle('active', isActive)" in source
-    assert "button.setAttribute('aria-pressed', String(isActive))" in source
-    assert "syncChatContextButtons();" in source
-    assert "data-chat-context-mode" in source
-
-
 def test_ui1_styles_define_open_menu_focus_and_active_states():
     css = CSS.read_text(encoding="utf-8")
 
@@ -65,4 +53,3 @@ def test_ui1_styles_define_open_menu_focus_and_active_states():
     assert "box-shadow: var(--elevation-low)" in css
     assert ".theme-select-trigger:focus-visible" in css
     assert ".theme-select-option:hover" in css
-    assert ".console-layout-073.active" in css

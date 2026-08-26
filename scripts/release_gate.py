@@ -520,7 +520,6 @@ def sample_vault_smoke(vault_path: Path) -> tuple[bool, str]:
     from fuente.domain.frontmatter import parse_frontmatter, serialize_frontmatter
     from fuente.domain.paths import AuthorizedPathResolver, document_id_for_relative_path
     from fuente.extractors.registry import ExtractorRegistry
-    from fuente.graph_engine.linker import GraphLinker
     from fuente.infrastructure.sqlite_store import JobStore
     from fuente.infrastructure.vault_migration import VaultMigrator
     from fuente.rag.semantic_chunker import SemanticChunker
@@ -637,7 +636,7 @@ historial: []
 
     fake_chroma = FakeChroma()
     migrator = VaultMigrator(vault_path, chroma=fake_chroma)
-    manifest = migrator.apply(rebuild_index=True, rebuild_moc=True)
+    manifest = migrator.apply(rebuild_index=True)
     if manifest.status != "completed":
         return False, f"migration status {manifest.status}"
 
@@ -712,13 +711,32 @@ historial: []
             chunker=SemanticChunker(),
             chroma=fake_chroma,
             atomic_generator=SmokeGenerator(),
-            linker=GraphLinker(vault.output_dir),
             ram_governor=FakeGovernor(),
             stabilize=lambda path: path.is_file() and path.stat().st_size > 0,
         )
         source_path = vault.input_dir / ingest_source
         source_path.write_text(ingest_text, encoding="utf-8")
         job = ingestion.submit(ingest_identity)
+        for source_stage, target_stage in (
+            ("1_volcado", "2_copiado"),
+            ("2_copiado", "3_capturado"),
+        ):
+            ingestion.transition_approvals.begin_review(
+                job.job_id,
+                source_stage,
+                target_stage,
+                1,
+                job.source_hash,
+                "release-gate",
+            )
+            ingestion.transition_approvals.approve(
+                job.job_id,
+                source_stage,
+                target_stage,
+                1,
+                job.source_hash,
+                "release-gate",
+            )
         completed = ingestion.resume(job.job_id)
         if completed.stage == "saved_clean":
             if completed.clean_artifact is None:

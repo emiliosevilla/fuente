@@ -23,6 +23,8 @@ class TestIntegration(unittest.TestCase):
         self.vault_path = Path(self.temp_dir.name)
         self.config = get_default_config(self.vault_path)
         self.pipeline = ETLPipeline(self.config)
+        from tests.conftest import auto_approve_early_transitions
+        auto_approve_early_transitions(self.pipeline.ingestion)
         self.pipeline.set_runtime_policy(explicit_test_runtime_policy())
         patch_abundant_ram(self.pipeline.ram_governor)
         patch_test_model_inventory(self.pipeline.ram_governor, "test-model")

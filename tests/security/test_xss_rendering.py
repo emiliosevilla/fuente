@@ -9,11 +9,8 @@ from fuente.application.chat import ChatApplicationService, FakeChatProvider
 from fuente.application.retrieval import MODE_NONE, RetrievalApplicationService
 from fuente.control_console import FuenteConsoleBackend
 from fuente.core.vault import document_id_for_relative_path
-from fuente.domain.documents import NoteDocument
-from fuente.domain.frontmatter import serialize_frontmatter
 from fuente.domain.metadata_form import MetadataValidationError, validate_metadata_fields
 from fuente.ui.bridge import FuentePyWebViewApi
-from fuente.ui.markdown_projection import project_note_document
 from tests.conftest import save_v3_summary_note
 
 from tests.security.conftest import assert_html_fails_closed
@@ -39,35 +36,6 @@ def _write_note(backend, *, title: str, body: str, issue: str = "_Sin_Cuestion")
         tags=["segura"],
     )
     return document_id
-
-
-def test_hostile_markdown_projection_is_data_not_executable_html():
-    note = NoteDocument.from_persisted(
-        document_id="editor-xss",
-        relative_path="hostile.md",
-        markdown=serialize_frontmatter(
-            {
-                "schema_version": 1,
-                "title": "Hostile",
-                "date": "2026-08-11",
-                "author": "Fuente",
-                "tags": [],
-                "issue": "_Sin_Cuestion",
-                "status": "pending_review",
-                "sources": [],
-                "history": [],
-            }
-        ) + HOSTILE_MARKDOWN,
-        revision=1,
-    )
-
-    projection = project_note_document(note)
-
-    assert isinstance(projection, dict)
-    assert "html" not in projection
-    assert projection["body"]["type"] == "doc"
-    assert all(isinstance(node, dict) for node in projection["body"]["content"])
-    assert "<script>" in projection["body"]["content"][0]["attrs"]["markdown"]
 
 
 def test_note_body_html_and_js_fail_closed_in_rendered_html(temp_vault_path):

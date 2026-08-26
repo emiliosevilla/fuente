@@ -10,7 +10,6 @@ import sys
 import time
 import json
 import html
-import shutil
 import queue
 import logging
 import logging.handlers
@@ -34,11 +33,6 @@ from tkinter import ttk, messagebox, filedialog
 
 from fuente.application.approval import ApprovalApplicationService
 from fuente.application.chat import ChatApplicationService, OllamaChatProvider
-from fuente.application.refinement import (
-    OllamaVerifier,
-    RefinementApplicationService,
-    RefinementSnapshot,
-)
 from fuente.application.ingestion import (
     TERMINAL_STAGES,
     IngestionApplicationService,
@@ -50,7 +44,6 @@ from fuente.application.export import (
     ExportFileExistsError,
     UnsupportedExportFormatError,
 )
-from fuente.application.fusion import FusionApplicationService
 from fuente.application.health import HealthService
 from fuente.application.job_control import (
     JobControlService,
@@ -69,7 +62,6 @@ from fuente.application.retrieval import RetrievalApplicationService
 from fuente.rag.chroma_store import ChromaRetrievalBackend
 from fuente.rag.minirag_store import MiniRAGStore
 from fuente.rag.router import RetrievalRouter
-from fuente.application.reflow import ReflowApplicationService, ReflowScope
 from fuente.application.settings import SettingsService, SettingsValidationError
 from fuente.config import (
     get_default_config,
@@ -79,7 +71,6 @@ from fuente.config import (
     describe_offline_mode,
 )
 from fuente.core.vault import VaultManager
-from fuente.domain.approvals import ApprovalLedger
 from fuente.domain.documents import MarkdownDocument
 from fuente.domain.errors import (
     CanonicalEligibilityError,
@@ -91,14 +82,11 @@ from fuente.domain.errors import (
 from fuente.domain.frontmatter import FrontmatterError, parse_frontmatter, serialize_frontmatter
 from fuente.domain.origins import (
     LegacyOriginsMigrationRequiredError,
-    OriginRef,
     parse_origins,
 )
 from fuente.domain.metadata_form import (
-    MetadataValidationError,
     metadata_form_snapshot,
     validate_metadata_fields,
-    validate_metadata_save_fields,
 )
 from fuente.domain.paths import AuthorizedPathResolver, document_id_for_relative_path
 from fuente.domain.quarantine import QuarantineRestoreError, QuarantineService
@@ -121,8 +109,6 @@ from fuente.core.folder_sync import (
 )
 from fuente.domain.sync import ConnectedFolder, SyncDirection, SyncProvider
 from fuente.watcher.watcher import ETLPipeline
-from fuente.graph_engine.linker import CANONICAL_MOC_FILENAME, GraphLinker
-from fuente.graph_engine.optimized_loop import OptimizadoGraphLoop
 from fuente.ram_governor.governor import RAMGovernor
 from fuente.ram_governor.budget import (
     ResourceKind,
@@ -133,12 +119,8 @@ from fuente.ram_governor.budget import (
 logger = logging.getLogger(__name__)
 
 try:
-    from fuente.reader_modal import FuenteReaderModal
-    from fuente.chat_modal import FuenteChatModal
     from fuente.category_modal import FuenteCategoryModal
 except ImportError:
-    FuenteReaderModal = None
-    FuenteChatModal = None
     FuenteCategoryModal = None
 
 try:
@@ -395,8 +377,6 @@ class FuenteConsoleBackend:
         self._notes_service: Optional[NotesApplicationService] = None
         self._export_service: Optional[ExportApplicationService] = None
         self._review_export_service: Optional[ReviewExportApplicationService] = None
-        self._reflow_service: Optional[ReflowApplicationService] = None
-        self._fusion_service: Optional[FusionApplicationService] = None
         self._ingestion_service: Optional[IngestionApplicationService] = None
         self._ingestion_job_store: Optional[JobStore] = None
         self._job_control_service: Optional[JobControlService] = None
@@ -457,8 +437,6 @@ class FuenteConsoleBackend:
         self._notes_service = None
         self._export_service = None
         self._review_export_service = None
-        self._reflow_service = None
-        self._fusion_service = None
         self._job_store = None
         self._job_control_service = None
         # A test/offline attachment is an explicit alternate collaborator.
@@ -477,74 +455,6 @@ class FuenteConsoleBackend:
             self.vault.active_theme, self.vault.current_theme_dir
         )
         return self.vault.active_theme
-
-    def _refine_graph(self, target_issue: Optional[str] = None) -> dict:
-        """Delegate graph work to the lifecycle-owned, serialized loop."""
-        if self.lifecycle is None or not self.lifecycle.is_running:
-            return {
-                "error": "graph_service_unavailable",
-                "message": "The lifecycle-owned graph service is not started",
-            }
-        return self.lifecycle.refine_graph(target_issue=target_issue)
-
-    def reflow_links(self, scope_payload: object) -> Dict[str, Any]:
-        """Run one explicit link reflow through the lifecycle-owned graph loop."""
-        if isinstance(scope_payload, ReflowScope):
-            scope = scope_payload
-        elif isinstance(scope_payload, Mapping):
-            allowed = {"document_id", "theme", "issue", "candidate_id", "candidate_revision"}
-            if set(scope_payload) - allowed:
-                return {"error": "invalid_payload", "message": "Unsupported scope field"}
-            values = {
-                key: scope_payload.get(key)
-                for key in allowed
-                if key in scope_payload
-            }
-            if any(
-                value is not None
-                and not isinstance(value, int if key == "candidate_revision" else str)
-                for key, value in values.items()
-            ):
-                return {"error": "invalid_payload", "message": "Scope values must be strings"}
-            scope = ReflowScope(
-                document_id=values.get("document_id"),
-                theme=values.get("theme"),
-                issue=values.get("issue"),
-                candidate_id=values.get("candidate_id"),
-                candidate_revision=values.get("candidate_revision"),
-            )
-        else:
-            return {"error": "invalid_payload", "message": "Scope must be an object"}
-
-        if self.lifecycle is None or not self.lifecycle.is_running:
-            return {
-                "error": "graph_service_unavailable",
-                "message": "The lifecycle-owned graph service is not started",
-            }
-        service = self._reflow_service or ReflowApplicationService(
-            lifecycle=self.lifecycle,
-            path_resolver=self._path_resolver(),
-            index_notifier=self.notify_index_changed,
-            eligibility_guard=lambda document_id: self.get_notes_service().require_published_output(
-                document_id
-            ),
-            refinement_guard=self._require_accepted_refinement,
-        )
-        self._reflow_service = service
-        try:
-            result = service.reflow_links(scope)
-        except PathAuthorizationError as error:
-            return self._path_error(error)
-        except OutputApprovalRequiredError as error:
-            return {"error": error.code, "message": str(error)}
-        except CanonicalEligibilityError as error:
-            return {"error": error.code, "message": str(error)}
-        except (TypeError, ValueError) as error:
-            return {"error": "invalid_payload", "message": str(error)}
-        payload = result.as_dict()
-        if result.error:
-            return {"error": result.error, "message": result.error}
-        return payload
 
     def _apply_settings_config(self, config: AppConfig) -> None:
         """Refresh settings consumers after their durable config has been written."""
@@ -857,7 +767,6 @@ class FuenteConsoleBackend:
                     else self.ram_governor.recommend_model_decision
                 ),
                 ollama_url=self.config.ollama_url,
-                refinement_guard=self._require_accepted_refinement,
             )
         return self._chat_service
 
@@ -879,102 +788,6 @@ class FuenteConsoleBackend:
                 runtime_policy=self.runtime_policy,
             )
         return self._notes_service
-
-    def _require_accepted_refinement(self, candidate_id: str, expected_revision: int) -> None:
-        verdict = self.get_notes_service().job_store.get_refinement_verdict(candidate_id)
-        if (
-            verdict is None
-            or verdict.get("decision") != "accepted"
-            or int(verdict.get("revision", -1)) != expected_revision
-        ):
-            raise ValueError("refinement candidate is not accepted for this revision")
-
-    def evaluate_refinement(self, candidate_id: str, expected_revision: int) -> dict[str, Any]:
-        """Evaluate one stored reflow candidate and persist only its verdict."""
-        notes = self.get_notes_service()
-        row = notes.job_store.get_refinement_candidate(candidate_id)
-        if row is None or int(row["revision"]) != expected_revision:
-            raise ValueError("refinement candidate identity is missing or stale")
-        baseline_id = document_id_for_relative_path(str(row["baseline_path"]))
-        baseline = notes.get_note(baseline_id)
-        if (
-            int(row.get("baseline_revision", 0)) != baseline.revision
-            or str(row.get("baseline_content_hash") or "") != baseline.content_hash
-        ):
-            raise ValueError("refinement baseline is stale")
-        candidate = notes.get_note(candidate_id)
-        chroma = self._get_chroma_store()
-        chroma.add_chunks(
-            [baseline.to_markdown(), candidate.to_markdown()],
-            [
-                {"document_id": candidate_id, "revision": baseline.revision, "content_hash": baseline.content_hash},
-                {"document_id": candidate_id, "revision": expected_revision, "content_hash": candidate.content_hash},
-            ],
-            [f"{candidate_id}:baseline", f"{candidate_id}:candidate"],
-        )
-
-        def snapshot(note, revision: int, *, candidate_note: bool) -> RefinementSnapshot:
-            try:
-                notes.require_eligible_origins(note)
-                approved_origins = 1.0
-            except (TypeError, ValueError, CanonicalEligibilityError):
-                approved_origins = 0.0
-            citations_valid = bool(
-                note.frontmatter.get("sources")
-                or note.frontmatter.get("citations")
-                or note.origins
-            )
-            markdown = note.to_markdown()
-            open_links = markdown.count("[[")
-            close_links = markdown.count("]]" )
-            link_validity = 1.0 if open_links == close_links else 0.0
-            query = (note.title or note.body_markdown[:160]).strip()
-            retrieval = self.get_retrieval_service()
-
-            def retrieval_probe(role: str) -> float:
-                try:
-                    backend = retrieval.router.refinement() if role == "refinement" else retrieval.router.primary()
-                    hits = backend.search(query, 3)
-                except (OSError, RuntimeError, TypeError, ValueError):
-                    return 0.0
-                try:
-                    return min(1.0, len(hits) / 3.0)
-                except (TypeError, ValueError):
-                    return 0.0
-
-            return RefinementSnapshot(
-                document_id=(candidate_id if candidate_note else note.document_id),
-                revision=revision,
-                content_hash=note.content_hash,
-                markdown=markdown,
-                approved_origins=approved_origins,
-                citations_valid=citations_valid,
-                link_validity=link_validity,
-                primary_retrieval=retrieval_probe("primary"),
-                refinement_retrieval=retrieval_probe("refinement"),
-            )
-
-        service = RefinementApplicationService(
-            job_store=notes.job_store,
-            loader=lambda _candidate_id: (
-                snapshot(baseline, baseline.revision, candidate_note=False),
-                snapshot(candidate, expected_revision, candidate_note=True),
-            ),
-            verifier=OllamaVerifier(
-                OllamaChatProvider(self.config.ollama_url, timeout=12.0),
-                model=(self.config.custom_model_override or self.ram_governor.recommend_model()),
-            ),
-        )
-        verdict = service.evaluate(candidate_id, expected_revision)
-        return {
-            "candidate_id": verdict.candidate_id,
-            "decision": verdict.decision,
-            "baseline_score": verdict.baseline_score,
-            "candidate_score": verdict.candidate_score,
-            "graph_delta": verdict.graph_delta,
-            "retrieval_delta": verdict.retrieval_delta,
-            "verifier_reason": verdict.verifier_reason,
-        }
 
     def get_approval_service(self) -> ApprovalApplicationService:
         """Return the approval ledger facade for canonical clean notes."""
@@ -1002,60 +815,11 @@ class FuenteConsoleBackend:
             )
         return self._review_export_service
 
-    def get_fusion_service(self) -> FusionApplicationService:
-        """Return the cached preview-then-commit fusion coordinator."""
-        if self._fusion_service is None:
-            self._fusion_service = FusionApplicationService(
-                notes_service=self.get_notes_service(),
-            )
-        return self._fusion_service
-
-    def get_fusion_candidates(
-        self, *, issue: str | None = None, limit: int = 25
-    ) -> Dict[str, Any]:
-        candidates = self.get_fusion_service().find_candidates(issue=issue, limit=limit)
-        return {
-            "candidates": [
-                {
-                    "candidate_id": candidate.candidate_id,
-                    "document_ids": list(candidate.document_ids),
-                    "score": candidate.score,
-                    "reasons": list(candidate.reasons),
-                }
-                for candidate in candidates
-            ]
-        }
-
-    def preview_fusion(
-        self, document_ids: list[str], title: str, issue_id: str
-    ) -> Dict[str, Any]:
-        return self.get_fusion_service().preview(
-            document_ids,
-            title,
-            issue_id,
-        ).as_dict()
-
-    def commit_fusion(
-        self, preview_id: str, source_revisions: dict[str, int]
-    ) -> Dict[str, Any]:
-        note = self.get_fusion_service().commit(preview_id, source_revisions)
-        return {
-            "document_id": note.document_id,
-            "path": note.relative_path,
-            "title": note.title,
-            "status": note.status,
-            "revision": note.revision,
-            "frontmatter": dict(note.frontmatter),
-            "body_markdown": note.body_markdown,
-            "source_ids": list(note.source_ids),
-        }
-
     def approve_and_export(
         self,
         document_id: str,
         expected_revision: int,
         export_format: str,
-        metadata_patch: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """Approve canonically, then prepare a browser download payload.
 
@@ -1067,7 +831,6 @@ class FuenteConsoleBackend:
             document_id,
             expected_revision,
             export_format,
-            metadata_patch=metadata_patch,
         ).as_dict()
 
     def export_note(
@@ -1283,7 +1046,7 @@ class FuenteConsoleBackend:
             pass
         return document_id_for_relative_path(relative)
 
-    def get_initial_state_dict(self) -> Dict[str, Any]:
+    def get_initial_state_dict(self) -> Dict[str, object]:
         stats = self.get_stats_dict()
         return {
             "vault_path": str(self.vault_path),
@@ -1333,7 +1096,7 @@ class FuenteConsoleBackend:
         proc_files = [
             path
             for path in self.vault.output_dir.rglob("*.md")
-            if path.is_file() and path.name != CANONICAL_MOC_FILENAME
+            if path.is_file()
         ] if self.vault.output_dir.exists() else []
         quar_items = self.quarantine_service.list_active_items()
         notes_count = len(self.vault.enumerate_documents("output"))
@@ -1603,7 +1366,7 @@ class FuenteConsoleBackend:
             theme_name = payload.get("theme_name", "")
             if theme_name:
                 # Create on the shared vault (lifecycle pipeline when attached),
-                # then rebind linker + graph loop through the lifecycle API.
+                # then apply it through the shared lifecycle API.
                 self.vault.create_theme(theme_name)
                 active = self._apply_theme(self.vault.active_theme)
                 return {
@@ -1640,11 +1403,7 @@ class FuenteConsoleBackend:
                 if not pending_root.exists():
                     continue
                 for md_file in pending_root.rglob("*.md"):
-                    is_system_moc = (
-                        md_file.name == CANONICAL_MOC_FILENAME
-                        or md_file.name.startswith("_Cuestion_")
-                    )
-                    if md_file.name.startswith(".") or is_system_moc:
+                    if md_file.name.startswith("."):
                         continue
                     try:
                         resolved_path = md_file.resolve()
@@ -1740,77 +1499,6 @@ class FuenteConsoleBackend:
                 "revision": approved.revision,
             }
 
-        elif action_name == "update_note_metadata":
-            allowed_fields = {"document_id", "metadata", "expected_revision"}
-            if (
-                set(payload) - allowed_fields
-                or not isinstance(payload.get("document_id"), str)
-                or not payload.get("document_id", "").strip()
-                or "expected_revision" not in payload
-            ):
-                return {"error": "invalid_payload"}
-            identifier = payload["document_id"].strip()
-            if "/" in identifier or "\\" in identifier or identifier.endswith(".md"):
-                return {"error": "invalid_payload"}
-            try:
-                notes = self.get_notes_service()
-                document_id = identifier
-                expected_revision = payload.get("expected_revision")
-                if expected_revision is None:
-                    return {"error": "expected_revision is required"}
-                metadata_patch = validate_metadata_save_fields(
-                    payload.get("metadata") or {},
-                    allowed_issues=self.vault.get_issues_in_theme(),
-                )
-                updated = notes.update_metadata(
-                    document_id,
-                    expected_revision=int(expected_revision),
-                    metadata_patch=metadata_patch,
-                )
-            except LegacyOriginsMigrationRequiredError:
-                return {
-                    "error": "legacy_origins_unmigrated",
-                    "message": "Legacy origins require complete OriginRef identity",
-                }
-            except MetadataValidationError as error:
-                return {
-                    "error": error.code,
-                    "message": str(error),
-                    "field_errors": error.field_errors,
-                }
-            except NoteRevisionConflictError as error:
-                return {"error": error.code, "message": str(error)}
-            except PathAuthorizationError as error:
-                return self._path_error(error)
-            except (TypeError, ValueError) as error:
-                return {"error": f"Error al actualizar metadatos: {error}"}
-            return {
-                "log": "Metadatos guardados correctamente.",
-                "status": "saved",
-                "document_id": updated.document_id,
-                "revision": updated.revision,
-                "metadata": metadata_form_snapshot(updated.frontmatter),
-            }
-
-        elif action_name == "validate_note_metadata":
-            try:
-                metadata_patch = validate_metadata_save_fields(
-                    payload.get("metadata") or {},
-                    allowed_issues=self.vault.get_issues_in_theme(),
-                )
-            except LegacyOriginsMigrationRequiredError:
-                return {
-                    "error": "legacy_origins_unmigrated",
-                    "message": "Legacy origins require complete OriginRef identity",
-                }
-            except MetadataValidationError as error:
-                return {
-                    "error": error.code,
-                    "message": str(error),
-                    "field_errors": error.field_errors,
-                }
-            return {"valid": True, "metadata": metadata_patch}
-
         elif action_name == "get_note_metadata":
             identifier = payload.get("document_id") or payload.get("path")
             if not identifier:
@@ -1827,95 +1515,6 @@ class FuenteConsoleBackend:
             if payload.get("diagnostic"):
                 response["raw_frontmatter"] = serialize_frontmatter(note.frontmatter)
             return response
-
-        # --- CRUD DE NOTAS (GUARDAR, FUSIONAR, MOVER, ELIMINAR) ---
-        elif action_name == "save_note":
-            identifier = (
-                payload.get("document_id")
-                or payload.get("file_path")
-                or payload.get("path")
-            )
-            new_content = payload.get("content")
-            title = payload.get("title")
-            issue_name = payload.get("issue", "_Sin_Cuestion")
-
-            if identifier:
-                try:
-                    p = self._resolve_note_from_identifier(str(identifier))
-                except PathAuthorizationError as error:
-                    return self._path_error(error)
-                if p.exists() and new_content is not None:
-                    atomic_write_text(p, new_content)
-                    return {"log": f"Nota '{p.name}' guardada correctamente.", "status": "saved"}
-            elif title and new_content:
-                try:
-                    saved_path = self.vault.save_atomic_note(
-                        title=title,
-                        content=new_content,
-                        issue_name=issue_name,
-                    )
-                except PathAuthorizationError as error:
-                    return self._path_error(error)
-                except FrontmatterError as error:
-                    return {
-                        "error": "origin_required",
-                        "message": str(error),
-                    }
-                return {
-                    "log": f"Nota nueva '{saved_path.name}' creada en {issue_name}.",
-                    "status": "created",
-                    "path": self._vault_relative_identity(saved_path),
-                }
-
-            return {"error": "Datos insuficientes para guardar nota"}
-
-        elif action_name == "move_note":
-            identifier = (
-                payload.get("document_id")
-                or payload.get("file_path")
-                or payload.get("path")
-            )
-            target_issue = payload.get("target_issue", "_Sin_Cuestion")
-            if identifier:
-                try:
-                    resolver = self._path_resolver()
-                    p = self._resolve_note_from_identifier(str(identifier))
-                except PathAuthorizationError as error:
-                    return self._path_error(error)
-                if p.exists():
-                    target_dir = self.vault.output_dir / self.vault.sanitize_filename(target_issue)
-                    dest_path = target_dir / p.name
-                    try:
-                        resolver.resolve_note(self._vault_relative_identity(dest_path))
-                    except PathAuthorizationError as error:
-                        return self._path_error(error)
-                    target_dir.mkdir(parents=True, exist_ok=True)
-                    if p != dest_path:
-                        shutil.move(str(p), str(dest_path))
-                    return {
-                        "log": f"Nota '{p.name}' movida a Cuestión '{target_issue}'.",
-                        "new_path": self._vault_relative_identity(dest_path),
-                    }
-            return {"error": "No se pudo mover la nota"}
-
-        elif action_name == "delete_note":
-            identifier = (
-                payload.get("document_id")
-                or payload.get("file_path")
-                or payload.get("path")
-            )
-            if identifier:
-                try:
-                    p = self._resolve_note_from_identifier(str(identifier))
-                except PathAuthorizationError as error:
-                    return self._path_error(error)
-                if p.exists():
-                    quar_path = self.vault.move_to_quarantine(p, reason="Eliminada por el usuario")
-                    return {
-                        "log": f"Nota '{p.name}' trasladada a Papelera de Cuarentena.",
-                        "quarantine_path": quar_path.name,
-                    }
-            return {"error": "Ruta de archivo no válida para eliminar"}
 
         # --- PAPELERA CUARENTENA Y RESTAURACIÓN ---
         elif action_name == "get_quarantine":
@@ -1942,44 +1541,6 @@ class FuenteConsoleBackend:
                     return {"error": f"Error al restaurar: {e}"}
             return {"error": "Nombre de archivo de cuarentena no especificado"}
 
-        # --- LANZAMIENTO EXPLÍCITO DE CICLOS OPTIMIZADOS ---
-        elif action_name == "run_optimized_cycle":
-            target_issue = payload.get("target_issue")
-            try:
-                res = self._refine_graph(target_issue=target_issue)
-                if "error" in res:
-                    return res
-                msg = f"Ciclo Optimizado completado para Cuestión '{target_issue or 'Todas'}'. Notas procesadas: {res.get('processed_notes', 0)}."
-                return {"log": msg, "result": res, "refresh": True, "stats": self.get_stats_dict()}
-            except Exception as e:
-                return {"error": f"Error ejecutando ciclo optimizado: {e}"}
-
-        elif action_name == "reflow_links":
-            result = self.reflow_links(payload.get("scope", payload))
-            if "error" in result:
-                return result
-            return {
-                "log": (
-                    "Reflow de enlaces completado. "
-                    f"Notas procesadas: {result.get('processed_notes', 0)}; "
-                    f"notas cambiadas: {result.get('changed_notes', 0)}."
-                ),
-                "result": result,
-                **result,
-                "refresh": bool(result.get("changed_markdown")),
-            }
-
-        elif action_name == "evaluate_refinement":
-            candidate_id = payload.get("candidate_id")
-            expected_revision = payload.get("expected_revision")
-            if not isinstance(candidate_id, str) or not isinstance(expected_revision, int):
-                return {"error": "invalid_payload", "message": "candidate_id and expected_revision are required"}
-            try:
-                result = self.evaluate_refinement(candidate_id, expected_revision)
-            except (TypeError, ValueError, OSError) as error:
-                return {"error": "refinement_evaluation_failed", "message": str(error)}
-            return {"status": "success", "result": result, **result}
-
         # --- ACCIONES ANTERIORES DE CONSOLA ---
         elif action_name == "flush_sources":
             sync_report = self.sync_manager.sync_to_input(
@@ -1990,19 +1551,6 @@ class FuenteConsoleBackend:
                 "refresh": True,
                 "stats": self.get_stats_dict()
             }
-        elif action_name == "reindex_notes":
-            try:
-                res = self._refine_graph()
-                if "error" in res:
-                    return res
-                notes_count = self.get_stats_dict()["processed"]
-                return {
-                    "log": f"Se regeneró el mapa de notas e interconexiones. Total notas preparadas: {notes_count}",
-                    "refresh": True,
-                    "stats": self.get_stats_dict()
-                }
-            except Exception as e:
-                return {"log": f"Error en reíndice: {e}"}
         elif action_name == "quick_help":
             base_dir = Path(__file__).resolve().parent.parent
             readme_file = base_dir / "README.md"
@@ -2120,7 +1668,7 @@ class FuenteConsoleBackend:
             return {"log": message, "alert": message}
         elif action_name == "stat_notes":
             notes = self.vault.enumerate_documents("output")
-            message = f"Telemetría del Grafo consultada: {len(notes)} notas preparadas."
+            message = f"Notas preparadas consultadas: {len(notes)}."
             return {"log": message, "alert": message}
         elif action_name == "step1_flush":
             sync_report = self.sync_manager.sync_to_input(
@@ -2193,19 +1741,6 @@ class FuenteConsoleBackend:
                 }
             except Exception as e:
                 return {"log": f"Error en Transcripción: {e}"}
-        elif action_name == "step3_structure":
-            try:
-                res = self._refine_graph()
-                if "error" in res:
-                    return res
-                notes_count = self.get_stats_dict()["processed"]
-                return {
-                    "log": f"[PASO 3 ESTRUCTURACIÓN] Grafo refinado e hiperinterenlazado. Notas en {self.vault.config.output_dir_name}: {notes_count}.",
-                    "refresh": True,
-                    "stats": self.get_stats_dict()
-                }
-            except Exception as e:
-                return {"log": f"Error en Estructuración: {e}"}
         elif action_name == "save_settings":
             canonical_settings = dict(payload)
             if "model" in canonical_settings:
@@ -2432,21 +1967,20 @@ class FuenteConsoleBackend:
         return "_Sin_Cuestion"
 
     def _note_list_entry(
-        self, document_id: str, relative_path: str, *, is_moc: bool = False
+        self, document_id: str, relative_path: str
     ) -> Dict[str, Any]:
         title = Path(relative_path).stem.replace("_", " ")
-        issue = "" if is_moc else self._issue_from_relative_path(relative_path)
-        status = "approved" if is_moc else "pending_review"
+        issue = self._issue_from_relative_path(relative_path)
+        status = "pending_review"
         try:
             path = self._path_resolver().resolve_note(relative_path)
             raw = path.read_text(encoding="utf-8", errors="replace")
             metadata, _body = parse_frontmatter(raw)
             title = metadata.get("title") or title
-            if not is_moc:
-                issue = metadata.get("issue") or issue or "_Sin_Cuestion"
+            issue = metadata.get("issue") or issue or "_Sin_Cuestion"
             status = metadata.get("status") or status
         except (PathAuthorizationError, FrontmatterError, OSError):
-            if not is_moc and not issue:
+            if not issue:
                 issue = "_Sin_Cuestion"
         return {
             "document_id": document_id,
@@ -2455,34 +1989,12 @@ class FuenteConsoleBackend:
             "issue": issue,
             "theme": self.vault.active_theme,
             "status": status,
-            "is_moc": is_moc,
         }
 
     def get_notes_list(self) -> List[Dict[str, Any]]:
         """Return theme-scoped notes with opaque document ids and metadata."""
         notes: List[Dict[str, Any]] = []
-        moc_path = self.get_canonical_moc_path()
-        if moc_path.exists():
-            try:
-                relative = self._vault_relative_identity(moc_path)
-                moc_document_id = document_id_for_relative_path(relative)
-                try:
-                    moc_document_id = MarkdownDocument.from_markdown(
-                        moc_path.read_text(encoding="utf-8")
-                    ).note_id or moc_document_id
-                except (FrontmatterError, OSError, UnicodeError, ValueError):
-                    pass
-                notes.append(
-                    self._note_list_entry(
-                        moc_document_id,
-                        relative,
-                        is_moc=True,
-                    )
-                )
-            except PathAuthorizationError:
-                pass
-
-        seen = {note["document_id"] for note in notes}
+        seen: set[str] = set()
         for root in ("clean", "output"):
             for document_id, relative in self.vault.enumerate_documents(root):
                 if document_id in seen:
@@ -2632,11 +2144,6 @@ class FuenteConsoleBackend:
         for candidate in sorted(directory.rglob("*")) if directory.exists() else []:
             if not candidate.is_file() or candidate.name.startswith("."):
                 continue
-            if root_name == "output" and (
-                candidate.name == CANONICAL_MOC_FILENAME
-                or candidate.name.startswith("_Cuestion_")
-            ):
-                continue
             try:
                 identity = self._vault_relative_identity(candidate)
                 authorized = resolver.resolve(identity, root_name=root_name)
@@ -2685,132 +2192,6 @@ class FuenteConsoleBackend:
         except OSError as error:
             return {"error": "open_failed", "message": str(error)}
         return {"status": "opened", "file_id": file_identity}
-
-    def get_canonical_moc_path(self) -> Path:
-        """Return the canonical Map-of-Content path under the active theme output."""
-        return self.vault.output_dir / CANONICAL_MOC_FILENAME
-
-    def get_graph_data(self) -> Dict[str, Any]:
-        out_dir = self.vault.output_dir
-        if not out_dir.exists():
-            return {"nodes": [], "links": []}
-
-        discovered = GraphLinker(
-            out_dir, vault_root=self.vault.config.vault_path
-        ).enumerate_reader_notes()
-        node_target_by_path = {
-            (out_dir / note.relative_path).resolve(): note.link_target
-            for note in discovered
-        }
-        nodes = []
-        for note in discovered:
-            vault_relative = self._vault_relative_identity(out_dir / note.relative_path)
-            node = {
-                "id": note.link_target,
-                "label": note.stem,
-                "path": vault_relative,
-                "document_id": note.document_id,
-                "origins": list(note.origins),
-            }
-            if note.relative_path == CANONICAL_MOC_FILENAME:
-                node["node_type"] = "canonical_moc"
-            nodes.append(node)
-
-        links = []
-        seen_links: set[tuple[str, str, str]] = set()
-
-        def add_link(source: str, target: str, relation: str) -> None:
-            identity = (source, target, relation)
-            if identity in seen_links:
-                return
-            seen_links.add(identity)
-            links.append(
-                {"source": source, "target": target, "relation": relation}
-            )
-
-        import re
-        link_pattern = re.compile(r"\[\[(.*?)\]\]")
-        resolver = self._path_resolver()
-
-        for note in discovered:
-            note_file = out_dir / note.relative_path
-            source = note.link_target
-            try:
-                content = note_file.read_text(encoding="utf-8", errors="ignore")
-                for target in link_pattern.findall(content):
-                    clean_target = target.split("|")[0].split("#")[0].strip()
-                    if not clean_target:
-                        continue
-                    try:
-                        target_path = resolver.resolve_wikilink_target(clean_target)
-                    except PathAuthorizationError:
-                        continue
-                    target_id = node_target_by_path.get(target_path.resolve())
-                    if target_id and target_id != source:
-                        add_link(source, target_id, "wikilink")
-            except OSError:
-                pass
-
-        assert self._job_store is not None
-        approval_ledger = ApprovalLedger(
-            self._job_store,
-            vault_root=self.vault.config.vault_path,
-            clean_root=self.vault.clean_dir,
-            derived_root=self.vault.output_dir,
-        )
-        origin_node_ids: set[str] = set()
-        for note in discovered:
-            source = note.link_target
-            for raw_origin in note.origins:
-                try:
-                    origin = OriginRef.from_mapping(raw_origin)
-                    row, origin_path, origin_document = (
-                        approval_ledger.canonical_snapshot(origin.note_id)
-                    )
-                except (
-                    FrontmatterError,
-                    OSError,
-                    PathAuthorizationError,
-                    UnicodeError,
-                    ValueError,
-                ):
-                    continue
-                if (
-                    str(row.get("relative_path")) != origin.path
-                    or int(row.get("revision", 0)) != origin.revision
-                    or str(row.get("content_hash")) != origin.content_hash
-                    or origin_document.note_id != origin.note_id
-                    or origin_document.content_hash != origin.content_hash
-                    or not self._job_store.is_note_approval_current(
-                        origin.note_id,
-                        origin.revision,
-                        origin.content_hash,
-                    )
-                ):
-                    continue
-
-                origin_relative = self._vault_relative_identity(origin_path)
-                if origin_relative != origin.path:
-                    continue
-                origin_graph_id = f"origin:{origin.note_id}"
-                if origin_graph_id not in origin_node_ids:
-                    origin_node_ids.add(origin_graph_id)
-                    nodes.append(
-                        {
-                            "id": origin_graph_id,
-                            "label": origin_document.title
-                            or origin_path.stem.replace("_", " "),
-                            "path": origin_relative,
-                            "document_id": origin.note_id,
-                            "origins": [],
-                            "node_type": "canonical_origin",
-                            "revision": origin.revision,
-                        }
-                    )
-                add_link(source, origin_graph_id, "origin")
-
-        return {"nodes": nodes, "links": links}
-
 
 class FuenteControlConsole(tk.Tk):
     """Consola Fallback Tkinter Papiro."""
@@ -2917,7 +2298,7 @@ def launch_control_console(vault_path: Optional[Path] = None):
     vía PyWebView / Native WebKit engine con fallback Tkinter.
 
     Owns the lifecycle of the console's background services: the
-    `ApplicationLifecycle` (FolderMonitor + OptimizadoGraphLoop) is started
+    `ApplicationLifecycle` is started
     before the window opens and stopped — bounded, no leftover threads —
     once the window is closed, regardless of which UI backend was used.
     """
@@ -2938,15 +2319,16 @@ def launch_control_console(vault_path: Optional[Path] = None):
         api = FuentePyWebViewApi(backend)
         webview.settings["ALLOW_DOWNLOADS"] = True
         window = webview.create_window(
-            "Fuente — Configuración",
+            "Fuente y Caudal",
             url=str(html_file),
             js_api=api,
             width=1280,
             height=850,
             min_size=(980, 680),
-            background_color="#071311",
+            background_color="#ECEFF4",
         )
         api.set_window(window)
+        window.events.closing += api._handle_window_closing
         window.events.shown += _activate_webview_window
         window.events.loaded += _activate_webview_window
         webview.start(debug=False)
@@ -2998,7 +2380,7 @@ def launch_control_console(vault_path: Optional[Path] = None):
         if startup_error:
             raise startup_error[0]
 
-        # One VaultManager: console theme actions retarget FolderMonitor + graph loop.
+        # One VaultManager keeps console actions and FolderMonitor on one theme.
         backend.attach_lifecycle(lifecycle)
         if HAS_WEBVIEW and html_file.exists():
             api = FuentePyWebViewApi(backend)
@@ -3006,15 +2388,16 @@ def launch_control_console(vault_path: Optional[Path] = None):
             # before the native window is created.
             webview.settings["ALLOW_DOWNLOADS"] = True
             window = webview.create_window(
-                "Fuente",
+                "Fuente y Caudal",
                 url=str(html_file),
                 js_api=api,
                 width=1280,
                 height=850,
                 min_size=(980, 680),
-                background_color="#071311"
+                background_color="#ECEFF4"
             )
             api.set_window(window)
+            window.events.closing += api._handle_window_closing
             window.events.shown += _activate_webview_window
             window.events.loaded += _activate_webview_window
             webview.start(debug=False)

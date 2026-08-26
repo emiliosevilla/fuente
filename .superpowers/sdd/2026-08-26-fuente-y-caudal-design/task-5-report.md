@@ -152,3 +152,123 @@ claim anything about the user's production Vault.
   are wired now.
 - Native evidence lives in disposable `/tmp` Vaults. It proves the runtime
   path without reading or mutating the user's real Vault.
+
+## Fix round 1
+
+### Reviewer findings closed
+
+- `TransitionApprovalService` is now consumed immediately before all four
+  production mutations. `VaultManager.copy_to_dirty` owns the first guard;
+  ingestion owns the copied-to-canonical and canonical-to-processed guards;
+  refinement promotion repeats the canonical-to-processed guard; sharing
+  repeats the processed-to-shared guard inside its publication lock.
+- An unapproved ingestion remains at its last durable stage with
+  `awaiting_transition_approval`; it is not quarantined as a processing fault.
+- `ApprovalApplicationService` records the matching `3_capturado ->
+  4_procesado` or `4_procesado -> 5_compartido` transition when the existing
+  clean/processed human approval succeeds.
+- `begin_review` now serializes read/claim/write on the sole `JobStore`
+  connection. A current claim is idempotent for its owner and raises
+  `ReviewClaimConflictError` for another reviewer. The race test proves one
+  owner and one conflict.
+- `_immediate_transaction` no longer calls `sqlite3.connect`. The connection
+  instrumentation test and the native verifier both observe exactly one
+  connection per `JobStore` process.
+- UI restoration awaits workspace, filter and sort state together, applies
+  filter/sort first, then loads the workspace. Rendering reapplies the filter
+  after async note loading. The current shell has no sort control, so Task 5
+  persists and restores deterministic title order without inventing one.
+- Failed SQLite reads/writes are logged and shown in the status line. Failed
+  writes remain queued in memory and are retried on `pywebviewready`, so a
+  draft or filter is not silently discarded.
+
+### Commits
+
+- `0285212` `test: expose transition approval integration gaps`
+- `47ff3c3` `fix: enforce approvals at transition boundaries`
+- `d956a58` `fix: restore SQLite UI state deterministically`
+- `a32110c` `test: make Task 5 runtime proof reproducible`
+- `332b9e0` `fix: preserve retries across approval guards`
+- `df8d8a4` `docs: refresh Task 5 verification snapshot`
+
+### Commands and outputs
+
+1. RED:
+
+   `python3 -m pytest tests/test_transition_approvals.py tests/test_transition_approval_boundaries.py -q`
+
+   Collection failed because `ReviewClaimConflictError` did not exist.
+
+2. Transition integration GREEN:
+
+   `python3 -m pytest tests/test_transition_approvals.py tests/test_transition_approval_boundaries.py -q`
+
+   Result: `15 passed in 0.65s`.
+
+3. UI/bridge behavior GREEN:
+
+   `python3 -m pytest tests/test_ui_state_store.py tests/test_shell_runtime_behavior.py tests/contract/test_bridge_frontend_contract.py tests/contract/test_note_scope_contract.py -q`
+
+   Result: `50 passed, 102 warnings in 2.10s`.
+
+4. First complete-suite measurement:
+
+   `python3 -m pytest -q`
+
+   Result: `32 failed, 1154 passed, 1 skipped, 138 warnings in 41.76s`.
+   The failures identified legacy test/smoke consumers that had not explicitly
+   approved the two new early boundaries, the removed I/O retry adapter, and
+   the expected stale evidence digest. Tests now use an explicitly named
+   approval helper; production gates remain fail-closed. The retry adapter was
+   restored while forwarding the exact transition identity into the guarded
+   Vault method.
+
+5. Complete suite after those fixes and evidence refresh:
+
+   `python3 -m pytest -q`
+
+   Result: `1186 passed, 1 skipped, 227 warnings in 65.15s`.
+
+6. Freshness:
+
+   `python3 -m pytest tests/test_documentation_freshness.py -q`
+
+   Result: `7 passed in 0.87s`.
+
+7. Final whitespace check:
+
+   `git diff --check`
+
+   Result: PASS.
+
+### Reproducible real evidence
+
+Command:
+
+`python3 scripts/verify_task5_runtime.py`
+
+Final result: `PASS`. The versioned verifier launches two separate real Cocoa
+PyWebView processes against `consola_preview.html` and the native
+`FuentePyWebViewApi`, using one temporary Vault for both processes. It reports:
+
+- write process: `workspace=flow`, `local_storage_length=0`,
+  `sqlite_connect_calls=1`, AppleWebKit 605.1.15;
+- read/restart process: the same four values;
+- exactly one `.fuente/state.db`;
+- all four production-boundary denial tests plus the single-connection
+  instrumentation test: `5 passed in 0.64s`.
+
+The verifier does not call `localStorage.clear()` and fails unless every
+boolean check is true. It is a reproducible real-runtime artifact, not a
+narrative claim.
+
+### Synthetic evidence and concerns
+
+The pytest race, stale hash/revision/stage/expiry, mutation-denial, UI ordering
+and queued-write tests are deterministic synthetic evidence. They complement,
+but are kept separate from, the two-process Cocoa run above.
+
+The suite retains one pre-existing skip and 227 dependency deprecation
+warnings. The Task 4 shell still has no interactive sort control; only its
+existing state model was persisted. No user Vault was opened or mutated, and
+no push or PR was made.

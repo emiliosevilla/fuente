@@ -1139,7 +1139,7 @@ document.addEventListener('keydown', handleShellKeydown);
             });
             readUiState('reader-workspace', 'panels').then(function(panels) {
                 if (panels && ['assistant', 'notes'].includes(panels.tab)) {
-                    switchWorkspaceTab(panels.tab, false);
+                    switchWorkspaceTab(panels.tab);
                 }
             });
             readUiState('job-queue', 'cursor', 'session').then(function(cursor) {
@@ -3505,7 +3505,7 @@ document.addEventListener('keydown', handleShellKeydown);
             }
         }
 
-        function switchWorkspaceTab(tabId, persist) {
+        function switchWorkspaceTab(tabId) {
             const allowed = ['assistant', 'notes'];
             if (allowed.indexOf(tabId) === -1) return;
             allowed.forEach(function(id) {
@@ -3518,9 +3518,7 @@ document.addEventListener('keydown', handleShellKeydown);
                 }
                 if (panel) panel.classList.toggle('is-hidden', !active);
             });
-            if (persist !== false) {
-                persistUiState('reader-workspace', 'panels', {tab: tabId});
-            }
+            persistUiState('reader-workspace', 'panels', {tab: tabId});
         }
 
         let currentDocumentWorkspace = null;

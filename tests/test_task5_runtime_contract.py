@@ -41,6 +41,10 @@ def test_runtime_verifier_uses_real_html_bridge_and_two_processes() -> None:
 def test_runtime_verifier_proves_restart_by_process_replacement() -> None:
     source = SCRIPT.read_text(encoding="utf-8")
     assert "restart_exec_replaced_process" in source
+    assert "late_write_after_scheduled_restart" in source
+    assert '"action_executions"' in source
+    assert '"late_pending_count"' in source
+    assert "exec-restart-late" in source
     assert '"before_pid"' in source
     assert '"after_pid"' in source
     assert '"restart", "--vault"' not in source

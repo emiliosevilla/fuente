@@ -517,3 +517,111 @@ Two earlier native attempts are explicitly excluded from successful evidence:
 - The suite retains one pre-existing skip and 227 dependency deprecation
   warnings. No user Vault was opened, no second database was created, and no
   push or PR was made.
+
+## Fix round 4
+
+### Findings closed
+
+- Close and restart now close UI-write admission under the same `RLock` that
+  counts admitted pending work and in-flight SQLite calls. A write that starts
+  after the close linearization point returns `ui_state_closing` without
+  entering `UIStateStore.set`; an already admitted pending write may retry
+  until SQLite confirms it.
+- A real PyWebView window always cancels the first Cocoa close event and asks
+  JavaScript to drain asynchronously. The `closing` handler never evaluates
+  JavaScript synchronously. If a new pending item reaches the native gate, the
+  pending action is cancelled and the visible status line reports the error.
+- Completion rechecks both the mirrored queue and in-flight SQLite count while
+  holding the gate. `_close_action_scheduled` makes duplicate completion
+  callbacks idempotent, so exactly one close or restart action is scheduled.
+- A Cocoa close received while `restart_with_vault` is pending can no longer
+  replace the restart tuple. The selected Vault remains attached to that exact
+  action until the successful SQLite drain calls `os.execv`.
+- Source launches now re-exec the current Python entrypoint while replacing
+  only its `--vault` argument. Frozen launches retain the bootstrap
+  `--runtime` route.
+
+### Commits
+
+- `dc1fa4a` `test: expose linearizable close and restart gaps`
+- `738492f` `fix: linearize UI state close and restart`
+- `6ba0490` `test: prove deferred restart replaces Cocoa process`
+- `6d2d8fb` `docs: refresh Task 5 round four snapshot`
+
+### TDD and verification
+
+1. RED:
+
+   `python3 -m pytest tests/test_ui_close_guard.py::test_native_close_blocks_write_start_after_its_empty_check tests/test_ui_close_guard.py::test_native_close_does_not_replace_pending_restart tests/test_task5_runtime_contract.py::test_runtime_verifier_proves_restart_by_process_replacement -q`
+
+   Result before implementation: `3 failed in 0.97s`. The late write reached
+   SQLite, native close replaced restart, and the runtime verifier had no
+   process-replacement proof.
+
+2. Close/bridge/JS focal suite:
+
+   `python3 -m pytest tests/test_ui_close_guard.py tests/test_shell_runtime_behavior.py tests/test_ui_state_store.py tests/test_settings_service.py tests/contract/test_settings_contract.py tests/contract/test_q03_ui_recovery_contract.py tests/contract/test_bridge_frontend_contract.py tests/test_task5_runtime_contract.py -q`
+
+   Result: `108 passed, 103 warnings in 13.11s`.
+
+3. First complete suite after executable changes:
+
+   `python3 -m pytest -q`
+
+   Result: `1 failed, 1199 passed, 1 skipped, 227 warnings in 69.29s`.
+   The only failure was the expected stale source-tree digest in
+   `current-sdd.json`; no product test failed.
+
+4. Complete suite after snapshot refresh:
+
+   `python3 -m pytest -q`
+
+   Result: `1200 passed, 1 skipped, 227 warnings in 71.50s`.
+
+5. Freshness:
+
+   `python3 -m pytest tests/test_documentation_freshness.py -q`
+
+   Result: `7 passed in 0.99s`.
+
+6. `git diff --check`: PASS.
+
+### Reproducible real Cocoa restart evidence
+
+Command:
+
+`python3 scripts/verify_task5_runtime.py`
+
+Final result: `PASS`. The parent starts the `restart` child once. That child
+forces a real post-ready SQLite failure, calls the production
+`restart_with_vault`, observes `ui_state_pending`, then unblocks the existing
+retry. Only after SQLite stores `reader/filters.search = exec-restart` does
+the bridge schedule one restart and call its real `os.execv`.
+
+The replacement process retains PID `65112` before and after exec, opens the
+same temporary target Vault, and reads both `workspace = flow` and
+`filter_search = exec-restart` from its `.fuente/state.db`. It reports one
+SQLite connection on each side, `scheduled_actions = 1`, empty localStorage,
+Cocoa/AppleWebKit, and exactly one `state.db`. No recovery process is created
+externally after the restart request.
+
+The first all-up exec attempt timed out and is excluded from successful
+evidence. An isolated replay then proved same-PID replacement; the final
+versioned verifier additionally distinguishes three harmless idempotent
+completion callbacks from the single scheduled action and passes end to end.
+
+The same run keeps the three workspaces, native close recovery, all four real
+transition boundaries, and the mutated-bytes red-seal check green in the same
+temporary Vault.
+
+### Concerns and deliberate limits
+
+- Completion may be requested more than once when drain notifications overlap;
+  the native gate makes those requests idempotent and schedules exactly one
+  action. No extra timer, queue or persistence authority was added.
+- A force-kill still cannot run the normal close guard. Recoverable SQLite
+  failures keep normal close/restart cancelled, visible and retrying while the
+  window remains alive.
+- The suite retains one pre-existing skip and 227 dependency warnings. No user
+  Vault was opened, no localStorage fallback or second database was introduced,
+  and no push or PR was made.

@@ -2,10 +2,9 @@
 
 ## Status
 
-G2 is **BLOCKED** for the real ready state. The physical temporary Vault and the
-native empty setup screen were verified. The installed Obsidian CLI returned
-code `1` because Obsidian was not running. Starting it or registering the
-temporary Vault would write global Obsidian state and needs human consent.
+G2 is **PASS**. The temporary Vault was provisioned and inspected physically,
+Obsidian was opened after explicit consent, and Fuente reached the native ready
+state against that exact temporary Vault.
 
 ## Official documentation checked
 
@@ -77,8 +76,17 @@ and no `.obsidian/workspace.json`.
 - Visual inspection confirmed the empty setup modal identifies Obsidian as
   available, offers `Crear Vault Fuente`, and describes selecting an existing
   Vault or creating the fixed Vault.
-- `02-setup-ready.png` was not captured: the real transition requires the
-  blocked CLI/app consent above. No synthetic screenshot was substituted.
+- With explicit authorization, Obsidian 1.13.7 was opened and its CLI returned
+  `0` for `obsidian vault info=path`. A second provision run returned `ready`,
+  `setup_ready: true`, fourteen resources, no `workspace.json`, and an empty,
+  valid allowlist.
+- `python3 -m fuente.main --vault /tmp/fuente-task3-ready.dTW6jv/Fuente`
+  opened the native ready state. `02-setup-ready.png` was captured and visually
+  inspected: the activity log says `Fuente lista`, and the footer displays the
+  same temporary Vault path. The window title is `Fuente y Caudal` in both
+  empty and ready setup states.
+- Completion checks passed: `63 passed in 1.30s`, and the native evidence
+  verifier passed with the measured base `d7bf687945d29c198dbb99cde888674e4e488686`.
 
 ## Files changed and review
 
@@ -93,6 +101,5 @@ and no `.obsidian/workspace.json`.
 
 Commit subject: `feat: provision the Fuente Obsidian vault`.
 
-Concern: human consent is still required to start Obsidian, enable/register
-its CLI if necessary, and complete the ready-state capture against the
-temporary Vault.
+Concern: the default packaged allowlist remains empty until a named community
+plugin and its pinned version are explicitly approved.

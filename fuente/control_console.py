@@ -2387,7 +2387,7 @@ def launch_control_console(vault_path: Optional[Path] = None):
             # before the native window is created.
             webview.settings["ALLOW_DOWNLOADS"] = True
             window = webview.create_window(
-                "Fuente",
+                "Fuente y Caudal",
                 url=str(html_file),
                 js_api=api,
                 width=1280,

@@ -2351,8 +2351,8 @@ document.addEventListener('keydown', function(event) {
 
         function restartWithSelectedVault(result) {
             const setupStatus = document.getElementById('setup-obsidian-status');
-            if (!result || !result.restart_required || !result.vault_path) {
-                if (setupStatus) setupStatus.textContent = 'No se recibió una carpeta válida.';
+            if (!result || !result.restart_required || !result.setup || result.setup.setup_ready !== true || !result.vault_path) {
+                if (setupStatus) setupStatus.textContent = (result && result.message) || 'El Vault todavía no está listo en Obsidian.';
                 return;
             }
             const status = document.getElementById('settings-save-status');
@@ -2399,6 +2399,11 @@ document.addEventListener('keydown', function(event) {
                 if (result.error) {
                     const status = document.getElementById('setup-obsidian-status');
                     if (status) status.textContent = result.message || result.error;
+                    return;
+                }
+                if (!result.setup || result.setup.setup_ready !== true) {
+                    const status = document.getElementById('setup-obsidian-status');
+                    if (status) status.textContent = result.message || 'El Vault todavía no está listo en Obsidian.';
                     return;
                 }
                 const pathInput = document.getElementById('setting-vault-path');

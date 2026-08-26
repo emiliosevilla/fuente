@@ -17,7 +17,7 @@ class FakeCli:
 
     def run(self, command: list[str], *, cwd: Path) -> SimpleNamespace:
         self.commands.append((command, cwd))
-        return SimpleNamespace(returncode=0, stdout="", stderr="")
+        return SimpleNamespace(returncode=0, stdout=str(cwd), stderr="")
 
 
 def test_provision_requires_consent_and_fixed_vault_name(tmp_path):
@@ -53,10 +53,10 @@ def test_provision_creates_only_the_fixed_layout_and_hidden_resources(tmp_path):
     assert len(list((vault / ".fuente").glob("agents/*/AGENTS.md"))) == 7
 
 
-def test_provision_uses_the_pyinstaller_resource_layout_when_frozen(tmp_path, monkeypatch):
+def test_provision_uses_the_pyinstaller_frameworks_resource_layout_when_frozen(tmp_path, monkeypatch):
     from fuente import integrations
 
-    bundle_root = tmp_path / "Fuente.app" / "Contents" / "Resources"
+    bundle_root = tmp_path / "Fuente.app" / "Contents" / "Frameworks"
     shutil.copytree(
         Path(integrations.__file__).parent.parent / "resources",
         bundle_root / "fuente" / "resources",
@@ -162,6 +162,18 @@ def test_injected_cli_failure_is_not_reported_ready(tmp_path):
     assert result["cli"]["commands"][0]["returncode"] == 1
 
 
+def test_injected_cli_with_empty_output_is_not_reported_ready(tmp_path):
+    class EmptyOutputCli(FakeCli):
+        def run(self, command: list[str], *, cwd: Path) -> SimpleNamespace:
+            super().run(command, cwd=cwd)
+            return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    result = ObsidianProvisioner(cli=EmptyOutputCli()).provision(tmp_path / "Fuente", consent=True)
+
+    assert result["status"] == "needs_obsidian_cli"
+    assert result["setup_ready"] is False
+
+
 def test_setup_ready_requires_all_vault_invariants(tmp_path):
     vault = tmp_path / "Fuente"
     (vault / ".obsidian").mkdir(parents=True)
@@ -170,5 +182,26 @@ def test_setup_ready_requires_all_vault_invariants(tmp_path):
     result = ObsidianProvisioner(cli=FakeCli()).provision(vault, consent=True)
 
     assert result["cli"]["ready"] is True
+    assert result["layout_valid"] is False
+    assert result["setup_ready"] is False
+
+
+def test_setup_ready_requires_vault_local_appearance(tmp_path, monkeypatch):
+    vault = tmp_path / "Fuente"
+    original_copy = ObsidianProvisioner._copy_packaged_resources
+
+    def copy_without_appearance(target: Path) -> None:
+        original_copy(target)
+        (target / ".obsidian" / "appearance.json").unlink()
+
+    monkeypatch.setattr(
+        ObsidianProvisioner,
+        "_copy_packaged_resources",
+        classmethod(lambda _cls, target: copy_without_appearance(target)),
+    )
+
+    result = ObsidianProvisioner(cli=FakeCli()).provision(vault, consent=True)
+
+    assert result["appearance_json"] is False
     assert result["layout_valid"] is False
     assert result["setup_ready"] is False

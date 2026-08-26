@@ -88,12 +88,14 @@ class ObsidianProvisioner:
             for resource_id in RESOURCE_IDS
         )
         workspace_json = (vault / ".obsidian" / "workspace.json").exists()
+        appearance_json = (vault / ".obsidian" / "appearance.json").is_file()
         layout_valid = (
             vault.is_dir()
             and vault.name == VAULT_NAME
             and all(directories.values())
             and (vault / ".fuente" / "state.db").is_file()
             and resource_count == len(RESOURCE_IDS) * 2
+            and appearance_json
             and not workspace_json
         )
         return {
@@ -104,6 +106,7 @@ class ObsidianProvisioner:
             "state_db": (vault / ".fuente" / "state.db").is_file(),
             "resources": resource_count,
             "workspace_json": workspace_json,
+            "appearance_json": appearance_json,
             "layout_valid": layout_valid,
             "plugin_manifests": manifests,
             "plugin_errors": plugin_errors,
@@ -145,9 +148,13 @@ class ObsidianProvisioner:
     def _resource_root():
         bundle_root = getattr(sys, "_MEIPASS", None)
         if bundle_root:
-            frozen_resources = Path(bundle_root) / "fuente" / "resources"
-            if frozen_resources.is_dir():
-                return frozen_resources
+            frameworks_root = Path(bundle_root)
+            for frozen_resources in (
+                frameworks_root / "fuente" / "resources",
+                frameworks_root.parent / "Resources" / "fuente" / "resources",
+            ):
+                if frozen_resources.is_dir():
+                    return frozen_resources
         return resources.files("fuente.resources")
 
     def _allowlist(self) -> dict[str, str]:
@@ -260,7 +267,7 @@ class ObsidianProvisioner:
             return False
         output = str(results[0].get("stdout") or "").strip()
         if not output:
-            return True
+            return False
         try:
             return Path(output).expanduser().resolve() == vault
         except OSError:

@@ -243,6 +243,14 @@ class FuenteSetupBackend:
             result = ObsidianProvisioner().provision(target, consent=True)
         except (OSError, PermissionError, ValueError) as error:
             return {"error": "vault_creation_failed", "message": str(error)}
+        if result.get("setup_ready") is not True:
+            return {
+                "error": "vault_setup_incomplete",
+                "message": "El Vault se creó, pero Obsidian todavía no lo reconoce mediante la CLI.",
+                "vault_path": str(target),
+                "restart_required": False,
+                "setup": result,
+            }
         try:
             config_path = save_startup_vault(target)
         except OSError as error:

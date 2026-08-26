@@ -68,7 +68,12 @@ def test_console_css_is_present_and_byte_identical_in_wheel(tmp_path):
                 "manifest = root.joinpath('manifest.json').read_text(encoding='utf-8'); "
                 "assert 'demo_version' in manifest; "
                 "[root.joinpath('notes', name).read_text(encoding='utf-8') for name in "
-                    "('Introduccion.txt', 'Arquitectura_Local.txt', 'Flujo_Revision.txt')]"
+                    "('Introduccion.txt', 'Arquitectura_Local.txt', 'Flujo_Revision.txt')]; "
+                "fuente = resources.files('fuente.resources'); "
+                "assert fuente.joinpath('obsidian/community-plugins.json').is_file(); "
+                "assert fuente.joinpath('obsidian/appearance.json').is_file(); "
+                "assert fuente.joinpath('templates/reunion/template.md').is_file(); "
+                "assert fuente.joinpath('agents/reunion/AGENTS.md').is_file()"
             ),
         ],
         check=True,
@@ -82,6 +87,10 @@ def test_console_css_is_present_and_byte_identical_in_wheel(tmp_path):
     with zipfile.ZipFile(wheels[0]) as archive:
         assert "fuente/ui/static/console.css" in archive.namelist()
         assert "fuente/resources/demo_vault/manifest.json" in archive.namelist()
+        assert "fuente/resources/obsidian/community-plugins.json" in archive.namelist()
+        assert "fuente/resources/obsidian/appearance.json" in archive.namelist()
+        assert "fuente/resources/templates/reunion/template.md" in archive.namelist()
+        assert "fuente/resources/agents/reunion/AGENTS.md" in archive.namelist()
         assert {
             "fuente/resources/demo_vault/notes/Introduccion.txt",
             "fuente/resources/demo_vault/notes/Arquitectura_Local.txt",

@@ -155,28 +155,50 @@ class JobStore:
         ).fetchone()
         return dict(row) if row is not None else None
 
-    def save_transition_approval(self, values: dict[str, Any]) -> dict[str, Any]:
-        self._connection.execute(
-            """
-            INSERT INTO transition_approvals
-                (artifact_id, source_stage, target_stage, revision, content_hash,
-                 reviewer, approved_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT (artifact_id, source_stage, target_stage, revision, content_hash)
-            DO NOTHING
-            """,
-            tuple(
-                values[field]
-                for field in (
-                    "artifact_id", "source_stage", "target_stage", "revision",
-                    "content_hash", "reviewer", "approved_at",
-                )
-            ),
+    def save_transition_approval(
+        self, values: dict[str, Any], *, claim_expires_after: datetime
+    ) -> dict[str, Any] | None:
+        identity = tuple(
+            values[field]
+            for field in (
+                "artifact_id", "source_stage", "target_stage", "revision", "content_hash"
+            )
         )
-        return self.get_transition_approval(
-            values["artifact_id"], values["source_stage"], values["target_stage"],
-            values["revision"], values["content_hash"],
-        ) or values
+        with self._immediate_transaction(str(values["artifact_id"])) as connection:
+            claim = connection.execute(
+                """
+                SELECT reviewer, expires_at FROM review_claims
+                WHERE artifact_id = ? AND source_stage = ? AND target_stage = ?
+                  AND revision = ? AND content_hash = ?
+                """,
+                identity,
+            ).fetchone()
+            if (
+                claim is None
+                or claim["reviewer"] != values["reviewer"]
+                or datetime.fromisoformat(claim["expires_at"]) <= claim_expires_after
+            ):
+                return None
+            connection.execute(
+                """
+                INSERT INTO transition_approvals
+                    (artifact_id, source_stage, target_stage, revision, content_hash,
+                     reviewer, approved_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT (artifact_id, source_stage, target_stage, revision, content_hash)
+                DO NOTHING
+                """,
+                (*identity, values["reviewer"], values["approved_at"]),
+            )
+            row = connection.execute(
+                """
+                SELECT * FROM transition_approvals
+                WHERE artifact_id = ? AND source_stage = ? AND target_stage = ?
+                  AND revision = ? AND content_hash = ?
+                """,
+                identity,
+            ).fetchone()
+            return dict(row) if row is not None else None
 
     def get_transition_approval(
         self,
@@ -2159,6 +2181,8 @@ class UIStateStore:
         *,
         session_ttl: timedelta = timedelta(hours=24),
     ) -> None:
+        if session_ttl <= timedelta(0):
+            raise ValueError("session_ttl must be positive")
         self.job_store = job_store
         self.session_ttl = session_ttl
 

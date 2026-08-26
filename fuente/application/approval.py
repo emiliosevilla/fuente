@@ -72,19 +72,16 @@ class TransitionApprovalService:
             artifact_id, source_stage, target_stage, revision, content_hash
         )
         reviewer = normalize_reviewer(reviewer)
-        claim = self.store.get_review_claim(*identity)
-        if (
-            claim is None
-            or claim["reviewer"] != reviewer
-            or datetime.fromisoformat(claim["expires_at"]) <= self._now()
-        ):
-            raise OutputApprovalRequiredError(identity[0])
+        approved_at = self._now()
         approval = TransitionApproval(
-            *identity, reviewer=reviewer, approved_at=self._now().isoformat()
+            *identity, reviewer=reviewer, approved_at=approved_at.isoformat()
         )
-        return TransitionApproval(
-            **self.store.save_transition_approval(approval.__dict__)
+        row = self.store.save_transition_approval(
+            approval.__dict__, claim_expires_after=approved_at
         )
+        if row is None:
+            raise OutputApprovalRequiredError(identity[0])
+        return TransitionApproval(**row)
 
     def require_current(
         self,

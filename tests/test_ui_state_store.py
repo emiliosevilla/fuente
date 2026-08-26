@@ -37,6 +37,20 @@ def test_ui_state_rejects_values_larger_than_64_kib(tmp_path) -> None:
             UIStateStore(store).set("persistent", "main-window", "drafts", "x" * 65537)
 
 
+def test_expired_session_state_is_removed(tmp_path) -> None:
+    with JobStore(tmp_path) as store:
+        state = UIStateStore(store)
+        state.set("session", "job-queue", "cursor", {"current": "next"})
+        store._connection.execute(
+            "UPDATE ui_state SET expires_at = ? WHERE scope = 'session'",
+            ("2000-01-01T00:00:00+00:00",),
+        )
+        assert state.get("session", "job-queue", "cursor") is None
+        assert store._connection.execute(
+            "SELECT COUNT(*) FROM ui_state WHERE scope = 'session'"
+        ).fetchone()[0] == 0
+
+
 def test_ui_state_schema_does_not_create_a_second_database(tmp_path) -> None:
     with JobStore(tmp_path) as store, sqlite3.connect(store.db_path) as connection:
         tables = {

@@ -174,7 +174,7 @@ def test_injected_cli_with_empty_output_is_not_reported_ready(tmp_path):
     assert result["setup_ready"] is False
 
 
-def test_setup_ready_requires_all_vault_invariants(tmp_path):
+def test_provision_removes_workspace_json_before_reporting_ready(tmp_path):
     vault = tmp_path / "Fuente"
     (vault / ".obsidian").mkdir(parents=True)
     (vault / ".obsidian" / "workspace.json").write_text("{}", encoding="utf-8")
@@ -182,8 +182,10 @@ def test_setup_ready_requires_all_vault_invariants(tmp_path):
     result = ObsidianProvisioner(cli=FakeCli()).provision(vault, consent=True)
 
     assert result["cli"]["ready"] is True
-    assert result["layout_valid"] is False
-    assert result["setup_ready"] is False
+    assert result["workspace_json"] is False
+    assert result["layout_valid"] is True
+    assert result["setup_ready"] is True
+    assert not (vault / ".obsidian" / "workspace.json").exists()
 
 
 def test_setup_ready_requires_vault_local_appearance(tmp_path, monkeypatch):

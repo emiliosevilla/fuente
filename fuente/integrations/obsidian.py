@@ -130,6 +130,7 @@ class ObsidianProvisioner:
         self._create_state_db(vault / ".fuente" / "state.db")
         self._copy_packaged_resources(vault)
         cli_result = self._run_cli(vault)
+        (vault / ".obsidian" / "workspace.json").unlink(missing_ok=True)
         status = self.inspect(vault)
         cli_ready = bool(cli_result.get("ready"))
         status.update(

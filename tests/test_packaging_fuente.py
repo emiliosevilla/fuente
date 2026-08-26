@@ -43,6 +43,7 @@ def test_distribution_sources_include_webview_console_and_read_only_reader() -> 
     assert 'Fuente_Distribucion_macOS.dmg' in build
     assert '("consola_preview.html", ".")' in spec
     assert '("fuente/ui/static", "fuente/ui/static")' in spec
+    assert '("fuente/resources", "fuente/resources")' in spec
     assert '("build/runtime-source.zip", ".")' in spec
     assert '("build/pip-source.zip", ".")' in spec
     html = (ROOT / "consola_preview.html").read_text(encoding="utf-8")

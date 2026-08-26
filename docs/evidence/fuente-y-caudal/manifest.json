@@ -60,6 +60,21 @@
     "scenario": "home-1024"
   },
   {
+    "file": "04-home-1280.png",
+    "git_head": "c344e920866c102cef98cef934c8be75ed75276f",
+    "window_owner": "Python",
+    "window_owner_pid": 26591,
+    "window_title": "Fuente y Caudal",
+    "engine": "PyWebView WebKit",
+    "runtime_signal": "vmmap:WebKit.framework",
+    "width": 1280,
+    "height": 850,
+    "sha256": "dccaf1b779629d77e55f2f8f68386dfbd7a8a5a6f37503589648a1ecc39d9fa1",
+    "requested_width": 1280,
+    "requested_height": 850,
+    "scenario": "home-1280"
+  },
+  {
     "file": "05-home-max.png",
     "git_head": "c344e920866c102cef98cef934c8be75ed75276f",
     "window_owner": "Python",

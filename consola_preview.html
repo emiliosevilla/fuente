@@ -1096,34 +1096,72 @@ document.addEventListener('keydown', handleShellKeydown);
         }
 
         const WORKSPACE_IDS = ['home', 'source', 'flow'];
+        const pendingUiState = new Map();
+
+        function reportUiStateFailure(operation, owner, key, error) {
+            const message = 'No se pudo ' + operation + ' el estado de ' + owner + '/' + key + ': ' + String(error || 'error SQLite');
+            console.error(message);
+            log(message);
+            const status = document.getElementById('bottom-status-line');
+            if (status) status.textContent = message;
+        }
 
         function persistUiState(owner, key, value, scope) {
+            const stateScope = scope || 'persistent';
+            const pendingKey = stateScope + '\u0000' + owner + '\u0000' + key;
+            const pending = {scope: stateScope, owner: owner, key: key, value: value};
+            pendingUiState.set(pendingKey, pending);
             const api = window.pywebview && window.pywebview.api;
-            if (!api || typeof api.set_ui_state !== 'function') return Promise.resolve();
-            return api.set_ui_state(scope || 'persistent', owner, key, value).catch(function() {});
+            if (!api || typeof api.set_ui_state !== 'function') return Promise.resolve({status: 'queued'});
+            return api.set_ui_state(stateScope, owner, key, value).then(function(result) {
+                if (!result || result.error) throw new Error((result && result.message) || 'respuesta inválida');
+                if (pendingUiState.get(pendingKey) === pending) pendingUiState.delete(pendingKey);
+                return result;
+            }).catch(function(error) {
+                reportUiStateFailure('guardar', owner, key, error);
+                return {error: 'ui_state_persistence_failed', message: String(error)};
+            });
+        }
+
+        function flushPendingUiState() {
+            return Promise.all(Array.from(pendingUiState.values()).map(function(pending) {
+                return persistUiState(pending.owner, pending.key, pending.value, pending.scope);
+            }));
         }
 
         function readUiState(owner, key, scope) {
             const api = window.pywebview && window.pywebview.api;
             if (!api || typeof api.get_ui_state !== 'function') return Promise.resolve(null);
             return api.get_ui_state(scope || 'persistent', owner, key).then(function(result) {
-                return result && !result.error ? result.value : null;
-            }).catch(function() { return null; });
+                if (result && !result.error) return result.value;
+                reportUiStateFailure('leer', owner, key, result && result.message);
+                return null;
+            }).catch(function(error) {
+                reportUiStateFailure('leer', owner, key, error);
+                return null;
+            });
         }
 
         function restoreUiState() {
-            readUiState('main-window', 'workspace').then(function(workspace) {
-                if (WORKSPACE_IDS.includes(workspace)) switchWorkspace(workspace);
-            });
-            readUiState('main-window', 'visual_style').then(function(style) {
-                if (FUENTE_STYLES.has(style)) applyVisualStyle(style, false);
-            });
-            readUiState('reader', 'filters').then(function(filters) {
+            Promise.all([
+                readUiState('main-window', 'workspace'),
+                readUiState('reader', 'filters'),
+                readUiState('reader', 'sort')
+            ]).then(function(values) {
+                const workspace = values[0];
+                const filters = values[1];
+                const sort = values[2];
                 const search = document.getElementById('reader-search');
                 if (search && filters && typeof filters.search === 'string') {
                     search.value = filters.search;
-                    filterReaderNotes(false);
                 }
+                setReaderSort(sort, false);
+                if (!sort) setReaderSort(readerSort, true);
+                if (WORKSPACE_IDS.includes(workspace)) switchWorkspace(workspace);
+                else filterReaderNotes(false);
+            });
+            readUiState('main-window', 'visual_style').then(function(style) {
+                if (FUENTE_STYLES.has(style)) applyVisualStyle(style, false);
             });
             readUiState('reader-library', 'panels').then(function(panels) {
                 const workspace = document.getElementById('reader-view-list');
@@ -3611,7 +3649,15 @@ document.addEventListener('keydown', handleShellKeydown);
         let currentSelectedDocumentId = '';
         let currentSelectedNoteDocumentModel = [];
         let readerNotes = [];
+        let readerSort = {field: 'title', direction: 'asc'};
         let readerNoteHistory = [];
+
+        function setReaderSort(value, persist) {
+            const valid = value && value.field === 'title' && ['asc', 'desc'].includes(value.direction);
+            readerSort = valid ? {field: 'title', direction: value.direction} : {field: 'title', direction: 'asc'};
+            if (persist !== false) persistUiState('reader', 'sort', readerSort);
+            return readerSort;
+        }
 
         function projectionInlineText(tokens) {
             return (tokens || []).map(function(token) {
@@ -4143,7 +4189,10 @@ document.addEventListener('keydown', handleShellKeydown);
                 group.appendChild(issueLabel);
                 const nested = document.createElement('ul');
                 nested.className = 'reader-note-list';
-                byIssue[issue].forEach(function(n) {
+                byIssue[issue].sort(function(left, right) {
+                    const order = String(left.title || '').localeCompare(String(right.title || ''), 'es');
+                    return readerSort.direction === 'desc' ? -order : order;
+                }).forEach(function(n) {
                     const li = document.createElement('li');
                     li.className = 'reader-note-item' + (currentSelectedDocumentId === n.document_id ? ' active' : '');
                     li.dataset.documentId = n.document_id || '';
@@ -4164,6 +4213,7 @@ document.addEventListener('keydown', handleShellKeydown);
             } else if (currentSelectedDocumentId) {
                 highlightSidebarNote(currentSelectedDocumentId);
             }
+            filterReaderNotes(false);
         }
 
         function loadNoteContent(documentId, options) {
@@ -4453,6 +4503,7 @@ document.addEventListener('keydown', handleShellKeydown);
                 nativeConsoleInitialized = true;
                 log('Conexión nativa PyWebView establecida con la Consola Fuente');
                 if (window.pywebview && window.pywebview.api) {
+                    flushPendingUiState();
                     recoverNativeModalLoads();
                     restoreUiState();
                     callNativeRequest('get_initial_state', function() {

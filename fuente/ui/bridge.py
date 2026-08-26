@@ -10,7 +10,10 @@ import threading
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Mapping, Optional
 
-from fuente.application.approval import ApprovalApplicationService
+from fuente.application.approval import (
+    ApprovalApplicationService,
+    TransitionApprovalService,
+)
 from fuente.application.sharing import SharingApplicationService
 from fuente.application.job_control import (
     decode_cursor,
@@ -29,6 +32,7 @@ from fuente.domain.errors import (
     NoteRevisionConflictError,
     OutputApprovalRequiredError,
     PathAuthorizationError,
+    ReviewClaimConflictError,
 )
 from fuente.domain.sync import SyncDirection
 from fuente.infrastructure.sqlite_store import UIStateStore
@@ -155,6 +159,58 @@ class FuentePyWebViewApi:
             or getattr(pipeline, "job_store", None)
             or self.backend.get_notes_service().job_store
         )
+
+    def begin_transition_review(
+        self,
+        artifact_id: object,
+        source_stage: object,
+        target_stage: object,
+        revision: object,
+        content_hash: object,
+        reviewer: object,
+    ) -> dict[str, Any]:
+        """Claim one exact adjacent transition for human review."""
+        try:
+            claim = TransitionApprovalService(self._ui_job_store()).begin_review(
+                artifact_id,
+                source_stage,
+                target_stage,
+                revision,
+                content_hash,
+                reviewer,
+            )
+            return dict(claim.__dict__)
+        except ReviewClaimConflictError as error:
+            return self._error(error.code, str(error))
+        except (TypeError, ValueError) as error:
+            return self._error("invalid_payload", str(error))
+
+    def approve_transition(
+        self,
+        artifact_id: object,
+        source_stage: object,
+        target_stage: object,
+        revision: object,
+        content_hash: object,
+        reviewer: object,
+    ) -> dict[str, Any]:
+        """Approve the exact transition currently claimed by this reviewer."""
+        try:
+            approval = TransitionApprovalService(self._ui_job_store()).approve(
+                artifact_id,
+                source_stage,
+                target_stage,
+                revision,
+                content_hash,
+                reviewer,
+            )
+            return dict(approval.__dict__)
+        except OutputApprovalRequiredError as error:
+            return self._error(error.code, str(error))
+        except JobStoreBusyError:
+            return self._error("approval_busy", "Approval storage is busy; retry")
+        except (sqlite3.Error, TypeError, ValueError) as error:
+            return self._error("approval_failed", str(error))
 
     def get_settings_info(self) -> dict[str, Any]:
         return self.backend.get_settings_info()

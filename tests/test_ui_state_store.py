@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import sqlite3
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -52,10 +51,12 @@ def test_expired_session_state_is_removed(tmp_path) -> None:
 
 
 def test_ui_state_schema_does_not_create_a_second_database(tmp_path) -> None:
-    with JobStore(tmp_path) as store, sqlite3.connect(store.db_path) as connection:
+    with JobStore(tmp_path) as store:
         tables = {
             row[0]
-            for row in connection.execute("SELECT name FROM sqlite_master WHERE type = 'table'")
+            for row in store._connection.execute(
+                "SELECT name FROM sqlite_master WHERE type = 'table'"
+            )
         }
     assert {"ui_state", "transition_approvals", "review_claims"} <= tables
     assert list(tmp_path.rglob("*.db")) == [tmp_path / ".fuente" / "state.db"]
@@ -73,6 +74,26 @@ def test_bridge_round_trips_ui_state_through_existing_job_store(tmp_path) -> Non
         assert api.get_ui_state("persistent", "reader", "filters") == {
             "value": {"search": "SQLite"}
         }
+
+
+def test_bridge_exposes_real_human_transition_review(tmp_path) -> None:
+    with JobStore(tmp_path) as store:
+        backend = SimpleNamespace(
+            get_notes_service=lambda: SimpleNamespace(job_store=store)
+        )
+        api = FuentePyWebViewApi(backend)
+        identity = (
+            "job-1",
+            "1_volcado",
+            "2_copiado",
+            1,
+            "a" * 64,
+            "emilio",
+        )
+        claim = api.begin_transition_review(*identity)
+        assert claim["reviewer"] == "emilio"
+        approval = api.approve_transition(*identity)
+        assert approval["content_hash"] == "a" * 64
 
 
 def test_console_keeps_business_state_out_of_local_storage() -> None:

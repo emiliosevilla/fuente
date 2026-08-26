@@ -9,7 +9,10 @@ from typing import Any, Callable, Optional, Protocol
 
 from fuente.application.ingestion import CHUNK_ARTIFACT_KIND
 from fuente.core.vault import VaultManager
-from fuente.application.approval import ApprovalApplicationService
+from fuente.application.approval import (
+    ApprovalApplicationService,
+    TransitionApprovalService,
+)
 from fuente.domain.approvals import ApprovalLedger
 from fuente.domain.documents import MarkdownDocument, NoteDocument, content_hash_for_markdown
 from fuente.domain.errors import (
@@ -72,9 +75,11 @@ class NotesApplicationService:
             clean_root=vault.clean_dir,
             derived_root=vault.output_dir,
         )
+        self.transition_approvals = TransitionApprovalService(job_store)
         self.approval_service = ApprovalApplicationService(
             vault=vault,
             ledger=self.approval_ledger,
+            transition_approvals=self.transition_approvals,
         )
 
     def require_eligible_origins(
@@ -489,6 +494,14 @@ class NotesApplicationService:
         ):
             raise NoteRevisionConflictError(candidate_id)
         self.require_eligible_origins(candidate)
+
+        self.transition_approvals.require_current(
+            candidate.document_id,
+            "3_capturado",
+            "4_procesado",
+            candidate.revision,
+            candidate.content_hash,
+        )
 
         issue = self.vault.sanitize_filename(
             str(candidate.frontmatter.get("issue") or "_Sin_Cuestion")

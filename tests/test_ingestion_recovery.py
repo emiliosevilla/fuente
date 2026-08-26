@@ -253,6 +253,7 @@ def _build_harness(
     source_text: str = SOURCE_TEXT,
     source_name: str = SOURCE_NAME,
     ram_governor: Any = None,
+    approve_early_transitions: bool = True,
 ) -> _Harness:
     config = get_default_config(vault_path)
     vault = VaultManager(config.vault)
@@ -279,6 +280,25 @@ def _build_harness(
 
     source_path = vault.input_dir / source_name
     source_path.write_text(source_text, encoding="utf-8")
+    if approve_early_transitions:
+        original_submit = service.submit
+
+        def submit_with_early_approvals(*args, **kwargs):
+            job = original_submit(*args, **kwargs)
+            for source, target in (
+                ("1_volcado", "2_copiado"),
+                ("2_copiado", "3_capturado"),
+            ):
+                transition = service.transition_approvals
+                transition.begin_review(
+                    job.job_id, source, target, 1, job.source_hash, "pytest"
+                )
+                transition.approve(
+                    job.job_id, source, target, 1, job.source_hash, "pytest"
+                )
+            return job
+
+        service.submit = submit_with_early_approvals
     return _Harness(
         service=service,
         vault=vault,

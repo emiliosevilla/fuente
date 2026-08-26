@@ -57,7 +57,9 @@ class TransitionApprovalService:
             claimed_at=claimed_at.isoformat(),
             expires_at=(claimed_at + self.claim_ttl).isoformat(),
         )
-        return ReviewClaim(**self.store.save_review_claim(claim.__dict__))
+        return ReviewClaim(
+            **self.store.save_review_claim(claim.__dict__, claimed_after=claimed_at)
+        )
 
     def approve(
         self,
@@ -128,9 +130,18 @@ class TransitionApprovalService:
 class ApprovalApplicationService:
     """Approve only server-resolved notes inside ``VaultManager.clean_dir``."""
 
-    def __init__(self, *, vault: VaultManager, ledger: ApprovalLedger) -> None:
+    def __init__(
+        self,
+        *,
+        vault: VaultManager,
+        ledger: ApprovalLedger,
+        transition_approvals: TransitionApprovalService | None = None,
+    ) -> None:
         self.vault = vault
         self.ledger = ledger
+        self.transition_approvals = transition_approvals or TransitionApprovalService(
+            ledger.store
+        )
 
     def request_approval(self, note_id: str) -> ApprovalRequest:
         note_id = validate_approval_note_id(note_id)
@@ -158,16 +169,37 @@ class ApprovalApplicationService:
                 or str(row["content_hash"]) != document.content_hash
             ):
                 raise NoteRevisionConflictError(note_id)
-            return self.ledger.approve(
+            approved = self.ledger.approve(
                 note_id,
                 expected_revision,
                 document.content_hash,
                 reviewer,
             )
+            self._approve_transition(
+                note_id,
+                "3_capturado",
+                "4_procesado",
+                expected_revision,
+                document.content_hash,
+                approved.reviewer,
+            )
+            return approved
 
     def is_eligible(self, note_id: str, revision: int, content_hash: str) -> bool:
         """The single approval decision consumed by generation in Task 5."""
-        return self.ledger.is_current(note_id, revision, content_hash)
+        if not self.ledger.is_current(note_id, revision, content_hash):
+            return False
+        try:
+            self.transition_approvals.require_current(
+                note_id,
+                "3_capturado",
+                "4_procesado",
+                revision,
+                content_hash,
+            )
+        except OutputApprovalRequiredError:
+            return False
+        return True
 
     def approve_processed(
         self, note_id: str, expected_revision: int, reviewer: str,
@@ -184,16 +216,65 @@ class ApprovalApplicationService:
         )
         if row is None:
             raise NoteRevisionConflictError(note_id)
-        return ApprovalRecord(
+        approved = ApprovalRecord(
             note_id=str(row["note_id"]),
             revision=int(row["revision"]),
             content_hash=str(row["content_hash"]),
             reviewer=str(row["reviewer"]),
             approved_at=str(row["approved_at"]),
         )
+        self._approve_transition(
+            note_id,
+            "4_procesado",
+            "5_compartido",
+            expected_revision,
+            content_hash,
+            approved.reviewer,
+        )
+        return approved
 
     def is_processed_current(self, note_id: str, revision: int, content_hash: str) -> bool:
-        return self.ledger.store.is_processed_approval_current(note_id, revision, content_hash)
+        if not self.ledger.store.is_processed_approval_current(
+            note_id, revision, content_hash
+        ):
+            return False
+        try:
+            self.transition_approvals.require_current(
+                note_id,
+                "4_procesado",
+                "5_compartido",
+                revision,
+                content_hash,
+            )
+        except OutputApprovalRequiredError:
+            return False
+        return True
+
+    def _approve_transition(
+        self,
+        artifact_id: str,
+        source_stage: str,
+        target_stage: str,
+        revision: int,
+        content_hash: str,
+        reviewer: str,
+    ) -> None:
+        self.transition_approvals.begin_review(
+            artifact_id,
+            source_stage,
+            target_stage,
+            revision,
+            content_hash,
+            reviewer,
+        )
+        self.transition_approvals.approve(
+            artifact_id,
+            source_stage,
+            target_stage,
+            revision,
+            content_hash,
+            reviewer,
+        )
 
     @property
     def _lock_directory(self):

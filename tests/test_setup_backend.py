@@ -46,7 +46,7 @@ def test_setup_backend_rejects_normal_folder_without_obsidian_marker(tmp_path, m
     assert not pointer.exists()
 
 
-def test_setup_backend_guided_creation_produces_fixed_fuente_vault(tmp_path, monkeypatch):
+def test_setup_backend_does_not_persist_or_restart_incomplete_guided_vault(tmp_path, monkeypatch):
     pointer = tmp_path / "startup.json"
     parent = tmp_path / "vaults"
     parent.mkdir()
@@ -61,10 +61,11 @@ def test_setup_backend_guided_creation_produces_fixed_fuente_vault(tmp_path, mon
     })
 
     created = parent / "Fuente"
-    assert result["restart_required"] is True
-    assert result["startup_config_path"] == str(pointer)
+    assert result["error"] == "vault_setup_incomplete"
+    assert result["restart_required"] is False
+    assert not pointer.exists()
     assert (created / ".obsidian").is_dir()
-    assert setup_backend.load_startup_vault() == created.resolve()
+    assert result["setup"]["setup_ready"] is False
 
 
 def test_setup_backend_macos_folder_dialog_does_not_create_tk_on_callback_thread():
@@ -97,13 +98,17 @@ def test_setup_backend_macos_vault_target_uses_native_save_panel():
     assert command[-2:] == ["--", "Elige el Vault"]
 
 
-def test_setup_backend_guided_creation_accepts_native_target_path(tmp_path, monkeypatch):
+def test_setup_backend_guided_creation_accepts_native_target_path_when_setup_is_ready(tmp_path, monkeypatch):
     pointer = tmp_path / "startup.json"
     parent = tmp_path / "vaults"
     parent.mkdir()
     monkeypatch.setattr(setup_backend, "startup_config_path", lambda: pointer)
     monkeypatch.setattr(setup_backend, "detect_obsidian_installed", lambda: True)
-    monkeypatch.setattr("fuente.integrations.obsidian.shutil.which", lambda _name: None)
+    def ready_provision(_self, target, *, consent):
+        (target / ".obsidian").mkdir(parents=True)
+        return {"setup_ready": True}
+
+    monkeypatch.setattr("fuente.ui.setup_backend.ObsidianProvisioner.provision", ready_provision)
 
     result = FuenteSetupBackend().create_vault({
         "target_path": str(parent / "Fuente"),

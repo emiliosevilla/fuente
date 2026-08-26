@@ -167,6 +167,7 @@ def test_guided_vault_confirms_the_exact_creation_path():
     assert "Selección cancelada o sin carpeta." in guided
     assert "El Vault Fuente se creará exactamente en:" in guided
     assert "Fuente configurará los recursos ocultos y consultará la CLI de Obsidian." in guided
+    assert "result.setup.setup_ready" in guided
 
 
 def test_note_content_rejection_and_malformed_payload_render_visible_error():

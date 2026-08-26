@@ -13,16 +13,29 @@
     "scenario": "baseline"
   },
   {
-    "file": "01-setup-empty.png",
-    "git_head": "08f5310466c0c9051f68dbd208d25d90c0c2b181",
+    "file": "02-setup-ready.png",
+    "git_head": "d7bf687945d29c198dbb99cde888674e4e488686",
     "window_owner": "Python",
-    "window_owner_pid": 71899,
+    "window_owner_pid": 79243,
     "window_title": "Fuente y Caudal",
     "engine": "PyWebView WebKit",
     "runtime_signal": "vmmap:WebKit.framework",
     "width": 1280,
     "height": 802,
-    "sha256": "9255f5cbb2fc8514d75599d350f0228c4372e04f96f80272d250e494b6312b76",
+    "sha256": "e8a522b1f55e6c7d294760b5999c73b5dbd9994675686113e5120f6dfbf61b81",
+    "scenario": "setup-ready"
+  },
+  {
+    "file": "01-setup-empty.png",
+    "git_head": "d7bf687945d29c198dbb99cde888674e4e488686",
+    "window_owner": "Python",
+    "window_owner_pid": 79435,
+    "window_title": "Fuente y Caudal",
+    "engine": "PyWebView WebKit",
+    "runtime_signal": "vmmap:WebKit.framework",
+    "width": 1280,
+    "height": 802,
+    "sha256": "ffcc0b22967c16fba849fe5652980f5ac06dcc9ad2163405e2fbd22c8719844b",
     "scenario": "setup-empty"
   }
 ]

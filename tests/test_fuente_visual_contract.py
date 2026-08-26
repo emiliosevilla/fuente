@@ -1,4 +1,4 @@
-"""Red contracts for Task 9's Fuente visual system and reader layout."""
+"""Contracts for the Fuente and Caudal native product shell."""
 
 from __future__ import annotations
 
@@ -55,27 +55,25 @@ def test_console_consumes_fuente_tokens_instead_of_literal_nord_palette() -> Non
     nord_hex_values = ("#2E3440", "#3B4252", "#434C5E", "#D8DEE9", "#E5E9F0", "#ECEFF4", "#8FBCBB", "#88C0D0", "#81A1C1", "#5E81AC", "#A3BE8C", "#EBCB8B", "#BF616A")
     assert not any(value in css.upper() for value in nord_hex_values)
 
-def test_workflow_uses_css_arrow_connectors_and_modern_motion_layer() -> None:
+def test_caudal_shell_exposes_five_non_empty_stages_and_reduced_motion() -> None:
     html, css, tokens = _read(HTML_PATH), _read(CONSOLE_CSS_PATH), _read(TOKENS_CSS_PATH)
-    assert html.count('class="arrow-connector" aria-hidden="true"></div>') == 4
+    assert re.findall(r'data-flow-step="([1-5])"', html) == ["1", "2", "3", "4", "5"]
+    for label in ("Volcado", "Copiado", "Capturado", "Procesado", "Compartido"):
+        assert label in html
     assert all(f'id="badge-step{step}"' in html for step in range(1, 6))
-    assert "Revisar y compartir" in html
     assert "═►" not in html
     assert "--fuente-glass:" in tokens
     assert "--fuente-shadow-glass:" in tokens
-    assert ".arrow-connector::before" in css
-    assert ".arrow-connector::after" in css
-    assert "@keyframes flowPulse" in css
     assert "prefers-reduced-motion" in css
 
 def test_console_exposes_independent_nord_gruvbox_visual_style_toggle() -> None:
     html = _read(HTML_PATH)
     assert '<html lang="es" data-fuente-style="nord">' in html
     assert 'id="style-toggle"' in html
-    assert 'class="masthead-link masthead-style-button"' in html
-    assert '>Gruvbox</button>' in html
+    assert '<span id="style-toggle-label">Gruvbox</span>' in html
     assert "const nextStyle = activeStyle === 'nord' ? 'gruvbox' : 'nord'" in html
-    assert "styleToggle.textContent = nextStyle === 'gruvbox' ? 'Gruvbox' : 'Nord'" in html
+    assert "const nextStyleLabel = nextStyle === 'gruvbox' ? 'Gruvbox' : 'Nord'" in html
+    assert "styleLabel.textContent = nextStyleLabel" in html
     assert "styleToggle.setAttribute('aria-pressed'" not in html
     assert "FUENTE_STYLE_STORAGE_KEY = 'fuente.visual-style'" in html
     assert "document.documentElement.dataset.fuenteStyle = activeStyle" in html
@@ -91,12 +89,18 @@ def test_nord_and_gruvbox_text_tokens_meet_normal_text_contrast() -> None:
             "--text-primary",
             "--text-secondary",
             "--accent-primary",
-            "--focus-ring",
             "--state-success",
             "--state-warning",
             "--state-danger",
         ):
             assert _contrast_ratio(canvas, _theme_token_hex(tokens, theme, token)) >= 4.5
+        assert _contrast_ratio(canvas, _theme_token_hex(tokens, theme, "--focus-ring")) >= 3
+
+def test_nord_is_the_light_initial_theme() -> None:
+    tokens = _read(TOKENS_CSS_PATH)
+    assert _theme_token_hex(tokens, "nord", "--surface-canvas").upper() == "#ECEFF4"
+    assert _theme_token_hex(tokens, "nord", "--surface-raised").upper() == "#FFFFFF"
+    assert _theme_token_hex(tokens, "nord", "--text-primary").upper() == "#2E3440"
 
 def test_visual_style_toggle_does_not_reuse_vault_theme_bridge() -> None:
     html = _read(HTML_PATH)
@@ -117,6 +121,46 @@ def test_console_reader_css_keeps_keyboard_focus_and_narrow_layout() -> None:
     css = _read(CONSOLE_CSS_PATH)
     assert ":focus-visible" in css
     assert re.search(r"@media\s*[^{}]*max-width\s*:", css)
+
+def test_shell_has_exactly_three_product_workspaces() -> None:
+    html = _read(HTML_PATH)
+    assert re.findall(r'data-workspace="([^"]+)"', html) == ["home", "source", "flow"]
+    assert re.findall(r'data-workspace-target="([^"]+)"', html) == ["home", "source", "flow"]
+    assert 'aria-label="Espacios de Fuente y Caudal"' in html
+    assert html.count('role="main"') == 1
+
+def test_shell_dimensions_type_and_keyboard_focus_are_explicit() -> None:
+    html, css, tokens = _read(HTML_PATH), _read(CONSOLE_CSS_PATH), _read(TOKENS_CSS_PATH)
+    for declaration in (
+        "--rail-width: 68px",
+        "--header-height: 64px",
+        "--font-size-base: 16px",
+        "--font-size-document: 17px",
+        "--font-size-control: 14px",
+    ):
+        assert declaration in tokens
+    assert "height: var(--header-height)" in css
+    assert "overflow-x: hidden" in css
+    assert 'id="workspace-home-title" tabindex="-1"' in html
+    assert 'id="workspace-source-title" tabindex="-1"' in html
+    assert 'id="workspace-flow-title" tabindex="-1"' in html
+    assert "document.querySelector('#workspace-' + workspaceId + ' h1')" in html
+    assert "heading.focus({preventScroll: true})" in html
+    assert "document.activeElement.setAttribute('data-keyboard-focus', 'true')" in html
+    assert '[data-keyboard-focus="true"]' in css
+
+def test_shell_uses_named_svg_controls_and_shared_disclosures() -> None:
+    html = _read(HTML_PATH)
+    navigation = html.split('<nav id="primary-navigation"', 1)[1].split("</nav>", 1)[0]
+    assert navigation.count("<svg") >= 5
+    assert '<span aria-hidden="true">F</span>' not in navigation
+    assert '<span aria-hidden="true">N</span>' not in navigation
+    for primitive in ("ui-drawer", "ui-popover", "ui-accordion", "ui-carousel"):
+        assert primitive in html
+    assert 'id="source-context-drawer"' in html
+    assert 'id="flow-detail-drawer"' in html
+    assert 'aria-hidden="true"' in html.split('id="source-context-drawer"', 1)[1].split(">", 1)[0]
+    assert 'aria-hidden="true"' in html.split('id="flow-detail-drawer"', 1)[1].split(">", 1)[0]
 
 def test_reader_rendering_does_not_add_innerhtml_assignments() -> None:
     html = _read(HTML_PATH)

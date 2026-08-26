@@ -4,231 +4,174 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; base-uri 'none'; connect-src 'self'; font-src 'self'; img-src 'self' data:; object-src 'none'; script-src 'self' 'nonce-fuente-console' 'unsafe-eval'; style-src 'self'">
-    <title>Fuente | Consola</title>
+    <title>Fuente y Caudal</title>
     <!-- La tipografía global de la consola y sus modales se define en console.css. -->
     <link rel="stylesheet" data-fuente-tokens="true" href="fuente/ui/static/fuente_tokens.css">
     <link rel="stylesheet" href="fuente/ui/static/console.css">
 </head>
 <body>
-
-    <nav id="primary-navigation" class="primary-navigation" aria-label="Espacios de Fuente">
-        <button type="button" class="workspace-trigger is-active" data-workspace-target="home" data-onclick-command="switchWorkspace('home')" aria-current="page"><span aria-hidden="true">F</span><span>Inicio</span></button>
-        <button type="button" class="workspace-trigger" data-workspace-target="notes" data-onclick-command="switchWorkspace('notes')" aria-current="false"><span aria-hidden="true">N</span><span>Notas</span></button>
+    <nav id="primary-navigation" class="primary-navigation" aria-label="Espacios de Fuente y Caudal">
+        <button type="button" class="workspace-trigger is-active" data-workspace-target="home" data-onclick-command="switchWorkspace('home')" aria-current="page">
+            <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M3 11.5 12 4l9 7.5"></path><path d="M5.5 10v10h13V10M9.5 20v-6h5v6"></path></svg>
+            <span>Inicio</span>
+        </button>
+        <button type="button" class="workspace-trigger" data-workspace-target="source" data-onclick-command="switchWorkspace('source')" aria-current="false">
+            <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M5 4h14v16H5zM8 8h8M8 12h8M8 16h6"></path></svg>
+            <span>Fuente</span>
+        </button>
+        <button type="button" class="workspace-trigger" data-workspace-target="flow" data-onclick-command="switchWorkspace('flow')" aria-current="false">
+            <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M3 8c3-4 6 4 9 0s6 4 9 0M3 14c3-4 6 4 9 0s6 4 9 0"></path></svg>
+            <span>Caudal</span>
+        </button>
+        <span class="rail-spacer" aria-hidden="true"></span>
+        <button id="style-toggle" type="button" class="rail-utility masthead-style-button" data-onclick-command="toggleVisualStyle()" aria-label="Activar estilo visual Gruvbox">
+            <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"></circle><path d="M12 4a8 8 0 0 0 0 16z"></path></svg>
+            <span id="style-toggle-label">Gruvbox</span>
+        </button>
+        <button type="button" class="rail-utility" data-onclick-command="openModal('modal-settings')">
+            <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"></circle><path d="M19 13.5v-3l-2-.7-.7-1.7.9-1.9-2.1-2.1-1.9.9-1.7-.7-.7-2h-3l-.7 2-1.7.7-1.9-.9-2.1 2.1.9 1.9-.7 1.7-2 .7v3l2 .7.7 1.7-.9 1.9 2.1 2.1 1.9-.9 1.7.7.7 2h3l.7-2 1.7-.7 1.9.9 2.1-2.1-.9-1.9.7-1.7z"></path></svg>
+            <span>Ajustes</span>
+        </button>
     </nav>
 
     <main class="workspace-stage" role="main">
-    <section id="workspace-home" class="workspace-panel-root is-active" data-workspace="home" tabindex="-1" aria-labelledby="workspace-home-title">
-
-    <!-- CABECERA EDITORIAL PAPIRO -->
-    <div class="masthead-container" id="contextual-header">
-        <div class="masthead-main">
-            <div>
-                <h1 class="masthead-title" id="workspace-home-title">Inicio</h1>
-            </div>
-            <div class="console-layout-001">
-                <button type="button" class="masthead-link icon-button" data-onclick-command="switchWorkspace('notes')" aria-label="Buscar en Fuente">Buscar</button>
-                <span class="masthead-link" data-onclick-command="triggerAction('quick_help')">Guía Rápida</span>
-                <span class="console-text-001">|</span>
-                <span class="masthead-link" data-onclick-command="openModal('modal-settings')">Ajustes</span>
-                <span class="console-text-001">|</span>
-                <button id="style-toggle" type="button" class="masthead-link masthead-style-button" data-onclick-command="toggleVisualStyle()" aria-label="Activar estilo visual Gruvbox">Gruvbox</button>
-            </div>
-        </div>
-
-        <!-- STATUS STRIP (ESTADO DE FUENTE EN CABECERA) -->
-        <div class="status-strip">
-            <div class="status-item">
-                    <span class="status-label">Conexión</span>
-                <span class="status-val">
-                    <span id="status-offline-mode" class="offline-badge local-only" title="La IA trabaja en este equipo">Solo local</span>
-                </span>
-            </div>
-            <div class="status-item">
-                    <span class="status-label">IA local</span>
-                    <span class="status-val" id="status-ollama">No medido</span>
-            </div>
-            <div class="status-item">
-                    <span class="status-label">Notas</span>
-                    <span class="status-val" id="status-obsidian">No medido</span>
-            </div>
-        </div>
-    </div>
-
-    <!-- LAYOUT PRINCIPAL FULL-WIDTH -->
-    <div class="layout-full">
-        <!-- BARRA DE HERRAMIENTAS Y ACCIONES (TEMA, FUENTES, BUCLE OPTIMIZADO) -->
-        <div class="toolbar-bar">
-            <div class="toolbar-group">
-                <span class="console-layout-002">Espacio</span>
-                <div id="theme-select" class="theme-select-control">
-                    <button
-                        id="theme-select-trigger"
-                        type="button"
-                        class="console-layout-003 theme-select-trigger"
-                        data-onclick-command="toggleThemeMenu()"
-                        data-onkeydown-command="handleThemeTriggerKeydown(event)"
-                        aria-haspopup="listbox"
-                        aria-expanded="false"
-                        aria-controls="theme-select-menu">
-                        <span id="theme-select-label">General</span>
-                        <span class="theme-select-chevron" aria-hidden="true">▾</span>
-                    </button>
-                    <div id="theme-select-menu" class="theme-select-menu" role="listbox" aria-labelledby="theme-select-trigger"></div>
+        <section id="workspace-home" class="workspace-panel-root is-active" data-workspace="home" aria-labelledby="workspace-home-title">
+            <header class="shell-header">
+                <div>
+                    <p class="workspace-kicker">Fuente y Caudal</p>
+                    <h1 id="workspace-home-title" tabindex="-1">Inicio</h1>
                 </div>
-                <button class="btn-secondary" data-onclick-command="promptCreateTheme()">+ Nuevo tema</button>
-                <span class="console-layout-004"></span>
-                <button class="btn-primary" data-onclick-command="triggerAction('step2_transcribe')">
-                    Procesar material
+                <button type="button" class="icon-button shell-header-action" data-onclick-command="triggerAction('quick_help')" aria-label="Abrir guía rápida">
+                    <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M4 5c3-1 5 0 8 2v13c-3-2-5-3-8-2zM20 5c-3-1-5 0-8 2v13c3-2 5-3 8-2z"></path></svg>
+                    <span>Guía</span>
                 </button>
-                <button class="btn-secondary" data-onclick-command="syncAllInputs()">
-                    Actualizar entradas
+            </header>
+            <div class="workspace-content home-content">
+                <section class="status-strip" aria-label="Estado local">
+                    <div class="status-item"><span class="status-label">Conexión</span><span id="status-offline-mode" class="offline-badge local-only" title="La IA trabaja en este equipo">Solo local</span></div>
+                    <div class="status-item"><span class="status-label">IA local</span><span class="status-val" id="status-ollama">No medido</span></div>
+                    <div class="status-item"><span class="status-label">Vault</span><span class="status-val" id="status-obsidian">No medido</span></div>
+                </section>
+
+                <section id="home-product-access" class="ui-carousel product-access" aria-labelledby="home-product-access-title">
+                    <div class="section-heading">
+                        <div><p class="workspace-kicker">Continuar</p><h2 id="home-product-access-title">Elige dónde trabajar</h2></div>
+                        <div class="carousel-controls" aria-label="Controles del carrusel">
+                            <button type="button" class="icon-button" data-onclick-command="moveCarousel('home-product-track', 'previous')" aria-label="Anterior">
+                                <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="m15 5-7 7 7 7"></path></svg>
+                            </button>
+                            <span id="home-product-position" aria-live="polite">1 de 2</span>
+                            <button type="button" class="icon-button" data-onclick-command="moveCarousel('home-product-track', 'next')" aria-label="Siguiente">
+                                <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="m9 5 7 7-7 7"></path></svg>
+                            </button>
+                        </div>
+                    </div>
+                    <div id="home-product-track" class="carousel-track" tabindex="0">
+                        <article class="product-entry">
+                            <p class="workspace-kicker">Leer y consultar</p>
+                            <h3>Fuente</h3>
+                            <p>Abre el catálogo de solo lectura y continúa en Obsidian cuando necesites editar.</p>
+                            <p class="product-metric"><strong id="stat-notes">0</strong> notas preparadas</p>
+                            <button type="button" class="btn-primary" data-onclick-command="switchWorkspace('source')">Abrir Fuente</button>
+                        </article>
+                        <article class="product-entry">
+                            <p class="workspace-kicker">Mover y revisar</p>
+                            <h3>Caudal</h3>
+                            <p>Consulta las cinco etapas, los trabajos pendientes y las revisiones.</p>
+                            <p class="product-metric"><strong id="stat-input">0</strong> archivos pendientes</p>
+                            <button type="button" class="btn-primary" data-onclick-command="switchWorkspace('flow')">Abrir Caudal</button>
+                        </article>
+                    </div>
+                </section>
+
+                <details class="ui-accordion home-disclosure">
+                    <summary>Configuración y diagnóstico</summary>
+                    <div class="accordion-body">
+                        <div id="theme-select" class="theme-select-control">
+                            <button id="theme-select-trigger" type="button" class="theme-select-trigger" data-onclick-command="toggleThemeMenu()" data-onkeydown-command="handleThemeTriggerKeydown(event)" aria-haspopup="listbox" aria-expanded="false" aria-controls="theme-select-menu">
+                                <span id="theme-select-label">General</span>
+                                <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"></path></svg>
+                            </button>
+                            <div id="theme-select-menu" class="theme-select-menu ui-popover" role="listbox" aria-labelledby="theme-select-trigger"></div>
+                        </div>
+                        <button type="button" class="btn-secondary" data-onclick-command="promptCreateTheme()">Nuevo tema</button>
+                        <button type="button" class="btn-secondary" id="btn-open-health" data-onclick-command="openModal('modal-health')">Estado del sistema</button>
+                    </div>
+                </details>
+
+                <section class="log-section" aria-labelledby="activity-title">
+                    <div class="log-header">
+                        <h2 id="activity-title">Actividad reciente</h2>
+                        <div class="log-actions">
+                            <button class="btn-small" id="btn-toggle-path" data-onclick-command="togglePathMode(this)">Rutas cortas</button>
+                            <button class="btn-small" data-onclick-command="clearLogView()">Limpiar</button>
+                        </div>
+                    </div>
+                    <div class="log-console" id="log-console" role="log" aria-live="polite"><div><span class="log-time">[00:00:00]</span> Fuente lista.</div></div>
+                </section>
+                <div class="bottom-status-bar"><span id="bottom-status-line">Estado: sin medir • Notas: sin conectar • Memoria: sin medir</span><span class="console-text-002">Fuente · Emilio Sevilla Ortego</span></div>
+            </div>
+        </section>
+
+        <section id="workspace-source" class="workspace-panel-root" data-workspace="source" aria-labelledby="workspace-source-title" hidden>
+            <header class="shell-header">
+                <div><p class="workspace-kicker">Biblioteca local</p><h1 id="workspace-source-title" tabindex="-1">Fuente</h1></div>
+                <button type="button" class="icon-button shell-header-action" data-onclick-command="triggerAction('open_obsidian', {}, this)" aria-label="Abrir el Vault en Obsidian">
+                    <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M6 3h9l4 4v14H6zM14 3v5h5"></path><path d="M9 13h6M9 17h4"></path></svg>
+                    <span>Obsidian</span>
                 </button>
-                <button class="btn-secondary" data-onclick-command="openApprovalInbox()">
-                    Revisar notas
-                </button>
-                <button class="btn-secondary" id="btn-open-job-queue" data-onclick-command="openModal('modal-job-queue')">
-                    Trabajos
-                </button>
-                <button class="btn-secondary" id="btn-open-health" data-onclick-command="openModal('modal-health')">
-                    Estado del sistema
-                </button>
+            </header>
+            <div class="workspace-content source-content" id="workspace-notes">
+                <div id="reader-workspace-host"></div>
             </div>
-        </div>
+        </section>
 
-        <!-- STATS GRID -->
-        <div class="current-work-strip" aria-label="Trabajo actual">
-            <div class="current-work-item" data-onclick-command="openModal('modal-stat-input')">
-                <div class="stat-title">Archivos pendientes</div>
-                <div class="stat-num gold" id="stat-input">0</div>
+        <section id="workspace-flow" class="workspace-panel-root" data-workspace="flow" aria-labelledby="workspace-flow-title" hidden>
+            <header class="shell-header">
+                <div><p class="workspace-kicker">Control del material</p><h1 id="workspace-flow-title" tabindex="-1">Caudal</h1></div>
+                <button type="button" class="btn-primary shell-primary-action" data-onclick-command="triggerAction('step2_transcribe')">Procesar material</button>
+            </header>
+            <div class="workspace-content flow-content">
+                <section class="flow-section" id="fuente-flow" aria-labelledby="flow-title">
+                    <div class="section-heading"><div><p class="workspace-kicker">Pipeline</p><h2 id="flow-title">Cinco etapas</h2></div><button type="button" class="btn-secondary" data-onclick-command="openDrawer('flow-detail-drawer')">Ver detalle</button></div>
+                    <div class="flow-stages">
+                        <div class="flow-stage" data-flow-step="1"><span class="flow-stage-number">1</span><strong>Volcado</strong><span id="badge-step1">Sin medir</span></div>
+                        <div class="flow-stage" data-flow-step="2"><span class="flow-stage-number">2</span><strong>Copiado</strong><span id="badge-step2">Sin medir</span></div>
+                        <div class="flow-stage" data-flow-step="3"><span class="flow-stage-number">3</span><strong>Capturado</strong><span id="badge-step3">Sin medir</span></div>
+                        <div class="flow-stage" data-flow-step="4"><span class="flow-stage-number">4</span><strong>Procesado</strong><span id="badge-step4">Sin medir</span></div>
+                        <div class="flow-stage" data-flow-step="5"><span class="flow-stage-number">5</span><strong>Compartido</strong><span id="badge-step5">Sin medir</span></div>
+                    </div>
+                </section>
+                <section class="flow-operations" aria-labelledby="flow-operations-title">
+                    <div class="section-heading"><div><p class="workspace-kicker">Trabajo actual</p><h2 id="flow-operations-title">Operaciones</h2></div></div>
+                    <div class="toolbar-group">
+                        <button class="btn-secondary" data-onclick-command="syncAllInputs()">Actualizar entradas</button>
+                        <button class="btn-secondary" data-onclick-command="openApprovalInbox()">Revisar notas</button>
+                        <button class="btn-secondary" id="btn-open-job-queue" data-onclick-command="openModal('modal-job-queue')">Trabajos</button>
+                        <button class="btn-secondary" data-onclick-command="openModal('modal-quarantine')">Cuarentena</button>
+                    </div>
+                    <div class="current-work-strip" aria-label="Resumen operativo">
+                        <button type="button" class="current-work-item" data-onclick-command="openModal('modal-category')"><span>Procesados</span><strong id="stat-processed">0</strong></button>
+                        <button type="button" class="current-work-item" data-onclick-command="openModal('modal-quarantine')"><span>En cuarentena</span><strong id="stat-quarantine">0</strong></button>
+                        <button type="button" class="current-work-item" data-onclick-command="openModal('modal-stat-ram')"><span>Memoria</span><strong id="stat-ram">0%</strong></button>
+                    </div>
+                </section>
+                <aside id="flow-detail-drawer" class="ui-drawer" aria-label="Detalle operativo" aria-hidden="true" hidden>
+                    <div class="drawer-header"><h2>Detalle operativo</h2><button type="button" class="icon-button" data-onclick-command="closeDrawer('flow-detail-drawer')" aria-label="Cerrar detalle"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"></path></svg></button></div>
+                    <p>Los trabajos, la cuarentena y las aprobaciones conservan sus controles actuales.</p>
+                </aside>
             </div>
-            <div class="current-work-item" data-onclick-command="openModal('modal-category')">
-                <div class="stat-title">Archivos procesados</div>
-                <div class="stat-num green" id="stat-processed">0</div>
-            </div>
-            <div class="current-work-item" data-onclick-command="openModal('modal-quarantine')">
-                <div class="stat-title">En cuarentena</div>
-                <div class="stat-num red" id="stat-quarantine">0</div>
-            </div>
-            <div class="current-work-item" data-onclick-command="openModal('modal-stat-notes')">
-                <div class="stat-title">Notas preparadas</div>
-                <div class="stat-num" id="stat-notes">0</div>
-            </div>
-            <div class="current-work-item" data-onclick-command="openModal('modal-stat-ram')">
-                <div class="stat-title">Memoria</div>
-                <div class="stat-num" id="stat-ram">0%</div>
-            </div>
-        </div>
-
-        <!-- MAPA SIMPLE DEL FLUJO -->
-        <div class="flow-section fuente-flow" id="fuente-flow">
-            <div class="flow-title">De archivos a notas útiles</div>
-            
-            <div class="flow-stages">
-                <div class="flow-stage">
-                    <div class="flow-stage-header">
-                        <span class="flow-stage-title">Recopilar</span>
-                        <span class="node-badge" id="badge-step1">Última vez: --/--/---- --:--:--</span>
-                    </div>
-                    <div class="node-card" data-onclick-command="triggerAction('step1_flush')">
-                        <div class="node-name">Recopilar archivos</div>
-                        <div class="node-desc">Recoger archivos de las carpetas conectadas</div>
-                    </div>
-                </div>
-
-                <div class="arrow-connector" aria-hidden="true"></div>
-
-                <div class="flow-stage">
-                    <div class="flow-stage-header">
-                        <span class="flow-stage-title">Convertir</span>
-                        <span class="node-badge" id="badge-step2">Última vez: --/--/---- --:--:--</span>
-                    </div>
-                    <div class="node-card" data-onclick-command="triggerAction('step2_transcribe')">
-                        <div class="node-name">Convertir a texto</div>
-                        <div class="node-desc">Preparar audios, imágenes y documentos</div>
-                    </div>
-                </div>
-
-                <div class="arrow-connector" aria-hidden="true"></div>
-
-                <div class="flow-stage">
-                    <div class="flow-stage-header">
-                        <span class="flow-stage-title">Organizar</span>
-                        <span class="node-badge" id="badge-step3">Última vez: --/--/---- --:--:--</span>
-                    </div>
-                    <div class="node-card" data-onclick-command="openApprovalInbox()">
-                        <div class="node-name">Revisar notas</div>
-                        <div class="node-desc">Comprobar las notas preparadas antes de compartir</div>
-                    </div>
-                </div>
-
-                <div class="arrow-connector" aria-hidden="true"></div>
-
-                <div class="flow-stage">
-                    <div class="flow-stage-header">
-                        <span class="flow-stage-title">Consultar</span>
-                        <span class="node-badge" id="badge-step4">Última vez: --/--/---- --:--:--</span>
-                    </div>
-                    <div class="node-card" data-onclick-command="openModal('modal-reader')">
-                        <div class="node-name">Consultar notas</div>
-                        <div class="node-desc">Leerlas o preguntar sobre ellas</div>
-                    </div>
-                </div>
-
-                <div class="arrow-connector" aria-hidden="true"></div>
-
-                <div class="flow-stage">
-                    <div class="flow-stage-header">
-                        <span class="flow-stage-title">Compartir</span>
-                        <span class="node-badge" id="badge-step5">Última vez: --/--/---- --:--:--</span>
-                    </div>
-                    <div class="node-card" data-onclick-command="openApprovalInbox()">
-                        <div class="node-name">Revisar y compartir</div>
-                        <div class="node-desc">Dar por buenas las notas y preparar su salida</div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- LOG CONSOLE DE AUDITORÍA -->
-        <div class="log-section">
-            <div class="log-header">
-                <span>Actividad</span>
-                <div class="log-actions">
-                    <button class="btn-small" id="btn-toggle-path" data-onclick-command="togglePathMode(this)">Rutas cortas</button>
-                    <button class="btn-small" data-onclick-command="clearLogView()">Limpiar</button>
-                </div>
-            </div>
-            <div class="log-console" id="log-console">
-                <div><span class="log-time">[00:00:00]</span> Fuente lista.</div>
-            </div>
-        </div>
-
-        <!-- LÍNEA DE ESTADO MINIMALISTA INFERIOR -->
-        <div class="bottom-status-bar">
-            <span id="bottom-status-line">Estado: sin medir • Notas: sin conectar • Memoria: sin medir</span>
-            <span class="console-text-002">Fuente · Emilio Sevilla Ortego</span>
-        </div>
-    </div>
-    </section>
-
-    <section id="workspace-notes" class="workspace-panel-root" data-workspace="notes" tabindex="-1" aria-labelledby="workspace-notes-title" hidden>
-        <header class="workspace-heading">
-            <h1 id="workspace-notes-title">Notas</h1>
-            <p>Busca, lee y prepara tus notas sin perder el contexto.</p>
-        </header>
-        <div id="reader-workspace-host"></div>
-    </section>
-
+        </section>
     </main>
 
     <!-- MODAL NOTAS -->
-    <div class="modal-overlay" id="modal-reader">
+    <div class="modal-overlay" id="modal-reader" aria-hidden="true">
         <div class="modal-container">
             <div class="modal-header">
                 <div class="reader-title-tools">
                     <div class="modal-title">Notas</div>
                     <button class="btn-small" id="btn-reader-library" aria-pressed="true" data-onclick-command="toggleReaderLibrary()">Biblioteca</button>
-                    <button class="btn-small" id="btn-reader-context" aria-pressed="true" data-onclick-command="toggleReaderContext()">Contexto</button>
+                    <button class="btn-small" id="btn-reader-context" aria-pressed="false" data-onclick-command="toggleReaderContext()">Contexto</button>
                 </div>
                 <div class="console-layout-005">
                     <button class="btn-small" id="btn-reader-back" data-onclick-command="goBackReaderNote()" disabled title="Volver a la nota anterior">◄ Atrás</button>
@@ -248,7 +191,7 @@
                         <input type="search" class="reader-search-input" id="reader-search" placeholder="Buscar por título o frase..." autocomplete="off" data-oninput-command="filterReaderNotes()">
                     </div>
                 </div>
-                <div class="reader-context-grid">
+                <div class="reader-context-grid is-context-hidden">
                     <section class="reader-context-content" data-reader-region="content" aria-label="Contenido de la nota">
                         <div class="reader-dual-pane reader-view" id="reader-view-list">
                             <div class="reader-sidebar">
@@ -265,7 +208,7 @@
                             </div>
                         </div>
                     </section>
-                    <aside class="reader-properties-pane" data-reader-region="properties" role="dialog" aria-modal="false" aria-label="Más sobre la nota">
+                    <aside id="source-context-drawer" class="reader-properties-pane ui-drawer" data-reader-region="properties" role="dialog" aria-modal="false" aria-label="Más sobre la nota" aria-hidden="true">
                         <div class="workspace-tabs" role="tablist" aria-label="Más sobre la nota">
                             <button type="button" class="btn-small workspace-tab is-active" id="workspace-tab-assistant" role="tab" aria-selected="true" aria-controls="workspace-panel-assistant" data-onclick-command="switchWorkspaceTab('assistant')">Contexto</button>
                             <button type="button" class="btn-small workspace-tab" id="workspace-tab-notes" role="tab" aria-selected="false" aria-controls="workspace-panel-notes" data-onclick-command="switchWorkspaceTab('notes')">Preparar</button>
@@ -434,11 +377,15 @@
     </div>
 
     <!-- MODAL AJUSTES -->
-    <div class="modal-overlay" id="modal-settings">
+    <div class="modal-overlay ui-modal" id="modal-settings" role="dialog" aria-modal="true" aria-labelledby="settings-modal-title" aria-hidden="true">
         <div class="modal-container">
             <div class="modal-header">
-                <div class="modal-title">Ajustes</div>
-                <button class="close-btn" data-onclick-command="closeModal('modal-settings')">&times;</button>
+                <div class="modal-title" id="settings-modal-title">Ajustes</div>
+                <button type="button" class="close-btn" data-onclick-command="closeModal('modal-settings')" aria-label="Cerrar ajustes">
+                    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                        <path d="M6 6l12 12M18 6L6 18"></path>
+                    </svg>
+                </button>
             </div>
             <div class="modal-body">
                 <div class="console-layout-032">
@@ -851,6 +798,9 @@
             if (command.startsWith('openHelpInfo(')) return openHelpInfo(args[0]);
             if (command.startsWith('closeModal(')) return closeModal(args[0]);
             if (command.startsWith('switchWorkspace(')) return switchWorkspace(args[0]);
+            if (command.startsWith('openDrawer(')) return openDrawer(args[0], element);
+            if (command.startsWith('closeDrawer(')) return closeDrawer(args[0]);
+            if (command.startsWith('moveCarousel(')) return moveCarousel(args[0], args[1]);
             if (command.startsWith('switchReaderView(')) return switchReaderView(args[0]);
             if (command.startsWith('switchSettingsTab(')) return switchSettingsTab(args[0]);
             if (command.startsWith('switchWorkspaceTab(')) return switchWorkspaceTab(args[0]);
@@ -902,9 +852,33 @@
     });
 });
 
+function clearKeyboardFocusMarker() {
+    document.querySelectorAll('[data-keyboard-focus="true"]').forEach(function(element) {
+        element.removeAttribute('data-keyboard-focus');
+    });
+}
+
+document.addEventListener('keydown', function(event) {
+    if (event.key !== 'Tab') return;
+    requestAnimationFrame(function() {
+        clearKeyboardFocusMarker();
+        if (document.activeElement instanceof HTMLElement) {
+            document.activeElement.setAttribute('data-keyboard-focus', 'true');
+        }
+    });
+});
+
+document.addEventListener('pointerdown', clearKeyboardFocusMarker);
+
 document.addEventListener('keydown', function(event) {
     const openDialogs = Array.from(document.querySelectorAll('.modal-overlay.is-open'));
     const dialog = openDialogs[openDialogs.length - 1];
+    const drawer = document.querySelector('.ui-drawer:not([hidden])[aria-hidden="false"]');
+    if (!dialog && drawer && event.key === 'Escape') {
+        event.preventDefault();
+        closeDrawer(drawer.id);
+        return;
+    }
     if (!dialog) return;
     if (event.key === 'Escape') {
         event.preventDefault();
@@ -1107,7 +1081,7 @@ document.addEventListener('keydown', function(event) {
             }
         }
 
-        const WORKSPACE_IDS = ['home', 'notes', 'map'];
+        const WORKSPACE_IDS = ['home', 'source', 'flow'];
 
         function switchWorkspace(workspaceId) {
             if (!WORKSPACE_IDS.includes(workspaceId)) return;
@@ -1121,8 +1095,45 @@ document.addEventListener('keydown', function(event) {
                 button.classList.toggle('is-active', active);
                 button.setAttribute('aria-current', active ? 'page' : 'false');
             });
-            document.getElementById('workspace-' + workspaceId)?.focus({preventScroll: true});
-            if (workspaceId === 'notes') loadReaderNotes();
+            const heading = document.querySelector('#workspace-' + workspaceId + ' h1');
+            if (heading) heading.focus({preventScroll: true});
+            if (workspaceId === 'source') loadReaderNotes();
+        }
+
+        let lastDrawerTrigger = null;
+
+        function openDrawer(drawerId, trigger) {
+            const drawer = document.getElementById(drawerId);
+            if (!drawer) return;
+            lastDrawerTrigger = trigger || document.activeElement;
+            drawer.hidden = false;
+            drawer.setAttribute('aria-hidden', 'false');
+            requestAnimationFrame(function() {
+                const focusable = getFocusableElements(drawer);
+                if (focusable.length) focusable[0].focus();
+            });
+        }
+
+        function closeDrawer(drawerId) {
+            const drawer = document.getElementById(drawerId);
+            if (!drawer) return;
+            drawer.hidden = true;
+            drawer.setAttribute('aria-hidden', 'true');
+            if (lastDrawerTrigger && typeof lastDrawerTrigger.focus === 'function') {
+                lastDrawerTrigger.focus();
+            }
+        }
+
+        function moveCarousel(trackId, direction) {
+            const track = document.getElementById(trackId);
+            if (!track || !track.children.length) return;
+            const current = Number(track.dataset.carouselIndex || 0);
+            const offset = direction === 'next' ? 1 : -1;
+            const index = Math.max(0, Math.min(track.children.length - 1, current + offset));
+            track.dataset.carouselIndex = String(index);
+            track.children[index].scrollIntoView({behavior: 'smooth', block: 'nearest', inline: 'start'});
+            const status = document.getElementById(trackId.replace('-track', '-position'));
+            if (status) status.textContent = String(index + 1) + ' de ' + String(track.children.length);
         }
 
         function mountReaderWorkspace() {
@@ -1235,7 +1246,7 @@ document.addEventListener('keydown', function(event) {
 
         function openModal(id) {
             if (id === 'modal-reader') {
-                switchWorkspace('notes');
+                switchWorkspace('source');
                 updateStepBadge('badge-step4');
                 return;
             }
@@ -3123,8 +3134,10 @@ document.addEventListener('keydown', function(event) {
             const styleToggle = document.getElementById('style-toggle');
             if (styleToggle) {
                 const nextStyle = activeStyle === 'nord' ? 'gruvbox' : 'nord';
-                styleToggle.textContent = nextStyle === 'gruvbox' ? 'Gruvbox' : 'Nord';
-                styleToggle.setAttribute('aria-label', 'Activar estilo visual ' + styleToggle.textContent);
+                const styleLabel = document.getElementById('style-toggle-label');
+                const nextStyleLabel = nextStyle === 'gruvbox' ? 'Gruvbox' : 'Nord';
+                if (styleLabel) styleLabel.textContent = nextStyleLabel;
+                styleToggle.setAttribute('aria-label', 'Activar estilo visual ' + nextStyleLabel);
             }
             try {
                 window.localStorage.setItem(FUENTE_STYLE_STORAGE_KEY, activeStyle);
@@ -3786,9 +3799,11 @@ document.addEventListener('keydown', function(event) {
         function toggleReaderContext() {
             const workspace = document.querySelector('#modal-reader .reader-context-grid');
             const button = document.getElementById('btn-reader-context');
+            const drawer = document.getElementById('source-context-drawer');
             if (!workspace || !button) return;
             const visible = workspace.classList.toggle('is-context-hidden') === false;
             button.setAttribute('aria-pressed', String(visible));
+            if (drawer) drawer.setAttribute('aria-hidden', String(!visible));
         }
 
         function createNoteActionBar(noteTitle) {
@@ -4329,6 +4344,8 @@ document.addEventListener('keydown', function(event) {
                         if (state.vault_path) {
                             document.getElementById('setting-vault-path').value = state.vault_path;
                         }
+                        const vaultStatus = document.getElementById('status-obsidian');
+                        if (vaultStatus) vaultStatus.textContent = state.vault_path ? 'Conectado' : 'Sin configurar';
                         if (state.offline_mode) {
                             applyOfflineModeState(state.offline_mode);
                         }

@@ -1046,7 +1046,7 @@ class FuenteConsoleBackend:
             pass
         return document_id_for_relative_path(relative)
 
-    def get_initial_state_dict(self) -> Dict[str, Any]:
+    def get_initial_state_dict(self) -> Dict[str, object]:
         stats = self.get_stats_dict()
         return {
             "vault_path": str(self.vault_path),
@@ -2325,7 +2325,7 @@ def launch_control_console(vault_path: Optional[Path] = None):
             width=1280,
             height=850,
             min_size=(980, 680),
-            background_color="#071311",
+            background_color="#ECEFF4",
         )
         api.set_window(window)
         window.events.shown += _activate_webview_window
@@ -2393,7 +2393,7 @@ def launch_control_console(vault_path: Optional[Path] = None):
                 width=1280,
                 height=850,
                 min_size=(980, 680),
-                background_color="#071311"
+                background_color="#ECEFF4"
             )
             api.set_window(window)
             window.events.shown += _activate_webview_window

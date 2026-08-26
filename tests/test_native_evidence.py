@@ -120,6 +120,31 @@ def test_manifest_rejects_missing_runtime_signal(tmp_path: Path):
     assert "runtime signal" in verify_manifest(manifest, "a" * 40)[0]
 
 
+def test_capture_cli_parses_requested_window_size():
+    assert capture_native_ui._window_size("1024x700") == (1024, 700)
+    with pytest.raises(ValueError, match="WIDTHxHEIGHT"):
+        capture_native_ui._window_size("1024")
+
+
+def test_maximized_capture_uses_measured_screen_region(tmp_path: Path):
+    window = {"window_id": 44, "x": 0, "y": 26, "width": 1280, "height": 802}
+    output = tmp_path / "max.png"
+
+    assert capture_native_ui._capture_command(window, output, maximize=True) == [
+        "/usr/sbin/screencapture",
+        "-x",
+        "-R0,26,1280,802",
+        str(output),
+    ]
+    assert capture_native_ui._capture_command(window, output, maximize=False) == [
+        "/usr/sbin/screencapture",
+        "-x",
+        "-l",
+        "44",
+        str(output),
+    ]
+
+
 @pytest.mark.parametrize(("field", "message"), [("width", "width"), ("height", "height")])
 def test_manifest_rejects_boolean_dimensions(tmp_path: Path, field: str, message: str):
     image = tmp_path / "home.png"

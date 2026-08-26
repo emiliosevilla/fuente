@@ -124,7 +124,7 @@ class FuentePyWebViewApi:
         if error is not None:
             return error
         try:
-            state = UIStateStore(self.backend.get_notes_service().job_store)
+            state = UIStateStore(self._ui_job_store())
             return {"value": state.get(*values)}
         except (TypeError, ValueError) as error:
             return self._error("invalid_payload", str(error))
@@ -141,10 +141,20 @@ class FuentePyWebViewApi:
         if error is not None:
             return error
         try:
-            UIStateStore(self.backend.get_notes_service().job_store).set(*values, value)
+            UIStateStore(self._ui_job_store()).set(*values, value)
             return {"status": "saved"}
         except (TypeError, ValueError) as error:
             return self._error("invalid_payload", str(error))
+
+    def _ui_job_store(self):
+        store = getattr(self.backend, "_job_store", None)
+        lifecycle = getattr(self.backend, "lifecycle", None)
+        pipeline = getattr(lifecycle, "pipeline", None)
+        return (
+            store
+            or getattr(pipeline, "job_store", None)
+            or self.backend.get_notes_service().job_store
+        )
 
     def get_settings_info(self) -> dict[str, Any]:
         return self.backend.get_settings_info()

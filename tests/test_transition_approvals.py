@@ -111,6 +111,21 @@ def test_review_claim_expires_without_granting_permission(
         service.require_current(*args)
 
 
+def test_approval_requires_the_reviewer_who_holds_the_current_claim(
+    service, artifact
+) -> None:
+    args = (
+        artifact.id,
+        "4_procesado",
+        "5_compartido",
+        artifact.revision,
+        artifact.content_hash,
+    )
+    service.begin_review(*args, reviewer="emilio")
+    with pytest.raises(OutputApprovalRequiredError):
+        service.approve(*args, reviewer="otra-persona")
+
+
 def test_transition_service_rejects_non_adjacent_stages(service, artifact) -> None:
     with pytest.raises(ValueError, match="transition"):
         service.begin_review(

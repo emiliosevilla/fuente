@@ -272,3 +272,128 @@ The suite retains one pre-existing skip and 227 dependency deprecation
 warnings. The Task 4 shell still has no interactive sort control; only its
 existing state model was persisted. No user Vault was opened or mutated, and
 no push or PR was made.
+
+## Fix round 2
+
+### Findings closed
+
+- A failed UI-state write after `pywebviewready` now remains in the in-memory
+  pending map and schedules another SQLite attempt. The status line remains
+  visibly failed until recovery. If the user closes while a write is still
+  pending, `beforeunload` blocks the normal close path and explains that the
+  change has not yet been persisted; no fallback copy is written to
+  `localStorage`.
+- Clean and processed approvals now take/reuse the exact reviewer claim, write
+  the ledger, and write the transition approval inside one
+  `BEGIN IMMEDIATE` transaction on the existing `JobStore` connection. A
+  competing claim fails before ledger mutation; a late transition rejection
+  rolls back the ledger and clean catalog status.
+- `claim_resource_lease` uses the same `_transaction_lock` and
+  `_immediate_transaction` path as every other explicit SQLite transaction.
+  The interleaving test holds that lock in one thread and proves the lease
+  writer waits instead of issuing a nested `BEGIN`.
+- The runtime verifier no longer invokes pytest fixtures for transition
+  evidence. After the two real Cocoa processes restart UI state, it runs the
+  real ingestion, notes and sharing boundaries in the same temporary Vault and
+  on its sole `.fuente/state.db`.
+
+### Commits
+
+- `d5fbf24` `test: expose Task 5 round two races`
+- `15ab52f` `fix: commit ledgers and transitions atomically`
+- `972bc1a` `fix: retry UI state writes after startup`
+- `e987ee0` `test: verify Task 5 in one runtime Vault`
+- `1551218` `docs: refresh Task 5 round two snapshot`
+- `3fde9bb` `docs: mark Task 5 round two ready`
+
+The last report commit appends this section only; it does not change executable
+source or the measured source-tree digest.
+
+### TDD and synthetic evidence
+
+1. RED command:
+
+   `python3 -m pytest tests/test_approval_ledger.py::test_clean_claim_conflict_leaves_no_partial_ledger_approval tests/test_processed_output_approval.py::test_processed_claim_conflict_leaves_no_partial_ledger_approval tests/test_transition_approvals.py::test_resource_lease_waits_for_the_shared_transaction_lock tests/test_shell_runtime_behavior.py::test_ui_state_write_failure_after_ready_retries_and_recovers -q`
+
+   Result before implementation: `4 failed`. The two ledger tests found
+   partial approvals after claim conflict, the lease test raised nested
+   transaction `OperationalError`, and the UI retry function was absent.
+
+2. Atomic rollback/lock GREEN:
+
+   `python3 -m pytest tests/test_approval_ledger.py::test_transition_rejection_rolls_back_clean_ledger_and_catalog tests/test_approval_ledger.py::test_clean_claim_conflict_leaves_no_partial_ledger_approval tests/test_processed_output_approval.py::test_processed_claim_conflict_leaves_no_partial_ledger_approval tests/test_transition_approvals.py::test_resource_lease_waits_for_the_shared_transaction_lock -q`
+
+   Result: `4 passed in 0.26s`.
+
+3. All affected focal tests:
+
+   `python3 -m pytest tests/test_transition_approvals.py tests/test_approval_ledger.py tests/test_processed_output_approval.py tests/test_sharing_service.py tests/test_scheduler_limits.py tests/test_shell_runtime_behavior.py tests/test_ui_state_store.py tests/test_task5_runtime_contract.py -q`
+
+   Result: `64 passed in 2.30s`.
+
+4. First full-suite measurement after executable changes:
+
+   `python3 -m pytest -q`
+
+   Result: `1 failed, 1190 passed, 1 skipped, 227 warnings in 68.91s`.
+   The only failure was the expected stale source-tree digest in
+   `test_current_evidence_matches_branch_and_source_tree`; no product test
+   failed.
+
+5. Full suite after refreshing the measured snapshot:
+
+   `python3 -m pytest -q`
+
+   Result: `1191 passed, 1 skipped, 227 warnings in 66.04s`.
+
+6. Final freshness:
+
+   `python3 -m pytest tests/test_documentation_freshness.py -q`
+
+   Result: `7 passed in 0.20s`.
+
+7. `git diff --check`: PASS.
+
+### Reproducible real Cocoa and transition evidence
+
+Command:
+
+`python3 scripts/verify_task5_runtime.py`
+
+Final result: `PASS`. The emitted JSON records one shared temporary Vault for
+all three phases. Both separate Cocoa/PyWebView processes reported
+`workspace=flow`, `local_storage_length=0`, `sqlite_connect_calls=1`, and an
+AppleWebKit 605.1.15 user agent. The integrated production phase reported one
+SQLite connection and the same Vault path. Filesystem inspection found exactly
+one `.fuente/state.db`.
+
+For each real boundary — `1_volcado -> 2_copiado`, `2_copiado ->
+3_capturado`, `3_capturado -> 4_procesado`, and `4_procesado ->
+5_compartido` — the JSON contains:
+
+- `denied_before_mutation: true` while the seal is red;
+- `orange_denied_before_mutation: true` after taking a review claim;
+- `claim: in_review` and `approval: approved`;
+- no target bytes before green approval.
+
+The fourth edge additionally reports `shared_file_written: true`. After
+changing the processed Markdown bytes, `mutated_bytes_seal` is
+`pending_review`, proving that seal color is recomputed from exact ledger/claim
+identity rather than stored as authority.
+
+This is real local integration evidence against one disposable Vault. The
+pytest cases above are synthetic race and fault-injection evidence and are not
+presented as Cocoa runtime proof.
+
+### Concerns and deliberate limits
+
+- A normal close with pending UI state is explicitly blocked and explained;
+  an external force-kill can still lose an in-memory pending write because the
+  contract forbids a second persistence authority. SQLite remains the sole
+  durable store and `localStorage` remains empty.
+- The suite retains one pre-existing skip and 227 dependency deprecation
+  warnings from ChromaDB/Pydantic.
+- The Task 4 shell still has no interactive sort control, so Task 5 persists
+  its existing deterministic sort state without inventing a new control.
+- All native and transition evidence used a disposable temporary Vault. No
+  user Vault was read or mutated, and no push or PR was made.

@@ -198,3 +198,52 @@ persistUiState('reader', 'drafts', {workspaceChat: 'sin perder'}).then(function(
         [node, "-"], input=program, text=True, capture_output=True, check=False
     )
     assert result.returncode == 0, result.stderr
+
+
+def test_ui_state_write_failure_after_ready_retries_and_recovers():
+    node = shutil.which("node")
+    assert node is not None, "Node is required to execute the shell behavior contract"
+    functions = "\n".join(
+        _extract_function(name)
+        for name in (
+            "reportUiStateFailure",
+            "scheduleUiStateRetry",
+            "flushPendingUiState",
+            "persistUiState",
+        )
+    )
+    program = """
+const assert = require('node:assert/strict');
+const pendingUiState = new Map();
+const UI_STATE_RETRY_DELAY_MS = 1500;
+let uiStateRetryTimer = null;
+let retry = null;
+let calls = 0;
+const status = {textContent: ''};
+global.setTimeout = function(callback) { retry = callback; return 1; };
+global.window = {pywebview: {api: {set_ui_state() {
+    calls += 1;
+    return calls === 1
+        ? Promise.reject(new Error('database temporarily locked'))
+        : Promise.resolve({status: 'saved'});
+}}}};
+global.document = {getElementById() { return status; }};
+global.log = function() {};
+console.error = function() {};
+__FUNCTIONS__
+persistUiState('reader', 'filters', {search: 'no perder'}).then(function(first) {
+    assert.equal(first.error, 'ui_state_persistence_failed');
+    assert.equal(pendingUiState.size, 1);
+    assert.equal(typeof retry, 'function');
+    retry();
+    setImmediate(function() {
+        assert.equal(calls, 2);
+        assert.equal(pendingUiState.size, 0);
+        assert.match(status.textContent, /database temporarily locked/);
+    });
+});
+""".replace("__FUNCTIONS__", functions)
+    result = subprocess.run(
+        [node, "-"], input=program, text=True, capture_output=True, check=False
+    )
+    assert result.returncode == 0, result.stderr

@@ -4,6 +4,7 @@ from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 from concurrent.futures import ThreadPoolExecutor
 from threading import Barrier
+from threading import Event, Thread
 
 import pytest
 
@@ -196,3 +197,35 @@ def test_transition_approval_uses_only_job_store_connection(
         service.approve(*args, reviewer="emilio")
 
     assert len(connections) == 1
+
+
+def test_resource_lease_waits_for_the_shared_transaction_lock(tmp_path) -> None:
+    store = JobStore(tmp_path)
+    started = Event()
+    finished = Event()
+    result = []
+
+    def claim_lease() -> None:
+        started.set()
+        result.append(
+            store.claim_resource_lease(
+                job_id="job-lease",
+                task_class="light",
+                resource_key="cpu",
+                limit=1,
+            )
+        )
+        finished.set()
+
+    worker = Thread(target=claim_lease)
+    try:
+        with store._immediate_transaction("outer"):
+            worker.start()
+            assert started.wait(timeout=1)
+            assert not finished.wait(timeout=0.1)
+        worker.join(timeout=2)
+        assert finished.is_set()
+        assert result[0]["job_id"] == "job-lease"
+    finally:
+        worker.join(timeout=2)
+        store.close()

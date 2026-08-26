@@ -15,6 +15,7 @@ from fuente.domain.errors import (
     InvalidNoteTransitionError,
     NoteRevisionConflictError,
     PathAuthorizationError,
+    ReviewClaimConflictError,
 )
 from fuente.domain.frontmatter import parse_frontmatter, serialize_frontmatter
 from fuente.infrastructure.sqlite_store import JobStore
@@ -257,6 +258,33 @@ def test_approval_and_catalog_state_roll_back_in_one_sqlite_transaction(
         1,
         store.get_note(NOTE_ID)["content_hash"],
     ) is False
+
+
+def test_clean_claim_conflict_leaves_no_partial_ledger_approval(
+    approval_services,
+) -> None:
+    approvals, _ledger, _notes, store, _path, _relative = approval_services
+    request = approvals.request_approval(NOTE_ID)
+    transition = approvals.transition_approvals
+    transition.begin_review(
+        NOTE_ID,
+        "3_capturado",
+        "4_procesado",
+        request.revision,
+        request.content_hash,
+        "otra-persona",
+    )
+
+    with pytest.raises(ReviewClaimConflictError):
+        approvals.approve_clean(NOTE_ID, request.revision, "emilio")
+
+    assert store._connection.execute(
+        "SELECT COUNT(*) FROM note_approvals WHERE note_id = ?", (NOTE_ID,)
+    ).fetchone()[0] == 0
+    assert store._connection.execute(
+        "SELECT COUNT(*) FROM transition_approvals WHERE artifact_id = ?", (NOTE_ID,)
+    ).fetchone()[0] == 0
+    assert store.get_note(NOTE_ID)["status"] == "pending_review"
 
 
 

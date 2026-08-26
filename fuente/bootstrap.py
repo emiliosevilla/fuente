@@ -29,7 +29,7 @@ def _launch_setup(message: str | None = None) -> None:
     html_file = _html_file()
     webview.settings["ALLOW_DOWNLOADS"] = True
     window = webview.create_window(
-        "Fuente — Configuración inicial",
+        "Fuente y Caudal",
         url=str(html_file),
         js_api=api,
         width=1280,

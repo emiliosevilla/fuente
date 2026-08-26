@@ -55,11 +55,13 @@ def test_distribution_sources_include_webview_console_and_read_only_reader() -> 
 
 def test_bootstrap_spec_excludes_optional_native_runtime() -> None:
     spec = (ROOT / "fuente.spec").read_text(encoding="utf-8")
+    bootstrap = (ROOT / "fuente" / "bootstrap.py").read_text(encoding="utf-8")
     assert '"fuente/bootstrap.py"' in spec
     assert "COLLECT(" in spec
     assert '"torch"' in spec
     assert '"docling"' in spec
     assert '"pip._internal.cli.main"' not in spec
+    assert '"Fuente y Caudal"' in bootstrap
 
 
 def test_spec_keeps_stdlib_optparse_for_embedded_pip() -> None:

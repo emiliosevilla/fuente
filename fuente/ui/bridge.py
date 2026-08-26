@@ -526,10 +526,12 @@ class FuentePyWebViewApi:
         if isinstance(parsed, dict) and "error" in parsed:
             return parsed
         assert isinstance(parsed, dict)
-        if set(parsed) != {"target_path"}:
-            return self._error("invalid_payload", "Se requiere la ruta completa del Vault.")
+        if set(parsed) != {"target_path", "consent"}:
+            return self._error("invalid_payload", "Se requieren la ruta completa y el consentimiento.")
         if not isinstance(parsed["target_path"], str) or not parsed["target_path"].strip():
             return self._error("invalid_payload", "target_path debe ser texto no vacío")
+        if parsed["consent"] is not True:
+            return self._error("consent_required", "Debes confirmar la configuración de Obsidian.")
         action = getattr(self.backend, "create_vault", None)
         if not callable(action):
             return self._error("setup_not_available", "La creación guiada sólo está disponible durante la configuración inicial.")

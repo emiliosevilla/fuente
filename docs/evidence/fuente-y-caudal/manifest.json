@@ -11,5 +11,18 @@
     "height": 802,
     "sha256": "76bdc95db928d98fdbdac98e69d6635f0442ae7666549cccbc394d7f8e16bac6",
     "scenario": "baseline"
+  },
+  {
+    "file": "01-setup-empty.png",
+    "git_head": "08f5310466c0c9051f68dbd208d25d90c0c2b181",
+    "window_owner": "Python",
+    "window_owner_pid": 71899,
+    "window_title": "Fuente y Caudal",
+    "engine": "PyWebView WebKit",
+    "runtime_signal": "vmmap:WebKit.framework",
+    "width": 1280,
+    "height": 802,
+    "sha256": "9255f5cbb2fc8514d75599d350f0228c4372e04f96f80272d250e494b6312b76",
+    "scenario": "setup-empty"
   }
 ]

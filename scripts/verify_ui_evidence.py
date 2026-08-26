@@ -51,7 +51,8 @@ def verify_manifest(path: Path, expected_head: str) -> list[str]:
         if entry.get("engine") != "PyWebView WebKit":
             errors.append(_error(index, "engine must be 'PyWebView WebKit'"))
             continue
-        if entry.get("git_head") != expected_head:
+        entry_head = BASELINE_HEAD if scenario == "baseline" else expected_head
+        if entry.get("git_head") != entry_head:
             errors.append(_error(index, "git head does not match the expected head"))
             continue
         if entry.get("runtime_signal") != "vmmap:WebKit.framework":

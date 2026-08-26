@@ -62,6 +62,25 @@ def test_manifest_allows_real_baseline_title_only_for_baseline(tmp_path: Path):
     assert "window title" in verify_manifest(manifest, "a" * 40)[0]
 
 
+def test_manifest_allows_historical_baseline_with_current_evidence(tmp_path: Path):
+    baseline = tmp_path / "00-baseline.png"
+    current = tmp_path / "01-setup-empty.png"
+    for image in (baseline, current):
+        image.write_bytes(b"\x89PNG\r\n\x1a\nsource")
+    manifest = tmp_path / "manifest.json"
+    manifest.write_text(
+        json.dumps(
+            [
+                _entry(baseline, git_head=BASELINE_HEAD, window_title="Fuente", scenario="baseline"),
+                _entry(current, git_head="a" * 40, scenario="setup-empty"),
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    assert verify_manifest(manifest, "a" * 40) == []
+
+
 def test_manifest_rejects_nonhistorical_baseline(tmp_path: Path):
     image = tmp_path / "later.png"
     image.write_bytes(b"\x89PNG\r\n\x1a\nsource")

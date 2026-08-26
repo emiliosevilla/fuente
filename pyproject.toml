@@ -84,6 +84,7 @@ include = ["fuente*"]
 "fuente.infrastructure.migrations" = ["*.sql"]
 "fuente.ui.static" = ["*.css"]
 "fuente.resources.demo_vault" = ["manifest.json", "notes/*.txt"]
+"fuente.resources" = ["obsidian/*.json", "templates/*/*.md", "agents/*/*.md"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

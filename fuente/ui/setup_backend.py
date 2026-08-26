@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import os
-import re
 import shutil
 import subprocess
 import sys
@@ -15,6 +14,7 @@ from pathlib import Path
 from typing import Any
 
 from fuente.infrastructure.atomic_files import atomic_write_json
+from fuente.integrations.obsidian import ObsidianProvisioner, VAULT_NAME
 
 def detect_obsidian_installed() -> bool:
     """Return whether Obsidian is available without importing installer runtime."""
@@ -77,6 +77,15 @@ def validate_directory_path(raw_path: str | Path) -> Path | None:
     return candidate
 
 
+def get_setup_status() -> dict[str, object]:
+    """Return measured setup state without creating a Vault or changing Obsidian."""
+    vault = load_startup_vault()
+    return {
+        "obsidian_installed": detect_obsidian_installed(),
+        "vault": ObsidianProvisioner().inspect(vault) if vault is not None else None,
+    }
+
+
 @dataclass(frozen=True)
 class _SetupOnboardingStatus:
     def as_dict(self) -> dict[str, Any]:
@@ -130,6 +139,7 @@ class FuenteSetupBackend:
             },
             "offline_mode": {"mode": "offline", "reason": "sin_vault"},
             "onboarding": _SetupOnboardingStatus().as_dict(),
+            "setup_status": get_setup_status(),
         }
 
     def get_settings_info(self) -> dict[str, Any]:
@@ -216,15 +226,22 @@ class FuenteSetupBackend:
             name = str(payload.get("vault_name") or "").strip()
             parent_raw = str(payload.get("parent_path") or "").strip()
             parent = validate_directory_path(parent_raw)
-        if not re.fullmatch(r"[^/\\\0]+", name) or name in {".", ".."}:
-            return {"error": "invalid_vault_name", "message": "Nombre de Vault no válido."}
+        if name != VAULT_NAME:
+            return {
+                "error": "invalid_vault_name",
+                "message": f"El Vault debe llamarse exactamente {VAULT_NAME}.",
+            }
         if parent is None:
             return {"error": "invalid_parent_path", "message": "La carpeta padre no es válida."}
+        if payload.get("consent") is not True:
+            return {
+                "error": "consent_required",
+                "message": "Confirma la configuración de Obsidian y la CLI para crear el Vault.",
+            }
         target = parent / name
         try:
-            target.mkdir()
-            (target / ".obsidian").mkdir()
-        except OSError as error:
+            result = ObsidianProvisioner().provision(target, consent=True)
+        except (OSError, PermissionError, ValueError) as error:
             return {"error": "vault_creation_failed", "message": str(error)}
         try:
             config_path = save_startup_vault(target)
@@ -239,6 +256,7 @@ class FuenteSetupBackend:
             "restart_required": True,
             "vault_path": str(target),
             "startup_config_path": str(config_path),
+            "setup": result,
             "log": f"Vault '{name}' creado en '{target}'. Reiniciando Fuente…",
         }
 
@@ -312,7 +330,7 @@ class FuenteSetupBackend:
                     "-e",
                     'tell application "System Events" to activate',
                     "-e",
-                    'return POSIX path of (choose file name with prompt (item 1 of argv) default name "Nuevo Vault")',
+                    'return POSIX path of (choose file name with prompt (item 1 of argv) default name "Fuente")',
                     "-e",
                     "end run",
                     "--",

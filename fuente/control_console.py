@@ -2319,7 +2319,7 @@ def launch_control_console(vault_path: Optional[Path] = None):
         api = FuentePyWebViewApi(backend)
         webview.settings["ALLOW_DOWNLOADS"] = True
         window = webview.create_window(
-            "Fuente — Configuración",
+            "Fuente y Caudal",
             url=str(html_file),
             js_api=api,
             width=1280,

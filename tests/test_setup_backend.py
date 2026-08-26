@@ -46,19 +46,21 @@ def test_setup_backend_rejects_normal_folder_without_obsidian_marker(tmp_path, m
     assert not pointer.exists()
 
 
-def test_setup_backend_guided_creation_produces_obsidian_vault(tmp_path, monkeypatch):
+def test_setup_backend_guided_creation_produces_fixed_fuente_vault(tmp_path, monkeypatch):
     pointer = tmp_path / "startup.json"
     parent = tmp_path / "vaults"
     parent.mkdir()
     monkeypatch.setattr(setup_backend, "startup_config_path", lambda: pointer)
     monkeypatch.setattr(setup_backend, "detect_obsidian_installed", lambda: True)
+    monkeypatch.setattr("fuente.integrations.obsidian.shutil.which", lambda _name: None)
 
     result = FuenteSetupBackend().create_vault({
-        "vault_name": "Mi Memoria",
+        "vault_name": "Fuente",
         "parent_path": str(parent),
+        "consent": True,
     })
 
-    created = parent / "Mi Memoria"
+    created = parent / "Fuente"
     assert result["restart_required"] is True
     assert result["startup_config_path"] == str(pointer)
     assert (created / ".obsidian").is_dir()
@@ -101,11 +103,13 @@ def test_setup_backend_guided_creation_accepts_native_target_path(tmp_path, monk
     parent.mkdir()
     monkeypatch.setattr(setup_backend, "startup_config_path", lambda: pointer)
     monkeypatch.setattr(setup_backend, "detect_obsidian_installed", lambda: True)
+    monkeypatch.setattr("fuente.integrations.obsidian.shutil.which", lambda _name: None)
 
     result = FuenteSetupBackend().create_vault({
-        "target_path": str(parent / "Mi Memoria"),
+        "target_path": str(parent / "Fuente"),
+        "consent": True,
     })
 
     assert result["restart_required"] is True
     assert result["startup_config_path"] == str(pointer)
-    assert (parent / "Mi Memoria" / ".obsidian").is_dir()
+    assert (parent / "Fuente" / ".obsidian").is_dir()

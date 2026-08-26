@@ -451,7 +451,7 @@
                     <div id="setup-obsidian-status" class="console-text-017" role="status" aria-live="polite"></div>
                     <div class="console-layout-040">
                         <button class="btn-secondary" id="setup-install-obsidian" data-onclick-command="installObsidian()">Instalar Obsidian</button>
-                        <button class="btn-secondary" id="setup-create-vault" data-onclick-command="createGuidedVault()">Crear tema guiado</button>
+                        <button class="btn-secondary" id="setup-create-vault" data-onclick-command="createGuidedVault()">Crear Vault Fuente</button>
                     </div>
                 </div>
 
@@ -2322,7 +2322,7 @@ document.addEventListener('keydown', function(event) {
             const status = document.getElementById('setup-obsidian-status');
             if (status) {
                 status.textContent = installed
-                    ? 'Obsidian está disponible. Selecciona una carpeta de notas o crea un tema nuevo.'
+                    ? 'Obsidian está disponible. Selecciona un Vault existente o crea el Vault Fuente.'
                     : 'Obsidian no está instalado. Instálalo para usar la biblioteca de notas.';
             }
             const install = document.getElementById('setup-install-obsidian');
@@ -2370,7 +2370,7 @@ document.addEventListener('keydown', function(event) {
 
         function createGuidedVault() {
             callNativeLongRequest('select_vault_target', function() {
-                return window.pywebview.api.select_vault_target('Elige la ubicación y el nombre del nuevo tema');
+                return window.pywebview.api.select_vault_target('Elige la carpeta padre para el Vault Fuente');
             }).then(function(targetPath) {
                 const setupStatus = document.getElementById('setup-obsidian-status');
                 if (!targetPath || typeof targetPath !== 'string') {
@@ -2381,18 +2381,19 @@ document.addEventListener('keydown', function(event) {
                 if (pathInput) pathInput.value = targetPath;
                 if (setupStatus) setupStatus.textContent = 'Carpeta elegida: ' + targetPath;
                 if (!window.confirm(
-                    'El tema se creará exactamente en:\n\n' + targetPath +
-                    '\n\nFuente creará esa carpeta y su configuración. ¿Continuar?'
+                    'El Vault Fuente se creará exactamente en:\n\n' + targetPath +
+                    '\n\nFuente configurará los recursos ocultos y consultará la CLI de Obsidian. ¿Continuar?'
                 )) return;
                 return callNativeRequest('create_vault', function() {
                     return window.pywebview.api.create_vault({
                         target_path: targetPath,
+                        consent: true,
                     });
                 });
             }).then(function(result) {
                 if (!result) {
                     const status = document.getElementById('setup-obsidian-status');
-                if (status) status.textContent = 'No se recibió respuesta al crear el tema.';
+                if (status) status.textContent = 'No se recibió respuesta al crear el Vault.';
                     return;
                 }
                 if (result.error) {
@@ -2405,7 +2406,7 @@ document.addEventListener('keydown', function(event) {
                 restartWithSelectedVault(result);
             }).catch(function(err) {
                 const status = document.getElementById('setup-obsidian-status');
-                if (status) status.textContent = String(err || 'No se pudo crear el tema.');
+                if (status) status.textContent = String(err || 'No se pudo crear el Vault.');
             });
         }
 
@@ -2730,7 +2731,7 @@ document.addEventListener('keydown', function(event) {
                 if (!info.setup_mode) loadCapabilities();
                 renderLinkedFolders();
                 populateOllamaModels(info.models, info.current_model);
-                if (statusEl) statusEl.textContent = 'Ajustes cargados desde el tema conectado.';
+                if (statusEl) statusEl.textContent = 'Ajustes cargados desde el Vault conectado.';
             }).catch(function(err) {
                 const message = String(err || nativeBackendUnavailableMessage());
                 renderSettingsLoadError(message);
@@ -4332,8 +4333,8 @@ document.addEventListener('keydown', function(event) {
                         const status = document.getElementById('bottom-status-line');
                         if (status) {
                             status.textContent = state.vault_path
-                                ? 'Tema conectado: ' + state.vault_path
-                                : 'No hay un tema conectado. Configúralo desde Ajustes.';
+                                ? 'Vault conectado: ' + state.vault_path
+                                : 'No hay un Vault conectado. Configúralo desde Ajustes.';
                             if (state.setup_mode) {
                                 renderSetupSettings({
                                     setup_mode: true,

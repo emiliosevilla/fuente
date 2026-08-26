@@ -23,19 +23,14 @@ from fuente.domain.vault_layout import VaultLayout
 from fuente.extractors.ocr_runtime import (
     resolve_tesseract_command,
 )
+from fuente.integrations.obsidian import VAULT_DIRECTORIES
 
 logger = logging.getLogger(__name__)
 
 RECEIPT_FILENAME = ".fuente_install_receipt.json"
 RECEIPT_VERSION = "1"
 DEFAULT_OLLAMA_URL = "http://localhost:11434"
-VAULT_SUBDIRS = (
-    "1_volcado",
-    "2_copiado",
-    "3_capturado",
-    "4_procesado",
-    "5_compartido",
-)
+VAULT_SUBDIRS = VAULT_DIRECTORIES[:5]
 OLLAMA_READY_TIMEOUT_SEC = 30.0
 OLLAMA_READY_POLL_SEC = 1.0
 OCR_REQUIRED_LANGUAGES = frozenset({"eng", "spa"})

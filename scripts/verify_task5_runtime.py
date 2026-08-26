@@ -114,7 +114,7 @@ def _integrated_transitions(vault_path: Path) -> dict[str, Any]:
     from fuente.domain.documents import content_hash_for_markdown
     from fuente.domain.errors import OutputApprovalRequiredError
     from fuente.domain.frontmatter import parse_frontmatter
-    from fuente.infrastructure.sqlite_store import JobStore
+    from fuente.infrastructure.sqlite_store import JobStore, UIStateStore
     from fuente.rag.router import RetrievalRouter
     from fuente.rag.semantic_chunker import SemanticChunker
 
@@ -329,7 +329,7 @@ def _integrated_transitions(vault_path: Path) -> dict[str, Any]:
 def _child(phase: str, vault: Path) -> int:
     import webview
 
-    from fuente.infrastructure.sqlite_store import JobStore
+    from fuente.infrastructure.sqlite_store import JobStore, UIStateStore
     from fuente.ui.bridge import FuentePyWebViewApi
 
     original_connect = sqlite3.connect
@@ -342,12 +342,82 @@ def _child(phase: str, vault: Path) -> int:
 
     sqlite3.connect = measured_connect
     store = JobStore(vault)
+    guard_write_failed = threading.Event()
+    guard_retry_failed = threading.Event()
     backend = SimpleNamespace(
         _job_store=store,
+        vault=SimpleNamespace(
+            active_theme="General",
+            get_available_themes=lambda: ["General"],
+        ),
         get_notes_service=lambda: SimpleNamespace(job_store=store),
         get_initial_state_dict=lambda: {},
     )
-    api = FuentePyWebViewApi(backend)
+    backend.validate_vault = lambda _path: {"vault_path": str(vault)}
+
+    class GuardProbeApi(FuentePyWebViewApi):
+        def __init__(self, probe_backend):
+            super().__init__(probe_backend)
+            self.block_writes = True
+            self.write_failures = 0
+            self.close_attempts = 0
+            self.close_returns = 0
+            self.closing_events = 0
+            self.cancelled_closes = 0
+            self.completion_calls = 0
+            self.restart_response: dict[str, Any] = {}
+            self.environment: dict[str, Any] = {}
+
+        def set_ui_state(self, scope, owner, key, value):
+            if self.block_writes and owner == "reader" and key == "filters":
+                self.write_failures += 1
+                guard_write_failed.set()
+                if self.write_failures >= 2:
+                    guard_retry_failed.set()
+                return self._error(
+                    "ui_state_persistence_failed", "forced post-ready SQLite failure"
+                )
+            return super().set_ui_state(scope, owner, key, value)
+
+        def probe_close(self):
+            from PyObjCTools import AppHelper
+            from webview.platforms.cocoa import BrowserView
+
+            self.close_attempts += 1
+            assert self._window is not None
+            native = BrowserView.instances[self._window.uid]
+            AppHelper.callAfter(native.window.performClose_, None)
+            self.close_returns += 1
+            return {"status": "close_returned"}
+
+        def _handle_window_closing(self):
+            allowed = super()._handle_window_closing()
+            self.closing_events += 1
+            if not allowed:
+                self.cancelled_closes += 1
+            return allowed
+
+        def restart_with_vault(self, vault_path):
+            response = super().restart_with_vault(vault_path)
+            self.restart_response = dict(response)
+            return response
+
+        def probe_unblock_ui_state(self):
+            self.block_writes = False
+            return {"status": "writes_unblocked"}
+
+        def probe_environment(self, local_storage_length, user_agent):
+            self.environment = {
+                "local_storage_length": local_storage_length,
+                "user_agent": user_agent,
+            }
+            return {"status": "recorded"}
+
+        def complete_pending_close(self):
+            self.completion_calls += 1
+            return super().complete_pending_close()
+
+    api = GuardProbeApi(backend) if phase == "guard" else FuentePyWebViewApi(backend)
     result: dict[str, object] = {}
     window = webview.create_window(
         f"Fuente Task 5 {phase}",
@@ -359,6 +429,7 @@ def _child(phase: str, vault: Path) -> int:
     )
     assert window is not None
     api.set_window(window)
+    window.events.closing += api._handle_window_closing
 
     def finish(value):
         result.update(value or {})
@@ -383,29 +454,109 @@ def _child(phase: str, vault: Path) -> int:
                     };
                 });
             """
-        else:
+        elif phase in {"read", "recover"}:
             script = """
                 window.pywebview.api.get_ui_state(
                     'persistent', 'main-window', 'workspace'
                 ).then(function(state) {
-                    return {
+                    return window.pywebview.api.get_ui_state(
+                        'persistent', 'reader', 'filters'
+                    ).then(function(filters) { return {
                         workspace: state.value,
+                        filter_search: filters.value && filters.value.search,
                         local_storage_length: window.localStorage.length,
                         user_agent: navigator.userAgent
-                    };
+                    }; });
                 });
             """
-        window.evaluate_js(script, callback=finish)
+        else:
+            script = """
+                window.pywebview.api.probe_environment(
+                    window.localStorage.length, navigator.userAgent
+                ).then(function() {
+                    return persistUiState(
+                        'reader', 'filters', {search: 'guarded-recovery'}
+                    );
+                });
+            """
+        window.evaluate_js(script, callback=None if phase == "guard" else finish)
 
     window.events.loaded += loaded
-    timer = threading.Timer(25, lambda: window.destroy())
+    timed_out = False
+
+    def force_destroy():
+        nonlocal timed_out
+        timed_out = True
+        api._close_authorized = True
+        window.destroy()
+
+    timer = threading.Timer(25, force_destroy)
     timer.start()
+    guard_errors: list[str] = []
+
+    def exercise_native_close_guard() -> None:
+        try:
+            if not guard_write_failed.wait(10):
+                raise RuntimeError("post-ready write failure was not observed")
+            api.probe_close()
+            for _attempt in range(100):
+                if api.cancelled_closes >= 1:
+                    break
+                threading.Event().wait(0.02)
+            if api.cancelled_closes < 1:
+                raise RuntimeError("native close was not cancelled")
+            if not guard_retry_failed.wait(5):
+                raise RuntimeError("cancelled close did not retry the pending write")
+            api.restart_with_vault(str(vault))
+            api.probe_close()
+            for _attempt in range(100):
+                if api.cancelled_closes >= 2:
+                    break
+                threading.Event().wait(0.02)
+            if api.cancelled_closes < 2:
+                raise RuntimeError("second native close was not cancelled")
+            api.probe_unblock_ui_state()
+            window.run_js("flushPendingUiState();")
+        except Exception as error:
+            guard_errors.append(f"{type(error).__name__}: {error}")
+
+    if phase == "guard":
+        threading.Thread(
+            target=exercise_native_close_guard,
+            name="task5-native-close-probe",
+            daemon=True,
+        ).start()
+    guard_filters = None
     try:
         webview.start(gui="cocoa", debug=False, private_mode=True)
+        if phase == "guard":
+            guard_filters = UIStateStore(store).get("persistent", "reader", "filters")
     finally:
         timer.cancel()
         store.close()
         sqlite3.connect = original_connect
+    if phase == "guard":
+        result.update(api.environment)
+        result.update(
+            {
+                "write_failures": api.write_failures,
+                "close_attempts": api.close_attempts,
+                "close_returns": api.close_returns,
+                "closing_events": api.closing_events,
+                "cancelled_closes": api.cancelled_closes,
+                "completion_calls": api.completion_calls,
+                "restart_error": api.restart_response.get("error"),
+                "filter_search": (
+                    guard_filters.get("search")
+                    if isinstance(guard_filters, dict)
+                    else None
+                ),
+                "timed_out": timed_out,
+                "guard_errors": guard_errors,
+            }
+        )
+        result["vault"] = str(vault)
+        result["sqlite_connect_calls"] = connection_count
     if not result:
         raise RuntimeError(f"PyWebView {phase} probe timed out")
     print(json.dumps(result, sort_keys=True))
@@ -416,7 +567,7 @@ def _run() -> int:
     with tempfile.TemporaryDirectory(prefix="fuente-task5-runtime-") as directory:
         vault = Path(directory).resolve()
         phases = []
-        for phase in ("write", "read"):
+        for phase in ("write", "read", "guard", "recover"):
             process = subprocess.run(
                 [sys.executable, __file__, "--child", phase, "--vault", str(vault)],
                 cwd=ROOT,
@@ -431,9 +582,11 @@ def _run() -> int:
 
         transition_contract = _integrated_transitions(vault)
 
+        initial_restart = phases[:2]
+        guard, recovered = phases[2], phases[3]
         checks = {
-            "two_process_restart": len(phases) == 2,
-            "workspace_restored": [item.get("workspace") for item in phases]
+            "two_process_restart": len(initial_restart) == 2,
+            "workspace_restored": [item.get("workspace") for item in initial_restart]
             == ["flow", "flow"],
             "local_storage_empty": all(
                 item.get("local_storage_length") == 0 for item in phases
@@ -457,6 +610,17 @@ def _run() -> int:
                 "mutated_bytes_seal"
             )
             == "pending_review",
+            "native_close_guard": guard.get("write_failures", 0) >= 2
+            and guard.get("close_attempts") == 2
+            and guard.get("close_returns") == 2
+            and guard.get("cancelled_closes") == 2
+            and guard.get("restart_error") == "ui_state_pending"
+            and guard.get("completion_calls") == 1
+            and guard.get("timed_out") is False
+            and guard.get("guard_errors") == [],
+            "native_close_recovery_restored": guard.get("filter_search")
+            == "guarded-recovery"
+            and recovered.get("filter_search") == "guarded-recovery",
             "one_state_database": len(list(vault.rglob("state.db"))) == 1,
         }
         output = {
@@ -471,7 +635,7 @@ def _run() -> int:
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--child", choices=("write", "read"))
+    parser.add_argument("--child", choices=("write", "read", "guard", "recover"))
     parser.add_argument("--vault", type=Path)
     args = parser.parse_args()
     if args.child:

@@ -180,6 +180,7 @@ def test_failed_ui_state_write_is_visible_and_remains_queued():
         for name in (
             "reportUiStateFailure",
             "scheduleUiStateRetry",
+            "notifyNativeUiStatePending",
             "persistUiState",
         )
     )
@@ -215,6 +216,8 @@ def test_ui_state_write_failure_after_ready_retries_and_recovers():
         for name in (
             "reportUiStateFailure",
             "scheduleUiStateRetry",
+            "notifyNativeUiStatePending",
+            "notifyNativeCloseWhenReady",
             "flushPendingUiState",
             "persistUiState",
         )
@@ -224,6 +227,7 @@ const assert = require('node:assert/strict');
 const pendingUiState = new Map();
 const UI_STATE_RETRY_DELAY_MS = 1500;
 let uiStateRetryTimer = null;
+let nativeCloseRequested = false;
 let retry = null;
 let calls = 0;
 const status = {textContent: ''};
@@ -264,6 +268,7 @@ def test_native_close_drain_completes_only_after_sqlite_write_recovers():
         for name in (
             "reportUiStateFailure",
             "scheduleUiStateRetry",
+            "notifyNativeUiStatePending",
             "notifyNativeCloseWhenReady",
             "flushPendingUiState",
             "persistUiState",
@@ -289,6 +294,7 @@ global.window = {pywebview: {api: {
             ? Promise.resolve({status: 'saved'})
             : Promise.reject(new Error('database temporarily locked'));
     },
+    ui_state_pending_changed() { return Promise.resolve({status: 'recorded'}); },
     complete_pending_close() {
         closeCompletions += 1;
         return Promise.resolve({status: 'closing'});

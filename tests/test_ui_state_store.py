@@ -79,6 +79,8 @@ def test_console_keeps_business_state_out_of_local_storage() -> None:
     html = (Path(__file__).parents[1] / "consola_preview.html").read_text(
         encoding="utf-8"
     )
-    assert "localStorage" not in html
+    assert "localStorage.getItem" not in html
+    assert "localStorage.setItem" not in html
+    assert "localStorage.removeItem('fuente.visual-style')" in html
     assert "api.get_ui_state" in html
     assert "api.set_ui_state" in html

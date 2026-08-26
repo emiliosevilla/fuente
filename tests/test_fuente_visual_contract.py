@@ -162,6 +162,18 @@ def test_shell_uses_named_svg_controls_and_shared_disclosures() -> None:
     assert 'aria-hidden="true"' in html.split('id="source-context-drawer"', 1)[1].split(">", 1)[0]
     assert 'aria-hidden="true"' in html.split('id="flow-detail-drawer"', 1)[1].split(">", 1)[0]
 
+
+def test_structural_controls_use_shared_svg_icons_beyond_the_rail() -> None:
+    html = _read(HTML_PATH)
+    for glyph in ("◄", "⌕", "×", "&times;"):
+        assert glyph not in html
+    assert 'id="ui-icon-definitions"' in html
+    assert 'id="ui-icon-back"' in html
+    assert 'id="ui-icon-search"' in html
+    assert 'id="ui-icon-close"' in html
+    assert html.count('class="ui-icon"') >= 16
+    assert "createUiIcon('close')" in html
+
 def test_reader_rendering_does_not_add_innerhtml_assignments() -> None:
     html = _read(HTML_PATH)
     assert re.search(r"\.innerHTML\s*=", html) is None

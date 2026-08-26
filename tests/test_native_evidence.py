@@ -145,6 +145,65 @@ def test_maximized_capture_uses_measured_screen_region(tmp_path: Path):
     ]
 
 
+def test_capture_rejects_requested_size_mismatch_before_writing(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+):
+    output = tmp_path / "mismatch.png"
+    window = {
+        "window_id": 44,
+        "window_owner": "Python",
+        "window_owner_pid": 123,
+        "window_title": "Fuente y Caudal",
+        "x": 0,
+        "y": 26,
+        "width": 1280,
+        "height": 802,
+    }
+    monkeypatch.setattr(
+        capture_native_ui,
+        "_configure_window",
+        lambda *args, **kwargs: (window, (1280, 850)),
+    )
+    monkeypatch.setattr(
+        capture_native_ui,
+        "_runtime_signal",
+        lambda process_id: "vmmap:WebKit.framework",
+    )
+
+    with pytest.raises(RuntimeError, match="requested 1280x850.*measured 1280x802"):
+        capture_native_ui.capture_window(
+            "Fuente y Caudal",
+            output,
+            resize=(1280, 850),
+        )
+
+    assert not output.exists()
+
+
+def test_manifest_rejects_requested_size_mismatch(tmp_path: Path):
+    image = tmp_path / "home.png"
+    image.write_bytes(b"\x89PNG\r\n\x1a\nsource")
+    manifest = tmp_path / "manifest.json"
+    manifest.write_text(
+        json.dumps(
+            [
+                _entry(
+                    image,
+                    width=1280,
+                    height=802,
+                    requested_width=1280,
+                    requested_height=850,
+                )
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    assert "requested dimensions do not match measured dimensions" in verify_manifest(
+        manifest, "a" * 40
+    )[0]
+
+
 @pytest.mark.parametrize(("field", "message"), [("width", "width"), ("height", "height")])
 def test_manifest_rejects_boolean_dimensions(tmp_path: Path, field: str, message: str):
     image = tmp_path / "home.png"

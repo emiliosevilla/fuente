@@ -50,13 +50,6 @@ def test_blob_urls_are_revoked_after_the_click_and_failures_are_visible():
     assert "exportInFlight = false" in CONSOLE
 
 
-def test_optimized_cycle_surfaces_backend_gate_errors_instead_of_claiming_success():
-    handler = _between(CONSOLE, "function triggerOptimizedCycle", "function openCurrentNoteInObsidian")
-    assert "if (res && res.error)" in handler
-    assert "Procesamiento detenido: ' + res.error" in handler
-    assert "return;" in handler
-
-
 def test_reader_export_keeps_opaque_document_id_and_strict_csp():
     execute = _between(CONSOLE, "function executeExportFormat", "function reportExportError")
     assert "currentSelectedDocumentId" in execute
@@ -77,62 +70,3 @@ def test_obsidian_reader_uri_uses_configured_vault_path_and_absolute_note_path()
     assert "obsidian://open?path=" in opener
     assert "vault=Vault_Fuente" not in opener
     assert "vaultName" not in opener
-
-
-def test_graph_draws_canonical_origins_and_provenance_edges_visibly():
-    renderer = _between(
-        CONSOLE, "function initObsidianGraphCanvas", "function renderReaderLoadError"
-    )
-
-    assert "relation: l.relation || 'wikilink'" in renderer
-    assert "l.relation === 'origin'" in renderer
-    assert "ctx.setLineDash" in renderer
-    assert "n.node_type === 'canonical_origin'" in renderer
-    assert "n.node_type === 'canonical_moc'" in renderer
-
-
-def test_graph_footer_separates_physical_wikilinks_from_validated_origins():
-    renderer = _between(
-        CONSOLE, "function initObsidianGraphCanvas", "function renderReaderLoadError"
-    )
-
-    assert 'id="graph-wikilinks-count"' in CONSOLE
-    assert 'id="graph-origins-count"' in CONSOLE
-    assert 'id="graph-links-count"' not in CONSOLE
-    assert "relation === 'wikilink'" in renderer
-    assert "relation === 'origin'" in renderer
-    assert "wikilinksCountEl.innerText = wikilinkCount" in renderer
-    assert "originsCountEl.innerText = originCount" in renderer
-    assert '>Enlaces <b id="graph-wikilinks-count"' in CONSOLE
-    assert '>Orígenes <b id="graph-origins-count"' in CONSOLE
-    assert "Las líneas unen notas relacionadas" in CONSOLE
-
-
-def test_graph_layout_and_edges_are_stable_visible_and_bounded():
-    renderer = _between(
-        CONSOLE, "function initObsidianGraphCanvas", "function renderReaderLoadError"
-    )
-
-    assert ".sort((a, b) => String(a.id).localeCompare(String(b.id)))" in renderer
-    assert "Math.random()" not in renderer
-    assert "const linkColor = rootStyles.getPropertyValue('--fuente-snow-0')" in renderer
-    assert "ctx.globalAlpha = isHighlighted ? 1.0 : 0.85" in renderer
-    assert "physicsFramesRemaining" in renderer
-    assert "Math.max(layoutPadding" in renderer
-    assert "ctx.measureText(visibleLabel + '…')" in renderer
-    assert "ctx.textAlign = labelOnRight ? 'left' : 'right'" in renderer
-    assert "obsidianGraphEngine = null" in renderer
-    assert "requestGraphRender(180)" in renderer
-    assert CONSOLE.count("function loadObsidianGraphView()") == 1
-    assert "function zoomReaderGraph(factor)" in CONSOLE
-    assert "function centerReaderGraph()" in CONSOLE
-
-
-def test_graph_skips_colliding_labels_but_keeps_hover_and_moc_labels_visible():
-    renderer = _between(
-        CONSOLE, "function initObsidianGraphCanvas", "function renderReaderLoadError"
-    )
-
-    assert "const labelBoxes = []" in renderer
-    assert "overlapsLabel" in renderer
-    assert "!isHovered && !isCanonicalMoc" in renderer

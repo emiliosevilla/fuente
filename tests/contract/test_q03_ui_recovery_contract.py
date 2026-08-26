@@ -72,7 +72,6 @@ def test_static_preview_is_explicit_and_native_loads_fail_visibly():
     reader = _function_source("loadReaderNotes", "highlightSidebarNote")
     content = _function_source("loadNoteContent", "loadCategoryData")
     settings = _function_source("loadSettingsData", "showButtonFeedback")
-    graph = _function_source("loadObsidianGraphView", "renderReaderLoadError")
 
     assert "new URLSearchParams(window.location.search)" in preview_mode
     assert "params.get('preview') === 'mock'" in preview_mode
@@ -86,7 +85,6 @@ def test_static_preview_is_explicit_and_native_loads_fail_visibly():
     assert "callNativeRequest('get_note_content'" in content
     assert "callNativeLongRequest('get_settings_info'" in settings
     assert "callNativeRequest('get_sync_inputs'" in settings
-    assert "isExplicitPreviewMode()" in graph
     assert "nativeBackendUnavailableMessage()" in reader
     assert "nativeBackendUnavailableMessage()" in settings
 

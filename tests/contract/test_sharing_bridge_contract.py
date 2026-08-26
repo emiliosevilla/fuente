@@ -22,11 +22,3 @@ def test_bridge_returns_workspace_without_absolute_paths(bridge_backend):
     assert payload["note"]["document_id"] == note_id
     assert "absolute_path" not in json.dumps(payload)
     assert str(backend.vault.config.vault_path) not in json.dumps(payload)
-
-
-def test_bridge_rejects_invalid_reply_payload(bridge_backend):
-    bridge, _backend = bridge_backend
-
-    result = bridge.add_discussion_reply("shared-note", {"body": ""})
-
-    assert result["error"] == "validation_error"

@@ -90,8 +90,7 @@ def _wait_for_shutdown_signal() -> None:
 
 
 def run_headless(vault_path: Path, wait_for_shutdown=None) -> None:
-    """Arranca los servicios continuos (FolderMonitor + OptimizadoGraphLoop) sin abrir
-    ninguna interfaz gráfica (Tkinter/PyWebView), pensado para Docker/CI."""
+    """Arranca la ingesta continua sin interfaz gráfica para Docker/CI."""
     logger.info(f"=== Fuente en modo headless (sin interfaz) — Vault: {vault_path} ===")
     config = get_default_config(vault_path)
     lifecycle = ApplicationLifecycle(config, mode="headless")
@@ -163,13 +162,13 @@ def main():
             logger.info(f"Ingesta completada: {files_processed}/{files_found} archivo(s) de 1_volcado procesados.")
         else:
             logger.info("No se encontraron archivos nuevos en 1_volcado para procesar.")
-        logger.info("Interconexiones del grafo de conocimiento refinadas.")
+        logger.info("Estado de ingesta actualizado.")
 
         print("\n" + "=" * 65)
         print(" ✅ INGESTA Y FLUSH FINALIZADOS CON ÉXITO")
         print("=" * 65)
-        print(" Todos los archivos han sido procesados y el mapa de conocimiento")
-        print(" en Obsidian ha sido actualizado correctamente.\n")
+        print(" Todos los archivos disponibles se han procesado; revisa las notas")
+        print(" pendientes y continúa su edición en Obsidian.\n")
     elif args.headless:
         vault_path = vault_path or Path.home() / "Documents" / "Fuente_Vault"
         vault_path.mkdir(parents=True, exist_ok=True)

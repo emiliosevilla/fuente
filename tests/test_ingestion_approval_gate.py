@@ -5,7 +5,7 @@ import pytest
 
 from fuente.domain.errors import NoteRevisionConflictError
 from fuente.domain.frontmatter import parse_frontmatter
-from fuente.graph_engine.atomic_generator import AtomicNoteGenerator
+from fuente.application.note_generation import AtomicNoteGenerator
 from tests.test_ingestion_recovery import SOURCE_IDENTITY, _build_harness
 
 

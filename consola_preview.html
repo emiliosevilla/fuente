@@ -8,14 +8,12 @@
     <!-- La tipografía global de la consola y sus modales se define en console.css. -->
     <link rel="stylesheet" data-fuente-tokens="true" href="fuente/ui/static/fuente_tokens.css">
     <link rel="stylesheet" href="fuente/ui/static/console.css">
-    <link rel="stylesheet" href="assets/toastui-editor/toastui-editor.css">
 </head>
 <body>
 
     <nav id="primary-navigation" class="primary-navigation" aria-label="Espacios de Fuente">
         <button type="button" class="workspace-trigger is-active" data-workspace-target="home" data-onclick-command="switchWorkspace('home')" aria-current="page"><span aria-hidden="true">F</span><span>Inicio</span></button>
         <button type="button" class="workspace-trigger" data-workspace-target="notes" data-onclick-command="switchWorkspace('notes')" aria-current="false"><span aria-hidden="true">N</span><span>Notas</span></button>
-        <button type="button" class="workspace-trigger" data-workspace-target="map" data-onclick-command="switchWorkspace('map')" aria-current="false"><span aria-hidden="true">M</span><span>Mapa</span></button>
     </nav>
 
     <main class="workspace-stage" role="main">
@@ -79,8 +77,8 @@
                 </div>
                 <button class="btn-secondary" data-onclick-command="promptCreateTheme()">+ Nuevo tema</button>
                 <span class="console-layout-004"></span>
-                <button class="btn-primary" id="btn-run-optimized" data-onclick-command="triggerOptimizedCycle()">
-                    <span id="optimized-spinner" class="is-hidden">⚙️</span> Procesar material
+                <button class="btn-primary" data-onclick-command="triggerAction('step2_transcribe')">
+                    Procesar material
                 </button>
                 <button class="btn-secondary" data-onclick-command="syncAllInputs()">
                     Actualizar entradas
@@ -122,13 +120,13 @@
         </div>
 
         <!-- MAPA SIMPLE DEL FLUJO -->
-        <div class="graph-section fuente-flow" id="fuente-flow">
-            <div class="graph-title">De archivos a notas útiles</div>
+        <div class="flow-section fuente-flow" id="fuente-flow">
+            <div class="flow-title">De archivos a notas útiles</div>
             
-            <div class="subgraphs-container">
-                <div class="subgraph-box">
-                    <div class="subgraph-header">
-                        <span class="subgraph-title">Recopilar</span>
+            <div class="flow-stages">
+                <div class="flow-stage">
+                    <div class="flow-stage-header">
+                        <span class="flow-stage-title">Recopilar</span>
                         <span class="node-badge" id="badge-step1">Última vez: --/--/---- --:--:--</span>
                     </div>
                     <div class="node-card" data-onclick-command="triggerAction('step1_flush')">
@@ -139,9 +137,9 @@
 
                 <div class="arrow-connector" aria-hidden="true"></div>
 
-                <div class="subgraph-box">
-                    <div class="subgraph-header">
-                        <span class="subgraph-title">Convertir</span>
+                <div class="flow-stage">
+                    <div class="flow-stage-header">
+                        <span class="flow-stage-title">Convertir</span>
                         <span class="node-badge" id="badge-step2">Última vez: --/--/---- --:--:--</span>
                     </div>
                     <div class="node-card" data-onclick-command="triggerAction('step2_transcribe')">
@@ -152,22 +150,22 @@
 
                 <div class="arrow-connector" aria-hidden="true"></div>
 
-                <div class="subgraph-box">
-                    <div class="subgraph-header">
-                        <span class="subgraph-title">Organizar</span>
+                <div class="flow-stage">
+                    <div class="flow-stage-header">
+                        <span class="flow-stage-title">Organizar</span>
                         <span class="node-badge" id="badge-step3">Última vez: --/--/---- --:--:--</span>
                     </div>
-                    <div class="node-card" data-onclick-command="triggerAction('step3_structure')">
-                        <div class="node-name">Organizar notas</div>
-                        <div class="node-desc">Separar, enlazar y ordenar las ideas</div>
+                    <div class="node-card" data-onclick-command="openApprovalInbox()">
+                        <div class="node-name">Revisar notas</div>
+                        <div class="node-desc">Comprobar las notas preparadas antes de compartir</div>
                     </div>
                 </div>
 
                 <div class="arrow-connector" aria-hidden="true"></div>
 
-                <div class="subgraph-box">
-                    <div class="subgraph-header">
-                        <span class="subgraph-title">Consultar</span>
+                <div class="flow-stage">
+                    <div class="flow-stage-header">
+                        <span class="flow-stage-title">Consultar</span>
                         <span class="node-badge" id="badge-step4">Última vez: --/--/---- --:--:--</span>
                     </div>
                     <div class="node-card" data-onclick-command="openModal('modal-reader')">
@@ -178,9 +176,9 @@
 
                 <div class="arrow-connector" aria-hidden="true"></div>
 
-                <div class="subgraph-box">
-                    <div class="subgraph-header">
-                        <span class="subgraph-title">Compartir</span>
+                <div class="flow-stage">
+                    <div class="flow-stage-header">
+                        <span class="flow-stage-title">Compartir</span>
                         <span class="node-badge" id="badge-step5">Última vez: --/--/---- --:--:--</span>
                     </div>
                     <div class="node-card" data-onclick-command="openApprovalInbox()">
@@ -221,13 +219,6 @@
         <div id="reader-workspace-host"></div>
     </section>
 
-    <section id="workspace-map" class="workspace-panel-root" data-workspace="map" tabindex="-1" aria-labelledby="workspace-map-title" hidden>
-        <div class="workspace-placeholder">
-            <h1 id="workspace-map-title">Mapa</h1>
-            <p>Explora relaciones, orígenes y notas en un espacio independiente.</p>
-            <button type="button" class="btn-primary" data-onclick-command="openReaderGraphModal()">Abrir mapa</button>
-        </div>
-    </section>
     </main>
 
     <!-- MODAL NOTAS -->
@@ -242,13 +233,10 @@
                 <div class="console-layout-005">
                     <button class="btn-small" id="btn-reader-back" data-onclick-command="goBackReaderNote()" disabled title="Volver a la nota anterior">◄ Atrás</button>
                     <button class="btn-small btn-toggle active" id="btn-reader-mode-list" data-onclick-command="switchReaderView('list')">Notas</button>
-                    <button class="btn-small btn-toggle" id="btn-reader-mode-graph" data-onclick-command="switchReaderView('graph')">Mapa</button>
-                    <button class="btn-small btn-toggle" id="btn-reader-mode-moc" data-onclick-command="openMOCNote()">Índice</button>
                     <span class="console-layout-006"></span>
                     <button class="btn-small" data-onclick-command="triggerAction('copy_reader_note', {}, this)">Copiar</button>
                     <button class="btn-small" data-onclick-command="triggerAction('export_reader_note', {}, this)">Exportar</button>
                     <button class="btn-small" data-onclick-command="triggerAction('open_obsidian', {}, this)">Obsidian</button>
-                    <button class="btn-small" data-onclick-command="openFusionWorkflow()">Unir</button>
                     <button class="close-btn" data-onclick-command="closeModal('modal-reader')">&times;</button>
                 </div>
             </div>
@@ -264,7 +252,6 @@
                     <section class="reader-context-content" data-reader-region="content" aria-label="Contenido de la nota">
                         <div class="reader-dual-pane reader-view" id="reader-view-list">
                             <div class="reader-sidebar">
-                                <div class="reader-pinned-container" id="reader-pinned-moc"></div>
                                 <div class="reader-sidebar-divider">Biblioteca</div>
                                 <div class="reader-note-list-scroll">
                                     <ul class="reader-note-list" id="reader-note-list">
@@ -282,7 +269,6 @@
                         <div class="workspace-tabs" role="tablist" aria-label="Más sobre la nota">
                             <button type="button" class="btn-small workspace-tab is-active" id="workspace-tab-assistant" role="tab" aria-selected="true" aria-controls="workspace-panel-assistant" data-onclick-command="switchWorkspaceTab('assistant')">Contexto</button>
                             <button type="button" class="btn-small workspace-tab" id="workspace-tab-notes" role="tab" aria-selected="false" aria-controls="workspace-panel-notes" data-onclick-command="switchWorkspaceTab('notes')">Preparar</button>
-                            <button type="button" class="btn-small workspace-tab" id="workspace-tab-discussion" role="tab" aria-selected="false" aria-controls="workspace-panel-discussion" data-onclick-command="switchWorkspaceTab('discussion')">Conversación</button>
                         </div>
                         <div id="workspace-panel-assistant" class="workspace-panel" role="tabpanel" aria-labelledby="workspace-tab-assistant">
                             <div class="reader-properties-visual">
@@ -299,120 +285,15 @@
                         </div>
                         <div id="workspace-panel-notes" class="workspace-panel is-hidden" role="tabpanel" aria-labelledby="workspace-tab-notes">
                             <h2>Preparación</h2>
-                            <div id="processed-editor-state" class="workspace-state-card">
+                            <div id="processed-share-state" class="workspace-state-card">
                                 <p class="workspace-empty-state">Aquí puedes preparar la nota antes de compartirla.</p>
                                 <button type="button" class="btn-primary" id="document-share-button" disabled>Compartir nota</button>
                                 <p id="document-share-reason" class="workspace-help" role="status">Primero revisa la nota.</p>
                                 <p id="document-share-path" class="workspace-help" aria-live="polite"></p>
                             </div>
                         </div>
-                        <div id="workspace-panel-discussion" class="workspace-panel is-hidden" role="tabpanel" aria-labelledby="workspace-tab-discussion">
-                            <h2>Discusión</h2>
-                            <p class="workspace-help">Edita la nota antes de compartirla; la copia compartida queda cerrada.</p>
-                            <div id="document-author-card" class="author-card" aria-label="Autor de la nota">Autor pendiente</div>
-                            <div id="discussion-events" class="discussion-events" aria-live="polite"></div>
-                            <p id="discussion-status" class="workspace-help" role="status">Comparte la nota para abrir la discusión.</p>
-                            <form id="discussion-reply-form" class="discussion-composer">
-                                <fieldset id="discussion-reply-fields" disabled>
-                                    <label for="discussion-reply-author">Tu nombre</label>
-                                    <input id="discussion-reply-author" name="author" type="text" autocomplete="name" required>
-                                    <label for="discussion-reply-body">Comentario</label>
-                                    <textarea id="discussion-reply-body" name="body" rows="4" required></textarea>
-                                    <button type="submit" class="btn-primary" id="discussion-reply-submit">Publicar comentario</button>
-                                </fieldset>
-                            </form>
-                        </div>
                     </aside>
                 </div>
-                <template id="reader-editor-template">
-                    <section class="reader-editor-panel" id="reader-editor-panel" aria-label="Editor Markdown">
-                        <div class="reader-editor-toolbar">
-                            <span class="reader-editor-mode-hint">Editor visual Markdown</span>
-                            <span id="reader-edit-state" class="reader-edit-state" role="status" aria-live="polite">Cargando editor...</span>
-                        </div>
-                                <label class="reader-editor-label" for="reader-markdown-editor">Texto de la nota</label>
-                        <div id="reader-markdown-editor" class="reader-markdown-editor" aria-describedby="reader-edit-state"></div>
-                        <div id="reader-editor-conflict" class="reader-editor-conflict is-hidden" role="alert">
-                            <p id="reader-editor-conflict-message">La nota cambió en otra sesión.</p>
-                            <div class="reader-editor-conflict-actions">
-                                <button type="button" class="btn-small" data-reader-editor-reload>Recargar versión del servidor</button>
-                                <button type="button" class="btn-small" data-reader-editor-keep>Seguir editando</button>
-                            </div>
-                        </div>
-                        <div class="reader-editor-actions">
-                            <button type="button" class="btn-primary" id="reader-markdown-save" disabled>Guardar</button>
-                            <button type="button" class="btn-secondary" id="reader-markdown-cancel">Cancelar</button>
-                        </div>
-                    </section>
-                </template>
-            </div>
-        </div>
-    </div>
-
-    <!-- MODAL GRAFO: independiente para no reducir el área de lectura -->
-    <div class="modal-overlay" id="modal-reader-graph" role="dialog" aria-modal="true" aria-labelledby="reader-graph-modal-title" aria-hidden="true">
-        <div class="modal-container reader-graph-modal-container">
-            <div class="modal-header">
-                <div>
-                    <div class="modal-title" id="reader-graph-modal-title">Mapa</div>
-                    <div class="graph-header-summary">Explora relaciones, orígenes y notas</div>
-                </div>
-                <div class="graph-header-actions">
-                    <button class="btn-small" data-onclick-command="zoomReaderGraph(0.82)" aria-label="Alejar mapa">−</button>
-                    <button class="btn-small" data-onclick-command="zoomReaderGraph(1.22)" aria-label="Acercar mapa">+</button>
-                    <button class="btn-small" data-onclick-command="centerReaderGraph()">Centrar</button>
-                    <button class="close-btn" data-onclick-command="closeModal('modal-reader-graph')" aria-label="Cerrar mapa">&times;</button>
-                </div>
-            </div>
-            <div class="modal-body reader-graph-modal-body">
-                <div class="reader-graph-container console-layout-009" id="reader-view-graph">
-                    <canvas id="obsidian-graph-canvas" class="graph-canvas console-layout-010"></canvas>
-                    <div class="graph-small-hint is-hidden" id="graph-small-hint" role="status">
-                        <strong>Tu mapa acaba de empezar</strong>
-                        <span>Aparecerán nuevas conexiones al procesar y enlazar más notas.</span>
-                    </div>
-                    <div class="console-layout-011" role="note" aria-label="Leyenda del grafo">
-                        <span class="graph-metric">Notas <b id="graph-nodes-count" class="graph-counter-nodes">0</b></span>
-                        <span class="graph-metric">Enlaces <b id="graph-wikilinks-count" class="graph-counter-wikilinks">0</b></span>
-                        <span class="graph-metric">Orígenes <b id="graph-origins-count" class="graph-counter-origins">0</b></span>
-                        <span class="graph-help">Las líneas unen notas relacionadas; el índice aparece en amarillo. Haz clic para abrir, arrastra para mover.</span>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- MODAL FUSIÓN REVISABLE: sólo document_id, preview read-only y confirmación explícita -->
-    <div class="modal-overlay" id="modal-fusion">
-        <div class="modal-container modal-wide">
-            <div class="modal-header">
-                <div class="modal-title">Unir notas</div>
-                <button class="close-btn" data-onclick-command="closeModal('modal-fusion')">&times;</button>
-            </div>
-            <div class="modal-body">
-                <p>Elige las notas y mira el resultado antes de crear una nueva.</p>
-                <div id="fusion-candidate-list" role="list" aria-label="Candidatos de fusión"></div>
-                <div id="fusion-source-selection" aria-live="polite"></div>
-                <div class="metadata-field">
-                    <label for="fusion-title">Título de la nota pendiente</label>
-                    <input type="text" id="fusion-title" autocomplete="off">
-                </div>
-                <div class="metadata-field">
-                    <label for="fusion-issue">Categoría destino</label>
-                    <input type="text" id="fusion-issue" value="_Sin_Cuestion" autocomplete="off">
-                </div>
-                <button class="btn-secondary" id="fusion-preview-button" data-onclick-command="previewSelectedFusion()" disabled>Ver antes</button>
-                <section id="fusion-preview-pane" aria-live="polite">
-                    <p>El resultado aparecerá aquí.</p>
-                </section>
-                <label class="fusion-confirmation-label">
-                    <input type="checkbox" id="fusion-confirmation">
-                    He revisado las notas y quiero crear una nueva.
-                </label>
-                <div id="fusion-status" role="status" aria-live="polite"></div>
-            </div>
-            <div class="modal-footer">
-                <button class="btn-primary" id="fusion-commit-button" data-onclick-command="commitSelectedFusion()" disabled>Crear nota nueva</button>
             </div>
         </div>
     </div>
@@ -470,39 +351,6 @@
         </div>
     </div>
 
-    <!-- MODAL CHAT (FUENTE EL CONVERSADOR) -->
-    <div class="modal-overlay" id="modal-chat">
-        <div class="modal-container console-layout-025">
-            <div class="modal-header">
-            <div class="modal-title">Consultar notas</div>
-                <div>
-                    <button class="btn-small" data-onclick-command="clearChatHistory()">Limpiar charla</button>
-                    <button class="close-btn" data-onclick-command="closeModal('modal-chat')">&times;</button>
-                </div>
-            </div>
-            <div id="chat-context-badge" class="console-layout-026">
-                                <span><b>Buscando en:</b> <span id="chat-context-label" class="console-text-008">Todas las notas</span></span>
-                                <small id="chat-context-subtext" class="console-text-009">Todas las notas de este tema</small>
-            </div>
-            <div class="modal-body">
-                <div class="chat-container-box">
-                    <div class="chat-messages-scroll" id="chat-messages">
-                        <div class="chat-bubble ai" id="chat-welcome-bubble">
-                            <strong>Fuente:</strong> <span id="chat-welcome-text">Hola. Pregúntame por tus notas.</span>
-                        </div>
-                    </div>
-                    <div class="chat-input-bar">
-                        <input type="text" class="chat-input-field" id="chat-input" placeholder="Escribe tu consulta sobre los documentos..." data-onkeypress-command="if(event.key==='Enter') sendChatMessage()">
-                        <button class="btn-primary" data-onclick-command="sendChatMessage()">Enviar</button>
-                    </div>
-                </div>
-            </div>
-            <div class="modal-footer">
-                <span id="chat-privacy-footer" class="console-text-002">La charla se queda en este equipo.</span>
-            </div>
-        </div>
-    </div>
-
     <!-- MODAL CUARENTENA -->
     <div class="modal-overlay" id="modal-quarantine">
         <div class="modal-container">
@@ -551,7 +399,6 @@
                     <div class="console-text-012">Resumen:</div>
                     <ul class="console-layout-029">
                         <li>Notas preparadas: <b id="stat-notes-total-count" class="console-text-003">0</b></li>
-                        <li>Enlaces entre notas: <b id="stat-notes-links-count" class="console-text-004">0</b></li>
                         <li>Búsqueda rápida: <b class="console-text-013">Lista</b></li>
                     </ul>
                 </div>
@@ -733,9 +580,7 @@
         </div>
     </div>
 
-    <!-- MODAL BANDEJA DE APROBACIÓN
-         El editor visual se sirve desde el bundle local de TOAST UI Editor.
-         El guardado sigue persistiendo únicamente body_markdown mediante el bridge nativo. -->
+    <!-- MODAL BANDEJA DE APROBACIÓN -->
     <div class="modal-overlay console-layer-002" id="modal-approval">
         <div class="modal-container">
             <div class="modal-header">
@@ -928,7 +773,6 @@
         </div>
     </div>
 
-    <script src="assets/toastui-editor/toastui-editor.js"></script>
     <script nonce="fuente-console">
         if (!window.pywebview && window.location.protocol !== 'file:') {
             window.__fuenteBrowserBridge = true;
@@ -970,15 +814,15 @@
             '3': {
                 title: '3. Procesa el material',
                 paragraphs: [
-                    '«Procesar material» lee las fuentes preparadas, separa las ideas y crea notas relacionadas entre sí.',
+                    '«Procesar material» lee las fuentes preparadas y separa las ideas en notas.',
                     'Si algo no se puede leer o necesita revisión, Fuente lo aísla y te lo muestra. No borra el original.'
                 ]
             },
             '4': {
                 title: '4. Consulta tus notas',
                 paragraphs: [
-                    'En «Notas» puedes buscar por palabras o por una frase completa, abrir el mapa y leer cada nota.',
-                    'Puedes consultar la nota abierta o todas las notas del tema. La respuesta se genera en tu equipo cuando la IA local está disponible.'
+                    'En «Notas» puedes buscar por palabras o por una frase completa y leer cada nota.',
+                    'Puedes consultar la nota abierta desde el asistente. La respuesta se genera en tu equipo cuando la IA local está disponible.'
                 ]
             },
             '5': {
@@ -1020,7 +864,6 @@
             if (command.startsWith('switchSettingsTab(')) return switchSettingsTab(args[0]);
             if (command.startsWith('switchWorkspaceTab(')) return switchWorkspaceTab(args[0]);
             if (command.startsWith('executeExportFormat(')) return executeExportFormat(args[0]);
-            if (command.startsWith('zoomReaderGraph(')) return zoomReaderGraph(Number(command.match(/[\d.]+/)[0]));
             if (command.startsWith('changeActiveTheme(')) return changeActiveTheme(element.value);
             if (command === 'handleThemeTriggerKeydown(event)') return handleThemeTriggerKeydown(event);
             if (command === 'togglePathMode(this)') return togglePathMode(element);
@@ -1029,16 +872,11 @@
                 'promptCreateTheme()': promptCreateTheme,
                 'toggleThemeMenu()': toggleThemeMenu,
                 'toggleVisualStyle()': toggleVisualStyle,
-                'triggerOptimizedCycle()': triggerOptimizedCycle,
                 'clearLogView()': clearLogView,
-                'openMOCNote()': openMOCNote,
                 'toggleReaderLibrary()': toggleReaderLibrary,
                 'toggleReaderContext()': toggleReaderContext,
-                'centerReaderGraph()': centerReaderGraph,
                 'filterReaderNotes()': filterReaderNotes,
                 'submitCreateThemeModal()': submitCreateThemeModal,
-                'clearChatHistory()': clearChatHistory,
-                'sendChatMessage()': sendChatMessage,
                 'browseVaultFolder()': browseVaultFolder,
                 'browseWhisperModelFolder()': browseWhisperModelFolder,
                 'addLinkedInputFolder()': addLinkedInputFolder,
@@ -1047,9 +885,6 @@
                 'resetDefaultSettings()': resetDefaultSettings,
                 'saveSettings()': saveSettings,
                 'openApprovalInbox()': openApprovalInbox,
-                'openFusionWorkflow()': openFusionWorkflow,
-                'previewSelectedFusion()': previewSelectedFusion,
-                'commitSelectedFusion()': commitSelectedFusion,
                 'saveApprovalMetadata()': saveApprovalMetadata,
                 'approveSelectedNote()': approveSelectedNote,
                 'approveAndExportSelectedNote()': approveAndExportSelectedNote,
@@ -1425,7 +1260,7 @@ document.addEventListener('keydown', function(event) {
                 });
             }
             updateModalBodyLock();
-            if (id === 'modal-reader' || id === 'modal-chat') {
+            if (id === 'modal-reader') {
                 updateStepBadge('badge-step4');
             }
             if (id === 'modal-reader') { loadReaderNotes(); }
@@ -1748,7 +1583,7 @@ document.addEventListener('keydown', function(event) {
             }
             items.forEach(function(job) {
                 const row = document.createElement('article');
-                row.classList.add('graph-section');
+                row.classList.add('flow-section');
                 appendQueueField(row, 'Referencia', queueReference(job.job_id));
                 appendQueueField(row, 'Entrada', job.source_relative_path);
                 appendQueueField(row, 'Paso', queueStageLabel(job.stage));
@@ -1831,7 +1666,7 @@ document.addEventListener('keydown', function(event) {
 
         function renderHealthItem(container, key, item) {
             const row = document.createElement('article');
-            row.classList.add('graph-section');
+            row.classList.add('flow-section');
             const heading = document.createElement('h3');
             heading.textContent = (item && item.label) || key;
             const status = document.createElement('strong');
@@ -2045,187 +1880,7 @@ document.addEventListener('keydown', function(event) {
             return metadata;
         }
 
-        let fusionCandidates = [];
-        let fusionPreview = null;
-
-        function fusionStatus(message, isError) {
-            const status = document.getElementById('fusion-status');
-            if (status) {
-                status.textContent = message || '';
-                status.dataset.state = isError ? 'error' : 'ok';
-            }
-        }
-
-        function renderFusionCandidates(candidates) {
-            const list = document.getElementById('fusion-candidate-list');
-            if (!list) return;
-            list.replaceChildren();
-            fusionCandidates = Array.isArray(candidates) ? candidates : [];
-            if (!fusionCandidates.length) {
-                const empty = document.createElement('p');
-                empty.textContent = 'No hay combinaciones disponibles.';
-                list.appendChild(empty);
-                return;
-            }
-            fusionCandidates.forEach(function(candidate, index) {
-                const item = document.createElement('div');
-                item.className = 'fusion-candidate-item';
-                item.setAttribute('role', 'listitem');
-                const label = document.createElement('label');
-                const checkbox = document.createElement('input');
-                checkbox.type = 'checkbox';
-                checkbox.dataset.fusionCandidateIndex = String(index);
-                checkbox.addEventListener('change', refreshFusionSelection);
-                const text = document.createElement('span');
-                text.textContent = 'Candidato ' + String(index + 1) + ': ' +
-                    (candidate.reasons || []).join(', ') + ' · ' +
-                    (candidate.document_ids || []).join(' · ');
-                label.append(checkbox, text);
-                item.appendChild(label);
-                list.appendChild(item);
-            });
-        }
-
-        function refreshFusionSelection() {
-            const selected = selectedFusionIds();
-            const selection = document.getElementById('fusion-source-selection');
-            const previewButton = document.getElementById('fusion-preview-button');
-            if (selection) selection.textContent = selected.length + ' origen(es) seleccionado(s): ' + selected.join(', ');
-            if (previewButton) previewButton.disabled = selected.length < 2;
-            fusionPreview = null;
-            const commitButton = document.getElementById('fusion-commit-button');
-            if (commitButton) commitButton.disabled = true;
-        }
-
-        function selectedFusionIds() {
-            const ids = [];
-            document.querySelectorAll('[data-fusion-candidate-index]:checked').forEach(function(checkbox) {
-                const candidate = fusionCandidates[Number(checkbox.dataset.fusionCandidateIndex)];
-                (candidate && candidate.document_ids || []).forEach(function(documentId) {
-                    if (!ids.includes(documentId)) ids.push(documentId);
-                });
-            });
-            return ids;
-        }
-
-        function openFusionWorkflow() {
-            fusionPreview = null;
-            document.getElementById('fusion-confirmation').checked = false;
-            document.getElementById('fusion-commit-button').disabled = true;
-            openModal('modal-fusion');
-            fusionStatus('Cargando opciones...', false);
-            if (window.pywebview && window.pywebview.api) {
-                window.pywebview.api.get_fusion_candidates().then(function(result) {
-                    if (result && result.error) {
-                        fusionStatus(result.message || result.error, true);
-                        return;
-                    }
-                    renderFusionCandidates(result && result.candidates);
-                    fusionStatus('Selecciona al menos dos orígenes y revisa el preview.', false);
-                }).catch(function(error) {
-                    fusionStatus('No se pudieron cargar los candidatos: ' + String(error), true);
-                });
-            } else {
-                renderFusionCandidates([]);
-                fusionStatus('Vista previa local: Fuente no está conectada.', false);
-            }
-        }
-
-        function renderFusionPreview(preview) {
-            const pane = document.getElementById('fusion-preview-pane');
-            if (!pane) return;
-            pane.replaceChildren();
-            const heading = document.createElement('h3');
-            heading.textContent = preview.title + ' · ' + preview.target_issue;
-            pane.appendChild(heading);
-            const sourceHeading = document.createElement('h4');
-            sourceHeading.textContent = 'Fuentes y resúmenes';
-            pane.appendChild(sourceHeading);
-            (preview.sources || []).forEach(function(source) {
-                const details = document.createElement('details');
-                const summary = document.createElement('summary');
-                summary.textContent = source.title + ' · ' + source.document_id + ' · revisión ' + source.revision;
-                details.appendChild(summary);
-                details.appendChild(createNoteContent(readerProjectionToDocumentModel(source.projection)));
-                pane.appendChild(details);
-            });
-            const mergedHeading = document.createElement('h4');
-            mergedHeading.textContent = 'Resultado propuesto';
-            pane.appendChild(mergedHeading);
-            pane.appendChild(createNoteContent(readerProjectionToDocumentModel(readerMarkdownToProjection(preview.body_markdown))));
-        }
-
-        function previewSelectedFusion() {
-            fusionPreview = null;
-            document.getElementById('fusion-confirmation').checked = false;
-            document.getElementById('fusion-commit-button').disabled = true;
-            const ids = selectedFusionIds();
-            const title = document.getElementById('fusion-title').value.trim();
-            const issue = document.getElementById('fusion-issue').value.trim();
-            if (ids.length < 2 || !title || !issue) {
-                fusionStatus('Selecciona al menos dos orígenes e indica título y cuestión.', true);
-                return;
-            }
-            fusionStatus('Construyendo preview de sólo lectura...', false);
-            if (!(window.pywebview && window.pywebview.api)) return;
-            window.pywebview.api.preview_fusion(ids, title, issue).then(function(result) {
-                if (result && result.error) {
-                    fusionPreview = null;
-                    document.getElementById('fusion-confirmation').checked = false;
-                    document.getElementById('fusion-commit-button').disabled = true;
-                    fusionStatus(result.message || result.error, true);
-                    return;
-                }
-                fusionPreview = result;
-                renderFusionPreview(result);
-                document.getElementById('fusion-confirmation').checked = false;
-                document.getElementById('fusion-commit-button').disabled = true;
-                fusionStatus('Vista previa lista. Confirma para crear la nota.', false);
-            }).catch(function(error) {
-                fusionPreview = null;
-                document.getElementById('fusion-confirmation').checked = false;
-                document.getElementById('fusion-commit-button').disabled = true;
-                fusionStatus('No se pudo construir el preview: ' + String(error), true);
-            });
-        }
-
-        function commitSelectedFusion() {
-            const confirmation = document.getElementById('fusion-confirmation');
-            if (!fusionPreview || !confirmation || !confirmation.checked) {
-                fusionStatus('Debes revisar el preview y confirmar la creación.', true);
-                return;
-            }
-            fusionStatus('Comprobando las fuentes y creando la nota...', false);
-            if (!(window.pywebview && window.pywebview.api)) return;
-            window.pywebview.api.commit_fusion(
-                fusionPreview.preview_id,
-                fusionPreview.source_revisions
-            ).then(function(result) {
-                if (result && result.error) {
-                    fusionPreview = null;
-                    confirmation.checked = false;
-                    document.getElementById('fusion-commit-button').disabled = true;
-                    fusionStatus(result.message || 'Conflicto de revisión: vuelve a previsualizar.', true);
-                    return;
-                }
-                fusionStatus('Nota creada. Los documentos originales no han cambiado.', false);
-                fusionPreview = null;
-                confirmation.checked = false;
-                document.getElementById('fusion-commit-button').disabled = true;
-                if (typeof loadReaderNotes === 'function') loadReaderNotes();
-            }).catch(function(error) {
-                fusionPreview = null;
-                confirmation.checked = false;
-                document.getElementById('fusion-commit-button').disabled = true;
-                fusionStatus('No se pudo confirmar la fusión: ' + String(error), true);
-            });
-        }
-
         document.addEventListener('change', function(event) {
-            if (event.target && event.target.id === 'fusion-confirmation') {
-                const button = document.getElementById('fusion-commit-button');
-                if (button) button.disabled = !fusionPreview || !event.target.checked;
-            }
             if (event.target && metadataFieldIds.indexOf(event.target.id.replace('metadata-', '')) !== -1) {
                 approvalMetadataEditGeneration += 1;
                 approvalMetadataDirty = true;
@@ -2677,14 +2332,8 @@ document.addEventListener('keydown', function(event) {
                         document.getElementById('stat-notes-total-count').innerText = state.stats.notes || '0';
                     }
                 });
-                window.pywebview.api.get_graph_data().then(function(data) {
-                    if (data && data.links) {
-                        document.getElementById('stat-notes-links-count').innerText = data.links.length;
-                    }
-                });
             } else {
                 document.getElementById('stat-notes-total-count').innerText = '0';
-                document.getElementById('stat-notes-links-count').innerText = '0';
             }
         }
 
@@ -3371,13 +3020,6 @@ document.addEventListener('keydown', function(event) {
             return `Sello de exportación [${dd}/${mm}/${yyyy} - ${hh}:${min}:${ss}]`;
         }
 
-        function getFullNotePath(notePath) {
-            const defaultBase = "/Users/emiliosevillaortego/Documents/Programación/fuente/Vault_Fuente/4_procesado/";
-            if (!notePath) return defaultBase + "_Indice_MOC.md";
-            if (notePath.startsWith("/")) return notePath;
-            return defaultBase + (notePath.endsWith(".md") ? notePath : notePath + ".md");
-        }
-
         function escapeHtml(value) {
             const node = document.createElement('span');
             node.textContent = String(value);
@@ -3818,47 +3460,12 @@ document.addEventListener('keydown', function(event) {
             }
         }
 
-        function triggerOptimizedCycle(issueName) {
-            const btn = document.getElementById('btn-run-optimized');
-            const spinner = document.getElementById('optimized-spinner');
-            if (btn) btn.disabled = true;
-            if (spinner) spinner.classList.add('is-active');
-
-            const activeDisplay = currentActiveTheme.replace(/_/g, ' ');
-            const issueLabel = issueName ? ' para la categoría "' + issueName + '"' : ' en el tema "' + activeDisplay + '"';
-            log('Iniciando el procesamiento' + issueLabel + '...');
-
-            if (window.pywebview && window.pywebview.api) {
-                window.pywebview.api.run_optimized_cycle(issueName || '').then(function(res) {
-                    if (btn) btn.disabled = false;
-                    if (spinner) spinner.classList.remove('is-active');
-                    if (res && res.error) {
-                        log('No se pudo procesar: ' + res.error + (res.message ? ' - ' + res.message : ''));
-                        showPapiroToast('Procesamiento detenido: ' + res.error, true);
-                        return;
-                    }
-                    if (res && res.log) log(res.log);
-                    if (res && res.stats) updateDashboardStats(res.stats);
-                    if (typeof loadReaderNotes === 'function') loadReaderNotes();
-                    showPapiroToast('Procesamiento terminado.');
-                }).catch(function(err) {
-                    if (btn) btn.disabled = false;
-                    if (spinner) spinner.classList.remove('is-active');
-                    log('Error durante el procesamiento: ' + err);
-                    showPapiroToast('No se pudo terminar el procesamiento', true);
-                });
-            } else {
-                setTimeout(function() {
-                    if (btn) btn.disabled = false;
-                    if (spinner) spinner.classList.remove('is-active');
-                    log('Procesamiento de ejemplo terminado. Se generaron notas e índice.');
-                    showPapiroToast('Procesamiento terminado.');
-                }, 1200);
-            }
-        }
-
         function openCurrentNoteInObsidian(btnEl) {
-            let noteFile = currentSelectedNotePath ? currentSelectedNotePath : '4_procesado/_Indice_MOC.md';
+            let noteFile = currentSelectedNotePath;
+            if (!noteFile) {
+                log('Selecciona una nota antes de abrirla en Obsidian.');
+                return;
+            }
             noteFile = noteFile.replace(/^\/+/, '');
             if (!noteFile.endsWith('.md')) noteFile += '.md';
             if (!noteFile.startsWith('4_procesado/')) noteFile = '4_procesado/' + noteFile;
@@ -3885,9 +3492,6 @@ document.addEventListener('keydown', function(event) {
             } else if (actionName === 'step2_transcribe') {
                 logTitle = 'procesado de datos desestructurados.';
                 updateStepBadge('badge-step2');
-            } else if (actionName === 'step3_structure' || actionName === 'reindex_notes') {
-                logTitle = 'preparación de notas inteligentes.';
-                updateStepBadge('badge-step3');
             } else if (actionName === 'copy_reader_note') {
                 copyCurrentReaderNote(btnEl);
                 return;
@@ -3910,133 +3514,16 @@ document.addEventListener('keydown', function(event) {
             } else {
                 if (actionName === 'flush_sources' || actionName === 'step1_flush') { log('Recopilación completada hacia 1_volcado (modo vista previa).'); }
                 else if (actionName === 'step2_transcribe') { log('Estructuración de datos completada hacia 3_capturado.'); }
-                else if (actionName === 'step3_structure') { log('Preparación de notas inteligentes con Bucle Optimizado finalizada.'); }
                 else if (actionName === 'quick_help') { openModal('modal-help'); }
                 else if (actionName === 'stat_ram') { alert('Purga de memoria RAM ejecutada.'); }
-                else if (actionName === 'stat_notes') { alert('Hay 142 notas preparadas y 380 enlaces entre ellas.'); }
+                else if (actionName === 'stat_notes') { alert('Hay 142 notas preparadas.'); }
                 else if (actionName === 'stat_input') { alert('Archivos por procesar: 3 en 1_volcado.'); }
                 else if (actionName === 'stat_processed') { openModal('modal-category'); }
             }
         }
 
-        function formatChatSourceLabels(sources, sourceLabels) {
-            if (sourceLabels && sourceLabels.length) {
-                return sourceLabels.map(function(label) { return String(label); });
-            }
-            if (!sources || !sources.length) return [];
-            return sources.map(function(src) {
-                if (typeof src === 'string') return src;
-                if (src && typeof src === 'object') {
-                    return src.relative_path || src.document_id || src.chunk_id || '';
-                }
-                return '';
-            }).filter(Boolean);
-        }
-
-        function appendChatBubble(container, kind, label, text, sources, meta) {
-            const bubble = document.createElement('div');
-            bubble.className = 'chat-bubble ' + kind;
-            const sender = document.createElement('strong');
-            sender.textContent = label;
-            // Never assign model/chat text via innerHTML. Use textContent only.
-            bubble.append(sender, document.createTextNode(' ' + String(text == null ? '' : text)));
-            if (meta && meta.error) {
-                const err = document.createElement('div');
-                err.classList.add('console-layout-068');
-                err.textContent = 'Error: ' + (meta.error.message || meta.error.code || 'fallo de Ollama');
-                bubble.appendChild(err);
-            }
-            if (meta && meta.retrieval_mode) {
-                const mode = document.createElement('div');
-                mode.classList.add('console-layout-069');
-                mode.textContent = 'Modo de recuperación: ' + meta.retrieval_mode;
-                bubble.appendChild(mode);
-            }
-            const labels = formatChatSourceLabels(sources, meta && meta.source_labels);
-            if (labels.length) {
-                const sourceText = document.createElement('div');
-                sourceText.classList.add('console-layout-070');
-                sourceText.textContent = 'Orígenes: ' + labels.join(', ');
-                bubble.appendChild(sourceText);
-            }
-            container.appendChild(bubble);
-            container.scrollTop = container.scrollHeight;
-        }
-
-        function sendChatMessage() {
-            const inputEl = document.getElementById('chat-input');
-            const msg = inputEl.value.trim();
-            if (!msg) return;
-
-            const chatScroll = document.getElementById('chat-messages');
-
-            appendChatBubble(chatScroll, 'user', 'Tú:', msg);
-            inputEl.value = '';
-
-            const contextPayload = {
-                context_mode: activeChatContextMode,
-                note_title: activeChatNoteTitle,
-                note_path: activeChatNotePath,
-                document_id: activeChatDocumentId
-            };
-
-            if (window.pywebview && window.pywebview.api) {
-                window.pywebview.api.send_chat_message(msg, contextPayload).then(function(reply) {
-                    if (!reply || typeof reply !== 'object') {
-                        appendChatBubble(chatScroll, 'ai', 'Fuente:', String(reply || ''), [], {
-                            error: { code: 'invalid_reply', message: 'Respuesta de chat inválida' },
-                            retrieval_mode: 'none'
-                        });
-                        return;
-                    }
-                    if (reply.error && !reply.text && !reply.answer) {
-                        appendChatBubble(chatScroll, 'ai', 'Fuente:', reply.message || 'No se pudo responder.', [], {
-                            error: { code: reply.error, message: reply.message || String(reply.error) },
-                            retrieval_mode: 'none'
-                        });
-                        return;
-                    }
-                    const answer = reply.text || reply.answer || '';
-                    appendChatBubble(chatScroll, 'ai', 'Fuente:', answer, reply.sources, {
-                        error: (reply.error && typeof reply.error === 'object') ? reply.error : null,
-                        retrieval_mode: reply.retrieval_mode || 'none',
-                        source_labels: reply.source_labels || []
-                    });
-                }).catch(function(err) {
-                    appendChatBubble(chatScroll, 'ai', 'Fuente:', 'No se pudo completar la consulta.', [], {
-                        error: { code: 'ollama_unavailable', message: String(err || 'conexión local no disponible') },
-                        retrieval_mode: 'none'
-                    });
-                });
-            } else {
-                setTimeout(function() {
-                    appendChatBubble(
-                        chatScroll,
-                        'ai',
-                        'Fuente:',
-                        'Vista previa: la charla real necesita la conexión local de Fuente.',
-                        [],
-                        {
-                            error: { code: 'offline_preview', message: 'Fuente no está conectada' },
-                            retrieval_mode: 'none'
-                        }
-                    );
-                }, 400);
-            }
-        }
-
-        function clearChatHistory() {
-            const chat = document.getElementById('chat-messages');
-            const welcome = document.getElementById('chat-welcome-bubble');
-            Array.from(chat.children).forEach(function(child) {
-                if (child !== welcome) {
-                    child.remove();
-                }
-            });
-        }
-
         function switchWorkspaceTab(tabId) {
-            const allowed = ['assistant', 'notes', 'discussion'];
+            const allowed = ['assistant', 'notes'];
             if (allowed.indexOf(tabId) === -1) return;
             allowed.forEach(function(id) {
                 const tab = document.getElementById('workspace-tab-' + id);
@@ -4053,7 +3540,7 @@ document.addEventListener('keydown', function(event) {
         let currentDocumentWorkspace = null;
 
         function showWorkspaceError(message) {
-            const status = document.getElementById('discussion-status');
+            const status = document.getElementById('document-share-reason');
             if (status) status.textContent = message || 'No se pudo completar la operación.';
         }
 
@@ -4061,49 +3548,20 @@ document.addEventListener('keydown', function(event) {
             const shareButton = document.getElementById('document-share-button');
             const reason = document.getElementById('document-share-reason');
             const path = document.getElementById('document-share-path');
-            const replyFields = document.getElementById('discussion-reply-fields');
-            const replyButton = document.getElementById('discussion-reply-submit');
-            const discussionStatus = document.getElementById('discussion-status');
             const canShare = Boolean(state && state.can_share);
-            const isShared = Boolean(state && state.shared);
             if (shareButton) shareButton.disabled = !canShare;
             if (reason) reason.textContent = canShare ? 'Revisión aprobada; lista para compartir.' : ((state && state.reason) || 'Requiere aprobación editorial vigente.');
             if (path) path.textContent = (state && state.shared_path) ? 'Publicado en: ' + state.shared_path : '';
-            if (replyFields) replyFields.disabled = !isShared;
-            if (replyButton) replyButton.disabled = !isShared;
-            if (discussionStatus && !isShared) discussionStatus.textContent = 'Comparte la nota para abrir la discusión.';
-            if (discussionStatus && isShared) discussionStatus.textContent = 'Discusión de la nota compartida.';
-        }
-
-        function renderDiscussionEvents(events) {
-            const container = document.getElementById('discussion-events');
-            if (!container) return;
-            container.replaceChildren();
-            (events || []).forEach(function(event) {
-                const item = document.createElement('article');
-                item.className = 'discussion-event';
-                const author = document.createElement('span');
-                author.className = 'discussion-event-author';
-                author.textContent = event.author || 'Autor';
-                const body = document.createElement('p');
-                body.textContent = event.body || '';
-                item.append(author, body);
-                container.appendChild(item);
-            });
         }
 
         function renderDocumentWorkspace(workspace) {
             currentDocumentWorkspace = workspace || null;
-            const note = workspace && workspace.note;
-            const author = document.getElementById('document-author-card');
-            if (author) author.textContent = 'Autor: ' + ((note && note.author) || 'No identificado');
             renderShareState({
                 can_share: Boolean(workspace && workspace.can_share),
                 shared: Boolean(workspace && workspace.shared),
                 shared_path: workspace && workspace.shared_output && workspace.shared_output.relative_path,
                 reason: workspace && workspace.share_reason,
             });
-            renderDiscussionEvents(workspace && workspace.discussion);
         }
 
         function loadDocumentWorkspace(documentId) {
@@ -4137,26 +3595,6 @@ document.addEventListener('keydown', function(event) {
                 .catch(function() { renderWorkspaceChatReply({error: {message: 'No se pudo consultar la nota.'}}); });
         }
 
-        function submitDiscussionReply(event) {
-            event.preventDefault();
-            const author = document.getElementById('discussion-reply-author');
-            const body = document.getElementById('discussion-reply-body');
-            if (!currentDocumentWorkspace || !currentDocumentWorkspace.shared || !currentDocumentWorkspace.note || !window.pywebview || !window.pywebview.api) {
-                showWorkspaceError('Comparte la nota antes de publicar comentarios.');
-                return;
-            }
-            window.pywebview.api.add_discussion_reply(currentDocumentWorkspace.note.document_id, {
-                author: author ? author.value : '', body: body ? body.value : '', parent_id: null
-            }).then(function(result) {
-                if (result && !result.error) {
-                    if (body) body.value = '';
-                    loadDocumentWorkspace(currentDocumentWorkspace.note.document_id);
-                } else {
-                    showWorkspaceError((result && (result.message || result.error)) || 'No se pudo publicar el comentario.');
-                }
-            }).catch(function() { showWorkspaceError('No se pudo publicar el comentario.'); });
-        }
-
         function shareCurrentDocument() {
             if (!currentDocumentWorkspace || !currentDocumentWorkspace.note || !window.pywebview || !window.pywebview.api) return;
             const note = currentDocumentWorkspace.note;
@@ -4168,477 +3606,20 @@ document.addEventListener('keydown', function(event) {
         }
 
         function switchReaderView(view) {
-            if (view === 'graph') {
-                openReaderGraphModal();
-                return;
-            }
+            if (view !== 'list') return;
             const listBtn = document.getElementById('btn-reader-mode-list');
-            const graphBtn = document.getElementById('btn-reader-mode-graph');
             const listView = document.getElementById('reader-view-list');
-
-            if (view === 'list') {
-                if (listBtn) listBtn.classList.add('active');
-                if (graphBtn) graphBtn.classList.remove('active');
-                if (listView) {
-                    listView.classList.remove('is-hidden');
-                    listView.classList.add('is-active');
-                }
-            }
+            if (listBtn) listBtn.classList.add('active');
+            if (listView) listView.classList.remove('is-hidden');
         }
 
-        function openReaderGraphModal() {
-            const graphBtn = document.getElementById('btn-reader-mode-graph');
-            const listBtn = document.getElementById('btn-reader-mode-list');
-            if (graphBtn) graphBtn.classList.add('active');
-            if (listBtn) listBtn.classList.remove('active');
-            openModal('modal-reader-graph');
-            loadObsidianGraphView();
-        }
-
-        let obsidianGraphEngine = null;
-        let obsidianGraphControls = null;
-
-        function zoomReaderGraph(factor) {
-            if (obsidianGraphControls) obsidianGraphControls.zoom(factor);
-        }
-
-        function centerReaderGraph() {
-            if (obsidianGraphControls) obsidianGraphControls.center();
-        }
-
-        function initObsidianGraphCanvas(data) {
-            const canvas = document.getElementById('obsidian-graph-canvas');
-            if (!canvas) return;
-            if (obsidianGraphEngine) cancelAnimationFrame(obsidianGraphEngine);
-            obsidianGraphEngine = null;
-            obsidianGraphControls = null;
-            const ctx = canvas.getContext('2d');
-            const nodesCountEl = document.getElementById('graph-nodes-count');
-            const wikilinksCountEl = document.getElementById('graph-wikilinks-count');
-            const originsCountEl = document.getElementById('graph-origins-count');
-            const smallHint = document.getElementById('graph-small-hint');
-            const rootStyles = getComputedStyle(document.documentElement);
-            const originColor = rootStyles.getPropertyValue('--fuente-frost-2').trim() || '#81A1C1';
-            const mocColor = rootStyles.getPropertyValue('--fuente-warning').trim() || '#EBCB8B';
-            const linkColor = rootStyles.getPropertyValue('--fuente-snow-0').trim() || '#D8DEE9';
-            const highlightedLinkColor = rootStyles.getPropertyValue('--fuente-snow-2').trim() || '#ECEFF4';
-            const nodeColor = rootStyles.getPropertyValue('--fuente-polar-0').trim() || '#2E3440';
-            const hoveredNodeColor = rootStyles.getPropertyValue('--fuente-polar-2').trim() || '#434C5E';
-            const nodeBorderColor = rootStyles.getPropertyValue('--fuente-snow-2').trim() || '#ECEFF4';
-            const labelHaloColor = rootStyles.getPropertyValue('--fuente-polar-0').trim() || '#071311';
-            const labelTextColor = rootStyles.getPropertyValue('--fuente-snow-2').trim() || '#F1F7F4';
-
-            const dpr = window.devicePixelRatio || 1;
-            const width = canvas.parentElement.clientWidth || 800;
-            const height = canvas.parentElement.clientHeight || 480;
-
-            canvas.width = width * dpr;
-            canvas.height = height * dpr;
-
-            let nodes = [...(data.nodes || [])]
-                .sort((a, b) => String(a.id).localeCompare(String(b.id)));
-            let links = data.links || [];
-
-            if (nodesCountEl) nodesCountEl.innerText = nodes.length;
-            let wikilinkCount = 0;
-            let originCount = 0;
-            links.forEach(link => {
-                const relation = link.relation || 'wikilink';
-                if (relation === 'wikilink') wikilinkCount += 1;
-                if (relation === 'origin') originCount += 1;
-            });
-            if (wikilinksCountEl) wikilinksCountEl.innerText = wikilinkCount;
-            if (originsCountEl) originsCountEl.innerText = originCount;
-            if (smallHint) smallHint.classList.toggle('is-hidden', nodes.length > 1);
-
-            if (nodes.length === 0) {
-                ctx.clearRect(0, 0, canvas.width, canvas.height);
-                ctx.fillStyle = getComputedStyle(document.documentElement)
-                    .getPropertyValue('--fuente-snow-0').trim() || '#888';
-                ctx.font = '14px Arial, sans-serif';
-                ctx.fillText('No hay notas en 4_procesado para construir el gráfico', width / 2 - 160, height / 2);
-                return;
-            }
-
-            // Estado de Pan & Zoom
-            let zoom = 1.0;
-            let panX = 0;
-            let panY = 0;
-            let isPanning = false;
-            let panStartX = 0;
-            let panStartY = 0;
-
-            const centerX = width / 2;
-            const centerY = height / 2;
-            const radius = Math.min(width, height) * 0.3;
-            const layoutPadding = 28;
-
-            nodes.forEach((n, idx) => {
-                const angle = (idx / nodes.length) * 2 * Math.PI;
-                n.x = centerX + radius * Math.cos(angle);
-                n.y = centerY + radius * Math.sin(angle);
-                n.radius = 6;
-            });
-
-            const nodeMap = {};
-            nodes.forEach(n => nodeMap[n.id] = n);
-
-            let activeLinks = [];
-            links.forEach(l => {
-                const s = typeof l.source === 'string' ? nodeMap[l.source] : l.source;
-                const t = typeof l.target === 'string' ? nodeMap[l.target] : l.target;
-                if (s && t) activeLinks.push({
-                    source: s,
-                    target: t,
-                    relation: l.relation || 'wikilink'
-                });
-            });
-
-            let draggedNode = null;
-            let hoveredNode = null;
-            let dragMoved = false;
-            let physicsFramesRemaining = 180;
-
-            function requestGraphRender(frames) {
-                physicsFramesRemaining = Math.max(physicsFramesRemaining, frames || 1);
-                if (!obsidianGraphEngine) obsidianGraphEngine = requestAnimationFrame(render);
-            }
-
-            obsidianGraphControls = {
-                zoom: function(factor) {
-                    const nextZoom = Math.max(0.3, Math.min(4, zoom * factor));
-                    panX = centerX - (centerX - panX) * (nextZoom / zoom);
-                    panY = centerY - (centerY - panY) * (nextZoom / zoom);
-                    zoom = nextZoom;
-                    requestGraphRender(1);
-                },
-                center: function() {
-                    zoom = 1;
-                    panX = 0;
-                    panY = 0;
-                    requestGraphRender(30);
-                }
-            };
-
-            function getMousePos(e) {
-                const rect = canvas.getBoundingClientRect();
-                return {
-                    sx: e.clientX - rect.left,
-                    sy: e.clientY - rect.top
-                };
-            }
-
-            function screenToWorld(sx, sy) {
-                return {
-                    wx: (sx - panX) / zoom,
-                    wy: (sy - panY) / zoom
-                };
-            }
-
-            canvas.onmousedown = function(e) {
-                const { sx, sy } = getMousePos(e);
-                const { wx, wy } = screenToWorld(sx, sy);
-
-                draggedNode = null;
-                dragMoved = false;
-
-                for (let i = 0; i < nodes.length; i++) {
-                    const n = nodes[i];
-                    const dx = n.x - wx;
-                    const dy = n.y - wy;
-                    const hitRadius = (n.radius + 8) / zoom;
-                    if (Math.sqrt(dx * dx + dy * dy) < hitRadius) {
-                        draggedNode = n;
-                        break;
-                    }
-                }
-
-                if (!draggedNode) {
-                    isPanning = true;
-                    panStartX = sx - panX;
-                    panStartY = sy - panY;
-                    canvas.classList.add('is-panning');
-                }
-            };
-
-            canvas.onmousemove = function(e) {
-                const { sx, sy } = getMousePos(e);
-                const { wx, wy } = screenToWorld(sx, sy);
-
-                if (draggedNode) {
-                    draggedNode.x = wx;
-                    draggedNode.y = wy;
-                    dragMoved = true;
-                    physicsFramesRemaining = Math.max(physicsFramesRemaining, 60);
-                } else if (isPanning) {
-                    panX = sx - panStartX;
-                    panY = sy - panStartY;
-                } else {
-                    hoveredNode = null;
-                    for (let i = 0; i < nodes.length; i++) {
-                        const n = nodes[i];
-                        const dx = n.x - wx;
-                        const dy = n.y - wy;
-                        const hitRadius = (n.radius + 8) / zoom;
-                        if (Math.sqrt(dx * dx + dy * dy) < hitRadius) {
-                            hoveredNode = n;
-                            break;
-                        }
-                    }
-                    canvas.classList.toggle('is-hovered', Boolean(hoveredNode));
-                }
-                requestGraphRender(draggedNode || isPanning ? 2 : 1);
-            };
-
-            canvas.onmouseup = function(e) {
-                if (draggedNode && !dragMoved && (draggedNode.document_id || draggedNode.path)) {
-                    switchReaderView('list');
-                    navigateReaderNote(draggedNode.document_id || draggedNode.path);
-                }
-                draggedNode = null;
-                isPanning = false;
-                canvas.classList.remove('is-panning');
-                canvas.classList.toggle('is-hovered', Boolean(hoveredNode));
-                requestGraphRender(2);
-            };
-
-            canvas.onwheel = function(e) {
-                e.preventDefault();
-                const zoomFactor = Math.pow(0.9985, e.deltaY);
-                const newZoom = Math.max(0.3, Math.min(4.0, zoom * zoomFactor));
-                const { sx, sy } = getMousePos(e);
-                
-                panX = sx - (sx - panX) * (newZoom / zoom);
-                panY = sy - (sy - panY) * (newZoom / zoom);
-                zoom = newZoom;
-                requestGraphRender(2);
-            };
-
-            function stepPhysics() {
-                for (let i = 0; i < nodes.length; i++) {
-                    for (let j = i + 1; j < nodes.length; j++) {
-                        const n1 = nodes[i];
-                        const n2 = nodes[j];
-                        let dx = n2.x - n1.x;
-                        let dy = n2.y - n1.y;
-                        let dist = Math.sqrt(dx * dx + dy * dy) || 1;
-                        if (dist < 180) {
-                            let force = (180 - dist) / dist * 0.12;
-                            let fx = dx * force;
-                            let fy = dy * force;
-                            if (n1 !== draggedNode) { n1.x -= fx; n1.y -= fy; }
-                            if (n2 !== draggedNode) { n2.x += fx; n2.y += fy; }
-                        }
-                    }
-                }
-
-                activeLinks.forEach(l => {
-                    let dx = l.target.x - l.source.x;
-                    let dy = l.target.y - l.source.y;
-                    let dist = Math.sqrt(dx * dx + dy * dy) || 1;
-                    let force = (dist - 110) * 0.012;
-                    let fx = (dx / dist) * force;
-                    let fy = (dy / dist) * force;
-                    if (l.source !== draggedNode) { l.source.x += fx; l.source.y += fy; }
-                    if (l.target !== draggedNode) { l.target.x -= fx; l.target.y -= fy; }
-                });
-
-                nodes.forEach(n => {
-                    if (n !== draggedNode) {
-                        n.x += (centerX - n.x) * 0.005;
-                        n.y += (centerY - n.y) * 0.005;
-                    }
-                    const labelAllowance = Math.min(
-                        width * 0.45,
-                        16 + String(n.label || '').length * 7
-                    );
-                    const maxX = Math.max(layoutPadding, width - layoutPadding - labelAllowance);
-                    n.x = Math.max(layoutPadding, Math.min(maxX, n.x));
-                    n.y = Math.max(layoutPadding, Math.min(height - layoutPadding, n.y));
-                });
-            }
-
-            function render() {
-                obsidianGraphEngine = null;
-                if (physicsFramesRemaining > 0) {
-                    stepPhysics();
-                    physicsFramesRemaining -= 1;
-                }
-
-                ctx.save();
-                ctx.clearRect(0, 0, canvas.width, canvas.height);
-                ctx.scale(dpr, dpr);
-                ctx.translate(panX, panY);
-                ctx.scale(zoom, zoom);
-
-                // Dibujar enlaces
-                activeLinks.forEach(l => {
-                    const isHighlighted = hoveredNode && (hoveredNode === l.source || hoveredNode === l.target);
-                    const isOriginRelation = l.relation === 'origin';
-                    ctx.beginPath();
-                    ctx.moveTo(l.source.x, l.source.y);
-                    ctx.lineTo(l.target.x, l.target.y);
-                    ctx.strokeStyle = isHighlighted ? highlightedLinkColor : (isOriginRelation ? originColor : linkColor);
-                    ctx.lineWidth = (isHighlighted ? 2.8 : 1.8) / zoom;
-                    ctx.globalAlpha = isHighlighted ? 1.0 : 0.85;
-                    ctx.setLineDash(isOriginRelation ? [7 / zoom, 5 / zoom] : []);
-                    ctx.stroke();
-                    ctx.setLineDash([]);
-                    ctx.globalAlpha = 1.0;
-                });
-
-                // Dibujar nodos y texto con alta definición (HiDPI / Retina) y halo de contraste.
-                // Las etiquetas que colisionan se reservan para el hover o el MOC:
-                // el nodo sigue siendo visible y navegable, y el hover revela su nombre.
-                const labelBoxes = [];
-                nodes.forEach(n => {
-                    const isHovered = (hoveredNode === n);
-                    const isCanonicalOrigin = n.node_type === 'canonical_origin';
-                    const isCanonicalMoc = n.node_type === 'canonical_moc';
-                    const drawRadius = (isHovered ? n.radius + 3 : n.radius) / zoom;
-                    ctx.beginPath();
-                    ctx.arc(n.x, n.y, Math.max(3, drawRadius), 0, 2 * Math.PI);
-                    ctx.fillStyle = isHovered
-                        ? hoveredNodeColor
-                        : (isCanonicalMoc ? mocColor : (isCanonicalOrigin ? originColor : nodeColor));
-                    ctx.fill();
-                    ctx.lineWidth = 1.5 / zoom;
-                    ctx.strokeStyle = nodeBorderColor;
-                    ctx.stroke();
-
-                    const fontSize = Math.max(10, Math.min(18, 12 / zoom));
-                    ctx.font = (isHovered ? '700 ' : '600 ') + fontSize + 'px Arial, sans-serif';
-
-                    // Keep long note titles inside the bounded graph pane.  The
-                    // native window is often Retina-scaled, so pixel positions
-                    // must be constrained using the canvas' CSS dimensions.
-                    const labelOnRight = n.x < width * 0.60;
-                    const labelX = labelOnRight ? n.x + 10 / zoom : n.x - 10 / zoom;
-                    const availableWidth = Math.max(
-                        90 / zoom,
-                        labelOnRight ? width - labelX - 8 / zoom : labelX - 8 / zoom
-                    );
-                    let visibleLabel = String(n.label || '');
-                    while (
-                        visibleLabel.length > 1
-                        && ctx.measureText(visibleLabel + '…').width > availableWidth
-                    ) {
-                        visibleLabel = visibleLabel.slice(0, -1);
-                    }
-                    if (visibleLabel !== String(n.label || '')) visibleLabel += '…';
-                    ctx.textAlign = labelOnRight ? 'left' : 'right';
-
-                    const labelWidth = ctx.measureText(visibleLabel).width;
-                    const labelLeft = labelOnRight ? labelX : labelX - labelWidth;
-                    const labelBox = {
-                        left: labelLeft - 3 / zoom,
-                        right: labelLeft + labelWidth + 3 / zoom,
-                        top: n.y - fontSize - 3 / zoom,
-                        bottom: n.y + 7 / zoom,
-                    };
-                    const overlapsLabel = labelBoxes.some(box => (
-                        labelBox.left < box.right
-                        && labelBox.right > box.left
-                        && labelBox.top < box.bottom
-                        && labelBox.bottom > box.top
-                    ));
-                    if (overlapsLabel && !isHovered && !isCanonicalMoc) return;
-                    labelBoxes.push(labelBox);
-
-                    // Stroke / Halo pergamino detrás del texto para que no se mezcle con las líneas
-                    ctx.lineWidth = 3.5 / zoom;
-                    ctx.strokeStyle = labelHaloColor;
-                    ctx.lineJoin = 'round';
-                    ctx.strokeText(visibleLabel, labelX, n.y + 4 / zoom);
-
-                    // Relleno de texto oscuro de alto contraste
-                    ctx.fillStyle = labelTextColor;
-                    ctx.fillText(visibleLabel, labelX, n.y + 4 / zoom);
-                    ctx.textAlign = 'start';
-                });
-
-                ctx.restore();
-
-                if (physicsFramesRemaining > 0) {
-                    obsidianGraphEngine = requestAnimationFrame(render);
-                }
-            }
-
-            requestGraphRender(180);
-        }
-
-        /* TASK3_READER_EDITOR_CONTROLLER_START */
+        /* READER_READ_ONLY_CONTROLLER_START */
         let currentSelectedNoteTitle = '';
         let currentSelectedNotePath = '';
         let currentSelectedDocumentId = '';
         let currentSelectedNoteDocumentModel = [];
         let readerNotes = [];
-        let pinnedMocDocumentId = '';
         let readerNoteHistory = [];
-        let readerEditorDocumentId = '';
-        let readerEditorRevision = null;
-        let readerEditorBody = '';
-        let readerEditorBodyBeforeLastChange = '';
-        let readerEditorOriginalBody = '';
-        let readerEditorOriginalDocumentModel = [];
-        let readerEditorProjection = null;
-        let readerEditorConflictBody = '';
-        let readerEditorInstance = null;
-        let readerEditorState = { status: 'saved', dirty: false };
-        let readerEditorRestoringMode = false;
-        let readerEditorSession = 0;
-        let readerEditorSaveOperation = null;
-
-        function readerEditorElement(id) {
-            return document.getElementById(id);
-        }
-
-        function disposeReaderEditor() {
-            if (!readerEditorInstance) return;
-            if (typeof readerEditorInstance.destroy === 'function') {
-                readerEditorInstance.destroy();
-            }
-            readerEditorInstance = null;
-        }
-
-        function setReaderEditorState(status, message) {
-            readerEditorState.status = status;
-            const state = readerEditorElement('reader-edit-state');
-            if (state) {
-                state.dataset.state = status;
-                state.textContent = message || status;
-            }
-            const saveButton = readerEditorElement('reader-markdown-save');
-            if (saveButton) {
-                saveButton.disabled = !readerEditorState.dirty || status === 'loading';
-            }
-        }
-
-        function getReaderEditorMarkdown() {
-            return readerEditorInstance ? readerEditorInstance.getMarkdown() : '';
-        }
-
-        function readerEditorContentSignature(markdown) {
-            return JSON.stringify(readerMarkdownToProjection(String(markdown || '')));
-        }
-
-        function updateReaderEditorDirtyState() {
-            if (readerEditorRestoringMode) return;
-            const previousBody = readerEditorBody;
-            readerEditorBody = getReaderEditorMarkdown();
-            readerEditorBodyBeforeLastChange = previousBody;
-            readerEditorState.dirty = readerEditorContentSignature(readerEditorBody)
-                !== readerEditorContentSignature(readerEditorOriginalBody);
-            if (readerEditorState.status !== 'loading' && readerEditorState.status !== 'conflict') {
-                setReaderEditorState(
-                    readerEditorState.dirty ? 'dirty' : 'saved',
-                    readerEditorState.dirty ? 'Cambios sin guardar' : 'Sin cambios'
-                );
-            } else {
-                const saveButton = readerEditorElement('reader-markdown-save');
-                if (saveButton) saveButton.disabled = !readerEditorState.dirty || readerEditorState.status === 'loading';
-            }
-        }
 
         function projectionInlineText(tokens) {
             return (tokens || []).map(function(token) {
@@ -4891,227 +3872,7 @@ document.addEventListener('keydown', function(event) {
             return '';
         }
 
-        function setReaderEditorMode(mode) {
-            if (!readerEditorInstance) return;
-            readerEditorInstance.changeMode(mode === 'markdown' ? 'markdown' : 'wysiwyg');
-        }
-
-        function showReaderEditorConflict() {
-            const conflict = readerEditorElement('reader-editor-conflict');
-            if (conflict) conflict.classList.remove('is-hidden');
-            setReaderEditorState('conflict', 'Conflicto: la nota cambió en el servidor');
-        }
-
-        function invalidateReaderEditorForNavigation(nextDocumentId) {
-            if (readerEditorDocumentId && currentSelectedDocumentId !== nextDocumentId) {
-                readerEditorSession += 1;
-                readerEditorSaveOperation = null;
-            }
-        }
-
-        function readerEditorOperationIsCurrent(operation) {
-            return readerEditorSaveOperation === operation
-                && readerEditorSession === operation.sessionId
-                && currentSelectedDocumentId === operation.documentId
-                && readerEditorDocumentId === operation.documentId;
-        }
-
-        function keepReaderEditing() {
-            const conflict = readerEditorElement('reader-editor-conflict');
-            if (conflict) conflict.classList.add('is-hidden');
-            readerEditorState.dirty = true;
-            setReaderEditorState('dirty', 'Seguir editando; cambios sin guardar');
-        }
-
-        function reloadReaderEditor() {
-            const conflict = readerEditorElement('reader-editor-conflict');
-            if (conflict) conflict.classList.add('is-hidden');
-            if (currentSelectedDocumentId) enterReaderEditMode();
-        }
-
-        function wireReaderEditorControls() {
-            const editor = readerEditorElement('reader-markdown-editor');
-            const saveButton = readerEditorElement('reader-markdown-save');
-            const cancelButton = readerEditorElement('reader-markdown-cancel');
-            const conflict = readerEditorElement('reader-editor-conflict');
-            if (!editor || !saveButton || !cancelButton || editor.dataset.wired === 'true') return;
-            editor.dataset.wired = 'true';
-            readerEditorInstance.on('change', function() {
-                updateReaderEditorDirtyState();
-            });
-            readerEditorInstance.on('changeMode', function() {
-                if (readerEditorRestoringMode) return;
-                updateReaderEditorDirtyState();
-            });
-            const nativeChangeMode = readerEditorInstance.changeMode.bind(readerEditorInstance);
-            function changeReaderEditorMode(mode, withoutFocus) {
-                const dirtyBeforeModeChange = readerEditorState.dirty;
-                readerEditorRestoringMode = true;
-                nativeChangeMode(mode, withoutFocus);
-                readerEditorRestoringMode = false;
-                readerEditorBody = getReaderEditorMarkdown();
-                readerEditorBodyBeforeLastChange = readerEditorBody;
-                readerEditorState.dirty = dirtyBeforeModeChange;
-                setReaderEditorState(
-                    dirtyBeforeModeChange ? 'dirty' : 'saved',
-                    dirtyBeforeModeChange ? 'Cambios sin guardar' : 'Sin cambios'
-                );
-            }
-            if (typeof readerEditorInstance.off === 'function') {
-                readerEditorInstance.off('needChangeMode');
-            }
-            readerEditorInstance.on('needChangeMode', changeReaderEditorMode);
-            readerEditorInstance.changeMode = changeReaderEditorMode;
-            saveButton.addEventListener('click', saveReaderEdit);
-            cancelButton.addEventListener('click', cancelReaderEdit);
-            if (conflict) {
-                const reload = conflict.querySelector('[data-reader-editor-reload]');
-                const keep = conflict.querySelector('[data-reader-editor-keep]');
-                if (reload) reload.addEventListener('click', reloadReaderEditor);
-                if (keep) keep.addEventListener('click', keepReaderEditing);
-            }
-        }
-
-        function mountReaderEditor() {
-            const reader = document.getElementById('reader-content');
-            const template = document.getElementById('reader-editor-template');
-            if (!reader || !template) return false;
-            const existing = readerEditorElement('reader-editor-panel');
-            if (!existing) {
-                reader.replaceChildren();
-                reader.appendChild(template.content.cloneNode(true));
-            }
-            if (!readerEditorInstance) {
-                const editor = readerEditorElement('reader-markdown-editor');
-                if (!(window.toastui && window.toastui.Editor && editor)) return false;
-                readerEditorInstance = new window.toastui.Editor({
-                    el: editor,
-                    height: '430px',
-                    initialEditType: 'wysiwyg',
-                    initialValue: '',
-                    previewStyle: 'vertical',
-                    usageStatistics: false
-                });
-            }
-            wireReaderEditorControls();
-            return Boolean(readerEditorElement('reader-editor-panel'));
-        }
-
-        function enterReaderEditMode() {
-            const documentId = currentSelectedDocumentId;
-            if (!documentId) return;
-            readerEditorSession += 1;
-            const editorSession = readerEditorSession;
-            readerEditorSaveOperation = null;
-            mountReaderEditor();
-            readerEditorOriginalDocumentModel = currentSelectedNoteDocumentModel;
-            readerEditorDocumentId = documentId;
-            readerEditorRevision = null;
-            readerEditorBody = '';
-            readerEditorOriginalBody = '';
-            readerEditorConflictBody = '';
-            readerEditorProjection = null;
-            readerEditorState = { status: 'loading', dirty: false };
-            setReaderEditorMode('wysiwyg');
-            setReaderEditorState('loading', 'Cargando Markdown...');
-            if (!(window.pywebview && window.pywebview.api && window.pywebview.api.get_note_editor)) {
-                setReaderEditorState('error', 'El editor requiere la conexión nativa de Fuente.');
-                return;
-            }
-            window.pywebview.api.get_note_editor(currentSelectedDocumentId).then(function(editorDocument) {
-                if (currentSelectedDocumentId !== documentId || readerEditorSession !== editorSession) return;
-                if (!editorDocument || editorDocument.error || editorDocument.document_id !== documentId || typeof editorDocument.revision !== 'number' || typeof editorDocument.body_markdown !== 'string' || !editorDocument.projection) {
-                    setReaderEditorState('error', (editorDocument && editorDocument.message) || 'No se pudo cargar el editor.');
-                    return;
-                }
-                readerEditorDocumentId = editorDocument.document_id;
-                readerEditorRevision = editorDocument.revision;
-                readerEditorBody = editorDocument.body_markdown;
-                readerEditorBodyBeforeLastChange = readerEditorBody;
-                readerEditorOriginalBody = editorDocument.body_markdown;
-                readerEditorProjection = editorDocument.projection;
-                if (readerEditorInstance) readerEditorInstance.setMarkdown(readerEditorBody, false);
-                readerEditorState = { status: 'saved', dirty: false };
-                setReaderEditorState('saved', 'Sin cambios');
-            }).catch(function(error) {
-                if (currentSelectedDocumentId === documentId && readerEditorSession === editorSession) {
-                    setReaderEditorState('error', 'No se pudo cargar el editor: ' + String(error));
-                }
-            });
-        }
-
-        function cancelReaderEdit() {
-            readerEditorSession += 1;
-            readerEditorSaveOperation = null;
-            const documentModel = readerEditorProjection
-                ? readerProjectionToDocumentModel(readerEditorProjection)
-                : readerEditorOriginalDocumentModel;
-            readerEditorState = { status: 'saved', dirty: false };
-            disposeReaderEditor();
-            renderNoteDocument(currentSelectedNoteTitle || 'Nota', documentModel);
-        }
-
-        function saveReaderEdit() {
-            const documentId = currentSelectedDocumentId;
-            if (!readerEditorInstance || !documentId || readerEditorDocumentId !== documentId || readerEditorRevision === null || readerEditorSaveOperation) return;
-            readerEditorBody = getReaderEditorMarkdown();
-            readerEditorState.dirty = readerEditorContentSignature(readerEditorBody)
-                !== readerEditorContentSignature(readerEditorOriginalBody);
-            if (!readerEditorState.dirty) {
-                setReaderEditorState('saved', 'Sin cambios');
-                return;
-            }
-            if (!(window.pywebview && window.pywebview.api && window.pywebview.api.update_note_body)) {
-                setReaderEditorState('error', 'El editor requiere la conexión nativa de Fuente.');
-                return;
-            }
-            setReaderEditorState('loading', 'Guardando Markdown...');
-            const operation = Object.freeze({
-                sessionId: readerEditorSession,
-                documentId: documentId,
-                expectedRevision: readerEditorRevision,
-                body: readerEditorBody
-            });
-            readerEditorSaveOperation = operation;
-            window.pywebview.api.update_note_body(operation.documentId, operation.expectedRevision, operation.body).then(function(result) {
-                if (!readerEditorOperationIsCurrent(operation)) {
-                    if (readerEditorSaveOperation === operation) readerEditorSaveOperation = null;
-                    return;
-                }
-                if (result && result.error === 'note_revision_conflict') {
-                    readerEditorSaveOperation = null;
-                    readerEditorConflictBody = getReaderEditorMarkdown();
-                    showReaderEditorConflict();
-                    return;
-                }
-                if (!result || result.error || result.document_id !== documentId || typeof result.revision !== 'number' || typeof result.body_markdown !== 'string' || !result.projection) {
-                    readerEditorSaveOperation = null;
-                    setReaderEditorState('error', (result && result.message) || 'No se pudo guardar la nota.');
-                    return;
-                }
-                const newerDraft = readerEditorContentSignature(getReaderEditorMarkdown())
-                    !== readerEditorContentSignature(operation.body);
-                readerEditorSaveOperation = null;
-                readerEditorRevision = result.revision;
-                readerEditorBody = newerDraft ? getReaderEditorMarkdown() : result.body_markdown;
-                readerEditorBodyBeforeLastChange = readerEditorBody;
-                readerEditorOriginalBody = result.body_markdown;
-                readerEditorProjection = result.projection;
-                readerEditorState = { status: newerDraft ? 'dirty' : 'saved', dirty: newerDraft };
-                setReaderEditorState(newerDraft ? 'dirty' : 'saved', newerDraft ? 'Guardado; hay cambios posteriores' : 'Guardado');
-                if (newerDraft) return;
-                loadNoteContent(operation.documentId, { skipHistory: true });
-            }).catch(function(error) {
-                if (!readerEditorOperationIsCurrent(operation)) {
-                    if (readerEditorSaveOperation === operation) readerEditorSaveOperation = null;
-                    return;
-                }
-                readerEditorSaveOperation = null;
-                setReaderEditorState('error', 'No se pudo guardar la nota: ' + String(error));
-            });
-        }
-
-        /* TASK3_READER_EDITOR_CONTROLLER_END */
+        /* READER_READ_ONLY_CONTROLLER_END */
 
         function updateReaderBackButton() {
             const btn = document.getElementById('btn-reader-back');
@@ -5148,18 +3909,6 @@ document.addEventListener('keydown', function(event) {
             loadNoteContent(documentId, { skipHistory: true });
         }
 
-        function openMOCNote() {
-            switchReaderView('list');
-            document.querySelectorAll('.btn-toggle').forEach(el => el.classList.remove('active'));
-            const mocBtn = document.getElementById('btn-reader-mode-moc');
-            if (mocBtn) mocBtn.classList.add('active');
-            if (pinnedMocDocumentId) {
-                navigateReaderNote(pinnedMocDocumentId);
-            } else {
-                loadReaderNotes();
-            }
-        }
-
         function toggleReaderLibrary() {
             const workspace = document.getElementById('reader-view-list');
             const button = document.getElementById('btn-reader-library');
@@ -5176,104 +3925,23 @@ document.addEventListener('keydown', function(event) {
             button.setAttribute('aria-pressed', String(visible));
         }
 
-        let activeChatContextMode = 'all_notes'; // 'single_note' or 'all_notes'
-        let activeChatNoteTitle = '';
-        let activeChatNotePath = '';
-        let activeChatDocumentId = '';
-
-        function launchChatWithContext(mode) {
-            activeChatContextMode = mode;
-            syncChatContextButtons();
-            activeChatNoteTitle = currentSelectedNoteTitle || 'esta nota';
-            activeChatNotePath = currentSelectedNotePath || '';
-            activeChatDocumentId = currentSelectedDocumentId || '';
-
-            closeModal('modal-reader');
-            openModal('modal-chat');
-
-            updateChatContextBadge();
-        }
-
-        function syncChatContextButtons() {
-            document.querySelectorAll('[data-chat-context-mode]').forEach(function(button) {
-                const isActive = button.dataset.chatContextMode === activeChatContextMode;
-                button.classList.toggle('active', isActive);
-                button.setAttribute('aria-pressed', String(isActive));
-            });
-        }
-
-        function updateChatContextBadge() {
-            const labelEl = document.getElementById('chat-context-label');
-            const subtextEl = document.getElementById('chat-context-subtext');
-            const scrollBox = document.getElementById('chat-messages');
-
-            if (activeChatContextMode === 'single_note') {
-                const noteName = activeChatNoteTitle || 'esta nota';
-                if (labelEl) labelEl.innerText = 'Nota activa: "' + noteName + '"';
-                if (subtextEl) subtextEl.innerText = 'La consulta se limita a esta nota';
-
-                if (scrollBox) {
-                    scrollBox.replaceChildren();
-                    appendChatBubble(
-                        scrollBox,
-                        'ai',
-                        'Fuente:',
-                        'Puedes consultar la nota "' + noteName + '". ¿Qué quieres saber?'
-                    );
-                }
-            } else {
-                if (labelEl) labelEl.innerText = 'Todas las notas';
-                if (subtextEl) subtextEl.innerText = 'La consulta usa todas las notas del tema';
-
-                if (scrollBox) {
-                    scrollBox.replaceChildren();
-                    appendChatBubble(
-                        scrollBox,
-                        'ai',
-                        'Fuente:',
-                        'Puedes consultar todas las notas del tema. ¿Qué quieres saber?'
-                    );
-                }
-            }
-        }
-
         function createNoteActionBar(noteTitle) {
             currentSelectedNoteTitle = noteTitle;
             const bar = document.createElement('div');
             bar.id = 'note-action-bar';
             bar.classList.add('console-layout-071');
-            const actions = document.createElement('div');
-            actions.classList.add('console-layout-072');
-            const editButton = document.createElement('button');
-            editButton.type = 'button';
-            editButton.className = 'btn-small';
-            editButton.textContent = 'Editar';
-            editButton.addEventListener('click', function() { enterReaderEditMode(); });
-            actions.appendChild(editButton);
-            [['single_note', 'Preguntar sobre esta nota'], ['all_notes', 'Preguntar sobre el tema']].forEach(function(action) {
-                const button = document.createElement('button');
-                button.type = 'button';
-                button.className = 'btn-small';
-                button.classList.add('console-layout-073');
-                button.dataset.chatContextMode = action[0];
-                button.setAttribute('aria-pressed', 'false');
-                button.textContent = action[1];
-                button.addEventListener('click', function() { launchChatWithContext(action[0]); });
-                actions.appendChild(button);
-            });
-            syncChatContextButtons();
-            bar.appendChild(actions);
+            const heading = document.createElement('h2');
+            heading.textContent = noteTitle || 'Nota';
+            bar.appendChild(heading);
             return bar;
         }
 
         function renderNoteDocument(title, documentModel) {
             const reader = document.getElementById('reader-content');
-            disposeReaderEditor();
             currentSelectedNoteDocumentModel = documentModel || [];
             reader.replaceChildren(createNoteActionBar(title));
             reader.appendChild(createNoteContent(documentModel));
             renderReaderProperties(currentSelectedDocumentId);
-            loadObsidianGraphView();
         }
 
         function renderReaderProperties(documentId) {
@@ -5319,10 +3987,6 @@ document.addEventListener('keydown', function(event) {
 
         const LOCAL_MOCK_NOTES = [
             {
-                title: "Índice MOC | Mapa de Conocimiento Global",
-                path: "_Indice_MOC.md",
-            },
-            {
                 title: "Arquitectura General de Fuente",
                 path: "Nota_Arquitectura_Fuente.md",
             },
@@ -5345,10 +4009,6 @@ document.addEventListener('keydown', function(event) {
             {
                 title: "Estética Editorial Papiro y Consola UI",
                 path: "Nota_Formato_Papiro.md",
-            },
-            {
-                title: "Grafo Interactivo de Conocimiento",
-                path: "Nota_Graph_Engine_Optimizado.md",
             },
             {
                 title: "Estructuración en Notas Atómicas",
@@ -5375,62 +4035,6 @@ document.addEventListener('keydown', function(event) {
                 path: "Nota_Manual_Usuario_Avanzado.md",
             }
         ];
-
-        function loadObsidianGraphView() {
-            if (!isExplicitPreviewMode()) {
-                callNativeRequest('get_graph_data', function() {
-                    return window.pywebview.api.get_graph_data();
-                }).then(function(data) {
-                    initObsidianGraphCanvas(data);
-                }).catch(function(err) {
-                    log('No se pudo cargar el grafo: ' + String(err || nativeBackendUnavailableMessage()));
-                });
-                return;
-            }
-
-            const demoData = {
-                    nodes: [
-                        { id: "_Indice_MOC", label: "Índice MOC", path: "_Indice_MOC.md" },
-                        { id: "Nota_Arquitectura_Fuente", label: "Arquitectura General", path: "Nota_Arquitectura_Fuente.md" },
-                        { id: "Nota_ETL_Pipeline_Ingesta", label: "Pipeline ETL Ingesta", path: "Nota_ETL_Pipeline_Ingesta.md" },
-                        { id: "Nota_Motor_IA_Local", label: "Motor IA Local", path: "Nota_Motor_IA_Local.md" },
-                        { id: "Nota_Base_Datos_Vectorial", label: "Base Vectorial ChromaDB", path: "Nota_Base_Datos_Vectorial.md" },
-                        { id: "Nota_Optimizacion_RAM", label: "Gobernador de RAM", path: "Nota_Optimizacion_RAM.md" },
-                        { id: "Nota_Formato_Papiro", label: "Estética Papiro UI", path: "Nota_Formato_Papiro.md" },
-                        { id: "Nota_Graph_Engine_Optimizado", label: "Grafo Interactivo", path: "Nota_Graph_Engine_Optimizado.md" },
-                        { id: "Nota_Notas_Atomicas", label: "Notas Atómicas", path: "Nota_Notas_Atomicas.md" },
-                        { id: "Nota_Gestor_Cuarentena", label: "Gestor Cuarentena", path: "Nota_Gestor_Cuarentena.md" },
-                        { id: "Nota_Integracion_Obsidian", label: "Integración Obsidian", path: "Nota_Integracion_Obsidian.md" },
-                        { id: "Nota_Telemetria_y_Logs", label: "Gazette Logs", path: "Nota_Telemetria_y_Logs.md" },
-                        { id: "Nota_Seguridad_y_Privacidad", label: "Privacidad Offline", path: "Nota_Seguridad_y_Privacidad.md" },
-                        { id: "Nota_Manual_Usuario_Avanzado", label: "Manual de Usuario", path: "Nota_Manual_Usuario_Avanzado.md" }
-                    ],
-                    links: [
-                        { source: "_Indice_MOC", target: "Nota_Arquitectura_Fuente" },
-                        { source: "_Indice_MOC", target: "Nota_ETL_Pipeline_Ingesta" },
-                        { source: "_Indice_MOC", target: "Nota_Motor_IA_Local" },
-                        { source: "_Indice_MOC", target: "Nota_Base_Datos_Vectorial" },
-                        { source: "_Indice_MOC", target: "Nota_Optimizacion_RAM" },
-                        { source: "_Indice_MOC", target: "Nota_Formato_Papiro" },
-                        { source: "_Indice_MOC", target: "Nota_Graph_Engine_Optimizado" },
-                        { source: "_Indice_MOC", target: "Nota_Notas_Atomicas" },
-                        { source: "_Indice_MOC", target: "Nota_Gestor_Cuarentena" },
-                        { source: "_Indice_MOC", target: "Nota_Integracion_Obsidian" },
-                        { source: "_Indice_MOC", target: "Nota_Telemetria_y_Logs" },
-                        { source: "_Indice_MOC", target: "Nota_Seguridad_y_Privacidad" },
-                        { source: "_Indice_MOC", target: "Nota_Manual_Usuario_Avanzado" },
-                        { source: "Nota_Arquitectura_Fuente", target: "Nota_ETL_Pipeline_Ingesta" },
-                        { source: "Nota_Arquitectura_Fuente", target: "Nota_Motor_IA_Local" },
-                        { source: "Nota_Arquitectura_Fuente", target: "Nota_Base_Datos_Vectorial" },
-                        { source: "Nota_ETL_Pipeline_Ingesta", target: "Nota_Gestor_Cuarentena" },
-                        { source: "Nota_Motor_IA_Local", target: "Nota_Optimizacion_RAM" },
-                        { source: "Nota_Formato_Papiro", target: "Nota_Graph_Engine_Optimizado" },
-                        { source: "Nota_Manual_Usuario_Avanzado", target: "Nota_Seguridad_y_Privacidad" },
-                        { source: "Nota_Manual_Usuario_Avanzado", target: "Nota_Integracion_Obsidian" }
-                    ]
-            };
-            initObsidianGraphCanvas(demoData);
-        }
 
         function renderReaderLoadError(message) {
             const ul = document.getElementById('reader-note-list');
@@ -5477,7 +4081,6 @@ document.addEventListener('keydown', function(event) {
                         document_id: 'mock-' + index,
                         issue: '_Sin_Cuestion',
                         theme: 'General',
-                        is_moc: n.path.indexOf('_Indice_MOC') !== -1
                     };
                 }));
                 renderExplicitPreviewNotesNotice();
@@ -5500,7 +4103,7 @@ document.addEventListener('keydown', function(event) {
         }
 
         function highlightSidebarNote(documentId) {
-            document.querySelectorAll('.reader-note-item, .reader-pinned-item').forEach(function(el) {
+            document.querySelectorAll('.reader-note-item').forEach(function(el) {
                 el.classList.remove('active');
                 if (el.dataset.documentId && el.dataset.documentId === documentId) {
                     el.classList.add('active');
@@ -5510,11 +4113,8 @@ document.addEventListener('keydown', function(event) {
 
         function renderNoteList(notes) {
             readerNotes = Array.isArray(notes) ? notes.slice() : [];
-            const pinnedContainer = document.getElementById('reader-pinned-moc');
             const ul = document.getElementById('reader-note-list');
             if (ul) ul.replaceChildren();
-            if (pinnedContainer) pinnedContainer.replaceChildren();
-            pinnedMocDocumentId = '';
 
             if (!notes || !notes.length) {
                 if (ul) {
@@ -5526,31 +4126,14 @@ document.addEventListener('keydown', function(event) {
                 return;
             }
 
-            const mocNote = notes.find(function(n) {
-                return n.is_moc || (n.path && (n.path.indexOf('_Indice_MOC') !== -1 || n.path.indexOf('Indice_MOC') !== -1));
-            });
-            if (mocNote && pinnedContainer) {
-                pinnedMocDocumentId = mocNote.document_id || '';
-                const mocDiv = document.createElement('div');
-                mocDiv.className = 'reader-pinned-item' + (currentSelectedDocumentId === mocNote.document_id ? ' active' : '');
-                mocDiv.dataset.documentId = mocNote.document_id || '';
-                mocDiv.dataset.path = mocNote.path || '';
-                mocDiv.textContent = mocNote.title;
-                mocDiv.addEventListener('click', function() {
-                    navigateReaderNote(mocNote.document_id);
-                });
-                pinnedContainer.appendChild(mocDiv);
-            }
-
-            const otherNotes = notes.filter(function(n) { return n !== mocNote; });
-            const themeName = (otherNotes[0] && otherNotes[0].theme) || (mocNote && mocNote.theme) || 'General';
+            const themeName = (notes[0] && notes[0].theme) || 'General';
             const themeLabel = document.createElement('li');
             themeLabel.className = 'reader-theme-label';
             themeLabel.textContent = 'Tema: ' + themeName;
             ul.appendChild(themeLabel);
 
             const byIssue = {};
-            otherNotes.forEach(function(n) {
+            notes.forEach(function(n) {
                 const issue = n.issue || '_Sin_Cuestion';
                 if (!byIssue[issue]) byIssue[issue] = [];
                 byIssue[issue].push(n);
@@ -5580,7 +4163,7 @@ document.addEventListener('keydown', function(event) {
                 ul.appendChild(group);
             });
 
-            const firstId = (mocNote && mocNote.document_id) || (otherNotes[0] && otherNotes[0].document_id);
+            const firstId = notes[0] && notes[0].document_id;
             if (!currentSelectedDocumentId && firstId) {
                 loadNoteContent(firstId);
             } else if (currentSelectedDocumentId) {
@@ -5590,7 +4173,6 @@ document.addEventListener('keydown', function(event) {
 
         function loadNoteContent(documentId, options) {
             if (!documentId) return;
-            invalidateReaderEditorForNavigation(documentId);
             options = options || {};
             if (!options.skipHistory) {
                 pushReaderHistory(documentId);
@@ -5612,7 +4194,6 @@ document.addEventListener('keydown', function(event) {
                     reader.replaceChildren(createNoteActionBar(found.title));
                     reader.appendChild(createMockNoteContent(found));
                     renderReaderProperties(currentSelectedDocumentId);
-                    loadObsidianGraphView();
                 } else {
                     currentSelectedNoteTitle = displayTitle;
                     currentSelectedNotePath = '';
@@ -5674,9 +4255,9 @@ document.addEventListener('keydown', function(event) {
                 });
             } else {
                 const mockFiles = [
-                    { name: 'transcripcion_reunion_inicial_2026.txt', path: '/Users/emiliosevillaortego/Documents/Programación/fuente/Vault_Fuente/2_copiado/transcripcion_reunion_inicial_2026.txt', folder: '2_copiado' },
+                    { name: 'acta_cliente_inicial_2026.txt', path: '/Users/emiliosevillaortego/Documents/Programación/fuente/Vault_Fuente/2_copiado/acta_cliente_inicial_2026.txt', folder: '2_copiado' },
                     { name: 'esquema_base_datos_vectorial.txt', path: '/Users/emiliosevillaortego/Documents/Programación/fuente/Vault_Fuente/2_copiado/esquema_base_datos_vectorial.txt', folder: '2_copiado' },
-                    { name: 'transcripcion_reunion_inicial_2026_limpio.txt', path: '/Users/emiliosevillaortego/Documents/Programación/fuente/Vault_Fuente/3_capturado/transcripcion_reunion_inicial_2026_capturado.txt', folder: '3_capturado' },
+                    { name: 'acta_cliente_inicial_2026_capturado.txt', path: '/Users/emiliosevillaortego/Documents/Programación/fuente/Vault_Fuente/3_capturado/acta_cliente_inicial_2026_capturado.txt', folder: '3_capturado' },
                     { name: 'esquema_base_datos_vectorial_limpio.txt', path: '/Users/emiliosevillaortego/Documents/Programación/fuente/Vault_Fuente/3_capturado/esquema_base_datos_vectorial_capturado.txt', folder: '3_capturado' }
                 ];
                 renderCategoryFiles(mockFiles);
@@ -5742,7 +4323,7 @@ document.addEventListener('keydown', function(event) {
             const rawInput = searchInput ? searchInput.value : '';
             const query = normalizeReaderSearchText(rawInput);
 
-            document.querySelectorAll('.reader-note-item, .reader-pinned-item').forEach(function(el) {
+            document.querySelectorAll('.reader-note-item').forEach(function(el) {
                 el.classList.toggle(
                     'is-filtered-out',
                     Boolean(query && !normalizeReaderSearchText(el.innerText).includes(query))
@@ -5751,8 +4332,7 @@ document.addEventListener('keydown', function(event) {
 
             if (query.length > 0 && query !== lastSearchQuery) {
                 lastSearchQuery = query;
-                invalidateReaderEditorForNavigation('');
-                document.querySelectorAll('.reader-note-item, .reader-pinned-item').forEach(el => el.classList.remove('active'));
+                document.querySelectorAll('.reader-note-item').forEach(el => el.classList.remove('active'));
                 currentSelectedNotePath = '';
                 currentSelectedDocumentId = '';
 
@@ -5915,8 +4495,6 @@ document.addEventListener('keydown', function(event) {
             mountReaderWorkspace();
             const shareButton = document.getElementById('document-share-button');
             if (shareButton) shareButton.addEventListener('click', shareCurrentDocument);
-            const discussionForm = document.getElementById('discussion-reply-form');
-            if (discussionForm) discussionForm.addEventListener('submit', submitDiscussionReply);
             const workspaceChatForm = document.getElementById('workspace-chat-form');
             if (workspaceChatForm) workspaceChatForm.addEventListener('submit', submitWorkspaceChat);
             if (isExplicitPreviewMode()) {

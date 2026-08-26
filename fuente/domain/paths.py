@@ -13,7 +13,6 @@ from fuente.domain.frontmatter import FrontmatterError, parse_frontmatter
 
 
 RootName = Literal["vault", "output", "input", "dirty", "clean", "quarantine"]
-REFLOW_REVIEW_DIR_NAME = "_Reflow_Review"
 logger = logging.getLogger(__name__)
 
 
@@ -132,7 +131,6 @@ class AuthorizedPathResolver:
                 return self._resolve_unregistered_note_id(
                     document_id,
                     allow_canonical_route=False,
-                    allow_review_candidate=True,
                 )
             canonical_id = record.get("note_id")
             if not isinstance(canonical_id, str) or not canonical_id:
@@ -155,7 +153,6 @@ class AuthorizedPathResolver:
             return self._resolve_unregistered_note_id(
                 canonical_id,
                 allow_canonical_route=False,
-                allow_review_candidate=True,
             )
 
         logger.warning(
@@ -165,7 +162,6 @@ class AuthorizedPathResolver:
         return self._resolve_unregistered_note_id(
             document_id,
             allow_canonical_route=True,
-            allow_review_candidate=True,
         )
 
     def resolve_reader_note_id(self, document_id: str) -> Path:
@@ -201,22 +197,18 @@ class AuthorizedPathResolver:
                         continue
                     if root_name == "output":
                         output_route = True
-                        if self._is_reflow_review_path(path):
-                            continue
                     if self._catalog_path_matches_identity(path, canonical_id):
                         return path
                 if output_route:
                     return self._resolve_unregistered_note_id(
                         canonical_id,
                         allow_canonical_route=False,
-                        allow_review_candidate=False,
                     )
                 raise PathAuthorizationError()
 
         return self._resolve_unregistered_note_id(
             document_id,
             allow_canonical_route=self.catalog is None,
-            allow_review_candidate=False,
         )
 
     def _resolve_unregistered_note_id(
@@ -224,7 +216,6 @@ class AuthorizedPathResolver:
         document_id: str,
         *,
         allow_canonical_route: bool,
-        allow_review_candidate: bool,
     ) -> Path:
         """Resolve one identity declared by an authorized output Markdown file."""
         output = self.roots["output"]
@@ -240,45 +231,25 @@ class AuthorizedPathResolver:
                 authorized = self.resolve_note(relative)
             except PathAuthorizationError:
                 continue
-            is_review_candidate = self._is_reflow_review_candidate_path(authorized)
-            if not self._is_reader_visible_output_note(authorized) and not (
-                allow_review_candidate and is_review_candidate
-            ):
+            if not self._is_reader_visible_output_note(authorized):
                 continue
 
             route_matches = document_id_for_relative_path(relative) == document_id
-            is_canonical_moc = (
-                authorized == self.roots["output"] / "_Indice_MOC.md"
-            )
             canonical_matches = False
             schema_version: object = None
-            status: object = None
             try:
                 metadata, _body = parse_frontmatter(
                     authorized.read_text(encoding="utf-8")
                 )
                 canonical_matches = metadata.get("note_id") == document_id
                 schema_version = metadata.get("schema_version")
-                status = metadata.get("status")
             except (FrontmatterError, OSError, UnicodeError):
                 pass
-
-            if is_review_candidate:
-                if (
-                    allow_review_candidate
-                    and route_matches
-                    and canonical_matches
-                    and schema_version == 3
-                    and status == "pending_review"
-                ):
-                    matches.append(authorized)
-                continue
 
             if canonical_matches or (
                 route_matches
                 and (
-                    is_canonical_moc
-                    or allow_canonical_route
+                    allow_canonical_route
                     or schema_version in {None, 1}
                 )
             ):
@@ -310,46 +281,14 @@ class AuthorizedPathResolver:
         )
 
     def _is_reader_visible_output_note(self, path: Path) -> bool:
-        """Mirror reader-list exclusions while retaining its canonical MOC."""
+        """Mirror reader-list exclusions for output Markdown notes."""
         try:
             relative = path.relative_to(self.roots["output"])
         except ValueError:
             return False
         if any(part.startswith(".") for part in relative.parts):
             return False
-        if self._is_reflow_review_path(path):
-            return False
-        if path.name.startswith("_") and path.suffix.lower() == ".md":
-            return relative.as_posix() == "_Indice_MOC.md"
         return True
-
-    def _is_reflow_review_candidate_path(self, path: Path) -> bool:
-        """Accept only the exact path shape emitted by the reflow job service."""
-        if not self._is_reflow_review_path(path):
-            return False
-        try:
-            relative = path.relative_to(self.roots["output"])
-        except ValueError:
-            return False
-        prefix, marker, request_id = path.stem.rpartition("_reflow_")
-        if (
-            relative.parent.name != REFLOW_REVIEW_DIR_NAME
-            or marker != "_reflow_"
-            or not prefix.startswith("_")
-        ):
-            return False
-        try:
-            uuid.UUID(request_id)
-        except (ValueError, AttributeError):
-            return False
-        return True
-
-    def _is_reflow_review_path(self, path: Path) -> bool:
-        try:
-            relative = path.relative_to(self.roots["output"])
-        except ValueError:
-            return False
-        return REFLOW_REVIEW_DIR_NAME in relative.parts
 
     def canonical_note_id(self, identifier: str) -> str:
         """Translate a canonical or legacy opaque identifier to ``note_id``."""

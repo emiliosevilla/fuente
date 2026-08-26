@@ -93,10 +93,8 @@ def test_open_obsidian_uses_macos_native_launcher(temp_vault_path):
 def test_note_mutation_methods_use_identifiers_not_absolute_path_parameters():
     mutation_methods = (
         "approve_note",
-        "save_draft",
-        "delete_note",
         "restore_note",
-        "move_note",
+        "update_note_metadata",
     )
 
     assert not hasattr(FuentePyWebViewApi, "merge_notes")
@@ -148,7 +146,7 @@ def test_bridge_rejects_absolute_note_identifier_without_mutation(temp_vault_pat
     external = temp_vault_path.parent / "outside.md"
     external.write_text("private", encoding="utf-8")
 
-    assert bridge.save_draft(str(external), "changed") == {
+    assert bridge.approve_note(str(external), 1) == {
         "error": "path_not_authorized",
         "message": "Path is not authorized",
     }

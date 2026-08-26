@@ -42,10 +42,6 @@ VALID_ACTION_PAYLOADS: dict[str, dict] = {
     "flush_sources": {},
     "step1_flush": {},
     "step2_transcribe": {},
-    "step3_structure": {},
-    "reflow_links": {"issue": "Issue-A"},
-    "evaluate_refinement": {"candidate_id": "candidate-1", "expected_revision": 2},
-    "reindex_notes": {},
     "stat_ram": {},
     "stat_input": {},
     "stat_notes": {},
@@ -62,7 +58,6 @@ VALID_ACTION_PAYLOADS: dict[str, dict] = {
     "reset_default_settings": {},
 }
 
-EDITOR_BRIDGE_METHODS = {"get_note_editor", "update_note_body"}
 ORIGIN_REF = {
     "note_id": "4ca13d5c-4d78-4f37-8c3c-d1dc530a4dc9",
     "revision": 2,
@@ -76,23 +71,6 @@ def test_every_frontend_direct_bridge_call_is_exposed():
     exposed = _bridge_public_methods()
     assert called, "consola_preview.html must call at least one bridge method"
     assert called <= exposed, called - exposed
-
-
-def test_revisioned_editor_methods_are_in_the_typed_bridge_allowlist():
-    assert EDITOR_BRIDGE_METHODS <= _bridge_public_methods()
-
-
-def test_revisioned_editor_methods_have_no_path_parameters():
-    assert tuple(inspect.signature(FuentePyWebViewApi.get_note_editor).parameters) == (
-        "self",
-        "note_id",
-    )
-    assert tuple(inspect.signature(FuentePyWebViewApi.update_note_body).parameters) == (
-        "self",
-        "note_id",
-        "expected_revision",
-        "body_markdown",
-    )
 
 
 def test_frontend_bridge_calls_use_the_typed_api_inventory():
@@ -265,7 +243,7 @@ def test_fuente_v3_frontend_uses_origins_notes_and_input_folders():
 
     assert 'id="metadata-origins"' in source
     assert 'id="metadata-sources"' not in source
-    assert "Orígenes" in source
+    assert "De dónde sale" in source
     assert "Notas preparadas" in source
     assert "Carpetas de entrada" in source
     assert "window.pywebview.api.get_sync_inputs()" in source

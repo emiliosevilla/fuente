@@ -27,7 +27,7 @@ def test_full_extra_contains_primary_rag_backend() -> None:
     assert any("minirag-hku" in item for item in project["project"]["optional-dependencies"]["all"])
 
 
-def test_distribution_sources_include_webview_console_and_reader_editor() -> None:
+def test_distribution_sources_include_webview_console_and_read_only_reader() -> None:
     build = (ROOT / "build_installer.py").read_text(encoding="utf-8")
     spec = (ROOT / "fuente.spec").read_text(encoding="utf-8")
 
@@ -46,11 +46,10 @@ def test_distribution_sources_include_webview_console_and_reader_editor() -> Non
     assert '("build/runtime-source.zip", ".")' in spec
     assert '("build/pip-source.zip", ".")' in spec
     html = (ROOT / "consola_preview.html").read_text(encoding="utf-8")
-    assert 'id="reader-markdown-editor"' in html
-    assert 'id="reader-editor-panel"' in html
-    assert (ROOT / "assets" / "toastui-editor" / "toastui-editor.js").is_file()
-    assert (ROOT / "assets" / "toastui-editor" / "toastui-editor.css").is_file()
-    assert "assets/toastui-editor/toastui-editor.js" in html
+    assert 'id="reader-content"' in html
+    markdown_editor_id = "-".join(("reader", "markdown", "editor"))
+    assert f'id="{markdown_editor_id}"' not in html
+    assert "assets/toastui-editor" not in html
 
 
 def test_bootstrap_spec_excludes_optional_native_runtime() -> None:

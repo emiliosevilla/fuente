@@ -25,7 +25,6 @@ from fuente.domain.frontmatter import serialize_frontmatter
 from fuente.domain.jobs import JobRecord
 from fuente.domain.runtime_policy import ExecutionProfile, RuntimePolicy
 from fuente.extractors.registry import ExtractorRegistry
-from fuente.graph_engine.linker import GraphLinker
 from fuente.infrastructure.sqlite_store import JobStore
 from fuente.rag.semantic_chunker import SemanticChunker
 from fuente.ram_governor.budget import (
@@ -373,7 +372,6 @@ def test_media_batch_sibling_not_quarantined_on_peer_failure(tmp_path):
         chunker=SemanticChunker(),
         chroma=chroma,
         atomic_generator=_FakeGenerator(),
-        linker=GraphLinker(vault.output_dir),
         ram_governor=governor,
         stabilize=lambda _p: True,
         copy_to_dirty=lambda p: vault.copy_to_dirty(p),
@@ -441,7 +439,6 @@ def test_process_pending_respects_budget_and_stays_resumable(tmp_path):
         chunker=SemanticChunker(),
         chroma=_FakeChroma(),
         atomic_generator=_FakeGenerator(),
-        linker=GraphLinker(vault.output_dir),
         ram_governor=governor,
         stabilize=lambda _p: True,
     )
@@ -496,7 +493,6 @@ def test_orphaned_own_lease_does_not_block_resume(tmp_path):
         chunker=SemanticChunker(),
         chroma=_FakeChroma(),
         atomic_generator=_FakeGenerator(),
-        linker=GraphLinker(vault.output_dir),
         ram_governor=governor,
         stabilize=lambda _p: True,
     )
@@ -632,7 +628,6 @@ def test_unavailable_policy_llm_waits_at_indexed_chunks_without_fake_success(tmp
         chunker=SemanticChunker(),
         chroma=_FakeChroma(),
         atomic_generator=_FakeGenerator(),
-        linker=GraphLinker(vault.output_dir),
         runtime_policy=policy,
         ram_governor=_ProbeGovernor(
             measured_snapshot(total_gb=32.0, available_gb=20.0, safety_margin_pct=0.35)

@@ -69,6 +69,24 @@ def test_provision_uses_the_pyinstaller_frameworks_resource_layout_when_frozen(t
     assert (bundle_root.parent / "Fuente" / ".fuente" / "templates" / "reunion" / "template.md").is_file()
 
 
+def test_provision_uses_actual_pyinstaller_resources_beside_frameworks_meipass(tmp_path, monkeypatch):
+    from fuente import integrations
+
+    frameworks_root = tmp_path / "Fuente.app" / "Contents" / "Frameworks"
+    shutil.copytree(
+        Path(integrations.__file__).parent.parent / "resources",
+        frameworks_root.parent / "Resources" / "fuente" / "resources",
+    )
+    monkeypatch.setattr(sys, "_MEIPASS", str(frameworks_root), raising=False)
+
+    result = ObsidianProvisioner(cli=FakeCli()).provision(
+        frameworks_root.parent / "Fuente", consent=True
+    )
+
+    assert result["resources"] == 14
+    assert (frameworks_root.parent / "Fuente" / ".obsidian" / "appearance.json").is_file()
+
+
 def test_inspect_detects_unapproved_plugins_and_manifest_version_mismatch(tmp_path):
     vault = tmp_path / "Fuente"
     plugin = vault / ".obsidian" / "plugins" / "not-allowed"
@@ -174,18 +192,20 @@ def test_injected_cli_with_empty_output_is_not_reported_ready(tmp_path):
     assert result["setup_ready"] is False
 
 
-def test_provision_removes_workspace_json_before_reporting_ready(tmp_path):
+def test_provision_preserves_existing_workspace_json_and_reports_ready(tmp_path):
     vault = tmp_path / "Fuente"
     (vault / ".obsidian").mkdir(parents=True)
-    (vault / ".obsidian" / "workspace.json").write_text("{}", encoding="utf-8")
+    workspace = vault / ".obsidian" / "workspace.json"
+    workspace.write_bytes(b'{"main": "Obsidian owns this"}\n')
+    before = workspace.read_bytes()
 
     result = ObsidianProvisioner(cli=FakeCli()).provision(vault, consent=True)
 
     assert result["cli"]["ready"] is True
-    assert result["workspace_json"] is False
+    assert result["workspace_json"] is True
     assert result["layout_valid"] is True
     assert result["setup_ready"] is True
-    assert not (vault / ".obsidian" / "workspace.json").exists()
+    assert workspace.read_bytes() == before
 
 
 def test_setup_ready_requires_vault_local_appearance(tmp_path, monkeypatch):

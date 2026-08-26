@@ -19,6 +19,7 @@ are stored as plain text and every change is recorded as a `StageEvent`.
 from __future__ import annotations
 
 import sqlite3
+import threading
 import uuid
 import json
 from contextlib import contextmanager, suppress
@@ -37,6 +38,7 @@ from fuente.domain.jobs import (
     JobStoreBusyError,
     StageEvent,
 )
+from fuente.domain.errors import ReviewClaimConflictError
 from fuente.domain.refinement import RefinementCandidate, RefinementVerdict
 from fuente.domain.note_catalog import IdentityCollisionError
 from fuente.domain.sync import SyncManifestEntry
@@ -95,6 +97,7 @@ class JobStore:
         self.state_dir.mkdir(parents=True, exist_ok=True)
         self.db_path = self.state_dir / "state.db"
         self.pipeline_version = pipeline_version
+        self._transaction_lock = threading.RLock()
 
         self._connection = sqlite3.connect(
             self.db_path,
@@ -112,30 +115,51 @@ class JobStore:
 
     # -- UI state and transition approvals ------------------------------
 
-    def save_review_claim(self, values: dict[str, Any]) -> dict[str, Any]:
-        self._connection.execute(
-            """
-            INSERT INTO review_claims
-                (artifact_id, source_stage, target_stage, revision, content_hash,
-                 reviewer, claimed_at, expires_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT (artifact_id, source_stage, target_stage, revision, content_hash)
-            DO UPDATE SET reviewer = excluded.reviewer,
-                          claimed_at = excluded.claimed_at,
-                          expires_at = excluded.expires_at
-            """,
-            tuple(
-                values[field]
-                for field in (
-                    "artifact_id", "source_stage", "target_stage", "revision",
-                    "content_hash", "reviewer", "claimed_at", "expires_at",
-                )
-            ),
+    def save_review_claim(
+        self, values: dict[str, Any], *, claimed_after: datetime
+    ) -> dict[str, Any]:
+        identity = tuple(
+            values[field]
+            for field in (
+                "artifact_id", "source_stage", "target_stage", "revision", "content_hash"
+            )
         )
-        return self.get_review_claim(
-            values["artifact_id"], values["source_stage"], values["target_stage"],
-            values["revision"], values["content_hash"],
-        ) or values
+        with self._immediate_transaction(str(values["artifact_id"])) as connection:
+            existing = connection.execute(
+                """
+                SELECT * FROM review_claims
+                WHERE artifact_id = ? AND source_stage = ? AND target_stage = ?
+                  AND revision = ? AND content_hash = ?
+                """,
+                identity,
+            ).fetchone()
+            if existing is not None and datetime.fromisoformat(existing["expires_at"]) > claimed_after:
+                if existing["reviewer"] != values["reviewer"]:
+                    raise ReviewClaimConflictError(str(values["artifact_id"]))
+                return dict(existing)
+            connection.execute(
+                """
+                INSERT INTO review_claims
+                    (artifact_id, source_stage, target_stage, revision, content_hash,
+                     reviewer, claimed_at, expires_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT (artifact_id, source_stage, target_stage, revision, content_hash)
+                DO UPDATE SET reviewer = excluded.reviewer,
+                              claimed_at = excluded.claimed_at,
+                              expires_at = excluded.expires_at
+                """,
+                (*identity, values["reviewer"], values["claimed_at"], values["expires_at"]),
+            )
+            row = connection.execute(
+                """
+                SELECT * FROM review_claims
+                WHERE artifact_id = ? AND source_stage = ? AND target_stage = ?
+                  AND revision = ? AND content_hash = ?
+                """,
+                identity,
+            ).fetchone()
+            assert row is not None
+            return dict(row)
 
     def get_review_claim(
         self,
@@ -469,39 +493,25 @@ class JobStore:
 
     @contextmanager
     def _immediate_transaction(self, busy_id: str):
-        """Run a multi-statement write on a dedicated SQLite connection.
-
-        The store's main connection remains in autocommit mode for its legacy
-        one-statement operations. A separate ``BEGIN IMMEDIATE`` connection
-        prevents another thread using that shared connection from interleaving
-        with an approval transaction.
-        """
-        connection = sqlite3.connect(
-            self.db_path,
-            isolation_level=None,
-            timeout=5.0,
-        )
-        connection.row_factory = sqlite3.Row
-        connection.execute("PRAGMA foreign_keys = ON")
-        connection.execute("PRAGMA busy_timeout = 5000")
-        try:
-            connection.execute("BEGIN IMMEDIATE")
-            yield connection
-            connection.execute("COMMIT")
-        except sqlite3.OperationalError as error:
-            if connection.in_transaction:
-                with suppress(sqlite3.Error):
-                    connection.execute("ROLLBACK")
-            if _is_lock_contention(error):
-                raise JobStoreBusyError(busy_id) from error
-            raise
-        except BaseException:
-            if connection.in_transaction:
-                with suppress(sqlite3.Error):
-                    connection.execute("ROLLBACK")
-            raise
-        finally:
-            connection.close()
+        """Serialize a multi-statement write on this store's sole connection."""
+        connection = self._connection
+        with self._transaction_lock:
+            try:
+                connection.execute("BEGIN IMMEDIATE")
+                yield connection
+                connection.execute("COMMIT")
+            except sqlite3.OperationalError as error:
+                if connection.in_transaction:
+                    with suppress(sqlite3.Error):
+                        connection.execute("ROLLBACK")
+                if _is_lock_contention(error):
+                    raise JobStoreBusyError(busy_id) from error
+                raise
+            except BaseException:
+                if connection.in_transaction:
+                    with suppress(sqlite3.Error):
+                        connection.execute("ROLLBACK")
+                raise
 
     # -- inbound sync manifest -------------------------------------------
 

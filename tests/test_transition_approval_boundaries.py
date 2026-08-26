@@ -5,7 +5,11 @@ import pytest
 from fuente.application.sharing import SharingApplicationService
 from fuente.domain.documents import content_hash_for_markdown
 from fuente.domain.errors import OutputApprovalRequiredError
-from tests.test_ingestion_recovery import SOURCE_IDENTITY, _build_harness
+from tests.test_ingestion_recovery import (
+    SOURCE_IDENTITY,
+    _approval_request,
+    _build_harness,
+)
 from tests.test_refinement_promotion import _service
 
 
@@ -16,7 +20,7 @@ def _approve(service, artifact_id, source, target, revision, content_hash):
 
 
 def test_volcado_to_copiado_blocks_before_copy(temp_vault_path) -> None:
-    harness = _build_harness(temp_vault_path)
+    harness = _build_harness(temp_vault_path, approve_early_transitions=False)
     try:
         job = harness.service.submit(SOURCE_IDENTITY)
         waiting = harness.service.resume(job.job_id)
@@ -27,7 +31,7 @@ def test_volcado_to_copiado_blocks_before_copy(temp_vault_path) -> None:
 
 
 def test_copiado_to_capturado_blocks_before_clean_write(temp_vault_path) -> None:
-    harness = _build_harness(temp_vault_path)
+    harness = _build_harness(temp_vault_path, approve_early_transitions=False)
     try:
         job = harness.service.submit(SOURCE_IDENTITY)
         _approve(
@@ -46,10 +50,17 @@ def test_copiado_to_capturado_blocks_before_clean_write(temp_vault_path) -> None
 
 
 def test_capturado_to_procesado_blocks_before_note_write(temp_vault_path) -> None:
-    harness = _build_harness(temp_vault_path)
+    harness = _build_harness(temp_vault_path, approve_early_transitions=False)
     try:
         job = harness.service.submit(SOURCE_IDENTITY)
-        _approve(harness.service.transition_approvals, job.job_id, "1_volcado", "2_copiado", 1, job.source_hash)
+        _approve(
+            harness.service.transition_approvals,
+            job.job_id,
+            "1_volcado",
+            "2_copiado",
+            1,
+            job.source_hash,
+        )
         first_wait = harness.service.resume(job.job_id)
         dirty = harness.vault.config.vault_path / first_wait.dirty_artifact
         _approve(
@@ -61,9 +72,7 @@ def test_capturado_to_procesado_blocks_before_note_write(temp_vault_path) -> Non
             harness.vault.calculate_file_hash(dirty),
         )
         clean_wait = harness.service.resume(job.job_id)
-        request = harness.service.approval_service.request_approval(
-            harness.service._document_id(clean_wait)
-        )
+        request = _approval_request(harness, clean_wait)
         harness.service.approval_service.ledger.approve(
             request.note_id,
             request.revision,
@@ -79,7 +88,7 @@ def test_capturado_to_procesado_blocks_before_note_write(temp_vault_path) -> Non
 
 
 def test_procesado_to_compartido_blocks_before_shared_write(tmp_path) -> None:
-    vault, store, notes, candidate_id = _service(tmp_path)
+    vault, store, notes, candidate_id = _service(tmp_path, approve_transition=False)
     try:
         candidate = notes.get_note(candidate_id)
         _approve(

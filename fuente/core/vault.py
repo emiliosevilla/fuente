@@ -4,7 +4,7 @@ import hashlib
 import json
 from datetime import datetime
 from pathlib import Path
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 import logging
 
 from fuente.config import (
@@ -21,6 +21,9 @@ from fuente.domain.vault_layout import VaultLayout
 from fuente.infrastructure.atomic_files import atomic_write_json, atomic_write_text
 
 logger = logging.getLogger(__name__)
+
+if TYPE_CHECKING:
+    from fuente.application.approval import TransitionApprovalService
 
 WINDOWS_RESERVED_NAMES = {
     "CON", "PRN", "AUX", "NUL",
@@ -302,12 +305,29 @@ class VaultManager:
         logger.info(f"Cuestión creada en Tema '{self.active_theme}': {sanitized_issue}")
         return issue_dir
 
-    def copy_to_dirty(self, source_path: Path) -> Path:
+    def copy_to_dirty(
+        self,
+        source_path: Path,
+        *,
+        transition_approvals: "TransitionApprovalService",
+        artifact_id: str,
+        revision: int,
+        content_hash: str,
+    ) -> Path:
         """Copia un archivo crudo desde 1_volcado hacia 2_copiado manteniendo el hash original."""
         if not source_path.exists():
             raise FileNotFoundError(f"Archivo de entrada no encontrado: {source_path}")
 
         file_hash = self.calculate_file_hash(source_path)
+        if file_hash != content_hash:
+            raise ValueError("Source bytes changed after transition approval")
+        transition_approvals.require_current(
+            artifact_id,
+            "1_volcado",
+            "2_copiado",
+            revision,
+            file_hash,
+        )
         safe_stem = self.sanitize_filename(source_path.stem)
         dest_filename = f"{safe_stem}_{file_hash[:8]}{source_path.suffix}"
         dest_path = self.dirty_dir / dest_filename

@@ -287,6 +287,29 @@ def test_clean_claim_conflict_leaves_no_partial_ledger_approval(
     assert store.get_note(NOTE_ID)["status"] == "pending_review"
 
 
+def test_transition_rejection_rolls_back_clean_ledger_and_catalog(
+    approval_services,
+    monkeypatch,
+) -> None:
+    approvals, _ledger, _notes, store, _path, _relative = approval_services
+    monkeypatch.setattr(
+        store,
+        "_save_transition_approval_in_transaction",
+        lambda *_args, **_kwargs: None,
+    )
+
+    with pytest.raises(sqlite3.IntegrityError, match="transition approval was rejected"):
+        approvals.approve_clean(NOTE_ID, 1, "emilio")
+
+    assert store._connection.execute(
+        "SELECT COUNT(*) FROM note_approvals WHERE note_id = ?", (NOTE_ID,)
+    ).fetchone()[0] == 0
+    assert store._connection.execute(
+        "SELECT COUNT(*) FROM transition_approvals WHERE artifact_id = ?", (NOTE_ID,)
+    ).fetchone()[0] == 0
+    assert store.get_note(NOTE_ID)["status"] == "pending_review"
+
+
 
 def test_direct_markdown_edit_fails_closed_without_trusting_stale_catalog(
     approval_services,

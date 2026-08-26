@@ -138,6 +138,7 @@ def test_ledger_schema_has_exact_identity_key_fk_and_no_markdown_copy(
     assert {"markdown", "body", "body_markdown", "content"}.isdisjoint(columns)
     assert any(row[2] == "note_catalog" and row[3] == "note_id" for row in foreign_keys)
     assert ("note_id", "revision", "content_hash") in unique_column_sets
+    assert "seal" not in columns
 
     with sqlite3.connect(store.db_path) as connection:
         connection.execute("PRAGMA foreign_keys = ON")

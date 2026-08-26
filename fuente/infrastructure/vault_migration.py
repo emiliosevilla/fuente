@@ -5,7 +5,7 @@ import hashlib
 import logging
 import re
 import shutil
-from dataclasses import asdict, dataclass, field, replace
+from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterator, Optional, Protocol
@@ -13,7 +13,6 @@ from typing import Any, Iterator, Optional, Protocol
 import yaml
 
 from fuente.config import AppConfig, VaultConfig, get_default_config
-from fuente.application.notes import NotesApplicationService
 from fuente.core.vault import VaultManager
 from fuente.domain.documents import MarkdownDocument, content_hash_for_markdown
 from fuente.domain.errors import PathAuthorizationError
@@ -38,7 +37,6 @@ from fuente.domain.vault_layout import (
     LEGACY_OUTPUT_DIR_NAME,
     LEGACY_SHARED_DIR_NAME,
 )
-from fuente.graph_engine.optimized_loop import OptimizadoGraphLoop
 from fuente.infrastructure.atomic_files import atomic_write_json, atomic_write_text
 from fuente.infrastructure.sqlite_store import JobStore
 from fuente.rag.index_records import ChunkIdentity, materialize_chunks, obsolete_chunk_ids
@@ -123,7 +121,6 @@ class MigrationManifest:
     status: str
     backup_dir: str
     entries: list[ManifestEntry] = field(default_factory=list)
-    moc_rebuilt: bool = False
     index_rebuilt: bool = False
     themes_processed: list[str] = field(default_factory=list)
     scan_summary: dict[str, int] = field(default_factory=dict)
@@ -138,7 +135,6 @@ class MigrationManifest:
             "status": self.status,
             "backup_dir": self.backup_dir,
             "entries": [asdict(entry) for entry in self.entries],
-            "moc_rebuilt": self.moc_rebuilt,
             "index_rebuilt": self.index_rebuilt,
             "themes_processed": list(self.themes_processed),
             "scan_summary": dict(self.scan_summary),
@@ -156,7 +152,6 @@ class MigrationManifest:
             status=str(payload.get("status", "in_progress")),
             backup_dir=str(payload.get("backup_dir", "")),
             entries=entries,
-            moc_rebuilt=bool(payload.get("moc_rebuilt", False)),
             index_rebuilt=bool(payload.get("index_rebuilt", False)),
             themes_processed=list(payload.get("themes_processed", [])),
             scan_summary=dict(payload.get("scan_summary", {})),
@@ -517,7 +512,6 @@ class VaultMigrator:
         manifest_path: Optional[str | Path] = None,
         *,
         rebuild_index: bool = True,
-        rebuild_moc: bool = True,
         force: bool = False,
     ) -> MigrationManifest:
         scan = self.scan()
@@ -571,14 +565,10 @@ class VaultMigrator:
             entry.applied = True
             self._persist_manifest(manifest)
 
-        if rebuild_moc:
-            manifest.themes_processed = self._refresh_moc_catalog()
-            manifest.moc_rebuilt = True
-            self._persist_manifest(manifest)
-
         if rebuild_index:
+            manifest.themes_processed = list(scan.themes)
             manifest.index_rebuilt = self._rebuild_index(
-                manifest.themes_processed or scan.themes
+                manifest.themes_processed
             )
             self._persist_manifest(manifest)
 
@@ -632,8 +622,6 @@ class VaultMigrator:
         self._persist_manifest(manifest, manifest_path)
         if self._chroma is None and self._restore_runtime_state(manifest):
             return manifest, restored_count
-        if manifest.moc_rebuilt:
-            self._refresh_moc_catalog()
         if manifest.index_rebuilt:
             self._rebuild_index(
                 manifest.themes_processed or _migration_theme_names(self.config.vault)
@@ -717,49 +705,6 @@ class VaultMigrator:
         except ValueError:
             return True
         return False
-
-    def _refresh_moc_catalog(self) -> list[str]:
-        """Regenerate graph outputs only through the provenance gate."""
-        processed: list[str] = []
-        with JobStore(self.vault_path) as store:
-            for theme in _migration_theme_names(self.config.vault):
-                self.vault.set_active_theme(theme)
-                for output_name in _migration_output_names(
-                    self.vault.config, self.vault.current_theme_dir
-                ):
-                    output_dir = self.vault.current_theme_dir / output_name
-                    legacy_config = replace(
-                        self.vault.config, output_dir_name=output_name
-                    )
-                    legacy_vault = VaultManager(legacy_config)
-                    legacy_vault.set_active_theme(theme)
-                    notes = NotesApplicationService(
-                        vault=legacy_vault,
-                        path_resolver=legacy_vault.path_resolver(),
-                        job_store=store,
-                    )
-                    loop = OptimizadoGraphLoop(
-                        output_dir,
-                        vault_root=self.vault.config.vault_path,
-                        eligibility_guard=notes.require_published_output,
-                    )
-                    result = loop.rebuild_catalog()
-                    if result.get("status") == "success":
-                        processed.append(theme)
-                    elif result.get("error") == "origin_not_approved":
-                        logger.info(
-                            "Skipping unapproved graph rebuild for theme %s/%s",
-                            theme,
-                            output_name,
-                        )
-                    else:
-                        logger.warning(
-                            "Graph rebuild failed for theme %s/%s: %s",
-                            theme,
-                            output_name,
-                            result,
-                        )
-        return processed
 
     @staticmethod
     def _scan_frontmatter_issues(markdown: str) -> Optional[str]:

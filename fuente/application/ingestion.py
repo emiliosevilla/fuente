@@ -237,7 +237,6 @@ class IngestionApplicationService:
         chunker: Any,
         chroma: Any,
         atomic_generator: Any,
-        linker: Any,
         runtime_policy: RuntimePolicy | None = None,
         ram_governor: Any = None,
         scheduler: Optional[ResourceScheduler] = None,
@@ -263,7 +262,6 @@ class IngestionApplicationService:
             refinement=ChromaRetrievalBackend(chroma),
         )
         self.atomic_generator = atomic_generator
-        self.linker = linker
         self.runtime_policy = runtime_policy
         self.ram_governor = ram_governor
         self._copy_to_dirty = copy_to_dirty
@@ -860,23 +858,12 @@ class IngestionApplicationService:
             self._candidate(job, context)
         )
         note_path = self._target_note_path(job)
-        current_relative_path = note_path.resolve().relative_to(
-            self.vault.output_dir.resolve()
-        ).as_posix()
-        linked = self.linker.auto_link_content(
-            validated,
-            self._source_stem(job),
-            current_relative_path=current_relative_path,
-        )
-        # Linking rewrites the note body, so the text that actually reaches
-        # disk is validated too, never just the model's candidate.
-        persisted_markdown = self._validated_markdown(linked)
-        atomic_write_text(note_path, persisted_markdown)
+        atomic_write_text(note_path, validated)
         document_id = self._document_id(job)
         self.job_store.upsert_document_identity(
             document_id=document_id,
             relative_path=self.vault_relative_identity(note_path),
-            content_hash=content_hash_for_markdown(persisted_markdown),
+            content_hash=content_hash_for_markdown(validated),
         )
         return self._advance(job, "saved_note", note_document_id=document_id)
 

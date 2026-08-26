@@ -59,9 +59,6 @@ def test_nested_theme_and_issue_surface_in_bridge_subsystems(bridge_backend):
     metadata = bridge.get_note_metadata(document_id)
     assert metadata["metadata"]["issue"] == ISSUE
 
-    graph = bridge.get_graph_data()
-    node_ids = {node["document_id"] for node in graph["nodes"]}
-    assert document_id in node_ids
 
 
 def test_general_theme_hides_nested_theme_notes(bridge_backend):
@@ -75,8 +72,6 @@ def test_general_theme_hides_nested_theme_notes(bridge_backend):
         item["document_id"] for item in bridge.get_pending_notes()["pending_notes"]
     }
     assert document_id not in inbox_ids
-    graph_ids = {node["document_id"] for node in bridge.get_graph_data()["nodes"]}
-    assert document_id not in graph_ids
 
 
 def test_bridge_approval_changes_state_and_history(bridge_backend):

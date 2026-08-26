@@ -5,18 +5,14 @@ import pytest
 
 from fuente.config import VaultConfig
 from fuente.application.approval import ApprovalApplicationService
-from fuente.control_console import FuenteConsoleBackend
 from fuente.core.vault import VaultManager
 from fuente.domain.approvals import ApprovalLedger
 from fuente.domain.documents import content_hash_for_markdown
 from fuente.domain.errors import PathAuthorizationError
-from fuente.application.fusion import FusionApplicationService
-from fuente.application.notes import NotesApplicationService
 from fuente.domain.frontmatter import serialize_frontmatter
 from fuente.domain.paths import document_id_for_relative_path
 from fuente.domain.paths import SourcePathAuthorizer
 from fuente.infrastructure.sqlite_store import JobStore
-from fuente.rag.vault_corpus import VaultCorpusProvider
 
 
 @pytest.mark.parametrize(
@@ -123,56 +119,6 @@ def test_source_path_authorizer_rejects_outside_paths_and_symlink_components(tmp
         authorizer.resolve(symlink_dir / "inside.md")
 
 
-def test_fusion_candidates_skip_symlinked_notes_outside_vault(
-    path_resolver, temp_vault_path
-):
-    inside = temp_vault_path / "4_salida" / "inside.md"
-    markdown = serialize_frontmatter(
-        {
-            "schema_version": 1,
-            "title": "Inside",
-            "date": "2026-08-11",
-            "author": "test",
-            "tags": [],
-            "issue": "Issue-A",
-            "status": "approved",
-            "sources": [],
-            "history": [],
-        }
-    ) + "# Same body\n"
-    inside.write_text(markdown, encoding="utf-8")
-    other = temp_vault_path / "4_salida" / "other.md"
-    other.write_text(markdown, encoding="utf-8")
-    external = temp_vault_path.parent / "outside-fusion.md"
-    external.write_bytes(inside.read_bytes())
-    link = temp_vault_path / "4_salida" / "outside-fusion.md"
-    link.symlink_to(external)
-    before = inside.read_bytes()
-    store = JobStore(temp_vault_path)
-    notes = NotesApplicationService(
-        vault=VaultManager(VaultConfig(vault_path=temp_vault_path)),
-        path_resolver=path_resolver,
-        job_store=store,
-    )
-    service = FusionApplicationService(
-        notes_service=notes,
-        corpus_provider=VaultCorpusProvider(
-            vault_root=temp_vault_path,
-            output_roots=[path_resolver.roots["output"]],
-            path_resolver=path_resolver,
-        ),
-    )
-    try:
-        candidates = service.find_candidates()
-    finally:
-        store.close()
-
-    linked_id = document_id_for_relative_path("4_salida/outside-fusion.md")
-    assert all(linked_id not in candidate.document_ids for candidate in candidates)
-    assert candidates
-    assert inside.read_bytes() == before
-
-
 @pytest.mark.parametrize(
     "quarantine_id",
     ["../nota.md", "/tmp/nota.md", "folder/nota.md", "nested/deep/nota.md"],
@@ -180,23 +126,6 @@ def test_fusion_candidates_skip_symlinked_notes_outside_vault(
 def test_rejects_quarantine_identifiers_with_path_separators(path_resolver, quarantine_id):
     with pytest.raises(PathAuthorizationError):
         path_resolver.resolve_quarantine(quarantine_id)
-
-
-def test_backend_save_note_rejects_absolute_external_path_without_mutation(
-    temp_vault_path, external_note_path
-):
-    backend = FuenteConsoleBackend(temp_vault_path)
-
-    result = backend.handle_action(
-        "save_note",
-        {"path": str(external_note_path), "content": "changed"},
-    )
-
-    assert result == {
-        "error": "path_not_authorized",
-        "message": "Path is not authorized",
-    }
-    assert external_note_path.read_text(encoding="utf-8") == "secret"
 
 
 def test_restore_rejects_absolute_quarantine_identifier_without_mutation(

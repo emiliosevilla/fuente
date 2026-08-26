@@ -4,7 +4,7 @@ import pytest
 
 from fuente.config import get_default_config
 from fuente.domain.quarantine import InvalidModelOutputError
-from fuente.graph_engine.atomic_generator import AtomicNoteGenerator
+from fuente.application.note_generation import AtomicNoteGenerator
 from fuente.watcher.watcher import ETLPipeline
 from tests.conftest import (
     approve_saved_clean_job,

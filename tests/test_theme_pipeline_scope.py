@@ -17,7 +17,6 @@ from fuente.core.folder_sync import FolderSyncManager
 from fuente.core.vault import VaultManager, document_id_for_relative_path
 from fuente.domain.frontmatter import serialize_frontmatter
 from fuente.domain.runtime_policy import ExecutionProfile, RuntimePolicy
-from fuente.graph_engine.optimized_loop import OptimizadoGraphLoop
 from fuente.watcher.watcher import ETLPipeline, FolderMonitor
 
 
@@ -163,7 +162,7 @@ def test_connected_folder_sync_stays_in_active_theme(temp_vault_path, tmp_path):
     assert sample.exists(), "source file in the connected folder must remain intact"
 
 
-def test_enumerate_documents_excludes_system_hidden_moc_and_quarantine(temp_vault_path):
+def test_enumerate_documents_keeps_notes_and_excludes_system_hidden_and_quarantine(temp_vault_path):
     config = get_default_config(temp_vault_path)
     vault = VaultManager(config.vault)
     vault.create_theme(THEME)
@@ -194,7 +193,7 @@ def test_enumerate_documents_excludes_system_hidden_moc_and_quarantine(temp_vaul
 
     assert any(rel.endswith("Contratos/Obligaciones.md") for rel in relative_paths)
     assert any(rel.endswith("_Sin_Cuestion/Nota_Default.md") for rel in relative_paths)
-    assert all(not rel.endswith("_Indice_MOC.md") for rel in relative_paths)
+    assert any(rel.endswith("_Indice_MOC.md") for rel in relative_paths)
     assert all(".hidden_note.md" not in rel for rel in relative_paths)
     assert all(".fuente" not in rel for rel in relative_paths)
     assert all("quarantine" not in rel for rel in relative_paths)
@@ -204,8 +203,8 @@ def test_enumerate_documents_excludes_system_hidden_moc_and_quarantine(temp_vaul
         assert document_id != relative
 
 
-def test_lifecycle_set_active_theme_retargets_monitor_and_graph_loop(temp_vault_path):
-    """After theme switch, FolderMonitor process path and graph loop use Theme roots."""
+def test_lifecycle_set_active_theme_retargets_monitor(temp_vault_path):
+    """After a theme switch the monitor follows the active ingestion root."""
     config = get_default_config(temp_vault_path)
     for root in _general_roots(temp_vault_path).values():
         root.mkdir(parents=True, exist_ok=True)
@@ -213,31 +212,22 @@ def test_lifecycle_set_active_theme_retargets_monitor_and_graph_loop(temp_vault_
     lifecycle = ApplicationLifecycle(
         config,
         mode="continuous",
-        # Real monitor/graph with huge intervals so start/stop stay cheap.
         monitor_factory=lambda pipeline: FolderMonitor(pipeline, poll_interval_sec=3600.0),
-        graph_loop_factory=lambda output_dir: OptimizadoGraphLoop(
-            output_dir, interval_sec=3600
-        ),
     )
     try:
         lifecycle.start()
         assert lifecycle.pipeline is not None
         assert lifecycle.monitor is not None
-        assert lifecycle.graph_loop is not None
 
         general_input = lifecycle.pipeline.vault.input_dir
-        general_output = lifecycle.pipeline.vault.output_dir
         assert general_input == temp_vault_path / "1_volcado"
-        assert lifecycle.graph_loop.output_dir.resolve() == general_output.resolve()
 
         lifecycle.pipeline.vault.create_theme(THEME)
         lifecycle.set_active_theme(THEME)
 
         theme_input = lifecycle.pipeline.vault.input_dir
-        theme_output = lifecycle.pipeline.vault.output_dir
         assert theme_input == temp_vault_path / THEME / "1_volcado"
         assert theme_input != general_input
-        assert theme_output != general_output
 
         # FolderMonitor reads pipeline.vault each poll / process_existing path.
         assert lifecycle.monitor.pipeline.vault.input_dir == theme_input
@@ -245,9 +235,6 @@ def test_lifecycle_set_active_theme_retargets_monitor_and_graph_loop(temp_vault_
             temp_vault_path / "1_volcado"
         )
 
-        # Graph loop must not keep refining only the General tree.
-        assert lifecycle.graph_loop.output_dir.resolve() == theme_output.resolve()
-        assert lifecycle.pipeline.linker.output_dir.resolve() == theme_output.resolve()
     finally:
         lifecycle.stop()
 
@@ -263,9 +250,6 @@ def test_console_set_theme_shares_lifecycle_vault_and_retargets_services(temp_va
         backend.config,
         mode="continuous",
         monitor_factory=lambda pipeline: FolderMonitor(pipeline, poll_interval_sec=3600.0),
-        graph_loop_factory=lambda output_dir: OptimizadoGraphLoop(
-            output_dir, interval_sec=3600
-        ),
     )
     try:
         lifecycle.start()
@@ -286,26 +270,17 @@ def test_console_set_theme_shares_lifecycle_vault_and_retargets_services(temp_va
         assert lifecycle.monitor.pipeline.vault.input_dir == (
             temp_vault_path / THEME / "1_volcado"
         )
-        assert lifecycle.graph_loop.output_dir.resolve() == (
-            temp_vault_path / THEME / "4_procesado"
-        ).resolve()
 
         backend.handle_action("set_theme", {"theme_name": "General"})
         assert lifecycle.pipeline.vault.active_theme == "General"
         assert backend.sync_manager.active_theme == "General"
         assert backend.sync_manager.active_theme_dir == temp_vault_path.resolve()
         assert lifecycle.monitor.pipeline.vault.input_dir == temp_vault_path / "1_volcado"
-        assert lifecycle.graph_loop.output_dir.resolve() == (
-            temp_vault_path / "4_procesado"
-        ).resolve()
 
         backend.handle_action("set_theme", {"theme_name": THEME})
         assert lifecycle.monitor.pipeline.vault.input_dir == (
             temp_vault_path / THEME / "1_volcado"
         )
-        assert lifecycle.graph_loop.output_dir.resolve() == (
-            temp_vault_path / THEME / "4_procesado"
-        ).resolve()
         assert backend.sync_manager.active_theme == THEME
         assert backend.sync_manager.active_theme_dir == (
             temp_vault_path / THEME

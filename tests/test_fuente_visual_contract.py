@@ -106,15 +106,12 @@ def test_visual_style_toggle_does_not_reuse_vault_theme_bridge() -> None:
     assert 'id="style-select"' not in html
     assert 'id="settings-style-select"' not in html
 
-def test_reader_exposes_content_properties_and_independent_graph() -> None:
+def test_reader_exposes_read_only_content_and_properties() -> None:
     html = _read(HTML_PATH)
     for region in ("content", "properties"):
         assert f'data-reader-region="{region}"' in html
     assert 'id="reader-properties"' in html
-    assert 'id="modal-reader-graph"' in html
-    assert 'aria-labelledby="reader-graph-modal-title"' in html
     assert "function renderReaderProperties(" in html
-    assert "loadObsidianGraphView();" in html
 
 def test_console_reader_css_keeps_keyboard_focus_and_narrow_layout() -> None:
     css = _read(CONSOLE_CSS_PATH)
@@ -125,34 +122,6 @@ def test_reader_rendering_does_not_add_innerhtml_assignments() -> None:
     html = _read(HTML_PATH)
     assert re.search(r"\.innerHTML\s*=", html) is None
     assert re.search(r"(?:readerContent|readerProperties|readerRelations)\.innerHTML\s*=", html) is None
-
-def test_reader_views_keep_hidden_state_and_canvas_uses_a_semantic_token() -> None:
-    html, css = _read(HTML_PATH), _read(CONSOLE_CSS_PATH)
-    assert ".reader-graph-modal-body .reader-graph-container" in css
-    assert "reader-context-content #reader-view-list.is-hidden" in css
-    assert "getPropertyValue('--fuente-snow-0')" in html
-    assert "ctx.fillStyle = '#5E564B'" not in html
-
-def test_graph_legend_uses_semantic_tokens_with_readable_contrast() -> None:
-    css, tokens = _read(CONSOLE_CSS_PATH), _read(TOKENS_CSS_PATH)
-    legend = re.search(r"\.console-layout-011\s*\{([^}]*)\}", css, re.DOTALL)
-    assert legend is not None
-    declarations = legend.group(1)
-    assert "background: var(--fuente-polar-0)" in declarations
-    assert "color: var(--fuente-snow-0)" in declarations
-    background = _token_hex(tokens, "--fuente-polar-0")
-    assert all(_contrast_ratio(background, _token_hex(tokens, token)) >= 4.5 for token in ("--fuente-snow-0", "--fuente-frost-1", "--fuente-frost-2"))
-
-def test_graph_counters_use_high_contrast_tokens_on_the_dark_legend() -> None:
-    css, tokens = _read(CONSOLE_CSS_PATH), _read(TOKENS_CSS_PATH)
-    background = _token_hex(tokens, "--fuente-polar-0")
-    counter_tokens = {".graph-counter-nodes": "--fuente-snow-2", ".graph-counter-wikilinks": "--fuente-frost-1", ".graph-counter-origins": "--fuente-warning"}
-    for selector, token in counter_tokens.items():
-        rule = re.search(rf"{re.escape(selector)}\s*\{{([^}}]*)\}}", css, re.DOTALL)
-        assert rule is not None
-        assert f"color: var({token})" in rule.group(1)
-        assert _contrast_ratio(background, _token_hex(tokens, token)) >= 4.5
-
 
 def test_upgrade_palette_is_semantic_and_component_css_has_no_hex_literals() -> None:
     css, tokens = _read(CONSOLE_CSS_PATH), _read(TOKENS_CSS_PATH)

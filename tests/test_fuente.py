@@ -11,7 +11,6 @@ from fuente.extractors.office_pdf import TextAndOfficeExtractor
 from fuente.ram_governor.budget import MODEL_CATALOG
 from fuente.ram_governor.governor import RAMGovernor
 from fuente.rag.semantic_chunker import SemanticChunker
-from fuente.graph_engine.linker import GraphLinker
 from fuente.watcher.watcher import wait_until_file_stable, is_temporary_or_system_file
 
 
@@ -80,41 +79,6 @@ class TestFuente(unittest.TestCase):
         html_text, _ = extractor.extract(html_file)
         self.assertIn("# Titulo HTML", html_text)
         self.assertIn("Parrafo de texto.", html_text)
-
-    def test_linker_protection_yaml_and_code(self):
-        existing_note = self.config.vault.output_dir / "Proyecto Alpha.md"
-        with open(existing_note, "w", encoding="utf-8") as f:
-            f.write(serialize_frontmatter({
-                "schema_version": 1, "title": "Proyecto Alpha", "date": "",
-                "author": "Fuente", "tags": [], "issue": "_Sin_Cuestion",
-                "status": "approved", "sources": [], "history": [],
-            }) + "Contenido de Proyecto Alpha")
-
-        linker = GraphLinker(self.config.vault.output_dir)
-
-        content = """---
-title: "Nota sobre Proyecto Alpha"
-tags: [proyecto alpha, test]
----
-
-# Proyecto Alpha
-
-En este informe hablamos del Proyecto Alpha.
-
-```python
-# No modificar esto:
-var_name = "Proyecto Alpha"
-```
-
-Ver también: `Proyecto Alpha en codigo inline`
-"""
-        linked = linker.auto_link_content(content, "Otra Nota")
-
-        metadata, _ = parse_frontmatter(linked)
-        self.assertEqual(metadata["tags"], ["proyecto alpha", "test"])
-        self.assertIn("del [[Proyecto Alpha]].", linked)
-        self.assertIn('var_name = "Proyecto Alpha"', linked)
-        self.assertIn('`Proyecto Alpha en codigo inline`', linked)
 
     def test_ram_governor(self):
         gov = RAMGovernor()

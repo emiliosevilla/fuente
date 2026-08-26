@@ -1,15 +1,19 @@
 import json
 import logging
 import uuid
-from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Dict, Any, Optional, List
 
 from fuente.domain.documents import MarkdownDocument
 from fuente.domain.frontmatter import FrontmatterError
 from fuente.domain.frontmatter import serialize_frontmatter
 from fuente.domain.quarantine import InvalidModelOutputError
-from fuente.graph_engine.prompts import ATOMIC_NOTE_SYSTEM_PROMPT
+
+ATOMIC_NOTE_SYSTEM_PROMPT = """Eres el generador local de notas de Fuente.
+Devuelve exclusivamente un objeto JSON que cumpla el esquema solicitado por la API.
+No devuelvas Markdown, YAML, comentarios ni texto fuera del JSON.
+Resume fielmente el documento: title, date, author, tags, summary y body.
+No inventes fuentes ni atribuciones; si un dato no aparece, usa una cadena vacía o
+"Desconocido". Escribe summary y body en español y con Markdown sencillo."""
 
 
 ATOMIC_NOTE_RESPONSE_SCHEMA = {
@@ -26,25 +30,6 @@ ATOMIC_NOTE_RESPONSE_SCHEMA = {
 }
 
 logger = logging.getLogger(__name__)
-
-@dataclass
-class AtomicNode:
-    node_id: str
-    concept: str
-    summary: str
-    content: str
-    source_file: str
-    parent_node_id: Optional[str] = None
-    child_node_ids: List[str] = field(default_factory=list)
-    tags: List[str] = field(default_factory=list)
-    metadata: Dict[str, Any] = field(default_factory=dict)
-
-@dataclass
-class GraphEdge:
-    source_id: str
-    target_id: str
-    relation_type: str  # p.ej: 'PARENT_CHILD', 'SIMILAR', 'DEPENDS_ON'
-    weight: float = 1.0
 
 try:
     import requests
@@ -194,7 +179,7 @@ Extracción desestructurada desde carpeta 1_volcado.
 Origen: {file_name}
 
 ## Objetivo
-Estructurar e interconectar conocimiento en Obsidian.
+Estructurar conocimiento revisable en Obsidian.
 
 ## Método
 Pipeline ETL Fuente.
@@ -208,15 +193,4 @@ Registro de ingesta inicial.
 ## Resultado
 Nota atómica inicial registrada.
 
-## Referencias Cruzadas
-
-### Reuniones
-
-### Emails
-
-### Conversaciones
-
-### Normativa
-
-### Otras Notas Atómicas
 """

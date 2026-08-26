@@ -4,7 +4,6 @@ import os
 from fuente.ram_governor.governor import RAMGovernor, OS_WHITELIST
 from fuente.rag.semantic_chunker import SemanticChunker
 from fuente.rag.hybrid_search import BM25Okapi
-from fuente.graph_engine.atomic_generator import AtomicNode, GraphEdge
 
 
 class TestSystemInvariants(unittest.TestCase):

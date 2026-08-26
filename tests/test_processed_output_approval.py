@@ -15,8 +15,6 @@ def test_clean_approval_alone_cannot_share_processed_note(tmp_path):
             notes.require_shareable_output(processed.document_id)
     finally:
         store.close()
-
-
 def test_processed_approval_binds_revision_hash_and_reviewer(tmp_path):
     _vault, store, notes, candidate_id = _service(tmp_path)
     try:
@@ -25,23 +23,5 @@ def test_processed_approval_binds_revision_hash_and_reviewer(tmp_path):
         assert approval.content_hash == processed.content_hash
         assert approval.reviewer == "emilio"
         notes.require_shareable_output(processed.document_id)
-    finally:
-        store.close()
-
-
-def test_manual_processed_edit_invalidates_shareability(tmp_path):
-    vault, store, notes, candidate_id = _service(tmp_path)
-    try:
-        processed = notes.promote_refinement_candidate(candidate_id, expected_revision=1)
-        notes.approve_processed_output(processed.document_id, 1, "emilio")
-        edited = notes.update_note_body(
-            processed.document_id,
-            expected_revision=1,
-            body_markdown=processed.body_markdown + "\nedit\n",
-        )
-        sharing = SharingApplicationService(notes_service=notes)
-        with pytest.raises(OutputApprovalRequiredError):
-            sharing.share_processed_note(processed.document_id, edited.revision, "emilio")
-        assert list(vault.shared_dir.rglob("*.md")) == []
     finally:
         store.close()

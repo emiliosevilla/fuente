@@ -50,7 +50,8 @@ def test_runtime_html_has_no_external_cdn_urls():
             f"Forbidden CDN reference found: {pattern}"
         )
     assert "font-src 'self'" in source
-    assert "Arial, sans-serif" in source
+    css = (CONSOLE_HTML.parent / "fuente/ui/static/console.css").read_text(encoding="utf-8")
+    assert "font-family: var(--font-mono)" in css
 
 
 def test_runtime_html_external_http_urls_are_loopback_only():

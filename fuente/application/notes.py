@@ -29,12 +29,10 @@ from fuente.domain.runtime_policy import RuntimePolicy
 from fuente.rag.chroma_store import ChromaStore
 from fuente.rag.minirag_store import MiniRAGStore, MiniRAGUnavailableError
 from fuente.rag.semantic_chunker import SemanticChunker
-from fuente.ui.markdown_projection import project_note_document
 
 logger = logging.getLogger(__name__)
 
 IndexNotifier = Callable[[], None]
-MAX_BODY_MARKDOWN_CHARS = 1_000_000
 
 
 class PublishedOutputTarget(Protocol):
@@ -331,64 +329,6 @@ class NotesApplicationService:
             content_hash=str(identity.get("content_hash") or note.content_hash),
         )
 
-    def enumerate_output_notes(self) -> list[NoteDocument]:
-        """Read authorized output notes without touching note-state storage.
-
-        ``get_note`` deliberately repairs/creates the SQLite document identity,
-        which is appropriate for normal note access but not for read-only
-        analysis.  Fusion detection uses this enumeration so candidate
-        inspection cannot change revisions, identities, indexes, or files.
-        """
-        output_root = self.path_resolver.roots["output"]
-        vault_root = self.vault.config.vault_path.resolve()
-        if not output_root.exists() or not output_root.is_dir():
-            return []
-
-        notes: list[NoteDocument] = []
-        for candidate in sorted(output_root.rglob("*"), key=lambda path: path.as_posix()):
-            if (
-                not candidate.is_file()
-                or candidate.suffix.lower() != ".md"
-                or candidate.is_symlink()
-                or self._has_symlink_component(candidate, output_root)
-            ):
-                continue
-            try:
-                relative = candidate.relative_to(vault_root).as_posix()
-            except ValueError:
-                continue
-            relative_parts = Path(relative).parts
-            if (
-                any(part.startswith(".") for part in relative_parts)
-                or candidate.name.startswith("_")
-            ):
-                continue
-            try:
-                authorized = self.path_resolver.resolve_note(relative)
-                if authorized != candidate:
-                    continue
-                markdown = candidate.read_text(encoding="utf-8")
-                notes.append(
-                    NoteDocument.from_persisted(
-                        document_id=(
-                            MarkdownDocument.from_markdown(markdown).note_id
-                            or document_id_for_relative_path(relative)
-                        ),
-                        relative_path=relative,
-                        markdown=markdown,
-                        revision=1,
-                    )
-                )
-            except (
-                FrontmatterError,
-                OSError,
-                PathAuthorizationError,
-                UnicodeError,
-                ValueError,
-            ):
-                logger.info("Skipping unreadable or invalid output note: %s", candidate)
-        return notes
-
     @staticmethod
     def _has_symlink_component(path: Path, root: Path) -> bool:
         try:
@@ -401,72 +341,6 @@ class NotesApplicationService:
             if current.is_symlink():
                 return True
         return False
-
-    def get_editor_document(self, document_id: str) -> dict[str, Any]:
-        """Return the revisioned Markdown body-editor contract for a note."""
-        document_id = self._resolve_opaque_document_id(document_id)
-        note = self.get_note(document_id)
-        projection = project_note_document(note)
-        return {
-            "document_id": note.document_id,
-            "revision": note.revision,
-            "frontmatter": dict(note.frontmatter),
-            "body_markdown": note.body_markdown,
-            "projection": projection,
-        }
-
-    def update_note_body(
-        self,
-        document_id: str,
-        expected_revision: int,
-        body_markdown: str,
-    ) -> NoteDocument:
-        """Replace only the canonical Markdown body under a revision CAS."""
-        document_id = self._resolve_opaque_document_id(document_id)
-        if not isinstance(body_markdown, str):
-            raise ValueError("body_markdown must be a string")
-        if len(body_markdown) > MAX_BODY_MARKDOWN_CHARS:
-            raise ValueError(
-                "body_markdown exceeds maximum length of "
-                f"{MAX_BODY_MARKDOWN_CHARS} characters"
-            )
-        if (
-            not isinstance(expected_revision, int)
-            or isinstance(expected_revision, bool)
-            or expected_revision < 1
-        ):
-            raise ValueError("expected_revision must be a positive integer")
-
-        lock_directory = self.vault.config.vault_path / ".fuente" / "note-editor-locks"
-        with document_file_lock(lock_directory, document_id):
-            note = self.get_note(document_id)
-            if note.revision != expected_revision:
-                raise NoteRevisionConflictError(document_id)
-
-            path, _ = self._resolve_note_path(document_id)
-            current_markdown = path.read_text(encoding="utf-8", errors="replace")
-            current_hash = content_hash_for_markdown(current_markdown)
-            catalog_record = self.job_store.get_note(document_id)
-            if catalog_record is not None:
-                if (
-                    int(catalog_record["revision"]) != expected_revision
-                    or catalog_record.get("content_hash") != current_hash
-                ):
-                    raise NoteRevisionConflictError(document_id)
-            else:
-                identity = self.job_store.get_document_identity(document_id)
-                if identity is None or identity.get("content_hash") != current_hash:
-                    raise NoteRevisionConflictError(document_id)
-
-            return self._persist_note(
-                note,
-                expected_revision=expected_revision,
-                expected_content_hash=current_hash,
-                metadata=dict(note.frontmatter),
-                body_markdown=body_markdown,
-                lock_held=True,
-                reindex=False,
-            )
 
     def persist_pending_review_candidate(
         self,

@@ -10,40 +10,311 @@
     <link rel="stylesheet" href="fuente/ui/static/console.css">
 </head>
 <body>
-    <svg id="ui-icon-definitions" aria-hidden="true" focusable="false">
+            <svg id="ui-icon-definitions" aria-hidden="true" focusable="false">
         <defs>
-            <symbol id="ui-icon-back" viewBox="0 0 24 24">
-                <path d="m15 5-7 7 7 7"></path>
+            <!-- Lucide stroke icons; CSS sets stroke on svg.ui-icon -->
+            <symbol id="ui-icon-house" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"></path>
+                <path d="M3 10a2 2 0 0 1 .709-1.528l7-6a2 2 0 0 1 2.582 0l7 6A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
             </symbol>
-            <symbol id="ui-icon-search" viewBox="0 0 24 24">
-                <circle cx="11" cy="11" r="6"></circle>
-                <path d="m16 16 4 4"></path>
+            <symbol id="ui-icon-library" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="m16 6 4 14"></path>
+                <path d="M12 6v14"></path>
+                <path d="M8 8v12"></path>
+                <path d="M4 4v16"></path>
             </symbol>
-            <symbol id="ui-icon-close" viewBox="0 0 24 24">
-                <path d="m6 6 12 12M18 6 6 18"></path>
+            <symbol id="ui-icon-waves" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M2 6c.6.5 1.2 1 2.5 1C7 7 7 5 9.5 5c2.6 0 2.4 2 5 2 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1"></path>
+                <path d="M2 12c.6.5 1.2 1 2.5 1 2.5 0 2.5-2 5-2 2.6 0 2.4 2 5 2 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1"></path>
+                <path d="M2 18c.6.5 1.2 1 2.5 1 2.5 0 2.5-2 5-2 2.6 0 2.4 2 5 2 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1"></path>
+            </symbol>
+            <symbol id="ui-icon-sun-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 2v2"></path>
+                <path d="M14.837 16.385a6 6 0 1 1-7.223-7.222c.624-.147.97.66.715 1.248a4 4 0 0 0 5.26 5.259c.589-.255 1.396.09 1.248.715"></path>
+                <path d="M16 12a4 4 0 0 0-4-4"></path>
+                <path d="m19 5-1.256 1.256"></path>
+                <path d="M20 12h2"></path>
+            </symbol>
+            <symbol id="ui-icon-settings-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M14 17H5"></path>
+                <path d="M19 7h-9"></path>
+                <circle cx="17" cy="17" r="3"></circle>
+                <circle cx="7" cy="7" r="3"></circle>
+            </symbol>
+            <symbol id="ui-icon-book-open" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 5v16"></path>
+                <path d="M20.001 19A2 2 0 0022 17V5a2 2 0 00-1.999-2L16 3.002A5 5 0 0012 5a5 5 0 00-4-2H4a2 2 0 00-2 2v12a2 2 0 001.999 2H8a5 5 0 014 2 5 5 0 014-2z"></path>
+            </symbol>
+            <symbol id="ui-icon-filter" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
+            </symbol>
+            <symbol id="ui-icon-arrow-up-down" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="m21 16-4 4-4-4"></path>
+                <path d="M17 20V4"></path>
+                <path d="m3 8 4-4 4 4"></path>
+                <path d="M7 4v16"></path>
+            </symbol>
+            <symbol id="ui-icon-ellipsis" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="1"></circle>
+                <circle cx="19" cy="12" r="1"></circle>
+                <circle cx="5" cy="12" r="1"></circle>
+            </symbol>
+            <symbol id="ui-icon-message-circle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M2.992 16.342a2 2 0 0 1 .094 1.167l-1.065 3.29a1 1 0 0 0 1.236 1.168l3.413-.998a2 2 0 0 1 1.099.092 10 10 0 1 0-4.777-4.719"></path>
+            </symbol>
+            <symbol id="ui-icon-back" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="m15 18-6-6 6-6"></path>
+            </symbol>
+            <symbol id="ui-icon-search" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="m21 21-4.34-4.34"></path>
+                <circle cx="11" cy="11" r="8"></circle>
+            </symbol>
+            <symbol id="ui-icon-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M18 6 6 18"></path>
+                <path d="m6 6 12 12"></path>
+            </symbol>
+            <symbol id="ui-icon-chevron-down" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="m6 9 6 6 6-6"></path>
+            </symbol>
+            <symbol id="ui-icon-chevron-left" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="m15 18-6-6 6-6"></path>
+            </symbol>
+            <symbol id="ui-icon-chevron-right" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="m9 18 6-6-6-6"></path>
+            </symbol>
+            <symbol id="ui-icon-download" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 15V3"></path>
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                <path d="m7 10 5 5 5-5"></path>
+            </symbol>
+            <symbol id="ui-icon-upload" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 3v12"></path>
+                <path d="m17 8-5-5-5 5"></path>
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+            </symbol>
+            <symbol id="ui-icon-copy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect width="14" height="14" x="8" y="8" rx="2" ry="2"></rect>
+                <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"></path>
+            </symbol>
+            <symbol id="ui-icon-printer" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
+                <path d="M6 9V3a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v6"></path>
+                <rect x="6" y="14" width="12" height="8" rx="1"></rect>
+            </symbol>
+            <symbol id="ui-icon-share-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="18" cy="5" r="3"></circle>
+                <circle cx="6" cy="12" r="3"></circle>
+                <circle cx="18" cy="19" r="3"></circle>
+                <line x1="8.59" x2="15.42" y1="13.51" y2="17.49"></line>
+                <line x1="15.41" x2="8.59" y1="6.51" y2="10.49"></line>
+            </symbol>
+            <symbol id="ui-icon-external-link" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M15 3h6v6"></path>
+                <path d="M10 14 21 3"></path>
+                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+            </symbol>
+            <symbol id="ui-icon-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M5 12h14"></path>
+                <path d="M12 5v14"></path>
+            </symbol>
+            <symbol id="ui-icon-minus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M5 12h14"></path>
+            </symbol>
+            <symbol id="ui-icon-file" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"></path>
+                <path d="M14 2v5a1 1 0 0 0 1 1h5"></path>
+            </symbol>
+            <symbol id="ui-icon-folder" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"></path>
+            </symbol>
+            <symbol id="ui-icon-folder-open" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2"></path>
+            </symbol>
+            <symbol id="ui-icon-layout-grid" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect width="7" height="7" x="3" y="3" rx="1"></rect>
+                <rect width="7" height="7" x="14" y="3" rx="1"></rect>
+                <rect width="7" height="7" x="14" y="14" rx="1"></rect>
+                <rect width="7" height="7" x="3" y="14" rx="1"></rect>
+            </symbol>
+            <symbol id="ui-icon-list" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M3 5h.01"></path>
+                <path d="M3 12h.01"></path>
+                <path d="M3 19h.01"></path>
+                <path d="M8 5h13"></path>
+                <path d="M8 12h13"></path>
+                <path d="M8 19h13"></path>
+            </symbol>
+            <symbol id="ui-icon-file-text" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"></path>
+                <path d="M14 2v5a1 1 0 0 0 1 1h5"></path>
+                <path d="M10 9H8"></path>
+                <path d="M16 13H8"></path>
+                <path d="M16 17H8"></path>
+            </symbol>
+            <symbol id="ui-icon-newspaper" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M15 18h-5"></path>
+                <path d="M18 14h-8"></path>
+                <path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-4 0v-9a2 2 0 0 1 2-2h2"></path>
+                <rect width="8" height="4" x="10" y="6" rx="1"></rect>
+            </symbol>
+            <symbol id="ui-icon-palette" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 22a1 1 0 0 1 0-20 10 9 0 0 1 10 9 5 5 0 0 1-5 5h-2.25a1.75 1.75 0 0 0-1.4 2.8l.3.4a1.75 1.75 0 0 1-1.4 2.8z"></path>
+                <circle cx="13.5" cy="6.5" r=".5" fill="currentColor"></circle>
+                <circle cx="17.5" cy="10.5" r=".5" fill="currentColor"></circle>
+                <circle cx="6.5" cy="12.5" r=".5" fill="currentColor"></circle>
+                <circle cx="8.5" cy="7.5" r=".5" fill="currentColor"></circle>
+            </symbol>
+            <symbol id="ui-icon-activity" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2"></path>
+            </symbol>
+            <symbol id="ui-icon-eraser" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 21H8a2 2 0 0 1-1.42-.587l-3.994-3.999a2 2 0 0 1 0-2.828l10-10a2 2 0 0 1 2.829 0l5.999 6a2 2 0 0 1 0 2.828L12.834 21"></path>
+                <path d="m5.082 11.09 8.828 8.828"></path>
+            </symbol>
+            <symbol id="ui-icon-trash-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M10 11v6"></path>
+                <path d="M14 11v6"></path>
+                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"></path>
+                <path d="M3 6h18"></path>
+                <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+            </symbol>
+            <symbol id="ui-icon-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M20 6 9 17l-5-5"></path>
+            </symbol>
+            <symbol id="ui-icon-sparkles" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M11.017 2.814a1 1 0 0 1 1.966 0l1.051 5.558a2 2 0 0 0 1.594 1.594l5.558 1.051a1 1 0 0 1 0 1.966l-5.558 1.051a2 2 0 0 0-1.594 1.594l-1.051 5.558a1 1 0 0 1-1.966 0l-1.051-5.558a2 2 0 0 0-1.594-1.594l-5.558-1.051a1 1 0 0 1 0-1.966l5.558-1.051a2 2 0 0 0 1.594-1.594z"></path>
+                <path d="M20 2v4"></path>
+                <path d="M22 4h-4"></path>
+                <circle cx="4" cy="20" r="2"></circle>
+            </symbol>
+            <symbol id="ui-icon-send" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.496.496 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z"></path>
+                <path d="m21.854 2.147-10.94 10.939"></path>
+            </symbol>
+            <symbol id="ui-icon-panel-left-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect width="18" height="18" x="3" y="3" rx="2"></rect>
+                <path d="M9 3v18"></path>
+                <path d="m16 15-3-3 3-3"></path>
+            </symbol>
+            <symbol id="ui-icon-file-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"></path>
+                <path d="M14 2v5a1 1 0 0 0 1 1h5"></path>
+                <path d="M9 15h6"></path>
+                <path d="M12 18v-6"></path>
+            </symbol>
+            <symbol id="ui-icon-heart-pulse" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M2 9.5a5.5 5.5 0 0 1 9.591-3.676.56.56 0 0 0 .818 0A5.49 5.49 0 0 1 22 9.5c0 2.29-1.5 4-3 5.5l-5.492 5.313a2 2 0 0 1-3 .019L5 15c-1.5-1.5-3-3.2-3-5.5"></path>
+                <path d="M3.22 13H9.5l.5-1 2 4.5 2-7 1.5 3.5h5.27"></path>
+            </symbol>
+            <symbol id="ui-icon-scroll-text" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M15 12h-5"></path>
+                <path d="M15 8h-5"></path>
+                <path d="M19 17V5a2 2 0 0 0-2-2H4"></path>
+                <path d="M8 21h12a2 2 0 0 0 2-2v-1a1 1 0 0 0-1-1H11a1 1 0 0 0-1 1v1a2 2 0 1 1-4 0V5a2 2 0 1 0-4 0v2a1 1 0 0 0 1 1h3"></path>
+            </symbol>
+            <symbol id="ui-icon-folder-search" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M10.7 20H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H20a2 2 0 0 1 2 2v4.1"></path>
+                <path d="m21 21-1.9-1.9"></path>
+                <circle cx="17" cy="17" r="3"></circle>
+            </symbol>
+            <symbol id="ui-icon-save" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"></path>
+                <path d="M17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7"></path>
+                <path d="M7 3v4a1 1 0 0 0 1 1h7"></path>
+            </symbol>
+            <symbol id="ui-icon-rotate-ccw" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path>
+                <path d="M3 3v5h5"></path>
+            </symbol>
+            <symbol id="ui-icon-file-code" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"></path>
+                <path d="M14 2v5a1 1 0 0 0 1 1h5"></path>
+                <path d="M10 12.5 8 15l2 2.5"></path>
+                <path d="m14 12.5 2 2.5-2 2.5"></path>
+            </symbol>
+            <symbol id="ui-icon-zap" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M15.914 4a1.5 1.5 0 00-2.474-1.561l-9 9A1.5 1.5 0 005.5 14h4.002a.5.5 0 01.471.666L8.086 20a1.5 1.5 0 002.475 1.56l9-9A1.5 1.5 0 0018.5 10h-3.997a.5.5 0 01-.472-.667z"></path>
+            </symbol>
+            <symbol id="ui-icon-refresh-cw" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"></path>
+                <path d="M21 3v5h-5"></path>
+                <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"></path>
+                <path d="M8 16H3v5"></path>
+            </symbol>
+            <symbol id="ui-icon-circle-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10"></circle>
+                <path d="m9 12 2 2 4-4"></path>
+            </symbol>
+            <symbol id="ui-icon-wand-sparkles" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="m21.64 3.64-1.28-1.28a1.21 1.21 0 0 0-1.72 0L2.36 18.64a1.21 1.21 0 0 0 0 1.72l1.28 1.28a1.2 1.2 0 0 0 1.72 0L21.64 5.36a1.2 1.2 0 0 0 0-1.72"></path>
+                <path d="m14 7 3 3"></path>
+                <path d="M5 6v4"></path>
+                <path d="M19 14v4"></path>
+                <path d="M10 2v2"></path>
+                <path d="M7 8H3"></path>
+                <path d="M21 16h-4"></path>
+                <path d="M11 3H9"></path>
+            </symbol>
+            <symbol id="ui-icon-network" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="16" y="16" width="6" height="6" rx="1"></rect>
+                <rect x="2" y="16" width="6" height="6" rx="1"></rect>
+                <rect x="9" y="2" width="6" height="6" rx="1"></rect>
+                <path d="M5 16v-3a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v3"></path>
+                <path d="M12 12V8"></path>
+            </symbol>
+            <symbol id="ui-icon-layers" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83z"></path>
+                <path d="M2 12a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 12"></path>
+                <path d="M2 17a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 17"></path>
+            </symbol>
+            <symbol id="ui-icon-file-type" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"></path>
+                <path d="M14 2v5a1 1 0 0 0 1 1h5"></path>
+                <path d="M11 18h2"></path>
+                <path d="M12 12v6"></path>
+                <path d="M9 13v-.5a.5.5 0 0 1 .5-.5h5a.5.5 0 0 1 .5.5v.5"></path>
+            </symbol>
+            <symbol id="ui-icon-git-branch" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M15 6a9 9 0 0 0-9 9V3"></path>
+                <circle cx="18" cy="6" r="3"></circle>
+                <circle cx="6" cy="18" r="3"></circle>
+            </symbol>
+            <symbol id="ui-icon-cloud" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"></path>
+            </symbol>
+            <symbol id="ui-icon-link" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
+                <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+            </symbol>
+            <symbol id="ui-icon-eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"></path>
+                <circle cx="12" cy="12" r="3"></circle>
             </symbol>
         </defs>
     </svg>
     <nav id="primary-navigation" class="primary-navigation" aria-label="Espacios de Fuente y Caudal">
         <button type="button" class="workspace-trigger is-active" data-workspace-target="home" data-onclick-command="switchWorkspace('home')" aria-current="page">
-            <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M3 11.5 12 4l9 7.5"></path><path d="M5.5 10v10h13V10M9.5 20v-6h5v6"></path></svg>
+            <svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-house"></use></svg>
             <span>Inicio</span>
         </button>
         <button type="button" class="workspace-trigger" data-workspace-target="source" data-onclick-command="switchWorkspace('source')" aria-current="false">
-            <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M5 4h14v16H5zM8 8h8M8 12h8M8 16h6"></path></svg>
+            <svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-library"></use></svg>
             <span>Fuente</span>
         </button>
         <button type="button" class="workspace-trigger" data-workspace-target="flow" data-onclick-command="switchWorkspace('flow')" aria-current="false">
-            <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M3 8c3-4 6 4 9 0s6 4 9 0M3 14c3-4 6 4 9 0s6 4 9 0"></path></svg>
+            <svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-waves"></use></svg>
             <span>Caudal</span>
         </button>
-        <span class="rail-spacer" aria-hidden="true"></span>
-        <button id="style-toggle" type="button" class="rail-utility masthead-style-button" data-onclick-command="toggleVisualStyle()" aria-label="Activar estilo visual Gruvbox">
-            <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"></circle><path d="M12 4a8 8 0 0 0 0 16z"></path></svg>
-            <span id="style-toggle-label">Gruvbox</span>
+        <button type="button" class="rail-utility" data-onclick-command="triggerAction('quick_help')" aria-label="Abrir guía rápida">
+            <svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-book-open"></use></svg>
+            <span>Guía</span>
         </button>
-        <button type="button" class="rail-utility" data-onclick-command="openModal('modal-settings')">
-            <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"></circle><path d="M19 13.5v-3l-2-.7-.7-1.7.9-1.9-2.1-2.1-1.9.9-1.7-.7-.7-2h-3l-.7 2-1.7.7-1.9-.9-2.1 2.1.9 1.9-.7 1.7-2 .7v3l2 .7.7 1.7-.9 1.9 2.1 2.1 1.9-.9 1.7.7.7 2h3l.7-2 1.7-.7 1.9.9 2.1-2.1-.9-1.9.7-1.7z"></path></svg>
+        <button id="style-toggle" type="button" class="rail-utility masthead-style-button" data-onclick-command="toggleVisualStyle()" aria-label="Cambiar aspecto a Gruvbox">
+            <svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-sun-moon"></use></svg>
+            <span id="style-toggle-label">Aspecto</span>
+        </button>
+        <button type="button" class="rail-utility" data-onclick-command="openModal('modal-settings')" aria-label="Abrir ajustes">
+            <svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-settings-2"></use></svg>
             <span>Ajustes</span>
         </button>
     </nav>
@@ -52,73 +323,76 @@
         <section id="workspace-home" class="workspace-panel-root is-active" data-workspace="home" aria-labelledby="workspace-home-title">
             <header class="shell-header">
                 <div>
-                    <p class="workspace-kicker">Fuente y Caudal</p>
-                    <h1 id="workspace-home-title" tabindex="-1">Inicio</h1>
+                    <h1 id="workspace-home-title" tabindex="-1" class="shell-brand-title">Fuente y Caudal</h1>
                 </div>
-                <button type="button" class="icon-button shell-header-action" data-onclick-command="triggerAction('quick_help')" aria-label="Abrir guía rápida">
-                    <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M4 5c3-1 5 0 8 2v13c-3-2-5-3-8-2zM20 5c-3-1-5 0-8 2v13c3-2 5-3 8-2z"></path></svg>
-                    <span>Guía</span>
-                </button>
             </header>
             <div class="workspace-content home-content">
-                <section class="status-strip" aria-label="Estado local">
+                <section class="status-strip" aria-labelledby="quick-diagnostics-title">
+                    <h2 id="quick-diagnostics-title" class="status-strip-title">Diagnóstico rápido</h2>
                     <div class="status-item"><span class="status-label">Conexión</span><span id="status-offline-mode" class="offline-badge local-only" title="La IA trabaja en este equipo">Solo local</span></div>
                     <div class="status-item"><span class="status-label">IA local</span><span class="status-val" id="status-ollama">No medido</span></div>
                     <div class="status-item"><span class="status-label">Vault</span><span class="status-val" id="status-obsidian">No medido</span></div>
                 </section>
 
-                <section id="home-product-access" class="ui-carousel product-access" aria-labelledby="home-product-access-title">
+                <section id="home-product-access" class="home-dashboard" aria-labelledby="home-dashboard-title">
                     <div class="section-heading">
-                        <div><p class="workspace-kicker">Continuar</p><h2 id="home-product-access-title">Elige dónde trabajar</h2></div>
-                        <div class="carousel-controls" aria-label="Controles del carrusel">
-                            <button type="button" class="icon-button" data-onclick-command="moveCarousel('home-product-track', 'previous')" aria-label="Anterior">
-                                <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="m15 5-7 7 7 7"></path></svg>
-                            </button>
-                            <span id="home-product-position" aria-live="polite">1 de 2</span>
-                            <button type="button" class="icon-button" data-onclick-command="moveCarousel('home-product-track', 'next')" aria-label="Siguiente">
-                                <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="m9 5 7 7-7 7"></path></svg>
-                            </button>
+                        <div>
+                            <h2 id="home-dashboard-title">Estado general</h2>
                         </div>
                     </div>
-                    <div id="home-product-track" class="carousel-track" tabindex="0">
-                        <article class="product-entry">
-                            <p class="workspace-kicker">Leer y consultar</p>
-                            <h3>Fuente</h3>
-                            <p>Abre el catálogo de solo lectura y continúa en Obsidian cuando necesites editar.</p>
-                            <p class="product-metric"><strong id="stat-notes">0</strong> notas preparadas</p>
-                            <button type="button" class="btn-primary" data-onclick-command="switchWorkspace('source')">Abrir Fuente</button>
-                        </article>
-                        <article class="product-entry">
-                            <p class="workspace-kicker">Mover y revisar</p>
-                            <h3>Caudal</h3>
-                            <p>Consulta las cinco etapas, los trabajos pendientes y las revisiones.</p>
-                            <p class="product-metric"><strong id="stat-input">0</strong> archivos pendientes</p>
-                            <button type="button" class="btn-primary" data-onclick-command="switchWorkspace('flow')">Abrir Caudal</button>
-                        </article>
+                    <div class="home-dashboard-grid">
+                        <div class="dash-group">
+                            <h3>Herramientas</h3>
+                            <dl class="dash-list">
+                                <div><dt>Ollama</dt><dd id="dash-tool-ollama">No medido</dd></div>
+                                <div><dt>Obsidian</dt><dd id="dash-tool-obsidian">No medido</dd></div>
+                                <div><dt>AnythingLLM</dt><dd id="dash-tool-anythingllm">Opcional</dd></div>
+                                <div><dt>ChromaDB</dt><dd id="dash-tool-chroma">Local</dd></div>
+                            </dl>
+                        </div>
+                        <div class="dash-group">
+                            <h3>Configuración activa</h3>
+                            <dl class="dash-list">
+                                <div><dt>Modo</dt><dd id="dash-config-mode">Solo local</dd></div>
+                                <div><dt>Estilo</dt><dd id="dash-config-style">Nord</dd></div>
+                                <div><dt>Vault</dt><dd id="dash-config-vault">Sin conectar</dd></div>
+                                <div><dt>Tema</dt><dd id="dash-config-theme">General</dd></div>
+                            </dl>
+                        </div>
+                        <div class="dash-group">
+                            <h3>Totales</h3>
+                            <dl class="dash-list">
+                                <div><dt>Notas</dt><dd><strong id="stat-notes">0</strong></dd></div>
+                                <div><dt>Pendientes</dt><dd><strong id="stat-input">0</strong></dd></div>
+                                <div><dt>Procesados</dt><dd><strong id="stat-processed">0</strong></dd></div>
+                                <div><dt>Cuarentena</dt><dd><strong id="stat-quarantine">0</strong></dd></div>
+                                <div><dt>Carpetas</dt><dd><strong id="stat-folders">0</strong></dd></div>
+                                <div><dt>Memoria</dt><dd><strong id="stat-ram">-</strong></dd></div>
+                            </dl>
+                        </div>
                     </div>
                 </section>
 
-                <details class="ui-accordion home-disclosure">
-                    <summary>Configuración y diagnóstico</summary>
-                    <div class="accordion-body">
+                <section class="home-diagnostics" aria-labelledby="home-diagnostics-title">
+                    <h2 id="home-diagnostics-title">Configuración y diagnóstico</h2>
+                    <div class="accordion-body home-diagnostics-body">
                         <div id="theme-select" class="theme-select-control">
                             <button id="theme-select-trigger" type="button" class="theme-select-trigger" data-onclick-command="toggleThemeMenu()" data-onkeydown-command="handleThemeTriggerKeydown(event)" aria-haspopup="listbox" aria-expanded="false" aria-controls="theme-select-menu">
                                 <span id="theme-select-label">General</span>
-                                <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"></path></svg>
+                                <svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-chevron-down"></use></svg>
                             </button>
                             <div id="theme-select-menu" class="theme-select-menu ui-popover" role="listbox" aria-labelledby="theme-select-trigger"></div>
                         </div>
-                        <button type="button" class="btn-secondary" data-onclick-command="promptCreateTheme()">Nuevo tema</button>
-                        <button type="button" class="btn-secondary" id="btn-open-health" data-onclick-command="openModal('modal-health')">Estado del sistema</button>
+                        <button type="button" class="btn-secondary" data-onclick-command="promptCreateTheme()"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-file-plus"></use></svg>Nuevo tema</button>
+                        <button type="button" class="btn-secondary" id="btn-open-health" data-onclick-command="openModal('modal-health')"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-heart-pulse"></use></svg>Estado del sistema</button>
                     </div>
-                </details>
+                </section>
 
                 <section class="log-section" aria-labelledby="activity-title">
                     <div class="log-header">
                         <h2 id="activity-title">Actividad reciente</h2>
                         <div class="log-actions">
-                            <button class="btn-small" id="btn-toggle-path" data-onclick-command="togglePathMode(this)">Rutas cortas</button>
-                            <button class="btn-small" data-onclick-command="clearLogView()">Limpiar</button>
+                            <button class="btn-small" data-onclick-command="clearLogView()"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-eraser"></use></svg>Limpiar</button>
                         </div>
                     </div>
                     <div class="log-console" id="log-console" role="log" aria-live="polite"><div><span class="log-time">[00:00:00]</span> Fuente lista.</div></div>
@@ -130,42 +404,63 @@
         <section id="workspace-source" class="workspace-panel-root fuente-shell" data-workspace="source" aria-labelledby="workspace-source-title" hidden>
             <header class="shell-header fuente-topbar">
                 <h1 id="workspace-source-title" tabindex="-1">Fuente</h1>
-                <label class="search-box fuente-search" for="reader-search"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg><input type="search" id="reader-search" aria-label="Buscar en Fuente" placeholder="Buscar en Fuente" autocomplete="off" data-oninput-command="filterReaderNotes()"><kbd>⌘F</kbd></label>
+                <label class="search-box fuente-search" for="reader-search"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-search"></use></svg><input type="search" id="reader-search" aria-label="Buscar en Fuente" placeholder="Buscar en Fuente" autocomplete="off" data-oninput-command="filterReaderNotes()"><kbd>⌘F</kbd></label>
                 <div class="segmented fuente-views source-view-switch" role="tablist" aria-label="Vista de Fuente">
-                    <button type="button" class="source-view-tab" id="btn-source-view-grid" role="tab" data-onclick-command="switchSourceView('grid')">Grid</button>
-                    <button type="button" class="source-view-tab is-active" id="btn-source-view-list" role="tab" aria-selected="true" data-onclick-command="switchSourceView('list')">Lista</button>
-                    <button type="button" class="source-view-tab" id="btn-source-view-individual" role="tab" data-onclick-command="switchSourceView('individual')">Individual</button>
-                    <button type="button" class="source-view-tab" id="btn-source-view-feed" role="tab" data-onclick-command="switchSourceView('feed')">Feed</button>
+                    <button type="button" class="source-view-tab" id="btn-source-view-grid" role="tab" data-onclick-command="switchSourceView('grid')"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-layout-grid"></use></svg><span>Grid</span></button>
+                    <button type="button" class="source-view-tab is-active" id="btn-source-view-list" role="tab" aria-selected="true" data-onclick-command="switchSourceView('list')"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-list"></use></svg><span>Lista</span></button>
+                    <button type="button" class="source-view-tab" id="btn-source-view-individual" role="tab" data-onclick-command="switchSourceView('individual')"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-file-text"></use></svg><span>Individual</span></button>
+                    <button type="button" class="source-view-tab" id="btn-source-view-feed" role="tab" data-onclick-command="switchSourceView('feed')"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-newspaper"></use></svg><span>Feed</span></button>
                 </div>
-                <button type="button" class="toolbar-button" id="btn-source-filter" data-onclick-command="toggleFilterPopover()"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M4 5h16l-6 7v6l-4 2v-8z"></path></svg>Filtrar</button>
-                <button type="button" class="toolbar-button" id="btn-source-sort" data-onclick-command="cycleSourceOrder()"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M8 4v16m0-16L5 7m3-3 3 3M16 20V4m0 16-3-3m3 3 3-3"></path></svg>Ordenar</button>
-                <button type="button" class="toolbar-button" id="btn-source-actions" data-onclick-command="toggleSourceActionsPopover()"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1" fill="currentColor"></circle><circle cx="12" cy="12" r="1" fill="currentColor"></circle><circle cx="19" cy="12" r="1" fill="currentColor"></circle></svg>Acciones <span>⌄</span></button>
-                <button type="button" class="toolbar-button" id="btn-source-consult" data-onclick-command="openDrawer('source-chat-drawer')"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M4 5c3-1 5 0 8 2v13c-3-2-5-3-8-2zM20 5c-3-1-5 0-8 2v13c3-2 5-3 8-2z"></path></svg>Consultar</button>
+                <button type="button" class="toolbar-button" id="btn-source-filter" data-onclick-command="toggleFilterPopover()"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-filter"></use></svg>Filtrar</button>
+                <button type="button" class="toolbar-button" id="btn-source-sort" data-onclick-command="cycleSourceOrder()"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-arrow-up-down"></use></svg>Ordenar</button>
+                <button type="button" class="toolbar-button" id="btn-source-actions" data-onclick-command="toggleSourceActionsPopover()"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-wand-sparkles"></use></svg>Acciones</button>
+                <button type="button" class="toolbar-button" id="btn-source-consult" data-onclick-command="openDrawer('source-chat-drawer')"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-message-circle"></use></svg>Consultar</button>
             </header>
             <aside id="source-filter-drawer" class="ui-drawer source-filter-drawer filter-popover" role="dialog" aria-modal="false" aria-label="Filtros de Fuente" aria-hidden="true" hidden>
                 <h3>Sello</h3>
-                <label><input type="checkbox" name="source-filter-seal" value="pending_review" data-onchange-command="applySourceFilters()"><span><span class="dot red"></span> Rojo</span><span>12</span></label>
-                <label><input type="checkbox" name="source-filter-seal" value="in_review" data-onchange-command="applySourceFilters()"><span><span class="dot orange"></span> Naranja</span><span>7</span></label>
-                <label><input type="checkbox" name="source-filter-seal" value="approved" data-onchange-command="applySourceFilters()"><span><span class="dot green"></span> Verde</span><span>86</span></label>
+                <label><input type="checkbox" name="source-filter-seal" value="pending_review" data-onchange-command="applySourceFilters()"><span><span class="dot red"></span> Rojo</span><span>6</span></label>
+                <label><input type="checkbox" name="source-filter-seal" value="in_review" data-onchange-command="applySourceFilters()"><span><span class="dot orange"></span> Ámbar</span><span>5</span></label>
+                <label><input type="checkbox" name="source-filter-seal" value="approved" data-onchange-command="applySourceFilters()"><span><span class="dot green"></span> Verde</span><span>5</span></label>
                 <hr>
                 <h3>Tipo de nota</h3>
-                <label><input type="checkbox" name="source-filter-type" value="concepto" data-onchange-command="applySourceFilters()"><span>Concepto</span><span>54</span></label>
-                <label><input type="checkbox" name="source-filter-type" value="referencia" data-onchange-command="applySourceFilters()"><span>Referencia</span><span>28</span></label>
-                <label><input type="checkbox" name="source-filter-type" value="proyecto" data-onchange-command="applySourceFilters()"><span>Proyecto</span><span>16</span></label>
-                <label><input type="checkbox" name="source-filter-type" value="decision" data-onchange-command="applySourceFilters()"><span>Decisión</span><span>7</span></label>
+                <label><input type="checkbox" name="source-filter-type" value="concepto" data-onchange-command="applySourceFilters()"><span>Concepto</span><span>4</span></label>
+                <label><input type="checkbox" name="source-filter-type" value="referencia" data-onchange-command="applySourceFilters()"><span>Referencia</span><span>4</span></label>
+                <label><input type="checkbox" name="source-filter-type" value="proyecto" data-onchange-command="applySourceFilters()"><span>Proyecto</span><span>4</span></label>
+                <label><input type="checkbox" name="source-filter-type" value="decision" data-onchange-command="applySourceFilters()"><span>Decisión</span><span>4</span></label>
                 <p class="clear" data-onclick-command="clearSourceFilters()">Limpiar filtros</p>
             </aside>
             <aside class="library" id="fuente-library" aria-label="Biblioteca">
-                <div class="library-head"><h2>Biblioteca</h2><span aria-hidden="true">«</span></div>
+                <div class="library-head"><h2>Biblioteca</h2><button type="button" class="icon-button" id="btn-source-library" data-onclick-command="toggleSourceLibrary()" aria-label="Colapsar biblioteca" aria-controls="fuente-library" aria-expanded="true"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-panel-left-close"></use></svg></button></div>
+                <button type="button" class="library-all-notes" data-source-filter="all:" data-onclick-command="selectSourceLibraryFilter(this)">Todas las notas</button>
                 <ul class="library-tree">
-                    <li><span class="row"><span class="chev">›</span>Proyectos</span></li>
-                    <li><span class="row"><span class="chev">›</span>Temas</span></li>
-                    <li><span class="row"><span class="chev">›</span>Tipos de nota</span></li>
-                    <li><span class="row"><span class="chev">⌄</span>Sellos</span>
-                        <ul>
-                            <li><span><span class="dot red"></span>Rojo</span><span class="num">12</span></li>
-                            <li><span><span class="dot orange"></span>Naranja</span><span class="num">7</span></li>
-                            <li><span><span class="dot green"></span>Verde</span><span class="num">86</span></li>
+                    <li><button type="button" class="row library-tree-toggle" data-source-filter="project:" data-onclick-command="toggleSourceLibrarySection(this)" aria-controls="source-projects-tree" aria-expanded="false"><span class="chev">›</span><span>Proyectos</span></button>
+                        <ul id="source-projects-tree" hidden>
+                            <li><button type="button" class="library-tree-item-button" data-source-filter="project:Arquitectura" data-onclick-command="selectSourceLibraryFilter(this)">Arquitectura</button></li>
+                            <li><button type="button" class="library-tree-item-button" data-source-filter="project:Lanzamiento" data-onclick-command="selectSourceLibraryFilter(this)">Lanzamiento</button></li>
+                            <li><button type="button" class="library-tree-item-button" data-source-filter="project:Operaciones" data-onclick-command="selectSourceLibraryFilter(this)">Operaciones</button></li>
+                        </ul>
+                    </li>
+                    <li><button type="button" class="row library-tree-toggle" data-source-filter="theme:" data-onclick-command="toggleSourceLibrarySection(this)" aria-controls="source-themes-tree" aria-expanded="false"><span class="chev">›</span><span>Temas</span></button>
+                        <ul id="source-themes-tree" hidden>
+                            <li><button type="button" class="library-tree-item-button" data-source-filter="theme:General" data-onclick-command="selectSourceLibraryFilter(this)">General</button><span class="num">2</span></li>
+                            <li><button type="button" class="library-tree-item-button" data-source-filter="theme:Arquitectura" data-onclick-command="selectSourceLibraryFilter(this)">Arquitectura</button><span class="num">5</span></li>
+                            <li><button type="button" class="library-tree-item-button" data-source-filter="theme:Operaciones" data-onclick-command="selectSourceLibraryFilter(this)">Operaciones</button><span class="num">4</span></li>
+                            <li><button type="button" class="library-tree-item-button" data-source-filter="theme:Lanzamiento" data-onclick-command="selectSourceLibraryFilter(this)">Lanzamiento</button><span class="num">5</span></li>
+                        </ul>
+                    </li>
+                    <li><button type="button" class="row library-tree-toggle" data-source-filter="note_type:" data-onclick-command="toggleSourceLibrarySection(this)" aria-controls="source-note-types-tree" aria-expanded="false"><span class="chev">›</span><span>Tipos de nota</span></button>
+                        <ul id="source-note-types-tree" hidden>
+                            <li><button type="button" class="library-tree-item-button" data-source-filter="note_type:concepto" data-onclick-command="selectSourceLibraryFilter(this)">Concepto</button><span class="num">4</span></li>
+                            <li><button type="button" class="library-tree-item-button" data-source-filter="note_type:referencia" data-onclick-command="selectSourceLibraryFilter(this)">Referencia</button><span class="num">4</span></li>
+                            <li><button type="button" class="library-tree-item-button" data-source-filter="note_type:proyecto" data-onclick-command="selectSourceLibraryFilter(this)">Proyecto</button><span class="num">4</span></li>
+                            <li><button type="button" class="library-tree-item-button" data-source-filter="note_type:decision" data-onclick-command="selectSourceLibraryFilter(this)">Decisión</button><span class="num">4</span></li>
+                        </ul>
+                    </li>
+                    <li><button type="button" class="row library-tree-toggle" data-source-filter="seal:" data-onclick-command="toggleSourceLibrarySection(this)" aria-controls="source-seals-tree" aria-expanded="true"><span class="chev">⌄</span><span>Sellos</span></button>
+                        <ul id="source-seals-tree">
+                            <li><button type="button" class="library-tree-item-button" data-source-filter="seal:pending_review" data-onclick-command="selectSourceLibraryFilter(this)"><span class="dot red"></span>Rojo</button><span class="num">6</span></li>
+                            <li><button type="button" class="library-tree-item-button" data-source-filter="seal:in_review" data-onclick-command="selectSourceLibraryFilter(this)"><span class="dot orange"></span>Ámbar</button><span class="num">5</span></li>
+                            <li><button type="button" class="library-tree-item-button" data-source-filter="seal:approved" data-onclick-command="selectSourceLibraryFilter(this)"><span class="dot green"></span>Verde</button><span class="num">5</span></li>
                         </ul>
                     </li>
                 </ul>
@@ -184,30 +479,23 @@
                         <h2>Componentes</h2>
                         <p>El sistema se apoya en tres componentes principales: (1) el almacén local de notas (Obsidian), (2) el índice semántico (ChromaDB) y (3) la capa de consulta (la consulta local). Para más detalles, ver [[Componentes del sistema]].</p>
                     </article>
-                    <div class="reader-actions" id="fuente-reader-actions">
-                        <button type="button" data-onclick-command="triggerAction('copy_reader_note', {}, this)">Copiar</button>
-                        <button type="button" data-onclick-command="printCurrentNote()">Imprimir</button>
-                        <button type="button" data-onclick-command="triggerAction('export_reader_note', {}, this)">Exportar</button>
-                        <button type="button" data-onclick-command="triggerAction('open_obsidian', {}, this)">Abrir en Obsidian</button>
-                    </div>
                 </section>
                 <div id="reader-workspace-host"></div>
             </div>
             <aside id="source-chat-drawer" class="ui-drawer source-chat-drawer" role="dialog" aria-modal="false" aria-label="Consultar sobre la nota" aria-hidden="true" hidden>
-                <div class="drawer-header"><h2>Consultar local</h2><button type="button" class="icon-button" data-onclick-command="closeDrawer('source-chat-drawer')" aria-label="Cerrar consulta"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"></path></svg></button></div>
+                <div class="drawer-header"><h2>Consultar esta Nota</h2><button type="button" class="icon-button" data-onclick-command="closeDrawer('source-chat-drawer')" aria-label="Cerrar consulta"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-close"></use></svg></button></div>
                 <form id="source-chat-form" class="workspace-chat-form">
                     <label for="source-chat-input">Preguntar sobre esta nota</label>
                     <textarea id="source-chat-input" rows="3" required></textarea>
-                    <button type="submit" class="btn-primary">Preguntar</button>
+                    <button type="submit" class="btn-primary"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-send"></use></svg>Enviar</button>
                 </form>
                 <div id="source-chat-answer" class="workspace-chat-answer" aria-live="polite"></div>
             </aside>
-            <button type="button" class="vertical-tab fuente-chat-tab" data-onclick-command="openDrawer('source-chat-drawer')" aria-label="Abrir consulta local">‹  Consultar local</button>
             <div id="aux-search-relations" class="aux-search-relations" hidden>
                 <section class="aux-search-pane" aria-label="Busqueda unificada">
                     <header class="aux-search-tools">
-                        <label class="search-box"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg><input aria-label="Buscar en Fuente" placeholder="Buscar en Fuente" value="arquitectura modular"><kbd>⌘K</kbd></label>
-                        <button type="button" class="toolbar-button">Filtros</button>
+                        <label class="search-box"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-search"></use></svg><input aria-label="Buscar en Fuente" placeholder="Buscar en Fuente" value="arquitectura modular"><kbd>⌘K</kbd></label>
+                        <button type="button" class="toolbar-button"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-filter"></use></svg>Filtros</button>
                         <nav class="aux-search-tabs"><span class="is-active">Contenido</span><span>Metadatos</span><span>Relaciones</span><span class="aux-search-views">Grid   <b>Lista</b>   Feed</span></nav>
                     </header>
                     <div class="aux-search-main">
@@ -219,7 +507,7 @@
                             <label>Tema</label><input placeholder="Seleccionar tema...">
                             <label>Urgencia</label>
                             <div class="aux-urgency"><label><input type="checkbox"><span class="dot red"></span>Critica</label><label><input type="checkbox"><span class="dot orange"></span>Alta</label><label><input type="checkbox"><span class="dot orange"></span>Media</label><label><input type="checkbox"><span class="dot green"></span>Baja</label><label><input type="checkbox"><span class="dot slate"></span>Sin urgencia</label></div>
-                            <button type="button" class="toolbar-button">Limpiar filtros</button>
+                            <button type="button" class="toolbar-button"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-eraser"></use></svg>Limpiar filtros</button>
                         </aside>
                         <section class="aux-result-list">
                             <article><h3>Decisiones de arquitectura - Q1 2025</h3><span>Proyectos/Arquitectura/Decisiones/2025-01-15-de-arquitectura.md</span><p>acordamos adoptar un enfoque modular. Vease [[Arquitectura modular]] y [[Decisiones previas]].</p></article>
@@ -250,7 +538,7 @@
                         <span class="graph-node n5">Reunion con Cliente - 08/05/2025.md</span>
                         <span class="graph-node n6">Plan de lanzamiento v2.0.md</span>
                         <span class="graph-node n7">ADR-004 Modularidad y limites.md</span>
-                        <div class="graph-controls"><span><button type="button">-</button><button type="button">100%</button><button type="button">+</button></span><button type="button" class="btn-secondary" data-onclick-command="openObsidianGraph()">Abrir grafo completo en Obsidian</button></div>
+                        <div class="graph-controls"><span><button type="button" class="icon-button" aria-label="Alejar"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-minus"></use></svg></button><button type="button" class="btn-small"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-search"></use></svg>100%</button><button type="button" class="icon-button" aria-label="Acercar"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-plus"></use></svg></button></span><button type="button" class="btn-secondary" data-onclick-command="openObsidianGraph()"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-network"></use></svg>Abrir grafo completo en Obsidian</button></div>
                     </div>
                     <aside class="aux-relations-detail">
                         <h3>Detalles</h3>
@@ -265,106 +553,98 @@
                     </aside>
                 </section>
             </div>
-            <section class="recent source-recent ui-carousel" aria-labelledby="source-recent-title">
-                <h2 class="recent-title" id="source-recent-title">Notas recientes</h2>
-                <div class="carousel-controls source-recent-controls">
-                    <button type="button" class="icon-button" data-onclick-command="moveCarousel('source-recent-track', 'previous')" aria-label="Anterior"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="m15 5-7 7 7 7"></path></svg></button>
-                    <button type="button" class="icon-button" data-onclick-command="moveCarousel('source-recent-track', 'next')" aria-label="Siguiente"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="m9 5 7 7-7 7"></path></svg></button>
-                </div>
-                <div id="source-recent-track" class="recent-track carousel-track">
-                    <article class="note-card"><span class="seal green"></span><h3>Índice de contenido con ChromaDB</h3><div class="meta"><span>9 abr 2024</span><span>Javier Ruiz</span></div><p>Cómo indexamos el contenido de las notas para permitir búsqueda rápida y relevancia.</p></article>
-                    <article class="note-card"><span class="seal red"></span><h3>Principios de diseño</h3><div class="meta"><span>7 abr 2024</span><span>María Ortega</span></div><p>Notas sobre los principios que guían las decisiones de diseño del sistema Fuente y Caudal.</p></article>
-                    <article class="note-card"><span class="seal orange"></span><h3>Flujo de consulta local</h3><div class="meta"><span>4 abr 2024</span><span>Javier Ruiz</span></div><p>Descripción del flujo completo desde la pregunta del usuario hasta la respuesta consultada.</p></article>
-                </div>
-            </section>
         </section>
 
         <section id="workspace-flow" class="workspace-panel-root caudal-shell" data-workspace="flow" aria-labelledby="workspace-flow-title" hidden>
             <header class="shell-header caudal-topbar">
-                <div class="back-forward" aria-hidden="true"><span>‹</span><span>›</span></div>
+                <div class="back-forward" aria-hidden="true"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-chevron-left"></use></svg><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-chevron-right"></use></svg></div>
                 <h1 id="workspace-flow-title" tabindex="-1">Caudal</h1>
                 <div class="shell-header-actions caudal-header-actions topbar-actions">
-                    <button type="button" class="button" id="btn-caudal-import" data-onclick-command="toggleCaudalImportMenu()"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M12 16V3m0 0L7 8m5-5 5 5M4 14v6h16v-6"></path></svg>Importar</button>
-                    <button type="button" class="button" data-onclick-command="openModal('modal-caudal-export')"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M12 3v13m0 0-5-5m5 5 5-5M4 20h16"></path></svg>Exportar</button>
-                    <button type="button" class="button" data-onclick-command="openDrawer('flow-queue-drawer')"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg>Buscar</button>
-                    <button type="button" class="button" data-onclick-command="openDrawer('flow-detail-drawer')"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M4 5h16l-6 7v6l-4 2v-8z"></path></svg>Filtros</button>
-                    <button type="button" class="btn-primary shell-primary-action" hidden data-onclick-command="triggerAction('step2_transcribe')">Procesar material</button>
+                    <button type="button" class="button" id="btn-caudal-import" data-onclick-command="toggleCaudalImportMenu()"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-download"></use></svg>Importar</button>
+                    <button type="button" class="button" data-onclick-command="openModal('modal-caudal-export')"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-upload"></use></svg>Exportar</button>
+                    <button type="button" class="button" data-onclick-command="openDrawer('flow-queue-drawer')"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-layers"></use></svg>Cola</button>
+                    <button type="button" class="button" data-onclick-command="openDrawer('flow-detail-drawer')"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-file-text"></use></svg>Detalle</button>
+                    <button type="button" class="btn-primary shell-primary-action" hidden data-onclick-command="triggerAction('step2_transcribe')"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-sparkles"></use></svg>Procesar material</button>
                 </div>
                 <div id="caudal-import-menu" class="import-menu ui-popover" hidden>
-                    <button type="button" data-onclick-command="runCaudalImport('files')">Archivos</button>
-                    <button type="button" data-onclick-command="runCaudalImport('folder')">Carpeta</button>
-                    <button type="button" data-onclick-command="runCaudalImport('sync')">SharePoint sincronizado</button>
+                    <button type="button" data-onclick-command="runCaudalImport('files')"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-file"></use></svg>Archivos</button>
+                    <button type="button" data-onclick-command="runCaudalImport('folder')"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-folder"></use></svg>Carpeta</button>
+                    <button type="button" data-onclick-command="runCaudalImport('sync')"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-cloud"></use></svg>SharePoint sincronizado</button>
                 </div>
+                <input id="caudal-browser-files" type="file" multiple hidden>
             </header>
             <div class="workspace-content flow-content caudal-body">
                 <section class="flow-section" id="fuente-flow" aria-labelledby="flow-title">
                     <h2 id="flow-title" class="visually-hidden">Cinco etapas</h2>
                     <div class="flow-stages" aria-label="Pipeline">
-                        <div class="flow-stage" data-flow-step="1"><span class="flow-stage-number">1</span><strong>Volcado</strong><span id="badge-step1" class="num">134</span></div>
-                        <div class="flow-stage" data-flow-step="2"><span class="flow-stage-number">2</span><strong>Copiado</strong><span id="badge-step2" class="num">98</span></div>
-                        <div class="flow-stage" data-flow-step="3"><span class="flow-stage-number">3</span><strong>Capturado</strong><span id="badge-step3" class="num">76</span></div>
-                        <div class="flow-stage" data-flow-step="4"><span class="flow-stage-number">4</span><strong>Procesado</strong><span id="badge-step4" class="num">58</span></div>
-                        <div class="flow-stage" data-flow-step="5"><span class="flow-stage-number">5</span><strong>Compartido</strong><span id="badge-step5" class="num">42</span></div>
+                        <button type="button" class="flow-stage" data-flow-step="1" data-onclick-command="selectCaudalStage(this)" aria-label="Ver trabajos volcados"><span class="flow-stage-number">1</span><strong>Volcado</strong><span id="badge-step1" class="num">134</span></button>
+                        <button type="button" class="flow-stage" data-flow-step="2" data-onclick-command="selectCaudalStage(this)" aria-label="Ver trabajos copiados"><span class="flow-stage-number">2</span><strong>Copiado</strong><span id="badge-step2" class="num">98</span></button>
+                        <button type="button" class="flow-stage" data-flow-step="3" data-onclick-command="selectCaudalStage(this)" aria-label="Ver trabajos capturados"><span class="flow-stage-number">3</span><strong>Capturado</strong><span id="badge-step3" class="num">76</span></button>
+                        <button type="button" class="flow-stage" data-flow-step="4" data-onclick-command="selectCaudalStage(this)" aria-label="Ver trabajos procesados"><span class="flow-stage-number">4</span><strong>Procesado</strong><span id="badge-step4" class="num">58</span></button>
+                        <button type="button" class="flow-stage" data-flow-step="5" data-onclick-command="selectCaudalStage(this)" aria-label="Ver trabajos compartidos"><span class="flow-stage-number">5</span><strong>Compartido</strong><span id="badge-step5" class="num">42</span></button>
                     </div>
                 </section>
                 <section class="flow-operations queue" aria-labelledby="flow-operations-title">
                     <h2 id="flow-operations-title" class="visually-hidden">Cola y revisiones</h2>
                     <div class="flow-queue" id="caudal-queue">
                         <div class="flow-queue-tabs queue-tabs" role="tablist" aria-label="Estado de la cola">
-                            <button type="button" class="btn-small is-active" id="caudal-queue-tab-waiting" data-onclick-command="setCaudalQueueFilter('waiting')">Pendientes</button>
-                            <button type="button" class="btn-small" id="caudal-queue-tab-active" data-onclick-command="setCaudalQueueFilter('active')">En revisión</button>
-                            <button type="button" class="btn-small" id="caudal-queue-tab-done" data-onclick-command="setCaudalQueueFilter('completed')">Terminados</button>
+                            <button type="button" class="btn-small is-active" id="caudal-queue-tab-waiting" data-onclick-command="setCaudalQueueFilter('waiting')"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-layers"></use></svg>Pendientes</button>
+                            <button type="button" class="btn-small" id="caudal-queue-tab-active" data-onclick-command="setCaudalQueueFilter('active')"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-eye"></use></svg>En revisión</button>
+                            <button type="button" class="btn-small" id="caudal-queue-tab-done" data-onclick-command="setCaudalQueueFilter('completed')"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-circle-check"></use></svg>Aprobadas</button>
+                            <button type="button" class="btn-small" id="caudal-queue-tab-quarantine" data-onclick-command="setCaudalQueueFilter('quarantined')"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-file"></use></svg>Cuarentena</button>
                         </div>
                         <div class="flow-queue-table-wrap">
                             <table class="flow-queue-table" id="caudal-queue-table" aria-label="Cola de trabajos">
                                 <thead>
-                                    <tr><th>Archivo</th><th>Etapa</th><th>Sello</th><th>Actualizado</th></tr>
+                                    <tr><th>Archivo</th><th>Etapa</th><th>Actualizado</th></tr>
                                 </thead>
                                 <tbody id="caudal-queue-body">
-                                    <tr data-file="Acta_2024-05-14.pdf"><td>Acta_2024-05-14.pdf</td><td>Procesado</td><td><span class="status-cell"><span class="dot orange"></span>Naranja · En revisión</span></td><td class="num">13/05/2024 11:32</td></tr>
-                                    <tr class="selected" data-file="Contrato_Servicios_v3.docx"><td>Contrato_Servicios_v3.docx</td><td>Procesado</td><td><span class="status-cell"><span class="dot orange"></span>Naranja · En revisión</span></td><td class="num">13/05/2024 10:47</td></tr>
-                                    <tr data-file="Informe_Mensual_Abril.xlsx"><td>Informe_Mensual_Abril.xlsx</td><td>Procesado</td><td><span class="status-cell"><span class="dot orange"></span>Naranja · En revisión</span></td><td class="num">12/05/2024 17:21</td></tr>
-                                    <tr data-file="Poliza_Seguros_2024.pdf"><td>Poliza_Seguros_2024.pdf</td><td>Procesado</td><td><span class="status-cell"><span class="dot orange"></span>Naranja · En revisión</span></td><td class="num">12/05/2024 09:58</td></tr>
-                                    <tr data-file="Presentacion_Comite.pptx"><td>Presentacion_Comite.pptx</td><td>Procesado</td><td><span class="status-cell"><span class="dot orange"></span>Naranja · En revisión</span></td><td class="num">11/05/2024 16:05</td></tr>
-                                    <tr data-file="Reporte_Auditoria_Q1.pdf"><td>Reporte_Auditoria_Q1.pdf</td><td>Procesado</td><td><span class="status-cell"><span class="dot orange"></span>Naranja · En revisión</span></td><td class="num">11/05/2024 08:42</td></tr>
+                                    <tr data-file="Acta_2024-05-14.pdf" data-queue-status="waiting"><td>Acta_2024-05-14.pdf</td><td>Preparado</td><td class="num">13/05/2024 11:32</td></tr>
+                                    <tr class="selected" data-file="Contrato_Servicios_v3.docx" data-queue-status="waiting"><td>Contrato_Servicios_v3.docx</td><td>Preparado</td><td class="num">13/05/2024 10:47</td></tr>
+                                    <tr data-file="Informe_Mensual_Abril.xlsx" data-queue-status="active"><td>Informe_Mensual_Abril.xlsx</td><td>Procesado</td><td class="num">12/05/2024 17:21</td></tr>
+                                    <tr data-file="Poliza_Seguros_2024.pdf" data-queue-status="completed"><td>Poliza_Seguros_2024.pdf</td><td>Compartido</td><td class="num">12/05/2024 09:58</td></tr>
+                                    <tr data-file="Presentacion_Comite.pptx" data-queue-status="completed"><td>Presentacion_Comite.pptx</td><td>Compartido</td><td class="num">11/05/2024 16:05</td></tr>
+                                    <tr data-file="Reporte_Auditoria_Q1.pdf" data-queue-status="active"><td>Reporte_Auditoria_Q1.pdf</td><td>Procesado</td><td class="num">11/05/2024 08:42</td></tr>
+                                    <tr data-file="Documento_danado.pdf" data-queue-status="quarantined"><td>Documento_danado.pdf</td><td>En cuarentena</td><td class="num">10/05/2024 14:10</td></tr>
                                 </tbody>
                             </table>
                             <template id="caudal-queue-fixture">
-                                <tr data-file="Acta_2024-05-14.pdf"><td>Acta_2024-05-14.pdf</td><td>Procesado</td><td><span class="status-cell"><span class="dot orange"></span>Naranja · En revisión</span></td><td class="num">13/05/2024 11:32</td></tr>
-                                <tr class="selected" data-file="Contrato_Servicios_v3.docx"><td>Contrato_Servicios_v3.docx</td><td>Procesado</td><td><span class="status-cell"><span class="dot orange"></span>Naranja · En revisión</span></td><td class="num">13/05/2024 10:47</td></tr>
-                                <tr data-file="Informe_Mensual_Abril.xlsx"><td>Informe_Mensual_Abril.xlsx</td><td>Procesado</td><td><span class="status-cell"><span class="dot orange"></span>Naranja · En revisión</span></td><td class="num">12/05/2024 17:21</td></tr>
-                                <tr data-file="Poliza_Seguros_2024.pdf"><td>Poliza_Seguros_2024.pdf</td><td>Procesado</td><td><span class="status-cell"><span class="dot orange"></span>Naranja · En revisión</span></td><td class="num">12/05/2024 09:58</td></tr>
-                                <tr data-file="Presentacion_Comite.pptx"><td>Presentacion_Comite.pptx</td><td>Procesado</td><td><span class="status-cell"><span class="dot orange"></span>Naranja · En revisión</span></td><td class="num">11/05/2024 16:05</td></tr>
-                                <tr data-file="Reporte_Auditoria_Q1.pdf"><td>Reporte_Auditoria_Q1.pdf</td><td>Procesado</td><td><span class="status-cell"><span class="dot orange"></span>Naranja · En revisión</span></td><td class="num">11/05/2024 08:42</td></tr>
+                                <tr data-file="Acta_2024-05-14.pdf" data-queue-status="waiting"><td>Acta_2024-05-14.pdf</td><td>Preparado</td><td class="num">13/05/2024 11:32</td></tr>
+                                <tr class="selected" data-file="Contrato_Servicios_v3.docx" data-queue-status="waiting"><td>Contrato_Servicios_v3.docx</td><td>Preparado</td><td class="num">13/05/2024 10:47</td></tr>
+                                <tr data-file="Informe_Mensual_Abril.xlsx" data-queue-status="active"><td>Informe_Mensual_Abril.xlsx</td><td>Procesado</td><td class="num">12/05/2024 17:21</td></tr>
+                                <tr data-file="Poliza_Seguros_2024.pdf" data-queue-status="completed"><td>Poliza_Seguros_2024.pdf</td><td>Compartido</td><td class="num">12/05/2024 09:58</td></tr>
+                                <tr data-file="Presentacion_Comite.pptx" data-queue-status="completed"><td>Presentacion_Comite.pptx</td><td>Compartido</td><td class="num">11/05/2024 16:05</td></tr>
+                                <tr data-file="Reporte_Auditoria_Q1.pdf" data-queue-status="active"><td>Reporte_Auditoria_Q1.pdf</td><td>Procesado</td><td class="num">11/05/2024 08:42</td></tr>
+                                <tr data-file="Documento_danado.pdf" data-queue-status="quarantined"><td>Documento_danado.pdf</td><td>En cuarentena</td><td class="num">10/05/2024 14:10</td></tr>
                             </template>
                         </div>
                     </div>
                 </section>
                 <footer class="caudal-footer" id="caudal-footer" aria-label="Contadores de Caudal">
-                    <button type="button" class="caudal-counter" data-caudal-feed-filter='{"seal":"pending_review"}' data-onclick-command="openSourceFeedFromCounter(this)"><span class="dot red" aria-hidden="true"></span><span>Rojos</span><strong id="count-seal-pending">12</strong></button>
+                    <button type="button" class="caudal-counter" data-caudal-feed-filter='{"seal":"pending_review"}' data-onclick-command="openSourceFeedFromCounter(this)"><span class="dot red" aria-hidden="true"></span><span>Pendientes</span><strong id="count-seal-pending">12</strong></button>
                     <button type="button" class="caudal-counter" data-caudal-feed-filter='{"seal":"in_review"}' data-onclick-command="openSourceFeedFromCounter(this)"><span class="dot orange" aria-hidden="true"></span><span>En revisión</span><strong id="count-seal-review">7</strong></button>
-                    <button type="button" class="caudal-counter" data-caudal-feed-filter='{"seal":"approved"}' data-onclick-command="openSourceFeedFromCounter(this)"><span class="dot green" aria-hidden="true"></span><span>Verdes</span><strong id="count-seal-approved">86</strong></button>
+                    <button type="button" class="caudal-counter" data-caudal-feed-filter='{"seal":"approved"}' data-onclick-command="openSourceFeedFromCounter(this)"><span class="dot green" aria-hidden="true"></span><span>Aprobadas</span><strong id="count-seal-approved">86</strong></button>
                     <button type="button" class="caudal-counter" data-onclick-command="openModal('modal-quarantine')"><span class="dot slate" aria-hidden="true"></span><span>Cuarentena</span><strong id="count-quarantine-footer">3</strong></button>
                     <button type="button" class="caudal-counter caudal-type-counter" hidden data-caudal-feed-filter='{"note_type":"resumen"}' data-onclick-command="openSourceFeedFromCounter(this)"><span>Resumen</span><strong id="count-type-resumen">0</strong></button>
                     <button type="button" class="caudal-counter caudal-type-counter" hidden data-caudal-feed-filter='{"note_type":"propiedades"}' data-onclick-command="openSourceFeedFromCounter(this)"><span>Propiedades</span><strong id="count-type-propiedades">0</strong></button>
                     <button type="button" class="caudal-counter caudal-type-counter" hidden data-caudal-feed-filter='{"note_type":"contexto"}' data-onclick-command="openSourceFeedFromCounter(this)"><span>Contexto</span><strong id="count-type-contexto">0</strong></button>
                     <button type="button" class="caudal-counter caudal-type-counter" hidden data-caudal-feed-filter='{"note_type":"concepto"}' data-onclick-command="openSourceFeedFromCounter(this)"><span>Concepto</span><strong id="count-type-concepto">0</strong></button>
-                    <button type="button" class="btn-secondary" data-onclick-command="openDrawer('flow-log-drawer')">Ver registro</button>
+                    <button type="button" class="btn-secondary" data-onclick-command="openDrawer('flow-log-drawer')"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-scroll-text"></use></svg>Ver registro</button>
                 </footer>
                 <aside id="flow-detail-drawer" class="ui-drawer file-detail" aria-label="Detalle del archivo" aria-hidden="true">
-                    <div class="drawer-header detail-head"><h2>Detalle del archivo</h2><button type="button" class="icon-button" data-onclick-command="closeDrawer('flow-detail-drawer')" aria-label="Cerrar detalle"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"></path></svg></button></div>
+                    <div class="drawer-header detail-head"><h2>Detalle del archivo</h2><button type="button" class="icon-button" data-onclick-command="closeDrawer('flow-detail-drawer')" aria-label="Cerrar detalle"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-close"></use></svg></button></div>
                     <div class="caudal-detail-body">
                         <dl class="caudal-detail-properties" id="caudal-detail-properties">
                             <div><dt>Archivo</dt><dd id="caudal-detail-file">Contrato_Servicios_v3.docx</dd></div>
                             <div><dt>Origen</dt><dd id="caudal-detail-origin">SharePoint sincronizado /Legal/Contratos/2024/</dd></div>
                             <div><dt>Revisión</dt><dd id="caudal-detail-revision">3 (13/05/2024 10:47)</dd></div>
                             <div><dt>Hash (SHA-256)</dt><dd id="caudal-detail-hash">3b8f2c6e6b5d9f3a7e9c1d4b2a7f3e9d 8c7a1b2d3e4f5a6b7c8d9e0f1a2b3c4</dd></div>
-                            <div><dt>Sello actual</dt><dd id="caudal-detail-seal"><span class="status-cell"><span class="dot orange"></span>Naranja · En revisión</span></dd></div>
+                            <div><dt>Estado</dt><dd id="caudal-detail-status"><span class="status-cell"><span class="dot orange"></span>En revisión</span></dd></div>
                             <div><dt>Próxima aprobación requerida</dt><dd id="caudal-detail-next-approval">Aprobador Legal</dd></div>
                         </dl>
                         <div class="toolbar-group detail-actions">
-                            <button type="button" class="btn-primary" id="btn-caudal-approve-step" data-onclick-command="approveCaudalSelection()">Aprobar paso</button>
-                            <button type="button" class="btn-secondary" data-onclick-command="switchWorkspace('source')">Abrir en Fuente</button>
+                            <button type="button" class="btn-primary" id="btn-caudal-approve-step" data-onclick-command="approveCaudalSelection()"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-circle-check"></use></svg>Aprobar paso</button>
+                            <button type="button" class="btn-secondary" data-onclick-command="switchWorkspace('source')"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-library"></use></svg>Abrir en Fuente</button>
                         </div>
                         <p class="visually-hidden">Los cuatro gates de aprobación usan approve_clean, approve_processed_output y begin_transition_review según la etapa activa.</p>
                         <div class="detail-accordion">
@@ -375,16 +655,15 @@
                     </div>
                 </aside>
                 <aside id="flow-queue-drawer" class="ui-drawer" aria-label="Cola de trabajos" aria-hidden="true" hidden>
-                    <div class="drawer-header"><h2>Cola de trabajos</h2><button type="button" class="icon-button" data-onclick-command="closeDrawer('flow-queue-drawer')" aria-label="Cerrar cola"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"></path></svg></button></div>
+                    <div class="drawer-header"><h2>Cola de trabajos</h2><button type="button" class="icon-button" data-onclick-command="closeDrawer('flow-queue-drawer')" aria-label="Cerrar cola"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-close"></use></svg></button></div>
                     <div id="flow-queue-drawer-host">
-                        <button class="btn-secondary" data-onclick-command="openModal('modal-job-queue')">Abrir cola completa</button>
+                        <button class="btn-secondary" data-onclick-command="openModal('modal-job-queue')"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-layers"></use></svg>Abrir cola completa</button>
                     </div>
                 </aside>
                 <aside id="flow-log-drawer" class="ui-drawer" aria-label="Registro de actividad" aria-hidden="true" hidden>
-                    <div class="drawer-header"><h2>Registro de actividad</h2><button type="button" class="icon-button" data-onclick-command="closeDrawer('flow-log-drawer')" aria-label="Cerrar registro"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"></path></svg></button></div>
+                    <div class="drawer-header"><h2>Registro de actividad</h2><button type="button" class="icon-button" data-onclick-command="closeDrawer('flow-log-drawer')" aria-label="Cerrar registro"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-close"></use></svg></button></div>
                     <div class="log-console caudal-log-console" id="caudal-log-console" role="log" aria-live="polite"></div>
                 </aside>
-                <button type="button" class="vertical-tab activity-tab" data-onclick-command="openDrawer('flow-log-drawer')" aria-label="Abrir registro de actividad">Registro de actividad  ›</button>
             </div>
         </section>
     </main>
@@ -395,15 +674,13 @@
             <div class="modal-header">
                 <div class="reader-title-tools">
                     <div class="modal-title" id="modal-reader-title">Notas</div>
-                    <button class="btn-small" id="btn-reader-library" aria-pressed="true" data-onclick-command="toggleReaderLibrary()">Biblioteca</button>
-                    <button class="btn-small" id="btn-reader-context" aria-pressed="false" data-onclick-command="toggleReaderContext()">Contexto</button>
+                    <button class="btn-small" id="btn-reader-library" aria-pressed="true" data-onclick-command="toggleReaderLibrary()"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-panel-left-close"></use></svg>Contenido</button>
+                    <button class="btn-small" id="btn-reader-context" aria-pressed="false" data-onclick-command="toggleReaderContext()"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-message-circle"></use></svg>Contexto</button>
                 </div>
                 <div class="console-layout-005">
-                    <button type="button" class="btn-small" id="btn-reader-back" data-onclick-command="goBackReaderNote()" disabled title="Volver a la nota anterior"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-back"></use></svg><span>Atrás</span></button>
-                    <button type="button" class="btn-small source-view-tab" id="btn-source-view-filtered" role="tab" data-onclick-command="switchSourceView('filtered')">Filtrada</button>
-                    <button type="button" class="btn-small" id="btn-source-hierarchy" data-onclick-command="switchSourceView('hierarchy')">Jerarquía</button>
-                    <button type="button" class="btn-small" id="btn-source-relations" data-onclick-command="switchSourceView('relations')">Relaciones</button>
-                    <button type="button" class="btn-small" data-onclick-command="openDrawer('source-search-drawer')">Buscar</button>
+                    <button type="button" class="btn-small" id="btn-source-hierarchy" data-onclick-command="switchSourceView('hierarchy')"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-git-branch"></use></svg>Jerarquía</button>
+                    <button type="button" class="btn-small" id="btn-source-relations" data-onclick-command="switchSourceView('relations')"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-network"></use></svg>Relaciones</button>
+                    <button type="button" class="btn-small" data-onclick-command="openDrawer('source-search-drawer')"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-search"></use></svg>Buscar</button>
                     <button type="button" class="close-btn" data-onclick-command="closeModal('modal-reader')" aria-label="Cerrar notas"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-close"></use></svg></button>
                 </div>
             </div>
@@ -412,7 +689,7 @@
                     <section class="reader-context-content" data-reader-region="content" aria-label="Contenido de la nota">
                         <div class="reader-dual-pane reader-view" id="reader-view-list">
                             <div class="reader-sidebar">
-                                <div class="library-head"><h2 class="reader-sidebar-divider">Biblioteca</h2><button type="button" class="icon-button" data-onclick-command="toggleReaderLibrary()" aria-label="Plegar biblioteca">«</button></div>
+                                <div class="library-head"><h2 class="reader-sidebar-divider">Notas</h2><button type="button" class="icon-button" data-onclick-command="toggleReaderLibrary()" aria-label="Ocultar lista de notas"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-panel-left-close"></use></svg></button></div>
                                 <div class="reader-note-list-scroll">
                                     <ul class="reader-note-list" id="reader-note-list">
                                         <li class="reader-note-item active">Cargando notas...</li>
@@ -444,13 +721,13 @@
                         </div>
                         <div class="reader-view is-hidden" id="reader-view-relations" data-source-view="relations" hidden>
                             <div class="source-relations-preview" id="source-relations-preview" aria-label="Relaciones de la nota"></div>
-                            <button type="button" class="btn-secondary" id="btn-open-obsidian-graph" data-onclick-command="openObsidianGraph()">Abrir grafo completo en Obsidian</button>
+                            <button type="button" class="btn-secondary" id="btn-open-obsidian-graph" data-onclick-command="openObsidianGraph()"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-network"></use></svg>Abrir grafo completo en Obsidian</button>
                         </div>
                     </section>
                     <aside id="source-context-drawer" class="reader-properties-pane ui-drawer" data-reader-region="properties" role="dialog" aria-modal="false" aria-label="Más sobre la nota" aria-hidden="true" hidden>
                         <div class="workspace-tabs" role="tablist" aria-label="Más sobre la nota">
-                            <button type="button" class="btn-small workspace-tab is-active" id="workspace-tab-assistant" role="tab" aria-selected="true" aria-controls="workspace-panel-assistant" data-onclick-command="switchWorkspaceTab('assistant')">Contexto</button>
-                            <button type="button" class="btn-small workspace-tab" id="workspace-tab-notes" role="tab" aria-selected="false" aria-controls="workspace-panel-notes" data-onclick-command="switchWorkspaceTab('notes')">Preparar</button>
+                            <button type="button" class="btn-small workspace-tab is-active" id="workspace-tab-assistant" role="tab" aria-selected="true" aria-controls="workspace-panel-assistant" data-onclick-command="switchWorkspaceTab('assistant')"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-message-circle"></use></svg>Contexto</button>
+                            <button type="button" class="btn-small workspace-tab" id="workspace-tab-notes" role="tab" aria-selected="false" aria-controls="workspace-panel-notes" data-onclick-command="switchWorkspaceTab('notes')"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-share-2"></use></svg>Preparar</button>
                         </div>
                         <div id="workspace-panel-assistant" class="workspace-panel" role="tabpanel" aria-labelledby="workspace-tab-assistant">
                             <div class="reader-properties-visual">
@@ -460,7 +737,7 @@
                             <form id="workspace-chat-form" class="workspace-chat-form">
                                 <label for="workspace-chat-input">Preguntar sobre esta nota</label>
                                 <textarea id="workspace-chat-input" rows="3" required></textarea>
-                                <button type="submit" class="btn-primary">Preguntar</button>
+                                <button type="submit" class="btn-primary"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-send"></use></svg>Preguntar</button>
                             </form>
                             <div id="workspace-chat-answer" class="workspace-chat-answer" aria-live="polite"></div>
                             <div id="workspace-chat-citations" class="workspace-chat-citations" aria-label="Citas de la respuesta"></div>
@@ -469,35 +746,30 @@
                             <h2>Preparación</h2>
                             <div id="processed-share-state" class="workspace-state-card">
                                 <p class="workspace-empty-state">Aquí puedes preparar la nota antes de compartirla.</p>
-                                <button type="button" class="btn-primary" id="document-share-button" disabled>Compartir nota</button>
+                                <button type="button" class="btn-primary" id="document-share-button" disabled><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-share-2"></use></svg>Compartir nota</button>
                                 <p id="document-share-reason" class="workspace-help" role="status">Primero revisa la nota.</p>
                                 <p id="document-share-path" class="workspace-help" aria-live="polite"></p>
                             </div>
                         </div>
                     </aside>
-                    </aside>
                     <aside id="source-search-drawer" class="ui-drawer source-search-drawer" role="dialog" aria-modal="false" aria-label="Buscar en Fuente" aria-hidden="true" hidden>
-                        <div class="drawer-header"><h2>Buscar</h2><button type="button" class="icon-button" data-onclick-command="closeDrawer('source-search-drawer')" aria-label="Cerrar búsqueda"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"></path></svg></button></div>
+                        <div class="drawer-header"><h2>Buscar</h2><button type="button" class="icon-button" data-onclick-command="closeDrawer('source-search-drawer')" aria-label="Cerrar búsqueda"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-close"></use></svg></button></div>
                         <div class="source-search-tabs" role="tablist" aria-label="Modo de búsqueda">
-                            <button type="button" class="btn-small is-active" id="source-search-tab-content" data-onclick-command="switchSourceSearchMode('content')">Contenido</button>
-                            <button type="button" class="btn-small" id="source-search-tab-metadata" data-onclick-command="switchSourceSearchMode('metadata')">Metadatos</button>
-                            <button type="button" class="btn-small" id="source-search-tab-relations" data-onclick-command="switchSourceSearchMode('relations')">Relaciones</button>
+                            <button type="button" class="btn-small is-active" id="source-search-tab-content" data-onclick-command="switchSourceSearchMode('content')"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-file-text"></use></svg>Contenido</button>
+                            <button type="button" class="btn-small" id="source-search-tab-metadata" data-onclick-command="switchSourceSearchMode('metadata')"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-list"></use></svg>Metadatos</button>
+                            <button type="button" class="btn-small" id="source-search-tab-relations" data-onclick-command="switchSourceSearchMode('relations')"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-network"></use></svg>Relaciones</button>
                         </div>
                         <label for="source-search-input">Consulta</label>
                         <input type="search" id="source-search-input" placeholder="Buscar...">
-                        <button type="button" class="btn-primary" data-onclick-command="runSourceSearch()">Buscar</button>
+                        <button type="button" class="btn-primary" data-onclick-command="runSourceSearch()"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-search"></use></svg>Buscar</button>
                         <div id="source-search-results" class="source-search-results" aria-live="polite"></div>
                     </aside>
-                    </aside>
                     <div id="source-actions-popover" class="source-actions-popover reader-actions" role="dialog" aria-label="Acciones de lectura" aria-hidden="true" hidden>
-                        <button type="button" class="btn-small" data-onclick-command="triggerAction('copy_reader_note', {}, this)"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><rect x="8" y="8" width="11" height="11" rx="1"></rect><path d="M5 15H4V4h11v1"></path></svg>Copiar</button>
-                        <button type="button" class="btn-small" data-onclick-command="printCurrentNote()"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M6 9V3h12v6M6 18H4v-8h16v8h-2M7 14h10v7H7z"></path></svg>Imprimir</button>
-                        <button type="button" class="btn-small" data-onclick-command="triggerAction('export_reader_note', {}, this)"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M5 12h12m-4-4 4 4-4 4M19 5v14"></path></svg>Exportar</button>
-                        <button type="button" class="btn-small" data-onclick-command="openCurrentNoteFile()">Abrir archivo</button>
-                        <button type="button" class="btn-small" data-onclick-command="triggerAction('open_obsidian', {}, this)"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="m12 3 6 5-6 13-6-13z"></path><path d="m6 8 6 4 6-4"></path></svg>Abrir en Obsidian</button>
-                        <button type="button" class="btn-small" data-onclick-command="switchSourceView('filtered')">Filtrada</button>
-                        <button type="button" class="btn-small" data-onclick-command="switchSourceView('hierarchy')">Jerarquía</button>
-                        <button type="button" class="btn-small" data-onclick-command="switchSourceView('relations')">Relaciones</button>
+                        <button type="button" class="btn-small" data-onclick-command="triggerAction('copy_reader_note', {}, this)"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-copy"></use></svg>Copiar</button>
+                        <button type="button" class="btn-small" data-onclick-command="printCurrentNote()"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-printer"></use></svg>Imprimir</button>
+                        <button type="button" class="btn-small" data-onclick-command="triggerAction('export_reader_note', {}, this)"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-upload"></use></svg>Exportar</button>
+                        <button type="button" class="btn-small" data-onclick-command="openCurrentNoteFile()"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-folder-open"></use></svg>Abrir archivo</button>
+                        <button type="button" class="btn-small" data-onclick-command="triggerAction('open_obsidian', {}, this)"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-external-link"></use></svg>Abrir en Obsidian</button>
                     </div>
                 </div>
             </div>
@@ -522,8 +794,8 @@
                 </div>
             </div>
             <div class="modal-footer">
-                <button class="btn-secondary" data-onclick-command="closeModal('modal-create-theme')">Cancelar</button>
-                <button class="btn-primary" data-onclick-command="submitCreateThemeModal()">Crear tema</button>
+                <button class="btn-secondary" data-onclick-command="closeModal('modal-create-theme')"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-close"></use></svg>Cancelar</button>
+                <button class="btn-primary" data-onclick-command="submitCreateThemeModal()"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-check"></use></svg>Crear tema</button>
             </div>
         </div>
     </div>
@@ -541,18 +813,18 @@
                 </p>
                 <div class="console-layout-022">
                     <button class="btn-primary console-layout-023" data-onclick-command="executeExportFormat('markdown')">
-                        Texto (.md)
+                        <svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-file-code"></use></svg>Texto (.md)
                     </button>
                     <button class="btn-primary console-layout-023" data-onclick-command="executeExportFormat('pdf')">
-                        Imprimir / Guardar como PDF
+                        <svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-printer"></use></svg>Imprimir / Guardar como PDF
                     </button>
                     <button class="btn-primary console-layout-023" data-onclick-command="executeExportFormat('docx')">
-                        Word (.docx)
+                        <svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-file-type"></use></svg>Word (.docx)
                     </button>
                 </div>
             </div>
             <div class="modal-footer console-layout-024">
-                <button class="btn-secondary" data-onclick-command="closeModal('modal-export-options')">Cancelar</button>
+                <button class="btn-secondary" data-onclick-command="closeModal('modal-export-options')"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-close"></use></svg>Cancelar</button>
             </div>
         </div>
     </div>
@@ -630,7 +902,7 @@
                         <li>Margen de seguridad: <b id="stat-ram-margin-pct" class="console-text-014">20%</b></li>
                         <li>Limpieza automática: <b class="console-text-013">Lista</b></li>
                     </ul>
-                    <button class="btn-secondary console-layout-031" data-onclick-command="triggerAction('stat_ram')">Liberar memoria</button>
+                    <button class="btn-secondary console-layout-031" data-onclick-command="triggerAction('stat_ram')"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-zap"></use></svg>Liberar memoria</button>
                 </div>
             </div>
             <div class="modal-footer">
@@ -648,28 +920,29 @@
             </div>
             <div class="modal-body">
                 <div class="console-layout-032">
-                    <button class="btn-small tab-btn console-text-015" id="tab-btn-routes" data-onclick-command="switchSettingsTab('routes')">Carpetas</button>
-                    <button class="btn-small tab-btn" id="tab-btn-server" data-onclick-command="switchSettingsTab('server')">IA</button>
-                    <button class="btn-small tab-btn" id="tab-btn-templates" data-onclick-command="switchSettingsTab('templates')">Plantillas</button>
+                    <button class="btn-small tab-btn console-text-015" id="tab-btn-routes" data-onclick-command="switchSettingsTab('routes')"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-folder"></use></svg>Carpetas</button>
+                    <button class="btn-small tab-btn" id="tab-btn-server" data-onclick-command="switchSettingsTab('server')"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-sparkles"></use></svg>IA</button>
+                    <button class="btn-small tab-btn" id="tab-btn-templates" data-onclick-command="switchSettingsTab('templates')"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-file-text"></use></svg>Plantillas</button>
                 </div>
                 <div id="settings-load-status" class="console-text-017" role="status" aria-live="polite"></div>
                 <div id="setup-vault-panel" class="console-layout-039" hidden>
                     <strong>Para empezar</strong>
                     <div id="setup-obsidian-status" class="console-text-017" role="status" aria-live="polite"></div>
                     <div class="console-layout-040">
-                        <button class="btn-secondary" id="setup-install-obsidian" data-onclick-command="installObsidian()">Instalar Obsidian</button>
-                        <button class="btn-secondary" id="setup-create-vault" data-onclick-command="createGuidedVault()">Crear Vault Fuente</button>
+                        <button class="btn-secondary" id="setup-install-obsidian" data-onclick-command="installObsidian()"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-download"></use></svg>Instalar Obsidian</button>
+                        <button class="btn-secondary" id="setup-create-vault" data-onclick-command="createGuidedVault()"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-folder-open"></use></svg>Crear Vault Fuente</button>
                     </div>
                 </div>
 
                 <!-- PESTAÑA 1: MEMORIA & CONEXIONES -->
                 <div class="tab-panel console-layout-033" id="tab-panel-routes">
+                    <p class="settings-helper">Aquí decides dónde lee Fuente tus notas y qué carpetas usa para recoger material y compartir resultados.</p>
                     <!-- BÓVEDA PRINCIPAL -->
                     <div>
                         <label class="console-layout-034">Carpeta de notas:</label>
                         <div class="console-layout-035">
                             <input type="text" id="setting-vault-path" value="" readonly class="console-layout-036">
-                            <button class="btn-secondary console-layout-037" data-onclick-command="browseVaultFolder()">Explorar...</button>
+                            <button class="btn-secondary console-layout-037" data-onclick-command="browseVaultFolder()"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-folder-search"></use></svg>Explorar...</button>
                         </div>
                         <span class="console-layout-038">Fuente ordena por dentro sus carpetas de trabajo.</span>
                     </div>
@@ -678,7 +951,7 @@
                     <div class="console-layout-039">
                         <div class="console-layout-040">
                             <label class="console-text-016">Carpetas de entrada:</label>
-                            <button class="btn-small" data-onclick-command="addLinkedInputFolder()">+ Añadir carpeta</button>
+                            <button class="btn-small" data-onclick-command="addLinkedInputFolder()"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-plus"></use></svg>Añadir carpeta</button>
                         </div>
                         <span class="console-layout-041">Fuente recogerá lo que dejes en estas carpetas:</span>
                         <div id="linked-input-folders-list" class="console-layout-042">
@@ -691,7 +964,7 @@
                     <div class="console-layout-039">
                         <div class="console-layout-040">
                             <label class="console-text-016">Carpetas para compartir:</label>
-                            <button class="btn-small" data-onclick-command="addLinkedOutputFolder()">+ Añadir destino</button>
+                            <button class="btn-small" data-onclick-command="addLinkedOutputFolder()"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-plus"></use></svg>Añadir destino</button>
                         </div>
                         <span class="console-layout-041">Las notas que compartas se copiarán aquí:</span>
                         <div id="linked-output-folders-list" class="console-layout-042">
@@ -702,6 +975,7 @@
 
                 <!-- PESTAÑA 2: SERVIDOR & IA -->
                 <div class="tab-panel console-layout-043" id="tab-panel-server">
+                    <p class="settings-helper">La IA se usa para transcribir y organizar. Por defecto, todo permanece en este equipo.</p>
                     <div>
                         <label class="console-layout-034">Modelo de IA:</label>
                         <select id="setting-ollama-model" class="console-layout-044">
@@ -752,7 +1026,7 @@
                         <label for="setting-whisper-model-path">Carpeta del modelo de audio</label>
                         <div class="console-layout-035">
                             <input id="setting-whisper-model-path" type="text" class="console-layout-036" autocomplete="off" placeholder="Selecciona una carpeta o archivo de modelo local">
-                            <button type="button" class="btn-secondary console-layout-037" data-onclick-command="browseWhisperModelFolder()">Explorar...</button>
+                            <button type="button" class="btn-secondary console-layout-037" data-onclick-command="browseWhisperModelFolder()"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-folder-search"></use></svg>Explorar...</button>
                         </div>
                         <span class="console-text-017">Usa una carpeta de audio que ya esté en este equipo.</span>
                         <span id="eco-policy-summary">Esperando la primera medición.</span>
@@ -760,17 +1034,18 @@
                 </div>
 
                 <div class="tab-panel console-layout-043 is-hidden" id="tab-panel-templates">
+                    <p class="settings-helper">Estas plantillas guían la forma de las notas nuevas; no cambian las notas que ya existen.</p>
                     <p class="console-text-017">Edita las plantillas ocultas y las instrucciones AGENTS.md que usa la generación.</p>
-                    <button type="button" class="btn-secondary" data-onclick-command="openModal('modal-template-helper')">Abrir editor de plantillas</button>
+                    <button type="button" class="btn-secondary" data-onclick-command="openModal('modal-template-helper')"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-file-text"></use></svg>Abrir editor de plantillas</button>
                     <p id="template-settings-status" class="console-text-017" role="status" aria-live="polite"></p>
                 </div>
 
             </div>
             <div class="modal-footer">
-                <button class="btn-secondary console-text-018" data-onclick-command="resetDefaultSettings()">Restablecer valores</button>
+                <button class="btn-secondary console-text-018" data-onclick-command="resetDefaultSettings()"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-rotate-ccw"></use></svg>Restablecer valores</button>
                 <div class="console-layout-047">
                     <span class="console-text-019">Local por defecto</span>
-                    <button class="btn-secondary console-text-020" data-onclick-command="saveSettings()">Guardar</button>
+                    <button class="btn-secondary console-text-020" data-onclick-command="saveSettings()"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-save"></use></svg>Guardar</button>
                 </div>
                 <div id="settings-save-status" class="console-text-017" role="alert" aria-live="polite"></div>
             </div>
@@ -787,18 +1062,18 @@
             <div class="modal-body template-helper-shell">
                 <aside class="template-helper-types" id="template-type-list" aria-label="Tipos de plantilla">
                     <h3>Plantillas e instrucciones</h3>
-                    <button type="button" class="template-type-btn is-active">Reunión</button>
-                    <button type="button" class="template-type-btn">Tareas</button>
-                    <button type="button" class="template-type-btn">Objetivos</button>
-                    <button type="button" class="template-type-btn">Resumen</button>
-                    <button type="button" class="template-type-btn">Propiedades</button>
-                    <button type="button" class="template-type-btn">Contexto</button>
-                    <button type="button" class="template-type-btn">Concepto</button>
+                    <button type="button" class="template-type-btn is-active"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-message-circle"></use></svg>Reunión</button>
+                    <button type="button" class="template-type-btn"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-check"></use></svg>Tareas</button>
+                    <button type="button" class="template-type-btn"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-zap"></use></svg>Objetivos</button>
+                    <button type="button" class="template-type-btn"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-scroll-text"></use></svg>Resumen</button>
+                    <button type="button" class="template-type-btn"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-list"></use></svg>Propiedades</button>
+                    <button type="button" class="template-type-btn"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-layers"></use></svg>Contexto</button>
+                    <button type="button" class="template-type-btn"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-sparkles"></use></svg>Concepto</button>
                 </aside>
                 <section class="template-helper-editor">
                     <div class="template-helper-tabs">
-                        <button type="button" class="btn-small tab-btn is-active" id="template-tab-template" data-onclick-command="switchTemplateEditorTab('template')">template.md</button>
-                        <button type="button" class="btn-small tab-btn" id="template-tab-agents" data-onclick-command="switchTemplateEditorTab('agents')">AGENTS.md</button>
+                        <button type="button" class="btn-small tab-btn is-active" id="template-tab-template" data-onclick-command="switchTemplateEditorTab('template')"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-file-code"></use></svg>template.md</button>
+                        <button type="button" class="btn-small tab-btn" id="template-tab-agents" data-onclick-command="switchTemplateEditorTab('agents')"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-file-text"></use></svg>AGENTS.md</button>
                     </div>
                     <textarea id="template-editor-template" class="template-helper-textarea" aria-label="Contenido de template.md">---
 tipo: reunión
@@ -847,11 +1122,11 @@ origen: {{origen}}
                 </aside>
             </div>
             <div class="modal-footer template-helper-footer">
-                <button type="button" class="btn-secondary" data-onclick-command="restoreTemplateHelper()">Restaurar</button>
+                <button type="button" class="btn-secondary" data-onclick-command="restoreTemplateHelper()"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-rotate-ccw"></use></svg>Restaurar</button>
                 <span id="template-helper-meta" class="console-text-017 template-helper-meta">Última revisión: 02 may 2025 10:34   Hash: 7f3c9a1d</span>
                 <div class="template-helper-actions">
-                    <button type="button" class="btn-secondary" data-onclick-command="previewTemplateHelper()">Previsualizar</button>
-                    <button type="button" class="btn-primary" data-onclick-command="saveTemplateHelper()">Guardar cambios</button>
+                    <button type="button" class="btn-secondary" data-onclick-command="previewTemplateHelper()"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-eye"></use></svg>Previsualizar</button>
+                    <button type="button" class="btn-primary" data-onclick-command="saveTemplateHelper()"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-save"></use></svg>Guardar cambios</button>
                 </div>
             </div>
         </div>
@@ -926,14 +1201,14 @@ origen: {{origen}}
             <div class="modal-footer console-layout-049">
                 <span id="approval-form-status" class="console-text-024"></span>
                 <div class="console-layout-050">
-                    <button class="btn-primary" id="btn-approve-note" data-onclick-command="approveSelectedNote()" disabled>Dar por buena</button>
+                    <button class="btn-primary" id="btn-approve-note" data-onclick-command="approveSelectedNote()" disabled><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-circle-check"></use></svg>Dar por buena</button>
                     <select id="approval-export-format" aria-label="Formato de aprobación y exportación">
                         <option value="markdown">Markdown</option>
                         <option value="docx">Word</option>
                         <option value="pdf">PDF</option>
                     </select>
-                    <button class="btn-primary" id="btn-approve-export" data-onclick-command="approveAndExportSelectedNote()" disabled>Dar por buena y sacar</button>
-                    <button class="btn-secondary" id="btn-retry-approval-export" data-onclick-command="retryFailedApprovalExport()" hidden>Intentar de nuevo</button>
+                    <button class="btn-primary" id="btn-approve-export" data-onclick-command="approveAndExportSelectedNote()" disabled><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-upload"></use></svg>Dar por buena y sacar</button>
+                    <button class="btn-secondary" id="btn-retry-approval-export" data-onclick-command="retryFailedApprovalExport()" hidden><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-refresh-cw"></use></svg>Intentar de nuevo</button>
                 </div>
             </div>
         </div>
@@ -945,8 +1220,8 @@ origen: {{origen}}
             <div class="modal-header">
                 <div class="modal-title" id="modal-job-queue-title">Trabajos</div>
                 <div>
-                    <button class="btn-small" id="job-queue-load" data-onclick-command="loadJobQueue()">Ver</button>
-                    <button class="btn-small" id="job-queue-refresh" data-onclick-command="refreshJobQueue()">Actualizar</button>
+                    <button class="btn-small" id="job-queue-load" data-onclick-command="loadJobQueue()"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-eye"></use></svg>Ver</button>
+                    <button class="btn-small" id="job-queue-refresh" data-onclick-command="refreshJobQueue()"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-refresh-cw"></use></svg>Actualizar</button>
                     <button type="button" class="close-btn" data-onclick-command="closeModal('modal-job-queue')" aria-label="Cerrar trabajos"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-close"></use></svg></button>
                 </div>
             </div>
@@ -955,8 +1230,8 @@ origen: {{origen}}
                 <div id="job-queue-list" aria-live="polite"></div>
                 <div id="job-queue-detail" class="is-hidden" aria-live="polite"></div>
                 <div id="job-queue-pagination">
-                    <button class="btn-small" id="job-queue-previous-page" disabled data-onclick-command="loadPreviousJobPage()">Anterior</button>
-                    <button class="btn-small" id="job-queue-next-page" disabled data-onclick-command="loadNextJobPage()">Siguiente</button>
+                    <button class="btn-small" id="job-queue-previous-page" disabled data-onclick-command="loadPreviousJobPage()"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-chevron-left"></use></svg>Anterior</button>
+                    <button class="btn-small" id="job-queue-next-page" disabled data-onclick-command="loadNextJobPage()"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-chevron-right"></use></svg>Siguiente</button>
                 </div>
             </div>
             <div class="modal-footer">
@@ -973,15 +1248,15 @@ origen: {{origen}}
             </div>
             <div class="modal-body import-wizard">
                 <nav class="import-tabs" aria-label="Modo">
-                    <button type="button" class="is-active">Importar</button>
-                    <button type="button" data-onclick-command="openModal('modal-caudal-export')">Exportar</button>
+                    <button type="button" class="is-active"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-download"></use></svg>Importar</button>
+                    <button type="button" data-onclick-command="openModal('modal-caudal-export')"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-upload"></use></svg>Exportar</button>
                 </nav>
                 <div class="import-content">
                     <section>
                         <h3>1. Selecciona el origen</h3>
-                        <div class="source-choice"><b>Archivos</b><p>Importa archivos individuales (md, txt, pdf, docx, etc.).</p><button type="button" class="btn-secondary" data-onclick-command="runCaudalImport('files')">Elegir...</button></div>
-                        <div class="source-choice"><b>Carpeta</b><p>Importa todos los archivos de una carpeta.</p><button type="button" class="btn-secondary" data-onclick-command="runCaudalImport('folder')">Elegir...</button></div>
-                        <div class="source-choice"><b>SharePoint sincronizado</b><p>Importa desde una biblioteca o carpeta de SharePoint.</p><button type="button" class="btn-secondary" data-onclick-command="runCaudalImport('sync')">Elegir...</button></div>
+                        <div class="source-choice"><b>Archivos</b><p>Importa archivos individuales (md, txt, pdf, docx, etc.).</p><button type="button" class="btn-secondary" data-onclick-command="runCaudalImport('files')"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-folder-search"></use></svg>Elegir...</button></div>
+                        <div class="source-choice"><b>Carpeta</b><p>Importa todos los archivos de una carpeta.</p><button type="button" class="btn-secondary" data-onclick-command="runCaudalImport('folder')"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-folder-search"></use></svg>Elegir...</button></div>
+                        <div class="source-choice"><b>SharePoint sincronizado</b><p>Importa desde una biblioteca o carpeta de SharePoint.</p><button type="button" class="btn-secondary" data-onclick-command="runCaudalImport('sync')"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-folder-search"></use></svg>Elegir...</button></div>
                     </section>
                     <section>
                         <h3>2. Destino</h3>
@@ -999,9 +1274,9 @@ origen: {{origen}}
                 <div id="caudal-import-status" role="status"></div>
             </div>
             <div class="modal-footer import-footer">
-                <button type="button" class="btn-secondary" data-onclick-command="closeModal('modal-caudal-import')">Cancelar</button>
-                <button type="button" class="btn-secondary" data-onclick-command="closeModal('modal-caudal-import')">Atrás</button>
-                <button type="button" class="btn-primary" data-onclick-command="closeModal('modal-caudal-import')">Continuar</button>
+                <button type="button" class="btn-secondary" data-onclick-command="closeModal('modal-caudal-import')"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-close"></use></svg>Cancelar</button>
+                <button type="button" class="btn-secondary" data-onclick-command="closeModal('modal-caudal-import')"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-back"></use></svg>Atrás</button>
+                <button type="button" class="btn-primary" data-onclick-command="closeModal('modal-caudal-import')"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-chevron-right"></use></svg>Continuar</button>
             </div>
         </div>
     </div>
@@ -1023,8 +1298,8 @@ origen: {{origen}}
                     <option value="docx">Word</option>
                 </select>
                 <div class="toolbar-group">
-                    <button type="button" class="btn-primary" data-onclick-command="runCaudalExport()">Exportar</button>
-                    <button type="button" class="btn-secondary" data-onclick-command="downloadPdfFile()">Imprimir PDF</button>
+                    <button type="button" class="btn-primary" data-onclick-command="runCaudalExport()"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-upload"></use></svg>Exportar</button>
+                    <button type="button" class="btn-secondary" data-onclick-command="downloadPdfFile()"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-printer"></use></svg>Imprimir PDF</button>
                 </div>
                 <div id="caudal-export-status" role="status"></div>
             </div>
@@ -1037,7 +1312,7 @@ origen: {{origen}}
             <div class="modal-header">
                 <div class="modal-title" id="modal-health-title">Estado del sistema</div>
                 <div>
-                    <button class="btn-small" id="health-refresh" data-onclick-command="refreshHealth()">Actualizar</button>
+                    <button class="btn-small" id="health-refresh" data-onclick-command="refreshHealth()"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-refresh-cw"></use></svg>Actualizar</button>
                     <button type="button" class="close-btn" data-onclick-command="closeModal('modal-health')" aria-label="Cerrar estado del sistema"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-close"></use></svg></button>
                 </div>
             </div>
@@ -1063,8 +1338,8 @@ origen: {{origen}}
                 <div id="onboarding-collisions" class="is-hidden" role="alert"></div>
             </div>
             <div class="modal-footer" id="onboarding-actions" hidden>
-                <button class="btn-primary" id="onboarding-create-demo" data-onclick-command="createDemoVault()">Crear ejemplo</button>
-                <button class="btn-secondary" id="onboarding-dismiss" data-onclick-command="dismissOnboarding()">Ahora no</button>
+                <button class="btn-primary" id="onboarding-create-demo" data-onclick-command="createDemoVault()"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-sparkles"></use></svg>Crear ejemplo</button>
+                <button class="btn-secondary" id="onboarding-dismiss" data-onclick-command="dismissOnboarding()"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-close"></use></svg>Ahora no</button>
             </div>
         </div>
     </section>
@@ -1080,30 +1355,30 @@ origen: {{origen}}
                 <div class="console-layout-052">
                     <h4 class="console-layout-053">1. Selecciona un tema</h4>
                     <p class="console-layout-054">Cada tema mantiene sus notas separadas. Elige uno existente o crea uno nuevo.</p>
-                    <button class="btn-text help-info-button" data-onclick-command="openHelpInfo('1')">+ Info</button>
+                    <button class="btn-text help-info-button" data-onclick-command="openHelpInfo('1')"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-plus"></use></svg>Info</button>
                 </div>
                 <div class="console-layout-052">
                     <h4 class="console-layout-053">2. Añade tus fuentes</h4>
                     <p class="console-layout-054">Conecta carpetas o añade documentos, audios e imágenes para incorporarlos a Fuente.</p>
-                    <button class="btn-text help-info-button" data-onclick-command="openHelpInfo('2')">+ Info</button>
+                    <button class="btn-text help-info-button" data-onclick-command="openHelpInfo('2')"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-plus"></use></svg>Info</button>
                 </div>
                 <div class="console-layout-052">
                     <h4 class="console-layout-053">3. Procesa el material</h4>
                     <p class="console-layout-054">Pulsa «Procesar material» para convertir las fuentes en notas organizadas y relacionadas.</p>
-                    <button class="btn-text help-info-button" data-onclick-command="openHelpInfo('3')">+ Info</button>
+                    <button class="btn-text help-info-button" data-onclick-command="openHelpInfo('3')"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-plus"></use></svg>Info</button>
                 </div>
                 <div class="console-layout-052">
                     <h4 class="console-layout-053">4. Consulta tus notas</h4>
                     <p class="console-layout-054">Abre «Notas» para leer, buscar o consultar una nota concreta o el conjunto del tema.</p>
-                    <button class="btn-text help-info-button" data-onclick-command="openHelpInfo('4')">+ Info</button>
+                    <button class="btn-text help-info-button" data-onclick-command="openHelpInfo('4')"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-plus"></use></svg>Info</button>
                 </div>
                 <div class="console-layout-052">
                     <h4 class="console-layout-053">5. Revisa y comparte</h4>
                     <p class="console-layout-054">Cuando una nota esté lista, revisa su contenido y compártela si procede.</p>
-                    <button class="btn-text help-info-button" data-onclick-command="openHelpInfo('5')">+ Info</button>
+                    <button class="btn-text help-info-button" data-onclick-command="openHelpInfo('5')"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-plus"></use></svg>Info</button>
                 </div>
                 <div class="console-layout-052">
-                    <button class="btn-secondary" data-onclick-command="openOnboardingFromHelp()">Abrir ejemplo</button>
+                    <button class="btn-secondary" data-onclick-command="openOnboardingFromHelp()"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-book-open"></use></svg>Abrir ejemplo</button>
                 </div>
             </div>
             <div class="modal-footer">
@@ -1124,7 +1399,90 @@ origen: {{origen}}
     </div>
 
     <script nonce="fuente-console">
-        if (!window.pywebview && window.location.protocol !== 'file:') {
+        // ponytail: browser QA uses ?preview=mock (fixture API). Real vault stays PyWebView-only.
+        (function installBrowserApi() {
+            if (window.pywebview) return;
+            var previewMock = new URLSearchParams(window.location.search).get('preview') === 'mock';
+            if (previewMock) {
+                window.__fuenteBrowserBridge = true;
+                window.pywebview = {
+                    api: new Proxy({}, {
+                        get: function(_target, methodName) {
+                            return function() {
+                                if (methodName === 'get_initial_state') {
+                                    return Promise.resolve({
+                                        vault_path: 'Vista previa demo',
+                                        offline_mode: true,
+                                        onboarding: { visible: false },
+                                        stats: {
+                                            input: 134,
+                                            processed: 98,
+                                            quarantine: 3,
+                                            notes: 86,
+                                            ram: 'local',
+                                            line: 'Vista previa · datos de ejemplo'
+                                        }
+                                    });
+                                }
+                                if (methodName === 'get_flow_state') {
+                                    return Promise.resolve({
+                                        seals: { pending_review: 12, in_review: 7, approved: 86 },
+                                        quarantine: 3,
+                                        note_types: { resumen: 20, propiedades: 18, contexto: 22, concepto: 26 },
+                                        steps: {
+                                            s1: { count: 134 },
+                                            s2: { count: 98 },
+                                            s3: { count: 76 },
+                                            s4: { count: 58 },
+                                            s5: { count: 42 }
+                                        },
+                                        stats: {
+                                            input: 134,
+                                            processed: 98,
+                                            quarantine: 3,
+                                            notes: 86,
+                                            ram: 'local',
+                                            line: 'Vista previa · datos de ejemplo'
+                                        }
+                                    });
+                                }
+                                if (methodName === 'get_health') {
+                                    return Promise.resolve({
+                                        ollama: { available: true, label: 'Lista' },
+                                        obsidian: { available: true, label: 'Detectada' },
+                                        offline_mode: true
+                                    });
+                                }
+                                if (methodName === 'get_notes_list' || methodName === 'get_pending_notes') {
+                                    return Promise.resolve([]);
+                                }
+                                if (methodName === 'get_quarantine') {
+                                    return Promise.resolve({ items: [] });
+                                }
+                                if (methodName === 'get_jobs') {
+                                    return Promise.resolve({ jobs: [], next_cursor: null });
+                                }
+                                if (methodName === 'process_workspace_chat') {
+                                    var documentId = String(arguments[0] || '');
+                                    var message = String(arguments[1] || '').trim();
+                                    var note = typeof LOCAL_MOCK_NOTES !== 'undefined'
+                                        ? LOCAL_MOCK_NOTES.find(function(item, index) {
+                                            return documentId === 'mock-' + index || documentId === item.path;
+                                        })
+                                        : null;
+                                    return Promise.resolve({
+                                        text: 'Respuesta demo sobre "' + (note ? note.title : 'la nota actual') + '". '
+                                            + 'He recibido: «' + message + '». En la aplicación Python, esta consulta se responde con la IA local.'
+                                    });
+                                }
+                                return Promise.resolve({ ok: true });
+                            };
+                        }
+                    })
+                };
+                return;
+            }
+            if (window.location.protocol === 'file:') return;
             window.__fuenteBrowserBridge = true;
             window.pywebview = {
                 api: new Proxy({}, {
@@ -1144,7 +1502,7 @@ origen: {{origen}}
                     }
                 })
             };
-        }
+        })();
 
         const HELP_DETAILS = {
             '1': {
@@ -1222,8 +1580,10 @@ origen: {{origen}}
             if (command.startsWith('executeExportFormat(')) return executeExportFormat(args[0]);
             if (command.startsWith('changeActiveTheme(')) return changeActiveTheme(element.value);
             if (command === 'handleThemeTriggerKeydown(event)') return handleThemeTriggerKeydown(event);
-            if (command === 'togglePathMode(this)') return togglePathMode(element);
             if (command === 'openSourceFeedFromCounter(this)') return openSourceFeedFromCounter(element);
+            if (command === 'toggleSourceLibrarySection(this)') return toggleSourceLibrarySection(element);
+            if (command === 'selectSourceLibraryFilter(this)') return selectSourceLibraryFilter(element);
+            if (command === 'selectCaudalStage(this)') return selectCaudalStage(element);
             if (command.startsWith('setCaudalQueueFilter(')) return setCaudalQueueFilter(args[0]);
             if (command.startsWith('runCaudalImport(')) return runCaudalImport(args[0]);
             if (command === 'runCaudalExport()') return runCaudalExport();
@@ -1234,6 +1594,7 @@ origen: {{origen}}
                 'toggleThemeMenu()': toggleThemeMenu,
                 'toggleVisualStyle()': toggleVisualStyle,
                 'clearLogView()': clearLogView,
+                'toggleSourceLibrary()': toggleSourceLibrary,
                 'toggleReaderLibrary()': toggleReaderLibrary,
                 'toggleReaderContext()': toggleReaderContext,
                 'filterReaderNotes()': filterReaderNotes,
@@ -1246,6 +1607,7 @@ origen: {{origen}}
                 'toggleCaudalImportMenu()': toggleCaudalImportMenu,
                 'printCurrentNote()': printCurrentNote,
                 'openCurrentNoteFile()': openCurrentNoteFile,
+                'downloadPdfFile()': downloadPdfFile,
                 'openObsidianGraph()': openObsidianGraph,
                 'submitCreateThemeModal()': submitCreateThemeModal,
                 'browseVaultFolder()': browseVaultFolder,
@@ -1356,16 +1718,6 @@ document.addEventListener('keydown', handleShellKeydown);
             }
         }
 
-        function togglePathMode(btn) {
-            if (btn.innerText.includes('Relativas')) {
-                btn.innerText = 'Rutas: Completas';
-                log('Modo de visualización de rutas cambiado a: Rutas Completas');
-            } else {
-                btn.innerText = 'Rutas: Relativas';
-                log('Modo de visualización de rutas cambiado a: Rutas Relativas');
-            }
-        }
-
         function clearLogView() {
             document.getElementById('log-console').replaceChildren();
         }
@@ -1464,12 +1816,15 @@ document.addEventListener('keydown', handleShellKeydown);
             const welcome = document.getElementById('chat-welcome-text');
             const footer = document.getElementById('chat-privacy-footer');
             const isLocalOnly = offlineMode.is_local_only !== false;
+            const modeLabel = offlineMode.label || (isLocalOnly ? 'Solo local' : 'IA remota habilitada');
             if (badge) {
-                badge.textContent = offlineMode.label || (isLocalOnly ? 'Solo local' : 'IA remota habilitada');
+                badge.textContent = modeLabel;
                 badge.title = offlineMode.detail || '';
                 badge.classList.toggle('local-only', isLocalOnly);
                 badge.classList.toggle('external-enabled', !isLocalOnly);
             }
+            const dashMode = document.getElementById('dash-config-mode');
+            if (dashMode) dashMode.textContent = modeLabel;
             if (detail && offlineMode.detail) {
                 detail.textContent = offlineMode.detail;
             }
@@ -1822,6 +2177,10 @@ document.addEventListener('keydown', handleShellKeydown);
         function isExplicitPreviewMode() {
             const params = new URLSearchParams(window.location.search);
             return params.get('preview') === 'mock';
+        }
+
+        function isSourcePreviewMode() {
+            return isExplicitPreviewMode() || window.location.protocol === 'file:';
         }
 
         function nativeBackendUnavailableMessage() {
@@ -2400,6 +2759,12 @@ document.addEventListener('keydown', handleShellKeydown);
             const ollamaStatus = document.getElementById('status-ollama');
             if (ollamaStatus) ollamaStatus.textContent = snapshot.ollama && snapshot.ollama.status
                 ? String(snapshot.ollama.status) : 'unknown';
+            const dashOllama = document.getElementById('dash-tool-ollama');
+            if (dashOllama) dashOllama.textContent = ollamaStatus ? ollamaStatus.textContent : 'No medido';
+            const dashObsidian = document.getElementById('dash-tool-obsidian');
+            if (dashObsidian && snapshot.vault) {
+                dashObsidian.textContent = snapshot.vault.status || snapshot.vault.label || 'Medido';
+            }
             const policy = snapshot.policy || {};
             const profile = document.getElementById('setting-resource-profile');
             const audio = document.getElementById('setting-audio-mode');
@@ -4020,11 +4385,13 @@ document.addEventListener('keydown', handleShellKeydown);
             const styleToggle = document.getElementById('style-toggle');
             if (styleToggle) {
                 const nextStyle = activeStyle === 'nord' ? 'gruvbox' : 'nord';
-                const styleLabel = document.getElementById('style-toggle-label');
                 const nextStyleLabel = nextStyle === 'gruvbox' ? 'Gruvbox' : 'Nord';
-                if (styleLabel) styleLabel.textContent = nextStyleLabel;
-                styleToggle.setAttribute('aria-label', 'Activar estilo visual ' + nextStyleLabel);
+                const styleLabel = document.getElementById('style-toggle-label');
+                if (styleLabel) styleLabel.textContent = 'Aspecto';
+                styleToggle.setAttribute('aria-label', 'Cambiar aspecto a ' + nextStyleLabel);
             }
+            const dashStyle = document.getElementById('dash-config-style');
+            if (dashStyle) dashStyle.textContent = activeStyle === 'gruvbox' ? 'Gruvbox' : 'Nord';
             if (persist !== false) persistUiState('main-window', 'visual_style', activeStyle);
             return activeStyle;
         }
@@ -4368,7 +4735,7 @@ document.addEventListener('keydown', handleShellKeydown);
         }
 
         function switchReaderView(view) {
-            switchSourceView(view === 'list' ? 'list' : 'list');
+            switchSourceView(view || 'list');
         }
 
         const SOURCE_VIEW_IDS = ['grid', 'list', 'individual', 'feed', 'filtered', 'hierarchy', 'relations'];
@@ -4380,6 +4747,8 @@ document.addEventListener('keydown', handleShellKeydown);
         let sourceFeedLoading = false;
         let sourceSearchMode = 'content';
         let sourceFeedObserver = null;
+        let sourceLibraryFilter = {kind: '', value: ''};
+        let sourceSearchQuery = '';
 
         function switchSourceView(view) {
             if (!SOURCE_VIEW_IDS.includes(view)) view = 'list';
@@ -4400,7 +4769,7 @@ document.addEventListener('keydown', handleShellKeydown);
             Object.keys(views).forEach(function(key) {
                 const pane = views[key];
                 if (!pane) return;
-                const active = key === view || (view === 'hierarchy' && key === 'list');
+                const active = (view === 'individual' ? key === 'list' : key === view) || (view === 'hierarchy' && key === 'list');
                 pane.hidden = !active;
                 pane.classList.toggle('is-hidden', !active);
             });
@@ -4464,6 +4833,39 @@ document.addEventListener('keydown', handleShellKeydown);
             if (sourceView === 'grid') renderSourceGrid();
         }
 
+        function getPreviewSourceItems() {
+            const seals = ['approved', 'pending_review', 'in_review'];
+            const types = ['concepto', 'referencia', 'proyecto', 'decision'];
+            const projects = ['Arquitectura', 'Lanzamiento', 'Operaciones'];
+            return (LOCAL_MOCK_NOTES || [])
+                .map(function(note, index) {
+                    return {
+                        note: note,
+                        index: index,
+                        seal: note.seal || seals[index % seals.length],
+                        note_type: note.note_type || types[index % types.length],
+                        project: note.project || projects[index % projects.length],
+                        theme: note.theme || 'General'
+                    };
+                })
+                .filter(function(item) {
+                    const libraryMatch = !sourceLibraryFilter.value
+                        || item[sourceLibraryFilter.kind] === sourceLibraryFilter.value;
+                    const searchable = [item.note.title, item.note.path, item.project, item.note_type, item.theme]
+                        .map(normalizeReaderSearchText).join(' ');
+                    return libraryMatch
+                        && (!sourceSearchQuery || searchable.includes(sourceSearchQuery))
+                        && (!sourceFilters.seal || item.seal === sourceFilters.seal)
+                        && (!sourceFilters.note_type || item.note_type === sourceFilters.note_type)
+                        && (!sourceFilters.theme || item.theme === sourceFilters.theme);
+                })
+                .sort(function(left, right) {
+                    return sourceOrder === 'title'
+                        ? String(left.note.title || '').localeCompare(String(right.note.title || ''), 'es')
+                        : left.index - right.index;
+                });
+        }
+
         function clearSourceFilters() {
             document.querySelectorAll('#source-filter-drawer input[type="checkbox"]').forEach(function(input) {
                 input.checked = false;
@@ -4483,9 +4885,13 @@ document.addEventListener('keydown', handleShellKeydown);
         function cycleSourceOrder() {
             sourceOrder = sourceOrder === 'date' ? 'title' : 'date';
             persistUiState('source', 'sort', {order: sourceOrder});
-            if (sourceView === 'feed') resetSourceFeed();
-            if (sourceView === 'grid') renderSourceGrid();
-            loadReaderNotes();
+            if (sourceView === 'feed') return resetSourceFeed();
+            if (sourceView === 'grid') return renderSourceGrid();
+            if (sourceView === 'filtered') return renderSourceFilteredGrid();
+            if (sourceView === 'list') {
+                setReaderSort({field: 'title', direction: sourceOrder === 'title' ? 'asc' : 'desc'});
+                return renderNoteList(readerNotes);
+            }
         }
 
         function toggleCaudalImportMenu() {
@@ -4495,35 +4901,6 @@ document.addEventListener('keydown', handleShellKeydown);
                 return;
             }
             menu.hidden = !menu.hidden;
-        }
-
-        function fillSourceRecent(notes) {
-            const track = document.getElementById('source-recent-track');
-            if (!track) return;
-            track.replaceChildren();
-            (notes || []).slice(0, 3).forEach(function(item) {
-                const card = document.createElement('article');
-                card.className = 'note-card';
-                const seal = document.createElement('span');
-                seal.className = 'seal ' + sealClassName(item.seal || item.status);
-                card.appendChild(seal);
-                const title = document.createElement('h3');
-                title.textContent = String(item.title || 'Nota').replace(/[\u2013\u2014]/g, '-');
-                card.appendChild(title);
-                const meta = document.createElement('div');
-                meta.className = 'meta';
-                const date = document.createElement('span');
-                date.textContent = item.updated_at || item.date || '';
-                const author = document.createElement('span');
-                author.textContent = item.author || item.theme || '';
-                meta.appendChild(date);
-                meta.appendChild(author);
-                card.appendChild(meta);
-                const excerpt = document.createElement('p');
-                excerpt.textContent = item.excerpt || item.issue || '';
-                card.appendChild(excerpt);
-                track.appendChild(card);
-            });
         }
 
         function closeCaptureOverlays() {
@@ -4540,8 +4917,6 @@ document.addEventListener('keydown', handleShellKeydown);
             if (importMenu) importMenu.hidden = true;
             const aux = document.getElementById('aux-search-relations');
             if (aux) aux.hidden = true;
-            const disclosure = document.querySelector('.home-disclosure');
-            if (disclosure) disclosure.open = false;
             document.querySelectorAll('[data-keyboard-focus="true"]').forEach(function(element) {
                 element.removeAttribute('data-keyboard-focus');
             });
@@ -4556,20 +4931,124 @@ document.addEventListener('keydown', handleShellKeydown);
             if (!body || !fixture) return;
             body.replaceChildren();
             body.appendChild(fixture.content.cloneNode(true));
+            bindCaudalQueueRows();
+            const selected = body.querySelector('tr.selected[data-file]');
+            if (selected && !caudalSelectedJobId) caudalSelectedJobId = selected.dataset.file;
+        }
+
+        function selectCaudalPreviewRow(row) {
+            if (!row || !row.dataset.file) return;
+            const body = document.getElementById('caudal-queue-body');
+            if (body) body.querySelectorAll('tr[data-file]').forEach(function(item) {
+                item.classList.toggle('selected', item === row);
+            });
+            caudalSelectedJobId = row.dataset.file;
+            const file = document.getElementById('caudal-detail-file');
+            if (file) file.textContent = row.dataset.file;
+            const statusNode = document.getElementById('caudal-detail-status');
+            if (statusNode) {
+                const status = row.dataset.queueStatus || 'waiting';
+                const labels = {waiting: ['red', 'Pendiente'], active: ['orange', 'En revisión'], completed: ['green', 'Aprobada'], quarantined: ['slate', 'Cuarentena']};
+                const value = labels[status] || labels.waiting;
+                const statusCell = document.createElement('span');
+                statusCell.className = 'status-cell';
+                const dot = document.createElement('span');
+                dot.className = 'dot ' + value[0];
+                statusCell.appendChild(dot);
+                statusCell.appendChild(document.createTextNode(value[1]));
+                statusNode.replaceChildren(statusCell);
+            }
+            openDrawer('flow-detail-drawer');
+        }
+
+        function bindCaudalQueueRows() {
+            document.querySelectorAll('#caudal-queue-body tr[data-file]').forEach(function(row) {
+                if (row.dataset.caudalBound === 'true') return;
+                row.dataset.caudalBound = 'true';
+                row.tabIndex = 0;
+                row.addEventListener('click', function() { selectCaudalPreviewRow(row); });
+                row.addEventListener('keydown', function(event) {
+                    if (event.key !== 'Enter' && event.key !== ' ') return;
+                    event.preventDefault();
+                    selectCaudalPreviewRow(row);
+                });
+            });
+        }
+
+        function isCaudalPreviewMode() {
+            return isExplicitPreviewMode() || window.location.protocol === 'file:' || document.body.getAttribute('data-capture-scenario');
+        }
+
+        function renderCaudalPreviewQueue(filter) {
+            const body = document.getElementById('caudal-queue-body');
+            const fixture = document.getElementById('caudal-queue-fixture');
+            if (!body || !fixture) return;
+            const rows = Array.from(fixture.content.querySelectorAll('tr[data-file]')).filter(function(row) {
+                return row.dataset.queueStatus === filter;
+            });
+            body.replaceChildren();
+            rows.forEach(function(row) { body.appendChild(row.cloneNode(true)); });
+            if (!rows.length) {
+                const empty = document.createElement('tr');
+                const cell = document.createElement('td');
+                cell.colSpan = 3;
+                cell.textContent = 'No hay trabajos en esta vista.';
+                empty.appendChild(cell);
+                body.appendChild(empty);
+            }
+            bindCaudalQueueRows();
+            const selected = Array.from(body.querySelectorAll('tr[data-file]')).find(function(row) {
+                return row.dataset.file === caudalSelectedJobId;
+            }) || body.querySelector('tr[data-file]');
+            if (selected) selectCaudalPreviewRow(selected);
+        }
+
+        function previewImportFiles(paths) {
+            const fixture = document.getElementById('caudal-queue-fixture');
+            if (!fixture) return;
+            let imported = 0;
+            Array.from(new Set(paths || [])).forEach(function(path) {
+                const name = String(path || '').split('/').pop();
+                if (!name || fixture.content.querySelector('tr[data-file="' + name.replace(/"/g, '') + '"]')) return;
+                const row = document.createElement('tr');
+                row.dataset.file = name;
+                row.dataset.queueStatus = 'waiting';
+                [name, 'Preparado', '27/08/2026 12:00'].forEach(function(value, index) {
+                    const cell = document.createElement('td');
+                    cell.textContent = value;
+                    if (index === 2) cell.className = 'num';
+                    row.appendChild(cell);
+                });
+                fixture.content.appendChild(row);
+                imported += 1;
+            });
+            renderCaudalPreviewQueue(caudalQueueFilter);
+            const status = document.getElementById('caudal-import-status');
+            if (status) status.textContent = 'Importados: ' + String(imported) + ' archivo(s) de prueba.';
         }
 
         function seedMockupIdentity() {
             restoreCaudalQueueFixture();
-            fillSourceRecent([
-                {title: 'Índice de contenido con ChromaDB', updated_at: '9 abr 2024', author: 'Javier Ruiz', excerpt: 'Cómo indexamos el contenido de las notas para permitir búsqueda rápida y relevancia.', seal: 'approved'},
-                {title: 'Principios de diseño', updated_at: '7 abr 2024', author: 'María Ortega', excerpt: 'Notas sobre los principios que guían las decisiones de diseño del sistema Fuente y Caudal.', seal: 'pending_review'},
-                {title: 'Flujo de consulta local', updated_at: '4 abr 2024', author: 'Javier Ruiz', excerpt: 'Descripción del flujo completo desde la pregunta del usuario hasta la respuesta consultada.', seal: 'in_review'}
-            ]);
-            const actions = document.getElementById('fuente-reader-actions');
-            if (actions) {
-                actions.hidden = false;
-                actions.setAttribute('aria-hidden', 'false');
-            }
+            updateDashboardStats({
+                input: 134,
+                processed: 98,
+                quarantine: 3,
+                notes: 86,
+                ram: 'local',
+                folders: 4
+            });
+            const setDash = function(id, value) {
+                const node = document.getElementById(id);
+                if (node) node.textContent = value;
+            };
+            setDash('dash-tool-ollama', 'Lista');
+            setDash('dash-tool-obsidian', 'Detectada');
+            setDash('dash-tool-anythingllm', 'Loopback');
+            setDash('dash-tool-chroma', 'Local');
+            setDash('dash-config-mode', 'Solo local');
+            setDash('dash-config-vault', 'Vista previa demo');
+            setDash('status-ollama', 'Lista');
+            setDash('status-obsidian', 'Conectado');
             const counts = {1: '134', 2: '98', 3: '76', 4: '58', 5: '42'};
             Object.keys(counts).forEach(function(step) {
                 const badge = document.getElementById('badge-step' + step);
@@ -4599,12 +5078,6 @@ document.addEventListener('keydown', handleShellKeydown);
             const preview = document.getElementById('template-preview-body');
             if (preview && !preview.querySelector('h3') && !preview.textContent.trim()) {
                 preview.textContent = 'Objetivo\n{objetivo}\n\nAgenda\n{agenda}';
-            }
-            const feed = document.getElementById('source-feed');
-            if (feed && document.body.getAttribute('data-capture-scenario') === 'caudal-feed-link' && !feed.querySelector('.note-card')) {
-                document.querySelectorAll('#source-recent-track .note-card').forEach(function(card) {
-                    feed.appendChild(card.cloneNode(true));
-                });
             }
             const searchResults = document.getElementById('source-search-results');
             if (searchResults && !searchResults.childElementCount) {
@@ -4636,11 +5109,8 @@ document.addEventListener('keydown', handleShellKeydown);
                 if (pathInput && !pathInput.value) pathInput.value = '/Users/emiliosevillaortego/Documents/Fuente_Vault';
             } else if (name === 'home-max') {
                 switchWorkspace('home');
-                const disclosure = document.querySelector('.home-disclosure');
-                if (disclosure) disclosure.open = true;
             } else if (name === 'home-1440') {
                 switchWorkspace('home');
-                moveCarousel('home-product-track', 'next');
             } else if (name === 'keyboard-focus') {
                 switchWorkspace('home');
                 const homeButton = document.querySelector('#primary-navigation .workspace-trigger');
@@ -4758,7 +5228,38 @@ document.addEventListener('keydown', handleShellKeydown);
         function runSourceSearch() {
             const query = String(document.getElementById('source-search-input')?.value || '').trim();
             const results = document.getElementById('source-search-results');
-            if (!query || !window.pywebview || !window.pywebview.api) return;
+            if (!query) {
+                if (results) results.textContent = 'Escribe una palabra o frase para buscar.';
+                return;
+            }
+            if (isSourcePreviewMode()) {
+                sourceSearchQuery = normalizeReaderSearchText(query);
+                const matches = getPreviewSourceItems();
+                if (results) {
+                    results.replaceChildren();
+                    if (!matches.length) {
+                        results.textContent = 'No hay notas que coincidan con «' + query + '».';
+                    } else {
+                        matches.forEach(function(item) {
+                            const row = document.createElement('button');
+                            row.type = 'button';
+                            row.className = 'source-search-result';
+                            row.textContent = item.note.title;
+                            row.addEventListener('click', function() {
+                                switchSourceView('individual');
+                                navigateReaderNote('mock-' + item.index);
+                                closeDrawer('source-search-drawer');
+                            });
+                            results.appendChild(row);
+                        });
+                    }
+                }
+                return;
+            }
+            if (!window.pywebview || !window.pywebview.api) {
+                if (results) results.textContent = 'Fuente no está conectada.';
+                return;
+            }
             window.pywebview.api.search_source(sourceSearchMode, query, sourceFilters).then(function(page) {
                 if (!results) return;
                 results.replaceChildren();
@@ -4823,7 +5324,18 @@ document.addEventListener('keydown', handleShellKeydown);
             const excerpt = document.createElement('p');
             excerpt.textContent = item.excerpt || '';
             card.appendChild(excerpt);
-            card.addEventListener('click', function() { navigateReaderNote(item.document_id); });
+            card.setAttribute('role', 'button');
+            card.tabIndex = 0;
+            card.addEventListener('click', function() {
+                switchSourceView('individual');
+                navigateReaderNote(item.document_id);
+            });
+            card.addEventListener('keydown', function(event) {
+                if (event.key !== 'Enter' && event.key !== ' ') return;
+                event.preventDefault();
+                switchSourceView('individual');
+                navigateReaderNote(item.document_id);
+            });
             return card;
         }
 
@@ -4848,8 +5360,23 @@ document.addEventListener('keydown', handleShellKeydown);
         function resetSourceFeed() {
             if (document.body.getAttribute('data-capture-scenario')) return;
             const feed = document.getElementById('source-feed');
-            if (feed) feed.replaceChildren();
+            if (!feed) return;
+            feed.replaceChildren();
             sourceFeedCursor = null;
+            if (isSourcePreviewMode()) {
+                getPreviewSourceItems().forEach(function(item) {
+                    const note = item.note;
+                    feed.appendChild(renderSourceCard({
+                        document_id: 'mock-' + item.index,
+                        title: note.title,
+                        updated_at: 'Vista previa',
+                        author: 'Fuente',
+                        excerpt: note.path,
+                        seal: item.seal
+                    }));
+                });
+                return;
+            }
             loadSourceFeedPage();
             const sentinel = document.getElementById('source-feed-sentinel');
             if (!sentinel || sourceFeedObserver) return;
@@ -4861,7 +5388,23 @@ document.addEventListener('keydown', handleShellKeydown);
 
         function renderSourceGrid() {
             const grid = document.getElementById('source-grid');
-            if (!grid || !window.pywebview || !window.pywebview.api) return;
+            if (!grid) return;
+            if (isSourcePreviewMode()) {
+                grid.replaceChildren();
+                getPreviewSourceItems().forEach(function(item) {
+                    const note = item.note;
+                    grid.appendChild(renderSourceCard({
+                        document_id: 'mock-' + item.index,
+                        title: note.title,
+                        updated_at: 'Vista previa',
+                        author: 'Fuente',
+                        excerpt: note.path,
+                        seal: item.seal
+                    }));
+                });
+                return;
+            }
+            if (!window.pywebview || !window.pywebview.api) return;
             window.pywebview.api.list_readonly_notes('', 'all_notes').then(function(result) {
                 grid.replaceChildren();
                 (result.items || []).forEach(function(item) { grid.appendChild(renderSourceCard(item)); });
@@ -4870,7 +5413,22 @@ document.addEventListener('keydown', handleShellKeydown);
 
         function renderSourceFilteredGrid() {
             const grid = document.getElementById('source-filtered-grid');
-            if (!grid || !window.pywebview || !window.pywebview.api) return;
+            if (!grid) return;
+            if (isSourcePreviewMode()) {
+                grid.replaceChildren();
+                getPreviewSourceItems().forEach(function(item) {
+                    const note = item.note;
+                    grid.appendChild(renderSourceCard({
+                        document_id: 'mock-' + item.index,
+                        title: note.title,
+                        updated_at: 'Vista previa',
+                        author: 'Fuente',
+                        excerpt: note.path,
+                        seal: item.seal
+                    }));
+                });
+                return;
+            }
             window.pywebview.api.list_feed(null, SOURCE_FEED_BATCH, sourceFilters, sourceOrder).then(function(page) {
                 grid.replaceChildren();
                 (page.items || []).forEach(function(item) { grid.appendChild(renderSourceCard(item)); });
@@ -4918,10 +5476,23 @@ document.addEventListener('keydown', handleShellKeydown);
         document.getElementById('source-chat-form')?.addEventListener('submit', function(event) {
             event.preventDefault();
             const message = String(document.getElementById('source-chat-input')?.value || '').trim();
-            if (!message || !currentSelectedDocumentId || !window.pywebview || !window.pywebview.api) return;
+            const answer = document.getElementById('source-chat-answer');
+            if (!message) {
+                if (answer) answer.textContent = 'Escribe una pregunta para enviar.';
+                return;
+            }
+            if (!currentSelectedDocumentId) {
+                if (answer) answer.textContent = 'Selecciona una nota antes de consultarla.';
+                return;
+            }
+            if (!window.pywebview || !window.pywebview.api) {
+                if (answer) answer.textContent = 'La consulta local necesita la conexión de Fuente.';
+                return;
+            }
             window.pywebview.api.process_workspace_chat(currentSelectedDocumentId, message).then(function(reply) {
-                const answer = document.getElementById('source-chat-answer');
                 if (answer) answer.textContent = (reply && reply.text) || (reply && reply.message) || '';
+            }).catch(function(error) {
+                if (answer) answer.textContent = 'No se pudo consultar la nota: ' + String(error || 'error desconocido');
             });
         });
 
@@ -5229,6 +5800,42 @@ document.addEventListener('keydown', handleShellKeydown);
             loadNoteContent(documentId, { skipHistory: true });
         }
 
+        function toggleSourceLibrary() {
+            const workspace = document.getElementById('workspace-source');
+            const button = document.getElementById('btn-source-library');
+            if (!workspace || !button) return;
+            const collapsed = workspace.classList.toggle('is-library-collapsed');
+            button.setAttribute('aria-expanded', String(!collapsed));
+            button.setAttribute('aria-label', collapsed ? 'Expandir biblioteca' : 'Colapsar biblioteca');
+        }
+
+        function toggleSourceLibrarySection(button) {
+            const tree = document.getElementById(button && button.getAttribute('aria-controls'));
+            if (!button || !tree) return;
+            const expanded = button.getAttribute('aria-expanded') !== 'false';
+            tree.hidden = expanded;
+            button.setAttribute('aria-expanded', String(!expanded));
+            const chevron = button.querySelector('.chev');
+            if (chevron) chevron.textContent = expanded ? '›' : '⌄';
+        }
+
+        function selectSourceLibraryFilter(button) {
+            const raw = button && button.dataset.sourceFilter;
+            if (!raw) return;
+            const separator = raw.indexOf(':');
+            const kind = separator === -1 ? raw : raw.slice(0, separator);
+            const value = separator === -1 ? '' : raw.slice(separator + 1);
+            sourceLibraryFilter = {kind: kind, value: value};
+            document.querySelectorAll('.library-all-notes, .library-tree-item-button').forEach(function(item) {
+                item.classList.toggle('is-selected', item === button);
+                item.toggleAttribute('aria-current', item === button);
+            });
+            if (!isSourcePreviewMode() && ['theme', 'note_type', 'seal'].includes(kind)) {
+                sourceFilters = {seal: kind === 'seal' ? value : '', note_type: kind === 'note_type' ? value : '', theme: kind === 'theme' ? value : ''};
+            }
+            switchSourceView('grid');
+        }
+
         function toggleReaderLibrary() {
             const workspace = document.getElementById('reader-view-list');
             const button = document.getElementById('btn-reader-library');
@@ -5250,12 +5857,11 @@ document.addEventListener('keydown', handleShellKeydown);
 
         function createNoteActionBar(noteTitle) {
             currentSelectedNoteTitle = noteTitle;
+            const modalTitle = document.getElementById('modal-reader-title');
+            if (modalTitle) modalTitle.textContent = noteTitle || 'Notas';
             const bar = document.createElement('div');
             bar.id = 'note-action-bar';
             bar.classList.add('console-layout-071');
-            const heading = document.createElement('h2');
-            heading.textContent = noteTitle || 'Nota';
-            bar.appendChild(heading);
             const badge = document.createElement('span');
             badge.className = 'source-readonly-badge';
             badge.textContent = 'Solo lectura';
@@ -5313,54 +5919,22 @@ document.addEventListener('keydown', handleShellKeydown);
         }
 
         const LOCAL_MOCK_NOTES = [
-            {
-                title: "Arquitectura General de Fuente",
-                path: "Nota_Arquitectura_Fuente.md",
-            },
-            {
-                title: "Pipeline ETL de Ingesta y Procesamiento",
-                path: "Nota_ETL_Pipeline_Ingesta.md",
-            },
-            {
-                title: "Motor de IA Local y Ollama",
-                path: "Nota_Motor_IA_Local.md",
-            },
-            {
-                title: "Base de Datos Vectorial ChromaDB",
-                path: "Nota_Base_Datos_Vectorial.md",
-            },
-            {
-                title: "Gobernador de RAM y Memoria",
-                path: "Nota_Optimizacion_RAM.md",
-            },
-            {
-                title: "Estética Editorial Papiro y Consola UI",
-                path: "Nota_Formato_Papiro.md",
-            },
-            {
-                title: "Estructuración en Notas Atómicas",
-                path: "Nota_Notas_Atomicas.md",
-            },
-            {
-                title: "Aislamiento y Recuperación de Cuarentena",
-                path: "Nota_Gestor_Cuarentena.md",
-            },
-            {
-                title: "Sincronización Bidireccional Obsidian",
-                path: "Nota_Integracion_Obsidian.md",
-            },
-            {
-                title: "Registros y Gazette Logging",
-                path: "Nota_Telemetria_y_Logs.md",
-            },
-            {
-                title: "Privacidad 100% Offline",
-                path: "Nota_Seguridad_y_Privacidad.md",
-            },
-            {
-                title: "Manual de Uso Avanzado y Atajos",
-                path: "Nota_Manual_Usuario_Avanzado.md",
-            }
+            {title: "Arquitectura General de Fuente", path: "Nota_Arquitectura_Fuente.md", project: "Arquitectura", theme: "Arquitectura", issue: "Fundamentos", note_type: "concepto", seal: "approved"},
+            {title: "Pipeline ETL de Ingesta y Procesamiento", path: "Nota_ETL_Pipeline_Ingesta.md", project: "Operaciones", theme: "Operaciones", issue: "Procesamiento", note_type: "proyecto", seal: "in_review"},
+            {title: "Motor de IA Local y Ollama", path: "Nota_Motor_IA_Local.md", project: "Operaciones", theme: "General", issue: "Consulta local", note_type: "referencia", seal: "in_review"},
+            {title: "Base de Datos Vectorial ChromaDB", path: "Nota_Base_Datos_Vectorial.md", project: "Arquitectura", theme: "Arquitectura", issue: "Búsqueda", note_type: "concepto", seal: "in_review"},
+            {title: "Gobernador de RAM y Memoria", path: "Nota_Optimizacion_RAM.md", project: "Operaciones", theme: "Operaciones", issue: "Rendimiento", note_type: "proyecto", seal: "pending_review"},
+            {title: "Estética Editorial Papiro y Consola UI", path: "Nota_Formato_Papiro.md", project: "Arquitectura", theme: "Arquitectura", issue: "Presentación", note_type: "referencia", seal: "approved"},
+            {title: "Estructuración en Notas Atómicas", path: "Nota_Notas_Atomicas.md", project: "Lanzamiento", theme: "Lanzamiento", issue: "Captura", note_type: "concepto", seal: "pending_review"},
+            {title: "Aislamiento y Recuperación de Cuarentena", path: "Nota_Gestor_Cuarentena.md", project: "Operaciones", theme: "Operaciones", issue: "Recuperación", note_type: "proyecto", seal: "in_review"},
+            {title: "Sincronización Bidireccional Obsidian", path: "Nota_Integracion_Obsidian.md", project: "Lanzamiento", theme: "Lanzamiento", issue: "Integraciones", note_type: "referencia", seal: "approved"},
+            {title: "Registros y Gazette Logging", path: "Nota_Telemetria_y_Logs.md", project: "Operaciones", theme: "General", issue: "Observabilidad", note_type: "concepto", seal: "pending_review"},
+            {title: "Privacidad 100% Offline", path: "Nota_Seguridad_y_Privacidad.md", project: "Arquitectura", theme: "Arquitectura", issue: "Seguridad", note_type: "referencia", seal: "pending_review"},
+            {title: "Manual de Uso Avanzado y Atajos", path: "Nota_Manual_Usuario_Avanzado.md", project: "Lanzamiento", theme: "Lanzamiento", issue: "Onboarding", note_type: "proyecto", seal: "approved"},
+            {title: "Decisión sobre el formato de las notas", path: "Nota_Decision_Formato.md", project: "Lanzamiento", theme: "Lanzamiento", issue: "Decisiones", note_type: "decision", seal: "pending_review"},
+            {title: "Decisión del modelo local", path: "Nota_Decision_Modelo_Local.md", project: "Operaciones", theme: "Operaciones", issue: "Decisiones", note_type: "decision", seal: "in_review"},
+            {title: "Decisión de estructura de proyectos", path: "Nota_Decision_Proyectos.md", project: "Lanzamiento", theme: "Lanzamiento", issue: "Decisiones", note_type: "decision", seal: "approved"},
+            {title: "Decisión de política de cuarentena", path: "Nota_Decision_Cuarentena.md", project: "Arquitectura", theme: "Arquitectura", issue: "Decisiones", note_type: "decision", seal: "pending_review"}
         ];
 
         function renderReaderLoadError(message) {
@@ -5404,18 +5978,22 @@ document.addEventListener('keydown', handleShellKeydown);
                 seedMockupIdentity();
                 return;
             }
-            if (isExplicitPreviewMode()) {
-                renderNoteList(LOCAL_MOCK_NOTES.map(function(n, index) {
+            if (isSourcePreviewMode()) {
+                const previewNotes = LOCAL_MOCK_NOTES.map(function(n, index) {
                     return {
                         title: n.title,
                         path: n.path,
                         document_id: 'mock-' + index,
-                        issue: '_Sin_Cuestion',
-                        theme: 'General',
+                        issue: n.issue || '_Sin_Cuestion',
+                        theme: n.theme || 'General',
+                        project: n.project || '',
+                        note_type: n.note_type || '',
+                        seal: n.seal || 'pending_review',
+                        status: n.seal || 'pending_review',
                     };
-                }));
+                });
+                renderNoteList(previewNotes);
                 renderExplicitPreviewNotesNotice();
-                fillSourceRecent(LOCAL_MOCK_NOTES);
                 return;
             }
 
@@ -5427,7 +6005,6 @@ document.addEventListener('keydown', handleShellKeydown);
                     return;
                 }
                 renderNoteList(notes);
-                fillSourceRecent(notes);
             }).catch(function(err) {
                 const message = String(err || nativeBackendUnavailableMessage());
                 renderReaderLoadError(message);
@@ -5490,7 +6067,15 @@ document.addEventListener('keydown', handleShellKeydown);
                     li.dataset.documentId = n.document_id || '';
                     li.dataset.path = n.path || '';
                     li.textContent = n.title;
+                    li.tabIndex = 0;
+                    li.setAttribute('role', 'button');
+                    li.setAttribute('aria-label', 'Abrir nota: ' + n.title);
                     li.addEventListener('click', function() {
+                        navigateReaderNote(n.document_id);
+                    });
+                    li.addEventListener('keydown', function(event) {
+                        if (event.key !== 'Enter' && event.key !== ' ') return;
+                        event.preventDefault();
                         navigateReaderNote(n.document_id);
                     });
                     nested.appendChild(li);
@@ -5520,7 +6105,7 @@ document.addEventListener('keydown', handleShellKeydown);
 
             let displayTitle = 'Nota';
 
-            if (isExplicitPreviewMode()) {
+            if (isSourcePreviewMode()) {
                 const found = LOCAL_MOCK_NOTES.find(function(n, index) {
                     return ('mock-' + index) === documentId || n.path === documentId;
                 });
@@ -5659,6 +6244,7 @@ document.addEventListener('keydown', handleShellKeydown);
             const searchInput = document.getElementById('reader-search');
             const rawInput = searchInput ? searchInput.value : '';
             const query = normalizeReaderSearchText(rawInput);
+            sourceSearchQuery = query;
             if (persist !== false) {
                 persistUiState('reader', 'filters', {search: rawInput});
             }
@@ -5669,6 +6255,15 @@ document.addEventListener('keydown', handleShellKeydown);
                     Boolean(query && !normalizeReaderSearchText(el.innerText).includes(query))
                 );
             });
+            document.querySelectorAll('.reader-issue-group').forEach(function(group) {
+                group.hidden = Boolean(query && !group.querySelector('.reader-note-item:not(.is-filtered-out)'));
+            });
+
+            if (isSourcePreviewMode()) {
+                if (sourceView === 'grid') renderSourceGrid();
+                if (sourceView === 'feed') resetSourceFeed();
+                if (sourceView === 'filtered') renderSourceFilteredGrid();
+            }
 
             if (query.length > 0 && query !== lastSearchQuery) {
                 lastSearchQuery = query;
@@ -5680,16 +6275,15 @@ document.addEventListener('keydown', handleShellKeydown);
                 if (readerContent) {
                     const emptyState = document.createElement('div');
                     emptyState.classList.add('console-layout-077');
-                    const hourglass = document.createElement('div');
-                    hourglass.classList.add('console-text-033');
-                    hourglass.textContent = '⌛';
+                    const searchIcon = createUiIcon('search');
+                    searchIcon.classList.add('console-text-033');
                     const title = document.createElement('div');
                     title.classList.add('console-text-034');
                     title.append('Búsqueda activa: "', document.createTextNode(rawInput), '"');
                     const help = document.createElement('div');
                     help.classList.add('console-layout-078');
                     help.textContent = 'Selecciona una de las notas filtradas en la columna izquierda para desplegar su lectura.';
-                    emptyState.append(hourglass, title, help);
+                    emptyState.append(searchIcon, title, help);
                     readerContent.replaceChildren(emptyState);
                 }
             } else if (query.length === 0 && lastSearchQuery.length > 0) {
@@ -5709,6 +6303,7 @@ document.addEventListener('keydown', handleShellKeydown);
             setText('count-quarantine-footer', stats.quarantine);
             setText('stat-notes', stats.notes);
             setText('stat-ram', stats.ram);
+            setText('stat-folders', stats.folders);
             if (healthSnapshotReceived && stats.line !== undefined) {
                 const status = document.getElementById('bottom-status-line');
                 if (status) status.innerText = stats.line;
@@ -5787,10 +6382,33 @@ document.addEventListener('keydown', handleShellKeydown);
 
         function setCaudalQueueFilter(filter) {
             caudalQueueFilter = filter || 'waiting';
+            const activeTabId = filter === 'completed'
+                ? 'caudal-queue-tab-done'
+                : filter === 'quarantined'
+                    ? 'caudal-queue-tab-quarantine'
+                    : 'caudal-queue-tab-' + filter;
             document.querySelectorAll('.flow-queue-tabs .btn-small').forEach(function(button) {
-                button.classList.toggle('is-active', button.id === 'caudal-queue-tab-' + filter);
+                button.classList.toggle('is-active', button.id === activeTabId);
             });
+            if (isCaudalPreviewMode()) {
+                renderCaudalPreviewQueue(caudalQueueFilter);
+                return;
+            }
             refreshCaudalQueue();
+        }
+
+        function selectCaudalStage(button) {
+            const step = Number(button && button.dataset.flowStep);
+            if (!Number.isInteger(step) || step < 1 || step > 5) return;
+            document.querySelectorAll('.flow-stage').forEach(function(stage) {
+                const active = stage === button;
+                stage.classList.toggle('active', active);
+                stage.setAttribute('aria-current', active ? 'step' : 'false');
+            });
+            const filter = step >= 5 ? 'completed' : step >= 3 ? 'active' : 'waiting';
+            setCaudalQueueFilter(filter);
+            const status = document.getElementById('bottom-status-line');
+            if (status) status.textContent = 'Mostrando trabajos de la etapa: ' + (button.querySelector('strong')?.textContent || 'seleccionada');
         }
 
         function refreshCaudalQueue() {
@@ -5809,7 +6427,7 @@ document.addEventListener('keydown', handleShellKeydown);
                     if (document.querySelector('#caudal-queue-body tr[data-file]')) return;
                     const row = document.createElement('tr');
                     const cell = document.createElement('td');
-                    cell.colSpan = 4;
+                    cell.colSpan = 3;
                     cell.textContent = 'No hay trabajos en esta vista.';
                     row.appendChild(cell);
                     body.appendChild(row);
@@ -5823,12 +6441,11 @@ document.addEventListener('keydown', handleShellKeydown);
                         openDrawer('flow-detail-drawer');
                         loadCaudalJobDetail(job.job_id);
                     });
-                    ['source_identity', 'stage', 'status', 'updated_at'].forEach(function(field, index) {
+                    ['source_identity', 'stage', 'updated_at'].forEach(function(field, index) {
                         const cell = document.createElement('td');
-                        const labels = ['Archivo', 'Etapa', 'Sello', 'Actualizado'];
+                        const labels = ['Archivo', 'Etapa', 'Actualizado'];
                         if (index === 0) cell.textContent = queueReference(job.source_identity || job.job_id);
                         else if (index === 1) cell.textContent = queueStageLabel(job.stage);
-                        else if (index === 2) cell.textContent = queueStatusLabel(job.status);
                         else cell.textContent = queueValue(job.updated_at, 'Sin fecha');
                         cell.setAttribute('data-label', labels[index]);
                         row.appendChild(cell);
@@ -5853,7 +6470,7 @@ document.addEventListener('keydown', handleShellKeydown);
                 setText('caudal-detail-origin', job.origin_kind || 'Local');
                 setText('caudal-detail-revision', String(job.revision || '1'));
                 setText('caudal-detail-hash', job.content_hash || 'Sin medir');
-                setText('caudal-detail-seal', queueStatusLabel(job.status));
+                setText('caudal-detail-status', queueStatusLabel(job.status));
                 setText('caudal-detail-next-approval', detail.reason || queueReasonLabel(job.error_message));
             });
         }
@@ -5868,7 +6485,24 @@ document.addEventListener('keydown', handleShellKeydown);
 
         function runCaudalImport(kind) {
             const status = document.getElementById('caudal-import-status');
-            if (!window.pywebview || !window.pywebview.api) return;
+            const menu = document.getElementById('caudal-import-menu');
+            if (menu) menu.hidden = true;
+            if (isExplicitPreviewMode()) {
+                previewImportFiles(kind === 'folder' ? ['Carpeta_demo/nota.md'] : [kind === 'sync' ? 'SharePoint_demo.md' : 'Importado_demo.md']);
+                return;
+            }
+            if (!window.pywebview || !window.pywebview.api) {
+                if (window.location.protocol === 'file:' && kind !== 'sync') {
+                    const picker = document.getElementById('caudal-browser-files');
+                    if (!picker) return;
+                    picker.webkitdirectory = kind === 'folder';
+                    picker.dataset.importKind = kind;
+                    picker.click();
+                } else if (status) {
+                    status.textContent = 'Fuente no está conectada.';
+                }
+                return;
+            }
             if (kind === 'files') {
                 window.pywebview.api.select_files('Seleccionar archivos para importar').then(function(paths) {
                     if (!paths || !paths.length) return;
@@ -5892,6 +6526,12 @@ document.addEventListener('keydown', handleShellKeydown);
             }
         }
 
+        function handleBrowserCaudalImport(event) {
+            const files = Array.from((event.target && event.target.files) || []);
+            previewImportFiles(files.map(function(file) { return file.webkitRelativePath || file.name; }));
+            event.target.value = '';
+        }
+
         function handleCaudalImportResult(result) {
             const status = document.getElementById('caudal-import-status');
             if (!result) return;
@@ -5912,7 +6552,14 @@ document.addEventListener('keydown', handleShellKeydown);
             const status = document.getElementById('caudal-export-status');
             const documentId = String(document.getElementById('caudal-export-document')?.value || '').trim();
             const format = String(document.getElementById('caudal-export-format')?.value || 'markdown');
-            if (!documentId || !window.pywebview || !window.pywebview.api) return;
+            if (!documentId) {
+                if (status) status.textContent = 'Indica la nota que quieres exportar.';
+                return;
+            }
+            if (!window.pywebview || !window.pywebview.api) {
+                if (status) status.textContent = 'La exportación requiere una nota aprobada y la conexión local de Fuente.';
+                return;
+            }
             const action = format === 'pdf'
                 ? window.pywebview.api.export_note(documentId, 'pdf')
                 : window.pywebview.api.export_note_to_downloads(documentId, format);
@@ -6026,6 +6673,10 @@ document.addEventListener('keydown', handleShellKeydown);
                         }
                         const vaultStatus = document.getElementById('status-obsidian');
                         if (vaultStatus) vaultStatus.textContent = state.vault_path ? 'Conectado' : 'Sin configurar';
+                        const dashVault = document.getElementById('dash-config-vault');
+                        if (dashVault) dashVault.textContent = state.vault_path || 'Sin conectar';
+                        const dashObsidian = document.getElementById('dash-tool-obsidian');
+                        if (dashObsidian) dashObsidian.textContent = state.vault_path ? 'Conectado' : 'Sin configurar';
                         if (state.offline_mode) {
                             applyOfflineModeState(state.offline_mode);
                         }
@@ -6057,6 +6708,8 @@ document.addEventListener('keydown', handleShellKeydown);
             clearLegacyLocalState();
             applyVisualStyle(readVisualStyle(), false);
             mountReaderWorkspace();
+            const caudalBrowserFiles = document.getElementById('caudal-browser-files');
+            if (caudalBrowserFiles) caudalBrowserFiles.addEventListener('change', handleBrowserCaudalImport);
             const shareButton = document.getElementById('document-share-button');
             if (shareButton) shareButton.addEventListener('click', shareCurrentDocument);
             const workspaceChatForm = document.getElementById('workspace-chat-form');
@@ -6067,6 +6720,7 @@ document.addEventListener('keydown', handleShellKeydown);
             });
             if (isExplicitPreviewMode()) {
                 markExplicitPreviewMode();
+                seedMockupIdentity();
             } else {
                 const status = document.getElementById('bottom-status-line');
                 if (status) status.textContent = 'Conectando con el backend de Fuente...';

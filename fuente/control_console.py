@@ -17,6 +17,7 @@ import subprocess
 import threading
 import webbrowser
 import secrets
+import shutil
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Mapping, Optional, Dict, Any, List
@@ -32,7 +33,7 @@ import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
 
 from fuente.application.approval import ApprovalApplicationService
-from fuente.application.chat import ChatApplicationService, OllamaChatProvider
+from fuente.application.chat import ChatApplicationService, OllamaChatProvider, AnythingLLMChatProvider
 from fuente.application.ingestion import (
     TERMINAL_STAGES,
     IngestionApplicationService,
@@ -44,6 +45,7 @@ from fuente.application.export import (
     ExportFileExistsError,
     UnsupportedExportFormatError,
 )
+from fuente.application.feed import validate_feed_filters, validate_feed_order
 from fuente.application.health import HealthService
 from fuente.application.job_control import (
     JobControlService,
@@ -60,9 +62,9 @@ from fuente.application.onboarding import OnboardingService
 from fuente.application.review_export import ReviewExportApplicationService
 from fuente.application.retrieval import RetrievalApplicationService
 from fuente.rag.chroma_store import ChromaRetrievalBackend
-from fuente.rag.minirag_store import MiniRAGStore
 from fuente.rag.router import RetrievalRouter
 from fuente.application.settings import SettingsService, SettingsValidationError
+from fuente.application.templates import TemplateRegistry, TemplateValidationError
 from fuente.config import (
     get_default_config,
     AppConfig,
@@ -70,6 +72,7 @@ from fuente.config import (
     load_config,
     describe_offline_mode,
 )
+from fuente.integrations.anythingllm import AnythingLLMConversationClient
 from fuente.core.vault import VaultManager
 from fuente.domain.documents import MarkdownDocument
 from fuente.domain.errors import (
@@ -78,6 +81,7 @@ from fuente.domain.errors import (
     NoteRevisionConflictError,
     OutputApprovalRequiredError,
     PathAuthorizationError,
+    TemplateRevisionConflictError,
 )
 from fuente.domain.frontmatter import FrontmatterError, parse_frontmatter, serialize_frontmatter
 from fuente.domain.origins import (
@@ -694,12 +698,8 @@ class FuenteConsoleBackend:
                     ram_governor=self.ram_governor,
                     eligibility_guard=self._is_retrieval_hit_eligible,
                     router=RetrievalRouter(
-                        primary=MiniRAGStore(
-                            self.config.vault.minirag_dir,
-                            ollama_url=self.config.ollama_url,
-                            model=self.config.custom_model_override,
-                        ),
-                        refinement=ChromaRetrievalBackend(chroma),
+                        search=ChromaRetrievalBackend(chroma),
+                        enrichment=None,
                     ),
                 )
             else:
@@ -751,12 +751,23 @@ class FuenteConsoleBackend:
             return False
         return True
 
+    def _build_chat_provider(self):
+        anything_url = (self.config.anythingllm_url or "").strip()
+        if anything_url:
+            client = AnythingLLMConversationClient(
+                anything_url,
+                self.config.anythingllm_workspace_slug,
+                api_key=self.config.anythingllm_api_key,
+            )
+            return AnythingLLMChatProvider(client)
+        return OllamaChatProvider(self.config.ollama_url, timeout=12.0)
+
     def get_chat_service(self) -> ChatApplicationService:
         """Shared chat contract used by WebView bridge and native modal."""
         if self._chat_service is None:
             self._chat_service = ChatApplicationService(
                 self.get_retrieval_service(),
-                provider=OllamaChatProvider(self.config.ollama_url, timeout=12.0),
+                provider=self._build_chat_provider(),
                 model_resolver=lambda: (
                     self.config.custom_model_override
                     or self.ram_governor.recommend_model()
@@ -788,6 +799,134 @@ class FuenteConsoleBackend:
                 runtime_policy=self.runtime_policy,
             )
         return self._notes_service
+
+    def list_readonly_notes(self, query: str, scope: str) -> Dict[str, Any]:
+        return self.get_notes_service().list_readonly_notes(query, scope)
+
+    def get_readonly_note(self, document_id: str) -> Dict[str, Any]:
+        return self.get_notes_service().get_readonly_note(document_id)
+
+    def get_hierarchy(self) -> Dict[str, Any]:
+        return self.get_notes_service().get_hierarchy()
+
+    def get_relation_preview(self, document_id: str) -> Dict[str, Any]:
+        return self.get_notes_service().get_relation_preview(document_id)
+
+    def list_feed(
+        self,
+        cursor: Optional[str],
+        limit: int,
+        filters: Optional[Mapping[str, Any]],
+        order: str,
+    ) -> Dict[str, Any]:
+        page = self.get_notes_service().list_feed(
+            cursor,
+            limit,
+            filters or {},
+            order,
+        )
+        return page.as_dict()
+
+    def search_source(
+        self,
+        mode: str,
+        query: str,
+        filters: Optional[Mapping[str, Any]],
+    ) -> Dict[str, Any]:
+        page = self.get_notes_service().search_source(mode, query, filters or {})
+        return page.as_dict()
+
+    def get_flow_state(self) -> Dict[str, Any]:
+        """Aggregate Caudal pipeline, seal and queue counters for the UI."""
+        metrics = self.vault.get_all_steps_metrics()
+        store = self.get_notes_service().job_store
+        seals = {
+            seal: store.count_feed_catalog(seal=seal)
+            for seal in ("pending_review", "in_review", "approved")
+        }
+        note_types = {
+            note_type: store.count_feed_catalog(note_type=note_type)
+            for note_type in ("resumen", "propiedades", "contexto", "concepto")
+        }
+        queue_counts = {"active": 0, "waiting": 0}
+        try:
+            queue_counts["active"] = len(
+                self.get_jobs({"status": "active"}, limit=100).get("items", [])
+            )
+            queue_counts["waiting"] = len(
+                self.get_jobs({"status": "waiting"}, limit=100).get("items", [])
+            )
+        except RuntimeError:
+            pass
+        step_keys = (
+            self.vault.config.input_dir_name,
+            self.vault.config.dirty_dir_name,
+            self.vault.config.clean_dir_name,
+            self.vault.config.output_dir_name,
+            self.vault.config.shared_dir_name,
+        )
+        return {
+            "active_theme": metrics.get("active_theme"),
+            "steps": {
+                key: metrics.get(key, {"count": 0})
+                for key in step_keys
+            },
+            "seals": seals,
+            "note_types": note_types,
+            "quarantine": int(metrics.get("quarantine", {}).get("count", 0)),
+            "queue": queue_counts,
+            "stats": self.get_stats_dict(),
+        }
+
+    def open_source_feed(
+        self,
+        filters: Optional[Mapping[str, Any]],
+        order: str,
+    ) -> Dict[str, Any]:
+        """Return a path-free deep link into the Fuente feed view."""
+        parsed_filters = validate_feed_filters(filters)
+        parsed_order = validate_feed_order(order)
+        return {
+            "workspace": "source",
+            "view": "feed",
+            "filters": parsed_filters,
+            "order": parsed_order,
+        }
+
+    def import_local_paths(self, paths: List[str]) -> Dict[str, Any]:
+        """Copy authorized local files or folders into the active input stage."""
+        if not isinstance(paths, list) or not paths:
+            return {"error": "invalid_payload", "message": "paths must be a non-empty list"}
+        destination = self.vault.input_dir
+        destination.mkdir(parents=True, exist_ok=True)
+        copied = 0
+        for raw in paths:
+            if not isinstance(raw, str) or not raw.strip():
+                continue
+            source = Path(raw).expanduser()
+            try:
+                resolved = source.resolve(strict=True)
+            except OSError:
+                return {"error": "import_source_missing", "message": "Selected path is unavailable"}
+            if resolved.is_dir():
+                for child in resolved.rglob("*"):
+                    if not child.is_file() or child.name.startswith("."):
+                        continue
+                    target = destination / child.name
+                    shutil.copy2(child, target)
+                    copied += 1
+            elif resolved.is_file():
+                shutil.copy2(resolved, destination / resolved.name)
+                copied += 1
+            else:
+                return {"error": "import_source_missing", "message": "Selected path is unavailable"}
+        return {
+            "status": "imported",
+            "copied": copied,
+            "refresh": True,
+            "stats": self.get_stats_dict(),
+            "flow_state": self.get_flow_state(),
+        }
 
     def get_approval_service(self) -> ApprovalApplicationService:
         """Return the approval ledger facade for canonical clean notes."""
@@ -1828,6 +1967,36 @@ class FuenteConsoleBackend:
             logging.error(f"Error en fallback Tkinter chooser: {e}")
             return ""
 
+    def select_files(self, title: str = "Seleccionar archivos") -> List[str]:
+        """Open a native multi-file picker for Caudal import."""
+        if sys.platform == "darwin":
+            try:
+                from AppKit import NSApplication, NSModalResponseOK, NSOpenPanel
+
+                app = NSApplication.sharedApplication()
+                app.activateIgnoringOtherApps_(True)
+                panel = NSOpenPanel.openPanel()
+                panel.setCanChooseFiles_(True)
+                panel.setCanChooseDirectories_(False)
+                panel.setAllowsMultipleSelection_(True)
+                panel.setMessage_(title)
+                if panel.runModal() == NSModalResponseOK:
+                    return [str(url.path()) for url in panel.URLs() or []]
+            except Exception as error:
+                logging.error("Error en selector de archivos AppKit: %s", error)
+            return []
+
+        try:
+            root = tk.Tk()
+            root.withdraw()
+            root.attributes("-topmost", True)
+            files = filedialog.askopenfilenames(title=title)
+            root.destroy()
+            return list(files or [])
+        except Exception as error:
+            logging.error("Error en fallback Tkinter file chooser: %s", error)
+            return []
+
     def select_vault_target(self, title: str = "Elegir ubicación del Vault") -> str:
         """Use macOS's native save panel for a new Vault path."""
         if sys.platform != "darwin":
@@ -1900,6 +2069,43 @@ class FuenteConsoleBackend:
             "policy": self._policy_dict(self.runtime_policy),
             "offline_mode": describe_offline_mode(self.config),
         }
+
+    def _template_registry(self) -> TemplateRegistry:
+        return TemplateRegistry(self.vault_path, self._job_store)
+
+    def list_templates(self) -> list[Dict[str, Any]]:
+        return [item.to_dict() for item in self._template_registry().list()]
+
+    def load_template(self, template_id: str) -> Dict[str, Any]:
+        try:
+            return self._template_registry().load(template_id).to_dict()
+        except PathAuthorizationError as error:
+            return self._path_error(error)
+        except TemplateValidationError as error:
+            return {"error": error.code, "message": str(error)}
+
+    def save_template(self, payload: Mapping[str, Any]) -> Dict[str, Any]:
+        try:
+            return self._template_registry().save(
+                str(payload["template_id"]),
+                str(payload["template"]),
+                str(payload["agents"]),
+                int(payload["expected_revision"]),
+            ).to_dict()
+        except (PathAuthorizationError, TemplateRevisionConflictError, TemplateValidationError) as error:
+            return {"error": error.code, "message": str(error)}
+
+    def restore_template(self, template_id: str, expected_revision: int) -> Dict[str, Any]:
+        try:
+            return self._template_registry().restore(template_id, expected_revision).to_dict()
+        except (PathAuthorizationError, TemplateRevisionConflictError, TemplateValidationError) as error:
+            return {"error": error.code, "message": str(error)}
+
+    def preview_template(self, template: str, agents: str) -> Dict[str, Any]:
+        try:
+            return self._template_registry().preview(template, agents)
+        except TemplateValidationError as error:
+            return {"error": error.code, "message": str(error)}
 
     def get_capabilities(self) -> Dict[str, Any]:
         from fuente.runtime_loader import capability_status

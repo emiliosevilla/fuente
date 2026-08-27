@@ -25,6 +25,8 @@ from fuente.infrastructure.atomic_files import atomic_write_json
 
 logger = logging.getLogger(__name__)
 DEFAULT_OLLAMA_URL = "http://localhost:11434"
+DEFAULT_ANYTHINGLLM_URL = "http://127.0.0.1:13001"
+DEFAULT_ANYTHINGLLM_WORKSPACE = "fuente"
 DEFAULT_ISSUE = "_Sin_Cuestion"
 VALID_RESOURCE_PROFILES = ("auto", "eco_strict")
 VALID_AUDIO_MODES = ("auto", "skip", "tiny_cpu")
@@ -219,6 +221,9 @@ class AppConfig:
     resource_profile: str = "auto"
     audio_mode: str = "auto"
     whisper_model_path: str | None = None
+    anythingllm_url: str = ""
+    anythingllm_workspace_slug: str = DEFAULT_ANYTHINGLLM_WORKSPACE
+    anythingllm_api_key: str = ""
 
     def to_dict(self) -> dict:
         return {
@@ -239,6 +244,8 @@ class AppConfig:
             "resource_profile": self.resource_profile,
             "audio_mode": self.audio_mode,
             "whisper_model_path": self.whisper_model_path,
+            "anythingllm_url": self.anythingllm_url,
+            "anythingllm_workspace_slug": self.anythingllm_workspace_slug,
         }
 
     @classmethod
@@ -263,6 +270,29 @@ class AppConfig:
             raw_whisper_path.strip()
             if isinstance(raw_whisper_path, str) and raw_whisper_path.strip()
             else None
+        )
+        raw_anything_url = data.get("anythingllm_url", "")
+        anythingllm_url = (
+            raw_anything_url.strip()
+            if isinstance(raw_anything_url, str) and raw_anything_url.strip()
+            else ""
+        )
+        if anythingllm_url:
+            try:
+                from fuente.integrations.anythingllm import validate_loopback_anythingllm_url
+
+                anythingllm_url = validate_loopback_anythingllm_url(anythingllm_url)
+            except ValueError:
+                logger.warning(
+                    "Ignoring invalid anythingllm_url from configuration: %r",
+                    raw_anything_url,
+                )
+                anythingllm_url = ""
+        raw_workspace = data.get("anythingllm_workspace_slug", DEFAULT_ANYTHINGLLM_WORKSPACE)
+        anythingllm_workspace_slug = (
+            raw_workspace.strip()
+            if isinstance(raw_workspace, str) and raw_workspace.strip()
+            else DEFAULT_ANYTHINGLLM_WORKSPACE
         )
         raw_model = data.get("custom_model_override", data.get("ollama_model"))
         custom_model_override = None
@@ -325,6 +355,8 @@ class AppConfig:
             resource_profile=resource_profile,
             audio_mode=audio_mode,
             whisper_model_path=whisper_model_path,
+            anythingllm_url=anythingllm_url,
+            anythingllm_workspace_slug=anythingllm_workspace_slug,
         )
 
 
@@ -363,17 +395,41 @@ def apply_environment_overrides(config: AppConfig) -> AppConfig:
     """
     env_url = os.environ.get("OLLAMA_URL")
     env_allow = _env_bool("ALLOW_NON_LOOPBACK_OLLAMA")
+    env_anything_url = os.environ.get("FUENTE_ANYTHINGLLM_URL")
+    env_anything_key = os.environ.get("FUENTE_ANYTHINGLLM_API_KEY")
     allow_non_loopback = (
         config.allow_non_loopback_ollama
         if env_allow is None
         else env_allow
     )
+    updated = config
+
+    if env_anything_key is not None:
+        updated = replace(updated, anythingllm_api_key=env_anything_key.strip())
+
+    if env_anything_url is not None:
+        candidate = env_anything_url.strip()
+        if not candidate:
+            updated = replace(updated, anythingllm_url="")
+        else:
+            try:
+                from fuente.integrations.anythingllm import validate_loopback_anythingllm_url
+
+                validated = validate_loopback_anythingllm_url(candidate)
+            except ValueError as error:
+                logger.warning(
+                    "Ignoring invalid FUENTE_ANYTHINGLLM_URL from environment (%s): %r",
+                    error,
+                    env_anything_url,
+                )
+            else:
+                updated = replace(updated, anythingllm_url=validated)
 
     if env_url is not None:
         candidate = env_url.strip()
         if not candidate:
             logger.warning("Ignoring empty OLLAMA_URL from environment.")
-            return config
+            return updated
         try:
             validate_ollama_url(candidate, allow_non_loopback)
         except ValueError as error:
@@ -382,26 +438,26 @@ def apply_environment_overrides(config: AppConfig) -> AppConfig:
                 error,
                 env_url,
             )
-            return config
+            return updated
         return replace(
-            config,
+            updated,
             ollama_url=candidate,
             allow_non_loopback_ollama=allow_non_loopback,
         )
 
     if env_allow is not None:
         try:
-            validate_ollama_url(config.ollama_url, env_allow)
+            validate_ollama_url(updated.ollama_url, env_allow)
         except ValueError as error:
             logger.warning(
                 "Ignoring ALLOW_NON_LOOPBACK_OLLAMA=%r (%s); keeping stored URL.",
                 os.environ.get("ALLOW_NON_LOOPBACK_OLLAMA"),
                 error,
             )
-            return config
-        return replace(config, allow_non_loopback_ollama=env_allow)
+            return updated
+        return replace(updated, allow_non_loopback_ollama=env_allow)
 
-    return config
+    return updated
 
 
 def load_config(vault_path: str | Path) -> AppConfig:

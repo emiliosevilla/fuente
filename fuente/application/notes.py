@@ -5,14 +5,20 @@ import json
 import logging
 import time
 from pathlib import Path
-from typing import Any, Callable, Optional, Protocol
+from typing import Any, Callable, Mapping, Optional, Protocol
 
-from fuente.application.ingestion import CHUNK_ARTIFACT_KIND
-from fuente.core.vault import VaultManager
 from fuente.application.approval import (
     ApprovalApplicationService,
     TransitionApprovalService,
 )
+from fuente.application.ingestion import CHUNK_ARTIFACT_KIND
+from fuente.application.feed import (
+    FeedApplicationService,
+    FeedPage,
+    MAX_FEED_LIMIT,
+    SearchPage,
+)
+from fuente.core.vault import VaultManager
 from fuente.domain.approvals import ApprovalLedger
 from fuente.domain.documents import MarkdownDocument, NoteDocument, content_hash_for_markdown
 from fuente.domain.errors import (
@@ -23,14 +29,17 @@ from fuente.domain.errors import (
     PathAuthorizationError,
     RefinementRejectedError,
 )
-from fuente.domain.frontmatter import FrontmatterError, serialize_human_frontmatter
+from fuente.domain.frontmatter import FrontmatterError, serialize_human_frontmatter, parse_frontmatter
 from fuente.domain.metadata_form import validate_metadata_fields
 from fuente.domain.paths import AuthorizedPathResolver, document_id_for_relative_path
 from fuente.infrastructure.atomic_files import atomic_write_text, document_file_lock
 from fuente.infrastructure.sqlite_store import JobStore
 from fuente.domain.runtime_policy import RuntimePolicy
-from fuente.rag.chroma_store import ChromaStore
-from fuente.rag.minirag_store import MiniRAGStore, MiniRAGUnavailableError
+from fuente.domain.vault_layout import (
+    CANONICAL_PROCESSED_DIR_NAME,
+    CANONICAL_SHARED_DIR_NAME,
+)
+from fuente.rag.chroma_store import ChromaRetrievalBackend, ChromaStore
 from fuente.rag.semantic_chunker import SemanticChunker
 
 logger = logging.getLogger(__name__)
@@ -65,7 +74,6 @@ class NotesApplicationService:
         self.path_resolver = path_resolver
         self.job_store = job_store
         self.chroma = chroma_store
-        self.minirag = MiniRAGStore(vault.config.minirag_dir)
         self.chunker = chunker or SemanticChunker()
         self._index_notifier = index_notifier
         self.runtime_policy = runtime_policy
@@ -333,6 +341,177 @@ class NotesApplicationService:
             revision=int(identity["revision"]),
             content_hash=str(identity.get("content_hash") or note.content_hash),
         )
+
+    def _feed_service(self) -> FeedApplicationService:
+        return FeedApplicationService(
+            self.job_store,
+            vault_root=self.vault.config.vault_path,
+            path_resolver=self.path_resolver,
+            chroma_store=self.chroma,
+        )
+
+    def list_readonly_notes(self, query: str, scope: str) -> dict[str, Any]:
+        normalized_scope = (scope or "all_notes").strip() or "all_notes"
+        if normalized_scope not in {"all_notes", "theme", "issue"}:
+            raise ValueError("scope is invalid")
+        filters: dict[str, str] = {}
+        if normalized_scope == "theme":
+            filters["theme"] = self.vault.active_theme
+        rows = self.job_store.list_feed_page(limit=MAX_FEED_LIMIT, order="date")
+        feed = self._feed_service()
+        items: list[dict[str, Any]] = []
+        needle = query.strip().casefold()
+        for row in rows:
+            item = feed._feed_item_from_row(row)
+            if normalized_scope == "issue" and item.issue == "_Sin_Cuestion":
+                continue
+            if needle and needle not in item.title.casefold():
+                continue
+            items.append(item.as_dict())
+        return {"scope": normalized_scope, "query": query.strip(), "items": items}
+
+    def get_readonly_note(self, document_id: str) -> dict[str, Any]:
+        note_id = self.resolve_document_id(document_id)
+        row = self.job_store.get_note(note_id)
+        if row is None:
+            raise PathAuthorizationError()
+        item = self._feed_service()._feed_item_from_row(row)
+        note = self.get_note(note_id)
+        return {
+            "note": {
+                "document_id": note.document_id,
+                "revision": note.revision,
+                "title": item.title,
+                "author": item.author,
+                "status": note.status,
+                "seal": item.seal,
+                "theme": item.theme,
+                "issue": item.issue,
+                "note_type": item.note_type,
+                "origin_kind": item.origin_kind,
+                "urgency": item.urgency,
+                "updated_at": item.updated_at,
+                "excerpt": item.excerpt,
+                "read_only": True,
+            }
+        }
+
+    def get_hierarchy(self) -> dict[str, Any]:
+        rows = self.job_store.list_feed_page(limit=MAX_FEED_LIMIT, order="theme")
+        themes: dict[str, dict[str, Any]] = {}
+        note_types: dict[str, int] = {}
+        seals: dict[str, int] = {"pending_review": 0, "in_review": 0, "approved": 0}
+        feed = self._feed_service()
+        for row in rows:
+            item = feed._feed_item_from_row(row)
+            theme_bucket = themes.setdefault(
+                item.theme,
+                {"theme": item.theme, "issues": {}, "count": 0},
+            )
+            theme_bucket["count"] += 1
+            issue_bucket = theme_bucket["issues"].setdefault(
+                item.issue,
+                {"issue": item.issue, "count": 0, "note_types": {}},
+            )
+            issue_bucket["count"] += 1
+            issue_bucket["note_types"][item.note_type] = (
+                issue_bucket["note_types"].get(item.note_type, 0) + 1
+            )
+            note_types[item.note_type] = note_types.get(item.note_type, 0) + 1
+            seals[item.seal] = seals.get(item.seal, 0) + 1
+        return {
+            "themes": [
+                {
+                    "theme": theme,
+                    "count": bucket["count"],
+                    "issues": [
+                        {
+                            "issue": issue,
+                            "count": issue_data["count"],
+                            "note_types": [
+                                {"note_type": note_type, "count": count}
+                                for note_type, count in sorted(issue_data["note_types"].items())
+                            ],
+                        }
+                        for issue, issue_data in sorted(bucket["issues"].items())
+                    ],
+                }
+                for theme, bucket in sorted(themes.items())
+            ],
+            "note_types": [
+                {"note_type": note_type, "count": count}
+                for note_type, count in sorted(note_types.items())
+            ],
+            "seals": [
+                {"seal": seal, "count": count}
+                for seal, count in sorted(seals.items())
+            ],
+        }
+
+    def get_relation_preview(self, document_id: str) -> dict[str, Any]:
+        note_id = self.resolve_document_id(document_id)
+        center = self.get_readonly_note(note_id)["note"]
+        row = self.job_store.get_note(note_id)
+        if row is None:
+            raise PathAuthorizationError()
+        path, _relative = self._resolve_note_path(note_id)
+        body = path.read_text(encoding="utf-8", errors="replace")
+        try:
+            _, markdown_body = parse_frontmatter(body)
+        except FrontmatterError:
+            markdown_body = body
+        outgoing: list[dict[str, Any]] = []
+        import re
+
+        for match in re.finditer(r"\[\[(.*?)\]\]", markdown_body):
+            target = match.group(1).strip()
+            note_name, _sep, label = target.partition("|")
+            note_name = note_name.split("#", 1)[0].strip()
+            display = label.strip() if label.strip() else note_name.replace("_", " ")
+            try:
+                resolved = self.path_resolver.resolve_wikilink_target(note_name)
+                target_id = self.resolve_document_id(
+                    document_id_for_relative_path(
+                        resolved.resolve().relative_to(
+                            self.vault.config.vault_path.resolve()
+                        ).as_posix()
+                    )
+                )
+                preview = self.get_readonly_note(target_id)["note"]
+                outgoing.append(
+                    {
+                        "document_id": preview["document_id"],
+                        "title": preview["title"],
+                        "seal": preview["seal"],
+                        "label": display,
+                    }
+                )
+            except (PathAuthorizationError, ValueError, OSError):
+                outgoing.append({"document_id": "", "title": display, "seal": "", "broken": True})
+        outgoing = outgoing[:24]
+        return {
+            "center": center,
+            "outgoing": outgoing,
+            "bounded": True,
+            "open_graph_in_obsidian": True,
+        }
+
+    def list_feed(
+        self,
+        cursor: str | None,
+        limit: int,
+        filters: Mapping[str, Any],
+        order: str,
+    ) -> FeedPage:
+        return self._feed_service().list_feed(cursor, limit, filters, order)
+
+    def search_source(
+        self,
+        mode: str,
+        query: str,
+        filters: Mapping[str, Any],
+    ) -> SearchPage:
+        return self._feed_service().search_source(mode, query, filters)
 
     @staticmethod
     def _has_symlink_component(path: Path, root: Path) -> bool:
@@ -786,6 +965,14 @@ class NotesApplicationService:
         ):
             return
 
+        normalized = note.relative_path.replace("\\", "/").split("/")
+        if CANONICAL_SHARED_DIR_NAME in normalized:
+            return
+        if note.status != "approved":
+            return
+        if CANONICAL_PROCESSED_DIR_NAME not in normalized:
+            return
+
         issue = str(note.frontmatter.get("issue") or "_Sin_Cuestion")
         theme = getattr(self.vault, "active_theme", "") or ""
         chunks = self.chunker.chunk_markdown(
@@ -817,25 +1004,12 @@ class NotesApplicationService:
         }
 
         obsolete = sorted(published - set(chunk_ids))
-        indexed_with = self.minirag
-        try:
-            result = self.minirag.rebuild(chunks)
-        except MiniRAGUnavailableError:
-            indexed_with = self.chroma
-            result = self.chroma.add_chunks(
-                [chunk["content"] for chunk in chunks],
-                [chunk["metadata"] for chunk in chunks],
-                chunk_ids,
+        backend = ChromaRetrievalBackend(self.chroma)
+        result = backend.rebuild(chunks)
+        if not result.success:
+            raise RuntimeError(
+                f"Chroma index rebuild failed for approved note {note.document_id}"
             )
-        if not result:
-            logger.warning("Chunk index unavailable for approved note %s", note.document_id)
-            return
-
-        def delete_index(ids: list[str]) -> bool:
-            delete = getattr(indexed_with, "delete", None)
-            if callable(delete):
-                return delete(ids) is not False
-            return bool(indexed_with.delete_chunks(ids))
 
         # New vectors are durable before the published artifact set changes.
         # If SQLite rejects the artifact publish, compensate only the newly
@@ -856,7 +1030,7 @@ class NotesApplicationService:
                 )
         except Exception:
             rollback_errors = []
-            if new_chunk_ids and not delete_index(new_chunk_ids):
+            if new_chunk_ids and backend.delete(new_chunk_ids) is False:
                 rollback_errors.append("chroma")
             try:
                 self.job_store.delete_index_artifacts(
@@ -886,7 +1060,7 @@ class NotesApplicationService:
                 note.document_id,
                 len(obsolete),
             )
-            if delete_index(obsolete):
+            if backend.delete(obsolete):
                 self.job_store.delete_index_artifacts(
                     note.document_id, artifact_ids=obsolete
                 )

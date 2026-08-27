@@ -40,6 +40,7 @@ CHAT_SYSTEM_PROMPT = (
 )
 
 ERROR_OLLAMA = "ollama_unavailable"
+ERROR_ANYTHINGLLM = "anythingllm_unavailable"
 ERROR_EMPTY_MESSAGE = "empty_message"
 ERROR_PROVIDER = "provider_error"
 
@@ -151,6 +152,58 @@ class FakeChatProvider:
         if self.fail:
             raise ChatProviderError(self.error_message, code=self.error_code)
         return self.response
+
+
+class AnythingLLMChatProvider:
+    """Route grounded prompts through a zero-document AnythingLLM workspace."""
+
+    def __init__(
+        self,
+        client: Any,
+        *,
+        default_session_id: str = "fuente-chat",
+    ) -> None:
+        self.client = client
+        self.default_session_id = default_session_id
+        self._context: Mapping[str, Any] = {}
+
+    def bind_context(self, context: Mapping[str, Any] | None) -> None:
+        self._context = dict(context or {})
+
+    def _session_id(self) -> str:
+        for key in ("session_id", "sessionId"):
+            value = str(self._context.get(key) or "").strip()
+            if value:
+                return value
+        return self.default_session_id
+
+    def generate(
+        self,
+        *,
+        model: str,
+        system: str,
+        prompt: str,
+        options: Mapping[str, Any] | None = None,
+        think: bool | None = None,
+    ) -> str:
+        from fuente.integrations.anythingllm import AnythingLLMError
+
+        combined = f"{system}\n\n{prompt}" if system else prompt
+        try:
+            payload = self.client.chat(
+                session_id=self._session_id(),
+                prompt=combined,
+                model=model,
+            )
+        except AnythingLLMError as exc:
+            raise ChatProviderError(str(exc), code=getattr(exc, "code", ERROR_ANYTHINGLLM)) from exc
+        reply = str(payload.get("textResponse") or "").strip()
+        if not reply:
+            raise ChatProviderError(
+                "AnythingLLM returned an empty response",
+                code=ERROR_ANYTHINGLLM,
+            )
+        return reply
 
 
 def _source_label(source: Mapping[str, Any]) -> str:
@@ -314,6 +367,8 @@ class ChatApplicationService:
                 raise ChatProviderError(
                     "No model configured for chat", code=ERROR_OLLAMA
                 )
+            if hasattr(self.provider, "bind_context"):
+                self.provider.bind_context(ctx)
             answer = self.provider.generate(
                 model=model,
                 system=self.system_prompt,
@@ -321,9 +376,17 @@ class ChatApplicationService:
             )
         except ChatProviderError as exc:
             detail = str(exc)
+            error_code = getattr(exc, "code", ERROR_PROVIDER)
+            if error_code == ERROR_ANYTHINGLLM:
+                provider_name = "AnythingLLM"
+                endpoint = getattr(self.provider, "client", None)
+                endpoint_url = getattr(endpoint, "base_url", "") if endpoint else ""
+            else:
+                provider_name = "Ollama"
+                endpoint_url = self.ollama_url or ""
             actionable = (
-                f"No se pudo completar la consulta con Ollama "
-                f"({self.ollama_url or 'URL no configurada'}). {detail} "
+                f"No se pudo completar la consulta con {provider_name} "
+                f"({endpoint_url or 'URL no configurada'}). {detail} "
                 "Comprueba que el servicio esté en ejecución y que la URL "
                 "sea loopback."
             )
@@ -332,7 +395,7 @@ class ChatApplicationService:
                 sources=sources,
                 retrieval_mode=retrieval_mode,
                 has_context=has_context,
-                error={"code": getattr(exc, "code", ERROR_PROVIDER), "message": detail},
+                error={"code": error_code, "message": detail},
                 model="",
                 ok=False,
                 degraded=bool(retrieval_ctx.get("degraded")),

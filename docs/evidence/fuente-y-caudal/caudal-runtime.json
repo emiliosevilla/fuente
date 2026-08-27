@@ -1,0 +1,146 @@
+{
+  "pipeline": {
+    "valid_stage": "completed"
+  },
+  "quarantine": {
+    "quarantine_id": "7f3269a1-d56a-41f2-b6d0-9421d84448dd",
+    "count": 1
+  },
+  "approvals": {
+    "share_without_approval": "blocked",
+    "approved_hash": "4d4955736afa36b39cb0aefc393ba88117dcf187a4528459463f06c0c51f0e1a"
+  },
+  "feed_links": {
+    "red": {
+      "workspace": "source",
+      "view": "feed",
+      "filters": {
+        "seal": "pending_review"
+      },
+      "order": "date"
+    },
+    "orange": {
+      "workspace": "source",
+      "view": "feed",
+      "filters": {
+        "seal": "in_review"
+      },
+      "order": "date"
+    },
+    "green": {
+      "workspace": "source",
+      "view": "feed",
+      "filters": {
+        "seal": "approved"
+      },
+      "order": "date"
+    },
+    "resumen": {
+      "workspace": "source",
+      "view": "feed",
+      "filters": {
+        "note_type": "resumen"
+      },
+      "order": "date"
+    },
+    "propiedades": {
+      "workspace": "source",
+      "view": "feed",
+      "filters": {
+        "note_type": "propiedades"
+      },
+      "order": "date"
+    },
+    "contexto": {
+      "workspace": "source",
+      "view": "feed",
+      "filters": {
+        "note_type": "contexto"
+      },
+      "order": "date"
+    },
+    "concepto": {
+      "workspace": "source",
+      "view": "feed",
+      "filters": {
+        "note_type": "concepto"
+      },
+      "order": "date"
+    }
+  },
+  "flow_state": {
+    "active_theme": "General",
+    "steps": {
+      "1_volcado": {
+        "count": 0,
+        "oldest": "N/A",
+        "files": []
+      },
+      "2_copiado": {
+        "count": 1,
+        "oldest": "2026-08-27 07:36:42",
+        "files": [
+          {
+            "name": "informe_trimestral_aa44a401.txt",
+            "rel_path": "2_copiado/informe_trimestral_aa44a401.txt",
+            "size": 63,
+            "mtime": "2026-08-27 07:36:42"
+          }
+        ]
+      },
+      "3_capturado": {
+        "count": 1,
+        "oldest": "2026-08-27 07:36:43",
+        "files": [
+          {
+            "name": "informe_trimestral.md",
+            "rel_path": "3_capturado/informe_trimestral.md",
+            "size": 679,
+            "mtime": "2026-08-27 07:36:43"
+          }
+        ]
+      },
+      "4_procesado": {
+        "count": 1,
+        "oldest": "2026-08-27 07:36:43",
+        "files": [
+          {
+            "name": "informe_trimestral.md",
+            "rel_path": "4_procesado/informe_trimestral.md",
+            "size": 511,
+            "mtime": "2026-08-27 07:36:43"
+          }
+        ]
+      },
+      "5_compartido": {
+        "count": 0,
+        "oldest": "N/A",
+        "files": []
+      }
+    },
+    "seals": {
+      "pending_review": 0,
+      "in_review": 0,
+      "approved": 1
+    },
+    "note_types": {
+      "resumen": 0,
+      "propiedades": 0,
+      "contexto": 0,
+      "concepto": 0
+    },
+    "quarantine": 1,
+    "queue": {
+      "active": 0,
+      "waiting": 0
+    },
+    "stats": {
+      "input": 0,
+      "processed": 1,
+      "quarantine": 1,
+      "notes": 1,
+      "ram": "70%",
+      "line": "Estado: Listo • Vault: fuente-task12-rp66hd4a • RAM: 70% • 07:36"
+    }
+  }
+}

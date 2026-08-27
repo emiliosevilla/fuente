@@ -38,19 +38,23 @@
 
 ---
 
+
+
 ### Task 1: Congelar baseline y crear captura nativa
 
 **Files:**
+
 - Create: `scripts/capture_native_ui.py`
 - Create: `scripts/verify_ui_evidence.py`
 - Create: `tests/test_native_evidence.py`
 - Create: `docs/evidence/fuente-y-caudal/manifest.json`
 
 **Interfaces:**
+
 - Produces: `capture_window(title: str, output: Path) -> dict[str, object]`
 - Produces: `verify_manifest(path: Path, expected_head: str) -> list[str]`
 
-- [ ] **Step 1: Medir Git y registrar el baseline**
+- [x] **Step 1: Medir Git y registrar el baseline**
 
 Run:
 
@@ -63,7 +67,7 @@ git -c core.fsmonitor=false status --short
 
 Expected: raiz `fuente`, rama `dev`, HEAD de 40 caracteres y lista de cambios preservada en el log de ejecucion.
 
-- [ ] **Step 2: Escribir el test de evidencia**
+- [x] **Step 2: Escribir el test de evidencia**
 
 ```python
 def test_manifest_rejects_browser_capture(tmp_path):
@@ -72,13 +76,13 @@ def test_manifest_rejects_browser_capture(tmp_path):
     assert "browser capture" in verify_manifest(manifest, "a" * 40)[0]
 ```
 
-- [ ] **Step 3: Verificar el fallo**
+- [x] **Step 3: Verificar el fallo**
 
 Run: `pytest tests/test_native_evidence.py -q`
 
 Expected: FAIL porque los scripts no existen.
 
-- [ ] **Step 4: Implementar captura y validacion minima**
+- [x] **Step 4: Implementar captura y validacion minima**
 
 Usar Quartz para resolver una ventana por titulo y stdlib para hash y JSON. Ejecutar la captura con argumentos, nunca con shell:
 
@@ -91,7 +95,7 @@ subprocess.run(
 
 `verify_manifest` exige fichero PNG, SHA-256 correcto, HEAD, `window_owner` en `{"Python", "Fuente"}`, titulo `Fuente y Caudal`, engine `PyWebView WebKit`, ancho y alto positivos.
 
-- [ ] **Step 5: Capturar baseline real**
+- [x] **Step 5: Capturar baseline real**
 
 Run:
 
@@ -102,7 +106,7 @@ python scripts/capture_native_ui.py --title Fuente --output docs/evidence/fuente
 
 Expected: PNG real y entrada de manifiesto. Inspeccionar el PNG con un visor de imagen, no con Chrome.
 
-- [ ] **Step 6: Verificar y commitear solo Task 1**
+- [x] **Step 6: Verificar y commitear solo Task 1**
 
 Run:
 
@@ -120,6 +124,7 @@ Expected: G0 PASS.
 ### Task 2: Eliminar funciones duplicadas
 
 **Files:**
+
 - Modify: `consola_preview.html`
 - Modify: `fuente/ui/bridge.py`
 - Modify: `fuente/control_console.py`
@@ -135,10 +140,11 @@ Expected: G0 PASS.
 - Modify: `tests/test_console_graph_lifecycle.py`
 
 **Interfaces:**
+
 - Preserves: `open_obsidian(note_path: str, obsidian_uri: str) -> dict[str, object]`
 - Removes: editor, map, fusion, discussion and parallel chat bridge methods
 
-- [ ] **Step 1: Trazar consumidores antes de borrar**
+- [x] **Step 1: Trazar consumidores antes de borrar**
 
 Run:
 
@@ -148,7 +154,7 @@ rg -n "reader_modal|chat_modal|graph_engine|modal-reader-graph|fusion|discussion
 
 Expected: lista completa guardada como evidencia de G1.
 
-- [ ] **Step 2: Cambiar los tests de frontera**
+- [x] **Step 2: Cambiar los tests de frontera**
 
 ```python
 def test_product_shell_has_no_duplicated_obsidian_capabilities():
@@ -159,17 +165,17 @@ def test_product_shell_has_no_duplicated_obsidian_capabilities():
 
 El test tambien comprueba que `open_obsidian` permanece y que no hay import activo de `fuente.graph_engine`.
 
-- [ ] **Step 3: Verificar el fallo**
+- [x] **Step 3: Verificar el fallo**
 
 Run: `pytest tests/test_active_artifact_hygiene.py tests/test_reader_workspace_contract.py tests/test_console_graph_lifecycle.py -q`
 
 Expected: FAIL por artefactos todavia presentes.
 
-- [ ] **Step 4: Borrar HTML, rutas y codigo sin consumidores**
+- [x] **Step 4: Borrar HTML, rutas y codigo sin consumidores**
 
 Eliminar los bloques completos, imports, handlers y estilos asociados. No dejar adaptadores vacios ni flags de compatibilidad. Conservar lectura, `open_obsidian`, ETL, aprobacion, cuarentena y sharing.
 
-- [ ] **Step 5: Verificar ausencia y regresion enfocada**
+- [x] **Step 5: Verificar ausencia y regresion enfocada**
 
 Run:
 
@@ -180,7 +186,7 @@ rg -n "modal-reader-graph|reader-markdown-editor|modal-fusion|discussion-reply-f
 
 Expected: tests PASS y `rg` sin coincidencias activas.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add consola_preview.html fuente/ui/bridge.py fuente/control_console.py fuente/application/lifecycle.py fuente/reader_modal.py fuente/chat_modal.py fuente/graph_engine tests/test_active_artifact_hygiene.py tests/test_reader_workspace_contract.py tests/test_console_graph_lifecycle.py
@@ -193,6 +199,7 @@ Expected: G1 PASS.
 ### Task 3: Provisionar Obsidian y el Vault Fuente
 
 **Files:**
+
 - Create: `fuente/integrations/obsidian.py`
 - Create: `fuente/resources/obsidian/community-plugins.json`
 - Create: `fuente/resources/obsidian/appearance.json`
@@ -207,11 +214,12 @@ Expected: G1 PASS.
 - Modify: `tests/test_installer_contract.py`
 
 **Interfaces:**
+
 - Produces: `ObsidianProvisioner.inspect(vault_path: Path) -> dict[str, object]`
 - Produces: `ObsidianProvisioner.provision(vault_path: Path, consent: bool) -> dict[str, object]`
 - Produces: `get_setup_status() -> dict[str, object]`
 
-- [ ] **Step 1: Escribir tests de nombre, consentimiento y allowlist**
+- [x] **Step 1: Escribir tests de nombre, consentimiento y allowlist**
 
 ```python
 def test_provision_requires_consent_and_fixed_vault_name(tmp_path):
@@ -224,17 +232,17 @@ def test_provision_requires_consent_and_fixed_vault_name(tmp_path):
 
 Verificar tambien que no se copia `workspace.json`, que los plugins salen de una allowlist, que cada manifest se valida y que los catorce recursos se copian bajo `.fuente`.
 
-- [ ] **Step 2: Verificar el fallo**
+- [x] **Step 2: Verificar el fallo**
 
 Run: `pytest tests/test_obsidian_provisioner.py tests/test_setup_backend.py tests/test_installer_contract.py -q`
 
 Expected: FAIL por modulo inexistente.
 
-- [ ] **Step 3: Implementar con stdlib y CLI oficial**
+- [x] **Step 3: Implementar con stdlib y CLI oficial**
 
 `provision` crea carpetas `1_volcado`, `2_copiado`, `3_capturado`, `4_procesado`, `5_compartido`, `.fuente` y `.obsidian`; copia templates e instrucciones de forma atomica; despues ejecuta comandos CLI con `subprocess.run([...], check=False)`. No concatena comandos ni modifica configuracion global sin consentimiento.
 
-- [ ] **Step 4: Ejecutar la prueba real de setup**
+- [x] **Step 4: Ejecutar la prueba real de setup**
 
 Run:
 
@@ -246,7 +254,7 @@ python scripts/capture_native_ui.py --title "Fuente y Caudal" --output docs/evid
 
 Expected: selector nativo, Vault `Fuente`, Obsidian instalado o detectado, allowlist verificada. Si macOS exige un consentimiento no automatizable, G2 BLOCKED con captura del estado exacto.
 
-- [ ] **Step 5: Verificar y commit**
+- [x] **Step 5: Verificar y commit**
 
 ```bash
 pytest tests/test_obsidian_provisioner.py tests/test_setup_backend.py tests/test_installer_contract.py -q
@@ -260,6 +268,7 @@ Expected: G2 PASS.
 ### Task 4: Crear shell Inicio, Fuente y Caudal
 
 **Files:**
+
 - Modify: `consola_preview.html`
 - Modify: `fuente/ui/static/fuente_tokens.css`
 - Modify: `fuente/ui/static/console.css`
@@ -275,10 +284,11 @@ Expected: G2 PASS.
 - Modify: `tests/test_ui_upgrade_contract.py`
 
 **Interfaces:**
+
 - Produces: workspaces `home`, `source`, `flow`
 - Preserves: one `get_initial_state() -> dict[str, object]`
 
-- [ ] **Step 1: Escribir contratos de shell**
+- [x] **Step 1: Escribir contratos de shell**
 
 ```python
 def test_shell_has_exactly_three_product_workspaces():
@@ -289,17 +299,17 @@ def test_shell_has_exactly_three_product_workspaces():
 
 Comprobar rail `68px`, cabecera maximo `64px`, Nord claro, tamanos tipograficos, foco de `h1`, cinco etapas y ausencia de emoji estructural.
 
-- [ ] **Step 2: Verificar el fallo**
+- [x] **Step 2: Verificar el fallo**
 
 Run: `pytest tests/test_fuente_visual_contract.py tests/test_ui_upgrade_contract.py -q`
 
 Expected: FAIL por nombres y estructura anteriores.
 
-- [ ] **Step 3: Implementar el shell minimo**
+- [x] **Step 3: Implementar el shell minimo**
 
 Reutilizar `switchWorkspace`, los tokens Nord/Gruvbox y el bridge. Inicio muestra estado y dos accesos. Fuente y Caudal se montan en sus secciones. Ajustes queda como utilidad. Crear primitivas CSS y JS para drawer, popover, accordion, modal y carrusel accesible; no crear variantes por pantalla.
 
-- [ ] **Step 4: Capturar tres tamanos reales**
+- [x] **Step 4: Capturar tres tamanos reales**
 
 Run:
 
@@ -311,7 +321,7 @@ python scripts/capture_native_ui.py --title "Fuente y Caudal" --output docs/evid
 
 Expected: una ventana nativa Nord clara, texto legible, sin scroll horizontal, tema uniforme y accion primaria visible.
 
-- [ ] **Step 5: Verificar teclado y commit**
+- [x] **Step 5: Verificar teclado y commit**
 
 Operar rail y Ajustes solo con Tab, Enter, Shift+Tab y Escape. Capturar el foco visible.
 
@@ -326,6 +336,7 @@ Expected: G3 PASS.
 ### Task 5: Llevar estado y aprobaciones a SQLite
 
 **Files:**
+
 - Modify: `fuente/infrastructure/sqlite_store.py`
 - Create: `fuente/infrastructure/migrations/022_ui_state_transition_approvals.sql`
 - Modify: `fuente/domain/approvals.py`
@@ -337,13 +348,14 @@ Expected: G3 PASS.
 - Modify: `tests/test_approval_ledger.py`
 
 **Interfaces:**
+
 - Produces: `UIStateStore.get(scope: str, owner: str, key: str) -> object | None`
 - Produces: `UIStateStore.set(scope: str, owner: str, key: str, value: object) -> None`
 - Produces: `TransitionApprovalService.begin_review(...) -> ReviewClaim`
 - Produces: `TransitionApprovalService.approve(...) -> TransitionApproval`
 - Produces: `TransitionApprovalService.require_current(...) -> None`
 
-- [ ] **Step 1: Escribir tests de SQLite y cuatro saltos**
+- [x] **Step 1: Escribir tests de SQLite y cuatro saltos**
 
 ```python
 @pytest.mark.parametrize("source,target", [
@@ -359,27 +371,27 @@ def test_each_transition_requires_exact_human_approval(service, artifact, source
 
 Cubrir sello rojo inicial, claim naranja sin permiso, verde vigente, cambio de bytes, revision, etapa y caducidad. `ui_state` rechaza claves desconocidas y valores mayores de 64 KiB.
 
-- [ ] **Step 2: Verificar el fallo**
+- [x] **Step 2: Verificar el fallo**
 
 Run: `pytest tests/test_ui_state_store.py tests/test_transition_approvals.py tests/test_approval_ledger.py -q`
 
 Expected: FAIL por tablas y servicios inexistentes.
 
-- [ ] **Step 3: Implementar sobre el JobStore existente**
+- [x] **Step 3: Implementar sobre el JobStore existente**
 
 Crear `ui_state`, `transition_approvals` y `review_claims` en la migracion. Mantener una sola conexion a `<Vault>/.fuente/state.db`. Derivar el sello desde ledger y claim; no guardar el color como autoridad.
 
-- [ ] **Step 4: Retirar estado de negocio de localStorage**
+- [x] **Step 4: Retirar estado de negocio de localStorage**
 
 Cambiar filtros, orden, workspace, paneles, cursor y borradores de UI a metodos bridge `get_ui_state` y `set_ui_state`. Eliminar las claves anteriores de `localStorage`.
 
-- [ ] **Step 5: Prueba real de reinicio y aprobaciones**
+- [x] **Step 5: Prueba real de reinicio y aprobaciones**
 
 Guardar estado persistente, cerrar PyWebView, relanzar y comprobar restauracion. Intentar los cuatro saltos sin aprobacion, iniciar revision naranja, aprobar una revision verde, modificarla y comprobar vuelta a rojo.
 
 Expected: una sola `state.db`, estado restaurado, cuatro bloqueos reales y `localStorage.length == 0`.
 
-- [ ] **Step 6: Verificar y commit**
+- [x] **Step 6: Verificar y commit**
 
 ```bash
 pytest tests/test_ui_state_store.py tests/test_transition_approvals.py tests/test_approval_ledger.py -q
@@ -392,6 +404,7 @@ Expected: G4 PASS.
 ### Task 6: Hacer ChromaDB indice unico
 
 **Files:**
+
 - Modify: `fuente/rag/router.py`
 - Modify: `fuente/rag/chroma_store.py`
 - Modify: `fuente/application/ingestion.py`
@@ -404,6 +417,7 @@ Expected: G4 PASS.
 - Modify: `tests/test_chat_retrieval_contract.py`
 
 **Interfaces:**
+
 - Produces: `RetrievalRouter(search: RetrievalBackend, enrichment: RetrievalBackend | None)`
 - Produces: `search() -> RetrievalBackend`
 - Produces: `enrichment() -> RetrievalBackend | None`
@@ -448,6 +462,7 @@ Expected: G5 PASS.
 ### Task 7: Limitar MiniRAG a enriquecimiento evaluado
 
 **Files:**
+
 - Modify: `fuente/rag/minirag_store.py`
 - Modify: `fuente/rag/router.py`
 - Modify: `fuente/application/refinement.py`
@@ -459,6 +474,7 @@ Expected: G5 PASS.
 - Create: `tests/integration/test_minirag_enrichment_gate.py`
 
 **Interfaces:**
+
 - Produces: `is_enrichment_enabled(note_id: str, revision: int, content_hash: str) -> bool`
 - Produces: `enrich(query: str, chroma_hits: list[RetrievalHit]) -> list[RetrievalHit]`
 
@@ -500,6 +516,7 @@ Expected: G6 PARTIAL, pendiente de la prueba AnythingLLM de Task 8.
 ### Task 8: Integrar AnythingLLM sin documentos
 
 **Files:**
+
 - Create: `fuente/integrations/anythingllm.py`
 - Modify: `fuente/config.py`
 - Modify: `fuente/application/chat.py`
@@ -510,6 +527,7 @@ Expected: G6 PARTIAL, pendiente de la prueba AnythingLLM de Task 8.
 - Modify: `tests/test_chat_retrieval_contract.py`
 
 **Interfaces:**
+
 - Produces: `AnythingLLMConversationClient.health() -> dict[str, object]`
 - Produces: `document_count() -> int`
 - Produces: `chat(session_id: str, prompt: str, model: str) -> dict[str, object]`
@@ -565,6 +583,7 @@ Expected: G6 PASS.
 ### Task 9: Crear helper de templates e instrucciones
 
 **Files:**
+
 - Create: `fuente/application/templates.py`
 - Modify: `fuente/infrastructure/sqlite_store.py`
 - Create: `fuente/infrastructure/migrations/024_template_versions.sql`
@@ -577,6 +596,7 @@ Expected: G6 PASS.
 - Create: `tests/contract/test_source_view_modes_contract.py`
 
 **Interfaces:**
+
 - Produces: `TemplateRegistry.list() -> list[TemplateSummary]`
 - Produces: `TemplateRegistry.load(template_id: str) -> TemplateBundle`
 - Produces: `TemplateRegistry.save(template_id: str, template: str, agents: str, expected_revision: int) -> TemplateBundle`
@@ -625,9 +645,12 @@ git add fuente/application/templates.py fuente/infrastructure/sqlite_store.py fu
 git commit -m "feat: add hidden template and agent helper"
 ```
 
+
+
 ### Task 10: Generar notas inteligentes en Procesado
 
 **Files:**
+
 - Create: `fuente/application/smart_notes.py`
 - Modify: `fuente/application/ingestion.py`
 - Modify: `fuente/application/approval.py`
@@ -639,6 +662,7 @@ git commit -m "feat: add hidden template and agent helper"
 - Modify: `tests/test_ingestion_approval_gate.py`
 
 **Interfaces:**
+
 - Produces: `SmartNoteGenerator.generate(source_id: str, revision: int, content_hash: str) -> list[GeneratedNote]`
 - Produces: `GeneratedNote(note_id, note_type, relative_path, content_hash, seal, lineage)`
 - Consumes: `TemplateRegistry`, `TransitionApprovalService`, `AnythingLLMConversationClient`, `RAMGovernor`
@@ -689,6 +713,7 @@ Expected: G7 PASS junto con Task 9.
 ### Task 11: Implementar Fuente de solo lectura y Feed
 
 **Files:**
+
 - Modify: `consola_preview.html`
 - Modify: `fuente/ui/static/console.css`
 - Modify: `fuente/ui/bridge.py`
@@ -700,6 +725,7 @@ Expected: G7 PASS junto con Task 9.
 - Modify: `tests/security/test_path_authorization.py`
 
 **Interfaces:**
+
 - Produces: `list_readonly_notes(query: str, scope: str) -> dict[str, object]`
 - Produces: `get_readonly_note(document_id: str) -> dict[str, object]`
 - Produces: `list_feed(cursor: str | None, limit: int, filters: FeedFilters, order: str) -> FeedPage`
@@ -761,6 +787,7 @@ Expected: G8 PASS.
 ### Task 12: Implementar Caudal
 
 **Files:**
+
 - Modify: `consola_preview.html`
 - Modify: `fuente/ui/static/console.css`
 - Modify: `fuente/ui/bridge.py`
@@ -774,6 +801,7 @@ Expected: G8 PASS.
 - Create: `tests/contract/test_import_export_print_contract.py`
 
 **Interfaces:**
+
 - Produces: `get_flow_state() -> dict[str, object]`
 - Produces: `open_source_feed(filters: dict[str, str], order: str) -> dict[str, object]`
 - Preserves: quarantine, approval and sharing bridge contracts
@@ -825,6 +853,7 @@ Expected: G9 PARTIAL, pendiente del gate final.
 ### Task 13: Gate final G0-G9
 
 **Files:**
+
 - Modify: `scripts/release_gate.py`
 - Modify: `scripts/update_sdd_evidence.py`
 - Modify: `docs/evidence/current-sdd.json`
@@ -834,6 +863,7 @@ Expected: G9 PARTIAL, pendiente del gate final.
 - Modify: `tests/test_documentation_freshness.py`
 
 **Interfaces:**
+
 - Produces: release verdict `READY` only when G0-G9 are PASS
 
 - [ ] **Step 1: Escribir el test del gate real**

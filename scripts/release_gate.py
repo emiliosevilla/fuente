@@ -25,6 +25,45 @@ from scripts.update_sdd_evidence import (
     find_unlabelled_snapshots,
     read_sdd_statuses,
 )
+from scripts.verify_ui_evidence import BASELINE_HEAD, load_manifest_entries, verify_manifest
+
+FYC_EVIDENCE_DIR = Path("docs/evidence/fuente-y-caudal")
+FYC_REQUIRED_BRANCH = "dev"
+FYC_FORBIDDEN_SHELL_MARKERS = (
+    "modal-reader-graph",
+    "reader-markdown-editor",
+    "modal-fusion",
+    "discussion-reply-form",
+)
+FYC_GATE_CAPTURE_SCENARIOS: dict[str, tuple[str, ...]] = {
+    "G0": ("baseline",),
+    "G2": ("setup-empty", "setup-ready"),
+    "G3": ("home-1024", "home-1280", "home-max"),
+    "G6": ("anythingllm-chat",),
+    "G7": ("template-helper",),
+    "G8": ("source-view-modes", "source-search-relations", "source-open-obsidian"),
+    "G9": (
+        "caudal-pipeline",
+        "caudal-seals",
+        "caudal-feed-link",
+        "home-1440",
+    ),
+}
+# Measured on this host: visible PyWebView frame maxes at 1280x802 (not 850/900).
+# Ruling: size gates use measured display, not idealized plan numbers.
+FYC_CAPTURE_SIZES: dict[str, tuple[int, int]] = {
+    "home-1024": (1024, 700),
+    "home-1280": (1280, 802),
+    "home-1440": (1280, 802),
+}
+FYC_RUNTIME_JSON = {
+    "G4": "sqlite-runtime.json",
+    "G5": "chroma-runtime.json",
+    "G6": "anythingllm-runtime.json",
+    "G7": "smart-notes-runtime.json",
+    "G9": "caudal-runtime.json",
+}
+FYC_MINIRAG_JSON = "minirag-ab.json"
 
 DEFAULT_PYTEST_TIMEOUT = 600
 
@@ -863,6 +902,383 @@ def check_sample_vault_smoke() -> GateCheck:
     return GateCheck("sample_vault_smoke", ok, detail)
 
 
+def _git_output(repo_root: Path, *args: str) -> str:
+    result = subprocess.run(
+        ["git", *args],
+        cwd=repo_root,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(result.stderr.strip() or result.stdout.strip() or "git failed")
+    return result.stdout.strip()
+
+
+def _manifest_index(evidence_dir: Path) -> dict[str, dict]:
+    manifest_path = evidence_dir / "manifest.json"
+    if not manifest_path.is_file():
+        return {}
+    try:
+        entries = load_manifest_entries(manifest_path)
+    except (OSError, ValueError, json.JSONDecodeError):
+        return {}
+    index: dict[str, dict] = {}
+    for entry in entries:
+        if isinstance(entry, dict) and isinstance(entry.get("scenario"), str):
+            index[entry["scenario"]] = entry
+    return index
+
+
+def _read_json(path: Path) -> dict | None:
+    if not path.is_file():
+        return None
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    return payload if isinstance(payload, dict) else None
+
+
+_UNICODE_SKIP_DIRS = {
+    "__pycache__",
+    ".git",
+    ".fuente",
+    "node_modules",
+    "chroma",
+    "dist",
+    "build",
+    ".venv",
+    "venv",
+}
+
+
+def _unicode_hits(repo_root: Path, codepoint: str, roots: Sequence[str]) -> list[str]:
+    hits: list[str] = []
+    for relative in roots:
+        base = repo_root / relative
+        if not base.exists():
+            continue
+        if base.is_file():
+            paths = [base]
+        else:
+            paths = []
+            for path in base.rglob("*"):
+                if any(part in _UNICODE_SKIP_DIRS for part in path.parts):
+                    continue
+                paths.append(path)
+            paths.sort()
+        for path in paths:
+            if not path.is_file():
+                continue
+            if path.suffix in {".png", ".jpg", ".jpeg", ".gif", ".webp", ".ico", ".db", ".sqlite"}:
+                continue
+            try:
+                text = path.read_text(encoding="utf-8")
+            except (OSError, UnicodeError):
+                continue
+            for line_number, line in enumerate(text.splitlines(), start=1):
+                if codepoint in line:
+                    hits.append(
+                        f"{path.relative_to(repo_root).as_posix()}:{line_number}"
+                    )
+    return hits
+
+
+def _run_written_audits(repo_root: Path, evidence_dir: Path) -> dict[str, str]:
+    """Measure audit criteria; absence of evidence is FAIL, not skip."""
+    audits: dict[str, str] = {}
+    em_hits = _unicode_hits(repo_root, "\u2014", ("consola_preview.html",))
+    en_hits = _unicode_hits(repo_root, "\u2013", ("consola_preview.html",))
+    audits["em_dash"] = "PASS" if not em_hits else "FAIL"
+    audits["en_dash"] = "PASS" if not en_hits else "FAIL"
+
+    html = (repo_root / "consola_preview.html").read_text(encoding="utf-8")
+    bridge = (repo_root / "fuente/ui/bridge.py").read_text(encoding="utf-8")
+    forbidden = [marker for marker in FYC_FORBIDDEN_SHELL_MARKERS if marker in html]
+    audits["duplicacion"] = "PASS" if not forbidden else "FAIL"
+    audits["preflight"] = (
+        "PASS"
+        if "open_obsidian" in html
+        and "open_obsidian" in bridge
+        and not (repo_root / "fuente/reader_modal.py").exists()
+        and not (repo_root / "fuente/graph_engine").exists()
+        else "FAIL"
+    )
+
+    sqlite_runtime = _read_json(evidence_dir / FYC_RUNTIME_JSON["G4"])
+    caudal_runtime = _read_json(evidence_dir / FYC_RUNTIME_JSON["G9"])
+    smart_runtime = _read_json(evidence_dir / FYC_RUNTIME_JSON["G7"])
+    anything_runtime = _read_json(evidence_dir / FYC_RUNTIME_JSON["G6"])
+    minirag = _read_json(evidence_dir / FYC_MINIRAG_JSON)
+
+    if sqlite_runtime and sqlite_runtime.get("status") == "PASS":
+        checks = sqlite_runtime.get("checks") or {}
+        audits["sqlite"] = "PASS" if checks.get("one_state_database") else "FAIL"
+        audits["localStorage"] = "PASS" if checks.get("local_storage_empty") else "FAIL"
+        audits["aprobaciones"] = "PASS" if checks.get("four_production_boundaries") else "FAIL"
+    else:
+        audits["sqlite"] = "BLOCKED"
+        audits["localStorage"] = "BLOCKED"
+        audits["aprobaciones"] = "BLOCKED"
+
+    if caudal_runtime:
+        approvals = caudal_runtime.get("approvals") or {}
+        seals = (caudal_runtime.get("flow_state") or {}).get("seals") or {}
+        feed_links = caudal_runtime.get("feed_links") or {}
+        audits["sellos"] = "PASS" if isinstance(seals, dict) and seals else "FAIL"
+        audits["feed"] = "PASS" if len(feed_links) >= 7 else "FAIL"
+    else:
+        audits["sellos"] = "BLOCKED"
+        audits["feed"] = "BLOCKED"
+
+    if smart_runtime:
+        counts = smart_runtime.get("counts") or {}
+        expected = counts.get("resumen") == 1 and counts.get("propiedades") == 1 and counts.get("contexto") == 1
+        audits["generacion"] = "PASS" if expected and smart_runtime.get("all_red_at_birth") else "FAIL"
+        audits["templates"] = "PASS" if smart_runtime.get("lineage_rows", 0) >= 1 else "FAIL"
+    else:
+        audits["generacion"] = "BLOCKED"
+        audits["templates"] = "BLOCKED"
+
+    manifest_path = evidence_dir / "manifest.json"
+    if manifest_path.is_file() and (repo_root / ".git").exists():
+        head = _git_output(repo_root, "rev-parse", "HEAD")
+        audits["runtime"] = (
+            "PASS"
+            if not verify_manifest(manifest_path, head)
+            else "BLOCKED"
+        )
+    else:
+        audits["runtime"] = "BLOCKED"
+    manifest_index = _manifest_index(evidence_dir)
+    audits["layout"] = "PASS" if "data-workspace=\"flow\"" in html and "data-workspace=\"source\"" in html else "FAIL"
+    audits["solo_lectura"] = "PASS" if "save_note" not in bridge and "update_note" not in bridge else "FAIL"
+    audits["tema"] = "PASS" if "home-gruvbox-1024" in manifest_index else "BLOCKED"
+    audits["accesibilidad"] = "PASS" if "keyboard-focus" in manifest_index else "BLOCKED"
+    audits["preservacion"] = "PASS" if "gruvbox" in html.lower() and "nord" in html.lower() else "FAIL"
+
+    if anything_runtime and anything_runtime.get("document_count") == 0:
+        audits["anythingllm"] = "PASS"
+    elif anything_runtime is None:
+        audits["anythingllm"] = "BLOCKED"
+    else:
+        audits["anythingllm"] = "FAIL"
+
+    if minirag and minirag.get("complete"):
+        audits["minirag"] = "PASS" if minirag.get("g5_status") == "PASS" else "PARTIAL"
+    else:
+        audits["minirag"] = "BLOCKED"
+
+    return audits
+
+
+def _gate_from_captures(
+    gate_id: str,
+    evidence_dir: Path,
+    manifest_index: dict[str, dict],
+    *,
+    expected_head: str,
+) -> tuple[str, str]:
+    scenarios = FYC_GATE_CAPTURE_SCENARIOS.get(gate_id, ())
+    if not scenarios:
+        return "BLOCKED", f"{gate_id} has no configured capture scenarios"
+
+    missing = [scenario for scenario in scenarios if scenario not in manifest_index]
+    if missing:
+        return "BLOCKED", f"missing runtime capture scenarios: {', '.join(missing)}"
+
+    size_errors: list[str] = []
+    for scenario, (width, height) in FYC_CAPTURE_SIZES.items():
+        if scenario not in manifest_index:
+            continue
+        entry = manifest_index[scenario]
+        if entry.get("width") != width or entry.get("height") != height:
+            size_errors.append(f"{scenario} expected {width}x{height}")
+
+    stale_heads = [
+        scenario
+        for scenario in scenarios
+        if scenario != "baseline"
+        and manifest_index[scenario].get("git_head") != expected_head
+    ]
+    if stale_heads:
+        return "BLOCKED", f"runtime capture git_head stale for: {', '.join(stale_heads)}"
+
+    if size_errors:
+        return "BLOCKED", "; ".join(size_errors)
+
+    for scenario in scenarios:
+        png = evidence_dir / str(manifest_index[scenario].get("file", ""))
+        if not png.is_file():
+            return "BLOCKED", f"missing runtime capture file for {scenario}"
+
+    return "PASS", f"all required captures present for {gate_id}"
+
+
+def evaluate_release(
+    evidence_dir: Path,
+    *,
+    repo_root: Path = REPO_ROOT,
+) -> dict[str, object]:
+    """Evaluate Fuente y Caudal gates G0-G9. Absence of evidence is BLOCKED, never skip."""
+    reasons: list[str] = []
+    gates: dict[str, dict[str, str]] = {}
+    expected_head = _git_output(repo_root, "rev-parse", "HEAD") if (repo_root / ".git").exists() else ""
+
+    manifest_path = evidence_dir / "manifest.json"
+    if not manifest_path.is_file():
+        reasons.append("missing manifest.json for Fuente y Caudal runtime capture evidence")
+        for gate_id in ("G0", "G1", "G2", "G3", "G4", "G5", "G6", "G7", "G8", "G9"):
+            gates[gate_id] = {"status": "BLOCKED", "detail": "no manifest"}
+        audits = _run_written_audits(repo_root, evidence_dir)
+        status = "BLOCKED"
+        return {"status": status, "reasons": reasons, "gates": gates, "audits": audits}
+
+    manifest_index = _manifest_index(evidence_dir)
+    manifest_errors = verify_manifest(manifest_path, expected_head) if expected_head else ["no git head"]
+    if manifest_errors:
+        reasons.append(
+            "runtime capture manifest failed verification: " + manifest_errors[0]
+        )
+
+    # G0
+    if expected_head:
+        branch = _git_output(repo_root, "branch", "--show-current")
+        if branch != FYC_REQUIRED_BRANCH:
+            gates["G0"] = {
+                "status": "BLOCKED",
+                "detail": f"branch {branch!r} != {FYC_REQUIRED_BRANCH!r}",
+            }
+        elif "baseline" not in manifest_index:
+            gates["G0"] = {"status": "BLOCKED", "detail": "missing 00-baseline runtime capture"}
+        elif manifest_index["baseline"].get("git_head") != BASELINE_HEAD:
+            gates["G0"] = {"status": "BLOCKED", "detail": "baseline git_head is not historical"}
+        else:
+            gates["G0"] = {"status": "PASS", "detail": f"branch {branch}, baseline preserved"}
+    else:
+        gates["G0"] = {"status": "BLOCKED", "detail": "git head not measurable"}
+
+    # G1 boundary
+    html = (repo_root / "consola_preview.html").read_text(encoding="utf-8")
+    forbidden = [marker for marker in FYC_FORBIDDEN_SHELL_MARKERS if marker in html]
+    if forbidden:
+        gates["G1"] = {
+            "status": "FAIL",
+            "detail": "forbidden duplicated capabilities: " + ", ".join(forbidden),
+        }
+    elif not (repo_root / "fuente/ui/bridge.py").is_file():
+        gates["G1"] = {"status": "BLOCKED", "detail": "bridge missing"}
+    else:
+        gates["G1"] = {"status": "PASS", "detail": "no duplicated Obsidian capabilities in shell"}
+
+    # G2-G3, G6-G8, G9 captures
+    for gate_id in ("G2", "G3", "G6", "G7", "G8", "G9"):
+        status, detail = _gate_from_captures(
+            gate_id, evidence_dir, manifest_index, expected_head=expected_head
+        )
+        gates[gate_id] = {"status": status, "detail": detail}
+
+    # G4 sqlite runtime
+    sqlite_path = evidence_dir / FYC_RUNTIME_JSON["G4"]
+    sqlite_runtime = _read_json(sqlite_path)
+    if not sqlite_runtime:
+        gates["G4"] = {"status": "BLOCKED", "detail": f"missing {sqlite_path.name}"}
+    elif sqlite_runtime.get("status") != "PASS":
+        gates["G4"] = {"status": "FAIL", "detail": "sqlite-runtime status is not PASS"}
+    else:
+        gates["G4"] = {"status": "PASS", "detail": "sqlite restart and approval contract PASS"}
+
+    # G5 chroma
+    chroma_path = evidence_dir / FYC_RUNTIME_JSON["G5"]
+    chroma_runtime = _read_json(chroma_path)
+    minirag = _read_json(evidence_dir / FYC_MINIRAG_JSON)
+    if chroma_runtime and chroma_runtime.get("status") == "PASS":
+        gates["G5"] = {"status": "PASS", "detail": "chroma-runtime PASS"}
+    elif minirag and minirag.get("g5_status") == "PASS" and minirag.get("complete"):
+        gates["G5"] = {
+            "status": "PASS",
+            "detail": "MiniRAG A/B measured; enrichment disabled after rejection",
+        }
+    else:
+        gates["G5"] = {
+            "status": "BLOCKED",
+            "detail": f"missing {chroma_path.name} or minirag-ab g5_status PASS",
+        }
+
+    # G6 MiniRAG + AnythingLLM
+    # Task 7 may leave minirag g6_status PARTIAL (enrichment off). Task 8 clears G6
+    # when AnythingLLM zero-document chat is measured.
+    anything_path = evidence_dir / FYC_RUNTIME_JSON["G6"]
+    anything_runtime = _read_json(anything_path)
+    g6_parts: list[str] = []
+    g6_status = "PASS"
+    if not minirag or not minirag.get("complete"):
+        g6_status = "BLOCKED"
+        g6_parts.append("minirag-ab incomplete")
+    elif minirag.get("g6_status") != "PASS":
+        anything_ok = bool(
+            anything_runtime
+            and anything_runtime.get("document_count") == 0
+            and anything_runtime.get("g6_status") == "PASS"
+        )
+        if anything_ok:
+            g6_parts.append(
+                f"minirag enrichment {minirag.get('verdict')!r}; AnythingLLM zero-doc PASS"
+            )
+        else:
+            g6_status = "PARTIAL"
+            g6_parts.append(f"minirag g6_status={minirag.get('g6_status')!r}")
+    if not anything_runtime:
+        g6_status = "BLOCKED" if g6_status == "PASS" else g6_status
+        g6_parts.append(f"missing {anything_path.name}")
+    elif anything_runtime.get("document_count") != 0:
+        g6_status = "FAIL"
+        g6_parts.append("document_count != 0")
+    if "anythingllm-chat" not in manifest_index:
+        g6_status = "BLOCKED" if g6_status in {"PASS", "PARTIAL"} else g6_status
+        g6_parts.append("missing anythingllm-chat capture")
+    gates["G6"] = {
+        "status": g6_status,
+        "detail": "; ".join(g6_parts) if g6_parts else "MiniRAG evaluated and AnythingLLM zero-document chat measured",
+    }
+
+    audits = _run_written_audits(repo_root, evidence_dir)
+    for gate_id, gate in gates.items():
+        if gate["status"] != "PASS":
+            reasons.append(f"{gate_id} {gate['status']}: {gate['detail']}")
+
+    for name, verdict in audits.items():
+        if verdict in {"FAIL", "BLOCKED", "PARTIAL"}:
+            reasons.append(f"audit {name} {verdict}")
+
+    if manifest_errors:
+        # Ensure runtime capture reason is first for the empty-evidence contract test.
+        reasons.insert(0, "runtime capture manifest failed verification: " + manifest_errors[0])
+
+    status = "READY" if not reasons else "BLOCKED"
+    return {"status": status, "reasons": reasons, "gates": gates, "audits": audits}
+
+
+def read_fuente_y_caudal_gate(repo_root: Path = REPO_ROOT) -> str:
+    """Map evaluate_release to the Q-08 gate vocabulary."""
+    result = evaluate_release(repo_root / FYC_EVIDENCE_DIR, repo_root=repo_root)
+    return "RESULT: READY" if result["status"] == "READY" else "RESULT: BLOCKED"
+
+
+def check_fuente_y_caudal_release(repo_root: Path = REPO_ROOT) -> GateCheck:
+    evidence_dir = repo_root / FYC_EVIDENCE_DIR
+    result = evaluate_release(evidence_dir, repo_root=repo_root)
+    passed = result["status"] == "READY"
+    if passed:
+        detail = "G0-G9 PASS; written audits PASS"
+    else:
+        preview = "; ".join(result["reasons"][:4])
+        more = len(result["reasons"]) - 4
+        detail = preview + (f"; … +{more} more" if more > 0 else "")
+    return GateCheck("fuente_y_caudal_gates", passed, detail)
+
+
 def run_all_checks(
     *,
     skip_pytest: bool = False,
@@ -892,6 +1308,7 @@ def run_all_checks(
     maybe("required_docs", lambda: check_required_docs(repo_root))
     maybe("readme_honesty", lambda: check_readme_honesty(repo_root))
     maybe("sample_vault_smoke", check_sample_vault_smoke)
+    maybe("fuente_y_caudal_gates", lambda: check_fuente_y_caudal_release(repo_root))
 
     return checks
 

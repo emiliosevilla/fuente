@@ -9,6 +9,7 @@ import pytest
 from fuente.application.chat import (
     CHAT_SYSTEM_PROMPT,
     ERROR_OLLAMA,
+    AnythingLLMChatProvider,
     ChatApplicationService,
     FakeChatProvider,
 )
@@ -336,6 +337,39 @@ def test_native_handler_receives_same_keys(grounded_service):
         "model",
     }
     assert required.issubset(result.keys())
+
+
+class _FakeAnythingLLMClient:
+    def __init__(self) -> None:
+        self.calls: list[dict[str, str]] = []
+
+    def chat(self, *, session_id: str, prompt: str, model: str) -> dict[str, object]:
+        self.calls.append(
+            {"session_id": session_id, "prompt": prompt, "model": model}
+        )
+        return {"textResponse": "Respuesta AnythingLLM con evidencia citada."}
+
+    def document_count(self) -> int:
+        return 0
+
+
+def test_chat_uses_anythingllm_with_chroma_context(grounded_service):
+    service, _provider, _store = grounded_service
+    fake_client = _FakeAnythingLLMClient()
+    service.provider = AnythingLLMChatProvider(fake_client)
+
+    result = service.ask(
+        "¿Qué garantiza la fianza del arrendamiento?",
+        {"session_id": "fuente-contract-test"},
+    )
+
+    assert result["ok"] is True
+    assert result["has_context"] is True
+    assert result["sources"]
+    assert fake_client.calls
+    assert fake_client.calls[0]["session_id"] == "fuente-contract-test"
+    assert "fianza" in fake_client.calls[0]["prompt"].lower()
+    assert CHAT_SYSTEM_PROMPT in fake_client.calls[0]["prompt"]
 
 
 def test_chat_is_honest_when_eco_policy_has_no_fitting_model(grounded_service):

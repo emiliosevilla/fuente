@@ -3,13 +3,32 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from typing import Any, Callable, Mapping, Protocol
+from typing import Any, Callable, Literal, Mapping, Protocol, Sequence
 
 from fuente.domain.refinement import RefinementVerdict
 from fuente.infrastructure.sqlite_store import JobStore
+from fuente.rag.backend import RetrievalHit
 
 
 REFINEMENT_EPSILON = 0.10
+
+
+@dataclass(frozen=True)
+class MiniRAGEvaluation:
+    document_id: str
+    revision: int
+    content_hash: str
+    baseline_metric: float
+    candidate_metric: float
+    metric_delta: float
+    verdict: Literal["accepted", "rejected", "needs_human_review"]
+    evaluator_reason: str
+    query: str = ""
+    model: str = ""
+
+
+class RetrievalMetric(Protocol):
+    def __call__(self, hits: Sequence[RetrievalHit]) -> float: ...
 
 
 @dataclass(frozen=True)
@@ -164,3 +183,83 @@ class RefinementApplicationService:
         if any(not 0.0 <= float(value) <= 1.0 for value in values):
             raise ValueError("refinement signals must be normalized between 0 and 1")
         return sum(float(value) for value in values) / len(values)
+
+
+def _default_retrieval_metric(hits: Sequence[RetrievalHit]) -> float:
+    if not hits:
+        return 0.0
+    return sum(float(hit.score) for hit in hits) / len(hits)
+
+
+class MiniRAGEnrichmentEvaluator:
+    """Persist an A/B verdict before MiniRAG enrichment may activate."""
+
+    def __init__(
+        self,
+        *,
+        job_store: JobStore,
+        epsilon: float = REFINEMENT_EPSILON,
+        metric_fn: RetrievalMetric | None = None,
+    ) -> None:
+        if epsilon < 0:
+            raise ValueError("epsilon must be non-negative")
+        self.job_store = job_store
+        self.epsilon = float(epsilon)
+        self.metric_fn = metric_fn or _default_retrieval_metric
+
+    def evaluate_ab(
+        self,
+        *,
+        document_id: str,
+        revision: int,
+        content_hash: str,
+        query: str,
+        baseline_hits: Sequence[RetrievalHit],
+        candidate_hits: Sequence[RetrievalHit],
+        citations_valid: bool = True,
+        model: str = "",
+    ) -> MiniRAGEvaluation:
+        try:
+            baseline_metric = float(self.metric_fn(baseline_hits))
+            candidate_metric = float(self.metric_fn(candidate_hits))
+            metric_delta = candidate_metric - baseline_metric
+            if not citations_valid:
+                verdict: Literal["accepted", "rejected", "needs_human_review"] = "rejected"
+                reason = "candidate citations are invalid"
+            elif metric_delta > self.epsilon:
+                verdict = "accepted"
+                reason = f"candidate exceeds baseline by {metric_delta:.3f}"
+            else:
+                verdict = "rejected"
+                reason = "candidate gain at or below epsilon"
+        except (OSError, TimeoutError, ValueError, TypeError) as exc:
+            baseline_metric = 0.0
+            candidate_metric = 0.0
+            metric_delta = 0.0
+            verdict = "needs_human_review"
+            reason = f"evaluation unavailable or invalid: {exc}"
+
+        evaluation = MiniRAGEvaluation(
+            document_id=document_id,
+            revision=revision,
+            content_hash=content_hash,
+            baseline_metric=baseline_metric,
+            candidate_metric=candidate_metric,
+            metric_delta=metric_delta,
+            verdict=verdict,
+            evaluator_reason=reason,
+            query=query,
+            model=model,
+        )
+        self.job_store.save_minirag_evaluation(
+            document_id,
+            revision,
+            content_hash,
+            baseline_metric=baseline_metric,
+            candidate_metric=candidate_metric,
+            verdict=verdict,
+            evaluator_reason=reason,
+            query=query,
+            model=model,
+        )
+        return evaluation

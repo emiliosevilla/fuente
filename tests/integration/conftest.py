@@ -83,8 +83,8 @@ class MissingMiniRAG:
 
 def offline_router(chroma: FakeChroma) -> RetrievalRouter:
     return RetrievalRouter(
-        primary=MissingMiniRAG(),
-        refinement=ChromaRetrievalBackend(chroma),
+        search=ChromaRetrievalBackend(chroma),
+        enrichment=None,
     )
 
 

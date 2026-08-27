@@ -364,13 +364,17 @@ PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -p no:cacheprovider tests -q
 ```
 
 El gate fail-closed comprueba tests, documentación, seguridad residual,
-sincronización de carpetas, limpieza del árbol y un smoke offline completo:
+sincronización de carpetas, limpieza del árbol, smoke offline completo y
+los gates Fuente y Caudal G0–G9 (capturas PyWebView, JSON de runtime y
+auditorías en `docs/evidence/fuente-y-caudal/`):
 
 ```bash
 PYTHONDONTWRITEBYTECODE=1 python3 scripts/release_gate.py
 ```
 
-`RESULT: READY` significa que el conjunto de comprobaciones del gate pasó.
+`RESULT: READY` significa que el conjunto de comprobaciones del gate pasó,
+incluido G0–G9 PASS en la evidencia Fuente y Caudal. `RESULT: BLOCKED` es el
+estado actual mientras falten capturas nativas, JSON de runtime o AnythingLLM.
 Las migraciones y la operación sin interfaz se describen en los comandos y
 contratos del propio repositorio; no requieren documentación adicional para
 ejecutar la suite o el gate.

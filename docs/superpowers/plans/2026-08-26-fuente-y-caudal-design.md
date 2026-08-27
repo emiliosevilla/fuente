@@ -927,4 +927,161 @@ git diff --cached --name-only
 git commit -m "docs: record Fuente y Caudal release evidence"
 ```
 
-Expected: G0-G9 PASS. Detenerse. No push, PR, merge o publicacion sin una orden posterior explicita.
+Expected: G0-G9 PASS. Detenerse. No push, PR, merge o publicacion sin una orden posterior explicita.  
+  
+---------------------------------  
+  
+After one session of intense work on Cursor this is what is done an what's not, accordingly to AI Agent itself:  
+  
+Tasks **1–13 del plan están hechas y en** `origin/dev` (`403f35e`). El plan en sí, en el último paso, dice: **parar** — sin PR/merge/publicación a `main` hasta que lo pidas.
+
+Lo que **sí queda** (el gate ya no está READY):
+
+1. **Revalidar G0–G9** — ahora `evaluate_release` → **BLOCKED**. Las capturas del manifiesto llevan `git_head` `b956fcc`/`a3b8c23`, no el HEAD actual `403f35e`. Hay que restampar/recapturar y regenerar `final-audit.md`.
+2. **Actualizar el ledger SDD** — `progress.md` sigue hablando de “commit pending” / READY viejo.
+3. **Limpieza opcional** — `task-11/12/13-report.md` siguen sin trackear.
+
+Fuera del plan hasta orden explícita: PR `dev` → `main`, merge, release/publicación.
+
+`★ Insight ─────────────────────────────────────` El commit de evidencia movió HEAD y, al exigir el gate `git_head == HEAD`, un ship correcto puede volver a dejar READY en rojo hasta restampar el manifiesto. `─────────────────────────────────────────────────`
+
+That `release_gate.py` run hung and was aborted. A faster `evaluate_release` already showed the real result: **BLOCKED** (capturas con `git_head` desactualizado respecto a `403f35e`).
+
+  
+Code for Tasks 1–13 is shipped on `dev`, but the plan is **not** fully closed and checks are **not** all green.
+
+### **Measured now**
+
+
+| **Check**          | **Result**                                        |
+| ------------------ | ------------------------------------------------- |
+| `evaluate_release` | **BLOCKED**                                       |
+| G0, G1, G4, G5, G6 | PASS (runtime JSON / audits)                      |
+| G2, G3, G7, G8, G9 | **BLOCKED** — capturas con `git_head` ≠ `403f35e` |
+| Audit `runtime`    | BLOCKED (mismo motivo)                            |
+
+
+### **Real screenshots?**
+
+**Partially, and not honestly for every scenario.**
+
+- There **are** real native PNGs (PyWebView/WebKit / Obsidian).
+- But of **21** files, only **5 unique images** by SHA-256.
+- **12** “different” scenarios are the **same** Inicio home bytes (`06-fuente-chat`, `07-template-helper`, `08-fuente-views`, `10-caudal-pipeline`, `11-caudal-seals`, etc.).
+- Another **6** are a second duplicated set (older shell shots).
+- Real distinct ones include things like `00-baseline`, `03-home-1024`, and `10-fuente-obsidian` (Obsidian vault).
+
+So: **not** “all real scenario screenshots passed.” Many names pretend to be chat/helper/Fuente/Caudal views but are copies of home.
+
+### **Bottom line**
+
+- **Implementation:** yes, committed/pushed.
+- **All checks passed:** **no** (gate BLOCKED).
+- **Real per-scenario runtime screenshots:** **no** — need fresh navigated captures + restamp `git_head`, then re-run the gate.
+
+`★ Insight ─────────────────────────────────────` A green-looking manifest can lie if files exist with the right names but identical pixels; hashing the PNGs catches that faster than reading the filenames. `─────────────────────────────────────────────────`
+
+That probe was aborted mid-run (likely hung on a runtime script). The useful bits were already captured separately: PNG sizes (~2560×1604 Retina) and the gate dump showing **BLOCKED** with stale `git_head`.
+
+---------------------------------
+
+## Addendum 2026-08-27 — clarifications (additive only)
+
+Measured on branch `dev`, HEAD `403f35e` (`feat` ship `44f9e90` + integration tests `403f35e`). This addendum does **not** replace Tasks 1–13 above; it records what still blocks calling the plan **closed**.
+
+### What “Tasks 1–13 done” means vs what it does not
+
+| Claim | Status | Clarification |
+| --- | --- | --- |
+| Product code for Tasks 1–13 on `origin/dev` | Yes | Implementation + most runtime JSON evidence committed/pushed. |
+| Plan Task 13 checkboxes / READY closure | **No** | Steps 1–7 above remain open until gate is READY **and** captures are unique per scenario. |
+| `evaluate_release` READY | **No** | Measured **BLOCKED** after the evidence commit (stale `git_head`). |
+| Honest per-scenario native screenshots | **No** | See duplicate PNG inventory below. Filename presence ≠ scenario proof. |
+| PR / merge to `main` / publication | Out of scope | Task 13 Step 7: stop without explicit later order. Push to `dev` already happened by user request; that does not finish the plan. |
+
+### Gate detail (do not treat git_head restamp as sufficient)
+
+Restamping `git_head` in `manifest.json` alone is **necessary but not sufficient**. READY also requires:
+
+1. Every required scenario PNG is a **distinct** capture of that UI state (not a renamed home frame).
+2. Manifest SHA-256 matches file bytes; `window_owner` / engine / title / sizes match `verify_ui_evidence` rules (baseline may keep historical HEAD exception).
+3. Runtime JSON still PASS when re-run against current HEAD: `sqlite-runtime.json`, `chroma-runtime.json` / `minirag-ab.json`, `anythingllm-runtime.json`, `smart-notes-runtime.json`, `caudal-runtime.json`.
+4. `docs/evidence/fuente-y-caudal/final-audit.md` regenerated to match the new verdict (file on disk may still describe an older BLOCKED snapshot at `b956fcc` — rewrite, do not leave stale narrative).
+5. SDD ledger `.superpowers/sdd/2026-08-26-fuente-y-caudal-design/progress.md` updated so it no longer says “commit pending” / contradictory READY.
+
+### Duplicate PNG inventory (SHA-256 groups measured 2026-08-27)
+
+**21** PNGs under `docs/evidence/fuente-y-caudal/`; only **5** unique digests.
+
+**Group A (12 files, identical bytes — Inicio/home frame):**
+
+- `01-setup-empty.png`
+- `02-setup-ready.png`
+- `04-home-1280.png`
+- `05-home-max.png`
+- `06-fuente-chat.png`
+- `07-template-helper.png`
+- `08-fuente-views.png`
+- `09-fuente-search-relations.png`
+- `10-caudal-pipeline.png`
+- `11-caudal-seals.png`
+- `12-caudal-feed-link.png`
+- `home-1440.png`
+
+**Group B (6 files, identical bytes — older shell set):**
+
+- `06-keyboard-focus.png`
+- `07-source-1024.png`
+- `08-flow-1024.png`
+- `09-home-gruvbox-1024.png`
+- `10-source-context-reopened.png`
+- `11-settings-focus-1024.png`
+
+**Unique (3 files + the two groups above = 5 digests):**
+
+- `00-baseline.png`
+- `03-home-1024.png`
+- `10-fuente-obsidian.png` (Obsidian owner; vault folders visible)
+
+### Display / capture size ruling (already applied in evidence tooling)
+
+This host cannot host ideal plan frames `1280x850` / `1440x900`. Measured visible frame used for gates: **1280×802** (Retina PNG pixels often ~2560×1604). Do not fail the plan solely for idealized 850/900 if evidence matches the measured ruling; **do** fail if scenarios are duplicate home frames.
+
+### AnythingLLM runtime note (for re-proof G6)
+
+- Working probe used Docker AnythingLLM on host **`:13001`**; OrbStack/docker-proxy on **`:3001`** can strip `Authorization`.
+- Optional bridge: `socat TCP-LISTEN:3001,bind=127.0.0.1,fork,reuseaddr TCP:127.0.0.1:13001`
+- Env: `FUENTE_ANYTHINGLLM_API_KEY` must be set for the zero-doc chat proof (`document_count == 0`).
+
+### How to re-measure uniqueness before claiming READY
+
+```bash
+python3 - <<'PY'
+from pathlib import Path
+import hashlib
+ev = Path('docs/evidence/fuente-y-caudal')
+d = {}
+for p in sorted(ev.glob('*.png')):
+    d.setdefault(hashlib.sha256(p.read_bytes()).hexdigest(), []).append(p.name)
+print('unique', len(d), 'of', sum(len(v) for v in d.values()))
+for h, names in sorted(d.items(), key=lambda x: -len(x[1])):
+    print(len(names), names)
+PY
+python3 -c 'from pathlib import Path; from scripts.release_gate import evaluate_release; print(evaluate_release(Path("docs/evidence/fuente-y-caudal"))["status"])'
+```
+
+Acceptance for screenshot honesty: **unique digest count == number of required distinct scenarios** (no multi-file groups sharing one hash except intentional identical states, which these are not).
+
+### Remaining work checklist (additive; closes the paste above)
+
+- [ ] Recapture **navigated** native scenarios (at least: setup empty/ready, home sizes, keyboard/gruvbox/settings, Fuente chat + views + search/relations, template helper, Caudal pipeline/seals/feed-link, Obsidian open). Inspect every PNG visually; reject any that still show Inicio when labeled otherwise.
+- [ ] Prove uniqueness with the SHA-256 script above (zero unexpected duplicate groups).
+- [ ] Restamp manifest `git_head` / hashes to current HEAD (baseline exception only if still coded that way).
+- [ ] Re-run runtime verifiers + `evaluate_release` → expect **READY**; rewrite `final-audit.md`.
+- [ ] Update SDD `progress.md` ledger to match measured READY.
+- [ ] Optional: commit evidence-only follow-up; still **no** PR/merge/`main` without a new explicit order.
+- [ ] Optional cleanup: delete or keep untracked `task-11-report.md` / `task-12-report.md` / `task-13-report.md` (scratch; not required for READY).
+
+### Language / process note on the pasted block above
+
+The block under the first `---------------------------------` is a session status dump (ES + EN + chat insights). Treat it as **evidence of measured gaps**, not as a substitute for Task 13 steps. When READY is true again, append a short measured closing note with HEAD, gate status, unique PNG count, and `final-audit.md` path — do not delete this addendum.

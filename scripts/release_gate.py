@@ -915,6 +915,33 @@ def _git_output(repo_root: Path, *args: str) -> str:
     return result.stdout.strip()
 
 
+def _acceptable_evidence_heads(repo_root: Path, head: str) -> set[str]:
+    """HEAD plus parent when HEAD is an evidence-only git_head restamp (chicken-egg)."""
+    heads = {head}
+    try:
+        names = [
+            line
+            for line in _git_output(
+                repo_root, "diff-tree", "--no-commit-id", "--name-only", "-r", head
+            ).splitlines()
+            if line.strip()
+        ]
+    except RuntimeError:
+        return heads
+    if not names:
+        return heads
+    allowed_prefix = "docs/evidence/fuente-y-caudal/"
+    if not all(
+        name.startswith(allowed_prefix) and name.endswith((".json",)) for name in names
+    ):
+        return heads
+    try:
+        heads.add(_git_output(repo_root, "rev-parse", f"{head}^"))
+    except RuntimeError:
+        pass
+    return heads
+
+
 def _manifest_index(evidence_dir: Path) -> dict[str, dict]:
     manifest_path = evidence_dir / "manifest.json"
     if not manifest_path.is_file():
@@ -1046,7 +1073,7 @@ def _run_written_audits(repo_root: Path, evidence_dir: Path) -> dict[str, str]:
         head = _git_output(repo_root, "rev-parse", "HEAD")
         audits["runtime"] = (
             "PASS"
-            if not verify_manifest(manifest_path, head)
+            if not verify_manifest(manifest_path, _acceptable_evidence_heads(repo_root, head))
             else "BLOCKED"
         )
     else:
@@ -1078,7 +1105,7 @@ def _gate_from_captures(
     evidence_dir: Path,
     manifest_index: dict[str, dict],
     *,
-    expected_head: str,
+    expected_head: str | set[str],
 ) -> tuple[str, str]:
     scenarios = FYC_GATE_CAPTURE_SCENARIOS.get(gate_id, ())
     if not scenarios:
@@ -1096,11 +1123,12 @@ def _gate_from_captures(
         if entry.get("width") != width or entry.get("height") != height:
             size_errors.append(f"{scenario} expected {width}x{height}")
 
+    allowed_heads = {expected_head} if isinstance(expected_head, str) else set(expected_head)
     stale_heads = [
         scenario
         for scenario in scenarios
         if scenario != "baseline"
-        and manifest_index[scenario].get("git_head") != expected_head
+        and manifest_index[scenario].get("git_head") not in allowed_heads
     ]
     if stale_heads:
         return "BLOCKED", f"runtime capture git_head stale for: {', '.join(stale_heads)}"
@@ -1125,6 +1153,9 @@ def evaluate_release(
     reasons: list[str] = []
     gates: dict[str, dict[str, str]] = {}
     expected_head = _git_output(repo_root, "rev-parse", "HEAD") if (repo_root / ".git").exists() else ""
+    acceptable_heads = (
+        _acceptable_evidence_heads(repo_root, expected_head) if expected_head else set()
+    )
 
     manifest_path = evidence_dir / "manifest.json"
     if not manifest_path.is_file():
@@ -1136,7 +1167,9 @@ def evaluate_release(
         return {"status": status, "reasons": reasons, "gates": gates, "audits": audits}
 
     manifest_index = _manifest_index(evidence_dir)
-    manifest_errors = verify_manifest(manifest_path, expected_head) if expected_head else ["no git head"]
+    manifest_errors = (
+        verify_manifest(manifest_path, acceptable_heads) if expected_head else ["no git head"]
+    )
     if manifest_errors:
         reasons.append(
             "runtime capture manifest failed verification: " + manifest_errors[0]
@@ -1175,7 +1208,7 @@ def evaluate_release(
     # G2-G3, G6-G8, G9 captures
     for gate_id in ("G2", "G3", "G6", "G7", "G8", "G9"):
         status, detail = _gate_from_captures(
-            gate_id, evidence_dir, manifest_index, expected_head=expected_head
+            gate_id, evidence_dir, manifest_index, expected_head=acceptable_heads
         )
         gates[gate_id] = {"status": status, "detail": detail}
 

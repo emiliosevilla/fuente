@@ -20,8 +20,7 @@ def main() -> int:
         vault = Path(tmp)
         db = vault / ".fuente" / "state.db"
         db.parent.mkdir(parents=True)
-        store = JobStore(db)
-        store.migrate()
+        store = JobStore(vault)
         service = TransitionApprovalService(store)
         artifact_id = "g4-runtime-note"
         content_hash = "a" * 64

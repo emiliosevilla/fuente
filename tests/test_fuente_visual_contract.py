@@ -134,8 +134,8 @@ def test_shell_has_exactly_three_product_workspaces() -> None:
 def test_shell_dimensions_type_and_keyboard_focus_are_explicit() -> None:
     html, css, tokens = _read(HTML_PATH), _read(CONSOLE_CSS_PATH), _read(TOKENS_CSS_PATH)
     for declaration in (
-        "--rail-width: 68px",
-        "--header-height: 64px",
+        "--rail-width: 113px",
+        "--header-height: 72px",
         "--font-size-base: 16px",
         "--font-size-document: 17px",
         "--font-size-control: 14px",
@@ -200,3 +200,36 @@ def test_upgrade_palette_is_semantic_and_component_css_has_no_hex_literals() -> 
     ):
         assert f"{token}:" in tokens
     assert re.search(r"#[0-9a-fA-F]{6}", css) is None
+
+
+def test_fuente_mockup_identity_markers_are_present() -> None:
+    html = _read(HTML_PATH)
+    assert "Arquitectura local" in html
+    assert "Solo lectura" in html
+    assert "Objetivo" in html
+    assert "Principios" in html
+    assert "Componentes" in html
+    assert "Limpiar filtros" in html
+    assert 'name="source-filter-seal"' in html
+    assert 'type="checkbox"' in html
+    assert "Índice de contenido con ChromaDB" in html
+    assert "Principios de diseño" in html
+    assert "Flujo de consulta local" in html
+    assert "\u2014" not in html
+    assert "\u2013" not in html
+    assert "Detalle del archivo" in html
+    assert "Contrato_Servicios_v3.docx" in html
+    assert "function applyCaptureScenario(name)" in html
+    assert "switchSourceView('individual')" in html.split("source-view-modes", 1)[1]
+    assert "source-filter-drawer" in html.split("source-view-modes", 1)[1]
+    assert "restoreCaudalQueueFixture" in html
+    assert "caudal-queue-fixture" in html
+    assert "if (document.body.getAttribute('data-capture-scenario')) return;" in html
+    assert 'id="aux-search-relations"' in html
+    assert "Decisiones de arquitectura - Q1 2025" in html
+    assert "Contenido: ChromaDB" in html
+    assert "modal-caudal-import" in html
+    assert "Elegir..." in html
+    assert "if (id === 'modal-template-helper' && !document.body.getAttribute('data-capture-scenario'))" in html
+    assert "openModal('modal-caudal-import')" in html.split("flow-1024", 1)[1]
+    assert "aux-search-relations" in html.split("source-search-relations", 1)[1]

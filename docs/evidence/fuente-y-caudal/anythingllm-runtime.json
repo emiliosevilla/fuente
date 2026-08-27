@@ -1,6 +1,6 @@
 {
   "task": 8,
-  "git_head": "f4ae0577606d986634a84d6877540fe85b3664c2",
+  "git_head": "dec265d45e0101bdcafca5a0a74d9ce9f97191b1",
   "base_url": "http://127.0.0.1:13001",
   "workspace": "fuente",
   "session_id": "fuente-task8-runtime",
@@ -14,8 +14,8 @@
   },
   "first_chat_id": 6,
   "second_chat_id": 7,
-  "first_response": "Por supuesto. Recuerda el token PLASMA-77 para esta sesión.",
-  "second_response": "El token PLASMA-77 se me recordó en esta sesión.",
+  "first_response": "Por supuesto. Recuerda el token PLASMA-77 para esta sesi\u00f3n.",
+  "second_response": "El token PLASMA-77 se me record\u00f3 en esta sesi\u00f3n.",
   "history_recovered": true,
   "g6_status": "PASS",
   "complete": true

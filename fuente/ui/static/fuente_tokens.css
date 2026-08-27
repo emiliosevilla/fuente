@@ -1,30 +1,32 @@
 /* Fuente semantic tokens for the local native knowledge studio. */
 :root,
 html[data-fuente-style="nord"] {
+    /* Bright Nord ambiance: Snow Storm + Frost (no pure white). */
     color-scheme: light;
-    --surface-canvas: #ECEFF4;
-    --surface-raised: #FFFFFF;
-    --surface-sunken: #E5E9F0;
-    --surface-overlay: #FFFFFF;
-    --text-primary: #2E3440;
-    --text-secondary: #434C5E;
-    --border-subtle: #D8DEE9;
-    --accent-primary: #4C6C94;
-    --accent-selection: rgba(94, 129, 172, 0.16);
-    --focus-ring: #5E81AC;
-    --state-success: #4F6F41;
-    --state-warning: #7A5E00;
-    --state-danger: #A83B46;
-    --surface-glass: rgba(255, 255, 255, 0.94);
-    --surface-glass-strong: rgba(255, 255, 255, 0.98);
-    --border-glass: rgba(76, 86, 106, 0.18);
-    --background-app: var(--surface-canvas);
-    --elevation-overlay: 0 16px 46px rgba(46, 52, 64, 0.18);
+    --surface-canvas: #ECEFF4; /* nord6 */
+    --surface-raised: #E5E9F0; /* nord5 */
+    --surface-sunken: #D8DEE9; /* nord4 */
+    --surface-overlay: #E5E9F0; /* nord5 */
+    --text-primary: #2E3440; /* nord0 */
+    --text-secondary: #4C566A; /* nord3 */
+    --border-subtle: #D8DEE9; /* nord4 */
+    --accent-primary: #4C6C94; /* nord10 deepened for AA text on snow */
+    --accent-selection: rgba(94, 129, 172, 0.22);
+    --focus-ring: #5E81AC; /* nord10 */
+    --state-success: #4F6F41; /* aurora green, darkened for AA on snow */
+    --state-warning: #7A5E00; /* aurora yellow, darkened for AA on snow */
+    --state-warning-fill: #D99A24; /* amber dorado para indicadores visuales */
+    --state-danger: #A83B46; /* aurora red, darkened for AA on snow */
+    --surface-glass: rgba(229, 233, 240, 0.92);
+    --surface-glass-strong: rgba(236, 239, 244, 0.96);
+    --border-glass: rgba(94, 129, 172, 0.28);
+    --background-app: linear-gradient(165deg, #ECEFF4 0%, #E5E9F0 42%, #D8DEE9 78%, #D3DEEA 100%);
+    --elevation-overlay: 0 16px 46px rgba(46, 52, 64, 0.16);
     --elevation-low: 0 2px 8px rgba(46, 52, 64, 0.10);
     --elevation-medium: 0 8px 18px rgba(46, 52, 64, 0.14);
     --surface-scrim: rgba(46, 52, 64, 0.46);
-    --surface-dim: rgba(46, 52, 64, 0.18);
-    --focus-shadow: 0 0 0 2px rgba(94, 129, 172, 0.24);
+    --surface-dim: rgba(76, 86, 106, 0.22);
+    --focus-shadow: 0 0 0 2px rgba(94, 129, 172, 0.32);
     --fuente-polar-0: #2E3440;
     --fuente-polar-1: #3B4252;
     --fuente-polar-2: #4C566A;
@@ -33,9 +35,9 @@ html[data-fuente-style="nord"] {
     --fuente-frost-2: #81A1C1;
     --fuente-frost-1: #88C0D0;
     --fuente-success: #A3BE8C;
-    --fuente-warning: #EBCB8B;
-    --fuente-danger: #D98990;
-    --fuente-selection: rgba(129, 161, 193, 0.24);
+    --fuente-warning: #D99A24;
+    --fuente-danger: #BF616A;
+    --fuente-selection: rgba(94, 129, 172, 0.24);
     --fuente-focus: #88C0D0;
     --fuente-glass: var(--surface-glass);
     --fuente-glass-strong: var(--surface-glass-strong);
@@ -58,6 +60,7 @@ html[data-fuente-style="gruvbox"] {
     --focus-ring: #83A598;
     --state-success: #B8BB26;
     --state-warning: #FABD2F;
+    --state-warning-fill: #FABD2F;
     --state-danger: #FF5D48;
     --surface-glass: rgba(50, 48, 47, 0.92);
     --surface-glass-strong: rgba(60, 56, 54, 0.97);
@@ -105,9 +108,9 @@ html[data-fuente-style="gruvbox"] {
     --control-compact: 32px;
     --control-standard: 40px;
     --control-prominent: 44px;
-    --rail-width: 113px;
+    --rail-width: 72px;
     --header-height: 72px;
-    --library-width: 325px;
+    --library-width: 192px;
     --content-measure: 76rem;
     --reading-measure: 68ch;
     --font-size-base: 16px;

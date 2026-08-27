@@ -182,13 +182,13 @@ def test_load_note_by_document_id_supports_nested_navigation_and_history(temp_va
     assert bridge.get_note_content(current)["title"] == "Pagos"
 
 
-def test_webview_reader_exposes_back_control_that_pops_history():
-    """WebView must wire Atrás to pop readerNoteHistory and reload by id."""
+def test_webview_reader_keeps_internal_note_history_without_redundant_back_control():
+    """WebView keeps linked-note history while the redundant Atrás control is absent."""
     source = (
         Path(__file__).resolve().parent.parent / "consola_preview.html"
     ).read_text(encoding="utf-8")
 
-    assert 'id="btn-reader-back"' in source
+    assert 'id="btn-reader-back"' not in source
     assert "goBackReaderNote()" in source
     assert "readerNoteHistory.pop()" in source
     assert "loadNoteContent(previousId, { skipHistory: true })" in source

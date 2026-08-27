@@ -23,10 +23,16 @@ def test_native_shell_has_three_product_workspaces_and_one_main_region():
     assert HTML.count('role="main"') == 1
 
 
-def test_home_is_not_a_uniform_stat_card_dashboard():
+def test_home_is_command_dashboard_not_product_gate():
+    assert 'id="home-product-access"' in HTML
+    assert 'id="home-dashboard-title"' in HTML
+    assert "Estado general" in HTML
     assert 'class="stats-grid"' not in HTML
     assert 'class="stat-card"' not in HTML
-    assert 'id="home-product-access"' in HTML
+    home = HTML.split('id="home-product-access"', 1)[1].split("</section>", 1)[0]
+    assert "Abrir Fuente" not in home
+    assert "Abrir Caudal" not in home
+    assert "Elige dónde trabajar" not in home
     assert 'data-onclick-command="switchWorkspace(\'source\')"' in HTML
     assert 'data-onclick-command="switchWorkspace(\'flow\')"' in HTML
 

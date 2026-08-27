@@ -70,10 +70,11 @@ def test_console_exposes_independent_nord_gruvbox_visual_style_toggle() -> None:
     html = _read(HTML_PATH)
     assert '<html lang="es" data-fuente-style="nord">' in html
     assert 'id="style-toggle"' in html
-    assert '<span id="style-toggle-label">Gruvbox</span>' in html
+    assert '<span id="style-toggle-label">Aspecto</span>' in html
     assert "const nextStyle = activeStyle === 'nord' ? 'gruvbox' : 'nord'" in html
     assert "const nextStyleLabel = nextStyle === 'gruvbox' ? 'Gruvbox' : 'Nord'" in html
-    assert "styleLabel.textContent = nextStyleLabel" in html
+    assert "styleLabel.textContent = 'Aspecto'" in html
+    assert "Cambiar aspecto a " in html
     assert "styleToggle.setAttribute('aria-pressed'" not in html
     assert "document.documentElement.dataset.fuenteStyle = activeStyle" in html
     assert "persistUiState('main-window', 'visual_style', activeStyle)" in html
@@ -101,8 +102,12 @@ def test_nord_and_gruvbox_text_tokens_meet_normal_text_contrast() -> None:
 def test_nord_is_the_light_initial_theme() -> None:
     tokens = _read(TOKENS_CSS_PATH)
     assert _theme_token_hex(tokens, "nord", "--surface-canvas").upper() == "#ECEFF4"
-    assert _theme_token_hex(tokens, "nord", "--surface-raised").upper() == "#FFFFFF"
+    assert _theme_token_hex(tokens, "nord", "--surface-raised").upper() == "#E5E9F0"
+    assert _theme_token_hex(tokens, "nord", "--surface-sunken").upper() == "#D8DEE9"
+    assert _theme_token_hex(tokens, "nord", "--accent-primary").upper() == "#4C6C94"
+    assert _theme_token_hex(tokens, "nord", "--focus-ring").upper() == "#5E81AC"
     assert _theme_token_hex(tokens, "nord", "--text-primary").upper() == "#2E3440"
+    assert "#FFFFFF" not in tokens.split('html[data-fuente-style="nord"]', 1)[1].split("html[data-fuente-style=\"gruvbox\"]", 1)[0].upper()
 
 def test_visual_style_toggle_does_not_reuse_vault_theme_bridge() -> None:
     html = _read(HTML_PATH)
@@ -119,6 +124,58 @@ def test_reader_exposes_read_only_content_and_properties() -> None:
     assert 'id="reader-properties"' in html
     assert "function renderReaderProperties(" in html
 
+def test_fuente_library_exposes_a_reversible_collapse_control() -> None:
+    html, css = _read(HTML_PATH), _read(CONSOLE_CSS_PATH)
+    assert 'id="btn-source-library"' in html
+    assert 'data-onclick-command="toggleSourceLibrary()"' in html
+    assert 'aria-controls="fuente-library"' in html
+    assert "function toggleSourceLibrary()" in html
+    assert ".fuente-shell.is-active.is-library-collapsed" in css
+
+
+def test_home_status_strip_has_a_quick_diagnostics_title() -> None:
+    html, css = _read(HTML_PATH), _read(CONSOLE_CSS_PATH)
+    assert 'aria-labelledby="quick-diagnostics-title"' in html
+    assert 'id="quick-diagnostics-title"' in html
+    assert "Diagnóstico rápido" in html
+    assert ".status-strip-title" in css
+
+
+def test_fuente_seals_tree_exposes_an_accessible_toggle() -> None:
+    html = _read(HTML_PATH)
+    assert 'data-onclick-command="toggleSourceLibrarySection(this)"' in html
+    assert 'aria-controls="source-seals-tree"' in html
+    assert 'aria-expanded="true"' in html
+    assert 'id="source-seals-tree"' in html
+    assert "function toggleSourceLibrarySection(button)" in html
+
+def test_fuente_note_types_tree_exposes_an_accessible_toggle() -> None:
+    html = _read(HTML_PATH)
+    assert 'aria-controls="source-note-types-tree"' in html
+    assert 'aria-expanded="false"' in html
+    assert 'id="source-note-types-tree" hidden' in html
+    assert "Concepto" in html
+    assert "Referencia" in html
+    assert "Proyecto" in html
+    assert "Decisión" in html
+
+
+def test_fuente_themes_tree_exposes_an_accessible_toggle() -> None:
+    html = _read(HTML_PATH)
+    assert 'aria-controls="source-themes-tree"' in html
+    assert 'id="source-themes-tree" hidden' in html
+    assert "General" in html
+
+
+def test_fuente_projects_tree_exposes_an_accessible_toggle() -> None:
+    html = _read(HTML_PATH)
+    assert 'aria-controls="source-projects-tree"' in html
+    assert 'id="source-projects-tree" hidden' in html
+    assert "Arquitectura" in html
+    assert "Lanzamiento" in html
+    assert "Operaciones" in html
+
+
 def test_console_reader_css_keeps_keyboard_focus_and_narrow_layout() -> None:
     css = _read(CONSOLE_CSS_PATH)
     assert ":focus-visible" in css
@@ -134,7 +191,7 @@ def test_shell_has_exactly_three_product_workspaces() -> None:
 def test_shell_dimensions_type_and_keyboard_focus_are_explicit() -> None:
     html, css, tokens = _read(HTML_PATH), _read(CONSOLE_CSS_PATH), _read(TOKENS_CSS_PATH)
     for declaration in (
-        "--rail-width: 113px",
+        "--rail-width: 72px",
         "--header-height: 72px",
         "--font-size-base: 16px",
         "--font-size-document: 17px",
@@ -157,7 +214,7 @@ def test_shell_uses_named_svg_controls_and_shared_disclosures() -> None:
     assert navigation.count("<svg") >= 5
     assert '<span aria-hidden="true">F</span>' not in navigation
     assert '<span aria-hidden="true">N</span>' not in navigation
-    for primitive in ("ui-drawer", "ui-popover", "ui-accordion", "ui-carousel"):
+    for primitive in ("ui-drawer", "ui-popover", "ui-carousel"):
         assert primitive in html
     assert 'id="source-context-drawer"' in html
     assert 'id="flow-detail-drawer"' in html
@@ -173,7 +230,17 @@ def test_structural_controls_use_shared_svg_icons_beyond_the_rail() -> None:
     assert 'id="ui-icon-back"' in html
     assert 'id="ui-icon-search"' in html
     assert 'id="ui-icon-close"' in html
+    for lucide_id in (
+        "ui-icon-house",
+        "ui-icon-settings-2",
+        "ui-icon-copy",
+        "ui-icon-download",
+        "ui-icon-send",
+        "ui-icon-circle-check",
+    ):
+        assert f'id="{lucide_id}"' in html
     assert html.count('class="ui-icon"') >= 16
+    assert re.search(r'<svg(?![^>]*id="ui-icon-definitions")[^>]*viewBox="0 0 24 24"[^>]*>\s*<path', html) is None
     assert "createUiIcon('close')" in html
 
 def test_reader_rendering_does_not_add_innerhtml_assignments() -> None:
@@ -233,3 +300,38 @@ def test_fuente_mockup_identity_markers_are_present() -> None:
     assert "if (id === 'modal-template-helper' && !document.body.getAttribute('data-capture-scenario'))" in html
     assert "openModal('modal-caudal-import')" in html.split("flow-1024", 1)[1]
     assert "aux-search-relations" in html.split("source-search-relations", 1)[1]
+
+
+def test_caudal_preview_exposes_working_queue_labels_and_controls() -> None:
+    html, css = _read(HTML_PATH), _read(CONSOLE_CSS_PATH)
+    assert 'id="caudal-browser-files"' in html
+    assert 'id="caudal-queue-tab-done"' in html
+    assert ">Aprobadas</button>" in html
+    assert "Terminados" not in html
+    assert ">Pendientes</span>" in html
+    assert ">Aprobadas</span>" in html
+    assert 'data-queue-status="waiting"' in html
+    assert 'data-queue-status="active"' in html
+    assert 'data-queue-status="completed"' in html
+    assert "function renderCaudalPreviewQueue(filter)" in html
+    assert "function selectCaudalPreviewRow(row)" in html
+    assert "function previewImportFiles(paths)" in html
+    assert 'class="vertical-tab activity-tab"' not in html
+    assert ".activity-tab" not in css
+    assert "#workspace-flow.is-active .dot.orange" in css
+    assert "var(--fuente-warning)" in css
+
+
+def test_source_preview_exposes_navigable_recent_cards_and_library_filters() -> None:
+    html, css = _read(HTML_PATH), _read(CONSOLE_CSS_PATH)
+    assert 'class="vertical-tab fuente-chat-tab"' not in html
+    assert "function isSourcePreviewMode()" in html
+    assert "function selectSourceLibraryFilter(button)" in html
+    assert "function renderSourceCard(item)" in html
+    assert 'data-source-filter="project:Arquitectura"' in html
+    assert 'data-source-filter="theme:General"' in html
+    assert 'data-source-filter="note_type:concepto"' in html
+    assert 'data-source-filter="seal:approved"' in html
+    assert "card.setAttribute('role', 'button')" in html
+    assert ".library-tree-item-button" in css
+    assert "grid-template-columns: var(--library-width) minmax(0, 1fr);" in css

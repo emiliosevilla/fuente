@@ -8,6 +8,7 @@ import json
 import os
 import re
 import subprocess
+import sys
 import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
@@ -235,11 +236,26 @@ def find_unlabelled_snapshots(docs_root: Path) -> list[str]:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--suite-file", type=Path, required=True)
-    parser.add_argument("--gate-file", type=Path, required=True)
+    parser.add_argument("--gate-file", type=Path)
+    parser.add_argument(
+        "--from-fuente-y-caudal-gate",
+        action="store_true",
+        help="Set gate from evaluate_release instead of --gate-file",
+    )
     parser.add_argument("--repo-root", type=Path, default=Path(__file__).resolve().parent.parent)
     args = parser.parse_args()
     suite = _read_result_file(args.suite_file, kind="suite")
-    gate = _read_result_file(args.gate_file, kind="gate")
+    if args.from_fuente_y_caudal_gate:
+        repo = args.repo_root.resolve()
+        if str(repo) not in sys.path:
+            sys.path.insert(0, str(repo))
+        from scripts.release_gate import read_fuente_y_caudal_gate
+
+        gate = read_fuente_y_caudal_gate(repo)
+    else:
+        if args.gate_file is None:
+            parser.error("--gate-file is required unless --from-fuente-y-caudal-gate is set")
+        gate = _read_result_file(args.gate_file, kind="gate")
     evidence = update_sdd_evidence(args.repo_root, suite=suite, gate=gate)
     print(json.dumps(evidence, ensure_ascii=False, indent=2, sort_keys=True))
     return 0

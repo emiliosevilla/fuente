@@ -27,37 +27,35 @@ class HitBackend(FakeBackend):
         ]
 
 
-def test_router_uses_primary_for_chat_and_refinement_for_evaluation():
-    router = RetrievalRouter(
-        primary=FakeBackend("minirag"),
-        refinement=FakeBackend("chroma"),
-    )
-    assert router.primary().name == "minirag"
-    assert router.refinement().name == "chroma"
+def test_chroma_is_the_only_search_backend():
+    router = RetrievalRouter(search=HitBackend("chroma"), enrichment=None)
+    assert router.search().name == "chroma"
+    assert router.enrichment() is None
 
 
-def test_primary_minirag_failure_reads_from_refinement_chroma():
-    class MissingMiniRAG(FakeBackend):
-        def search(self, query, limit):
-            raise RuntimeError("MiniRAG is not installed; use BM25 fallback")
+def test_router_exposes_search_without_enrichment_by_default():
+    router = RetrievalRouter(search=FakeBackend("chroma"))
+    assert router.search().name == "chroma"
+    assert router.enrichment() is None
 
-    router = RetrievalRouter(
-        primary=MissingMiniRAG("minirag"),
-        refinement=HitBackend("chroma"),
-    )
+
+def test_search_backend_is_used_for_chat_context():
+    backend = HitBackend("chroma")
+    router = RetrievalRouter(search=backend, enrichment=None)
     service = RetrievalApplicationService(
-        object(), router=router, eligibility_guard=lambda hit: True
+        router=router, eligibility_guard=lambda hit: True
     )
 
     context = service.build_context("contenido", "all_notes")
 
     assert context["has_context"] is True
     assert context["chunks"][0]["metadata"]["document_id"] == "doc-1"
+    assert context["chunks"][0].get("backend", backend.name) in {"chroma", None}
 
 
 def test_retrieval_hit_score_survives_service_bounding():
-    backend = HitBackend("minirag")
-    router = RetrievalRouter(primary=backend, refinement=HitBackend("chroma"))
+    backend = HitBackend("chroma")
+    router = RetrievalRouter(search=backend, enrichment=None)
     service = RetrievalApplicationService(
         router=router,
         eligibility_guard=lambda hit: True,
@@ -69,15 +67,31 @@ def test_retrieval_hit_score_survives_service_bounding():
     assert context["chunks"][0]["score"] == 0.75
 
 
-def test_chroma_backend_is_explicitly_named_refinement():
+def test_chroma_backend_is_explicitly_named_chroma():
     class Store:
         def query_hybrid(self, query, n_results=5):
             return []
 
-    assert ChromaRetrievalBackend(Store()).name == "chroma-refinement"
+    assert ChromaRetrievalBackend(Store()).name == "chroma"
 
 
-def test_chroma_backend_exposes_refinement_contract_and_failure():
+def test_chroma_backend_search_preserves_chunk_id_in_metadata():
+    class Store:
+        def query_hybrid(self, query, n_results=5):
+            return [
+                {
+                    "id": "doc-1:hash-1:0",
+                    "content": "contenido",
+                    "metadata": {"document_id": "doc-1", "source_hash": "hash-1"},
+                    "rrf_score": 0.4,
+                }
+            ]
+
+    hit = ChromaRetrievalBackend(Store()).search("contenido", 1)[0]
+    assert hit.metadata.get("id") == "doc-1:hash-1:0"
+
+
+def test_chroma_backend_exposes_search_contract_and_failure():
     class Store:
         def __init__(self):
             self.deleted = []

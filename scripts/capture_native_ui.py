@@ -16,6 +16,12 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 BASELINE_FILE = "00-baseline.png"
 BASELINE_HEAD = "a3b8c23020ab56e846703308bb787df062f97d87"
+ALLOWED_OWNERS = frozenset({"Python", "Fuente", "Obsidian"})
+MIN_FALLBACK_WIDTH = 900
+MIN_FALLBACK_HEIGHT = 600
+TITLE_OWNERS = {
+    "Obsidian": frozenset({"Obsidian"}),
+}
 
 
 def _window_size(value: str) -> tuple[int, int]:
@@ -34,35 +40,85 @@ def _git_head() -> str:
     ).stdout.strip()
 
 
+def _window_record(window, *, title: str) -> dict[str, object] | None:
+    import Quartz
+
+    bounds = window.get(Quartz.kCGWindowBounds, {})
+    width = int(bounds.get("Width", 0))
+    height = int(bounds.get("Height", 0))
+    if width <= 0 or height <= 0:
+        return None
+    window_title = str(window.get(Quartz.kCGWindowName) or "")
+    return {
+        "window_id": int(window[Quartz.kCGWindowNumber]),
+        "window_owner": str(window.get(Quartz.kCGWindowOwnerName, "")),
+        "window_owner_pid": int(window[Quartz.kCGWindowOwnerPID]),
+        "window_title": window_title or title,
+        "x": int(bounds.get("X", 0)),
+        "y": int(bounds.get("Y", 0)),
+        "width": width,
+        "height": height,
+    }
+
+
+def _fuente_pids() -> set[int]:
+    pids: set[int] = set()
+    for pattern in ("fuente.main", "Fuente.app/Contents/MacOS/Fuente"):
+        result = subprocess.run(
+            ["pgrep", "-f", pattern],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        for line in result.stdout.splitlines():
+            line = line.strip()
+            if line.isdigit():
+                pids.add(int(line))
+    return pids
+
+
 def _find_window(title: str) -> dict[str, object]:
     try:
         import Quartz
     except ImportError as error:
         raise RuntimeError("Quartz is required for native UI capture") from error
 
+    preferred_pids = _fuente_pids()
+    title_owners = TITLE_OWNERS.get(title, ALLOWED_OWNERS)
     windows = Quartz.CGWindowListCopyWindowInfo(
         Quartz.kCGWindowListOptionOnScreenOnly,
         Quartz.kCGNullWindowID,
     )
+    owner_candidates: list[dict[str, object]] = []
     for window in windows:
-        window_title = str(window.get(Quartz.kCGWindowName, ""))
-        if title.casefold() not in window_title.casefold():
+        record = _window_record(window, title=title)
+        if record is None:
             continue
-        bounds = window.get(Quartz.kCGWindowBounds, {})
-        width = int(bounds.get("Width", 0))
-        height = int(bounds.get("Height", 0))
-        if width <= 0 or height <= 0:
+        if record["window_owner"] not in title_owners and record["window_owner"] not in ALLOWED_OWNERS:
             continue
-        return {
-            "window_id": int(window[Quartz.kCGWindowNumber]),
-            "window_owner": str(window.get(Quartz.kCGWindowOwnerName, "")),
-            "window_owner_pid": int(window[Quartz.kCGWindowOwnerPID]),
-            "window_title": window_title,
-            "x": int(bounds.get("X", 0)),
-            "y": int(bounds.get("Y", 0)),
-            "width": width,
-            "height": height,
-        }
+        window_title = str(window.get(Quartz.kCGWindowName) or record["window_title"])
+        if title.casefold() in window_title.casefold():
+            if record["window_owner"] in title_owners or preferred_pids:
+                record["window_title"] = (
+                    title if record["window_owner"] in {"Python", "Fuente"} else window_title
+                )
+                if record["window_owner"] in {"Python", "Fuente"}:
+                    _runtime_signal(int(record["window_owner_pid"]))
+                elif record["window_owner"] == "Obsidian":
+                    record["runtime_signal"] = "obsidian:native"
+                return record
+        if (
+            record["window_owner"] in ALLOWED_OWNERS
+            and record["width"] >= MIN_FALLBACK_WIDTH
+            and record["height"] >= MIN_FALLBACK_HEIGHT
+            and title not in TITLE_OWNERS
+        ):
+            owner_candidates.append(record)
+    if owner_candidates:
+        best = max(owner_candidates, key=lambda item: int(item["width"]) * int(item["height"]))
+        _runtime_signal(int(best["window_owner_pid"]))
+        best["window_title"] = title
+        return best
     raise RuntimeError(f"No on-screen native window matched title: {title}")
 
 
@@ -118,7 +174,12 @@ def _configure_window(
     command = ["/usr/bin/osascript"]
     for statement in statements:
         command.extend(("-e", statement))
-    subprocess.run(command, check=True, capture_output=True, text=True)
+    result = subprocess.run(command, check=False, capture_output=True, text=True)
+    if result.returncode != 0:
+        raise RuntimeError(
+            "Could not resize native window (grant Accessibility to Terminal/Cursor): "
+            f"{result.stderr.strip() or result.stdout.strip()}"
+        )
     for _ in range(20):
         window = _find_window(title)
         if (window["width"], window["height"]) == requested:
@@ -126,6 +187,38 @@ def _configure_window(
         time.sleep(0.05)
     time.sleep(0.2)
     return window, requested
+
+
+def _capture_window_png(window: dict[str, object], output: Path, *, maximize: bool) -> None:
+    """Capture a window PNG via Quartz; fall back to screencapture only if needed."""
+    import Quartz as Q
+    from CoreFoundation import CFURLCreateWithFileSystemPath, kCFURLPOSIXPathStyle
+
+    window_id = int(window["window_id"])
+    image = Q.CGWindowListCreateImage(
+        Q.CGRectNull,
+        Q.kCGWindowListOptionIncludingWindow,
+        window_id,
+        Q.kCGWindowImageBoundsIgnoreFraming,
+    )
+    if image is None:
+        command = _capture_command(window, output, maximize=maximize)
+        result = subprocess.run(command, check=False, capture_output=True, text=True)
+        if result.returncode != 0:
+            raise RuntimeError(
+                "Native capture failed via Quartz and screencapture: "
+                f"{result.stderr.strip() or result.stdout.strip()}"
+            )
+        return
+
+    output.parent.mkdir(parents=True, exist_ok=True)
+    url = CFURLCreateWithFileSystemPath(None, str(output.resolve()), kCFURLPOSIXPathStyle, False)
+    destination = Q.CGImageDestinationCreateWithURL(url, "public.png", 1, None)
+    if destination is None:
+        raise RuntimeError(f"Could not create PNG destination: {output}")
+    Q.CGImageDestinationAddImage(destination, image, None)
+    if not Q.CGImageDestinationFinalize(destination):
+        raise RuntimeError(f"Could not write PNG capture: {output}")
 
 
 def _capture_command(
@@ -164,22 +257,29 @@ def capture_window(
             f"requested {requested[0]}x{requested[1]}, "
             f"measured {measured[0]}x{measured[1]}"
         )
-    runtime_signal = _runtime_signal(window["window_owner_pid"])
+    owner = str(window["window_owner"])
+    if owner == "Obsidian":
+        runtime_signal = "obsidian:native"
+        engine = "Obsidian"
+    else:
+        runtime_signal = _runtime_signal(window["window_owner_pid"])
+        engine = "PyWebView WebKit"
     output.parent.mkdir(parents=True, exist_ok=True)
-    subprocess.run(_capture_command(window, output, maximize=maximize), check=True)
+    _capture_window_png(window, output, maximize=maximize)
     if not output.is_file() or not output.read_bytes().startswith(b"\x89PNG\r\n\x1a\n"):
         raise RuntimeError(f"Native capture did not produce a PNG file: {output}")
+    png_bytes = output.read_bytes()
     record: dict[str, object] = {
         "file": output.name,
         "git_head": _git_head(),
         "window_owner": window["window_owner"],
         "window_owner_pid": window["window_owner_pid"],
         "window_title": window["window_title"],
-        "engine": "PyWebView WebKit",
+        "engine": engine,
         "runtime_signal": runtime_signal,
         "width": window["width"],
         "height": window["height"],
-        "sha256": hashlib.sha256(output.read_bytes()).hexdigest(),
+        "sha256": hashlib.sha256(png_bytes).hexdigest(),
     }
     if requested is not None:
         record["requested_width"] = requested[0]
@@ -189,8 +289,25 @@ def capture_window(
     return record
 
 
-def _write_manifest(path: Path, entries: list[dict[str, object]]) -> None:
-    encoded = json.dumps(entries, ensure_ascii=False, indent=2) + "\n"
+def _load_manifest_entries(path: Path) -> tuple[list[dict[str, object]], dict[str, object] | None]:
+    raw = json.loads(path.read_text(encoding="utf-8"))
+    if isinstance(raw, list):
+        return raw, None
+    if isinstance(raw, dict) and isinstance(raw.get("captures"), list):
+        return list(raw["captures"]), raw
+    raise RuntimeError(f"Manifest must be a list or object with captures: {path}")
+
+
+def _write_manifest(
+    path: Path, entries: list[dict[str, object]], wrapper: dict[str, object] | None
+) -> None:
+    if wrapper is not None:
+        wrapper["captures"] = entries
+        wrapper["git_head"] = _git_head()
+        payload: object = wrapper
+    else:
+        payload = entries
+    encoded = json.dumps(payload, ensure_ascii=False, indent=2) + "\n"
     with tempfile.NamedTemporaryFile(
         mode="w", encoding="utf-8", dir=path.parent, prefix=f".{path.name}.", delete=False
     ) as temporary:
@@ -222,15 +339,13 @@ def main(argv: list[str] | None = None) -> int:
     record["scenario"] = args.scenario
     manifest = args.output.parent / "manifest.json"
     if manifest.exists():
-        entries = json.loads(manifest.read_text(encoding="utf-8"))
-        if not isinstance(entries, list):
-            raise RuntimeError(f"Manifest must contain a list: {manifest}")
+        entries, wrapper = _load_manifest_entries(manifest)
     else:
-        entries = []
+        entries, wrapper = [], None
     entries = [entry for entry in entries if entry.get("file") != record["file"]]
     entries.append(record)
     entries.sort(key=lambda entry: str(entry.get("file", "")))
-    _write_manifest(manifest, entries)
+    _write_manifest(manifest, entries, wrapper)
     print(json.dumps(record, ensure_ascii=False, indent=2))
     return 0
 

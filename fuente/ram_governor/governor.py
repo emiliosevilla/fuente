@@ -467,6 +467,34 @@ class RAMGovernor:
             logger.error(f"Error comprobando disponibilidad del modelo '{model_name}': {e}")
             return False
 
+    def ensure_anythingllm_chat_ready(
+        self,
+        client: Any,
+        model_name: str,
+        *,
+        authorize_download: bool = False,
+    ) -> Dict[str, Any]:
+        """Verify an empty AnythingLLM workspace and an installed Ollama model."""
+        model = (model_name or "").strip()
+        if not model:
+            return {"ok": False, "reason": "model_not_configured", "model": ""}
+        try:
+            document_count = int(client.document_count())
+        except Exception as exc:
+            return {"ok": False, "reason": str(exc), "model": model}
+        if document_count != 0:
+            return {
+                "ok": False,
+                "reason": "anythingllm_documents_present",
+                "document_count": document_count,
+                "model": model,
+            }
+        if not self.ensure_model_available(
+            model, authorize_download=authorize_download
+        ):
+            return {"ok": False, "reason": "ollama_model_unavailable", "model": model}
+        return {"ok": True, "model": model, "document_count": 0}
+
     def check_cycle_model(
         self,
         model_name: Optional[str] = None,

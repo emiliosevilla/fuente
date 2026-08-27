@@ -24,6 +24,12 @@ from fuente.application.job_control import (
     validate_limit,
     validate_reason,
 )
+from fuente.application.feed import (
+    decode_feed_cursor,
+    validate_feed_filters,
+    validate_feed_limit,
+    validate_feed_order,
+)
 from fuente.domain.approvals import normalize_reviewer
 from fuente.domain.metadata_form import project_metadata_v3
 from fuente.domain.jobs import JobConflictError, JobNotFoundError, JobStoreBusyError
@@ -34,6 +40,7 @@ from fuente.domain.errors import (
     OutputApprovalRequiredError,
     PathAuthorizationError,
     ReviewClaimConflictError,
+    TemplateRevisionConflictError,
 )
 from fuente.domain.sync import SyncDirection
 from fuente.infrastructure.sqlite_store import UIStateStore
@@ -387,6 +394,59 @@ class FuentePyWebViewApi:
 
     def get_settings_info(self) -> dict[str, Any]:
         return self.backend.get_settings_info()
+
+    def list_templates(self) -> dict[str, Any]:
+        return {"templates": self.backend.list_templates()}
+
+    def load_template(self, template_id: object) -> dict[str, Any] | ErrorResult:
+        valid_id = self._text(template_id, "template_id")
+        if isinstance(valid_id, dict):
+            return valid_id
+        return self.backend.load_template(valid_id)
+
+    def save_template(self, payload: object) -> dict[str, Any] | ErrorResult:
+        parsed = self._payload(payload)
+        if isinstance(parsed, dict) and "error" in parsed:
+            return parsed
+        assert isinstance(parsed, dict)
+        required = {"template_id", "template", "agents", "expected_revision"}
+        if set(parsed) != required:
+            return self._error("invalid_payload", "Unsupported template field")
+        template_id = self._text(parsed["template_id"], "template_id")
+        if isinstance(template_id, dict):
+            return template_id
+        if not isinstance(parsed["template"], str) or not isinstance(parsed["agents"], str):
+            return self._error("invalid_payload", "template and agents must be strings")
+        revision_error = self._revision(parsed["expected_revision"])
+        if revision_error is not None:
+            return revision_error
+        return self.backend.save_template(parsed)
+
+    def restore_template(self, payload: object) -> dict[str, Any] | ErrorResult:
+        parsed = self._payload(payload)
+        if isinstance(parsed, dict) and "error" in parsed:
+            return parsed
+        assert isinstance(parsed, dict)
+        if set(parsed) != {"template_id", "expected_revision"}:
+            return self._error("invalid_payload", "Unsupported template field")
+        template_id = self._text(parsed["template_id"], "template_id")
+        if isinstance(template_id, dict):
+            return template_id
+        revision_error = self._revision(parsed["expected_revision"])
+        if revision_error is not None:
+            return revision_error
+        return self.backend.restore_template(template_id, int(parsed["expected_revision"]))
+
+    def preview_template(self, payload: object) -> dict[str, Any] | ErrorResult:
+        parsed = self._payload(payload)
+        if isinstance(parsed, dict) and "error" in parsed:
+            return parsed
+        assert isinstance(parsed, dict)
+        if set(parsed) != {"template", "agents"}:
+            return self._error("invalid_payload", "Unsupported template field")
+        if not isinstance(parsed["template"], str) or not isinstance(parsed["agents"], str):
+            return self._error("invalid_payload", "template and agents must be strings")
+        return self.backend.preview_template(parsed["template"], parsed["agents"])
 
     def get_health(self) -> dict[str, Any]:
         """Return a current read-only health snapshot for the first-run UI."""
@@ -1058,7 +1118,11 @@ class FuentePyWebViewApi:
             return text
         if context is not None and not isinstance(context, Mapping):
             return self._error("invalid_payload", "context must be an object")
-        return self.backend.process_chat(text, context=dict(context or {}))
+        ctx = dict(context or {})
+        session_id = ctx.get("sessionId")
+        if session_id and not ctx.get("session_id"):
+            ctx["session_id"] = session_id
+        return self.backend.process_chat(text, context=ctx)
 
     def process_workspace_chat(self, document_id: object, message: object) -> dict[str, Any]:
         note = self._text(document_id, "document_id")
@@ -1073,6 +1137,142 @@ class FuentePyWebViewApi:
             text,
             context={"context_mode": "single_note", "document_id": note},
         )
+
+    def list_readonly_notes(self, query: object, scope: object) -> dict[str, Any] | ErrorResult:
+        text = self._text(query, "query", required=False)
+        if isinstance(text, dict):
+            return text
+        scope_value = self._text(scope, "scope", required=False)
+        if isinstance(scope_value, dict):
+            return scope_value
+        try:
+            return self.backend.list_readonly_notes(str(text or ""), str(scope_value or "all_notes"))
+        except (PathAuthorizationError, ValueError) as error:
+            code = getattr(error, "code", "invalid_payload")
+            return {"error": code, "message": str(error)}
+
+    def get_readonly_note(self, document_id: object) -> dict[str, Any] | ErrorResult:
+        note = self._note_id(document_id)
+        if isinstance(note, dict):
+            return note
+        try:
+            return self.backend.get_readonly_note(note)
+        except PathAuthorizationError as error:
+            return {"error": error.code, "message": str(error)}
+        except (OSError, ValueError) as error:
+            return self._error("workspace_unavailable", str(error))
+
+    def list_feed(
+        self,
+        cursor: object = None,
+        limit: object = 30,
+        filters: object = None,
+        order: object = "date",
+    ) -> dict[str, Any] | ErrorResult:
+        try:
+            parsed_filters = validate_feed_filters(filters)
+            parsed_limit = validate_feed_limit(limit)
+            parsed_order = validate_feed_order(order)
+            if cursor is not None and not isinstance(cursor, str):
+                raise ValueError("cursor must be a string or None")
+            if cursor is not None:
+                decode_feed_cursor(cursor)
+        except (TypeError, ValueError) as error:
+            return self._error("invalid_payload", str(error))
+        try:
+            return self.backend.list_feed(
+                cursor if isinstance(cursor, str) else None,
+                parsed_limit,
+                parsed_filters,
+                parsed_order,
+            )
+        except (PathAuthorizationError, ValueError) as error:
+            code = getattr(error, "code", "invalid_payload")
+            return {"error": code, "message": str(error)}
+
+    def search_source(
+        self,
+        mode: object,
+        query: object,
+        filters: object = None,
+    ) -> dict[str, Any] | ErrorResult:
+        if not isinstance(mode, str) or not mode.strip():
+            return self._error("invalid_payload", "mode is required")
+        text = self._text(query, "query")
+        if isinstance(text, dict):
+            return text
+        try:
+            parsed_filters = validate_feed_filters(filters)
+            return self.backend.search_source(mode.strip(), text, parsed_filters)
+        except (TypeError, ValueError) as error:
+            return self._error("invalid_payload", str(error))
+        except PathAuthorizationError as error:
+            return {"error": error.code, "message": str(error)}
+
+    def get_flow_state(self) -> dict[str, Any] | ErrorResult:
+        try:
+            return self.backend.get_flow_state()
+        except (OSError, ValueError) as error:
+            return self._error("workspace_unavailable", str(error))
+
+    def open_source_feed(
+        self,
+        filters: object = None,
+        order: object = "date",
+    ) -> dict[str, Any] | ErrorResult:
+        try:
+            parsed_filters = validate_feed_filters(filters)
+            parsed_order = validate_feed_order(order)
+        except (TypeError, ValueError) as error:
+            return self._error("invalid_payload", str(error))
+        return self.backend.open_source_feed(parsed_filters, parsed_order)
+
+    def import_local_paths(self, paths: object) -> dict[str, Any] | ErrorResult:
+        if not isinstance(paths, list) or not paths:
+            return self._error("invalid_payload", "paths must be a non-empty list")
+        if not all(isinstance(path, str) and path.strip() for path in paths):
+            return self._error("invalid_payload", "paths must contain non-empty strings")
+        return self.backend.import_local_paths(paths)
+
+    def select_files(self, title: object = "Seleccionar archivos") -> list[str] | ErrorResult:
+        valid_title = self._text(title, "title", required=False)
+        if isinstance(valid_title, dict):
+            return valid_title
+        if len(valid_title) > 120:
+            return self._error("invalid_payload", "title is too long")
+        if self._window is not None:
+            import webview
+
+            selected = self._window.create_file_dialog(
+                webview.FileDialog.OPEN,
+                allow_multiple=True,
+            )
+            if not selected:
+                return []
+            if isinstance(selected, str):
+                return [selected]
+            return list(selected)
+        action = getattr(self.backend, "select_files", None)
+        if callable(action):
+            return action(valid_title or "Seleccionar archivos")
+        return self._error("import_not_available", "Native file picker is unavailable")
+
+    def get_hierarchy(self) -> dict[str, Any] | ErrorResult:
+        try:
+            return self.backend.get_hierarchy()
+        except (OSError, ValueError) as error:
+            return self._error("workspace_unavailable", str(error))
+
+    def get_relation_preview(self, document_id: object) -> dict[str, Any] | ErrorResult:
+        note = self._note_id(document_id)
+        if isinstance(note, dict):
+            return note
+        try:
+            return self.backend.get_relation_preview(note)
+        except PathAuthorizationError as error:
+            return {"error": error.code, "message": str(error)}
+        except (OSError, ValueError) as error:
+            return self._error("workspace_unavailable", str(error))
 
     def get_notes_list(self) -> list[dict[str, Any]]:
         return self.backend.get_notes_list()

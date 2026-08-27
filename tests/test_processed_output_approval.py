@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from fuente.application.sharing import SharingApplicationService
@@ -56,3 +58,13 @@ def test_processed_claim_conflict_leaves_no_partial_ledger_approval(tmp_path):
         ).fetchone()[0] == 0
     finally:
         store.close()
+
+
+def test_processed_approval_gates_surface_in_caudal_detail_drawer():
+    html = (Path(__file__).resolve().parents[1] / "consola_preview.html").read_text(
+        encoding="utf-8"
+    )
+    assert "approve_clean" in html
+    assert "approve_processed_output" in html
+    assert "begin_transition_review" in html
+    assert 'id="flow-detail-drawer"' in html

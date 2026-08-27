@@ -119,6 +119,30 @@ def test_source_path_authorizer_rejects_outside_paths_and_symlink_components(tmp
         authorizer.resolve(symlink_dir / "inside.md")
 
 
+def test_template_registry_rejects_traversal_template_ids(temp_vault_path):
+    from types import SimpleNamespace
+
+    from fuente.application.templates import TemplateRegistry
+    from fuente.integrations.obsidian import ObsidianProvisioner
+    from fuente.infrastructure.sqlite_store import JobStore
+
+    class FakeCli:
+        def run(self, command, *, cwd):
+            return SimpleNamespace(returncode=0, stdout=str(cwd), stderr="")
+
+    vault = temp_vault_path.parent / "Fuente"
+    if not vault.is_dir():
+        ObsidianProvisioner(cli=FakeCli()).provision(vault, consent=True)
+    store = JobStore(vault)
+    registry = TemplateRegistry(vault, store)
+    try:
+        for template_id in ("../resumen", "/resumen", "resumen/evil", "resumen\x00", ""):
+            with pytest.raises(PathAuthorizationError):
+                registry.load(template_id)
+    finally:
+        store.close()
+
+
 @pytest.mark.parametrize(
     "quarantine_id",
     ["../nota.md", "/tmp/nota.md", "folder/nota.md", "nested/deep/nota.md"],
@@ -137,3 +161,21 @@ def test_restore_rejects_absolute_quarantine_identifier_without_mutation(
         vault.restore_from_quarantine(str(external_note_path))
 
     assert external_note_path.read_text(encoding="utf-8") == "secret"
+
+
+def test_source_bridge_rejects_path_shaped_readonly_ids(temp_vault_path):
+    from fuente.control_console import FuenteConsoleBackend
+    from fuente.ui.bridge import FuentePyWebViewApi
+
+    api = FuentePyWebViewApi(FuenteConsoleBackend(temp_vault_path))
+    result = api.get_readonly_note("4_salida/nota.md")
+    assert result.get("error") == "path_not_authorized"
+
+
+def test_source_bridge_rejects_invalid_feed_cursor(temp_vault_path):
+    from fuente.control_console import FuenteConsoleBackend
+    from fuente.ui.bridge import FuentePyWebViewApi
+
+    api = FuentePyWebViewApi(FuenteConsoleBackend(temp_vault_path))
+    result = api.list_feed("not-a-cursor", 30, {}, "date")
+    assert result.get("error") == "invalid_payload"

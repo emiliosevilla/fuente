@@ -11,7 +11,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
-ALLOWED_OWNERS = {"Python", "Fuente"}
+ALLOWED_OWNERS = {"Python", "Fuente", "Obsidian"}
 BASELINE_FILE = "00-baseline.png"
 BASELINE_HEAD = "a3b8c23020ab56e846703308bb787df062f97d87"
 
@@ -20,13 +20,23 @@ def _error(index: int, message: str) -> str:
     return f"entry {index}: {message}"
 
 
+def load_manifest_entries(path: Path) -> list[dict]:
+    """Return capture entries from a list manifest or ``{"captures": [...]}`` wrapper."""
+    raw = json.loads(path.read_text(encoding="utf-8"))
+    if isinstance(raw, list):
+        return raw
+    if isinstance(raw, dict) and isinstance(raw.get("captures"), list):
+        return raw["captures"]
+    raise ValueError("manifest must be a capture list or an object with a captures array")
+
+
 def verify_manifest(path: Path, expected_head: str) -> list[str]:
     """Return all validation errors for the evidence entries at ``path``."""
     try:
-        entries = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as error:
+        entries = load_manifest_entries(path)
+    except (OSError, json.JSONDecodeError, ValueError, TypeError) as error:
         return [f"manifest unreadable: {error}"]
-    if not isinstance(entries, list) or not entries:
+    if not entries:
         return ["manifest must contain at least one evidence entry"]
 
     errors: list[str] = []
@@ -45,18 +55,33 @@ def verify_manifest(path: Path, expected_head: str) -> list[str]:
             errors.append(_error(index, "baseline is reserved for the historical baseline record"))
             continue
         expected_title = "Fuente" if scenario == "baseline" else "Fuente y Caudal"
-        if entry.get("window_title") != expected_title:
+        if scenario == "source-open-obsidian":
+            title = str(entry.get("window_title") or "")
+            if "Obsidian" not in title and entry.get("window_owner") != "Obsidian":
+                errors.append(_error(index, "window title must identify Obsidian"))
+                continue
+            if entry.get("window_owner") != "Obsidian":
+                errors.append(_error(index, "browser capture or untrusted owner: Obsidian required"))
+                continue
+            if entry.get("engine") not in {"Obsidian", "Obsidian Electron", "PyWebView WebKit"}:
+                errors.append(_error(index, "engine must identify Obsidian runtime"))
+                continue
+            if not str(entry.get("runtime_signal") or "").startswith(("obsidian:", "vmmap:")):
+                errors.append(_error(index, "runtime signal must prove Obsidian process"))
+                continue
+        elif entry.get("window_title") != expected_title:
             errors.append(_error(index, f"window title must be {expected_title!r}"))
             continue
-        if entry.get("engine") != "PyWebView WebKit":
+        elif entry.get("engine") != "PyWebView WebKit":
             errors.append(_error(index, "engine must be 'PyWebView WebKit'"))
             continue
+        else:
+            if entry.get("runtime_signal") != "vmmap:WebKit.framework":
+                errors.append(_error(index, "runtime signal must prove WebKit in the window process"))
+                continue
         entry_head = BASELINE_HEAD if scenario == "baseline" else expected_head
         if entry.get("git_head") != entry_head:
             errors.append(_error(index, "git head does not match the expected head"))
-            continue
-        if entry.get("runtime_signal") != "vmmap:WebKit.framework":
-            errors.append(_error(index, "runtime signal must prove WebKit in the window process"))
             continue
         if type(entry.get("window_owner_pid")) is not int or entry["window_owner_pid"] <= 0:
             errors.append(_error(index, "window owner PID must be positive"))

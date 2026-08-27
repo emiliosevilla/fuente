@@ -38,9 +38,15 @@ class _OfflineMiniRAG:
 
 @pytest.fixture(autouse=True)
 def isolate_optional_minirag(monkeypatch):
-    """Keep application tests offline; MiniRAG has its own direct contract tests."""
-    monkeypatch.setattr("fuente.application.ingestion.MiniRAGStore", _OfflineMiniRAG)
-    monkeypatch.setattr("fuente.application.notes.MiniRAGStore", _OfflineMiniRAG)
+    """Keep optional MiniRAG offline in modules that still reference it."""
+    for target in (
+        "fuente.application.ingestion.MiniRAGStore",
+        "fuente.application.notes.MiniRAGStore",
+    ):
+        module_path, _, attr = target.rpartition(".")
+        module = __import__(module_path, fromlist=[attr])
+        if hasattr(module, attr):
+            monkeypatch.setattr(target, _OfflineMiniRAG)
 
 
 def patch_abundant_ram(governor) -> None:

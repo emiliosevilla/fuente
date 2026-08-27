@@ -34,6 +34,8 @@ class TestConfigPersistenceAndSettings(unittest.TestCase):
         self.assertEqual(cfg.resource_profile, "auto")
         self.assertEqual(cfg.audio_mode, "auto")
         self.assertIsNone(cfg.whisper_model_path)
+        self.assertEqual(cfg.anythingllm_url, "")
+        self.assertEqual(cfg.anythingllm_workspace_slug, "fuente")
 
     def test_save_and_load_custom_config(self):
         cfg = load_config(self.vault_path)
@@ -130,6 +132,23 @@ class TestConfigPersistenceAndSettings(unittest.TestCase):
         max_allowed_ram = ram_info["total_gb"] * (1.0 - (0.35 * 0.5))
         for m in viable_models:
             self.assertLessEqual(m["min_ram_gb"], max_allowed_ram, f"Modelo {m['id']} excede el límite seguro de RAM")
+
+    def test_anythingllm_settings_round_trip(self):
+        cfg = load_config(self.vault_path)
+        cfg.anythingllm_url = "http://127.0.0.1:13001"
+        cfg.anythingllm_workspace_slug = "fuente"
+        save_config(cfg)
+        loaded = load_config(self.vault_path)
+        self.assertEqual(loaded.anythingllm_url, "http://127.0.0.1:13001")
+        self.assertEqual(loaded.anythingllm_workspace_slug, "fuente")
+
+    def test_anythingllm_api_key_from_environment(self):
+        os.environ["FUENTE_ANYTHINGLLM_API_KEY"] = "probe-key"
+        try:
+            loaded = load_config(self.vault_path)
+            self.assertEqual(loaded.anythingllm_api_key, "probe-key")
+        finally:
+            os.environ.pop("FUENTE_ANYTHINGLLM_API_KEY", None)
 
 
 if __name__ == "__main__":

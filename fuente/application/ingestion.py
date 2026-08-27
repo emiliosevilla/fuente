@@ -81,9 +81,13 @@ from fuente.extractors.policy import ExtractionDecision, ExtractionPolicy
 from fuente.infrastructure.atomic_files import atomic_write_text
 from fuente.infrastructure.sqlite_store import JobStore
 from fuente.ram_governor.budget import unavailable_snapshot
-from fuente.rag.chroma_store import ChromaRetrievalBackend
-from fuente.rag.router import RetrievalRouter
+from fuente.domain.vault_layout import (
+    CANONICAL_CLEAN_DIR_NAME,
+    CANONICAL_PROCESSED_DIR_NAME,
+)
+from fuente.rag.chroma_store import ChromaRetrievalBackend, resolve_index_authority
 from fuente.rag.minirag_store import MiniRAGStore, MiniRAGUnavailableError
+from fuente.rag.router import RetrievalRouter
 
 logger = logging.getLogger(__name__)
 
@@ -224,6 +228,7 @@ class _RunContext:
     metadata: dict = field(default_factory=dict)
     candidate: Optional[str] = None
     validated: Optional[str] = None
+    generated_notes: list[Any] = field(default_factory=list)
     approved_origin: OriginRef | None = None
     authorize_model_load: bool = False
 
@@ -241,6 +246,7 @@ class IngestionApplicationService:
         chunker: Any,
         chroma: Any,
         atomic_generator: Any,
+        smart_note_generator: Any | None = None,
         runtime_policy: RuntimePolicy | None = None,
         ram_governor: Any = None,
         scheduler: Optional[ResourceScheduler] = None,
@@ -257,15 +263,18 @@ class IngestionApplicationService:
         self.extraction_policy = ExtractionPolicy([extractors])
         self.chunker = chunker
         self.chroma = chroma
+        self._minirag_store = MiniRAGStore(
+            config.vault.minirag_dir,
+            ollama_url=config.ollama_url,
+            model=config.custom_model_override,
+            job_store=job_store,
+        )
         self.router = router or RetrievalRouter(
-            primary=MiniRAGStore(
-                config.vault.minirag_dir,
-                ollama_url=config.ollama_url,
-                model=config.custom_model_override,
-            ),
-            refinement=ChromaRetrievalBackend(chroma),
+            search=ChromaRetrievalBackend(chroma),
+            enrichment=self._minirag_store,
         )
         self.atomic_generator = atomic_generator
+        self.smart_note_generator = smart_note_generator
         self.runtime_policy = runtime_policy
         self.ram_governor = ram_governor
         self._copy_to_dirty = copy_to_dirty
@@ -287,6 +296,9 @@ class IngestionApplicationService:
             ledger=approval_ledger,
             transition_approvals=self.transition_approvals,
         )
+        setter = getattr(self._minirag_store, "set_approval_checker", None)
+        if callable(setter):
+            setter(self.approval_service.is_eligible)
 
     def refresh_approval_scope(self) -> None:
         """Rebind approval paths after an active-theme change."""
@@ -308,16 +320,99 @@ class IngestionApplicationService:
         """Legacy harnesses remain Auto; an injected policy is authoritative."""
         return self.runtime_policy is None or self.runtime_policy.vector_index_enabled
 
-    def _delete_primary_chunks(self, chunk_ids) -> bool:
+    def _delete_search_chunks(self, chunk_ids) -> bool:
         """Treat the contract's ``None`` delete result as successful."""
-        try:
-            return self.router.primary().delete(chunk_ids) is not False
-        except MiniRAGUnavailableError:
-            return self.router.refinement().delete(chunk_ids) is not False
+        return self.router.search().delete(chunk_ids) is not False
 
     def _delete_refinement_chunks(self, chunk_ids) -> bool:
-        """Remove refinement projections during compensation."""
-        return self.router.refinement().delete(chunk_ids) is not False
+        """Remove enrichment projections during compensation."""
+        enrichment = self.router.enrichment()
+        if enrichment is None:
+            return True
+        try:
+            return enrichment.delete(chunk_ids) is not False
+        except MiniRAGUnavailableError:
+            return True
+
+    def _stamp_note_identity_on_chunks(
+        self, chunks: list[dict[str, Any]], origin
+    ) -> list[dict[str, Any]]:
+        stamped: list[dict[str, Any]] = []
+        for chunk in chunks:
+            metadata = dict(chunk.get("metadata") or {})
+            metadata["note_id"] = origin.note_id
+            metadata["revision"] = origin.revision
+            metadata["content_hash"] = origin.content_hash
+            stamped.append({**chunk, "metadata": metadata})
+        return stamped
+
+    def _maybe_rebuild_enrichment_index(self, chunks, origin) -> None:
+        enrichment = self.router.enrichment()
+        if enrichment is None:
+            return
+        if not self.approval_service.is_eligible(
+            origin.note_id, origin.revision, origin.content_hash
+        ):
+            return
+        try:
+            result = enrichment.rebuild(chunks)
+        except (MiniRAGUnavailableError, Exception) as exc:
+            logger.info(
+                "MiniRAG enrichment index unavailable for %s: %s",
+                origin.note_id,
+                exc,
+            )
+            return
+        if not result.success:
+            logger.warning(
+                "MiniRAG enrichment rebuild failed for %s",
+                origin.note_id,
+            )
+
+    def _maybe_evaluate_enrichment(self, origin, chunks) -> None:
+        """Run one local A/B probe when an approved note gains a MiniRAG index."""
+        enrichment = self.router.enrichment()
+        if enrichment is None or origin is None or not chunks:
+            return
+        lookup = getattr(self.job_store, "get_minirag_evaluation", None)
+        if callable(lookup) and lookup(origin.note_id, origin.revision, origin.content_hash):
+            return
+        try:
+            from fuente.application.refinement import MiniRAGEnrichmentEvaluator
+            from fuente.rag.backend import RetrievalHit
+
+            probe = str(chunks[0].get("content") or "")[:240].strip() or "contexto aprobado"
+            model = str(getattr(self.config, "custom_model_override", None) or "")
+            baseline_hits = [
+                RetrievalHit(
+                    document_id=str(chunk.get("metadata", {}).get("document_id") or ""),
+                    revision=origin.revision,
+                    content_hash=origin.content_hash,
+                    content=str(chunk.get("content") or ""),
+                    score=0.5,
+                    backend="chroma",
+                    relative_path=str(chunk.get("metadata", {}).get("relative_path") or ""),
+                    metadata=dict(chunk.get("metadata") or {}),
+                )
+                for chunk in chunks[:3]
+            ]
+            candidate_hits = enrichment.enrich(probe, baseline_hits)
+            MiniRAGEnrichmentEvaluator(job_store=self.job_store).evaluate_ab(
+                document_id=origin.note_id,
+                revision=origin.revision,
+                content_hash=origin.content_hash,
+                query=probe,
+                baseline_hits=baseline_hits,
+                candidate_hits=candidate_hits,
+                citations_valid=bool(candidate_hits),
+                model=model,
+            )
+        except Exception as exc:
+            logger.info(
+                "MiniRAG enrichment A/B skipped for %s: %s",
+                origin.note_id,
+                exc,
+            )
 
     def _build_scheduler(self) -> ResourceScheduler:
         governor = self.ram_governor
@@ -823,7 +918,25 @@ class IngestionApplicationService:
                 )
             return self._advance(job, "indexed_chunks", note_document_id=document_id)
 
+        origin = context.approved_origin or self._approved_clean_origin(job)
+        if origin is None:
+            return self._rewind_to_clean_approval(job)
+        authority = resolve_index_authority(
+            relative_path=origin.path,
+            note_id=origin.note_id,
+            revision=origin.revision,
+            content_hash=origin.content_hash,
+            approval_service=self.approval_service,
+            processed_note_available=self._processed_index_authority_available(
+                origin.note_id
+            ),
+        )
+        if authority != CANONICAL_CLEAN_DIR_NAME:
+            return self._advance(job, "indexed_chunks", note_document_id=document_id)
+
         chunks = self._chunk_for_index(job, context, document_id)
+        if origin is not None:
+            chunks = self._stamp_note_identity_on_chunks(chunks, origin)
         chunk_ids = [chunk["id"] for chunk in chunks]
         published = {
             artifact["artifact_id"]
@@ -851,17 +964,14 @@ class IngestionApplicationService:
                 document_id,
                 len(obsolete),
             )
-            self._delete_primary_chunks(obsolete)
-        try:
-            result = self.router.primary().rebuild(chunks)
-        except MiniRAGUnavailableError:
-            logger.info("MiniRAG unavailable; using Chroma refinement backend for this run")
-            result = self.router.refinement().rebuild(chunks)
+            self._delete_search_chunks(obsolete)
+        result = self.router.search().rebuild(chunks)
         if not result.success:
-            logger.warning(
-                "Chunk index unavailable for job %s; continuing without vectors",
-                job.job_id,
+            raise RuntimeError(
+                f"Chroma index rebuild failed for job {job.job_id}"
             )
+        self._maybe_rebuild_enrichment_index(chunks, origin)
+        self._maybe_evaluate_enrichment(origin, chunks)
         if obsolete:
             self.job_store.delete_index_artifacts(document_id, artifact_ids=obsolete)
 
@@ -907,6 +1017,15 @@ class IngestionApplicationService:
             origin.revision,
             origin.content_hash,
         )
+        if context.generated_notes:
+            primary = context.generated_notes[0]
+            document_id = self._document_id(job)
+            self.job_store.upsert_document_identity(
+                document_id=document_id,
+                relative_path=primary.relative_path,
+                content_hash=primary.content_hash,
+            )
+            return self._advance(job, "saved_note", note_document_id=document_id)
         note_path = self._target_note_path(job)
         atomic_write_text(note_path, validated)
         document_id = self._document_id(job)
@@ -1126,7 +1245,7 @@ class IngestionApplicationService:
                 for artifact in artifacts
                 if artifact["kind"] == CHUNK_ARTIFACT_KIND
             ]
-            if plan.invalidate_chunk_index and not self._delete_primary_chunks(chunk_ids):
+            if plan.invalidate_chunk_index and not self._delete_search_chunks(chunk_ids):
                 return False
             self.job_store.delete_index_artifacts(document_id, artifact_ids=doomed)
             return True
@@ -1320,6 +1439,18 @@ class IngestionApplicationService:
         return context.candidate
 
     def _generate_candidate(self, job: JobRecord, context: _RunContext) -> None:
+        origin = context.approved_origin or self._approved_clean_origin(job)
+        if origin is None:
+            raise PermissionError(AWAITING_CLEAN_APPROVAL)
+        if self.smart_note_generator is not None:
+            context.generated_notes = self.smart_note_generator.generate(
+                origin.note_id, origin.revision, origin.content_hash
+            )
+            if context.generated_notes:
+                first = context.generated_notes[0]
+                note_path = self.vault.config.vault_path / first.relative_path
+                context.candidate = note_path.read_text(encoding="utf-8")
+            return
         generated = self.atomic_generator.generate_atomic_note(
             clean_md_content=self._content(job, context),
             model_name=self._selected_model(
@@ -1327,11 +1458,6 @@ class IngestionApplicationService:
             ),
             file_name=self._source_name(job),
         )
-        origin = context.approved_origin or self._approved_clean_origin(job)
-        if origin is None:
-            # Defense in depth for direct callers: only a real, current
-            # approval can turn canonical clean content into a derivative.
-            raise PermissionError(AWAITING_CLEAN_APPROVAL)
         try:
             metadata, body = parse_frontmatter(generated)
             metadata = dict(metadata)
@@ -1408,6 +1534,19 @@ class IngestionApplicationService:
             )
             raise PathAuthorizationError()
 
+    def _processed_index_authority_available(self, note_id: str) -> bool:
+        catalog = self.job_store.get_note(note_id)
+        if catalog is None:
+            return False
+        relative = str(catalog.get("relative_path") or "")
+        if CANONICAL_CLEAN_DIR_NAME in relative.split("/"):
+            return False
+        return self.approval_service.is_eligible(
+            note_id,
+            int(catalog["revision"]),
+            str(catalog["content_hash"]),
+        ) and CANONICAL_PROCESSED_DIR_NAME in relative.replace("\\", "/").split("/")
+
     def _approved_clean_origin(self, job: JobRecord) -> OriginRef | None:
         """Return only the exact, currently approved canonical clean record."""
         clean_path = self._recorded_artifact(job.clean_artifact)
@@ -1475,7 +1614,7 @@ class IngestionApplicationService:
                 if artifact["kind"] == CHUNK_ARTIFACT_KIND
             ]
             if chunk_ids and self._vector_index_enabled():
-                if not self._delete_primary_chunks(chunk_ids):
+                if not self._delete_search_chunks(chunk_ids):
                     raise RuntimeError("could not remove stale chunk index entries")
             if artifacts:
                 self.job_store.delete_index_artifacts(document_id)

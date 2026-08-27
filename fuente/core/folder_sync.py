@@ -545,11 +545,20 @@ class FolderSyncManager:
 
     def get_sync_sources(self) -> list[dict[str, object]]:
         """Return a browser-safe source inventory without exposing roots."""
+        labels = {
+            "local": "Carpeta local",
+            "network": "Red",
+            "onedrive_mount": "OneDrive sincronizado",
+            "sharepoint_mount": "SharePoint sincronizado",
+        }
         return [
             {
                 "id": connection.connection_id,
                 "provider": connection.provider,
                 "display_name": connection.display_name,
+                "provider_label": labels.get(
+                    connection.provider, connection.provider.replace("_", " ")
+                ),
                 "enabled": connection.enabled,
             }
             for connection in self.load_connections()

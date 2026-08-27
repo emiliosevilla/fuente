@@ -243,8 +243,8 @@ class RetrievalApplicationService:
         self.max_sources = max(1, int(max_sources))
         self.snippet_chars = max(32, int(snippet_chars))
         self.router = router or RetrievalRouter(
-            primary=_ServiceRetrievalBackend(self, "primary"),
-            refinement=_ServiceRetrievalBackend(self, "refinement"),
+            search=_ServiceRetrievalBackend(self, "chroma"),
+            enrichment=None,
         )
 
     def notify_index_changed(self) -> None:
@@ -264,7 +264,7 @@ class RetrievalApplicationService:
         document_id: Optional[str] = None,
         issue: Optional[str] = None,
         theme: Optional[str] = None,
-        role: str = "primary",
+        role: str = "search",
     ) -> list[dict]:
         """Return bounded, scoped hit dicts (sources + snippets always present)."""
         context = self.build_context(
@@ -287,7 +287,8 @@ class RetrievalApplicationService:
         document_id: Optional[str] = None,
         issue: Optional[str] = None,
         theme: Optional[str] = None,
-        role: str = "primary",
+        role: str = "search",
+        allow_enrichment: bool = True,
     ) -> dict:
         """Build an LLM-ready context payload (or a clear no-context result)."""
         try:
@@ -332,6 +333,8 @@ class RetrievalApplicationService:
             scoped = self._augment_from_corpus(scoped, q, scope_kind, filters, limit)
 
         bounded = self._bound_hits(scoped, limit=limit)
+        if role == "search" and allow_enrichment:
+            bounded = self._maybe_enrich_bounded_hits(q, bounded)
         if not bounded:
             return _empty_context(
                 query=q,
@@ -360,11 +363,14 @@ class RetrievalApplicationService:
     # ------------------------------------------------------------------
 
     def _backend_for_role(self, role: str):
-        if role == "primary":
-            return self.router.primary()
-        if role == "refinement":
-            return self.router.refinement()
-        raise ValueError("retrieval role must be 'primary' or 'refinement'")
+        if role in {"search", "primary"}:
+            return self.router.search()
+        if role in {"enrichment", "refinement"}:
+            enrichment = self.router.enrichment()
+            if enrichment is None:
+                raise ValueError("retrieval enrichment backend is disabled")
+            return enrichment
+        raise ValueError("retrieval role must be 'search' or 'enrichment'")
 
     def _search_backend(
         self, backend: Any, query: str, *, candidate_limit: int
@@ -373,15 +379,7 @@ class RetrievalApplicationService:
 
     def _search_role(self, role: str, query: str, limit: int) -> list[dict]:
         backend = self._backend_for_role(role)
-        try:
-            return self._search_backend(backend, query, candidate_limit=limit)
-        except RuntimeError as error:
-            if role != "primary" or "MiniRAG is not installed" not in str(error):
-                raise
-            logger.warning("MiniRAG unavailable; reading from Chroma refinement index")
-            return self._search_backend(
-                self.router.refinement(), query, candidate_limit=limit
-            )
+        return self._search_backend(backend, query, candidate_limit=limit)
 
     @staticmethod
     def _hit_as_dict(hit: Any) -> dict:
@@ -394,13 +392,53 @@ class RetrievalApplicationService:
         metadata.setdefault("revision", hit.revision)
         metadata.setdefault("source_hash", hit.content_hash)
         metadata.setdefault("relative_path", hit.relative_path)
+        if metadata.get("note_id") is None and hit.metadata.get("note_id"):
+            metadata["note_id"] = hit.metadata["note_id"]
+        chunk_id = metadata.get("id")
+        if not chunk_id and hit.document_id:
+            chunk_id = hit.document_id
         return {
-            "id": metadata.get("id") or hit.document_id,
+            "id": chunk_id,
             "content": hit.content,
             "metadata": metadata,
             "score": hit.score,
             "backend": hit.backend,
         }
+
+    @staticmethod
+    def _dict_to_retrieval_hit(item: Mapping[str, Any]) -> RetrievalHit:
+        metadata = dict(item.get("metadata") or {})
+        return RetrievalHit(
+            document_id=str(metadata.get("document_id") or item.get("document_id") or ""),
+            revision=int(metadata.get("revision") or 1),
+            content_hash=str(
+                metadata.get("content_hash")
+                or metadata.get("source_hash")
+                or ""
+            ),
+            content=str(item.get("content") or ""),
+            score=float(item.get("score") or 0.0),
+            backend=str(item.get("backend") or "chroma"),
+            relative_path=str(metadata.get("relative_path") or item.get("relative_path") or ""),
+            metadata=metadata,
+        )
+
+    def _maybe_enrich_bounded_hits(
+        self, query: str, hits: list[dict]
+    ) -> list[dict]:
+        enrichment = self.router.enrichment()
+        if enrichment is None or not hits:
+            return hits
+        chroma_hits = [self._dict_to_retrieval_hit(item) for item in hits]
+        hit_enabled = getattr(enrichment, "_hit_enrichment_enabled", None)
+        if not callable(hit_enabled) or not any(hit_enabled(hit) for hit in chroma_hits):
+            return hits
+        enrich = getattr(enrichment, "enrich", None)
+        if not callable(enrich):
+            enrich = self.router.enrich
+        enriched = enrich(query, chroma_hits)
+        converted = [self._hit_as_dict(hit) for hit in enriched]
+        return self._bound_hits(converted, limit=max(len(hits), 1))
 
     def _legacy_search(self, query: str, *, candidate_limit: int) -> list[dict]:
         if self._uses_vault_corpus or self._ram_fallback_active():

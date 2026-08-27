@@ -9,6 +9,8 @@ def test_quarantine_modal_wires_bridge_calls():
     assert "get_quarantine" in HTML
     assert "restore_note" in HTML
     assert "No hay archivos en cuarentena actualmente." not in HTML or "quarantine-list" in HTML
+    assert 'id="caudal-footer"' in HTML
+    assert "openModal('modal-quarantine')" in HTML or 'data-onclick-command="openModal(\'modal-quarantine\')"' in HTML
 
 
 def test_quarantine_list_shows_review_status_without_restore():

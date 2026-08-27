@@ -133,3 +133,15 @@ def test_step2_resolution_and_job_control_use_lifecycle_owned_instances(
     assert control.ingestion is ingestion
     assert control.job_store is store
     store.close()
+
+
+def test_console_backend_exposes_flow_state_and_feed_navigation(tmp_path):
+    vault_root = tmp_path / "Vault"
+    for name in ("1_volcado", "2_copiado", "3_capturado", "4_procesado", ".fuente"):
+        (vault_root / name).mkdir(parents=True)
+    backend = FuenteConsoleBackend(vault_root)
+
+    state = backend.get_flow_state()
+    assert "steps" in state and "seals" in state
+    feed = backend.open_source_feed({"seal": "pending_review"}, "date")
+    assert feed["workspace"] == "source" and feed["view"] == "feed"

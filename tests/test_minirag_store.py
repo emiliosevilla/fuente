@@ -8,9 +8,10 @@ from pathlib import Path
 import pytest
 
 from fuente.rag.minirag_store import MiniRAGStore, _normalize_minirag_record_kinds
+from fuente.rag.backend import RetrievalHit
 
 
-def record(document_id="note-1", revision=2, content_hash="abc"):
+def record(document_id="note-1", revision=2, content_hash="abc", note_id="note-1"):
     return {
         "id": f"{document_id}:chunk:0",
         "document_id": document_id,
@@ -18,7 +19,13 @@ def record(document_id="note-1", revision=2, content_hash="abc"):
         "content_hash": content_hash,
         "content": "Contrato de arrendamiento autorizado.",
         "relative_path": "General/3_limpio/nota.md",
-        "metadata": {"approved": True, "document_id": document_id},
+        "metadata": {
+            "approved": True,
+            "document_id": document_id,
+            "note_id": note_id,
+            "revision": revision,
+            "content_hash": content_hash,
+        },
     }
 
 
@@ -32,11 +39,12 @@ class FakeMiniRAG:
     def search(self, query, limit=5):
         return [
             {
-                "id": "note-1:chunk:0",
-                "content": "Contrato de arrendamiento autorizado.",
+                "id": item_id,
+                "content": content,
                 "score": 0.9,
             }
-        ][:limit]
+            for item_id, content in self.inserted[:limit]
+        ]
 
 
 class RealApiShapeFake:
@@ -263,3 +271,75 @@ def test_minirag_incomplete_relationship_gets_neutral_parser_fields():
         '<|>"related"<|>1)##\n'
         '("content_keywords"<|>"colaboración")<|COMPLETE|>'
     )
+
+
+def test_minirag_identity_uses_note_id_not_source_document_id(tmp_path: Path):
+    client = FakeMiniRAG()
+    store = MiniRAGStore(
+        tmp_path / "minirag",
+        client=client,
+        approval_checker=lambda note_id, revision, content_hash: (
+            note_id == "catalog-note" and revision == 3 and content_hash == "hash-note"
+        ),
+    )
+    store.rebuild([
+        record(
+            document_id="source-uuid",
+            note_id="catalog-note",
+            revision=3,
+            content_hash="hash-note",
+        )
+    ])
+    assert store.search("contrato", limit=1)
+    hit = RetrievalHit(
+        document_id="source-uuid",
+        revision=3,
+        content_hash="hash-note",
+        content="Contrato de arrendamiento autorizado.",
+        score=0.7,
+        backend="chroma",
+        relative_path="General/3_limpio/nota.md",
+        metadata={
+            "note_id": "catalog-note",
+            "revision": 3,
+            "content_hash": "hash-note",
+            "document_id": "source-uuid",
+        },
+    )
+    store._job_store = type(
+        "Gate",
+        (),
+        {"is_minirag_enrichment_accepted": staticmethod(lambda *_args: True)},
+    )()
+    enriched = store.enrich("contrato", [hit])
+    assert any(item.backend == "minirag" for item in enriched)
+
+
+def test_minirag_enrich_merges_without_duplicates(tmp_path: Path):
+    client = FakeMiniRAG()
+    store = MiniRAGStore(tmp_path / "minirag", client=client)
+    store.set_approval_checker(lambda *_args: True)
+    store._job_store = type(
+        "Gate",
+        (),
+        {
+            "is_minirag_enrichment_accepted": staticmethod(lambda *_args: True),
+        },
+    )()
+    store.rebuild([record()])
+    from fuente.rag.backend import RetrievalHit
+
+    chroma_hit = RetrievalHit(
+        document_id="source-uuid",
+        revision=2,
+        content_hash="abc",
+        content="Contrato de arrendamiento autorizado.",
+        score=0.7,
+        backend="chroma",
+        relative_path="General/3_limpio/nota.md",
+        metadata={"note_id": "note-1", "revision": 2, "content_hash": "abc"},
+    )
+    enriched = store.enrich("contrato", [chroma_hit])
+    assert enriched[0].backend == "chroma"
+    assert any(hit.backend == "minirag" for hit in enriched)
+    assert len({MiniRAGStore._hit_identity_key(hit) for hit in enriched}) == 2

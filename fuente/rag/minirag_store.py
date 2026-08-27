@@ -12,6 +12,9 @@ from fuente.infrastructure.atomic_files import atomic_write_json
 from fuente.rag.backend import IndexBuildResult, IndexRecord, RetrievalHit
 
 
+ApprovalChecker = Callable[[str, int, str], bool]
+
+
 _MINIRAG_RECORD_KIND = re.compile(
     r'(\(\s*)[\"\u201c\u201d]?(entity|relationship)[\"\u201c\u201d]?(\s*<\|>)',
     re.IGNORECASE,
@@ -58,6 +61,8 @@ class MiniRAGStore:
         model: str | None = None,
         embedding_func: Any | None = None,
         llm_model_func: Callable[..., Any] | None = None,
+        job_store: Any | None = None,
+        approval_checker: ApprovalChecker | None = None,
     ) -> None:
         self.root = Path(root).expanduser().resolve()
         self.root.mkdir(parents=True, exist_ok=True)
@@ -67,6 +72,11 @@ class MiniRAGStore:
         self.model = model
         self._embedding_func = embedding_func
         self._llm_model_func = llm_model_func
+        self._job_store = job_store
+        self._approval_checker = approval_checker
+
+    def set_approval_checker(self, checker: ApprovalChecker | None) -> None:
+        self._approval_checker = checker
 
     @property
     def _manifest_path(self) -> Path:
@@ -152,7 +162,14 @@ class MiniRAGStore:
         return generate
 
     def rebuild(self, records: Sequence[IndexRecord]) -> IndexBuildResult:
-        normalized = [self._normalize_record(record) for record in records]
+        approved = [
+            self._normalize_record(record)
+            for record in records
+            if self._may_index(record)
+        ]
+        if not approved:
+            return IndexBuildResult(backend=self.name, indexed_count=0, success=True)
+        normalized = approved
         client = self._get_client()
         contents = [record["content"] for record in normalized]
         ids = [record["id"] for record in normalized]
@@ -201,6 +218,72 @@ class MiniRAGStore:
             hits.extend(self._to_hits(item, manifest))
         return hits[: max(1, int(limit))]
 
+    def is_enrichment_enabled(self, note_id: str, revision: int, content_hash: str) -> bool:
+        if self._approval_checker is None:
+            return False
+        if not self._approval_checker(note_id, revision, content_hash):
+            return False
+        lookup = getattr(self._job_store, "is_minirag_enrichment_accepted", None)
+        if not callable(lookup):
+            return False
+        return bool(lookup(note_id, revision, content_hash))
+
+    @staticmethod
+    def _note_identity_from_mapping(
+        metadata: Mapping[str, Any],
+        *,
+        revision_fallback: int = 1,
+        content_hash_fallback: str = "",
+    ) -> tuple[str, int, str]:
+        note_id = str(metadata.get("note_id") or "")
+        revision = int(metadata.get("revision") or revision_fallback or 1)
+        content_hash = str(
+            metadata.get("content_hash")
+            or content_hash_fallback
+            or metadata.get("source_hash")
+            or ""
+        )
+        return note_id, revision, content_hash
+
+    def _note_identity_from_record(
+        self, record: IndexRecord | Mapping[str, Any]
+    ) -> tuple[str, int, str]:
+        normalized = self._normalize_record(record)
+        metadata = dict(normalized.get("metadata") or {})
+        note_id, revision, content_hash = self._note_identity_from_mapping(
+            metadata,
+            revision_fallback=int(normalized.get("revision") or 1),
+            content_hash_fallback=str(normalized.get("content_hash") or ""),
+        )
+        return note_id, revision, content_hash
+
+    def _note_identity_from_hit(self, hit: RetrievalHit) -> tuple[str, int, str]:
+        metadata = dict(hit.metadata or {})
+        return self._note_identity_from_mapping(
+            metadata,
+            revision_fallback=hit.revision,
+            content_hash_fallback=hit.content_hash,
+        )
+
+    def _hit_enrichment_enabled(self, hit: RetrievalHit) -> bool:
+        note_id, revision, content_hash = self._note_identity_from_hit(hit)
+        if not note_id:
+            return False
+        return self.is_enrichment_enabled(note_id, revision, content_hash)
+
+    def enrich(self, query: str, chroma_hits: list[RetrievalHit]) -> list[RetrievalHit]:
+        if not chroma_hits:
+            return []
+        gated = [hit for hit in chroma_hits if self._hit_enrichment_enabled(hit)]
+        if not gated:
+            return list(chroma_hits)
+        try:
+            extra = self.search(query, limit=max(len(chroma_hits), 5))
+        except MiniRAGUnavailableError:
+            return list(chroma_hits)
+        extra = [hit for hit in extra if self._hit_enrichment_enabled(hit)]
+        return self._merge_hits(chroma_hits, extra)
+
     def delete(self, document_ids: Sequence[str]) -> None:
         manifest = self._load_manifest()
         doomed = {str(value) for value in document_ids}
@@ -232,15 +315,65 @@ class MiniRAGStore:
         document_id = str(record.get("document_id") or metadata.get("document_id") or "")
         if not document_id:
             raise ValueError("MiniRAG records require document_id")
+        note_id = str(record.get("note_id") or metadata.get("note_id") or "")
+        if note_id:
+            metadata.setdefault("note_id", note_id)
+        revision = int(record.get("revision") or metadata.get("revision") or 1)
+        content_hash = str(
+            record.get("content_hash")
+            or metadata.get("content_hash")
+            or metadata.get("source_hash")
+            or ""
+        )
+        if content_hash:
+            metadata.setdefault("content_hash", content_hash)
+        metadata.setdefault("revision", revision)
         return {
             "id": str(record.get("id") or document_id),
             "document_id": document_id,
-            "revision": int(record.get("revision") or metadata.get("revision") or 1),
-            "content_hash": str(record.get("content_hash") or metadata.get("content_hash") or metadata.get("source_hash") or ""),
+            "note_id": note_id,
+            "revision": revision,
+            "content_hash": content_hash,
             "content": str(record.get("content") or ""),
             "relative_path": str(record.get("relative_path") or metadata.get("relative_path") or ""),
             "metadata": metadata,
         }
+
+    def _is_identity_approved(self, record: IndexRecord | Mapping[str, Any]) -> bool:
+        note_id, revision, content_hash = self._note_identity_from_record(record)
+        if not note_id or not content_hash:
+            return False
+        if self._approval_checker is None:
+            return False
+        return bool(self._approval_checker(note_id, revision, content_hash))
+
+    def _may_index(self, record: IndexRecord | Mapping[str, Any]) -> bool:
+        if self._approval_checker is None:
+            return True
+        return self._is_identity_approved(record)
+
+    @staticmethod
+    def _hit_identity_key(hit: RetrievalHit) -> str:
+        metadata = dict(hit.metadata or {})
+        note_id = str(metadata.get("note_id") or "")
+        identity = note_id or hit.document_id
+        return f"{identity}:{hit.revision}:{hit.content_hash}:{hit.backend}"
+
+    @classmethod
+    def _merge_hits(
+        cls,
+        primary: Sequence[RetrievalHit],
+        extra: Sequence[RetrievalHit],
+    ) -> list[RetrievalHit]:
+        merged = list(primary)
+        seen = {cls._hit_identity_key(hit) for hit in primary}
+        for hit in extra:
+            key = cls._hit_identity_key(hit)
+            if key in seen:
+                continue
+            merged.append(hit)
+            seen.add(key)
+        return merged
 
     def _load_manifest(self) -> dict[str, dict[str, Any]]:
         if not self._manifest_path.exists():
@@ -357,6 +490,13 @@ class MiniRAGStore:
         hits = []
         for source in sources:
             source_metadata = {**metadata, **dict(source.get("metadata") or {})}
+            note_id = str(
+                source.get("note_id")
+                or source_metadata.get("note_id")
+                or ""
+            )
+            if note_id:
+                source_metadata.setdefault("note_id", note_id)
             hits.append(RetrievalHit(
                 document_id=str(item.get("document_id") or source.get("document_id") or source_metadata.get("document_id") or ""),
                 revision=int(item.get("revision") or source.get("revision") or source_metadata.get("revision") or 1),

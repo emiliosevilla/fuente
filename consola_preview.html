@@ -143,9 +143,13 @@
         <section id="workspace-flow" class="workspace-panel-root" data-workspace="flow" aria-labelledby="workspace-flow-title" hidden>
             <header class="shell-header">
                 <div><p class="workspace-kicker">Control del material</p><h1 id="workspace-flow-title" tabindex="-1">Caudal</h1></div>
-                <button type="button" class="btn-primary shell-primary-action" data-onclick-command="triggerAction('step2_transcribe')">Procesar material</button>
+                <div class="shell-header-actions caudal-header-actions">
+                    <button type="button" class="btn-secondary" data-onclick-command="openModal('modal-caudal-import')">Importar</button>
+                    <button type="button" class="btn-secondary" data-onclick-command="openModal('modal-caudal-export')">Exportar</button>
+                    <button type="button" class="btn-primary shell-primary-action" data-onclick-command="triggerAction('step2_transcribe')">Procesar material</button>
+                </div>
             </header>
-            <div class="workspace-content flow-content">
+            <div class="workspace-content flow-content caudal-body">
                 <section class="flow-section" id="fuente-flow" aria-labelledby="flow-title">
                     <div class="section-heading"><div><p class="workspace-kicker">Pipeline</p><h2 id="flow-title">Cinco etapas</h2></div><button type="button" class="btn-secondary" data-onclick-command="openDrawer('flow-detail-drawer')">Ver detalle</button></div>
                     <div class="flow-stages">
@@ -157,22 +161,72 @@
                     </div>
                 </section>
                 <section class="flow-operations" aria-labelledby="flow-operations-title">
-                    <div class="section-heading"><div><p class="workspace-kicker">Trabajo actual</p><h2 id="flow-operations-title">Operaciones</h2></div></div>
-                    <div class="toolbar-group">
-                        <button class="btn-secondary" data-onclick-command="syncAllInputs()">Actualizar entradas</button>
-                        <button class="btn-secondary" data-onclick-command="openApprovalInbox()">Revisar notas</button>
-                        <button class="btn-secondary" id="btn-open-job-queue" data-onclick-command="openModal('modal-job-queue')">Trabajos</button>
-                        <button class="btn-secondary" data-onclick-command="openModal('modal-quarantine')">Cuarentena</button>
+                    <div class="section-heading">
+                        <div><p class="workspace-kicker">Trabajo actual</p><h2 id="flow-operations-title">Cola y revisiones</h2></div>
+                        <div class="toolbar-group">
+                            <button class="btn-secondary" data-onclick-command="syncAllInputs()">Actualizar entradas</button>
+                            <button class="btn-secondary" data-onclick-command="openApprovalInbox()">Revisar notas</button>
+                            <button class="btn-secondary" data-onclick-command="openDrawer('flow-queue-drawer')">Trabajos</button>
+                            <button class="btn-secondary" data-onclick-command="openModal('modal-quarantine')">Cuarentena</button>
+                            <button class="btn-secondary" data-onclick-command="openDrawer('flow-log-drawer')">Ver registro</button>
+                        </div>
                     </div>
-                    <div class="current-work-strip" aria-label="Resumen operativo">
-                        <button type="button" class="current-work-item" data-onclick-command="openModal('modal-category')"><span>Procesados</span><strong id="stat-processed">0</strong></button>
-                        <button type="button" class="current-work-item" data-onclick-command="openModal('modal-quarantine')"><span>En cuarentena</span><strong id="stat-quarantine">0</strong></button>
-                        <button type="button" class="current-work-item" data-onclick-command="openModal('modal-stat-ram')"><span>Memoria</span><strong id="stat-ram">0%</strong></button>
+                    <div class="flow-queue" id="caudal-queue">
+                        <div class="flow-queue-tabs" role="tablist" aria-label="Estado de la cola">
+                            <button type="button" class="btn-small is-active" id="caudal-queue-tab-waiting" data-onclick-command="setCaudalQueueFilter('waiting')">Pendientes</button>
+                            <button type="button" class="btn-small" id="caudal-queue-tab-active" data-onclick-command="setCaudalQueueFilter('active')">En revisión</button>
+                            <button type="button" class="btn-small" id="caudal-queue-tab-done" data-onclick-command="setCaudalQueueFilter('completed')">Terminados</button>
+                        </div>
+                        <div class="flow-queue-table-wrap">
+                            <table class="flow-queue-table" id="caudal-queue-table" aria-label="Cola de trabajos">
+                                <thead>
+                                    <tr><th>Archivo</th><th>Etapa</th><th>Sello</th><th>Actualizado</th></tr>
+                                </thead>
+                                <tbody id="caudal-queue-body">
+                                    <tr><td colspan="4">La cola aún no se ha medido.</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
                 </section>
+                <footer class="caudal-footer" id="caudal-footer" aria-label="Contadores de Caudal">
+                    <button type="button" class="caudal-counter" data-caudal-feed-filter='{"seal":"pending_review"}' data-onclick-command="openSourceFeedFromCounter(this)"><span class="dot red" aria-hidden="true"></span><span>Rojos</span><strong id="count-seal-pending">0</strong></button>
+                    <button type="button" class="caudal-counter" data-caudal-feed-filter='{"seal":"in_review"}' data-onclick-command="openSourceFeedFromCounter(this)"><span class="dot orange" aria-hidden="true"></span><span>En revisión</span><strong id="count-seal-review">0</strong></button>
+                    <button type="button" class="caudal-counter" data-caudal-feed-filter='{"seal":"approved"}' data-onclick-command="openSourceFeedFromCounter(this)"><span class="dot green" aria-hidden="true"></span><span>Verdes</span><strong id="count-seal-approved">0</strong></button>
+                    <button type="button" class="caudal-counter" data-onclick-command="openModal('modal-quarantine')"><span class="dot slate" aria-hidden="true"></span><span>Cuarentena</span><strong id="count-quarantine-footer">0</strong></button>
+                    <button type="button" class="caudal-counter" data-caudal-feed-filter='{"note_type":"resumen"}' data-onclick-command="openSourceFeedFromCounter(this)"><span>Resumen</span><strong id="count-type-resumen">0</strong></button>
+                    <button type="button" class="caudal-counter" data-caudal-feed-filter='{"note_type":"propiedades"}' data-onclick-command="openSourceFeedFromCounter(this)"><span>Propiedades</span><strong id="count-type-propiedades">0</strong></button>
+                    <button type="button" class="caudal-counter" data-caudal-feed-filter='{"note_type":"contexto"}' data-onclick-command="openSourceFeedFromCounter(this)"><span>Contexto</span><strong id="count-type-contexto">0</strong></button>
+                    <button type="button" class="caudal-counter" data-caudal-feed-filter='{"note_type":"concepto"}' data-onclick-command="openSourceFeedFromCounter(this)"><span>Concepto</span><strong id="count-type-concepto">0</strong></button>
+                    <button type="button" class="btn-secondary" data-onclick-command="openDrawer('flow-log-drawer')">Ver registro</button>
+                </footer>
                 <aside id="flow-detail-drawer" class="ui-drawer" aria-label="Detalle operativo" aria-hidden="true" hidden>
                     <div class="drawer-header"><h2>Detalle operativo</h2><button type="button" class="icon-button" data-onclick-command="closeDrawer('flow-detail-drawer')" aria-label="Cerrar detalle"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"></path></svg></button></div>
-                    <p>Los trabajos, la cuarentena y las aprobaciones conservan sus controles actuales.</p>
+                    <div class="caudal-detail-body">
+                        <dl class="caudal-detail-properties" id="caudal-detail-properties">
+                            <div><dt>Archivo</dt><dd id="caudal-detail-file">Sin selección</dd></div>
+                            <div><dt>Origen</dt><dd id="caudal-detail-origin">Sin medir</dd></div>
+                            <div><dt>Revisión</dt><dd id="caudal-detail-revision">Sin medir</dd></div>
+                            <div><dt>Hash (SHA-256)</dt><dd id="caudal-detail-hash">Sin medir</dd></div>
+                            <div><dt>Sello actual</dt><dd id="caudal-detail-seal">Sin medir</dd></div>
+                            <div><dt>Próxima aprobación requerida</dt><dd id="caudal-detail-next-approval">Sin medir</dd></div>
+                        </dl>
+                        <div class="toolbar-group">
+                            <button type="button" class="btn-primary" id="btn-caudal-approve-step" data-onclick-command="approveCaudalSelection()">Aprobar paso</button>
+                            <button type="button" class="btn-secondary" data-onclick-command="switchWorkspace('source')">Abrir en Fuente</button>
+                        </div>
+                        <p class="console-text-022">Los cuatro gates de aprobación usan approve_clean, approve_processed_output y begin_transition_review según la etapa activa.</p>
+                    </div>
+                </aside>
+                <aside id="flow-queue-drawer" class="ui-drawer" aria-label="Cola de trabajos" aria-hidden="true" hidden>
+                    <div class="drawer-header"><h2>Cola de trabajos</h2><button type="button" class="icon-button" data-onclick-command="closeDrawer('flow-queue-drawer')" aria-label="Cerrar cola"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"></path></svg></button></div>
+                    <div id="flow-queue-drawer-host">
+                        <button class="btn-secondary" data-onclick-command="openModal('modal-job-queue')">Abrir cola completa</button>
+                    </div>
+                </aside>
+                <aside id="flow-log-drawer" class="ui-drawer" aria-label="Registro de actividad" aria-hidden="true" hidden>
+                    <div class="drawer-header"><h2>Registro de actividad</h2><button type="button" class="icon-button" data-onclick-command="closeDrawer('flow-log-drawer')" aria-label="Cerrar registro"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"></path></svg></button></div>
+                    <div class="log-console caudal-log-console" id="caudal-log-console" role="log" aria-live="polite"></div>
                 </aside>
             </div>
         </section>
@@ -189,11 +243,19 @@
                 </div>
                 <div class="console-layout-005">
                     <button type="button" class="btn-small" id="btn-reader-back" data-onclick-command="goBackReaderNote()" disabled title="Volver a la nota anterior"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-back"></use></svg><span>Atrás</span></button>
-                    <button class="btn-small btn-toggle active" id="btn-reader-mode-list" data-onclick-command="switchReaderView('list')">Notas</button>
-                    <span class="console-layout-006"></span>
-                    <button class="btn-small" data-onclick-command="triggerAction('copy_reader_note', {}, this)">Copiar</button>
-                    <button class="btn-small" data-onclick-command="triggerAction('export_reader_note', {}, this)">Exportar</button>
-                    <button class="btn-small" data-onclick-command="triggerAction('open_obsidian', {}, this)">Obsidian</button>
+                    <div class="source-view-switch" role="tablist" aria-label="Vista de Fuente">
+                        <button type="button" class="btn-small source-view-tab" id="btn-source-view-grid" role="tab" data-onclick-command="switchSourceView('grid')">Grid</button>
+                        <button type="button" class="btn-small source-view-tab is-active" id="btn-source-view-list" role="tab" aria-selected="true" data-onclick-command="switchSourceView('list')">Lista</button>
+                        <button type="button" class="btn-small source-view-tab" id="btn-source-view-individual" role="tab" data-onclick-command="switchSourceView('individual')">Individual</button>
+                        <button type="button" class="btn-small source-view-tab" id="btn-source-view-feed" role="tab" data-onclick-command="switchSourceView('feed')">Feed</button>
+                        <button type="button" class="btn-small source-view-tab" id="btn-source-view-filtered" role="tab" data-onclick-command="switchSourceView('filtered')">Filtrada</button>
+                    </div>
+                    <button type="button" class="btn-small" id="btn-source-hierarchy" data-onclick-command="switchSourceView('hierarchy')">Jerarquía</button>
+                    <button type="button" class="btn-small" id="btn-source-relations" data-onclick-command="switchSourceView('relations')">Relaciones</button>
+                    <button type="button" class="btn-small" data-onclick-command="openDrawer('source-filter-drawer')">Filtrar</button>
+                    <button type="button" class="btn-small" data-onclick-command="openDrawer('source-search-drawer')">Buscar</button>
+                    <button type="button" class="btn-small" id="btn-source-actions" data-onclick-command="toggleSourceActionsPopover()">Acciones</button>
+                    <button type="button" class="btn-small" data-onclick-command="openDrawer('source-chat-drawer')">Consultar</button>
                     <button type="button" class="close-btn" data-onclick-command="closeModal('modal-reader')" aria-label="Cerrar notas"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-close"></use></svg></button>
                 </div>
             </div>
@@ -214,12 +276,30 @@
                                     <ul class="reader-note-list" id="reader-note-list">
                                         <li class="reader-note-item active">Cargando notas...</li>
                                     </ul>
+                                    <ul class="source-hierarchy-tree" id="source-hierarchy-tree" hidden aria-label="Jerarquía de notas"></ul>
                                 </div>
                             </div>
                             <div class="reader-view-pane" id="reader-content">
                                 <h2 class="console-layout-007">Selecciona una nota</h2>
                                 <p class="console-layout-008">Elige una nota de la biblioteca para leerla.</p>
                             </div>
+                        </div>
+                        <div class="reader-view is-hidden" id="reader-view-grid" data-source-view="grid" hidden>
+                            <div class="source-grid" id="source-grid" aria-label="Notas en cuadrícula"></div>
+                        </div>
+                        <div class="reader-view is-hidden" id="reader-view-feed" data-source-view="feed" hidden>
+                            <div class="source-feed" id="source-feed" aria-label="Feed de notas"></div>
+                            <div id="source-feed-sentinel" class="source-feed-sentinel" aria-hidden="true"></div>
+                        </div>
+                        <div class="reader-view is-hidden" id="reader-view-individual" data-source-view="individual" hidden>
+                            <div class="reader-view-pane source-individual-pane" id="reader-content-individual"></div>
+                        </div>
+                        <div class="reader-view is-hidden" id="reader-view-filtered" data-source-view="filtered" hidden>
+                            <div class="source-grid source-filtered-grid" id="source-filtered-grid" aria-label="Notas filtradas"></div>
+                        </div>
+                        <div class="reader-view is-hidden" id="reader-view-relations" data-source-view="relations" hidden>
+                            <div class="source-relations-preview" id="source-relations-preview" aria-label="Relaciones de la nota"></div>
+                            <button type="button" class="btn-secondary" id="btn-open-obsidian-graph" data-onclick-command="openObsidianGraph()">Abrir grafo completo en Obsidian</button>
                         </div>
                     </section>
                     <aside id="source-context-drawer" class="reader-properties-pane ui-drawer" data-reader-region="properties" role="dialog" aria-modal="false" aria-label="Más sobre la nota" aria-hidden="true" hidden>
@@ -250,6 +330,54 @@
                             </div>
                         </div>
                     </aside>
+                    <aside id="source-filter-drawer" class="ui-drawer source-filter-drawer" role="dialog" aria-modal="false" aria-label="Filtros de Fuente" aria-hidden="true" hidden>
+                        <div class="drawer-header"><h2>Filtros</h2><button type="button" class="icon-button" data-onclick-command="closeDrawer('source-filter-drawer')" aria-label="Cerrar filtros"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"></path></svg></button></div>
+                        <div class="source-filter-fields">
+                            <label for="source-filter-seal">Sello</label>
+                            <select id="source-filter-seal"><option value="">Todos</option><option value="pending_review">Rojo</option><option value="in_review">Naranja</option><option value="approved">Verde</option></select>
+                            <label for="source-filter-theme">Temática</label>
+                            <input type="text" id="source-filter-theme" placeholder="Tema">
+                            <label for="source-filter-origin">Origen</label>
+                            <input type="text" id="source-filter-origin" placeholder="Origen">
+                            <label for="source-filter-type">Tipo</label>
+                            <input type="text" id="source-filter-type" placeholder="Tipo de nota">
+                            <label for="source-filter-urgency">Urgencia</label>
+                            <input type="text" id="source-filter-urgency" placeholder="Urgencia">
+                            <label for="source-filter-date-from">Desde</label>
+                            <input type="date" id="source-filter-date-from">
+                            <label for="source-filter-date-to">Hasta</label>
+                            <input type="date" id="source-filter-date-to">
+                            <button type="button" class="btn-primary" data-onclick-command="applySourceFilters()">Aplicar filtros</button>
+                        </div>
+                    </aside>
+                    <aside id="source-search-drawer" class="ui-drawer source-search-drawer" role="dialog" aria-modal="false" aria-label="Buscar en Fuente" aria-hidden="true" hidden>
+                        <div class="drawer-header"><h2>Buscar</h2><button type="button" class="icon-button" data-onclick-command="closeDrawer('source-search-drawer')" aria-label="Cerrar búsqueda"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"></path></svg></button></div>
+                        <div class="source-search-tabs" role="tablist" aria-label="Modo de búsqueda">
+                            <button type="button" class="btn-small is-active" id="source-search-tab-content" data-onclick-command="switchSourceSearchMode('content')">Contenido</button>
+                            <button type="button" class="btn-small" id="source-search-tab-metadata" data-onclick-command="switchSourceSearchMode('metadata')">Metadatos</button>
+                            <button type="button" class="btn-small" id="source-search-tab-relations" data-onclick-command="switchSourceSearchMode('relations')">Relaciones</button>
+                        </div>
+                        <label for="source-search-input">Consulta</label>
+                        <input type="search" id="source-search-input" placeholder="Buscar...">
+                        <button type="button" class="btn-primary" data-onclick-command="runSourceSearch()">Buscar</button>
+                        <div id="source-search-results" class="source-search-results" aria-live="polite"></div>
+                    </aside>
+                    <aside id="source-chat-drawer" class="ui-drawer source-chat-drawer" role="dialog" aria-modal="false" aria-label="Consultar sobre la nota" aria-hidden="true" hidden>
+                        <div class="drawer-header"><h2>Consultar local</h2><button type="button" class="icon-button" data-onclick-command="closeDrawer('source-chat-drawer')" aria-label="Cerrar consulta"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"></path></svg></button></div>
+                        <form id="source-chat-form" class="workspace-chat-form">
+                            <label for="source-chat-input">Preguntar sobre esta nota</label>
+                            <textarea id="source-chat-input" rows="3" required></textarea>
+                            <button type="submit" class="btn-primary">Preguntar</button>
+                        </form>
+                        <div id="source-chat-answer" class="workspace-chat-answer" aria-live="polite"></div>
+                    </aside>
+                    <div id="source-actions-popover" class="source-actions-popover" role="dialog" aria-label="Acciones de lectura" aria-hidden="true" hidden>
+                        <button type="button" class="btn-small" data-onclick-command="triggerAction('copy_reader_note', {}, this)">Copiar <kbd>⌘C</kbd></button>
+                        <button type="button" class="btn-small" data-onclick-command="printCurrentNote()">Imprimir <kbd>⌘P</kbd></button>
+                        <button type="button" class="btn-small" data-onclick-command="triggerAction('export_reader_note', {}, this)">Exportar</button>
+                        <button type="button" class="btn-small" data-onclick-command="openCurrentNoteFile()">Abrir archivo</button>
+                        <button type="button" class="btn-small" data-onclick-command="triggerAction('open_obsidian', {}, this)">Abrir en Obsidian</button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -401,6 +529,7 @@
                 <div class="console-layout-032">
                     <button class="btn-small tab-btn console-text-015" id="tab-btn-routes" data-onclick-command="switchSettingsTab('routes')">Carpetas</button>
                     <button class="btn-small tab-btn" id="tab-btn-server" data-onclick-command="switchSettingsTab('server')">IA</button>
+                    <button class="btn-small tab-btn" id="tab-btn-templates" data-onclick-command="switchSettingsTab('templates')">Plantillas</button>
                 </div>
                 <div id="settings-load-status" class="console-text-017" role="status" aria-live="polite"></div>
                 <div id="setup-vault-panel" class="console-layout-039" hidden>
@@ -509,6 +638,12 @@
                     </fieldset>
                 </div>
 
+                <div class="tab-panel console-layout-043 is-hidden" id="tab-panel-templates">
+                    <p class="console-text-017">Edita las plantillas ocultas y las instrucciones AGENTS.md que usa la generación.</p>
+                    <button type="button" class="btn-secondary" data-onclick-command="openModal('modal-template-helper')">Abrir editor de plantillas</button>
+                    <p id="template-settings-status" class="console-text-017" role="status" aria-live="polite"></p>
+                </div>
+
             </div>
             <div class="modal-footer">
                 <button class="btn-secondary console-text-018" data-onclick-command="resetDefaultSettings()">Restablecer valores</button>
@@ -517,6 +652,54 @@
                     <button class="btn-secondary console-text-020" data-onclick-command="saveSettings()">Guardar</button>
                 </div>
                 <div id="settings-save-status" class="console-text-017" role="alert" aria-live="polite"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL TEMPLATES -->
+    <div class="modal-overlay ui-modal" id="modal-template-helper" role="dialog" aria-modal="true" aria-labelledby="template-helper-title" aria-hidden="true">
+        <div class="modal-container modal-wide template-helper-modal">
+            <div class="modal-header">
+                <div class="modal-title" id="template-helper-title">Plantillas e instrucciones</div>
+                <button type="button" class="close-btn" data-onclick-command="closeModal('modal-template-helper')" aria-label="Cerrar editor de plantillas"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-close"></use></svg></button>
+            </div>
+            <div class="modal-body template-helper-shell">
+                <aside class="template-helper-types" id="template-type-list" aria-label="Tipos de plantilla"></aside>
+                <section class="template-helper-editor">
+                    <div class="template-helper-tabs">
+                        <button type="button" class="btn-small tab-btn is-active" id="template-tab-template" data-onclick-command="switchTemplateEditorTab('template')">template.md</button>
+                        <button type="button" class="btn-small tab-btn" id="template-tab-agents" data-onclick-command="switchTemplateEditorTab('agents')">AGENTS.md</button>
+                    </div>
+                    <textarea id="template-editor-template" class="template-helper-textarea" aria-label="Contenido de template.md"></textarea>
+                    <textarea id="template-editor-agents" class="template-helper-textarea is-hidden" aria-label="Contenido de AGENTS.md"></textarea>
+                    <div id="template-helper-dirty" class="console-text-017 template-helper-dirty" hidden>Cambios sin guardar</div>
+                    <div id="template-helper-error" class="console-text-017 status-error" role="alert" aria-live="polite"></div>
+                </section>
+                <section class="template-helper-preview" id="template-helper-preview" aria-live="polite">
+                    <h3 class="console-text-016">Vista previa</h3>
+                    <pre id="template-preview-body" class="template-preview-body"></pre>
+                </section>
+                <aside class="template-helper-vars" aria-label="Variables permitidas">
+                    <h3 class="console-text-016">Variables</h3>
+                    <ul class="template-vars-list">
+                        <li>source_id</li>
+                        <li>source_title</li>
+                        <li>source_path</li>
+                        <li>source_hash</li>
+                        <li>created_at</li>
+                        <li>wikilink</li>
+                        <li>related_wikilinks</li>
+                        <li>concept_wikilinks</li>
+                    </ul>
+                </aside>
+            </div>
+            <div class="modal-footer template-helper-footer">
+                <button type="button" class="btn-secondary" data-onclick-command="restoreTemplateHelper()">Restaurar</button>
+                <span id="template-helper-meta" class="console-text-017 template-helper-meta"></span>
+                <div class="template-helper-actions">
+                    <button type="button" class="btn-secondary" data-onclick-command="previewTemplateHelper()">Previsualizar</button>
+                    <button type="button" class="btn-secondary" data-onclick-command="saveTemplateHelper()">Guardar</button>
+                </div>
             </div>
         </div>
     </div>
@@ -625,6 +808,49 @@
             </div>
             <div class="modal-footer">
                 <span>Desde aquí puedes ver qué está haciendo Fuente.</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="modal-caudal-import" role="dialog" aria-modal="true" aria-labelledby="modal-caudal-import-title" aria-hidden="true">
+        <div class="modal-container">
+            <div class="modal-header">
+                <div class="modal-title" id="modal-caudal-import-title">Importar material</div>
+                <button type="button" class="close-btn" data-onclick-command="closeModal('modal-caudal-import')" aria-label="Cerrar importación"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-close"></use></svg></button>
+            </div>
+            <div class="modal-body">
+                <p>Elige cómo quieres traer material al volcado. SharePoint se configura como carpeta local de OneDrive.</p>
+                <div class="toolbar-group">
+                    <button type="button" class="btn-secondary" data-onclick-command="runCaudalImport('files')">Archivos</button>
+                    <button type="button" class="btn-secondary" data-onclick-command="runCaudalImport('folder')">Carpeta</button>
+                    <button type="button" class="btn-secondary" data-onclick-command="runCaudalImport('sync')">SharePoint sincronizado</button>
+                </div>
+                <div id="caudal-import-status" role="status"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="modal-caudal-export" role="dialog" aria-modal="true" aria-labelledby="modal-caudal-export-title" aria-hidden="true">
+        <div class="modal-container">
+            <div class="modal-header">
+                <div class="modal-title" id="modal-caudal-export-title">Exportar nota aprobada</div>
+                <button type="button" class="close-btn" data-onclick-command="closeModal('modal-caudal-export')" aria-label="Cerrar exportación"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-close"></use></svg></button>
+            </div>
+            <div class="modal-body">
+                <p>Exporta una nota verde aprobada usando el selector nativo de destino.</p>
+                <label for="caudal-export-document">Nota</label>
+                <input type="text" id="caudal-export-document" placeholder="ID de nota aprobada" autocomplete="off">
+                <label for="caudal-export-format">Formato</label>
+                <select id="caudal-export-format">
+                    <option value="markdown">Markdown</option>
+                    <option value="pdf">PDF</option>
+                    <option value="docx">Word</option>
+                </select>
+                <div class="toolbar-group">
+                    <button type="button" class="btn-primary" data-onclick-command="runCaudalExport()">Exportar</button>
+                    <button type="button" class="btn-secondary" data-onclick-command="downloadPdfFile()">Imprimir PDF</button>
+                </div>
+                <div id="caudal-export-status" role="status"></div>
             </div>
         </div>
     </div>
@@ -811,13 +1037,21 @@
             if (command.startsWith('openDrawer(')) return openDrawer(args[0], element);
             if (command.startsWith('closeDrawer(')) return closeDrawer(args[0]);
             if (command.startsWith('moveCarousel(')) return moveCarousel(args[0], args[1]);
-            if (command.startsWith('switchReaderView(')) return switchReaderView(args[0]);
+            if command.startsWith('switchReaderView(')) return switchReaderView(args[0]);
+            if (command.startsWith('switchSourceView(')) return switchSourceView(args[0]);
+            if (command.startsWith('switchSourceSearchMode(')) return switchSourceSearchMode(args[0]);
             if (command.startsWith('switchSettingsTab(')) return switchSettingsTab(args[0]);
+            if (command.startsWith('switchTemplateEditorTab(')) return switchTemplateEditorTab(args[0]);
             if (command.startsWith('switchWorkspaceTab(')) return switchWorkspaceTab(args[0]);
             if (command.startsWith('executeExportFormat(')) return executeExportFormat(args[0]);
             if (command.startsWith('changeActiveTheme(')) return changeActiveTheme(element.value);
             if (command === 'handleThemeTriggerKeydown(event)') return handleThemeTriggerKeydown(event);
             if (command === 'togglePathMode(this)') return togglePathMode(element);
+            if (command === 'openSourceFeedFromCounter(this)') return openSourceFeedFromCounter(element);
+            if (command.startsWith('setCaudalQueueFilter(')) return setCaudalQueueFilter(args[0]);
+            if (command.startsWith('runCaudalImport(')) return runCaudalImport(args[0]);
+            if (command === 'runCaudalExport()') return runCaudalExport();
+            if (command === 'approveCaudalSelection()') return approveCaudalSelection();
 
             const handlers = {
                 'promptCreateTheme()': promptCreateTheme,
@@ -827,6 +1061,12 @@
                 'toggleReaderLibrary()': toggleReaderLibrary,
                 'toggleReaderContext()': toggleReaderContext,
                 'filterReaderNotes()': filterReaderNotes,
+                'applySourceFilters()': applySourceFilters,
+                'runSourceSearch()': runSourceSearch,
+                'toggleSourceActionsPopover()': toggleSourceActionsPopover,
+                'printCurrentNote()': printCurrentNote,
+                'openCurrentNoteFile()': openCurrentNoteFile,
+                'openObsidianGraph()': openObsidianGraph,
                 'submitCreateThemeModal()': submitCreateThemeModal,
                 'browseVaultFolder()': browseVaultFolder,
                 'browseWhisperModelFolder()': browseWhisperModelFolder,
@@ -836,6 +1076,9 @@
                 'resetDefaultSettings()': resetDefaultSettings,
                 'saveSettings()': saveSettings,
                 'openApprovalInbox()': openApprovalInbox,
+                'saveTemplateHelper()': saveTemplateHelper,
+                'previewTemplateHelper()': previewTemplateHelper,
+                'restoreTemplateHelper()': restoreTemplateHelper,
                 'approveSelectedNote()': approveSelectedNote,
                 'approveAndExportSelectedNote()': approveAndExportSelectedNote,
                 'retryFailedApprovalExport()': retryFailedApprovalExport,
@@ -922,8 +1165,15 @@ document.addEventListener('keydown', handleShellKeydown);
             timestamp.className = 'log-time';
             timestamp.textContent = `[${timeStr}]`;
             entry.append(timestamp, document.createTextNode(` ${msg}`));
-            consoleEl.appendChild(entry);
-            consoleEl.scrollTop = consoleEl.scrollHeight;
+            if (consoleEl) {
+                consoleEl.appendChild(entry.cloneNode(true));
+                consoleEl.scrollTop = consoleEl.scrollHeight;
+            }
+            const caudalLog = document.getElementById('caudal-log-console');
+            if (caudalLog) {
+                caudalLog.appendChild(entry);
+                caudalLog.scrollTop = caudalLog.scrollHeight;
+            }
         }
 
         function togglePathMode(btn) {
@@ -1279,6 +1529,7 @@ document.addEventListener('keydown', handleShellKeydown);
                     input.value = drafts.workspaceChat;
                 }
             });
+            readSourceUiState();
         }
 
         function switchWorkspace(workspaceId) {
@@ -1296,6 +1547,10 @@ document.addEventListener('keydown', handleShellKeydown);
             const heading = document.querySelector('#workspace-' + workspaceId + ' h1');
             if (heading) heading.focus({preventScroll: true});
             if (workspaceId === 'source') loadReaderNotes();
+            if (workspaceId === 'flow') {
+                loadFlowState();
+                refreshCaudalQueue();
+            }
             persistUiState('main-window', 'workspace', workspaceId);
         }
 
@@ -1318,6 +1573,9 @@ document.addEventListener('keydown', handleShellKeydown);
             lastDrawerTrigger = trigger || document.activeElement;
             if (drawerId === 'source-context-drawer') {
                 setReaderContextVisibility(true);
+            } else if (drawerId === 'source-filter-drawer' || drawerId === 'source-search-drawer' || drawerId === 'source-chat-drawer') {
+                drawer.hidden = false;
+                drawer.setAttribute('aria-hidden', 'false');
             } else {
                 drawer.hidden = false;
                 drawer.setAttribute('aria-hidden', 'false');
@@ -1333,6 +1591,9 @@ document.addEventListener('keydown', handleShellKeydown);
             if (!drawer) return;
             if (drawerId === 'source-context-drawer') {
                 setReaderContextVisibility(false);
+            } else if (drawerId === 'source-filter-drawer' || drawerId === 'source-search-drawer' || drawerId === 'source-chat-drawer') {
+                drawer.hidden = true;
+                drawer.setAttribute('aria-hidden', 'true');
             } else {
                 drawer.hidden = true;
                 drawer.setAttribute('aria-hidden', 'true');
@@ -1486,6 +1747,7 @@ document.addEventListener('keydown', handleShellKeydown);
             }
             if (id === 'modal-reader') { loadReaderNotes(); }
             if (id === 'modal-settings') { loadSettingsData(); }
+            if (id === 'modal-template-helper') { loadTemplateHelper(); }
             if (id === 'modal-stat-input') { loadStatInputData(); }
             if (id === 'modal-category') { loadCategoryData('4_procesado'); }
             if (id === 'modal-stat-notes') { loadStatNotesData(); }
@@ -2512,6 +2774,207 @@ document.addEventListener('keydown', handleShellKeydown);
             if (activeBtn) {
                 activeBtn.classList.add('is-active');
             }
+        }
+
+        let templateHelperState = {
+            template_id: '',
+            revision: 1,
+            template: '',
+            agents: '',
+            template_hash: '',
+            agents_hash: '',
+            dirty: false,
+        };
+
+        function renderTemplateHelperMeta(bundle) {
+            const meta = document.getElementById('template-helper-meta');
+            if (!meta || !bundle) return;
+            const shortHash = String(bundle.template_hash || '').slice(0, 8);
+            meta.textContent = 'Revisión ' + bundle.revision + ' · Hash ' + shortHash;
+        }
+
+        function markTemplateHelperDirty() {
+            templateHelperState.dirty = true;
+            const dirty = document.getElementById('template-helper-dirty');
+            if (dirty) dirty.hidden = false;
+        }
+
+        function clearTemplateHelperError() {
+            const error = document.getElementById('template-helper-error');
+            if (error) error.textContent = '';
+        }
+
+        function showTemplateHelperError(message) {
+            const error = document.getElementById('template-helper-error');
+            if (error) error.textContent = message || 'No se pudo completar la acción.';
+        }
+
+        function switchTemplateEditorTab(tabId) {
+            const templateEditor = document.getElementById('template-editor-template');
+            const agentsEditor = document.getElementById('template-editor-agents');
+            const templateTab = document.getElementById('template-tab-template');
+            const agentsTab = document.getElementById('template-tab-agents');
+            const showTemplate = tabId === 'template';
+            if (templateEditor) templateEditor.classList.toggle('is-hidden', !showTemplate);
+            if (agentsEditor) agentsEditor.classList.toggle('is-hidden', showTemplate);
+            if (templateTab) templateTab.classList.toggle('is-active', showTemplate);
+            if (agentsTab) agentsTab.classList.toggle('is-active', !showTemplate);
+        }
+
+        function renderTemplateTypeList(templates, activeId) {
+            const list = document.getElementById('template-type-list');
+            if (!list) return;
+            list.innerHTML = '';
+            templates.forEach(function(item) {
+                const button = document.createElement('button');
+                button.type = 'button';
+                button.className = 'template-type-btn' + (item.template_id === activeId ? ' is-active' : '');
+                button.textContent = item.label || item.template_id;
+                button.addEventListener('click', function() {
+                    if (templateHelperState.dirty) {
+                        showTemplateHelperError('Guarda o restaura antes de cambiar de tipo.');
+                        return;
+                    }
+                    loadTemplateBundle(item.template_id);
+                });
+                list.appendChild(button);
+            });
+        }
+
+        function bindTemplateHelperEditors() {
+            const templateEditor = document.getElementById('template-editor-template');
+            const agentsEditor = document.getElementById('template-editor-agents');
+            if (templateEditor && !templateEditor.dataset.bound) {
+                templateEditor.dataset.bound = '1';
+                templateEditor.addEventListener('input', function() {
+                    templateHelperState.template = templateEditor.value;
+                    markTemplateHelperDirty();
+                });
+            }
+            if (agentsEditor && !agentsEditor.dataset.bound) {
+                agentsEditor.dataset.bound = '1';
+                agentsEditor.addEventListener('input', function() {
+                    templateHelperState.agents = agentsEditor.value;
+                    markTemplateHelperDirty();
+                });
+            }
+        }
+
+        function applyTemplateBundle(bundle) {
+            templateHelperState = {
+                template_id: bundle.template_id,
+                revision: bundle.revision,
+                template: bundle.template,
+                agents: bundle.agents,
+                template_hash: bundle.template_hash,
+                agents_hash: bundle.agents_hash,
+                dirty: false,
+            };
+            const templateEditor = document.getElementById('template-editor-template');
+            const agentsEditor = document.getElementById('template-editor-agents');
+            const dirty = document.getElementById('template-helper-dirty');
+            const preview = document.getElementById('template-preview-body');
+            if (templateEditor) templateEditor.value = bundle.template;
+            if (agentsEditor) agentsEditor.value = bundle.agents;
+            if (dirty) dirty.hidden = true;
+            if (preview) preview.textContent = bundle.template;
+            renderTemplateHelperMeta(bundle);
+            clearTemplateHelperError();
+        }
+
+        function loadTemplateBundle(templateId) {
+            return callNativeLongRequest('load_template', function() {
+                return window.pywebview.api.load_template(templateId);
+            }).then(function(bundle) {
+                if (bundle && bundle.error) {
+                    showTemplateHelperError(bundle.message);
+                    return;
+                }
+                applyTemplateBundle(bundle);
+                renderTemplateTypeList(templateHelperState.templatesCache || [], templateId);
+            }).catch(function(message) {
+                showTemplateHelperError(message);
+            });
+        }
+
+        function loadTemplateHelper() {
+            bindTemplateHelperEditors();
+            clearTemplateHelperError();
+            return callNativeLongRequest('list_templates', function() {
+                return window.pywebview.api.list_templates();
+            }).then(function(result) {
+                if (result && result.error) {
+                    showTemplateHelperError(result.message);
+                    return;
+                }
+                const templates = result.templates || [];
+                templateHelperState.templatesCache = templates;
+                const initial = templates[0] ? templates[0].template_id : 'resumen';
+                renderTemplateTypeList(templates, templateHelperState.template_id || initial);
+                return loadTemplateBundle(templateHelperState.template_id || initial);
+            }).catch(function(message) {
+                showTemplateHelperError(message);
+            });
+        }
+
+        function previewTemplateHelper() {
+            const payload = {
+                template: document.getElementById('template-editor-template').value,
+                agents: document.getElementById('template-editor-agents').value,
+            };
+            return callNativeLongRequest('preview_template', function() {
+                return window.pywebview.api.preview_template(payload);
+            }).then(function(result) {
+                if (result && result.error) {
+                    showTemplateHelperError(result.message);
+                    return;
+                }
+                const preview = document.getElementById('template-preview-body');
+                if (preview) preview.textContent = result.template_preview || '';
+                clearTemplateHelperError();
+            }).catch(function(message) {
+                showTemplateHelperError(message);
+            });
+        }
+
+        function saveTemplateHelper() {
+            const payload = {
+                template_id: templateHelperState.template_id,
+                template: document.getElementById('template-editor-template').value,
+                agents: document.getElementById('template-editor-agents').value,
+                expected_revision: templateHelperState.revision,
+            };
+            return callNativeLongRequest('save_template', function() {
+                return window.pywebview.api.save_template(payload);
+            }).then(function(bundle) {
+                if (bundle && bundle.error) {
+                    showTemplateHelperError(bundle.message);
+                    return;
+                }
+                applyTemplateBundle(bundle);
+                const status = document.getElementById('template-settings-status');
+                if (status) status.textContent = 'Plantilla guardada en .fuente.';
+            }).catch(function(message) {
+                showTemplateHelperError(message);
+            });
+        }
+
+        function restoreTemplateHelper() {
+            const payload = {
+                template_id: templateHelperState.template_id,
+                expected_revision: templateHelperState.revision,
+            };
+            return callNativeLongRequest('restore_template', function() {
+                return window.pywebview.api.restore_template(payload);
+            }).then(function(bundle) {
+                if (bundle && bundle.error) {
+                    showTemplateHelperError(bundle.message);
+                    return;
+                }
+                applyTemplateBundle(bundle);
+            }).catch(function(message) {
+                showTemplateHelperError(message);
+            });
         }
 
         let linkedInputs = [];
@@ -3722,12 +4185,266 @@ document.addEventListener('keydown', handleShellKeydown);
         }
 
         function switchReaderView(view) {
-            if (view !== 'list') return;
-            const listBtn = document.getElementById('btn-reader-mode-list');
-            const listView = document.getElementById('reader-view-list');
-            if (listBtn) listBtn.classList.add('active');
-            if (listView) listView.classList.remove('is-hidden');
+            switchSourceView(view === 'list' ? 'list' : 'list');
         }
+
+        const SOURCE_VIEW_IDS = ['grid', 'list', 'individual', 'feed', 'filtered', 'hierarchy', 'relations'];
+        const SOURCE_FEED_BATCH = 30;
+        let sourceView = 'list';
+        let sourceFilters = {};
+        let sourceOrder = 'date';
+        let sourceFeedCursor = null;
+        let sourceFeedLoading = false;
+        let sourceSearchMode = 'content';
+        let sourceFeedObserver = null;
+
+        function switchSourceView(view) {
+            if (!SOURCE_VIEW_IDS.includes(view)) view = 'list';
+            sourceView = view;
+            document.querySelectorAll('.source-view-tab').forEach(function(button) {
+                const active = button.id === 'btn-source-view-' + view;
+                button.classList.toggle('is-active', active);
+                button.setAttribute('aria-selected', String(active));
+            });
+            const views = {
+                grid: document.getElementById('reader-view-grid'),
+                list: document.getElementById('reader-view-list'),
+                individual: document.getElementById('reader-view-individual'),
+                feed: document.getElementById('reader-view-feed'),
+                filtered: document.getElementById('reader-view-filtered'),
+                relations: document.getElementById('reader-view-relations')
+            };
+            Object.keys(views).forEach(function(key) {
+                const pane = views[key];
+                if (!pane) return;
+                const active = key === view || (view === 'hierarchy' && key === 'list');
+                pane.hidden = !active;
+                pane.classList.toggle('is-hidden', !active);
+            });
+            const hierarchyTree = document.getElementById('source-hierarchy-tree');
+            const noteList = document.getElementById('reader-note-list');
+            if (hierarchyTree && noteList) {
+                const showTree = view === 'hierarchy';
+                hierarchyTree.hidden = !showTree;
+                noteList.hidden = showTree;
+                if (showTree) loadSourceHierarchy();
+            }
+            const dualPane = document.getElementById('reader-view-list');
+            if (dualPane) {
+                dualPane.classList.toggle('is-individual', view === 'individual');
+            }
+            if (view === 'grid') renderSourceGrid();
+            if (view === 'filtered') renderSourceFilteredGrid();
+            if (view === 'feed') resetSourceFeed();
+            if (view === 'relations') loadSourceRelationsPreview();
+            persistUiState('source', 'workspace', {view: view});
+        }
+
+        function readSourceUiState() {
+            return Promise.all([
+                readUiState('source', 'filters'),
+                readUiState('source', 'sort'),
+                readUiState('source', 'workspace'),
+                readUiState('source', 'cursor', 'session')
+            ]).then(function(values) {
+                if (values[0]) sourceFilters = values[0];
+                if (values[1] && values[1].order) sourceOrder = values[1].order;
+                if (values[2] && values[2].view) switchSourceView(values[2].view);
+                if (values[3] && values[3].cursor) sourceFeedCursor = values[3].cursor;
+            });
+        }
+
+        function applySourceFilters() {
+            sourceFilters = {
+                seal: document.getElementById('source-filter-seal')?.value || '',
+                theme: document.getElementById('source-filter-theme')?.value || '',
+                origin: document.getElementById('source-filter-origin')?.value || '',
+                note_type: document.getElementById('source-filter-type')?.value || '',
+                urgency: document.getElementById('source-filter-urgency')?.value || '',
+                date_from: document.getElementById('source-filter-date-from')?.value || '',
+                date_to: document.getElementById('source-filter-date-to')?.value || ''
+            };
+            persistUiState('source', 'filters', sourceFilters);
+            closeDrawer('source-filter-drawer');
+            if (sourceView === 'filtered') renderSourceFilteredGrid();
+            if (sourceView === 'feed') resetSourceFeed();
+            if (sourceView === 'grid') renderSourceGrid();
+        }
+
+        function switchSourceSearchMode(mode) {
+            sourceSearchMode = mode;
+            document.querySelectorAll('.source-search-tabs .btn-small').forEach(function(button) {
+                button.classList.toggle('is-active', button.id === 'source-search-tab-' + mode);
+            });
+        }
+
+        function runSourceSearch() {
+            const query = String(document.getElementById('source-search-input')?.value || '').trim();
+            const results = document.getElementById('source-search-results');
+            if (!query || !window.pywebview || !window.pywebview.api) return;
+            window.pywebview.api.search_source(sourceSearchMode, query, sourceFilters).then(function(page) {
+                if (!results) return;
+                results.replaceChildren();
+                if (!page || page.error) {
+                    results.textContent = (page && page.message) || 'No se pudo buscar.';
+                    return;
+                }
+                (page.items || []).forEach(function(item) {
+                    const row = document.createElement('button');
+                    row.type = 'button';
+                    row.className = 'source-search-result';
+                    row.textContent = item.title || item.document_id;
+                    row.addEventListener('click', function() {
+                        navigateReaderNote(item.document_id);
+                        closeDrawer('source-search-drawer');
+                    });
+                    results.appendChild(row);
+                });
+            });
+        }
+
+        function toggleSourceActionsPopover() {
+            const popover = document.getElementById('source-actions-popover');
+            if (!popover) return;
+            const open = popover.hidden;
+            popover.hidden = !open;
+            popover.setAttribute('aria-hidden', String(!open));
+        }
+
+        function printCurrentNote() {
+            window.print();
+        }
+
+        function openCurrentNoteFile() {
+            if (!currentSelectedNotePath) return;
+            triggerAction('open_obsidian', {}, document.getElementById('btn-source-actions'));
+        }
+
+        function openObsidianGraph() {
+            triggerAction('open_obsidian', {graph: true}, document.getElementById('btn-open-obsidian-graph'));
+        }
+
+        function sealClassName(seal) {
+            if (seal === 'approved') return 'green';
+            if (seal === 'in_review') return 'orange';
+            return 'red';
+        }
+
+        function renderSourceCard(item) {
+            const card = document.createElement('article');
+            card.className = 'source-note-card';
+            const seal = document.createElement('span');
+            seal.className = 'source-seal ' + sealClassName(item.seal);
+            card.appendChild(seal);
+            const title = document.createElement('h3');
+            title.textContent = item.title || 'Nota';
+            card.appendChild(title);
+            const meta = document.createElement('div');
+            meta.className = 'source-card-meta';
+            meta.textContent = (item.updated_at || '') + ' · ' + (item.author || '');
+            card.appendChild(meta);
+            const excerpt = document.createElement('p');
+            excerpt.textContent = item.excerpt || '';
+            card.appendChild(excerpt);
+            card.addEventListener('click', function() { navigateReaderNote(item.document_id); });
+            return card;
+        }
+
+        function loadSourceFeedPage() {
+            if (sourceFeedLoading || !window.pywebview || !window.pywebview.api) return;
+            sourceFeedLoading = true;
+            window.pywebview.api.list_feed(sourceFeedCursor, SOURCE_FEED_BATCH, sourceFilters, sourceOrder).then(function(page) {
+                sourceFeedLoading = false;
+                if (!page || page.error) return;
+                const feed = document.getElementById('source-feed');
+                if (!feed) return;
+                (page.items || []).forEach(function(item) {
+                    feed.appendChild(renderSourceCard(item));
+                });
+                sourceFeedCursor = page.next_cursor || null;
+                persistUiState('source', 'cursor', {cursor: sourceFeedCursor}, 'session');
+                if (!page.has_more && sourceFeedObserver) sourceFeedObserver.disconnect();
+            }).catch(function() { sourceFeedLoading = false; });
+        }
+
+        function resetSourceFeed() {
+            const feed = document.getElementById('source-feed');
+            if (feed) feed.replaceChildren();
+            sourceFeedCursor = null;
+            loadSourceFeedPage();
+            const sentinel = document.getElementById('source-feed-sentinel');
+            if (!sentinel || sourceFeedObserver) return;
+            sourceFeedObserver = new IntersectionObserver(function(entries) {
+                if (entries.some(function(entry) { return entry.isIntersecting; })) loadSourceFeedPage();
+            });
+            sourceFeedObserver.observe(sentinel);
+        }
+
+        function renderSourceGrid() {
+            const grid = document.getElementById('source-grid');
+            if (!grid || !window.pywebview || !window.pywebview.api) return;
+            window.pywebview.api.list_readonly_notes('', 'all_notes').then(function(result) {
+                grid.replaceChildren();
+                (result.items || []).forEach(function(item) { grid.appendChild(renderSourceCard(item)); });
+            });
+        }
+
+        function renderSourceFilteredGrid() {
+            const grid = document.getElementById('source-filtered-grid');
+            if (!grid || !window.pywebview || !window.pywebview.api) return;
+            window.pywebview.api.list_feed(null, SOURCE_FEED_BATCH, sourceFilters, sourceOrder).then(function(page) {
+                grid.replaceChildren();
+                (page.items || []).forEach(function(item) { grid.appendChild(renderSourceCard(item)); });
+            });
+        }
+
+        function loadSourceHierarchy() {
+            const tree = document.getElementById('source-hierarchy-tree');
+            if (!tree || !window.pywebview || !window.pywebview.api) return;
+            window.pywebview.api.get_hierarchy().then(function(data) {
+                tree.replaceChildren();
+                (data.themes || []).forEach(function(theme) {
+                    const themeItem = document.createElement('li');
+                    themeItem.textContent = theme.theme + ' (' + theme.count + ')';
+                    const issues = document.createElement('ul');
+                    (theme.issues || []).forEach(function(issue) {
+                        const issueItem = document.createElement('li');
+                        issueItem.textContent = issue.issue + ' (' + issue.count + ')';
+                        issues.appendChild(issueItem);
+                    });
+                    themeItem.appendChild(issues);
+                    tree.appendChild(themeItem);
+                });
+            });
+        }
+
+        function loadSourceRelationsPreview() {
+            const panel = document.getElementById('source-relations-preview');
+            if (!panel || !currentSelectedDocumentId || !window.pywebview || !window.pywebview.api) return;
+            window.pywebview.api.get_relation_preview(currentSelectedDocumentId).then(function(data) {
+                panel.replaceChildren();
+                const title = document.createElement('h2');
+                title.textContent = (data.center && data.center.title) || 'Relaciones';
+                panel.appendChild(title);
+                const list = document.createElement('ul');
+                (data.outgoing || []).forEach(function(link) {
+                    const item = document.createElement('li');
+                    item.textContent = link.title || link.label || 'Enlace';
+                    list.appendChild(item);
+                });
+                panel.appendChild(list);
+            });
+        }
+
+        document.getElementById('source-chat-form')?.addEventListener('submit', function(event) {
+            event.preventDefault();
+            const message = String(document.getElementById('source-chat-input')?.value || '').trim();
+            if (!message || !currentSelectedDocumentId || !window.pywebview || !window.pywebview.api) return;
+            window.pywebview.api.process_workspace_chat(currentSelectedDocumentId, message).then(function(reply) {
+                const answer = document.getElementById('source-chat-answer');
+                if (answer) answer.textContent = (reply && reply.text) || (reply && reply.message) || '';
+            });
+        });
 
         /* READER_READ_ONLY_CONTROLLER_START */
         let currentSelectedNoteTitle = '';
@@ -4060,6 +4777,10 @@ document.addEventListener('keydown', handleShellKeydown);
             const heading = document.createElement('h2');
             heading.textContent = noteTitle || 'Nota';
             bar.appendChild(heading);
+            const badge = document.createElement('span');
+            badge.className = 'source-readonly-badge';
+            badge.textContent = 'Solo lectura';
+            bar.appendChild(badge);
             return bar;
         }
 
@@ -4493,12 +5214,224 @@ document.addEventListener('keydown', handleShellKeydown);
 
         function updateDashboardStats(stats) {
             if (!stats) return;
-            if (stats.input !== undefined) document.getElementById('stat-input').innerText = stats.input;
-            if (stats.processed !== undefined) document.getElementById('stat-processed').innerText = stats.processed;
-            if (stats.quarantine !== undefined) document.getElementById('stat-quarantine').innerText = stats.quarantine;
-            if (stats.notes !== undefined) document.getElementById('stat-notes').innerText = stats.notes;
-            if (stats.ram !== undefined) document.getElementById('stat-ram').innerText = stats.ram;
-            if (healthSnapshotReceived && stats.line !== undefined) document.getElementById('bottom-status-line').innerText = stats.line;
+            const setText = function(id, value) {
+                const node = document.getElementById(id);
+                if (node && value !== undefined) node.innerText = value;
+            };
+            setText('stat-input', stats.input);
+            setText('stat-processed', stats.processed);
+            setText('stat-quarantine', stats.quarantine);
+            setText('count-quarantine-footer', stats.quarantine);
+            setText('stat-notes', stats.notes);
+            setText('stat-ram', stats.ram);
+            if (healthSnapshotReceived && stats.line !== undefined) {
+                const status = document.getElementById('bottom-status-line');
+                if (status) status.innerText = stats.line;
+            }
+        }
+
+        let caudalQueueFilter = 'waiting';
+        let caudalSelectedJobId = null;
+
+        function renderFlowState(state) {
+            if (!state || state.error) return;
+            const seals = state.seals || {};
+            const noteTypes = state.note_types || {};
+            const setText = function(id, value) {
+                const node = document.getElementById(id);
+                if (node) node.textContent = String(value ?? 0);
+            };
+            setText('count-seal-pending', seals.pending_review);
+            setText('count-seal-review', seals.in_review);
+            setText('count-seal-approved', seals.approved);
+            setText('count-quarantine-footer', state.quarantine);
+            setText('count-type-resumen', noteTypes.resumen);
+            setText('count-type-propiedades', noteTypes.propiedades);
+            setText('count-type-contexto', noteTypes.contexto);
+            setText('count-type-concepto', noteTypes.concepto);
+            const stepKeys = Object.keys(state.steps || {});
+            const badges = ['badge-step1', 'badge-step2', 'badge-step3', 'badge-step4', 'badge-step5'];
+            badges.forEach(function(id, index) {
+                const key = stepKeys[index];
+                const count = key ? (state.steps[key].count || 0) : 0;
+                setText(id, count);
+            });
+            if (state.stats) updateDashboardStats(state.stats);
+        }
+
+        function loadFlowState() {
+            if (!window.pywebview || !window.pywebview.api || typeof window.pywebview.api.get_flow_state !== 'function') return;
+            return window.pywebview.api.get_flow_state().then(function(state) {
+                renderFlowState(state);
+                return state;
+            }).catch(function(error) {
+                log(error.message || 'No se pudo medir Caudal.');
+            });
+        }
+
+        function openSourceFeed(filters, order) {
+            if (!window.pywebview || !window.pywebview.api) return;
+            return window.pywebview.api.open_source_feed(filters || {}, order || 'date').then(function(payload) {
+                if (!payload || payload.error) {
+                    log((payload && (payload.message || payload.error)) || 'No se pudo abrir el Feed.');
+                    return;
+                }
+                sourceFilters = Object.assign({}, payload.filters || {});
+                sourceOrder = payload.order || 'date';
+                persistUiState('source', 'filters', sourceFilters);
+                persistUiState('source', 'sort', {order: sourceOrder});
+                switchWorkspace(payload.workspace || 'source');
+                switchSourceView(payload.view || 'feed');
+            });
+        }
+
+        function openSourceFeedFromCounter(button) {
+            if (!button) return;
+            const raw = button.getAttribute('data-caudal-feed-filter');
+            if (!raw) return;
+            try {
+                openSourceFeed(JSON.parse(raw), 'date');
+            } catch (error) {
+                log('Filtro de Feed no válido.');
+            }
+        }
+
+        function setCaudalQueueFilter(filter) {
+            caudalQueueFilter = filter || 'waiting';
+            document.querySelectorAll('.flow-queue-tabs .btn-small').forEach(function(button) {
+                button.classList.toggle('is-active', button.id === 'caudal-queue-tab-' + filter);
+            });
+            refreshCaudalQueue();
+        }
+
+        function refreshCaudalQueue() {
+            if (!window.pywebview || !window.pywebview.api || typeof window.pywebview.api.get_jobs !== 'function') return;
+            const filters = caudalQueueFilter === 'completed'
+                ? {status: 'completed'}
+                : {status: caudalQueueFilter};
+            return window.pywebview.api.get_jobs(filters, 25, null).then(function(page) {
+                const body = document.getElementById('caudal-queue-body');
+                if (!body) return;
+                body.replaceChildren();
+                const items = Array.isArray(page.items) ? page.items : [];
+                if (!items.length) {
+                    const row = document.createElement('tr');
+                    const cell = document.createElement('td');
+                    cell.colSpan = 4;
+                    cell.textContent = 'No hay trabajos en esta vista.';
+                    row.appendChild(cell);
+                    body.appendChild(row);
+                    return;
+                }
+                items.forEach(function(job) {
+                    const row = document.createElement('tr');
+                    row.tabIndex = 0;
+                    row.addEventListener('click', function() {
+                        caudalSelectedJobId = job.job_id;
+                        openDrawer('flow-detail-drawer');
+                        loadCaudalJobDetail(job.job_id);
+                    });
+                    ['source_identity', 'stage', 'status', 'updated_at'].forEach(function(field, index) {
+                        const cell = document.createElement('td');
+                        const labels = ['Archivo', 'Etapa', 'Sello', 'Actualizado'];
+                        if (index === 0) cell.textContent = queueReference(job.source_identity || job.job_id);
+                        else if (index === 1) cell.textContent = queueStageLabel(job.stage);
+                        else if (index === 2) cell.textContent = queueStatusLabel(job.status);
+                        else cell.textContent = queueValue(job.updated_at, 'Sin fecha');
+                        cell.setAttribute('data-label', labels[index]);
+                        row.appendChild(cell);
+                    });
+                    body.appendChild(row);
+                });
+            }).catch(function(error) {
+                log(error.message || 'No se pudo cargar la cola de Caudal.');
+            });
+        }
+
+        function loadCaudalJobDetail(jobId) {
+            if (!window.pywebview || !window.pywebview.api || !jobId) return;
+            return window.pywebview.api.get_job_detail(jobId).then(function(detail) {
+                if (!detail || detail.error) return;
+                const job = detail.job || {};
+                const setText = function(id, value) {
+                    const node = document.getElementById(id);
+                    if (node) node.textContent = String(value || 'Sin medir');
+                };
+                setText('caudal-detail-file', queueReference(job.source_identity || job.job_id));
+                setText('caudal-detail-origin', job.origin_kind || 'Local');
+                setText('caudal-detail-revision', String(job.revision || '1'));
+                setText('caudal-detail-hash', job.content_hash || 'Sin medir');
+                setText('caudal-detail-seal', queueStatusLabel(job.status));
+                setText('caudal-detail-next-approval', detail.reason || queueReasonLabel(job.error_message));
+            });
+        }
+
+        function approveCaudalSelection() {
+            if (!caudalSelectedJobId) {
+                openApprovalInbox();
+                return;
+            }
+            openApprovalInbox();
+        }
+
+        function runCaudalImport(kind) {
+            const status = document.getElementById('caudal-import-status');
+            if (!window.pywebview || !window.pywebview.api) return;
+            if (kind === 'files') {
+                window.pywebview.api.select_files('Seleccionar archivos para importar').then(function(paths) {
+                    if (!paths || !paths.length) return;
+                    return window.pywebview.api.import_local_paths(paths);
+                }).then(handleCaudalImportResult);
+                return;
+            }
+            if (kind === 'folder') {
+                window.pywebview.api.select_folder('Seleccionar carpeta para importar').then(function(folder) {
+                    if (!folder) return;
+                    return window.pywebview.api.import_local_paths([folder]);
+                }).then(handleCaudalImportResult);
+                return;
+            }
+            if (kind === 'sync') {
+                window.pywebview.api.sync_inputs({connection_ids: []}).then(function(result) {
+                    if (status) status.textContent = result.message || result.log || result.status || '';
+                    loadFlowState();
+                    refreshCaudalQueue();
+                });
+            }
+        }
+
+        function handleCaudalImportResult(result) {
+            const status = document.getElementById('caudal-import-status');
+            if (!result) return;
+            if (result.error) {
+                if (status) status.textContent = result.message || result.error;
+                log(result.message || result.error);
+                return;
+            }
+            if (status) status.textContent = 'Importados: ' + String(result.copied || 0);
+            if (result.log) log(result.log);
+            renderFlowState(result.flow_state);
+            if (result.stats) updateDashboardStats(result.stats);
+            refreshCaudalQueue();
+            closeModal('modal-caudal-import');
+        }
+
+        function runCaudalExport() {
+            const status = document.getElementById('caudal-export-status');
+            const documentId = String(document.getElementById('caudal-export-document')?.value || '').trim();
+            const format = String(document.getElementById('caudal-export-format')?.value || 'markdown');
+            if (!documentId || !window.pywebview || !window.pywebview.api) return;
+            const action = format === 'pdf'
+                ? window.pywebview.api.export_note(documentId, 'pdf')
+                : window.pywebview.api.export_note_to_downloads(documentId, format);
+            Promise.resolve(action).then(function(result) {
+                if (!result || result.error) {
+                    if (status) status.textContent = (result && (result.message || result.error)) || 'No se pudo exportar.';
+                    return;
+                }
+                if (status) status.textContent = 'Exportación preparada.';
+                closeModal('modal-caudal-export');
+            });
         }
 
         function isValidSettingsSaveResponse(res) {

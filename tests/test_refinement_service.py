@@ -5,12 +5,14 @@ import json
 import pytest
 
 from fuente.application.refinement import (
+    MiniRAGEnrichmentEvaluator,
     OllamaVerifier,
     RefinementApplicationService,
     RefinementSnapshot,
     VerifierResponse,
 )
 from fuente.infrastructure.sqlite_store import JobStore
+from fuente.rag.backend import RetrievalHit
 
 
 def snapshot(**overrides):
@@ -150,6 +152,76 @@ def test_ollama_verifier_rejects_extra_json_keys():
 
     with pytest.raises(ValueError, match="allow-listed"):
         OllamaVerifier(Provider(), model="qwen").verify(snapshot(), snapshot())
+
+
+def _retrieval_hit(**overrides):
+    values = dict(
+        document_id="note-1",
+        revision=2,
+        content_hash="sha256:note",
+        content="contexto",
+        score=0.8,
+        backend="chroma",
+        relative_path="General/3_limpio/nota.md",
+    )
+    values.update(overrides)
+    return RetrievalHit(**values)
+
+
+def test_minirag_evaluator_accepts_only_strict_positive_gain(tmp_path):
+    store = JobStore(tmp_path)
+    try:
+        evaluator = MiniRAGEnrichmentEvaluator(job_store=store)
+        evaluation = evaluator.evaluate_ab(
+            document_id="note-1",
+            revision=2,
+            content_hash="sha256:note",
+            query="relaciones contractuales",
+            baseline_hits=[_retrieval_hit(score=0.5)],
+            candidate_hits=[_retrieval_hit(score=0.7, backend="minirag")],
+        )
+        assert evaluation.verdict == "accepted"
+        saved = store.get_minirag_evaluation("note-1", 2, "sha256:note")
+        assert saved["baseline_metric"] == 0.5
+        assert saved["candidate_metric"] == 0.7
+        assert saved["metric_delta"] == pytest.approx(0.2)
+    finally:
+        store.close()
+
+
+def test_minirag_evaluator_rejects_gain_at_or_below_epsilon(tmp_path):
+    store = JobStore(tmp_path)
+    try:
+        evaluator = MiniRAGEnrichmentEvaluator(job_store=store)
+        evaluation = evaluator.evaluate_ab(
+            document_id="note-2",
+            revision=2,
+            content_hash="sha256:note",
+            query="relaciones contractuales",
+            baseline_hits=[_retrieval_hit(score=0.8)],
+            candidate_hits=[_retrieval_hit(score=0.89, backend="minirag")],
+        )
+        assert evaluation.verdict == "rejected"
+    finally:
+        store.close()
+
+
+def test_minirag_evaluator_rejects_invalid_citations(tmp_path):
+    store = JobStore(tmp_path)
+    try:
+        evaluator = MiniRAGEnrichmentEvaluator(job_store=store)
+        evaluation = evaluator.evaluate_ab(
+            document_id="note-3",
+            revision=2,
+            content_hash="sha256:note",
+            query="relaciones contractuales",
+            baseline_hits=[_retrieval_hit(score=0.5)],
+            candidate_hits=[_retrieval_hit(score=0.9, backend="minirag")],
+            citations_valid=False,
+        )
+        assert evaluation.verdict == "rejected"
+    finally:
+        store.close()
 
 
 def test_evaluate_pair_uses_logical_candidate_identity_with_distinct_hashes(tmp_path):

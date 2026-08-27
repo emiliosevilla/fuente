@@ -17,7 +17,7 @@ def test_connection_views_are_opaque_and_preserve_provider_metadata(tmp_path):
 
     view = manager.get_sync_sources()[0]
 
-    assert set(view) == {"id", "provider", "display_name", "enabled"}
+    assert set(view) == {"id", "provider", "display_name", "enabled", "provider_label"}
     assert view["id"] == connection.connection_id
     assert view["provider"] == "sharepoint_mount"
     assert str(source) not in repr(view)
@@ -59,6 +59,7 @@ def test_bridge_get_sync_sources_returns_backend_projection_without_paths(
             "id": backend.sync_manager.load_connections()[0].connection_id,
             "provider": "network",
             "display_name": "Team NAS",
+            "provider_label": "Red",
             "enabled": False,
         }
     ]

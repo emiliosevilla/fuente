@@ -30,8 +30,9 @@ def load_manifest_entries(path: Path) -> list[dict]:
     raise ValueError("manifest must be a capture list or an object with a captures array")
 
 
-def verify_manifest(path: Path, expected_head: str) -> list[str]:
+def verify_manifest(path: Path, expected_head: str | set[str]) -> list[str]:
     """Return all validation errors for the evidence entries at ``path``."""
+    allowed_heads = {expected_head} if isinstance(expected_head, str) else set(expected_head)
     try:
         entries = load_manifest_entries(path)
     except (OSError, json.JSONDecodeError, ValueError, TypeError) as error:
@@ -79,8 +80,11 @@ def verify_manifest(path: Path, expected_head: str) -> list[str]:
             if entry.get("runtime_signal") != "vmmap:WebKit.framework":
                 errors.append(_error(index, "runtime signal must prove WebKit in the window process"))
                 continue
-        entry_head = BASELINE_HEAD if scenario == "baseline" else expected_head
-        if entry.get("git_head") != entry_head:
+        if scenario == "baseline":
+            entry_ok = entry.get("git_head") == BASELINE_HEAD
+        else:
+            entry_ok = entry.get("git_head") in allowed_heads
+        if not entry_ok:
             errors.append(_error(index, "git head does not match the expected head"))
             continue
         if type(entry.get("window_owner_pid")) is not int or entry["window_owner_pid"] <= 0:

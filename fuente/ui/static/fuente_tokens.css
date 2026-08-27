@@ -105,9 +105,9 @@ html[data-fuente-style="gruvbox"] {
     --control-compact: 32px;
     --control-standard: 40px;
     --control-prominent: 44px;
-    --rail-width: 68px;
-    --header-height: 64px;
-    --library-width: 300px;
+    --rail-width: 113px;
+    --header-height: 72px;
+    --library-width: 325px;
     --content-measure: 76rem;
     --reading-measure: 68ch;
     --font-size-base: 16px;

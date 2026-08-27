@@ -1,19 +1,19 @@
 {
-  "measured_at": "2026-08-27T01:05:50Z",
-  "git_head": "0fc6801bba5add55a90f0f63171598cffd881d4b",
+  "measured_at": "2026-08-27T12:22:41Z",
+  "git_head": "310ba58ee07112af7927cf774e6ff9af8a036843",
   "gates": {
     "G0": "PASS",
     "G1": "PASS",
-    "G2": "BLOCKED",
-    "G3": "BLOCKED",
-    "G6": "BLOCKED",
-    "G7": "BLOCKED",
-    "G8": "BLOCKED",
-    "G9": "BLOCKED",
-    "G4": "BLOCKED",
+    "G2": "PASS",
+    "G3": "PASS",
+    "G6": "PASS",
+    "G7": "PASS",
+    "G8": "PASS",
+    "G9": "PASS",
+    "G4": "PASS",
     "G5": "PASS"
   },
-  "release_status": "BLOCKED",
+  "release_status": "READY",
   "captures": [
     {
       "file": "00-baseline.png",

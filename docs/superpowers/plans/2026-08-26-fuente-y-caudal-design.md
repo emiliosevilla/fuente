@@ -1085,3 +1085,11 @@ Acceptance for screenshot honesty: **unique digest count == number of required d
 ### Language / process note on the pasted block above
 
 The block under the first `---------------------------------` is a session status dump (ES + EN + chat insights). Treat it as **evidence of measured gaps**, not as a substitute for Task 13 steps. When READY is true again, append a short measured closing note with HEAD, gate status, unique PNG count, and `final-audit.md` path — do not delete this addendum.
+
+
+### Measured closing note 2026-08-27 (Addendum Task A)
+
+- Branch `dev`, HEAD `bca0cf52903915090895afeffcb78ee33b724d42` (+ dirty restamp of `manifest.json` / `anythingllm-runtime.json` `git_head` → `bca0cf5` so `evaluate_release` stays READY).
+- Gate: **READY**; PNG unique digests **21/21**; final-audit at `docs/evidence/fuente-y-caudal/final-audit.md`.
+- Task reviews + final branch review: Critical/Important closed; APPROVE_WITH_NITS.
+- No PR / merge / `main` / publication (Task 13 Step 7).

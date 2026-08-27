@@ -207,6 +207,18 @@ class ApprovalApplicationService:
             return False
         return True
 
+    def require_processed_generation(
+        self, note_id: str, revision: int, content_hash: str
+    ) -> None:
+        """Block smart-note generation until the exact 3->4 transition is approved."""
+        self.transition_approvals.require_current(
+            note_id,
+            "3_capturado",
+            "4_procesado",
+            revision,
+            content_hash,
+        )
+
     def approve_processed(
         self, note_id: str, expected_revision: int, reviewer: str,
         *, content_hash: str,

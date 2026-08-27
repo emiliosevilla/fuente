@@ -1,12 +1,50 @@
 from pathlib import Path
-from typing import List, Dict, Any, Optional, Sequence
+from typing import List, Dict, Any, Optional, Sequence, Protocol
 import logging
 import sys
 import json
 
+from fuente.domain.vault_layout import (
+    CANONICAL_CLEAN_DIR_NAME,
+    CANONICAL_PROCESSED_DIR_NAME,
+    CANONICAL_SHARED_DIR_NAME,
+)
+
 logger = logging.getLogger(__name__)
 
 _JSON_METADATA_KEYS = "__fuente_json_metadata_keys"
+
+
+class _IndexApproval(Protocol):
+    def is_eligible(self, note_id: str, revision: int, content_hash: str) -> bool: ...
+
+
+def _stage_in_relative_path(relative_path: str, stage_dir: str) -> bool:
+    return stage_dir in relative_path.replace("\\", "/").split("/")
+
+
+def resolve_index_authority(
+    *,
+    relative_path: str,
+    note_id: str,
+    revision: int,
+    content_hash: str,
+    approval_service: _IndexApproval,
+    processed_note_available: bool = False,
+) -> str | None:
+    """Return the authoritative Chroma stage for one note, or None if excluded."""
+    normalized = relative_path.replace("\\", "/")
+    if _stage_in_relative_path(normalized, CANONICAL_SHARED_DIR_NAME):
+        return None
+    if not approval_service.is_eligible(note_id, revision, content_hash):
+        return None
+    if _stage_in_relative_path(normalized, CANONICAL_PROCESSED_DIR_NAME):
+        return CANONICAL_PROCESSED_DIR_NAME
+    if _stage_in_relative_path(normalized, CANONICAL_CLEAN_DIR_NAME):
+        if processed_note_available:
+            return None
+        return CANONICAL_CLEAN_DIR_NAME
+    return None
 
 
 def _json_default(value: Any) -> Any:
@@ -278,6 +316,27 @@ class ChromaStore:
             logger.error(f"Error obteniendo títulos de notas: {e}")
             return []
 
+    def find_concept_note_id(self, slug: str) -> str | None:
+        """Return a catalog note_id when Chroma metadata matches a concept slug."""
+        if not self._ensure_collection():
+            return None
+        normalized = slug.strip().lower()
+        try:
+            get_res = self.collection.get(include=["metadatas"])
+        except Exception as exc:
+            logger.debug("Chroma concept lookup failed for %s: %s", slug, exc)
+            return None
+        for metadata in get_res.get("metadatas") or []:
+            if not metadata:
+                continue
+            relative_path = str(metadata.get("relative_path") or "")
+            if not relative_path.endswith(f"/conceptos/{normalized}.md"):
+                continue
+            note_id = metadata.get("note_id")
+            if isinstance(note_id, str) and note_id:
+                return note_id
+        return None
+
     def query_hybrid(self, query_text: str, n_results: int = 5) -> List[Dict[str, Any]]:
         """Realiza una búsqueda híbrida combinando la similitud semántica (ChromaDB) y léxica (BM25).
 
@@ -315,9 +374,9 @@ class ChromaStore:
 
 
 class ChromaRetrievalBackend:
-    """Expose Chroma only through the router's explicit refinement role."""
+    """Expose Chroma as the sole authorized search index."""
 
-    name = "chroma-refinement"
+    name = "chroma"
 
     def __init__(self, store: ChromaStore) -> None:
         self.store = store
@@ -337,23 +396,34 @@ class ChromaRetrievalBackend:
 
     def search(self, query: str, limit: int) -> list[RetrievalHit]:
         hits = self.store.query_hybrid(query, n_results=limit)
-        return [
-            RetrievalHit(
-                document_id=str((hit.get("metadata") or {}).get("document_id") or ""),
-                revision=int((hit.get("metadata") or {}).get("revision") or 1),
-                content_hash=str(
-                    (hit.get("metadata") or {}).get("content_hash")
-                    or (hit.get("metadata") or {}).get("source_hash")
-                    or ""
-                ),
-                content=str(hit.get("content") or ""),
-                score=float(hit.get("score") or hit.get("rrf_score") or hit.get("bm25_score") or 0.0),
-                backend=self.name,
-                relative_path=str((hit.get("metadata") or {}).get("relative_path") or ""),
-                metadata=dict(hit.get("metadata") or {}),
+        converted: list[RetrievalHit] = []
+        for hit in hits[: max(1, int(limit))]:
+            metadata = dict(hit.get("metadata") or {})
+            chunk_id = str(hit.get("id") or metadata.get("id") or "")
+            if chunk_id:
+                metadata["id"] = chunk_id
+            converted.append(
+                RetrievalHit(
+                    document_id=str(metadata.get("document_id") or ""),
+                    revision=int(metadata.get("revision") or 1),
+                    content_hash=str(
+                        metadata.get("content_hash")
+                        or metadata.get("source_hash")
+                        or ""
+                    ),
+                    content=str(hit.get("content") or ""),
+                    score=float(
+                        hit.get("score")
+                        or hit.get("rrf_score")
+                        or hit.get("bm25_score")
+                        or 0.0
+                    ),
+                    backend=self.name,
+                    relative_path=str(metadata.get("relative_path") or ""),
+                    metadata=metadata,
+                )
             )
-            for hit in hits[: max(1, int(limit))]
-        ]
+        return converted
 
     def delete(self, document_ids: Sequence[str]) -> bool:
         return bool(self.store.delete_chunks([str(document_id) for document_id in document_ids]))

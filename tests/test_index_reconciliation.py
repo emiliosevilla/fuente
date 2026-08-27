@@ -10,9 +10,15 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from fuente.application.ingestion import IngestionApplicationService, _RunContext
+from fuente.rag.chroma_store import resolve_index_authority
 from fuente.config import DEFAULT_ISSUE, get_default_config
 from fuente.core.vault import VaultManager
 from fuente.domain.jobs import CURRENT_PIPELINE_VERSION, JobRecord
+from fuente.domain.vault_layout import (
+    CANONICAL_CLEAN_DIR_NAME,
+    CANONICAL_PROCESSED_DIR_NAME,
+    CANONICAL_SHARED_DIR_NAME,
+)
 from fuente.rag.chroma_store import ChromaInitError, ChromaStore, _patch_sqlite_for_chroma
 from fuente.rag.index_records import (
     REQUIRED_CHUNK_METADATA_KEYS,
@@ -329,6 +335,77 @@ def test_query_results_expose_document_id_and_relative_path():
     source = query_result_source_fields(results[0])
     assert source["document_id"] == "doc-query"
     assert source["relative_path"] == "Acme/1_entrada/brief.md"
+
+
+class _ApprovalStub:
+    def __init__(self, *, eligible: bool = True) -> None:
+        self.eligible = eligible
+
+    def is_eligible(self, note_id: str, revision: int, content_hash: str) -> bool:
+        return self.eligible
+
+
+def test_same_note_id_in_stages_3_and_4_prefers_processed_authority():
+    approval = _ApprovalStub(eligible=True)
+    clean = f"Tema/{CANONICAL_CLEAN_DIR_NAME}/origen.md"
+    processed = f"Tema/{CANONICAL_PROCESSED_DIR_NAME}/origen.md"
+    note_id = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+
+    assert (
+        resolve_index_authority(
+            relative_path=clean,
+            note_id=note_id,
+            revision=1,
+            content_hash="hash-clean",
+            approval_service=approval,
+            processed_note_available=True,
+        )
+        is None
+    )
+    assert (
+        resolve_index_authority(
+            relative_path=processed,
+            note_id=note_id,
+            revision=2,
+            content_hash="hash-processed",
+            approval_service=approval,
+        )
+        == CANONICAL_PROCESSED_DIR_NAME
+    )
+
+
+def test_red_and_orange_notes_are_not_indexed():
+    approval = _ApprovalStub(eligible=False)
+    note_id = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+    relative = f"Tema/{CANONICAL_CLEAN_DIR_NAME}/borrador.md"
+
+    assert (
+        resolve_index_authority(
+            relative_path=relative,
+            note_id=note_id,
+            revision=1,
+            content_hash="hash-red",
+            approval_service=approval,
+        )
+        is None
+    )
+
+
+def test_shared_stage_does_not_create_chunks():
+    approval = _ApprovalStub(eligible=True)
+    note_id = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+    relative = f"Tema/{CANONICAL_SHARED_DIR_NAME}/publico.md"
+
+    assert (
+        resolve_index_authority(
+            relative_path=relative,
+            note_id=note_id,
+            revision=1,
+            content_hash="hash-shared",
+            approval_service=approval,
+        )
+        is None
+    )
 
 
 def test_chroma_initialize_reports_failure_explicitly(tmp_path):

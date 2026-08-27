@@ -1,0 +1,22 @@
+{
+  "task": 8,
+  "git_head": "b956fccc7069eba514c411c868ff3b787aeb8a6c",
+  "base_url": "http://127.0.0.1:13001",
+  "workspace": "fuente",
+  "session_id": "fuente-task8-runtime",
+  "model": "qwen2.5:0.5b",
+  "document_count": 0,
+  "health_ok": true,
+  "readiness": {
+    "ok": true,
+    "model": "qwen2.5:0.5b",
+    "document_count": 0
+  },
+  "first_chat_id": 4,
+  "second_chat_id": 5,
+  "first_response": "Por supuesto. Recuerda el token PLASMA-77 para esta sesión.",
+  "second_response": "Token PLASMA-77.",
+  "history_recovered": true,
+  "g6_status": "PASS",
+  "complete": true
+}

@@ -168,3 +168,26 @@ def test_atomic_fallback_never_serializes_legacy_sources():
     assert metadata["schema_version"] == 3
     assert "sources" not in metadata
     assert metadata["origins"] == []
+
+
+def test_processed_generation_requires_transition_approval(temp_vault_path):
+    from fuente.application.smart_notes import FakeConversationClient, SmartNoteGenerator
+    from fuente.application.templates import TemplateRegistry
+    from fuente.domain.errors import OutputApprovalRequiredError
+
+    harness = _build_harness(temp_vault_path)
+    try:
+        waiting = harness.service.resume(harness.service.submit(SOURCE_IDENTITY).job_id)
+        snapshot = _approval_snapshot(harness, waiting)
+        generator = SmartNoteGenerator(
+            vault=harness.vault,
+            store=harness.store,
+            templates=TemplateRegistry(temp_vault_path, harness.store),
+            transition_approvals=harness.service.transition_approvals,
+            chat_client=FakeConversationClient(),
+            model_name="test-model",
+        )
+        with pytest.raises(OutputApprovalRequiredError):
+            generator.generate(snapshot.note_id, snapshot.revision, snapshot.content_hash)
+    finally:
+        harness.store.close()

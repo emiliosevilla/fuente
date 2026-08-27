@@ -88,6 +88,13 @@ def test_console_labels_are_plain_without_internal_flow_names():
     assert "TELEMETRÍA DEL GRAFO DE CONOCIMIENTO" not in html
 
 
+def test_reader_workspace_supports_source_feed_toolbar():
+    html = Path("consola_preview.html").read_text(encoding="utf-8")
+    assert "function switchSourceView(" in html
+    assert 'id="source-feed"' in html
+    assert "list_feed" in html
+
+
 def test_preserve_modernization_keeps_navigation_and_removes_visual_noise():
     html = Path("consola_preview.html").read_text(encoding="utf-8")
     css = Path("fuente/ui/static/console.css").read_text(encoding="utf-8")

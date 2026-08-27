@@ -95,6 +95,14 @@ def test_update_evidence_rejects_empty_suite_and_unknown_gate(tmp_path: Path):
         update_sdd_evidence(tmp_path, suite="1 passed", gate="RESULT: UNKNOWN")
 
 
+def test_release_gate_blocks_missing_runtime_capture(tmp_path: Path):
+    from scripts.release_gate import evaluate_release
+
+    result = evaluate_release(tmp_path)
+    assert result["status"] == "BLOCKED"
+    assert "runtime capture" in result["reasons"][0].lower()
+
+
 def test_update_evidence_writes_explicit_results_and_exact_keys(tmp_path: Path, monkeypatch):
     (tmp_path / "docs/superpowers").mkdir(parents=True)
     (tmp_path / "docs/superpowers/plans").mkdir()

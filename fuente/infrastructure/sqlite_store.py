@@ -380,6 +380,265 @@ class JobStore:
         ).fetchone()
         return dict(row) if row is not None else None
 
+    # -- MiniRAG enrichment evaluation ---------------------------------
+
+    def save_minirag_evaluation(
+        self,
+        document_id: str,
+        revision: int,
+        content_hash: str,
+        *,
+        baseline_metric: float,
+        candidate_metric: float,
+        verdict: str,
+        evaluator_reason: str,
+        query: str = "",
+        model: str = "",
+    ) -> dict[str, Any]:
+        metric_delta = float(candidate_metric) - float(baseline_metric)
+        values = {
+            "document_id": document_id,
+            "revision": int(revision),
+            "content_hash": content_hash,
+            "baseline_metric": float(baseline_metric),
+            "candidate_metric": float(candidate_metric),
+            "metric_delta": metric_delta,
+            "verdict": verdict,
+            "evaluator_reason": evaluator_reason,
+            "query": query,
+            "model": model,
+            "created_at": _timestamp(),
+        }
+        try:
+            self._connection.execute(
+                """
+                INSERT INTO minirag_evaluations
+                (document_id, revision, content_hash, baseline_metric, candidate_metric,
+                 metric_delta, verdict, evaluator_reason, query, model, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                tuple(values[field] for field in (
+                    "document_id", "revision", "content_hash", "baseline_metric",
+                    "candidate_metric", "metric_delta", "verdict", "evaluator_reason",
+                    "query", "model", "created_at",
+                )),
+            )
+        except sqlite3.IntegrityError:
+            existing = self.get_minirag_evaluation(document_id, revision, content_hash)
+            if existing is None or any(
+                existing[field] != values[field]
+                for field in (
+                    "baseline_metric", "candidate_metric", "metric_delta",
+                    "verdict", "evaluator_reason", "query", "model",
+                )
+            ):
+                raise ValueError("minirag evaluation already exists with different values")
+        return self.get_minirag_evaluation(document_id, revision, content_hash) or values
+
+    def get_minirag_evaluation(
+        self,
+        document_id: str,
+        revision: int,
+        content_hash: str,
+    ) -> dict[str, Any] | None:
+        row = self._connection.execute(
+            """
+            SELECT * FROM minirag_evaluations
+            WHERE document_id = ? AND revision = ? AND content_hash = ?
+            """,
+            (document_id, int(revision), content_hash),
+        ).fetchone()
+        return dict(row) if row is not None else None
+
+    def list_template_versions(self) -> list[dict[str, Any]]:
+        rows = self._connection.execute(
+            "SELECT * FROM template_versions ORDER BY template_id"
+        ).fetchall()
+        return [dict(row) for row in rows]
+
+    def get_template_version(self, template_id: str) -> dict[str, Any] | None:
+        row = self._connection.execute(
+            "SELECT * FROM template_versions WHERE template_id = ?",
+            (template_id,),
+        ).fetchone()
+        return dict(row) if row is not None else None
+
+    def upsert_template_version(
+        self,
+        *,
+        template_id: str,
+        template_relative_path: str,
+        agents_relative_path: str,
+        template_hash: str,
+        agents_hash: str,
+    ) -> dict[str, Any]:
+        existing = self.get_template_version(template_id)
+        if existing is None:
+            self._connection.execute(
+                """
+                INSERT INTO template_versions (
+                    template_id, revision, template_relative_path, agents_relative_path,
+                    template_hash, agents_hash, updated_at
+                ) VALUES (?, 1, ?, ?, ?, ?, ?)
+                """,
+                (
+                    template_id,
+                    template_relative_path,
+                    agents_relative_path,
+                    template_hash,
+                    agents_hash,
+                    _timestamp(),
+                ),
+            )
+        else:
+            if (
+                existing["template_relative_path"] != template_relative_path
+                or existing["agents_relative_path"] != agents_relative_path
+                or existing["template_hash"] != template_hash
+                or existing["agents_hash"] != agents_hash
+            ):
+                self._connection.execute(
+                    """
+                    UPDATE template_versions
+                    SET template_relative_path = ?, agents_relative_path = ?,
+                        template_hash = ?, agents_hash = ?, updated_at = ?
+                    WHERE template_id = ? AND revision = ?
+                    """,
+                    (
+                        template_relative_path,
+                        agents_relative_path,
+                        template_hash,
+                        agents_hash,
+                        _timestamp(),
+                        template_id,
+                        existing["revision"],
+                    ),
+                )
+        return self.get_template_version(template_id) or {}
+
+    def update_template_version_cas(
+        self,
+        *,
+        template_id: str,
+        expected_revision: int,
+        template_relative_path: str,
+        agents_relative_path: str,
+        template_hash: str,
+        agents_hash: str,
+    ) -> dict[str, Any] | None:
+        cursor = self._connection.execute(
+            """
+            UPDATE template_versions
+            SET revision = revision + 1,
+                template_relative_path = ?,
+                agents_relative_path = ?,
+                template_hash = ?,
+                agents_hash = ?,
+                updated_at = ?
+            WHERE template_id = ? AND revision = ?
+            """,
+            (
+                template_relative_path,
+                agents_relative_path,
+                template_hash,
+                agents_hash,
+                _timestamp(),
+                template_id,
+                int(expected_revision),
+            ),
+        )
+        if cursor.rowcount == 0:
+            return None
+        return self.get_template_version(template_id)
+
+    def is_minirag_enrichment_accepted(
+        self,
+        document_id: str,
+        revision: int,
+        content_hash: str,
+    ) -> bool:
+        row = self.get_minirag_evaluation(document_id, revision, content_hash)
+        return row is not None and row.get("verdict") == "accepted"
+
+    # -- generated note lineage -------------------------------------------
+
+    def save_generated_note_lineage(
+        self,
+        *,
+        lineage_id: str,
+        source_note_id: str,
+        source_revision: int,
+        source_content_hash: str,
+        generated_note_id: str,
+        note_type: str,
+        relative_path: str,
+        content_hash: str,
+        template_id: str,
+        template_revision: int,
+        template_hash: str,
+        agents_hash: str,
+        model: str,
+    ) -> dict[str, Any]:
+        created_at = _timestamp()
+        self._connection.execute(
+            """
+            INSERT INTO generated_note_lineage (
+                lineage_id, source_note_id, source_revision, source_content_hash,
+                generated_note_id, note_type, relative_path, content_hash,
+                template_id, template_revision, template_hash, agents_hash, model,
+                created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                lineage_id,
+                source_note_id,
+                int(source_revision),
+                source_content_hash,
+                generated_note_id,
+                note_type,
+                relative_path,
+                content_hash,
+                template_id,
+                int(template_revision),
+                template_hash,
+                agents_hash,
+                model,
+                created_at,
+            ),
+        )
+        row = self._connection.execute(
+            "SELECT * FROM generated_note_lineage WHERE lineage_id = ?",
+            (lineage_id,),
+        ).fetchone()
+        return dict(row) if row is not None else {}
+
+    def list_generated_note_lineage(
+        self,
+        *,
+        source_note_id: str,
+        source_revision: int,
+        source_content_hash: str,
+    ) -> list[dict[str, Any]]:
+        rows = self._connection.execute(
+            """
+            SELECT * FROM generated_note_lineage
+            WHERE source_note_id = ? AND source_revision = ? AND source_content_hash = ?
+            ORDER BY created_at, generated_note_id
+            """,
+            (source_note_id, int(source_revision), source_content_hash),
+        ).fetchall()
+        return [dict(row) for row in rows]
+
+    def invalidate_processed_approval(self, note_id: str) -> None:
+        self._connection.execute(
+            """
+            UPDATE processed_approvals
+            SET invalidated_at = ?
+            WHERE note_id = ? AND invalidated_at IS NULL
+            """,
+            (_timestamp(), note_id),
+        )
+
     # -- processed note approvals -----------------------------------------
 
     def approve_processed_note(
@@ -1412,6 +1671,150 @@ class JobStore:
             """
         ).fetchall()
         return [dict(row) for row in rows]
+
+    def has_active_review_claim(self, artifact_id: str) -> bool:
+        now = _timestamp()
+        row = self._connection.execute(
+            """
+            SELECT 1 FROM review_claims
+            WHERE artifact_id = ? AND expires_at > ?
+            LIMIT 1
+            """,
+            (artifact_id, now),
+        ).fetchone()
+        return row is not None
+
+    def list_feed_page(
+        self,
+        *,
+        limit: int,
+        before: Optional[tuple[str, str]] = None,
+        order: str = "date",
+        seal: Optional[str] = None,
+        date_from: Optional[str] = None,
+        date_to: Optional[str] = None,
+        origin: Optional[str] = None,
+        theme: Optional[str] = None,
+        note_type: Optional[str] = None,
+    ) -> list[dict[str, Any]]:
+        """Return a stable feed page ordered with ``note_id`` as tie-breaker."""
+        if not isinstance(limit, int) or isinstance(limit, bool) or limit < 1:
+            raise ValueError("limit must be a positive integer")
+        if order not in {"date", "origin", "theme", "urgency"}:
+            raise ValueError("order is invalid")
+
+        clauses: list[str] = ["tombstone.note_id IS NULL"]
+        params: list[Any] = []
+        now = _timestamp()
+
+        if seal == "approved":
+            clauses.append("catalog.status = ?")
+            params.append("approved")
+        elif seal == "in_review":
+            clauses.append(
+                "catalog.status != ? AND EXISTS ("
+                "SELECT 1 FROM review_claims AS claim "
+                "WHERE claim.artifact_id = catalog.note_id AND claim.expires_at > ?"
+                ")"
+            )
+            params.extend(["approved", now])
+        elif seal == "pending_review":
+            clauses.append("catalog.status != ?")
+            params.append("approved")
+            clauses.append(
+                "NOT EXISTS ("
+                "SELECT 1 FROM review_claims AS claim "
+                "WHERE claim.artifact_id = catalog.note_id AND claim.expires_at > ?"
+                ")"
+            )
+            params.append(now)
+
+        if date_from:
+            clauses.append("catalog.updated_at >= ?")
+            params.append(date_from)
+        if date_to:
+            clauses.append("catalog.updated_at <= ?")
+            params.append(date_to)
+        if origin:
+            clauses.append("catalog.origin_kind = ?")
+            params.append(origin)
+        if theme:
+            clauses.append("catalog.theme = ?")
+            params.append(theme)
+        if note_type:
+            clauses.append("catalog.note_type = ?")
+            params.append(note_type)
+
+        if before is not None:
+            try:
+                before_updated_at, before_note_id = before
+            except (TypeError, ValueError) as error:
+                raise ValueError("before must be a (updated_at, note_id) cursor") from error
+            clauses.append(
+                "(catalog.updated_at < ? OR (catalog.updated_at = ? AND catalog.note_id < ?))"
+            )
+            params.extend([before_updated_at, before_updated_at, before_note_id])
+
+        order_sql = {
+            "date": "catalog.updated_at DESC, catalog.note_id DESC",
+            "origin": "catalog.origin_kind ASC, catalog.note_id ASC",
+            "theme": "catalog.theme ASC, catalog.note_id ASC",
+            "urgency": "catalog.issue ASC, catalog.note_id ASC",
+        }[order]
+
+        query = (
+            "SELECT catalog.* FROM note_catalog AS catalog "
+            "LEFT JOIN note_tombstones AS tombstone ON tombstone.note_id = catalog.note_id "
+            "WHERE " + " AND ".join(clauses) + f" ORDER BY {order_sql} LIMIT ?"
+        )
+        params.append(limit)
+        rows = self._connection.execute(query, params).fetchall()
+        return [dict(row) for row in rows]
+
+    def count_feed_catalog(
+        self,
+        *,
+        seal: Optional[str] = None,
+        note_type: Optional[str] = None,
+    ) -> int:
+        """Count catalog rows using the same seal/type rules as list_feed_page."""
+        clauses: list[str] = ["tombstone.note_id IS NULL"]
+        params: list[Any] = []
+        now = _timestamp()
+
+        if seal == "approved":
+            clauses.append("catalog.status = ?")
+            params.append("approved")
+        elif seal == "in_review":
+            clauses.append(
+                "catalog.status != ? AND EXISTS ("
+                "SELECT 1 FROM review_claims AS claim "
+                "WHERE claim.artifact_id = catalog.note_id AND claim.expires_at > ?"
+                ")"
+            )
+            params.extend(["approved", now])
+        elif seal == "pending_review":
+            clauses.append("catalog.status != ?")
+            params.append("approved")
+            clauses.append(
+                "NOT EXISTS ("
+                "SELECT 1 FROM review_claims AS claim "
+                "WHERE claim.artifact_id = catalog.note_id AND claim.expires_at > ?"
+                ")"
+            )
+            params.append(now)
+
+        if note_type:
+            clauses.append("catalog.note_type = ?")
+            params.append(note_type)
+
+        query = (
+            "SELECT COUNT(*) FROM note_catalog AS catalog "
+            "LEFT JOIN note_tombstones AS tombstone ON tombstone.note_id = catalog.note_id "
+            "WHERE " + " AND ".join(clauses)
+        )
+        row = self._connection.execute(query, params).fetchone()
+        return int(row[0]) if row else 0
 
     # -- canonical note approvals ----------------------------------------
 

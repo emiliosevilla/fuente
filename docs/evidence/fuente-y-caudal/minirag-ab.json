@@ -1,0 +1,48 @@
+{
+  "task": 7,
+  "git_head": "b956fccc7069eba514c411c868ff3b787aeb8a6c",
+  "query": "¿Qué relación contractual y obligaciones de arrendamiento aparecen en el informe aprobado del trimestre?",
+  "model": "qwen2.5:0.5b",
+  "seed": 42,
+  "note_id": "a5aea002-255d-55d9-a2b4-532feaa95649",
+  "revision": 1,
+  "content_hash": "5acd3f4f374f8f0915400d45f7f99cc559ea95ab18e5ec4421fac5b12bb3fb55",
+  "epsilon": 0.1,
+  "baseline": {
+    "hit_count": 1,
+    "metric": 0.5,
+    "hits": [
+      {
+        "document_id": "d2f4cb93-4bb6-5628-8f08-ac314baf2874",
+        "revision": 1,
+        "content_hash": "5acd3f4f374f8f0915400d45f7f99cc559ea95ab18e5ec4421fac5b12bb3fb55",
+        "content": "# Informe Trimestral\n\nEl EBITDA_TRIMESTRAL_APROBADO_15PCT creció en el trimestre.",
+        "score": 0.03278688524590164,
+        "backend": "chroma",
+        "relative_path": "1_volcado/informe_trimestral.txt"
+      }
+    ]
+  },
+  "candidate": {
+    "hit_count": 1,
+    "metric": 0.5,
+    "hits": [
+      {
+        "document_id": "d2f4cb93-4bb6-5628-8f08-ac314baf2874",
+        "revision": 1,
+        "content_hash": "5acd3f4f374f8f0915400d45f7f99cc559ea95ab18e5ec4421fac5b12bb3fb55",
+        "content": "# Informe Trimestral\n\nEl EBITDA_TRIMESTRAL_APROBADO_15PCT creció en el trimestre.",
+        "score": 0.03278688524590164,
+        "backend": "chroma",
+        "relative_path": "1_volcado/informe_trimestral.txt"
+      }
+    ]
+  },
+  "metric_delta": 0.0,
+  "verdict": "rejected",
+  "evaluator_reason": "candidate gain at or below epsilon",
+  "enrichment_enabled": false,
+  "g5_status": "PASS",
+  "g6_status": "PARTIAL",
+  "complete": true
+}

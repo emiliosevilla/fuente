@@ -75,3 +75,13 @@ class InvalidNoteTransitionError(ValueError):
     def __init__(self, document_id: str, message: str) -> None:
         self.document_id = document_id
         super().__init__(message)
+
+
+class TemplateRevisionConflictError(ValueError):
+    """Raised when a template mutation targets a stale revision."""
+
+    code = "template_revision_conflict"
+
+    def __init__(self, template_id: str) -> None:
+        self.template_id = template_id
+        super().__init__(f"Template revision conflict: {template_id}")

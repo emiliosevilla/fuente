@@ -332,7 +332,8 @@ def test_reindex_failure_keeps_previous_vectors_and_artifact_record(tmp_path):
             content_hash=note.content_hash,
         )
 
-        notes._reindex_after_approval(note)
+        with pytest.raises(RuntimeError, match="Chroma index rebuild failed"):
+            notes._reindex_after_approval(note)
 
         assert chroma.calls == ["add"]
         assert {

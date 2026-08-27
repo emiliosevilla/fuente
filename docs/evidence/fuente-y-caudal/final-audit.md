@@ -41,3 +41,8 @@ Tamaño host: marco visible **1280×802**.
 ## Git
 
 Las capturas sellan `git_head` al HEAD del momento. El commit de evidencia mueve HEAD; un commit de restamp + restamp del árbol de trabajo deja `evaluate_release` READY en limpio.
+
+## Reconcile 2026-08-27
+
+Re-medido en `dev` @ `310ba58` (= `origin/dev`): `evaluate_release` → **READY**; PNG únicos 21/21; PR #80 MERGED (`0fc6801` en `main`). El resumen `gates`/`release_status` del manifiesto se alineó con el veredicto vivo del gate.
+

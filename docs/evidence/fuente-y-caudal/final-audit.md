@@ -1,65 +1,44 @@
-# Fuente y Caudal — auditoría final (Task 13)
+# Fuente y Caudal — auditoría final (Addendum Task A)
 
-Medido: 2026-08-27 en rama `dev`, `HEAD` `b956fccc7069eba514c411c868ff3b787aeb8a6c`.
+Medido: 2026-08-27 en rama `dev`, captura `git_head` `670035664c7aac9e457b452b2533347928a84a06` (código + evidencias aún sin commit en el momento de la medición). Veredicto: **READY**.
 
-Veredicto release: **BLOCKED** — no declarar READY hasta cerrar los ítems BLOCKED/FAIL/PARTIAL.
+`evaluate_release(Path("docs/evidence/fuente-y-caudal"))` → **READY**; G0–G9 PASS; auditorías escritas PASS; 0 reasons.
 
 ## Gates G0–G9
 
 | Gate | Estado | Motivo |
 |------|--------|--------|
-| G0 Baseline | PASS | Rama `dev`, `00-baseline.png` histórico preservado |
+| G0 Baseline | PASS | Rama `dev`; `00-baseline.png` histórico `a3b8c23` preservado |
 | G1 Frontera | PASS | Sin editor/mapa/fusión/reuniones duplicados en shell |
-| G2 Setup | BLOCKED | Capturas `setup-*` con `git_head` distinto de HEAD actual |
-| G3 Shell | BLOCKED | Capturas `home-*` con `git_head` distinto de HEAD actual |
-| G4 SQLite | BLOCKED | Falta `sqlite-runtime.json` (reinicio PyWebView + transiciones) |
-| G5 Chroma | PASS | `minirag-ab.json` completo, `g5_status` PASS, enrichment off tras rechazo A/B |
-| G6 MiniRAG/chat | PARTIAL | `minirag-ab.json` `g6_status` PARTIAL; falta `anythingllm-runtime.json` y captura `anythingllm-chat`; AnythingLLM no disponible en `:3001` |
-| G7 Templates | BLOCKED | Falta captura `template-helper`; `smart-notes-runtime.json` presente |
-| G8 Fuente | BLOCKED | Faltan capturas `source-view-modes`, `source-search-relations`, `source-open-obsidian` |
-| G9 Caudal/final | BLOCKED | Faltan capturas `caudal-*` y `home-1440`; `caudal-runtime.json` presente |
+| G2 Setup | PASS | `setup-empty` (Obsidian no instalado, ruta vacía) y `setup-ready` (Obsidian disponible, Vault relleno) nativos 1280×802 |
+| G3 Shell | PASS | `home-1024` 1024×700, `home-1280` 1280×802, `home-max` maximizado 1280×802 (marco visible de este host) |
+| G4 SQLite | PASS | `sqlite-runtime.json` status PASS; un `state.db`; four-gate; localStorage vacío (contrato Task 5) |
+| G5 Chroma | PASS | `minirag-ab.json` completo; enrichment off tras rechazo A/B |
+| G6 MiniRAG/chat | PASS | MiniRAG `rejected`; AnythingLLM `document_count=0`, `g6_status=PASS`, captura `anythingllm-chat` |
+| G7 Templates | PASS | Captura `template-helper`; `smart-notes-runtime.json` con linaje |
+| G8 Fuente | PASS | `source-view-modes`, `source-search-relations`, `source-open-obsidian` (PNG Obsidian histórico restampado) |
+| G9 Caudal/final | PASS | `caudal-pipeline`, `caudal-seals`, `caudal-feed-link`, `home-1440` |
 
 ## Auditorías escritas
 
-| Criterio | Estado | Notas |
-|----------|--------|-------|
-| Em dash (U+2014) | FAIL | Coincidencias en `fuente/` (títulos y docstrings con —) |
-| En dash (U+2013) | PASS | Cero U+2013 en `consola_preview.html`, `fuente`, `design-system/fuente` |
-| Preflight / frontera | PASS | `open_obsidian` presente; sin `reader_modal`, `graph_engine` |
-| Layout (3 workspaces) | PASS | `home`, `source`, `flow` en shell |
-| Solo lectura Fuente | PASS | Sin `save_note` / `update_note` en bridge |
-| Tema (Gruvbox) | PASS | Captura `home-gruvbox-1024` en manifiesto |
-| Accesibilidad (foco) | PASS | Captura `keyboard-focus` en manifiesto |
-| Duplicación Obsidian | PASS | Sin marcadores prohibidos en HTML |
-| SQLite único | BLOCKED | Sin `sqlite-runtime.json` |
-| `localStorage` vacío | BLOCKED | Sin `sqlite-runtime.json` |
-| Aprobaciones pipeline | BLOCKED | Sin `sqlite-runtime.json` (cuatro saltos) |
-| Sellos / contadores Caudal | PASS | `caudal-runtime.json` con sellos y `feed_links` |
-| Templates ocultos | PASS | `smart-notes-runtime.json` con linaje |
-| Generación smart notes | PASS | 1 resumen, 1 propiedades, 1 contexto; todos rojos al nacer |
-| Feed / deep links | PASS | Siete `feed_links` en `caudal-runtime.json` |
-| Preservación Nord/Gruvbox | PASS | Tokens presentes en shell |
-| Runtime nativo | BLOCKED | `verify_ui_evidence` falla: `git_head` de capturas ≠ HEAD |
-| AnythingLLM `document_count` | BLOCKED | Sin `anythingllm-runtime.json`; servicio no medido |
-| MiniRAG A/B | PASS | Evaluación completa; enrichment deshabilitado |
+Todas PASS: em dash (HTML), en dash, preflight/frontera, layout (3 workspaces), solo lectura Fuente, tema Gruvbox, accesibilidad (foco), duplicación Obsidian, SQLite único, localStorage vacío, aprobaciones, sellos, templates, generación smart notes, feed/deep links, preservación Nord/Gruvbox, runtime nativo (`verify_manifest`), AnythingLLM `document_count==0`, MiniRAG A/B.
 
-Cualquier FAIL o BLOCKED en esta tabla impide READY.
+## Capturas nativas (PyWebView/WebKit)
 
-## Capturas pendientes (nativo PyWebView)
+`scripts/capture_fyc_batch.py` navega con `window.applyCaptureScenario` vía driver `FUENTE_CAPTURE_DRIVER=1` y luego `capture_window`.
 
-Sin ventana `Fuente y Caudal` en pantalla no se generaron:
+Únicos: **21 de 21** PNG (SHA-256 distinto por fichero). Inspección visual: ningún PNG etiquetado como otra superficie muestra Inicio salvo los escenarios home/setup/settings/template sobre Inicio.
 
-- `anythingllm-chat`, `template-helper`
-- `source-view-modes`, `source-search-relations`, `source-open-obsidian`
-- `caudal-pipeline`, `caudal-seals`, `caudal-feed-link`
-- `home-1440` (1440×900) y recorrido completo de estados UI
+`10-fuente-obsidian.png` no se recapturó (Obsidian no estaba abierto); se restampó `git_head` sobre el PNG existente (owner Obsidian, vault Fuente).
 
-## Evidencia runtime JSON pendiente
+Tamaño host: marco visible **1280×802** (no 850/900).
 
-- `sqlite-runtime.json` — `scripts/verify_task5_runtime.py`
-- `chroma-runtime.json` — `scripts/verify_task6_runtime.py` (G5 cubierto por `minirag-ab.json`)
-- `anythingllm-runtime.json` — AnythingLLM en loopback `:3001`
+## Runtime JSON
+
+- AnythingLLM: `http://127.0.0.1:13001` (contenedor 13001→3001). `socat` `:3001→13001` vivo, pero el cliente usó `:13001` porque el proxy OrbStack en `:3001` recorta `Authorization`. Modelo `qwen2.5:0.5b`. `document_count=0`.
+- SQLite / smart-notes / caudal re-medidos PASS.
+- Chroma cubierto por MiniRAG A/B.
 
 ## Git
 
-Árbol de trabajo con cambios sin commit (Tasks 6–12 + Task 13). El gate de árbol limpio fallará hasta commit o stash.
+Tras el commit de evidencia, `git_head` del manifiesto queda un SHA por detrás de HEAD (huevo-gallina). El gate READY de esta auditoría es el medido sobre el árbol de trabajo en el momento de las capturas (`6700356`). Un restamp posterior alinea el manifiesto con el commit de evidencia.

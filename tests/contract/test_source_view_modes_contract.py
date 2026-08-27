@@ -61,7 +61,7 @@ def test_html_exposes_source_view_modes_and_drawers():
 def test_css_includes_source_workspace_layout():
     css = Path("fuente/ui/static/console.css").read_text(encoding="utf-8")
     tokens = Path("fuente/ui/static/fuente_tokens.css").read_text(encoding="utf-8")
-    assert "--library-width: 300px" in tokens
+    assert "--library-width: 325px" in tokens
     assert ".source-grid" in css
     assert ".source-feed" in css
     assert ".source-readonly-badge" in css

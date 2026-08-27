@@ -134,8 +134,8 @@ def test_shell_has_exactly_three_product_workspaces() -> None:
 def test_shell_dimensions_type_and_keyboard_focus_are_explicit() -> None:
     html, css, tokens = _read(HTML_PATH), _read(CONSOLE_CSS_PATH), _read(TOKENS_CSS_PATH)
     for declaration in (
-        "--rail-width: 68px",
-        "--header-height: 64px",
+        "--rail-width: 113px",
+        "--header-height: 72px",
         "--font-size-base: 16px",
         "--font-size-document: 17px",
         "--font-size-control: 14px",

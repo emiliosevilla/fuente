@@ -29,6 +29,25 @@ def test_template_helper_calls_bridge_inventory():
     assert "preview_template" in source
 
 
+def test_list_templates_recovers_when_lifecycle_cleared_job_store(temp_vault_path):
+    vault = temp_vault_path.parent / "Fuente"
+    if not vault.is_dir():
+        from types import SimpleNamespace
+
+        from fuente.integrations.obsidian import ObsidianProvisioner
+
+        class FakeCli:
+            def run(self, command, *, cwd):
+                return SimpleNamespace(returncode=0, stdout=str(cwd), stderr="")
+
+        ObsidianProvisioner(cli=FakeCli()).provision(vault, consent=True)
+    backend = FuenteConsoleBackend(vault)
+    backend._job_store = None
+    result = FuentePyWebViewApi(backend).list_templates()
+    assert "error" not in result
+    assert len(result["templates"]) == 7
+
+
 def test_bridge_lists_hidden_templates(temp_vault_path):
     vault = temp_vault_path.parent / "Fuente"
     if not vault.is_dir():

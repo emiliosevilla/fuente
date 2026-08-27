@@ -225,3 +225,11 @@ def test_fuente_mockup_identity_markers_are_present() -> None:
     assert "restoreCaudalQueueFixture" in html
     assert "caudal-queue-fixture" in html
     assert "if (document.body.getAttribute('data-capture-scenario')) return;" in html
+    assert 'id="aux-search-relations"' in html
+    assert "Decisiones de arquitectura - Q1 2025" in html
+    assert "Contenido: ChromaDB" in html
+    assert "modal-caudal-import" in html
+    assert "Elegir..." in html
+    assert "if (id === 'modal-template-helper' && !document.body.getAttribute('data-capture-scenario'))" in html
+    assert "openModal('modal-caudal-import')" in html.split("flow-1024", 1)[1]
+    assert "aux-search-relations" in html.split("source-search-relations", 1)[1]

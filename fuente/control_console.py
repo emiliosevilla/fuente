@@ -2498,6 +2498,47 @@ class FuenteControlConsole(tk.Tk):
         QuarantineModal(self, self.quarantine_service, on_restore_callback=restore)
 
 
+def _start_capture_driver(window) -> None:
+    """Env-gated loopback so capture scripts can evaluate JS in the live window."""
+    if os.environ.get("FUENTE_CAPTURE_DRIVER") != "1":
+        return
+    port = int(os.environ.get("FUENTE_CAPTURE_PORT", "8765"))
+    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+    class Handler(BaseHTTPRequestHandler):
+        def log_message(self, *_args) -> None:
+            return
+
+        def do_GET(self) -> None:
+            payload = b"ok"
+            self.send_response(200)
+            self.send_header("Content-Type", "text/plain")
+            self.send_header("Content-Length", str(len(payload)))
+            self.end_headers()
+            self.wfile.write(payload)
+
+        def do_POST(self) -> None:
+            length = int(self.headers.get("Content-Length", "0"))
+            script = self.rfile.read(length).decode("utf-8")
+            try:
+                value = window.evaluate_js(script)
+                body = json.dumps({"ok": True, "value": value}).encode("utf-8")
+                status = 200
+            except Exception as error:
+                body = json.dumps({"ok": False, "error": str(error)}).encode("utf-8")
+                status = 500
+            self.send_response(status)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+    def serve() -> None:
+        ThreadingHTTPServer(("127.0.0.1", port), Handler).serve_forever()
+
+    threading.Thread(target=serve, name="fuente-capture-driver", daemon=True).start()
+
+
 def launch_control_console(vault_path: Optional[Path] = None):
     """
     Lanza la Consola Fuente oficial 100% IDÉNTICA a consola_preview.html
@@ -2534,6 +2575,7 @@ def launch_control_console(vault_path: Optional[Path] = None):
             background_color="#ECEFF4",
         )
         api.set_window(window)
+        _start_capture_driver(window)
         window.events.closing += api._handle_window_closing
         window.events.shown += _activate_webview_window
         window.events.loaded += _activate_webview_window
@@ -2603,6 +2645,7 @@ def launch_control_console(vault_path: Optional[Path] = None):
                 background_color="#ECEFF4"
             )
             api.set_window(window)
+            _start_capture_driver(window)
             window.events.closing += api._handle_window_closing
             window.events.shown += _activate_webview_window
             window.events.loaded += _activate_webview_window

@@ -127,37 +127,61 @@
             </div>
         </section>
 
-        <section id="workspace-source" class="workspace-panel-root" data-workspace="source" aria-labelledby="workspace-source-title" hidden>
-            <header class="shell-header">
-                <div><p class="workspace-kicker">Biblioteca local</p><h1 id="workspace-source-title" tabindex="-1">Fuente</h1></div>
-                <button type="button" class="icon-button shell-header-action" data-onclick-command="triggerAction('open_obsidian', {}, this)" aria-label="Abrir el Vault en Obsidian">
-                    <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M6 3h9l4 4v14H6zM14 3v5h5"></path><path d="M9 13h6M9 17h4"></path></svg>
-                    <span>Obsidian</span>
-                </button>
+        <section id="workspace-source" class="workspace-panel-root fuente-shell" data-workspace="source" aria-labelledby="workspace-source-title" hidden>
+            <header class="shell-header fuente-topbar">
+                <h1 id="workspace-source-title" tabindex="-1">Fuente</h1>
+                <label class="search-box fuente-search" for="reader-search"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg><input type="search" id="reader-search" aria-label="Buscar en Fuente" placeholder="Buscar en Fuente" autocomplete="off" data-oninput-command="filterReaderNotes()"><kbd>⌘F</kbd></label>
+                <div class="segmented fuente-views source-view-switch" role="tablist" aria-label="Vista de Fuente">
+                    <button type="button" class="source-view-tab" id="btn-source-view-grid" role="tab" data-onclick-command="switchSourceView('grid')">Grid</button>
+                    <button type="button" class="source-view-tab is-active" id="btn-source-view-list" role="tab" aria-selected="true" data-onclick-command="switchSourceView('list')">Lista</button>
+                    <button type="button" class="source-view-tab" id="btn-source-view-individual" role="tab" data-onclick-command="switchSourceView('individual')">Individual</button>
+                    <button type="button" class="source-view-tab" id="btn-source-view-feed" role="tab" data-onclick-command="switchSourceView('feed')">Feed</button>
+                </div>
+                <button type="button" class="toolbar-button" id="btn-source-filter" data-onclick-command="openDrawer('source-filter-drawer')"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M4 5h16l-6 7v6l-4 2v-8z"></path></svg>Filtrar</button>
+                <button type="button" class="toolbar-button" id="btn-source-sort" data-onclick-command="cycleSourceOrder()"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M8 4v16m0-16L5 7m3-3 3 3M16 20V4m0 16-3-3m3 3 3-3"></path></svg>Ordenar</button>
+                <button type="button" class="toolbar-button" id="btn-source-actions" data-onclick-command="toggleSourceActionsPopover()"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1" fill="currentColor"></circle><circle cx="12" cy="12" r="1" fill="currentColor"></circle><circle cx="19" cy="12" r="1" fill="currentColor"></circle></svg>Acciones <span>⌄</span></button>
+                <button type="button" class="toolbar-button" id="btn-source-consult" data-onclick-command="openDrawer('source-chat-drawer')"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M4 5c3-1 5 0 8 2v13c-3-2-5-3-8-2zM20 5c-3-1-5 0-8 2v13c3-2 5-3 8-2z"></path></svg>Consultar</button>
             </header>
             <div class="workspace-content source-content" id="workspace-notes">
                 <div id="reader-workspace-host"></div>
             </div>
+            <button type="button" class="vertical-tab fuente-chat-tab" data-onclick-command="openDrawer('source-chat-drawer')" aria-label="Abrir consulta local">‹  Consultar local</button>
+            <section class="recent source-recent ui-carousel" aria-labelledby="source-recent-title">
+                <h2 class="recent-title" id="source-recent-title">Notas recientes</h2>
+                <div class="carousel-controls source-recent-controls">
+                    <button type="button" class="icon-button" data-onclick-command="moveCarousel('source-recent-track', 'previous')" aria-label="Anterior"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="m15 5-7 7 7 7"></path></svg></button>
+                    <button type="button" class="icon-button" data-onclick-command="moveCarousel('source-recent-track', 'next')" aria-label="Siguiente"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="m9 5 7 7-7 7"></path></svg></button>
+                </div>
+                <div id="source-recent-track" class="recent-track carousel-track"></div>
+            </section>
         </section>
 
-        <section id="workspace-flow" class="workspace-panel-root" data-workspace="flow" aria-labelledby="workspace-flow-title" hidden>
-            <header class="shell-header">
-                <div><p class="workspace-kicker">Control del material</p><h1 id="workspace-flow-title" tabindex="-1">Caudal</h1></div>
-                <div class="shell-header-actions caudal-header-actions">
-                    <button type="button" class="btn-secondary" data-onclick-command="openModal('modal-caudal-import')">Importar</button>
-                    <button type="button" class="btn-secondary" data-onclick-command="openModal('modal-caudal-export')">Exportar</button>
-                    <button type="button" class="btn-primary shell-primary-action" data-onclick-command="triggerAction('step2_transcribe')">Procesar material</button>
+        <section id="workspace-flow" class="workspace-panel-root caudal-shell" data-workspace="flow" aria-labelledby="workspace-flow-title" hidden>
+            <header class="shell-header caudal-topbar">
+                <div class="back-forward" aria-hidden="true"><span>‹</span><span>›</span></div>
+                <h1 id="workspace-flow-title" tabindex="-1">Caudal</h1>
+                <div class="shell-header-actions caudal-header-actions topbar-actions">
+                    <button type="button" class="button" id="btn-caudal-import" data-onclick-command="toggleCaudalImportMenu()"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M12 16V3m0 0L7 8m5-5 5 5M4 14v6h16v-6"></path></svg>Importar</button>
+                    <button type="button" class="button" data-onclick-command="openModal('modal-caudal-export')"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M12 3v13m0 0-5-5m5 5 5-5M4 20h16"></path></svg>Exportar</button>
+                    <button type="button" class="button" data-onclick-command="openDrawer('flow-queue-drawer')"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg>Buscar</button>
+                    <button type="button" class="button" data-onclick-command="openDrawer('flow-detail-drawer')"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M4 5h16l-6 7v6l-4 2v-8z"></path></svg>Filtros</button>
+                    <button type="button" class="btn-primary shell-primary-action" hidden data-onclick-command="triggerAction('step2_transcribe')">Procesar material</button>
+                </div>
+                <div id="caudal-import-menu" class="import-menu ui-popover" hidden>
+                    <button type="button" data-onclick-command="runCaudalImport('files')">Archivos</button>
+                    <button type="button" data-onclick-command="runCaudalImport('folder')">Carpeta</button>
+                    <button type="button" data-onclick-command="runCaudalImport('sync')">SharePoint sincronizado</button>
                 </div>
             </header>
             <div class="workspace-content flow-content caudal-body">
                 <section class="flow-section" id="fuente-flow" aria-labelledby="flow-title">
                     <div class="section-heading"><div><p class="workspace-kicker">Pipeline</p><h2 id="flow-title">Cinco etapas</h2></div><button type="button" class="btn-secondary" data-onclick-command="openDrawer('flow-detail-drawer')">Ver detalle</button></div>
-                    <div class="flow-stages">
-                        <div class="flow-stage" data-flow-step="1"><span class="flow-stage-number">1</span><strong>Volcado</strong><span id="badge-step1">Sin medir</span></div>
-                        <div class="flow-stage" data-flow-step="2"><span class="flow-stage-number">2</span><strong>Copiado</strong><span id="badge-step2">Sin medir</span></div>
-                        <div class="flow-stage" data-flow-step="3"><span class="flow-stage-number">3</span><strong>Capturado</strong><span id="badge-step3">Sin medir</span></div>
-                        <div class="flow-stage" data-flow-step="4"><span class="flow-stage-number">4</span><strong>Procesado</strong><span id="badge-step4">Sin medir</span></div>
-                        <div class="flow-stage" data-flow-step="5"><span class="flow-stage-number">5</span><strong>Compartido</strong><span id="badge-step5">Sin medir</span></div>
+                    <div class="flow-stages pipeline" aria-label="Pipeline">
+                        <div class="flow-stage" data-flow-step="1"><span class="flow-stage-number">1</span><strong>Volcado</strong><span id="badge-step1" class="num">Sin medir</span></div>
+                        <div class="flow-stage" data-flow-step="2"><span class="flow-stage-number">2</span><strong>Copiado</strong><span id="badge-step2" class="num">Sin medir</span></div>
+                        <div class="flow-stage" data-flow-step="3"><span class="flow-stage-number">3</span><strong>Capturado</strong><span id="badge-step3" class="num">Sin medir</span></div>
+                        <div class="flow-stage" data-flow-step="4"><span class="flow-stage-number">4</span><strong>Procesado</strong><span id="badge-step4" class="num">Sin medir</span></div>
+                        <div class="flow-stage" data-flow-step="5"><span class="flow-stage-number">5</span><strong>Compartido</strong><span id="badge-step5" class="num">Sin medir</span></div>
                     </div>
                 </section>
                 <section class="flow-operations" aria-labelledby="flow-operations-title">
@@ -228,6 +252,7 @@
                     <div class="drawer-header"><h2>Registro de actividad</h2><button type="button" class="icon-button" data-onclick-command="closeDrawer('flow-log-drawer')" aria-label="Cerrar registro"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"></path></svg></button></div>
                     <div class="log-console caudal-log-console" id="caudal-log-console" role="log" aria-live="polite"></div>
                 </aside>
+                <button type="button" class="vertical-tab activity-tab" data-onclick-command="openDrawer('flow-log-drawer')" aria-label="Abrir registro de actividad">Registro de actividad  ›</button>
             </div>
         </section>
     </main>
@@ -243,35 +268,19 @@
                 </div>
                 <div class="console-layout-005">
                     <button type="button" class="btn-small" id="btn-reader-back" data-onclick-command="goBackReaderNote()" disabled title="Volver a la nota anterior"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-back"></use></svg><span>Atrás</span></button>
-                    <div class="source-view-switch" role="tablist" aria-label="Vista de Fuente">
-                        <button type="button" class="btn-small source-view-tab" id="btn-source-view-grid" role="tab" data-onclick-command="switchSourceView('grid')">Grid</button>
-                        <button type="button" class="btn-small source-view-tab is-active" id="btn-source-view-list" role="tab" aria-selected="true" data-onclick-command="switchSourceView('list')">Lista</button>
-                        <button type="button" class="btn-small source-view-tab" id="btn-source-view-individual" role="tab" data-onclick-command="switchSourceView('individual')">Individual</button>
-                        <button type="button" class="btn-small source-view-tab" id="btn-source-view-feed" role="tab" data-onclick-command="switchSourceView('feed')">Feed</button>
-                        <button type="button" class="btn-small source-view-tab" id="btn-source-view-filtered" role="tab" data-onclick-command="switchSourceView('filtered')">Filtrada</button>
-                    </div>
+                    <button type="button" class="btn-small source-view-tab" id="btn-source-view-filtered" role="tab" data-onclick-command="switchSourceView('filtered')">Filtrada</button>
                     <button type="button" class="btn-small" id="btn-source-hierarchy" data-onclick-command="switchSourceView('hierarchy')">Jerarquía</button>
                     <button type="button" class="btn-small" id="btn-source-relations" data-onclick-command="switchSourceView('relations')">Relaciones</button>
-                    <button type="button" class="btn-small" data-onclick-command="openDrawer('source-filter-drawer')">Filtrar</button>
                     <button type="button" class="btn-small" data-onclick-command="openDrawer('source-search-drawer')">Buscar</button>
-                    <button type="button" class="btn-small" id="btn-source-actions" data-onclick-command="toggleSourceActionsPopover()">Acciones</button>
-                    <button type="button" class="btn-small" data-onclick-command="openDrawer('source-chat-drawer')">Consultar</button>
                     <button type="button" class="close-btn" data-onclick-command="closeModal('modal-reader')" aria-label="Cerrar notas"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-close"></use></svg></button>
                 </div>
             </div>
             <div class="modal-body">
-                <div class="reader-search-row" role="search">
-                    <label class="reader-search-label" for="reader-search">Buscar notas</label>
-                    <div class="reader-search-wrapper">
-                        <svg class="reader-search-icon ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-search"></use></svg>
-                        <input type="search" class="reader-search-input" id="reader-search" placeholder="Buscar por título o frase..." autocomplete="off" data-oninput-command="filterReaderNotes()">
-                    </div>
-                </div>
                 <div class="reader-context-grid is-context-hidden">
                     <section class="reader-context-content" data-reader-region="content" aria-label="Contenido de la nota">
                         <div class="reader-dual-pane reader-view" id="reader-view-list">
                             <div class="reader-sidebar">
-                                <div class="reader-sidebar-divider">Biblioteca</div>
+                                <div class="library-head"><h2 class="reader-sidebar-divider">Biblioteca</h2><button type="button" class="icon-button" data-onclick-command="toggleReaderLibrary()" aria-label="Plegar biblioteca">«</button></div>
                                 <div class="reader-note-list-scroll">
                                     <ul class="reader-note-list" id="reader-note-list">
                                         <li class="reader-note-item active">Cargando notas...</li>
@@ -330,8 +339,8 @@
                             </div>
                         </div>
                     </aside>
-                    <aside id="source-filter-drawer" class="ui-drawer source-filter-drawer" role="dialog" aria-modal="false" aria-label="Filtros de Fuente" aria-hidden="true" hidden>
-                        <div class="drawer-header"><h2>Filtros</h2><button type="button" class="icon-button" data-onclick-command="closeDrawer('source-filter-drawer')" aria-label="Cerrar filtros"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"></path></svg></button></div>
+                    <aside id="source-filter-drawer" class="ui-drawer source-filter-drawer filter-popover" role="dialog" aria-modal="false" aria-label="Filtros de Fuente" aria-hidden="true" hidden>
+                        <div class="drawer-header"><h3>Sello</h3><button type="button" class="icon-button" data-onclick-command="closeDrawer('source-filter-drawer')" aria-label="Cerrar filtros"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"></path></svg></button></div>
                         <div class="source-filter-fields">
                             <label for="source-filter-seal">Sello</label>
                             <select id="source-filter-seal"><option value="">Todos</option><option value="pending_review">Rojo</option><option value="in_review">Naranja</option><option value="approved">Verde</option></select>
@@ -348,6 +357,7 @@
                             <label for="source-filter-date-to">Hasta</label>
                             <input type="date" id="source-filter-date-to">
                             <button type="button" class="btn-primary" data-onclick-command="applySourceFilters()">Aplicar filtros</button>
+                            <button type="button" class="clear" data-onclick-command="clearSourceFilters()">Limpiar filtros</button>
                         </div>
                     </aside>
                     <aside id="source-search-drawer" class="ui-drawer source-search-drawer" role="dialog" aria-modal="false" aria-label="Buscar en Fuente" aria-hidden="true" hidden>
@@ -371,12 +381,15 @@
                         </form>
                         <div id="source-chat-answer" class="workspace-chat-answer" aria-live="polite"></div>
                     </aside>
-                    <div id="source-actions-popover" class="source-actions-popover" role="dialog" aria-label="Acciones de lectura" aria-hidden="true" hidden>
-                        <button type="button" class="btn-small" data-onclick-command="triggerAction('copy_reader_note', {}, this)">Copiar <kbd>⌘C</kbd></button>
-                        <button type="button" class="btn-small" data-onclick-command="printCurrentNote()">Imprimir <kbd>⌘P</kbd></button>
-                        <button type="button" class="btn-small" data-onclick-command="triggerAction('export_reader_note', {}, this)">Exportar</button>
+                    <div id="source-actions-popover" class="source-actions-popover reader-actions" role="dialog" aria-label="Acciones de lectura" aria-hidden="true" hidden>
+                        <button type="button" class="btn-small" data-onclick-command="triggerAction('copy_reader_note', {}, this)"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><rect x="8" y="8" width="11" height="11" rx="1"></rect><path d="M5 15H4V4h11v1"></path></svg>Copiar</button>
+                        <button type="button" class="btn-small" data-onclick-command="printCurrentNote()"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M6 9V3h12v6M6 18H4v-8h16v8h-2M7 14h10v7H7z"></path></svg>Imprimir</button>
+                        <button type="button" class="btn-small" data-onclick-command="triggerAction('export_reader_note', {}, this)"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M5 12h12m-4-4 4 4-4 4M19 5v14"></path></svg>Exportar</button>
                         <button type="button" class="btn-small" data-onclick-command="openCurrentNoteFile()">Abrir archivo</button>
-                        <button type="button" class="btn-small" data-onclick-command="triggerAction('open_obsidian', {}, this)">Abrir en Obsidian</button>
+                        <button type="button" class="btn-small" data-onclick-command="triggerAction('open_obsidian', {}, this)"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="m12 3 6 5-6 13-6-13z"></path><path d="m6 8 6 4 6-4"></path></svg>Abrir en Obsidian</button>
+                        <button type="button" class="btn-small" data-onclick-command="switchSourceView('filtered')">Filtrada</button>
+                        <button type="button" class="btn-small" data-onclick-command="switchSourceView('hierarchy')">Jerarquía</button>
+                        <button type="button" class="btn-small" data-onclick-command="switchSourceView('relations')">Relaciones</button>
                     </div>
                 </div>
             </div>
@@ -1037,7 +1050,7 @@
             if (command.startsWith('openDrawer(')) return openDrawer(args[0], element);
             if (command.startsWith('closeDrawer(')) return closeDrawer(args[0]);
             if (command.startsWith('moveCarousel(')) return moveCarousel(args[0], args[1]);
-            if command.startsWith('switchReaderView(')) return switchReaderView(args[0]);
+            if (command.startsWith('switchReaderView(')) return switchReaderView(args[0]);
             if (command.startsWith('switchSourceView(')) return switchSourceView(args[0]);
             if (command.startsWith('switchSourceSearchMode(')) return switchSourceSearchMode(args[0]);
             if (command.startsWith('switchSettingsTab(')) return switchSettingsTab(args[0]);
@@ -1064,6 +1077,9 @@
                 'applySourceFilters()': applySourceFilters,
                 'runSourceSearch()': runSourceSearch,
                 'toggleSourceActionsPopover()': toggleSourceActionsPopover,
+                'cycleSourceOrder()': cycleSourceOrder,
+                'clearSourceFilters()': clearSourceFilters,
+                'toggleCaudalImportMenu()': toggleCaudalImportMenu,
                 'printCurrentNote()': printCurrentNote,
                 'openCurrentNoteFile()': openCurrentNoteFile,
                 'openObsidianGraph()': openObsidianGraph,
@@ -1746,7 +1762,10 @@ document.addEventListener('keydown', handleShellKeydown);
                 updateStepBadge('badge-step4');
             }
             if (id === 'modal-reader') { loadReaderNotes(); }
-            if (id === 'modal-settings') { loadSettingsData(); }
+            if (id === 'modal-settings') {
+                const scenario = document.body.getAttribute('data-capture-scenario');
+                if (scenario !== 'setup-empty' && scenario !== 'setup-ready') loadSettingsData();
+            }
             if (id === 'modal-template-helper') { loadTemplateHelper(); }
             if (id === 'modal-stat-input') { loadStatInputData(); }
             if (id === 'modal-category') { loadCategoryData('4_procesado'); }
@@ -2824,7 +2843,7 @@ document.addEventListener('keydown', handleShellKeydown);
         function renderTemplateTypeList(templates, activeId) {
             const list = document.getElementById('template-type-list');
             if (!list) return;
-            list.innerHTML = '';
+            list.replaceChildren();
             templates.forEach(function(item) {
                 const button = document.createElement('button');
                 button.type = 'button';
@@ -4265,11 +4284,170 @@ document.addEventListener('keydown', handleShellKeydown);
                 date_to: document.getElementById('source-filter-date-to')?.value || ''
             };
             persistUiState('source', 'filters', sourceFilters);
+            document.getElementById('btn-source-filter')?.classList.toggle('active', Boolean(sourceFilters.seal || sourceFilters.note_type || sourceFilters.theme));
             closeDrawer('source-filter-drawer');
             if (sourceView === 'filtered') renderSourceFilteredGrid();
             if (sourceView === 'feed') resetSourceFeed();
             if (sourceView === 'grid') renderSourceGrid();
         }
+
+        function clearSourceFilters() {
+            ['source-filter-seal', 'source-filter-theme', 'source-filter-origin', 'source-filter-type', 'source-filter-urgency', 'source-filter-date-from', 'source-filter-date-to'].forEach(function(id) {
+                const field = document.getElementById(id);
+                if (field) field.value = '';
+            });
+            applySourceFilters();
+        }
+
+        function cycleSourceOrder() {
+            sourceOrder = sourceOrder === 'date' ? 'title' : 'date';
+            persistUiState('source', 'sort', {order: sourceOrder});
+            if (sourceView === 'feed') resetSourceFeed();
+            if (sourceView === 'grid') renderSourceGrid();
+            loadReaderNotes();
+        }
+
+        function toggleCaudalImportMenu() {
+            const menu = document.getElementById('caudal-import-menu');
+            if (!menu) {
+                openModal('modal-caudal-import');
+                return;
+            }
+            menu.hidden = !menu.hidden;
+        }
+
+        function fillSourceRecent(notes) {
+            const track = document.getElementById('source-recent-track');
+            if (!track) return;
+            track.replaceChildren();
+            (notes || []).slice(0, 3).forEach(function(item) {
+                const card = document.createElement('article');
+                card.className = 'note-card';
+                const seal = document.createElement('span');
+                seal.className = 'seal ' + sealClassName(item.seal || item.status);
+                card.appendChild(seal);
+                const title = document.createElement('h3');
+                title.textContent = item.title || 'Nota';
+                card.appendChild(title);
+                const meta = document.createElement('div');
+                meta.className = 'meta';
+                const date = document.createElement('span');
+                date.textContent = item.updated_at || item.date || '';
+                const author = document.createElement('span');
+                author.textContent = item.author || item.theme || '';
+                meta.appendChild(date);
+                meta.appendChild(author);
+                card.appendChild(meta);
+                const excerpt = document.createElement('p');
+                excerpt.textContent = item.excerpt || item.issue || '';
+                card.appendChild(excerpt);
+                track.appendChild(card);
+            });
+        }
+
+        function closeCaptureOverlays() {
+            document.querySelectorAll('.modal-overlay.is-open').forEach(function(modal) {
+                if (modal.id !== 'modal-reader') closeModal(modal.id);
+            });
+            ['source-filter-drawer', 'source-search-drawer', 'source-chat-drawer', 'source-context-drawer', 'flow-detail-drawer', 'flow-queue-drawer', 'flow-log-drawer'].forEach(closeDrawer);
+            const popover = document.getElementById('source-actions-popover');
+            if (popover) {
+                popover.hidden = true;
+                popover.setAttribute('aria-hidden', 'true');
+            }
+            const importMenu = document.getElementById('caudal-import-menu');
+            if (importMenu) importMenu.hidden = true;
+            const disclosure = document.querySelector('.home-disclosure');
+            if (disclosure) disclosure.open = false;
+            document.querySelectorAll('[data-keyboard-focus="true"]').forEach(function(element) {
+                element.removeAttribute('data-keyboard-focus');
+            });
+            document.querySelectorAll('.flow-stage.active').forEach(function(step) {
+                step.classList.remove('active');
+            });
+        }
+
+        function applyCaptureScenario(name) {
+            closeCaptureOverlays();
+            applyVisualStyle('nord', false);
+            document.body.setAttribute('data-capture-scenario', name);
+            if (name === 'setup-empty') {
+                switchWorkspace('home');
+                openModal('modal-settings');
+                renderSetupSettings({setup_mode: true, obsidian_installed: false});
+                const pathInput = document.getElementById('setting-vault-path');
+                if (pathInput) pathInput.value = '';
+            } else if (name === 'setup-ready') {
+                switchWorkspace('home');
+                openModal('modal-settings');
+                renderSetupSettings({setup_mode: true, obsidian_installed: true});
+                const pathInput = document.getElementById('setting-vault-path');
+                if (pathInput && !pathInput.value) pathInput.value = '/Users/emiliosevillaortego/Documents/Fuente_Vault';
+            } else if (name === 'home-max') {
+                switchWorkspace('home');
+                const disclosure = document.querySelector('.home-disclosure');
+                if (disclosure) disclosure.open = true;
+            } else if (name === 'home-1440') {
+                switchWorkspace('home');
+                moveCarousel('home-product-track', 'next');
+            } else if (name === 'keyboard-focus') {
+                switchWorkspace('home');
+                const homeButton = document.querySelector('#primary-navigation .workspace-trigger');
+                if (homeButton) {
+                    homeButton.focus();
+                    homeButton.setAttribute('data-keyboard-focus', 'true');
+                }
+            } else if (name === 'home-gruvbox-1024') {
+                switchWorkspace('home');
+                applyVisualStyle('gruvbox', false);
+            } else if (name === 'settings-focus') {
+                switchWorkspace('home');
+                openModal('modal-settings');
+            } else if (name === 'source-1024' || name === 'source-view-modes') {
+                switchWorkspace('source');
+                switchSourceView(name === 'source-view-modes' ? 'grid' : 'individual');
+            } else if (name === 'source-search-relations') {
+                switchWorkspace('source');
+                switchSourceView('relations');
+                openDrawer('source-search-drawer');
+                switchSourceSearchMode('relations');
+            } else if (name === 'source-context-reopened') {
+                switchWorkspace('source');
+                switchSourceView('individual');
+                setReaderContextVisibility(true);
+            } else if (name === 'anythingllm-chat') {
+                switchWorkspace('source');
+                switchSourceView('individual');
+                openDrawer('source-chat-drawer');
+            } else if (name === 'template-helper') {
+                switchWorkspace('home');
+                openModal('modal-template-helper');
+            } else if (name === 'source-open-obsidian') {
+                switchWorkspace('source');
+                triggerAction('open_obsidian', {}, document.getElementById('btn-source-actions'));
+            } else if (name === 'caudal-pipeline') {
+                switchWorkspace('flow');
+                document.querySelectorAll('.flow-stage')[3]?.classList.add('active');
+            } else if (name === 'caudal-seals') {
+                switchWorkspace('flow');
+                openDrawer('flow-detail-drawer');
+            } else if (name === 'caudal-feed-link') {
+                switchWorkspace('flow');
+                openSourceFeedFromCounter(document.querySelector('[data-caudal-feed-filter]'));
+            } else if (name === 'flow-1024') {
+                switchWorkspace('flow');
+                toggleCaudalImportMenu();
+            } else if (name.indexOf('source') === 0) {
+                switchWorkspace('source');
+                switchSourceView('individual');
+            } else if (name.indexOf('flow') === 0 || name.indexOf('caudal') === 0) {
+                switchWorkspace('flow');
+            } else {
+                switchWorkspace('home');
+            }
+            return name;
+        }
+        window.applyCaptureScenario = applyCaptureScenario;
 
         function switchSourceSearchMode(mode) {
             sourceSearchMode = mode;
@@ -4932,6 +5110,7 @@ document.addEventListener('keydown', handleShellKeydown);
                     };
                 }));
                 renderExplicitPreviewNotesNotice();
+                fillSourceRecent(LOCAL_MOCK_NOTES);
                 return;
             }
 
@@ -4943,6 +5122,7 @@ document.addEventListener('keydown', handleShellKeydown);
                     return;
                 }
                 renderNoteList(notes);
+                fillSourceRecent(notes);
             }).catch(function(err) {
                 const message = String(err || nativeBackendUnavailableMessage());
                 renderReaderLoadError(message);

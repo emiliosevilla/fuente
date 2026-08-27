@@ -5,5 +5,6 @@
     "local_storage_empty": true,
     "four_production_boundaries": true,
     "state_db": ".fuente/state.db"
-  }
+  },
+  "note": "UI localStorage emptiness proven in Task 5 Cocoa run; this proof rechecks SQLite gate + four transitions"
 }

@@ -2071,6 +2071,8 @@ class FuenteConsoleBackend:
         }
 
     def _template_registry(self) -> TemplateRegistry:
+        if self._job_store is None:
+            self._job_store = JobStore(self.vault.config.vault_path)
         return TemplateRegistry(self.vault_path, self._job_store)
 
     def list_templates(self) -> list[Dict[str, Any]]:

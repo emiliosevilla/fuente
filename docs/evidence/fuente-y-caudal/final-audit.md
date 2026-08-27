@@ -1,6 +1,6 @@
-# Fuente y Caudal — auditoría final (Addendum Task A, fix round 1)
+# Fuente y Caudal — auditoría final (Addendum Task A, fix round 2)
 
-Medido: 2026-08-27 en rama `dev`. Capturas nativas PyWebView/WebKit con fixture de identidad mockup. Veredicto: **READY**.
+Medido: 2026-08-27 en rama `dev`. Capturas nativas PyWebView/WebKit con fixture de identidad mockup (Fuente/Caudal + auxiliar). Veredicto: **READY**.
 
 `evaluate_release(Path("docs/evidence/fuente-y-caudal"))` → **READY**; G0–G9 PASS; auditorías escritas PASS; 0 reasons.
 
@@ -16,8 +16,8 @@ Medido: 2026-08-27 en rama `dev`. Capturas nativas PyWebView/WebKit con fixture 
 | G5 Chroma | PASS | `minirag-ab.json` histórico; enrichment off tras rechazo A/B |
 | G6 MiniRAG/chat | PASS | MiniRAG `rejected`; AnythingLLM `document_count=0`, captura `anythingllm-chat` |
 | G7 Templates | PASS | Captura `template-helper`; `smart-notes-runtime.json` |
-| G8 Fuente | PASS | Individual + Filtrar checkbox + Biblioteca + Arquitectura local en `source-view-modes`; search/relations; Obsidian PNG histórico restampado |
-| G9 Caudal/final | PASS | Pipeline 134/98/76/58/42, tabla Pendientes con `Contrato_Servicios_v3.docx`, **Detalle del archivo**, sellos 12/7/86/3 |
+| G8 Fuente | PASS | Individual + Filtrar checkbox + Biblioteca + Arquitectura local en `source-view-modes`; búsqueda unificada + jerarquía/grafo en `source-search-relations`; Obsidian PNG histórico restampado |
+| G9 Caudal/final | PASS | Pipeline 134/98/76/58/42, tabla Pendientes con `Contrato_Servicios_v3.docx`, **Detalle del archivo**, sellos 12/7/86/3; wizard Importar en `flow-1024`; Feed con tres tarjetas en `caudal-feed-link` |
 
 ## Auditorías escritas
 
@@ -27,7 +27,7 @@ Todas PASS: em dash (HTML visible), en dash, preflight/frontera, layout (3 works
 
 `scripts/capture_fyc_batch.py` navega con `window.applyCaptureScenario` vía `FUENTE_CAPTURE_DRIVER=1`.
 
-Únicos: **21 de 21** PNG. Identidad Fuente: Individual, árbol Sellos 12/7/86, nota Arquitectura local, popover Filtrar (Sello + Tipo de nota + Limpiar filtros), tres tarjetas recientes sin U+2013/U+2014, barra Copiar/Imprimir/Exportar/Abrir en Obsidian. Identidad Caudal: pipeline, filas seleccionables, Detalle del archivo, menú Importar.
+Únicos: **21 de 21** PNG. Identidad Fuente: Individual, árbol Sellos 12/7/86, nota Arquitectura local, popover Filtrar (Sello + Tipo de nota + Limpiar filtros), tres tarjetas recientes sin U+2013/U+2014, barra Copiar/Imprimir/Exportar/Abrir en Obsidian. Identidad Caudal: pipeline, filas seleccionables, Detalle del archivo, menú Importar (pipeline) y wizard Importar/Exportar (`flow-1024`). Auxiliar: plantillas split Reunión/`template.md`/variables/Guardar cambios; búsqueda unificada + grafo.
 
 `10-fuente-obsidian.png` no se recapturó (Obsidian no abierto); `git_head` restampado.
 

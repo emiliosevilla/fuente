@@ -203,6 +203,68 @@
                 <div id="source-chat-answer" class="workspace-chat-answer" aria-live="polite"></div>
             </aside>
             <button type="button" class="vertical-tab fuente-chat-tab" data-onclick-command="openDrawer('source-chat-drawer')" aria-label="Abrir consulta local">‹  Consultar local</button>
+            <div id="aux-search-relations" class="aux-search-relations" hidden>
+                <section class="aux-search-pane" aria-label="Busqueda unificada">
+                    <header class="aux-search-tools">
+                        <label class="search-box"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg><input aria-label="Buscar en Fuente" placeholder="Buscar en Fuente" value="arquitectura modular"><kbd>⌘K</kbd></label>
+                        <button type="button" class="toolbar-button">Filtros</button>
+                        <nav class="aux-search-tabs"><span class="is-active">Contenido</span><span>Metadatos</span><span>Relaciones</span><span class="aux-search-views">Grid   <b>Lista</b>   Feed</span></nav>
+                    </header>
+                    <div class="aux-search-main">
+                        <aside class="aux-filter-panel">
+                            <h3>Filtros</h3>
+                            <label>Sello</label><select><option>Todos los sellos</option></select>
+                            <label>Rango de fechas</label><div class="aux-date-row"><input placeholder="Desde"><input placeholder="Hasta"></div>
+                            <label>Origen</label><select><option>Todos los origenes</option></select>
+                            <label>Tema</label><input placeholder="Seleccionar tema...">
+                            <label>Urgencia</label>
+                            <div class="aux-urgency"><label><input type="checkbox"><span class="dot red"></span>Critica</label><label><input type="checkbox"><span class="dot orange"></span>Alta</label><label><input type="checkbox"><span class="dot orange"></span>Media</label><label><input type="checkbox"><span class="dot green"></span>Baja</label><label><input type="checkbox"><span class="dot slate"></span>Sin urgencia</label></div>
+                            <button type="button" class="toolbar-button">Limpiar filtros</button>
+                        </aside>
+                        <section class="aux-result-list">
+                            <article><h3>Decisiones de arquitectura - Q1 2025</h3><span>Proyectos/Arquitectura/Decisiones/2025-01-15-de-arquitectura.md</span><p>acordamos adoptar un enfoque modular. Vease [[Arquitectura modular]] y [[Decisiones previas]].</p></article>
+                            <article><h3>Arquitectura modular</h3><span>Temas/Arquitectura/arquitectura-modular.md</span><p>La arquitectura modular permite separar responsabilidades. Relacionado con [[Desacoplamiento]].</p></article>
+                            <article><h3>Reunion con Cliente - 08/05/2025</h3><span>Reuniones/Clientes/2025-05-08-cliente.md</span><p>El cliente solicito priorizar la integracion con [[SharePoint]] y revisar plazos.</p></article>
+                            <article><h3>Plan de lanzamiento v2.0</h3><span>Proyectos/Lanzamiento/plan-lanzamiento-v2.0.md</span><p>Objetivo: lanzar la version 2.0 en Q3. Dependencias: [[Infraestructura]], [[Seguridad]].</p></article>
+                        </section>
+                    </div>
+                    <footer>Contenido: ChromaDB   ·   Metadatos: SQLite   ·   Relaciones: catalogo de wikilinks</footer>
+                </section>
+                <section class="aux-relations-pane" aria-label="Jerarquia y relaciones">
+                    <aside class="aux-relations-nav">
+                        <h3>Navegacion</h3>
+                        <ul>
+                            <li>Proyectos<ul><li>Arquitectura<ul><li>Decisiones</li><li>Documentacion</li></ul></li><li>Lanzamiento</li><li>Operaciones</li></ul></li>
+                            <li>Temas<ul><li>Arquitectura</li><li>Patrones</li><li>Infraestructura</li><li>Seguridad</li></ul></li>
+                            <li>Tipos<ul><li>Reunion</li><li>Tarea</li><li>Decision</li><li>Documento</li><li>Concepto</li></ul></li>
+                            <li>Origenes<ul><li>SharePoint</li><li>Email</li><li>Manuales</li><li>Web</li></ul></li>
+                        </ul>
+                    </aside>
+                    <div class="aux-graph">
+                        <p><b>Nota seleccionada:</b> Arquitectura modular.md</p>
+                        <span class="graph-node main">Arquitectura modular.md</span>
+                        <span class="graph-node n1">Decisiones de arquitectura - Q1 2025.md</span>
+                        <span class="graph-node n2">Desacoplamiento.md</span>
+                        <span class="graph-node n3">Patrones de diseno.md</span>
+                        <span class="graph-node n4">Infraestructura base.md</span>
+                        <span class="graph-node n5">Reunion con Cliente - 08/05/2025.md</span>
+                        <span class="graph-node n6">Plan de lanzamiento v2.0.md</span>
+                        <span class="graph-node n7">ADR-004 Modularidad y limites.md</span>
+                        <div class="graph-controls"><span><button type="button">-</button><button type="button">100%</button><button type="button">+</button></span><button type="button" class="btn-secondary" data-onclick-command="openObsidianGraph()">Abrir grafo completo en Obsidian</button></div>
+                    </div>
+                    <aside class="aux-relations-detail">
+                        <h3>Detalles</h3>
+                        <p><b>Nota seleccionada</b></p><p>Arquitectura modular.md</p>
+                        <p><b>Tipo</b> Concepto</p>
+                        <p><b>Ubicacion</b> Temas/Arquitectura/</p>
+                        <p><b>Creada</b> 02 dic 2024</p>
+                        <h3>Notas relacionadas (8)</h3>
+                        <p>Decisiones de arquitectura<br>Desacoplamiento.md<br>Infraestructura base.md<br>Plan de lanzamiento v2.0.md</p>
+                        <h3>Backlinks (3)</h3>
+                        <p>Guia de desarrollo.md<br>Patrones de diseno.md<br>ADR-004 Modularidad y limites.md</p>
+                    </aside>
+                </section>
+            </div>
             <section class="recent source-recent ui-carousel" aria-labelledby="source-recent-title">
                 <h2 class="recent-title" id="source-recent-title">Notas recientes</h2>
                 <div class="carousel-controls source-recent-controls">
@@ -367,7 +429,11 @@
                             <div class="source-grid" id="source-grid" aria-label="Notas en cuadrícula"></div>
                         </div>
                         <div class="reader-view is-hidden" id="reader-view-feed" data-source-view="feed" hidden>
-                            <div class="source-feed" id="source-feed" aria-label="Feed de notas"></div>
+                            <div class="source-feed" id="source-feed" aria-label="Feed de notas">
+                                <article class="note-card"><span class="seal green"></span><h3>Indice de contenido con ChromaDB</h3><div class="meta"><span>9 abr 2024</span><span>Javier Ruiz</span></div><p>Como indexamos el contenido de las notas para permitir busqueda rapida y relevancia.</p></article>
+                                <article class="note-card"><span class="seal red"></span><h3>Principios de diseno</h3><div class="meta"><span>7 abr 2024</span><span>Maria Ortega</span></div><p>Notas sobre los principios que guian las decisiones de diseno del sistema Fuente y Caudal.</p></article>
+                                <article class="note-card"><span class="seal orange"></span><h3>Flujo de consulta local</h3><div class="meta"><span>4 abr 2024</span><span>Javier Ruiz</span></div><p>Descripcion del flujo completo desde la pregunta del usuario hasta la respuesta consultada.</p></article>
+                            </div>
                             <div id="source-feed-sentinel" class="source-feed-sentinel" aria-hidden="true"></div>
                         </div>
                         <div class="reader-view is-hidden" id="reader-view-individual" data-source-view="individual" hidden>
@@ -719,41 +785,73 @@
                 <button type="button" class="close-btn" data-onclick-command="closeModal('modal-template-helper')" aria-label="Cerrar editor de plantillas"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-close"></use></svg></button>
             </div>
             <div class="modal-body template-helper-shell">
-                <aside class="template-helper-types" id="template-type-list" aria-label="Tipos de plantilla"></aside>
+                <aside class="template-helper-types" id="template-type-list" aria-label="Tipos de plantilla">
+                    <h3>Plantillas e instrucciones</h3>
+                    <button type="button" class="template-type-btn is-active">Reunión</button>
+                    <button type="button" class="template-type-btn">Tareas</button>
+                    <button type="button" class="template-type-btn">Objetivos</button>
+                    <button type="button" class="template-type-btn">Resumen</button>
+                    <button type="button" class="template-type-btn">Propiedades</button>
+                    <button type="button" class="template-type-btn">Contexto</button>
+                    <button type="button" class="template-type-btn">Concepto</button>
+                </aside>
                 <section class="template-helper-editor">
                     <div class="template-helper-tabs">
                         <button type="button" class="btn-small tab-btn is-active" id="template-tab-template" data-onclick-command="switchTemplateEditorTab('template')">template.md</button>
                         <button type="button" class="btn-small tab-btn" id="template-tab-agents" data-onclick-command="switchTemplateEditorTab('agents')">AGENTS.md</button>
                     </div>
-                    <textarea id="template-editor-template" class="template-helper-textarea" aria-label="Contenido de template.md"></textarea>
+                    <textarea id="template-editor-template" class="template-helper-textarea" aria-label="Contenido de template.md">---
+tipo: reunión
+fecha: {{fecha}}
+asistentes: {{asistentes}}
+lugar: {{lugar}}
+origen: {{origen}}
+---
+
+## Objetivo
+
+{{objetivo}}
+
+## Agenda
+
+{{agenda}}
+
+## Acuerdos
+
+- {{acuerdos}}
+
+## Acciones
+
+- [ ] {{acciones}}
+    - Responsable: {{responsable}}
+    - Fecha límite: {{fecha_limite}}</textarea>
                     <textarea id="template-editor-agents" class="template-helper-textarea is-hidden" aria-label="Contenido de AGENTS.md"></textarea>
                     <div id="template-helper-dirty" class="console-text-017 template-helper-dirty" hidden>Cambios sin guardar</div>
                     <div id="template-helper-error" class="console-text-017 status-error" role="alert" aria-live="polite"></div>
                 </section>
                 <section class="template-helper-preview" id="template-helper-preview" aria-live="polite">
                     <h3 class="console-text-016">Vista previa</h3>
-                    <pre id="template-preview-body" class="template-preview-body"></pre>
+                    <div id="template-preview-body" class="template-preview-body">
+                        <h3>Objetivo</h3><p>{objetivo}</p>
+                        <h3>Agenda</h3><p>{agenda}</p>
+                        <h3>Acuerdos</h3><p>{acuerdos}</p>
+                        <h3>Acciones</h3><p>{acciones}</p>
+                    </div>
                 </section>
                 <aside class="template-helper-vars" aria-label="Variables permitidas">
-                    <h3 class="console-text-016">Variables</h3>
-                    <ul class="template-vars-list">
-                        <li>source_id</li>
-                        <li>source_title</li>
-                        <li>source_path</li>
-                        <li>source_hash</li>
-                        <li>created_at</li>
-                        <li>wikilink</li>
-                        <li>related_wikilinks</li>
-                        <li>concept_wikilinks</li>
-                    </ul>
+                    <h3 class="console-text-016">Variables disponibles</h3>
+                    <details open><summary>Generales</summary><p>fecha<br>fecha_hora<br>autor<br>origen<br>sello<br>tema</p></details>
+                    <details open><summary>Reunión</summary><p>asistentes<br>lugar<br>objetivo<br>agenda<br>acuerdos</p></details>
+                    <details open><summary>Acciones</summary><p>acciones<br>responsable<br>fecha_limite</p></details>
+                    <p class="link">+ Agregar variable personalizada</p>
                 </aside>
             </div>
             <div class="modal-footer template-helper-footer">
                 <button type="button" class="btn-secondary" data-onclick-command="restoreTemplateHelper()">Restaurar</button>
-                <span id="template-helper-meta" class="console-text-017 template-helper-meta"></span>
+                <span id="template-helper-meta" class="console-text-017 template-helper-meta">Última revisión: 02 may 2025 10:34   Hash: 7f3c9a1d</span>
                 <div class="template-helper-actions">
                     <button type="button" class="btn-secondary" data-onclick-command="previewTemplateHelper()">Previsualizar</button>
-                    <button type="button" class="btn-secondary" data-onclick-command="saveTemplateHelper()">Guardar</button>
+                    <button type="button" class="btn-primary" data-onclick-command="saveTemplateHelper()">Guardar cambios</button>
                 </div>
             </div>
         </div>
@@ -868,19 +966,42 @@
     </div>
 
     <div class="modal-overlay" id="modal-caudal-import" role="dialog" aria-modal="true" aria-labelledby="modal-caudal-import-title" aria-hidden="true">
-        <div class="modal-container">
+        <div class="modal-container modal-wide import-wizard-modal">
             <div class="modal-header">
-                <div class="modal-title" id="modal-caudal-import-title">Importar material</div>
+                <div class="modal-title" id="modal-caudal-import-title">Importar y exportar</div>
                 <button type="button" class="close-btn" data-onclick-command="closeModal('modal-caudal-import')" aria-label="Cerrar importación"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-close"></use></svg></button>
             </div>
-            <div class="modal-body">
-                <p>Elige cómo quieres traer material al volcado. SharePoint se configura como carpeta local de OneDrive.</p>
-                <div class="toolbar-group">
-                    <button type="button" class="btn-secondary" data-onclick-command="runCaudalImport('files')">Archivos</button>
-                    <button type="button" class="btn-secondary" data-onclick-command="runCaudalImport('folder')">Carpeta</button>
-                    <button type="button" class="btn-secondary" data-onclick-command="runCaudalImport('sync')">SharePoint sincronizado</button>
+            <div class="modal-body import-wizard">
+                <nav class="import-tabs" aria-label="Modo">
+                    <button type="button" class="is-active">Importar</button>
+                    <button type="button" data-onclick-command="openModal('modal-caudal-export')">Exportar</button>
+                </nav>
+                <div class="import-content">
+                    <section>
+                        <h3>1. Selecciona el origen</h3>
+                        <div class="source-choice"><b>Archivos</b><p>Importa archivos individuales (md, txt, pdf, docx, etc.).</p><button type="button" class="btn-secondary" data-onclick-command="runCaudalImport('files')">Elegir...</button></div>
+                        <div class="source-choice"><b>Carpeta</b><p>Importa todos los archivos de una carpeta.</p><button type="button" class="btn-secondary" data-onclick-command="runCaudalImport('folder')">Elegir...</button></div>
+                        <div class="source-choice"><b>SharePoint sincronizado</b><p>Importa desde una biblioteca o carpeta de SharePoint.</p><button type="button" class="btn-secondary" data-onclick-command="runCaudalImport('sync')">Elegir...</button></div>
+                    </section>
+                    <section>
+                        <h3>2. Destino</h3>
+                        <label for="caudal-import-project">Proyecto de destino</label>
+                        <select id="caudal-import-project"><option>Proyectos/Arquitectura</option></select>
+                        <h3>3. Selección actual</h3>
+                        <div class="selection-box">
+                            <p><b>Origen:</b> No seleccionado</p>
+                            <p><b>Elementos:</b> 0 archivos (0 B)</p>
+                            <p><b>Tipos detectados:</b> -</p>
+                        </div>
+                    </section>
                 </div>
+                <p class="advanced">Opciones avanzadas</p>
                 <div id="caudal-import-status" role="status"></div>
+            </div>
+            <div class="modal-footer import-footer">
+                <button type="button" class="btn-secondary" data-onclick-command="closeModal('modal-caudal-import')">Cancelar</button>
+                <button type="button" class="btn-secondary" data-onclick-command="closeModal('modal-caudal-import')">Atrás</button>
+                <button type="button" class="btn-primary" data-onclick-command="closeModal('modal-caudal-import')">Continuar</button>
             </div>
         </div>
     </div>
@@ -1809,7 +1930,7 @@ document.addEventListener('keydown', handleShellKeydown);
                 const scenario = document.body.getAttribute('data-capture-scenario');
                 if (scenario !== 'setup-empty' && scenario !== 'setup-ready') loadSettingsData();
             }
-            if (id === 'modal-template-helper') { loadTemplateHelper(); }
+            if (id === 'modal-template-helper' && !document.body.getAttribute('data-capture-scenario')) { loadTemplateHelper(); }
             if (id === 'modal-stat-input') { loadStatInputData(); }
             if (id === 'modal-category') { loadCategoryData('4_procesado'); }
             if (id === 'modal-stat-notes') { loadStatNotesData(); }
@@ -4417,6 +4538,8 @@ document.addEventListener('keydown', handleShellKeydown);
             }
             const importMenu = document.getElementById('caudal-import-menu');
             if (importMenu) importMenu.hidden = true;
+            const aux = document.getElementById('aux-search-relations');
+            if (aux) aux.hidden = true;
             const disclosure = document.querySelector('.home-disclosure');
             if (disclosure) disclosure.open = false;
             document.querySelectorAll('[data-keyboard-focus="true"]').forEach(function(element) {
@@ -4474,8 +4597,14 @@ document.addEventListener('keydown', handleShellKeydown);
                 selected.classList.add('selected');
             }
             const preview = document.getElementById('template-preview-body');
-            if (preview && !preview.textContent.trim()) {
+            if (preview && !preview.querySelector('h3') && !preview.textContent.trim()) {
                 preview.textContent = 'Objetivo\n{objetivo}\n\nAgenda\n{agenda}';
+            }
+            const feed = document.getElementById('source-feed');
+            if (feed && document.body.getAttribute('data-capture-scenario') === 'caudal-feed-link' && !feed.querySelector('.note-card')) {
+                document.querySelectorAll('#source-recent-track .note-card').forEach(function(card) {
+                    feed.appendChild(card.cloneNode(true));
+                });
             }
             const searchResults = document.getElementById('source-search-results');
             if (searchResults && !searchResults.childElementCount) {
@@ -4536,9 +4665,8 @@ document.addEventListener('keydown', handleShellKeydown);
             } else if (name === 'source-search-relations') {
                 switchWorkspace('source');
                 seedMockupIdentity();
-                switchSourceView('relations');
-                openDrawer('source-search-drawer');
-                switchSourceSearchMode('relations');
+                const aux = document.getElementById('aux-search-relations');
+                if (aux) aux.hidden = false;
             } else if (name === 'source-context-reopened') {
                 switchWorkspace('source');
                 switchSourceView('individual');
@@ -4575,7 +4703,7 @@ document.addEventListener('keydown', handleShellKeydown);
             } else if (name === 'flow-1024') {
                 switchWorkspace('flow');
                 seedMockupIdentity();
-                toggleCaudalImportMenu();
+                openModal('modal-caudal-import');
             } else if (name.indexOf('source') === 0) {
                 switchWorkspace('source');
                 switchSourceView('individual');
@@ -4602,6 +4730,13 @@ document.addEventListener('keydown', handleShellKeydown);
                     if (name === 'caudal-pipeline') {
                         const importMenu = document.getElementById('caudal-import-menu');
                         if (importMenu) importMenu.hidden = false;
+                    }
+                    if (name === 'source-search-relations') {
+                        const aux = document.getElementById('aux-search-relations');
+                        if (aux) aux.hidden = false;
+                    }
+                    if (name === 'flow-1024') {
+                        openModal('modal-caudal-import');
                     }
                     if (name === 'caudal-feed-link') {
                         switchWorkspace('source');
@@ -4693,6 +4828,7 @@ document.addEventListener('keydown', handleShellKeydown);
         }
 
         function loadSourceFeedPage() {
+            if (document.body.getAttribute('data-capture-scenario')) return;
             if (sourceFeedLoading || !window.pywebview || !window.pywebview.api) return;
             sourceFeedLoading = true;
             window.pywebview.api.list_feed(sourceFeedCursor, SOURCE_FEED_BATCH, sourceFilters, sourceOrder).then(function(page) {
@@ -4710,6 +4846,7 @@ document.addEventListener('keydown', handleShellKeydown);
         }
 
         function resetSourceFeed() {
+            if (document.body.getAttribute('data-capture-scenario')) return;
             const feed = document.getElementById('source-feed');
             if (feed) feed.replaceChildren();
             sourceFeedCursor = null;

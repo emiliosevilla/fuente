@@ -77,7 +77,7 @@ def _eval(script: str) -> object:
 def _navigate(scenario: str) -> None:
     quoted = json.dumps(scenario)
     _eval(f"window.applyCaptureScenario({quoted})")
-    time.sleep(0.8)
+    time.sleep(1.2)
 
 
 def _save(scenario: str, filename: str, record: dict[str, object]) -> None:
@@ -102,10 +102,11 @@ def unique_png_groups(evidence: Path | None = None) -> dict[str, list[str]]:
 
 def verify_unique(required: list[str] | None = None) -> int:
     groups = unique_png_groups()
-    required = required or [filename for _scenario, filename, _size, _max in SCENARIOS]
-    required.append("10-fuente-obsidian.png")
-    present = [name for names in groups.values() for name in names]
-    missing = [name for name in required if name not in present]
+    names = list(required or [filename for _scenario, filename, _size, _max in SCENARIOS])
+    if "10-fuente-obsidian.png" not in names:
+        names.append("10-fuente-obsidian.png")
+    present = [name for group_names in groups.values() for name in group_names]
+    missing = [name for name in names if name not in present]
     duplicates = {digest: names for digest, names in groups.items() if len(names) > 1}
     print("unique", len(groups), "of", sum(len(names) for names in groups.values()))
     for digest, names in sorted(groups.items(), key=lambda item: -len(item[1])):

@@ -29,3 +29,17 @@ def test_verify_unique_rejects_duplicate_bytes(tmp_path: Path, capsys) -> None:
         assert batch.verify_unique(required=["one.png", "two.png"]) == 1
     finally:
         batch.EVIDENCE = original
+
+
+def test_evidence_directory_pngs_are_unique() -> None:
+    from scripts.capture_fyc_batch import EVIDENCE, SCENARIOS
+
+    required = [filename for _scenario, filename, _size, _max in SCENARIOS]
+    required.append("10-fuente-obsidian.png")
+    missing = [name for name in required if not (EVIDENCE / name).is_file()]
+    assert missing == []
+    assert verify_unique(required=required) == 0
+    groups = unique_png_groups(EVIDENCE)
+    evidence_pngs = {path.name for path in EVIDENCE.glob("*.png")}
+    assert set(required) <= evidence_pngs
+    assert len(groups) >= len(required)

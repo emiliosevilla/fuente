@@ -137,14 +137,71 @@
                     <button type="button" class="source-view-tab" id="btn-source-view-individual" role="tab" data-onclick-command="switchSourceView('individual')">Individual</button>
                     <button type="button" class="source-view-tab" id="btn-source-view-feed" role="tab" data-onclick-command="switchSourceView('feed')">Feed</button>
                 </div>
-                <button type="button" class="toolbar-button" id="btn-source-filter" data-onclick-command="openDrawer('source-filter-drawer')"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M4 5h16l-6 7v6l-4 2v-8z"></path></svg>Filtrar</button>
+                <button type="button" class="toolbar-button" id="btn-source-filter" data-onclick-command="toggleFilterPopover()"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M4 5h16l-6 7v6l-4 2v-8z"></path></svg>Filtrar</button>
                 <button type="button" class="toolbar-button" id="btn-source-sort" data-onclick-command="cycleSourceOrder()"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M8 4v16m0-16L5 7m3-3 3 3M16 20V4m0 16-3-3m3 3 3-3"></path></svg>Ordenar</button>
                 <button type="button" class="toolbar-button" id="btn-source-actions" data-onclick-command="toggleSourceActionsPopover()"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1" fill="currentColor"></circle><circle cx="12" cy="12" r="1" fill="currentColor"></circle><circle cx="19" cy="12" r="1" fill="currentColor"></circle></svg>Acciones <span>⌄</span></button>
                 <button type="button" class="toolbar-button" id="btn-source-consult" data-onclick-command="openDrawer('source-chat-drawer')"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M4 5c3-1 5 0 8 2v13c-3-2-5-3-8-2zM20 5c-3-1-5 0-8 2v13c3-2 5-3 8-2z"></path></svg>Consultar</button>
             </header>
+            <aside id="source-filter-drawer" class="ui-drawer source-filter-drawer filter-popover" role="dialog" aria-modal="false" aria-label="Filtros de Fuente" aria-hidden="true" hidden>
+                <h3>Sello</h3>
+                <label><input type="checkbox" name="source-filter-seal" value="pending_review" data-onchange-command="applySourceFilters()"><span><span class="dot red"></span> Rojo</span><span>12</span></label>
+                <label><input type="checkbox" name="source-filter-seal" value="in_review" data-onchange-command="applySourceFilters()"><span><span class="dot orange"></span> Naranja</span><span>7</span></label>
+                <label><input type="checkbox" name="source-filter-seal" value="approved" data-onchange-command="applySourceFilters()"><span><span class="dot green"></span> Verde</span><span>86</span></label>
+                <hr>
+                <h3>Tipo de nota</h3>
+                <label><input type="checkbox" name="source-filter-type" value="concepto" data-onchange-command="applySourceFilters()"><span>Concepto</span><span>54</span></label>
+                <label><input type="checkbox" name="source-filter-type" value="referencia" data-onchange-command="applySourceFilters()"><span>Referencia</span><span>28</span></label>
+                <label><input type="checkbox" name="source-filter-type" value="proyecto" data-onchange-command="applySourceFilters()"><span>Proyecto</span><span>16</span></label>
+                <label><input type="checkbox" name="source-filter-type" value="decision" data-onchange-command="applySourceFilters()"><span>Decisión</span><span>7</span></label>
+                <p class="clear" data-onclick-command="clearSourceFilters()">Limpiar filtros</p>
+            </aside>
+            <aside class="library" id="fuente-library" aria-label="Biblioteca">
+                <div class="library-head"><h2>Biblioteca</h2><span aria-hidden="true">«</span></div>
+                <ul class="library-tree">
+                    <li><span class="row"><span class="chev">›</span>Proyectos</span></li>
+                    <li><span class="row"><span class="chev">›</span>Temas</span></li>
+                    <li><span class="row"><span class="chev">›</span>Tipos de nota</span></li>
+                    <li><span class="row"><span class="chev">⌄</span>Sellos</span>
+                        <ul>
+                            <li><span><span class="dot red"></span>Rojo</span><span class="num">12</span></li>
+                            <li><span><span class="dot orange"></span>Naranja</span><span class="num">7</span></li>
+                            <li><span><span class="dot green"></span>Verde</span><span class="num">86</span></li>
+                        </ul>
+                    </li>
+                </ul>
+            </aside>
             <div class="workspace-content source-content" id="workspace-notes">
+                <section class="reader" id="fuente-individual-reader">
+                    <article>
+                        <h1>Arquitectura local</h1>
+                        <span class="readonly source-readonly-badge">Solo lectura</span>
+                        <div class="reader-meta"><span>12 abr 2024</span><span>·</span><span>María Ortega</span><span>·</span><span>Arquitectura</span><span>·</span><span>Fuente y Caudal</span></div>
+                        <p class="lead">La arquitectura local describe cómo se organiza y se relaciona la información dentro del sistema para maximizar la claridad, la trazabilidad y la autonomía.</p>
+                        <h2>Objetivo</h2>
+                        <p>Diseñar una estructura sostenible que permita capturar, conectar y consultar conocimiento sin depender de servicios externos. El sistema debe ser portable, comprensible y fácil de evolucionar.</p>
+                        <h2>Principios</h2>
+                        <p>Local-first, formato abierto, mínima magia, interoperabilidad y control total de los datos. Inspirado en los principios de [[Para Qué]] y [[Luhmann en Zettelkasten]].</p>
+                        <h2>Componentes</h2>
+                        <p>El sistema se apoya en tres componentes principales: (1) el almacén local de notas (Obsidian), (2) el índice semántico (ChromaDB) y (3) la capa de consulta (la consulta local). Para más detalles, ver [[Componentes del sistema]].</p>
+                    </article>
+                    <div class="reader-actions" id="fuente-reader-actions">
+                        <button type="button" data-onclick-command="triggerAction('copy_reader_note', {}, this)">Copiar</button>
+                        <button type="button" data-onclick-command="printCurrentNote()">Imprimir</button>
+                        <button type="button" data-onclick-command="triggerAction('export_reader_note', {}, this)">Exportar</button>
+                        <button type="button" data-onclick-command="triggerAction('open_obsidian', {}, this)">Abrir en Obsidian</button>
+                    </div>
+                </section>
                 <div id="reader-workspace-host"></div>
             </div>
+            <aside id="source-chat-drawer" class="ui-drawer source-chat-drawer" role="dialog" aria-modal="false" aria-label="Consultar sobre la nota" aria-hidden="true" hidden>
+                <div class="drawer-header"><h2>Consultar local</h2><button type="button" class="icon-button" data-onclick-command="closeDrawer('source-chat-drawer')" aria-label="Cerrar consulta"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"></path></svg></button></div>
+                <form id="source-chat-form" class="workspace-chat-form">
+                    <label for="source-chat-input">Preguntar sobre esta nota</label>
+                    <textarea id="source-chat-input" rows="3" required></textarea>
+                    <button type="submit" class="btn-primary">Preguntar</button>
+                </form>
+                <div id="source-chat-answer" class="workspace-chat-answer" aria-live="polite"></div>
+            </aside>
             <button type="button" class="vertical-tab fuente-chat-tab" data-onclick-command="openDrawer('source-chat-drawer')" aria-label="Abrir consulta local">‹  Consultar local</button>
             <section class="recent source-recent ui-carousel" aria-labelledby="source-recent-title">
                 <h2 class="recent-title" id="source-recent-title">Notas recientes</h2>
@@ -152,7 +209,11 @@
                     <button type="button" class="icon-button" data-onclick-command="moveCarousel('source-recent-track', 'previous')" aria-label="Anterior"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="m15 5-7 7 7 7"></path></svg></button>
                     <button type="button" class="icon-button" data-onclick-command="moveCarousel('source-recent-track', 'next')" aria-label="Siguiente"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="m9 5 7 7-7 7"></path></svg></button>
                 </div>
-                <div id="source-recent-track" class="recent-track carousel-track"></div>
+                <div id="source-recent-track" class="recent-track carousel-track">
+                    <article class="note-card"><span class="seal green"></span><h3>Índice de contenido con ChromaDB</h3><div class="meta"><span>9 abr 2024</span><span>Javier Ruiz</span></div><p>Cómo indexamos el contenido de las notas para permitir búsqueda rápida y relevancia.</p></article>
+                    <article class="note-card"><span class="seal red"></span><h3>Principios de diseño</h3><div class="meta"><span>7 abr 2024</span><span>María Ortega</span></div><p>Notas sobre los principios que guían las decisiones de diseño del sistema Fuente y Caudal.</p></article>
+                    <article class="note-card"><span class="seal orange"></span><h3>Flujo de consulta local</h3><div class="meta"><span>4 abr 2024</span><span>Javier Ruiz</span></div><p>Descripción del flujo completo desde la pregunta del usuario hasta la respuesta consultada.</p></article>
+                </div>
             </section>
         </section>
 
@@ -175,28 +236,19 @@
             </header>
             <div class="workspace-content flow-content caudal-body">
                 <section class="flow-section" id="fuente-flow" aria-labelledby="flow-title">
-                    <div class="section-heading"><div><p class="workspace-kicker">Pipeline</p><h2 id="flow-title">Cinco etapas</h2></div><button type="button" class="btn-secondary" data-onclick-command="openDrawer('flow-detail-drawer')">Ver detalle</button></div>
-                    <div class="flow-stages pipeline" aria-label="Pipeline">
-                        <div class="flow-stage" data-flow-step="1"><span class="flow-stage-number">1</span><strong>Volcado</strong><span id="badge-step1" class="num">Sin medir</span></div>
-                        <div class="flow-stage" data-flow-step="2"><span class="flow-stage-number">2</span><strong>Copiado</strong><span id="badge-step2" class="num">Sin medir</span></div>
-                        <div class="flow-stage" data-flow-step="3"><span class="flow-stage-number">3</span><strong>Capturado</strong><span id="badge-step3" class="num">Sin medir</span></div>
-                        <div class="flow-stage" data-flow-step="4"><span class="flow-stage-number">4</span><strong>Procesado</strong><span id="badge-step4" class="num">Sin medir</span></div>
-                        <div class="flow-stage" data-flow-step="5"><span class="flow-stage-number">5</span><strong>Compartido</strong><span id="badge-step5" class="num">Sin medir</span></div>
+                    <h2 id="flow-title" class="visually-hidden">Cinco etapas</h2>
+                    <div class="flow-stages" aria-label="Pipeline">
+                        <div class="flow-stage" data-flow-step="1"><span class="flow-stage-number">1</span><strong>Volcado</strong><span id="badge-step1" class="num">134</span></div>
+                        <div class="flow-stage" data-flow-step="2"><span class="flow-stage-number">2</span><strong>Copiado</strong><span id="badge-step2" class="num">98</span></div>
+                        <div class="flow-stage" data-flow-step="3"><span class="flow-stage-number">3</span><strong>Capturado</strong><span id="badge-step3" class="num">76</span></div>
+                        <div class="flow-stage" data-flow-step="4"><span class="flow-stage-number">4</span><strong>Procesado</strong><span id="badge-step4" class="num">58</span></div>
+                        <div class="flow-stage" data-flow-step="5"><span class="flow-stage-number">5</span><strong>Compartido</strong><span id="badge-step5" class="num">42</span></div>
                     </div>
                 </section>
-                <section class="flow-operations" aria-labelledby="flow-operations-title">
-                    <div class="section-heading">
-                        <div><p class="workspace-kicker">Trabajo actual</p><h2 id="flow-operations-title">Cola y revisiones</h2></div>
-                        <div class="toolbar-group">
-                            <button class="btn-secondary" data-onclick-command="syncAllInputs()">Actualizar entradas</button>
-                            <button class="btn-secondary" data-onclick-command="openApprovalInbox()">Revisar notas</button>
-                            <button class="btn-secondary" data-onclick-command="openDrawer('flow-queue-drawer')">Trabajos</button>
-                            <button class="btn-secondary" data-onclick-command="openModal('modal-quarantine')">Cuarentena</button>
-                            <button class="btn-secondary" data-onclick-command="openDrawer('flow-log-drawer')">Ver registro</button>
-                        </div>
-                    </div>
+                <section class="flow-operations queue" aria-labelledby="flow-operations-title">
+                    <h2 id="flow-operations-title" class="visually-hidden">Cola y revisiones</h2>
                     <div class="flow-queue" id="caudal-queue">
-                        <div class="flow-queue-tabs" role="tablist" aria-label="Estado de la cola">
+                        <div class="flow-queue-tabs queue-tabs" role="tablist" aria-label="Estado de la cola">
                             <button type="button" class="btn-small is-active" id="caudal-queue-tab-waiting" data-onclick-command="setCaudalQueueFilter('waiting')">Pendientes</button>
                             <button type="button" class="btn-small" id="caudal-queue-tab-active" data-onclick-command="setCaudalQueueFilter('active')">En revisión</button>
                             <button type="button" class="btn-small" id="caudal-queue-tab-done" data-onclick-command="setCaudalQueueFilter('completed')">Terminados</button>
@@ -207,39 +259,57 @@
                                     <tr><th>Archivo</th><th>Etapa</th><th>Sello</th><th>Actualizado</th></tr>
                                 </thead>
                                 <tbody id="caudal-queue-body">
-                                    <tr><td colspan="4">La cola aún no se ha medido.</td></tr>
+                                    <tr data-file="Acta_2024-05-14.pdf"><td>Acta_2024-05-14.pdf</td><td>Procesado</td><td><span class="status-cell"><span class="dot orange"></span>Naranja · En revisión</span></td><td class="num">13/05/2024 11:32</td></tr>
+                                    <tr class="selected" data-file="Contrato_Servicios_v3.docx"><td>Contrato_Servicios_v3.docx</td><td>Procesado</td><td><span class="status-cell"><span class="dot orange"></span>Naranja · En revisión</span></td><td class="num">13/05/2024 10:47</td></tr>
+                                    <tr data-file="Informe_Mensual_Abril.xlsx"><td>Informe_Mensual_Abril.xlsx</td><td>Procesado</td><td><span class="status-cell"><span class="dot orange"></span>Naranja · En revisión</span></td><td class="num">12/05/2024 17:21</td></tr>
+                                    <tr data-file="Poliza_Seguros_2024.pdf"><td>Poliza_Seguros_2024.pdf</td><td>Procesado</td><td><span class="status-cell"><span class="dot orange"></span>Naranja · En revisión</span></td><td class="num">12/05/2024 09:58</td></tr>
+                                    <tr data-file="Presentacion_Comite.pptx"><td>Presentacion_Comite.pptx</td><td>Procesado</td><td><span class="status-cell"><span class="dot orange"></span>Naranja · En revisión</span></td><td class="num">11/05/2024 16:05</td></tr>
+                                    <tr data-file="Reporte_Auditoria_Q1.pdf"><td>Reporte_Auditoria_Q1.pdf</td><td>Procesado</td><td><span class="status-cell"><span class="dot orange"></span>Naranja · En revisión</span></td><td class="num">11/05/2024 08:42</td></tr>
                                 </tbody>
                             </table>
+                            <template id="caudal-queue-fixture">
+                                <tr data-file="Acta_2024-05-14.pdf"><td>Acta_2024-05-14.pdf</td><td>Procesado</td><td><span class="status-cell"><span class="dot orange"></span>Naranja · En revisión</span></td><td class="num">13/05/2024 11:32</td></tr>
+                                <tr class="selected" data-file="Contrato_Servicios_v3.docx"><td>Contrato_Servicios_v3.docx</td><td>Procesado</td><td><span class="status-cell"><span class="dot orange"></span>Naranja · En revisión</span></td><td class="num">13/05/2024 10:47</td></tr>
+                                <tr data-file="Informe_Mensual_Abril.xlsx"><td>Informe_Mensual_Abril.xlsx</td><td>Procesado</td><td><span class="status-cell"><span class="dot orange"></span>Naranja · En revisión</span></td><td class="num">12/05/2024 17:21</td></tr>
+                                <tr data-file="Poliza_Seguros_2024.pdf"><td>Poliza_Seguros_2024.pdf</td><td>Procesado</td><td><span class="status-cell"><span class="dot orange"></span>Naranja · En revisión</span></td><td class="num">12/05/2024 09:58</td></tr>
+                                <tr data-file="Presentacion_Comite.pptx"><td>Presentacion_Comite.pptx</td><td>Procesado</td><td><span class="status-cell"><span class="dot orange"></span>Naranja · En revisión</span></td><td class="num">11/05/2024 16:05</td></tr>
+                                <tr data-file="Reporte_Auditoria_Q1.pdf"><td>Reporte_Auditoria_Q1.pdf</td><td>Procesado</td><td><span class="status-cell"><span class="dot orange"></span>Naranja · En revisión</span></td><td class="num">11/05/2024 08:42</td></tr>
+                            </template>
                         </div>
                     </div>
                 </section>
                 <footer class="caudal-footer" id="caudal-footer" aria-label="Contadores de Caudal">
-                    <button type="button" class="caudal-counter" data-caudal-feed-filter='{"seal":"pending_review"}' data-onclick-command="openSourceFeedFromCounter(this)"><span class="dot red" aria-hidden="true"></span><span>Rojos</span><strong id="count-seal-pending">0</strong></button>
-                    <button type="button" class="caudal-counter" data-caudal-feed-filter='{"seal":"in_review"}' data-onclick-command="openSourceFeedFromCounter(this)"><span class="dot orange" aria-hidden="true"></span><span>En revisión</span><strong id="count-seal-review">0</strong></button>
-                    <button type="button" class="caudal-counter" data-caudal-feed-filter='{"seal":"approved"}' data-onclick-command="openSourceFeedFromCounter(this)"><span class="dot green" aria-hidden="true"></span><span>Verdes</span><strong id="count-seal-approved">0</strong></button>
-                    <button type="button" class="caudal-counter" data-onclick-command="openModal('modal-quarantine')"><span class="dot slate" aria-hidden="true"></span><span>Cuarentena</span><strong id="count-quarantine-footer">0</strong></button>
-                    <button type="button" class="caudal-counter" data-caudal-feed-filter='{"note_type":"resumen"}' data-onclick-command="openSourceFeedFromCounter(this)"><span>Resumen</span><strong id="count-type-resumen">0</strong></button>
-                    <button type="button" class="caudal-counter" data-caudal-feed-filter='{"note_type":"propiedades"}' data-onclick-command="openSourceFeedFromCounter(this)"><span>Propiedades</span><strong id="count-type-propiedades">0</strong></button>
-                    <button type="button" class="caudal-counter" data-caudal-feed-filter='{"note_type":"contexto"}' data-onclick-command="openSourceFeedFromCounter(this)"><span>Contexto</span><strong id="count-type-contexto">0</strong></button>
-                    <button type="button" class="caudal-counter" data-caudal-feed-filter='{"note_type":"concepto"}' data-onclick-command="openSourceFeedFromCounter(this)"><span>Concepto</span><strong id="count-type-concepto">0</strong></button>
+                    <button type="button" class="caudal-counter" data-caudal-feed-filter='{"seal":"pending_review"}' data-onclick-command="openSourceFeedFromCounter(this)"><span class="dot red" aria-hidden="true"></span><span>Rojos</span><strong id="count-seal-pending">12</strong></button>
+                    <button type="button" class="caudal-counter" data-caudal-feed-filter='{"seal":"in_review"}' data-onclick-command="openSourceFeedFromCounter(this)"><span class="dot orange" aria-hidden="true"></span><span>En revisión</span><strong id="count-seal-review">7</strong></button>
+                    <button type="button" class="caudal-counter" data-caudal-feed-filter='{"seal":"approved"}' data-onclick-command="openSourceFeedFromCounter(this)"><span class="dot green" aria-hidden="true"></span><span>Verdes</span><strong id="count-seal-approved">86</strong></button>
+                    <button type="button" class="caudal-counter" data-onclick-command="openModal('modal-quarantine')"><span class="dot slate" aria-hidden="true"></span><span>Cuarentena</span><strong id="count-quarantine-footer">3</strong></button>
+                    <button type="button" class="caudal-counter caudal-type-counter" hidden data-caudal-feed-filter='{"note_type":"resumen"}' data-onclick-command="openSourceFeedFromCounter(this)"><span>Resumen</span><strong id="count-type-resumen">0</strong></button>
+                    <button type="button" class="caudal-counter caudal-type-counter" hidden data-caudal-feed-filter='{"note_type":"propiedades"}' data-onclick-command="openSourceFeedFromCounter(this)"><span>Propiedades</span><strong id="count-type-propiedades">0</strong></button>
+                    <button type="button" class="caudal-counter caudal-type-counter" hidden data-caudal-feed-filter='{"note_type":"contexto"}' data-onclick-command="openSourceFeedFromCounter(this)"><span>Contexto</span><strong id="count-type-contexto">0</strong></button>
+                    <button type="button" class="caudal-counter caudal-type-counter" hidden data-caudal-feed-filter='{"note_type":"concepto"}' data-onclick-command="openSourceFeedFromCounter(this)"><span>Concepto</span><strong id="count-type-concepto">0</strong></button>
                     <button type="button" class="btn-secondary" data-onclick-command="openDrawer('flow-log-drawer')">Ver registro</button>
                 </footer>
-                <aside id="flow-detail-drawer" class="ui-drawer" aria-label="Detalle operativo" aria-hidden="true" hidden>
-                    <div class="drawer-header"><h2>Detalle operativo</h2><button type="button" class="icon-button" data-onclick-command="closeDrawer('flow-detail-drawer')" aria-label="Cerrar detalle"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"></path></svg></button></div>
+                <aside id="flow-detail-drawer" class="ui-drawer file-detail" aria-label="Detalle del archivo" aria-hidden="true">
+                    <div class="drawer-header detail-head"><h2>Detalle del archivo</h2><button type="button" class="icon-button" data-onclick-command="closeDrawer('flow-detail-drawer')" aria-label="Cerrar detalle"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"></path></svg></button></div>
                     <div class="caudal-detail-body">
                         <dl class="caudal-detail-properties" id="caudal-detail-properties">
-                            <div><dt>Archivo</dt><dd id="caudal-detail-file">Sin selección</dd></div>
-                            <div><dt>Origen</dt><dd id="caudal-detail-origin">Sin medir</dd></div>
-                            <div><dt>Revisión</dt><dd id="caudal-detail-revision">Sin medir</dd></div>
-                            <div><dt>Hash (SHA-256)</dt><dd id="caudal-detail-hash">Sin medir</dd></div>
-                            <div><dt>Sello actual</dt><dd id="caudal-detail-seal">Sin medir</dd></div>
-                            <div><dt>Próxima aprobación requerida</dt><dd id="caudal-detail-next-approval">Sin medir</dd></div>
+                            <div><dt>Archivo</dt><dd id="caudal-detail-file">Contrato_Servicios_v3.docx</dd></div>
+                            <div><dt>Origen</dt><dd id="caudal-detail-origin">SharePoint sincronizado /Legal/Contratos/2024/</dd></div>
+                            <div><dt>Revisión</dt><dd id="caudal-detail-revision">3 (13/05/2024 10:47)</dd></div>
+                            <div><dt>Hash (SHA-256)</dt><dd id="caudal-detail-hash">3b8f2c6e6b5d9f3a7e9c1d4b2a7f3e9d 8c7a1b2d3e4f5a6b7c8d9e0f1a2b3c4</dd></div>
+                            <div><dt>Sello actual</dt><dd id="caudal-detail-seal"><span class="status-cell"><span class="dot orange"></span>Naranja · En revisión</span></dd></div>
+                            <div><dt>Próxima aprobación requerida</dt><dd id="caudal-detail-next-approval">Aprobador Legal</dd></div>
                         </dl>
-                        <div class="toolbar-group">
+                        <div class="toolbar-group detail-actions">
                             <button type="button" class="btn-primary" id="btn-caudal-approve-step" data-onclick-command="approveCaudalSelection()">Aprobar paso</button>
                             <button type="button" class="btn-secondary" data-onclick-command="switchWorkspace('source')">Abrir en Fuente</button>
                         </div>
-                        <p class="console-text-022">Los cuatro gates de aprobación usan approve_clean, approve_processed_output y begin_transition_review según la etapa activa.</p>
+                        <p class="visually-hidden">Los cuatro gates de aprobación usan approve_clean, approve_processed_output y begin_transition_review según la etapa activa.</p>
+                        <div class="detail-accordion">
+                            <details open><summary>Linaje</summary><p>Volcado › Copiado › Capturado › Procesado</p></details>
+                            <details><summary>Errores</summary></details>
+                            <details><summary>Notas generadas</summary></details>
+                        </div>
                     </div>
                 </aside>
                 <aside id="flow-queue-drawer" class="ui-drawer" aria-label="Cola de trabajos" aria-hidden="true" hidden>
@@ -339,26 +409,6 @@
                             </div>
                         </div>
                     </aside>
-                    <aside id="source-filter-drawer" class="ui-drawer source-filter-drawer filter-popover" role="dialog" aria-modal="false" aria-label="Filtros de Fuente" aria-hidden="true" hidden>
-                        <div class="drawer-header"><h3>Sello</h3><button type="button" class="icon-button" data-onclick-command="closeDrawer('source-filter-drawer')" aria-label="Cerrar filtros"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"></path></svg></button></div>
-                        <div class="source-filter-fields">
-                            <label for="source-filter-seal">Sello</label>
-                            <select id="source-filter-seal"><option value="">Todos</option><option value="pending_review">Rojo</option><option value="in_review">Naranja</option><option value="approved">Verde</option></select>
-                            <label for="source-filter-theme">Temática</label>
-                            <input type="text" id="source-filter-theme" placeholder="Tema">
-                            <label for="source-filter-origin">Origen</label>
-                            <input type="text" id="source-filter-origin" placeholder="Origen">
-                            <label for="source-filter-type">Tipo</label>
-                            <input type="text" id="source-filter-type" placeholder="Tipo de nota">
-                            <label for="source-filter-urgency">Urgencia</label>
-                            <input type="text" id="source-filter-urgency" placeholder="Urgencia">
-                            <label for="source-filter-date-from">Desde</label>
-                            <input type="date" id="source-filter-date-from">
-                            <label for="source-filter-date-to">Hasta</label>
-                            <input type="date" id="source-filter-date-to">
-                            <button type="button" class="btn-primary" data-onclick-command="applySourceFilters()">Aplicar filtros</button>
-                            <button type="button" class="clear" data-onclick-command="clearSourceFilters()">Limpiar filtros</button>
-                        </div>
                     </aside>
                     <aside id="source-search-drawer" class="ui-drawer source-search-drawer" role="dialog" aria-modal="false" aria-label="Buscar en Fuente" aria-hidden="true" hidden>
                         <div class="drawer-header"><h2>Buscar</h2><button type="button" class="icon-button" data-onclick-command="closeDrawer('source-search-drawer')" aria-label="Cerrar búsqueda"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"></path></svg></button></div>
@@ -372,14 +422,6 @@
                         <button type="button" class="btn-primary" data-onclick-command="runSourceSearch()">Buscar</button>
                         <div id="source-search-results" class="source-search-results" aria-live="polite"></div>
                     </aside>
-                    <aside id="source-chat-drawer" class="ui-drawer source-chat-drawer" role="dialog" aria-modal="false" aria-label="Consultar sobre la nota" aria-hidden="true" hidden>
-                        <div class="drawer-header"><h2>Consultar local</h2><button type="button" class="icon-button" data-onclick-command="closeDrawer('source-chat-drawer')" aria-label="Cerrar consulta"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"></path></svg></button></div>
-                        <form id="source-chat-form" class="workspace-chat-form">
-                            <label for="source-chat-input">Preguntar sobre esta nota</label>
-                            <textarea id="source-chat-input" rows="3" required></textarea>
-                            <button type="submit" class="btn-primary">Preguntar</button>
-                        </form>
-                        <div id="source-chat-answer" class="workspace-chat-answer" aria-live="polite"></div>
                     </aside>
                     <div id="source-actions-popover" class="source-actions-popover reader-actions" role="dialog" aria-label="Acciones de lectura" aria-hidden="true" hidden>
                         <button type="button" class="btn-small" data-onclick-command="triggerAction('copy_reader_note', {}, this)"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><rect x="8" y="8" width="11" height="11" rx="1"></rect><path d="M5 15H4V4h11v1"></path></svg>Copiar</button>
@@ -1079,6 +1121,7 @@
                 'toggleSourceActionsPopover()': toggleSourceActionsPopover,
                 'cycleSourceOrder()': cycleSourceOrder,
                 'clearSourceFilters()': clearSourceFilters,
+                'toggleFilterPopover()': toggleFilterPopover,
                 'toggleCaudalImportMenu()': toggleCaudalImportMenu,
                 'printCurrentNote()': printCurrentNote,
                 'openCurrentNoteFile()': openCurrentNoteFile,
@@ -1563,7 +1606,7 @@ document.addEventListener('keydown', handleShellKeydown);
             const heading = document.querySelector('#workspace-' + workspaceId + ' h1');
             if (heading) heading.focus({preventScroll: true});
             if (workspaceId === 'source') loadReaderNotes();
-            if (workspaceId === 'flow') {
+            if (workspaceId === 'flow' && !document.body.getAttribute('data-capture-scenario')) {
                 loadFlowState();
                 refreshCaudalQueue();
             }
@@ -4257,6 +4300,8 @@ document.addEventListener('keydown', handleShellKeydown);
             if (view === 'feed') resetSourceFeed();
             if (view === 'relations') loadSourceRelationsPreview();
             persistUiState('source', 'workspace', {view: view});
+            const sourceRoot = document.getElementById('workspace-source');
+            if (sourceRoot) sourceRoot.classList.toggle('is-individual', view === 'individual');
         }
 
         function readSourceUiState() {
@@ -4268,35 +4313,50 @@ document.addEventListener('keydown', handleShellKeydown);
             ]).then(function(values) {
                 if (values[0]) sourceFilters = values[0];
                 if (values[1] && values[1].order) sourceOrder = values[1].order;
-                if (values[2] && values[2].view) switchSourceView(values[2].view);
+                if (values[2] && values[2].view && !document.body.getAttribute('data-capture-scenario')) switchSourceView(values[2].view);
                 if (values[3] && values[3].cursor) sourceFeedCursor = values[3].cursor;
             });
         }
 
+        function checkedFilterValues(name) {
+            return Array.from(document.querySelectorAll('input[name="' + name + '"]:checked')).map(function(input) {
+                return input.value;
+            });
+        }
+
         function applySourceFilters() {
+            const seals = checkedFilterValues('source-filter-seal');
+            const types = checkedFilterValues('source-filter-type');
             sourceFilters = {
-                seal: document.getElementById('source-filter-seal')?.value || '',
-                theme: document.getElementById('source-filter-theme')?.value || '',
-                origin: document.getElementById('source-filter-origin')?.value || '',
-                note_type: document.getElementById('source-filter-type')?.value || '',
-                urgency: document.getElementById('source-filter-urgency')?.value || '',
-                date_from: document.getElementById('source-filter-date-from')?.value || '',
-                date_to: document.getElementById('source-filter-date-to')?.value || ''
+                seal: seals[0] || '',
+                note_type: types[0] || '',
+                theme: '',
+                origin: '',
+                urgency: '',
+                date_from: '',
+                date_to: ''
             };
             persistUiState('source', 'filters', sourceFilters);
-            document.getElementById('btn-source-filter')?.classList.toggle('active', Boolean(sourceFilters.seal || sourceFilters.note_type || sourceFilters.theme));
-            closeDrawer('source-filter-drawer');
+            document.getElementById('btn-source-filter')?.classList.toggle('active', seals.length + types.length > 0);
             if (sourceView === 'filtered') renderSourceFilteredGrid();
             if (sourceView === 'feed') resetSourceFeed();
             if (sourceView === 'grid') renderSourceGrid();
         }
 
         function clearSourceFilters() {
-            ['source-filter-seal', 'source-filter-theme', 'source-filter-origin', 'source-filter-type', 'source-filter-urgency', 'source-filter-date-from', 'source-filter-date-to'].forEach(function(id) {
-                const field = document.getElementById(id);
-                if (field) field.value = '';
+            document.querySelectorAll('#source-filter-drawer input[type="checkbox"]').forEach(function(input) {
+                input.checked = false;
             });
             applySourceFilters();
+        }
+
+        function toggleFilterPopover() {
+            const drawer = document.getElementById('source-filter-drawer');
+            const button = document.getElementById('btn-source-filter');
+            if (!drawer) return;
+            if (drawer.hidden) openDrawer('source-filter-drawer', button);
+            else closeDrawer('source-filter-drawer');
+            if (button) button.classList.toggle('active', !drawer.hidden);
         }
 
         function cycleSourceOrder() {
@@ -4327,7 +4387,7 @@ document.addEventListener('keydown', handleShellKeydown);
                 seal.className = 'seal ' + sealClassName(item.seal || item.status);
                 card.appendChild(seal);
                 const title = document.createElement('h3');
-                title.textContent = item.title || 'Nota';
+                title.textContent = String(item.title || 'Nota').replace(/[\u2013\u2014]/g, '-');
                 card.appendChild(title);
                 const meta = document.createElement('div');
                 meta.className = 'meta';
@@ -4349,7 +4409,7 @@ document.addEventListener('keydown', handleShellKeydown);
             document.querySelectorAll('.modal-overlay.is-open').forEach(function(modal) {
                 if (modal.id !== 'modal-reader') closeModal(modal.id);
             });
-            ['source-filter-drawer', 'source-search-drawer', 'source-chat-drawer', 'source-context-drawer', 'flow-detail-drawer', 'flow-queue-drawer', 'flow-log-drawer'].forEach(closeDrawer);
+            ['source-filter-drawer', 'source-search-drawer', 'source-chat-drawer', 'source-context-drawer', 'flow-queue-drawer', 'flow-log-drawer'].forEach(closeDrawer);
             const popover = document.getElementById('source-actions-popover');
             if (popover) {
                 popover.hidden = true;
@@ -4365,6 +4425,68 @@ document.addEventListener('keydown', handleShellKeydown);
             document.querySelectorAll('.flow-stage.active').forEach(function(step) {
                 step.classList.remove('active');
             });
+        }
+
+        function restoreCaudalQueueFixture() {
+            const body = document.getElementById('caudal-queue-body');
+            const fixture = document.getElementById('caudal-queue-fixture');
+            if (!body || !fixture) return;
+            body.replaceChildren();
+            body.appendChild(fixture.content.cloneNode(true));
+        }
+
+        function seedMockupIdentity() {
+            restoreCaudalQueueFixture();
+            fillSourceRecent([
+                {title: 'Índice de contenido con ChromaDB', updated_at: '9 abr 2024', author: 'Javier Ruiz', excerpt: 'Cómo indexamos el contenido de las notas para permitir búsqueda rápida y relevancia.', seal: 'approved'},
+                {title: 'Principios de diseño', updated_at: '7 abr 2024', author: 'María Ortega', excerpt: 'Notas sobre los principios que guían las decisiones de diseño del sistema Fuente y Caudal.', seal: 'pending_review'},
+                {title: 'Flujo de consulta local', updated_at: '4 abr 2024', author: 'Javier Ruiz', excerpt: 'Descripción del flujo completo desde la pregunta del usuario hasta la respuesta consultada.', seal: 'in_review'}
+            ]);
+            const actions = document.getElementById('fuente-reader-actions');
+            if (actions) {
+                actions.hidden = false;
+                actions.setAttribute('aria-hidden', 'false');
+            }
+            const counts = {1: '134', 2: '98', 3: '76', 4: '58', 5: '42'};
+            Object.keys(counts).forEach(function(step) {
+                const badge = document.getElementById('badge-step' + step);
+                if (badge) badge.textContent = counts[step];
+            });
+            document.querySelectorAll('.flow-stage').forEach(function(step, index) {
+                step.classList.toggle('active', index === 3);
+            });
+            const pending = document.getElementById('count-seal-pending');
+            const review = document.getElementById('count-seal-review');
+            const approved = document.getElementById('count-seal-approved');
+            const quarantine = document.getElementById('count-quarantine-footer');
+            if (pending) pending.textContent = '12';
+            if (review) review.textContent = '7';
+            if (approved) approved.textContent = '86';
+            if (quarantine) quarantine.textContent = '3';
+            const detail = document.getElementById('flow-detail-drawer');
+            if (detail) {
+                detail.hidden = false;
+                detail.setAttribute('aria-hidden', 'false');
+            }
+            const selected = document.querySelector('#caudal-queue-body tr[data-file="Contrato_Servicios_v3.docx"]');
+            if (selected) {
+                document.querySelectorAll('#caudal-queue-body tr').forEach(function(row) { row.classList.remove('selected'); });
+                selected.classList.add('selected');
+            }
+            const preview = document.getElementById('template-preview-body');
+            if (preview && !preview.textContent.trim()) {
+                preview.textContent = 'Objetivo\n{objetivo}\n\nAgenda\n{agenda}';
+            }
+            const searchResults = document.getElementById('source-search-results');
+            if (searchResults && !searchResults.childElementCount) {
+                ['Decisiones de arquitectura Q1 2025', 'Arquitectura modular', 'Plan de lanzamiento v2.0'].forEach(function(title) {
+                    const row = document.createElement('button');
+                    row.type = 'button';
+                    row.className = 'source-search-result';
+                    row.textContent = title;
+                    searchResults.appendChild(row);
+                });
+            }
         }
 
         function applyCaptureScenario(name) {
@@ -4405,45 +4527,87 @@ document.addEventListener('keydown', handleShellKeydown);
                 openModal('modal-settings');
             } else if (name === 'source-1024' || name === 'source-view-modes') {
                 switchWorkspace('source');
-                switchSourceView(name === 'source-view-modes' ? 'grid' : 'individual');
+                switchSourceView('individual');
+                seedMockupIdentity();
+                if (name === 'source-view-modes') {
+                    openDrawer('source-filter-drawer', document.getElementById('btn-source-filter'));
+                    document.getElementById('btn-source-filter')?.classList.add('active');
+                }
             } else if (name === 'source-search-relations') {
                 switchWorkspace('source');
+                seedMockupIdentity();
                 switchSourceView('relations');
                 openDrawer('source-search-drawer');
                 switchSourceSearchMode('relations');
             } else if (name === 'source-context-reopened') {
                 switchWorkspace('source');
                 switchSourceView('individual');
+                seedMockupIdentity();
                 setReaderContextVisibility(true);
             } else if (name === 'anythingllm-chat') {
                 switchWorkspace('source');
                 switchSourceView('individual');
+                seedMockupIdentity();
                 openDrawer('source-chat-drawer');
             } else if (name === 'template-helper') {
                 switchWorkspace('home');
+                seedMockupIdentity();
                 openModal('modal-template-helper');
             } else if (name === 'source-open-obsidian') {
                 switchWorkspace('source');
+                switchSourceView('individual');
+                seedMockupIdentity();
                 triggerAction('open_obsidian', {}, document.getElementById('btn-source-actions'));
             } else if (name === 'caudal-pipeline') {
                 switchWorkspace('flow');
-                document.querySelectorAll('.flow-stage')[3]?.classList.add('active');
+                seedMockupIdentity();
+                const importMenu = document.getElementById('caudal-import-menu');
+                if (importMenu) importMenu.hidden = false;
             } else if (name === 'caudal-seals') {
                 switchWorkspace('flow');
-                openDrawer('flow-detail-drawer');
+                seedMockupIdentity();
+                const importMenu = document.getElementById('caudal-import-menu');
+                if (importMenu) importMenu.hidden = true;
             } else if (name === 'caudal-feed-link') {
-                switchWorkspace('flow');
-                openSourceFeedFromCounter(document.querySelector('[data-caudal-feed-filter]'));
+                switchWorkspace('source');
+                switchSourceView('feed');
+                seedMockupIdentity();
             } else if (name === 'flow-1024') {
                 switchWorkspace('flow');
+                seedMockupIdentity();
                 toggleCaudalImportMenu();
             } else if (name.indexOf('source') === 0) {
                 switchWorkspace('source');
                 switchSourceView('individual');
+                seedMockupIdentity();
             } else if (name.indexOf('flow') === 0 || name.indexOf('caudal') === 0) {
                 switchWorkspace('flow');
+                seedMockupIdentity();
             } else {
                 switchWorkspace('home');
+            }
+            if (/source|flow|caudal|template|anythingllm/.test(name)) {
+                window.setTimeout(function() {
+                    seedMockupIdentity();
+                    if (name === 'source-view-modes' || name === 'anythingllm-chat' || name === 'source-1024' || name === 'source-open-obsidian' || name === 'source-context-reopened') {
+                        switchSourceView('individual');
+                    }
+                    if (name === 'source-view-modes') {
+                        openDrawer('source-filter-drawer', document.getElementById('btn-source-filter'));
+                        document.getElementById('btn-source-filter')?.classList.add('active');
+                    }
+                    if (name === 'anythingllm-chat') {
+                        openDrawer('source-chat-drawer');
+                    }
+                    if (name === 'caudal-pipeline') {
+                        const importMenu = document.getElementById('caudal-import-menu');
+                        if (importMenu) importMenu.hidden = false;
+                    }
+                    if (name === 'caudal-feed-link') {
+                        switchWorkspace('source');
+                        switchSourceView('feed');
+                    }
+                }, 400);
             }
             return name;
         }
@@ -5099,6 +5263,10 @@ document.addEventListener('keydown', handleShellKeydown);
         }
 
         function loadReaderNotes() {
+            if (document.body.getAttribute('data-capture-scenario')) {
+                seedMockupIdentity();
+                return;
+            }
             if (isExplicitPreviewMode()) {
                 renderNoteList(LOCAL_MOCK_NOTES.map(function(n, index) {
                     return {
@@ -5414,6 +5582,10 @@ document.addEventListener('keydown', handleShellKeydown);
         let caudalSelectedJobId = null;
 
         function renderFlowState(state) {
+            if (document.body.getAttribute('data-capture-scenario')) {
+                seedMockupIdentity();
+                return;
+            }
             if (!state || state.error) return;
             const seals = state.seals || {};
             const noteTypes = state.note_types || {};
@@ -5485,6 +5657,7 @@ document.addEventListener('keydown', handleShellKeydown);
         }
 
         function refreshCaudalQueue() {
+            if (document.body.getAttribute('data-capture-scenario')) return;
             if (!window.pywebview || !window.pywebview.api || typeof window.pywebview.api.get_jobs !== 'function') return;
             const filters = caudalQueueFilter === 'completed'
                 ? {status: 'completed'}
@@ -5492,9 +5665,11 @@ document.addEventListener('keydown', handleShellKeydown);
             return window.pywebview.api.get_jobs(filters, 25, null).then(function(page) {
                 const body = document.getElementById('caudal-queue-body');
                 if (!body) return;
+                if (document.body.getAttribute('data-capture-scenario')) return;
                 body.replaceChildren();
                 const items = Array.isArray(page.items) ? page.items : [];
                 if (!items.length) {
+                    if (document.querySelector('#caudal-queue-body tr[data-file]')) return;
                     const row = document.createElement('tr');
                     const cell = document.createElement('td');
                     cell.colSpan = 4;

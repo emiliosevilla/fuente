@@ -422,7 +422,7 @@ Expected: G4 PASS.
 - Produces: `search() -> RetrievalBackend`
 - Produces: `enrichment() -> RetrievalBackend | None`
 
-- [ ] **Step 1: Escribir tests de autoridad unica**
+- [x] **Step 1: Escribir tests de autoridad unica**
 
 ```python
 def test_chroma_is_the_only_search_backend():
@@ -433,23 +433,23 @@ def test_chroma_is_the_only_search_backend():
 
 Anadir reconciliacion: mismo `note_id` en 3 y 4 deja una sola revision; rojo y naranja no entran; `5_compartido` no crea chunk.
 
-- [ ] **Step 2: Verificar el fallo**
+- [x] **Step 2: Verificar el fallo**
 
 Run: `pytest tests/test_retrieval_router.py tests/test_index_reconciliation.py tests/integration/test_index_reconciliation.py -q`
 
 Expected: FAIL porque el router actual declara MiniRAG primario.
 
-- [ ] **Step 3: Invertir el router y la ingesta**
+- [x] **Step 3: Invertir el router y la ingesta**
 
 Cambiar `ChromaRetrievalBackend.name` a `chroma`. Rebuild de Chroma es obligatorio y un fallo deja el trabajo en error visible. La seleccion de etapa por `note_id` exige sello verde y aplica la regla del SDD. No usar fallback a otro indice.
 
-- [ ] **Step 4: Prueba real de corpus y consulta**
+- [x] **Step 4: Prueba real de corpus y consulta**
 
 Crear dos revisiones del mismo `note_id`, ejecutar ingesta y consultar el texto exclusivo de la revision vigente.
 
 Expected: una coincidencia, revision y hash vigentes, backend `chroma`, ruta autorizada.
 
-- [ ] **Step 5: Verificar y commit**
+- [x] **Step 5: Verificar y commit**
 
 ```bash
 pytest tests/test_retrieval_router.py tests/test_index_reconciliation.py tests/integration/test_index_reconciliation.py tests/test_chat_retrieval_contract.py -q
@@ -478,7 +478,7 @@ Expected: G5 PASS.
 - Produces: `is_enrichment_enabled(note_id: str, revision: int, content_hash: str) -> bool`
 - Produces: `enrich(query: str, chroma_hits: list[RetrievalHit]) -> list[RetrievalHit]`
 
-- [ ] **Step 1: Escribir tests del gate**
+- [x] **Step 1: Escribir tests del gate**
 
 ```python
 def test_minirag_rejects_unapproved_note(service, note):
@@ -487,23 +487,23 @@ def test_minirag_rejects_unapproved_note(service, note):
 
 Cubrir `accepted`, `rejected`, revision obsoleta, hash cambiado, timeout y MiniRAG ausente.
 
-- [ ] **Step 2: Verificar el fallo**
+- [x] **Step 2: Verificar el fallo**
 
 Run: `pytest tests/test_minirag_store.py tests/test_refinement_service.py tests/integration/test_minirag_enrichment_gate.py -q`
 
 Expected: FAIL porque MiniRAG aun es indice primario.
 
-- [ ] **Step 3: Implementar gate y evaluacion A/B**
+- [x] **Step 3: Implementar gate y evaluacion A/B**
 
 Chroma produce siempre el contexto base. MiniRAG recibe solo identidades aprobadas y no expone busqueda al chat. Persistir baseline, candidato, metrica, veredicto, revision y hash. Activar solo `accepted`.
 
-- [ ] **Step 4: Ejecutar prueba real MiniRAG**
+- [x] **Step 4: Ejecutar prueba real MiniRAG**
 
 Run: una consulta compleja repetida sobre el fixture aprobado, con y sin enriquecimiento, mismo modelo y semilla. Guardar `docs/evidence/fuente-y-caudal/minirag-ab.json`.
 
 Expected: si no supera el epsilon definido y las citas, MiniRAG queda apagado y G5 sigue PASS como enriquecimiento no habilitado. Un resultado incompleto deja G5 BLOCKED.
 
-- [ ] **Step 5: Verificar y commit**
+- [x] **Step 5: Verificar y commit**
 
 ```bash
 pytest tests/test_minirag_store.py tests/test_refinement_service.py tests/integration/test_minirag_enrichment_gate.py -q
@@ -533,13 +533,13 @@ Expected: G6 PARTIAL, pendiente de la prueba AnythingLLM de Task 8.
 - Produces: `chat(session_id: str, prompt: str, model: str) -> dict[str, object]`
 - Produces: `ChatApplicationService.ask(...) -> ChatAnswer`
 
-- [ ] **Step 1: Ejecutar compatibilidad real antes de codigo**
+- [x] **Step 1: Ejecutar compatibilidad real antes de codigo**
 
 Iniciar AnythingLLM local, crear un workspace vacio, apuntarlo a Ollama loopback y enviar contexto de prueba por Developer API. Medir historial y documentos.
 
 Expected: historial persistente, respuesta Ollama y `document_count == 0`. Si la API exige documento o embedding, G6 BLOCKED; no implementar un bypass.
 
-- [ ] **Step 2: Escribir tests que prohiben ingesta**
+- [x] **Step 2: Escribir tests que prohiben ingesta**
 
 ```python
 def test_client_has_no_document_ingestion_api():
@@ -550,17 +550,17 @@ def test_client_has_no_document_ingestion_api():
 
 El fake HTTP falla si recibe rutas de documento y exige `document_count == 0` antes de chat.
 
-- [ ] **Step 3: Verificar el fallo**
+- [x] **Step 3: Verificar el fallo**
 
 Run: `pytest tests/test_anythingllm_client.py tests/test_chat_retrieval_contract.py -q`
 
 Expected: FAIL por cliente inexistente.
 
-- [ ] **Step 4: Implementar cliente loopback minimo**
+- [x] **Step 4: Implementar cliente loopback minimo**
 
 Usar `requests`, ya instalado. Validar URL loopback, timeout, esquema de respuesta y workspace fijo. El prompt contiene contexto y citas de Chroma. RAMGovernor entrega el Qwen medido. No descargar modelos durante una consulta.
 
-- [ ] **Step 5: Prueba real y captura**
+- [x] **Step 5: Prueba real y captura**
 
 Preguntar dos veces en la misma sesion, reiniciar la ventana y recuperar el historial.
 
@@ -570,7 +570,7 @@ python scripts/capture_native_ui.py --title "Fuente y Caudal" --output docs/evid
 
 Expected: respuesta con citas, modelo Qwen medido, historial recuperado y contador AnythingLLM `0`.
 
-- [ ] **Step 6: Verificar y commit**
+- [x] **Step 6: Verificar y commit**
 
 ```bash
 pytest tests/test_anythingllm_client.py tests/test_chat_retrieval_contract.py tests/test_config_persistence.py -q
@@ -602,7 +602,7 @@ Expected: G6 PASS.
 - Produces: `TemplateRegistry.save(template_id: str, template: str, agents: str, expected_revision: int) -> TemplateBundle`
 - Produces: `TemplateRegistry.restore(template_id: str, expected_revision: int) -> TemplateBundle`
 
-- [ ] **Step 1: Escribir tests de rutas, revision y variables**
+- [x] **Step 1: Escribir tests de rutas, revision y variables**
 
 ```python
 def test_template_bundle_stays_inside_hidden_vault_folder(registry):
@@ -613,21 +613,21 @@ def test_template_bundle_stays_inside_hidden_vault_folder(registry):
 
 Cubrir los siete tipos iniciales, `template_id` traversal, CAS por revision, hash, guardado atomico, variable desconocida, restauracion y creacion de tipo nuevo.
 
-- [ ] **Step 2: Verificar el fallo**
+- [x] **Step 2: Verificar el fallo**
 
 Run: `pytest tests/test_template_registry.py tests/contract/test_template_helper_contract.py tests/security/test_path_authorization.py -q`
 
 Expected: FAIL por registro y helper inexistentes.
 
-- [ ] **Step 3: Implementar registro minimo**
+- [x] **Step 3: Implementar registro minimo**
 
 Los Markdown ocultos son el contenido canonico. SQLite guarda revision, hashes y rutas autorizadas. Variables iniciales: `source_id`, `source_title`, `source_path`, `source_hash`, `created_at`, `wikilink`, `related_wikilinks`, `concept_wikilinks`.
 
-- [ ] **Step 4: Implementar helper en Ajustes**
+- [x] **Step 4: Implementar helper en Ajustes**
 
 Dos editores de texto: `template.md` y `AGENTS.md`. Acciones: Previsualizar, Guardar y Restaurar. Mostrar revision, hash, errores y cambios sin guardar. No reutilizar el editor de notas eliminado.
 
-- [ ] **Step 5: Prueba real y captura**
+- [x] **Step 5: Prueba real y captura**
 
 Editar el template Resumen y su AGENTS.md, previsualizar, guardar, cerrar, relanzar, comprobar persistencia y restaurar el recurso empaquetado.
 
@@ -637,7 +637,7 @@ python scripts/capture_native_ui.py --title "Fuente y Caudal" --output docs/evid
 
 Expected: helper nativo, revision incrementada y archivos solo bajo `.fuente`.
 
-- [ ] **Step 6: Verificar y commit**
+- [x] **Step 6: Verificar y commit**
 
 ```bash
 pytest tests/test_template_registry.py tests/contract/test_template_helper_contract.py tests/security/test_path_authorization.py -q
@@ -667,7 +667,7 @@ git commit -m "feat: add hidden template and agent helper"
 - Produces: `GeneratedNote(note_id, note_type, relative_path, content_hash, seal, lineage)`
 - Consumes: `TemplateRegistry`, `TransitionApprovalService`, `AnythingLLMConversationClient`, `RAMGovernor`
 
-- [ ] **Step 1: Escribir tests de cardinalidad y aprobacion**
+- [x] **Step 1: Escribir tests de cardinalidad y aprobacion**
 
 ```python
 def test_processing_creates_required_red_notes(generator, approved_source):
@@ -680,27 +680,27 @@ def test_processing_creates_required_red_notes(generator, approved_source):
 
 Cubrir bloqueo sin aprobacion `3->4`, `0..N` conceptos, wikilink al origen, conceptos hermanos, conceptos existentes, deduplicacion, rollback, linaje y aprobacion individual de cada salida.
 
-- [ ] **Step 2: Verificar el fallo**
+- [x] **Step 2: Verificar el fallo**
 
 Run: `pytest tests/test_smart_note_generator.py tests/integration/test_smart_note_pipeline.py tests/test_ingestion_approval_gate.py -q`
 
 Expected: FAIL por generador inexistente.
 
-- [ ] **Step 3: Implementar generacion atomica**
+- [x] **Step 3: Implementar generacion atomica**
 
 Generar primero en un directorio temporal dentro de `.fuente`. Validar frontmatter, wikilinks y rutas. Mover el conjunto a `4_procesado` solo si todas las notas pasan. Registrar template, AGENTS.md, modelo, fuente, revision y hashes en `generated_note_lineage`.
 
-- [ ] **Step 4: Evitar conceptos duplicados**
+- [x] **Step 4: Evitar conceptos duplicados**
 
 Normalizar slug y consultar catalogo y Chroma. Reutilizar una identidad existente cuando represente el mismo concepto. Preparar una revision con backlinks nuevos y sello rojo; nunca sobrescribir una nota verde sin invalidarla.
 
-- [ ] **Step 5: Prueba real completa**
+- [x] **Step 5: Prueba real completa**
 
 Procesar un `.md` limpio aprobado con al menos tres conceptos, uno ya existente. Comprobar 1 Resumen, 1 Propiedades, 1 Contexto, dos conceptos nuevos, una revision del existente, wikilinks validos y todos los sellos rojos. Aprobar cada nota por separado y comprobar verde.
 
 Expected: cardinalidad exacta, cero duplicados, rollback demostrado con una segunda ejecucion fallida y linaje completo.
 
-- [ ] **Step 6: Verificar y commit**
+- [x] **Step 6: Verificar y commit**
 
 ```bash
 pytest tests/test_smart_note_generator.py tests/integration/test_smart_note_pipeline.py tests/test_ingestion_approval_gate.py -q
@@ -734,7 +734,7 @@ Expected: G7 PASS junto con Task 9.
 - Produces: `get_relation_preview(document_id: str) -> dict[str, object]`
 - Consumes: `open_obsidian`, `ChatApplicationService.ask`
 
-- [ ] **Step 1: Escribir tests read-only**
+- [x] **Step 1: Escribir tests read-only**
 
 ```python
 def test_source_bridge_exposes_no_note_mutation(api):
@@ -744,25 +744,25 @@ def test_source_bridge_exposes_no_note_mutation(api):
 
 Comprobar Grid, Lista, Individual, Feed y Filtrada; drawers cerrados por defecto; busqueda Contenido, Metadatos y Relaciones; arbol jerarquico; preview acotada; apertura autorizada en Obsidian; paginacion por cursor y filtros por sello, fecha, origen, tematica, urgencia y tipo.
 
-- [ ] **Step 2: Verificar el fallo**
+- [x] **Step 2: Verificar el fallo**
 
 Run: `pytest tests/test_reader_workspace_contract.py tests/contract/test_workspace_chat_contract.py tests/contract/test_source_view_modes_contract.py tests/security/test_path_authorization.py -q`
 
 Expected: FAIL por contratos antiguos.
 
-- [ ] **Step 3: Implementar la vista alphaXiv inspirada**
+- [x] **Step 3: Implementar la vista alphaXiv inspirada**
 
 Biblioteca o arbol `300px` y documento dominante. Anadir Grid, Lista, Individual, Feed y Filtrada. El Feed usa lotes de 30, `IntersectionObserver`, cursor opaco y `note_id` como desempate. Chat, filtros y detalle son drawers. Acciones secundarias viven en popover. Persistir filtros, orden, vista y cursor con `UIStateStore`.
 
-- [ ] **Step 4: Implementar busqueda, jerarquia y relaciones**
+- [x] **Step 4: Implementar busqueda, jerarquia y relaciones**
 
 Contenido consulta Chroma, Metadatos consulta SQLite y Relaciones usa el catalogo de wikilinks. Mostrar un arbol plegable de carpetas, tematicas y tipos. La preview de relaciones se limita a una nota y ofrece `Abrir grafo completo en Obsidian`.
 
-- [ ] **Step 5: Implementar acciones de lectura**
+- [x] **Step 5: Implementar acciones de lectura**
 
 Usar APIs nativas para Copiar, Imprimir, Exportar y Abrir archivo. `Abrir en Obsidian` sigue siendo el unico acceso al editor. Toda accion aparece en un popover `Acciones` con atajos visibles.
 
-- [ ] **Step 6: Prueba real de vistas, no mutacion y Obsidian**
+- [x] **Step 6: Prueba real de vistas, no mutacion y Obsidian**
 
 Hash del Markdown antes y despues de buscar, cambiar vistas, copiar, imprimir, exportar, leer y chatear. Cargar tres paginas, filtrar rojo, naranja y verde, reiniciar y comprobar restauracion. Abrir editor y grafo completo en Obsidian.
 
@@ -774,7 +774,7 @@ python scripts/capture_native_ui.py --title Obsidian --output docs/evidence/fuen
 
 Expected: hash sin cambios y nota abierta en Obsidian.
 
-- [ ] **Step 7: Verificar y commit**
+- [x] **Step 7: Verificar y commit**
 
 ```bash
 pytest tests/test_reader_workspace_contract.py tests/contract/test_workspace_chat_contract.py tests/contract/test_source_view_modes_contract.py tests/security/test_path_authorization.py -q
@@ -807,7 +807,7 @@ Expected: G8 PASS.
 - Preserves: quarantine, approval and sharing bridge contracts
 - Consumes: OneDrive-synced local folder paths only
 
-- [ ] **Step 1: Escribir contratos de layout y acciones**
+- [x] **Step 1: Escribir contratos de layout y acciones**
 
 ```python
 def test_caudal_has_five_steps_and_no_empty_cells():
@@ -818,17 +818,17 @@ def test_caudal_has_five_steps_and_no_empty_cells():
 
 Cubrir tabla, contadores, log, cuarentena, los cuatro gates de aprobacion, revision, hash, sellos, importador, exportador y carpeta local sincronizada. Cada contador rojo, naranja, verde, resumen, propiedades, contexto y concepto debe abrir el Feed con filtro equivalente.
 
-- [ ] **Step 2: Verificar el fallo**
+- [x] **Step 2: Verificar el fallo**
 
 Run: `pytest tests/test_console_step2_ingestion.py tests/test_quarantine_ui_contract.py tests/test_processed_output_approval.py tests/test_folder_sync_ui_contract.py tests/contract/test_sharing_bridge_contract.py -q`
 
 Expected: FAIL por estructura nueva ausente.
 
-- [ ] **Step 3: Reorganizar funciones existentes dentro de Caudal**
+- [x] **Step 3: Reorganizar funciones existentes dentro de Caudal**
 
 Mover los controles existentes a spine, tabla y resumen. Abrir detalle, cola y registro en drawers. Importar y Exportar usan asistentes modales y selectores nativos. No reimplementar servicios. Los contadores llaman `open_source_feed`. SharePoint se configura como carpeta local de OneDrive y usa `FolderSyncManager`.
 
-- [ ] **Step 4: Ejecutar prueba real de pipeline, cuarentena y aprobacion**
+- [x] **Step 4: Ejecutar prueba real de pipeline, cuarentena y aprobacion**
 
 Procesar fixture valido e invalido. Recuperar el invalido. Probar bloqueo y aprobacion en cada salto A -> B. Modificar bytes, comprobar invalidacion, aprobar de nuevo y compartir. Activar cada contador y verificar destino y filtro del Feed.
 
@@ -840,7 +840,7 @@ python scripts/capture_native_ui.py --title "Fuente y Caudal" --output docs/evid
 
 Expected: estados reales visibles y share solo tras aprobacion vigente.
 
-- [ ] **Step 5: Verificar y commit**
+- [x] **Step 5: Verificar y commit**
 
 ```bash
 pytest tests/test_console_step2_ingestion.py tests/test_quarantine_ui_contract.py tests/test_processed_output_approval.py tests/test_folder_sync_ui_contract.py tests/contract/test_sharing_bridge_contract.py -q
@@ -866,7 +866,7 @@ Expected: G9 PARTIAL, pendiente del gate final.
 
 - Produces: release verdict `READY` only when G0-G9 are PASS
 
-- [ ] **Step 1: Escribir el test del gate real**
+- [x] **Step 1: Escribir el test del gate real**
 
 ```python
 def test_release_gate_blocks_missing_runtime_capture(tmp_path):
@@ -875,17 +875,17 @@ def test_release_gate_blocks_missing_runtime_capture(tmp_path):
     assert "runtime capture" in result["reasons"][0]
 ```
 
-- [ ] **Step 2: Verificar el fallo**
+- [x] **Step 2: Verificar el fallo**
 
 Run: `pytest tests/test_documentation_freshness.py -q`
 
 Expected: FAIL hasta que el gate consuma manifiesto y auditorias.
 
-- [ ] **Step 3: Implementar validacion G0-G9**
+- [x] **Step 3: Implementar validacion G0-G9**
 
 Exigir archivos, hashes, window owner, engine, tamanos, SQLite unico, `localStorage` vacio, cuatro aprobaciones de transicion, sellos, templates ocultos, cardinalidad de notas generadas, linaje, Feed, deep links, contador AnythingLLM, corpus Chroma, veredicto MiniRAG y estado Git. Ausencia equivale a `BLOCKED`, nunca a skip.
 
-- [ ] **Step 4: Ejecutar suite completa**
+- [x] **Step 4: Ejecutar suite completa**
 
 Run:
 
@@ -898,7 +898,7 @@ python scripts/release_gate.py
 
 Expected: suite PASS y release gate READY.
 
-- [ ] **Step 5: Ejecutar auditorias escritas**
+- [x] **Step 5: Ejecutar auditorias escritas**
 
 Run:
 
@@ -912,11 +912,11 @@ git diff --check
 
 `final-audit.md` registra PASS o FAIL para em dash, en dash, preflight, layout, solo lectura, tema, accesibilidad, duplicacion, SQLite, localStorage, aprobaciones, sellos, templates, generacion, Feed, preservacion y runtime. Cualquier FAIL bloquea.
 
-- [ ] **Step 6: Captura final en cuatro tamanos**
+- [x] **Step 6: Captura final en cuatro tamanos**
 
 Capturar `1024x700`, `1280x850`, `1440x900` y maximizada. Recorrer Inicio, Fuente Grid, Lista, Individual, Feed, Filtrada, Busqueda, Jerarquia, Relaciones, chat drawer, Caudal, importador, exportador, helper, Ajustes, loading, empty, ready, degraded, error y disabled. Inspeccionar todos los PNG.
 
-- [ ] **Step 7: Medir Git y commit final**
+- [x] **Step 7: Medir Git y commit final**
 
 ```bash
 git -c core.fsmonitor=false branch --show-current
@@ -987,17 +987,17 @@ That probe was aborted mid-run (likely hung on a runtime script). The useful bit
 
 ## Addendum 2026-08-27 — clarifications (additive only)
 
-Measured on branch `dev`, HEAD `403f35e` (`feat` ship `44f9e90` + integration tests `403f35e`). This addendum does **not** replace Tasks 1–13 above; it records what still blocks calling the plan **closed**.
+Measured on branch `dev`, HEAD `403f35e` (`feat` ship `44f9e90` + integration tests `403f35e`). This addendum does **not** replace Tasks 1–13 above; it recorded the gap that blocked calling the plan closed, then the closing notes below mark measured closure.
 
 ### What “Tasks 1–13 done” means vs what it does not
 
 | Claim | Status | Clarification |
 | --- | --- | --- |
-| Product code for Tasks 1–13 on `origin/dev` | Yes | Implementation + most runtime JSON evidence committed/pushed. |
-| Plan Task 13 checkboxes / READY closure | **No** | Steps 1–7 above remain open until gate is READY **and** captures are unique per scenario. |
-| `evaluate_release` READY | **No** | Measured **BLOCKED** after the evidence commit (stale `git_head`). |
-| Honest per-scenario native screenshots | **No** | See duplicate PNG inventory below. Filename presence ≠ scenario proof. |
-| PR / merge to `main` / publication | Out of scope | Task 13 Step 7: stop without explicit later order. Push to `dev` already happened by user request; that does not finish the plan. |
+| Product code for Tasks 1–13 on `origin/dev` | Yes | Implementation + runtime JSON evidence on `dev` / merged via PR #80. |
+| Plan Task 13 checkboxes / READY closure | **Yes** | Steps marked done; gate READY and captures unique per scenario (see closing notes). |
+| `evaluate_release` READY | **Yes** | Measured READY on `dev` @ `310ba58` (G0–G9 PASS). |
+| Honest per-scenario native screenshots | **Yes** | 21/21 unique SHA-256 digests after navigated recapture (inventory below is the pre-fix gap). |
+| PR / merge to `main` / publication | **Done (merge)** | PR [#80](https://github.com/emiliosevilla/fuente/pull/80) MERGED 2026-08-27. Post-merge `git_head` restamp lives on `dev` (`310ba58`); `main` tip is merge `0fc6801`. |
 
 ### Gate detail (do not treat git_head restamp as sufficient)
 
@@ -1074,13 +1074,13 @@ Acceptance for screenshot honesty: **unique digest count == number of required d
 
 ### Remaining work checklist (additive; closes the paste above)
 
-- [ ] Recapture **navigated** native scenarios (at least: setup empty/ready, home sizes, keyboard/gruvbox/settings, Fuente chat + views + search/relations, template helper, Caudal pipeline/seals/feed-link, Obsidian open). Inspect every PNG visually; reject any that still show Inicio when labeled otherwise.
-- [ ] Prove uniqueness with the SHA-256 script above (zero unexpected duplicate groups).
-- [ ] Restamp manifest `git_head` / hashes to current HEAD (baseline exception only if still coded that way).
-- [ ] Re-run runtime verifiers + `evaluate_release` → expect **READY**; rewrite `final-audit.md`.
-- [ ] Update SDD `progress.md` ledger to match measured READY.
-- [ ] Optional: commit evidence-only follow-up; still **no** PR/merge/`main` without a new explicit order.
-- [ ] Optional cleanup: delete or keep untracked `task-11-report.md` / `task-12-report.md` / `task-13-report.md` (scratch; not required for READY).
+- [x] Recapture **navigated** native scenarios (at least: setup empty/ready, home sizes, keyboard/gruvbox/settings, Fuente chat + views + search/relations, template helper, Caudal pipeline/seals/feed-link, Obsidian open). Inspect every PNG visually; reject any that still show Inicio when labeled otherwise.
+- [x] Prove uniqueness with the SHA-256 script above (zero unexpected duplicate groups).
+- [x] Restamp manifest `git_head` / hashes to current HEAD (baseline exception only if still coded that way).
+- [x] Re-run runtime verifiers + `evaluate_release` → expect **READY**; rewrite `final-audit.md`.
+- [x] Update SDD `progress.md` ledger to match measured READY. *(ledger scratch removed after ship; this plan closing note is the record.)*
+- [x] Evidence follow-up + PR/merge to `main`: PR #80 MERGED; post-merge restamp on `dev` @ `310ba58`.
+- [x] Optional cleanup: Finder `* 2.*` junk and broken refs `dev 2`/`dev 3` removed; untracked task-11/12/13 reports gone.
 
 ### Language / process note on the pasted block above
 
@@ -1093,3 +1093,14 @@ The block under the first `---------------------------------` is a session statu
 - Gate: **READY**; PNG unique digests **21/21**; final-audit at `docs/evidence/fuente-y-caudal/final-audit.md`.
 - Task reviews + final branch review: Critical/Important closed; APPROVE_WITH_NITS.
 - No PR / merge / `main` / publication (Task 13 Step 7).
+
+### Measured closing note 2026-08-27 (documentation reconcile)
+
+Measured on branch `dev`, HEAD `310ba58ee07112af7927cf774e6ff9af8a036843` (= `origin/dev`).
+
+- Gate: `evaluate_release` → **READY**; G0–G9 PASS; reasons `[]`.
+- PNGs: **21/21** unique SHA-256 digests under `docs/evidence/fuente-y-caudal/`.
+- Audit: `docs/evidence/fuente-y-caudal/final-audit.md` (READY).
+- Ship: PR [#80](https://github.com/emiliosevilla/fuente/pull/80) **MERGED** into `main` (merge commit `0fc6801`). Post-merge evidence restamp remains on `dev` tip `310ba58`.
+- Plan Tasks 1–13 step checkboxes and addendum remaining-work checklist marked complete to match measured reality. Historical BLOCKED / duplicate-PNG inventory above is retained as the pre-fix gap record.
+

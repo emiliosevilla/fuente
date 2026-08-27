@@ -1,6 +1,6 @@
 # Fuente y Caudal: arquitectura y diseno de interfaz
 
-Estado: READY FOR IMPLEMENTATION
+Estado: IMPLEMENTED (gate READY; PR #80 merged 2026-08-27)
 Fecha: 2026-08-26
 Rama objetivo: `dev`
 Plan: `docs/superpowers/plans/2026-08-26-fuente-y-caudal-design.md`

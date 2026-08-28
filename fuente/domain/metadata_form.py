@@ -141,6 +141,7 @@ def metadata_form_snapshot(frontmatter: Mapping[str, Any]) -> dict[str, Any]:
         "title": str(frontmatter.get("title") or ""),
         "tags": [str(tag) for tag in frontmatter.get("tags", [])],
         "issue": str(frontmatter.get("issue") or "_Sin_Cuestion"),
+        "theme": str(frontmatter.get("theme") or "General"),
         "date": str(frontmatter.get("date") or ""),
         "status": str(frontmatter.get("status") or "pending_review"),
     }

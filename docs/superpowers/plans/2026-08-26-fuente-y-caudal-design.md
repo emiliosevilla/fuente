@@ -943,6 +943,12 @@ Lo que **sí queda** (el gate ya no está READY):
 
 Fuera del plan hasta orden explícita: PR `dev` → `main`, merge, release/publicación.
 
+### Posible trabajo futuro (cuando Thymer sea estable)
+
+- Evaluar una integración opcional con Thymer para colaboración multiusuario en
+  proyectos y uso de IA local sobre ese contexto, sin sustituir el Vault
+  Markdown ni la aprobación humana de Fuente.
+
 `★ Insight ─────────────────────────────────────` El commit de evidencia movió HEAD y, al exigir el gate `git_head == HEAD`, un ship correcto puede volver a dejar READY en rojo hasta restampar el manifiesto. `─────────────────────────────────────────────────`
 
 That `release_gate.py` run hung and was aborted. A faster `evaluate_release` already showed the real result: **BLOCKED** (capturas con `git_head` desactualizado respecto a `403f35e`).

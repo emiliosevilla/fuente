@@ -833,6 +833,28 @@ class FuenteConsoleBackend:
             "path": note.relative_path,
         }
 
+    def move_notes_to_theme(
+        self, document_ids: list[str], target_theme: str
+    ) -> Dict[str, Any]:
+        try:
+            return self.get_notes_service().move_notes_to_theme(document_ids, target_theme)
+        except PathAuthorizationError as error:
+            return self._path_error(error)
+        except (TypeError, ValueError, OSError) as error:
+            return {"error": "note_theme_change_failed", "message": str(error)}
+
+    def move_notes_to_status(
+        self, document_ids: list[str], target_status: str
+    ) -> Dict[str, Any]:
+        try:
+            return self.get_notes_service().move_notes_to_status(
+                document_ids, target_status
+            )
+        except PathAuthorizationError as error:
+            return self._path_error(error)
+        except (TypeError, ValueError, OSError) as error:
+            return {"error": "note_status_change_failed", "message": str(error)}
+
     def get_hierarchy(self) -> Dict[str, Any]:
         return self.get_notes_service().get_hierarchy()
 
@@ -2214,16 +2236,31 @@ class FuenteConsoleBackend:
             title = metadata.get("title") or title
             issue = metadata.get("issue") or issue or "_Sin_Cuestion"
             status = metadata.get("status") or status
+            theme = metadata.get("theme") or ""
         except (PathAuthorizationError, FrontmatterError, OSError):
             if not issue:
                 issue = "_Sin_Cuestion"
+            theme = ""
+        if not theme and self._job_store is not None:
+            catalog = self._job_store.get_note(document_id)
+            theme = str(catalog.get("theme") or "") if catalog else ""
+        theme = theme or "General"
+        seal = status if status in {"pending_review", "in_review", "approved"} else "pending_review"
+        if self._job_store is not None:
+            catalog = self._job_store.get_note(document_id)
+            if catalog is not None:
+                if status == "approved":
+                    seal = "approved"
+                elif status == "in_review" or self._job_store.has_active_review_claim(document_id):
+                    seal = "in_review"
         return {
             "document_id": document_id,
             "path": relative_path,
             "title": title,
             "issue": issue,
-            "theme": self.vault.active_theme,
+            "theme": theme,
             "status": status,
+            "seal": seal,
         }
 
     def get_notes_list(self) -> List[Dict[str, Any]]:

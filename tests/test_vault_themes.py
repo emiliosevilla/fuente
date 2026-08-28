@@ -25,10 +25,12 @@ class TestVaultThemesAndIssues(unittest.TestCase):
     def test_create_and_switch_theme(self):
         theme_dir = self.vault_mgr.create_theme("Derecho_Civil")
         self.assertTrue(theme_dir.exists())
+        self.assertEqual(theme_dir, self.vault_path)
         self.assertEqual(self.vault_mgr.active_theme, "Derecho_Civil")
         self.assertIn("Derecho_Civil", self.vault_mgr.get_available_themes())
         self.assertTrue((theme_dir / "1_volcado").exists())
         self.assertTrue((theme_dir / "4_procesado" / "_Sin_Cuestion").exists())
+        self.assertFalse((self.vault_path / "Derecho_Civil").exists())
 
     def test_create_issues_in_theme(self):
         self.vault_mgr.create_theme("Historia_Romana")

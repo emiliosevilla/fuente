@@ -92,6 +92,14 @@ def test_open_source_feed_returns_workspace_feed_payload(api):
     }
 
 
+def test_open_source_feed_accepts_note_type_order(api):
+    payload = api.open_source_feed({}, "note_type")
+
+    assert payload["order"] == "note_type"
+    page = api.list_feed(None, 30, {}, "note_type")
+    assert "error" not in page
+
+
 def test_get_flow_state_counts_seals_and_note_types(temp_vault_path, api):
     backend = FuenteConsoleBackend(temp_vault_path)
     store = JobStore(temp_vault_path)

@@ -264,11 +264,8 @@ class FolderSyncManager:
         self._extractor_registry = None
 
     def _default_active_theme_dir(self, active_theme: str) -> Path:
-        """Infer the legacy root only for callers without VaultManager context."""
-        if active_theme == "General":
-            general_dir = self.vault_root / "General"
-            return general_dir if general_dir.exists() else self.vault_root
-        return self.vault_root / active_theme
+        """Temas son metadatos; el sincronizador siempre usa la raíz ETL."""
+        return self.vault_root
 
     def _canonical_active_theme_dir(self, active_theme_dir: Path | str) -> Path:
         """Store one canonical vault root supplied by the trusted vault owner."""
@@ -325,7 +322,7 @@ class FolderSyncManager:
         return SyncDiagnostic(path=str(path), message=message, code=code)
 
     def _authorized_destination(self, path: Path, expected_root_name: str) -> Path:
-        """Authorize one direct ``1_volcado``/``2_copiado`` theme root."""
+        """Authorize one direct shared ``1_volcado``/``2_copiado`` root."""
         candidate = Path(path).expanduser()
         resolved = SourcePathAuthorizer(self.vault_root).resolve(candidate)
         expected = (self.active_theme_dir / expected_root_name).resolve(strict=False)
@@ -628,7 +625,7 @@ class FolderSyncManager:
         artifact.  A different source may not overwrite an occupied input or
         dirty path.
 
-        Both ``input_dir`` and ``dirty_dir`` must be the active Theme roots
+        Both ``input_dir`` and ``dirty_dir`` must be the shared Vault roots
         (typically ``VaultManager.input_dir`` / ``VaultManager.dirty_dir``).
         Never hardcode the General vault-root ``2_copiado``.
         """

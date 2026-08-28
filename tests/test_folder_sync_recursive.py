@@ -69,8 +69,8 @@ def test_sync_to_input_orders_source_files_by_provider_and_path(tmp_path):
         (root / "z" / "b.md").write_text(root.name, encoding="utf-8")
 
     vault = tmp_path / "vault"
-    active_input = vault / "Tema" / "1_volcado"
-    active_dirty = vault / "Tema" / "2_copiado"
+    active_input = vault / "1_volcado"
+    active_dirty = vault / "2_copiado"
     manager = FolderSyncManager(vault, active_theme="Tema")
     connections = [
         ConnectedFolder("network", str(network_root), "Network", True),
@@ -93,8 +93,8 @@ def test_sync_to_input_rejects_nested_destination_symlink_without_outside_write(
     tmp_path, destination_root
 ):
     vault = tmp_path / "vault"
-    active_input = vault / "Tema" / "1_volcado"
-    active_dirty = vault / "Tema" / "2_copiado"
+    active_input = vault / "1_volcado"
+    active_dirty = vault / "2_copiado"
     active_input.mkdir(parents=True)
     active_dirty.mkdir(parents=True)
 
@@ -150,9 +150,7 @@ def test_sync_to_input_enforces_manager_active_theme_context(tmp_path):
     manager = FolderSyncManager(vault, active_theme="TemaA")
 
     assert manager.active_theme == "TemaA"
-    assert manager.sync_to_input(
-        vault / "TemaA" / "1_volcado", vault / "TemaA" / "2_copiado"
-    ) == 0
+    assert manager.sync_to_input(vault / "1_volcado", vault / "2_copiado").copied == 0
 
     with pytest.raises(PathAuthorizationError):
         manager.sync_to_input(
@@ -169,7 +167,7 @@ def test_general_legacy_root_is_rejected_when_general_theme_directory_exists(tmp
     legacy_dirty.mkdir()
 
     vault = VaultManager(get_default_config(vault_path).vault)
-    assert vault.current_theme_dir == (vault_path / "General").resolve()
+    assert vault.current_theme_dir == vault_path.resolve()
 
     source = tmp_path / "provider"
     source.mkdir()
@@ -261,9 +259,8 @@ def test_scan_connection_reports_unreadable_root_without_mutation(tmp_path, monk
 
 def test_sync_to_input_returns_report_and_preserves_active_theme_scope(tmp_path):
     vault = tmp_path / "vault"
-    active_theme = vault / "Tema" / "1_volcado"
-    active_dirty = vault / "Tema" / "2_copiado"
-    general_input = vault / "1_volcado"
+    active_theme = vault / "1_volcado"
+    active_dirty = vault / "2_copiado"
     source = tmp_path / "source"
     (source / "nested").mkdir(parents=True)
     sample = source / "nested" / "sample.md"
@@ -279,5 +276,4 @@ def test_sync_to_input_returns_report_and_preserves_active_theme_scope(tmp_path)
     assert report.scanned == 1
     assert report.diagnostics == []
     assert (active_theme / "nested" / "sample.md").read_text(encoding="utf-8") == "from provider"
-    assert not general_input.exists()
     assert sample.read_text(encoding="utf-8") == "from provider"

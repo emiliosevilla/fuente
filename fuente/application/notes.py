@@ -383,6 +383,127 @@ class NotesApplicationService:
             reindex=False,
         )
 
+    def move_notes_to_theme(
+        self, document_ids: list[str], target_theme: str
+    ) -> dict[str, Any]:
+        """Change the Theme property without moving the Markdown file."""
+        if not isinstance(document_ids, list) or not document_ids:
+            raise ValueError("document_ids must be a non-empty list")
+        if len(document_ids) > 100 or any(
+            not isinstance(document_id, str) or not document_id.strip()
+            for document_id in document_ids
+        ):
+            raise ValueError("document_ids is invalid")
+        if not isinstance(target_theme, str) or not target_theme.strip():
+            raise ValueError("target_theme is required")
+        safe_theme = self.vault.sanitize_filename(target_theme.strip())
+        if safe_theme not in self.vault.get_available_themes():
+            raise ValueError("target_theme is not an existing Theme")
+
+        moved: list[dict[str, Any]] = []
+        errors: list[dict[str, str]] = []
+        for identifier in dict.fromkeys(document_ids):
+            try:
+                document_id = self.resolve_document_id(identifier)
+                note = self.get_note(document_id)
+                metadata = dict(note.frontmatter)
+                metadata["theme"] = safe_theme
+                metadata["history"] = [
+                    *metadata.get("history", []),
+                    {
+                        "date": time.strftime("%Y-%m-%d %H:%M:%S"),
+                        "action": "theme_changed",
+                        "theme": safe_theme,
+                    },
+                ]
+                updated = self._persist_note(
+                    note,
+                    expected_revision=note.revision,
+                    expected_content_hash=note.content_hash,
+                    metadata=metadata,
+                    body_markdown=note.body_markdown,
+                    reindex=False,
+                )
+                moved.append(
+                    {
+                        "document_id": updated.document_id,
+                        "title": updated.title,
+                        "theme": safe_theme,
+                        "path": updated.relative_path,
+                        "revision": updated.revision,
+                    }
+                )
+            except (NoteRevisionConflictError, PathAuthorizationError, ValueError, OSError) as error:
+                errors.append({"document_id": identifier, "message": str(error)})
+        return {"target_theme": safe_theme, "moved": moved, "errors": errors}
+
+    def move_notes_to_status(
+        self, document_ids: list[str], target_status: str
+    ) -> dict[str, Any]:
+        """Change the user-visible seal while keeping the note in place."""
+        if not isinstance(document_ids, list) or not document_ids:
+            raise ValueError("document_ids must be a non-empty list")
+        if len(document_ids) > 100 or any(
+            not isinstance(document_id, str) or not document_id.strip()
+            for document_id in document_ids
+        ):
+            raise ValueError("document_ids is invalid")
+        if target_status not in {"pending_review", "in_review", "approved"}:
+            raise ValueError("target_status is invalid")
+
+        moved: list[dict[str, Any]] = []
+        errors: list[dict[str, str]] = []
+        for identifier in dict.fromkeys(document_ids):
+            try:
+                document_id = self.resolve_document_id(identifier)
+                note = self.get_note(document_id)
+                if note.status == target_status:
+                    moved.append(
+                        {
+                            "document_id": note.document_id,
+                            "title": note.title,
+                            "status": target_status,
+                            "seal": target_status,
+                            "path": note.relative_path,
+                            "revision": note.revision,
+                            "changed": False,
+                        }
+                    )
+                    continue
+                metadata = dict(note.frontmatter)
+                metadata["status"] = target_status
+                metadata["history"] = [
+                    *metadata.get("history", []),
+                    {
+                        "date": time.strftime("%Y-%m-%d %H:%M:%S"),
+                        "action": "status_changed",
+                        "status": target_status,
+                    },
+                ]
+                updated = self._persist_note(
+                    note,
+                    expected_revision=note.revision,
+                    expected_content_hash=note.content_hash,
+                    metadata=metadata,
+                    body_markdown=note.body_markdown,
+                    preserve_status=True,
+                    reindex=False,
+                )
+                moved.append(
+                    {
+                        "document_id": updated.document_id,
+                        "title": updated.title,
+                        "status": target_status,
+                        "seal": target_status,
+                        "path": updated.relative_path,
+                        "revision": updated.revision,
+                        "changed": True,
+                    }
+                )
+            except (NoteRevisionConflictError, PathAuthorizationError, ValueError, OSError) as error:
+                errors.append({"document_id": identifier, "message": str(error)})
+        return {"target_status": target_status, "moved": moved, "errors": errors}
+
     def _feed_service(self) -> FeedApplicationService:
         return FeedApplicationService(
             self.job_store,
@@ -405,6 +526,8 @@ class NotesApplicationService:
         for row in rows:
             item = feed._feed_item_from_row(row)
             if normalized_scope == "issue" and item.issue == "_Sin_Cuestion":
+                continue
+            if normalized_scope == "theme" and item.theme != self.vault.active_theme:
                 continue
             if needle and needle not in item.title.casefold():
                 continue
@@ -839,6 +962,7 @@ class NotesApplicationService:
         body_markdown: str | None = None,
         expected_content_hash: str | None = None,
         lock_held: bool = False,
+        preserve_status: bool = False,
         reindex: bool,
     ) -> NoteDocument:
         if not lock_held:
@@ -851,6 +975,7 @@ class NotesApplicationService:
                     body_markdown=body_markdown,
                     expected_content_hash=expected_content_hash,
                     lock_held=True,
+                    preserve_status=preserve_status,
                     reindex=reindex,
                 )
 
@@ -893,7 +1018,7 @@ class NotesApplicationService:
             expected_revision,
             previous_hash,
         )
-        if markdown != previous_markdown and approval_was_current:
+        if markdown != previous_markdown and approval_was_current and not preserve_status:
             metadata = dict(metadata)
             metadata["status"] = "pending_review"
             markdown = serialize_human_frontmatter(metadata) + (
@@ -917,12 +1042,14 @@ class NotesApplicationService:
 
         try:
             if catalog_record is not None:
-                if approval_was_current:
+                if approval_was_current and not preserve_status:
                     invalidated = self.approval_ledger.invalidate_for_note(note.document_id)
                     updated_identity = self.job_store.get_note(note.document_id)
                     if invalidated == 0:
                         updated_identity = None
                 else:
+                    if approval_was_current:
+                        self.approval_ledger.invalidate_for_note(note.document_id)
                     updated_identity = self.job_store.update_note_cas(
                         note_id=note.document_id,
                         expected_revision=expected_revision,
@@ -930,6 +1057,7 @@ class NotesApplicationService:
                         relative_path=relative,
                         content_hash=new_hash,
                         status=str(metadata.get("status") or note.status),
+                        theme=str(metadata.get("theme") or "General"),
                     )
             else:
                 updated_identity = self.job_store.update_document_identity_cas(

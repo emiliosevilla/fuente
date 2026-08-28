@@ -26,6 +26,7 @@ def _write_note(path: Path, title: str, issue: str, body: str) -> None:
                 "date": "2026-08-08",
                 "author": "test",
                 "tags": ["reader"],
+                "theme": THEME,
                 "issue": issue,
                 "status": "approved",
                 "sources": [],
@@ -113,7 +114,8 @@ def test_get_notes_list_returns_metadata_and_opaque_document_ids(temp_vault_path
         assert note["document_id"]
         assert note["document_id"] != note["path"]
         assert note["document_id"] == document_id_for_relative_path(note["path"])
-        assert note["theme"] == THEME
+        expected_theme = "General" if note["path"].endswith("_Indice_MOC.md") else THEME
+        assert note["theme"] == expected_theme
         assert note["issue"] in {ISSUE_A, ISSUE_B, "_Sin_Cuestion"}
         assert note["title"]
         expected_status = (

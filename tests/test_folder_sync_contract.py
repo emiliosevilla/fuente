@@ -127,19 +127,19 @@ def test_common_input_sync_uses_only_the_common_input_root(tmp_path):
     first = manager.sync_connection(connection, direction=SyncDirection.INPUT_COMMON)
     second = manager.sync_connection(connection, direction=SyncDirection.INPUT_COMMON)
 
-    common = vault / "Tema" / "1_volcado" / "común"
+    common = vault / "1_volcado" / "común"
     assert first.copied == 1
     assert second.unchanged == 1
     assert first.destination_root.endswith("1_volcado/común")
     assert (common / "shared.md").read_text(encoding="utf-8") == "common input"
-    assert not (vault / "Tema" / "1_volcado" / "personal" / "shared.md").exists()
-    assert not (vault / "Tema" / "3_capturado" / "shared.md").exists()
-    assert not (vault / "Tema" / "4_procesado" / "shared.md").exists()
+    assert not (vault / "1_volcado" / "personal" / "shared.md").exists()
+    assert not (vault / "3_capturado" / "shared.md").exists()
+    assert not (vault / "4_procesado" / "shared.md").exists()
 
 
 def test_shared_output_sync_copies_only_from_shared_root(tmp_path):
     vault = tmp_path / "vault"
-    shared = vault / "Tema" / "5_compartido"
+    shared = vault / "5_compartido"
     shared.mkdir(parents=True)
     (shared / "approved.md").write_text("approved output", encoding="utf-8")
     destination = tmp_path / "shared-mount"
@@ -152,8 +152,8 @@ def test_shared_output_sync_copies_only_from_shared_root(tmp_path):
     assert first.copied == 1
     assert second.unchanged == 1
     assert (destination / "approved.md").read_text(encoding="utf-8") == "approved output"
-    assert not (vault / "Tema" / "3_capturado" / "approved.md").exists()
-    assert not (vault / "Tema" / "4_procesado" / "approved.md").exists()
+    assert not (vault / "3_capturado" / "approved.md").exists()
+    assert not (vault / "4_procesado" / "approved.md").exists()
 
 
 def test_output_sync_rejects_private_vault_roots(tmp_path):

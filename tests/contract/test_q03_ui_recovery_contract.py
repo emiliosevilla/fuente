@@ -54,34 +54,36 @@ def test_pywebview_ready_recovers_open_reader_and_settings_modals():
     assert "}, NATIVE_INITIAL_STATE_TIMEOUT_MS).then(function(state)" in ready_listener
 
 
-def test_console_csp_allows_pywebview_62_to_build_native_api_methods():
-    csp = next(
-        line for line in SOURCE.splitlines() if "Content-Security-Policy" in line
-    )
-    script_policy = csp.split("script-src", 1)[1].split(";", 1)[0]
-
-    # PyWebView 6.2 creates js_api wrappers with new Function(...).
-    assert "'unsafe-eval'" in script_policy
+def test_console_preview_does_not_block_pywebview_api_methods():
+    # The browser preview must not impose a CSP that blocks PyWebView or review overlays.
+    assert "Content-Security-Policy" not in SOURCE
 
 
 def test_static_preview_is_explicit_and_native_loads_fail_visibly():
+    bridge = SOURCE[SOURCE.index("(function installBrowserApi()") : SOURCE.index("const HELP_DETAILS")]
     preview_mode = _function_source(
-        "isExplicitPreviewMode", "nativeBackendUnavailableMessage"
+        "isSourcePreviewMode", "nativeBackendUnavailableMessage"
+    )
+    explicit_preview_mode = _function_source(
+        "isExplicitPreviewMode", "isSourcePreviewMode"
     )
     native_request = _function_source("callNativeRequest", "recoverNativeModalLoads")
     reader = _function_source("loadReaderNotes", "highlightSidebarNote")
     content = _function_source("loadNoteContent", "loadCategoryData")
     settings = _function_source("loadSettingsData", "showButtonFeedback")
 
-    assert "new URLSearchParams(window.location.search)" in preview_mode
-    assert "params.get('preview') === 'mock'" in preview_mode
+    assert "new URLSearchParams(window.location.search)" in explicit_preview_mode
+    assert "params.get('preview') === 'mock'" in explicit_preview_mode
+    assert "window.location.hostname" in bridge
+    assert "window.__fuenteBrowserPreview = true" in bridge
+    assert "window.__fuenteBrowserPreview === true" in SOURCE
     assert "typeof api[methodName] !== 'function'" in native_request
     assert "Promise.resolve().then" in native_request
     assert "Promise.race" in native_request
     assert "setTimeout(function()" in native_request
-    assert reader.index("isExplicitPreviewMode()") < reader.index("LOCAL_MOCK_NOTES")
+    assert reader.index("isSourcePreviewMode()") < reader.index("LOCAL_MOCK_NOTES")
     assert "callNativeRequest('get_notes_list'" in reader
-    assert content.index("isExplicitPreviewMode()") < content.index("LOCAL_MOCK_NOTES")
+    assert content.index("isSourcePreviewMode()") < content.index("LOCAL_MOCK_NOTES")
     assert "callNativeRequest('get_note_content'" in content
     assert "callNativeLongRequest('get_settings_info'" in settings
     assert "callNativeRequest('get_sync_inputs'" in settings
@@ -102,8 +104,8 @@ def test_normal_cli_routes_to_the_native_typed_bridge_not_a_static_server():
     assert "launch_control_console(vault_path)" in run_console
     assert "FuentePyWebViewApi(backend)" in launcher
     assert "js_api=api" in launcher
-    assert "http.server" not in MAIN_SOURCE
-    assert "http.server" not in LAUNCHER_SOURCE
+    assert "webview.create_window(" in launcher
+    assert "url=str(html_file)" in launcher
 
 
 def test_first_run_stays_unconfigured_until_settings_selects_a_vault():

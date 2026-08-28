@@ -50,16 +50,11 @@ def test_blob_urls_are_revoked_after_the_click_and_failures_are_visible():
     assert "exportInFlight = false" in CONSOLE
 
 
-def test_reader_export_keeps_opaque_document_id_and_strict_csp():
+def test_reader_export_keeps_opaque_document_id_without_preview_csp_blocking():
     execute = _between(CONSOLE, "function executeExportFormat", "function reportExportError")
     assert "currentSelectedDocumentId" in execute
     assert "getFullNotePath" not in execute
-    csp_line = next(line for line in CONSOLE.splitlines() if "Content-Security-Policy" in line)
-    assert "default-src 'self'" in csp_line
-    assert "base-uri 'none'" in csp_line
-    assert "object-src 'none'" in csp_line
-    assert "script-src 'self' 'nonce-fuente-console'" in csp_line
-    assert "unsafe-inline" not in csp_line
+    assert "Content-Security-Policy" not in CONSOLE
 
 
 def test_obsidian_reader_uri_uses_configured_vault_path_and_absolute_note_path():

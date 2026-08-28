@@ -171,6 +171,42 @@ def test_control_console_approve_uses_notes_service(temp_vault_manager):
     assert note.status == "approved"
 
 
+def test_editor_update_is_revision_checked_and_reopens_review(
+    notes_service, temp_vault_manager
+):
+    origin = approved_clean_origin(
+        temp_vault_manager, notes_service.job_store, filename="origen-editor.md"
+    )
+    document_id, note_path = _write_pending_note(
+        temp_vault_manager,
+        body="# Original\n",
+        title="Nota_Editor",
+        origins=[origin],
+        store=notes_service.job_store,
+    )
+    revision = notes_service.get_note(document_id).revision
+    approved = notes_service.approve(document_id, revision)
+
+    updated = notes_service.update_note_body(
+        document_id,
+        expected_revision=approved.revision,
+        body_markdown="# Editada\n\nCambios pendientes.\n",
+    )
+
+    assert updated.revision == approved.revision + 1
+    assert updated.status == "pending_review"
+    assert updated.body_markdown == "# Editada\n\nCambios pendientes.\n"
+    assert notes_service.get_note(document_id).status == "pending_review"
+    assert "# Editada" in note_path.read_text(encoding="utf-8")
+
+    with pytest.raises(NoteRevisionConflictError):
+        notes_service.update_note_body(
+            document_id,
+            expected_revision=approved.revision,
+            body_markdown="# Stale\n",
+        )
+
+
 def test_inbox_pending_path_approves_successfully(temp_vault_manager):
     backend = FuenteConsoleBackend(temp_vault_manager.config.vault_path)
     backend.vault = temp_vault_manager

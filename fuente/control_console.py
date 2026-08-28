@@ -806,6 +806,33 @@ class FuenteConsoleBackend:
     def get_readonly_note(self, document_id: str) -> Dict[str, Any]:
         return self.get_notes_service().get_readonly_note(document_id)
 
+    def update_note_content(
+        self,
+        document_id: str,
+        expected_revision: int,
+        body_markdown: str,
+    ) -> Dict[str, Any]:
+        try:
+            note = self.get_notes_service().update_note_body(
+                document_id,
+                expected_revision=expected_revision,
+                body_markdown=body_markdown,
+            )
+        except NoteRevisionConflictError as error:
+            return {"error": error.code, "message": str(error)}
+        except PathAuthorizationError as error:
+            return self._path_error(error)
+        except (TypeError, ValueError, OSError) as error:
+            return {"error": "note_save_failed", "message": str(error)}
+        return {
+            "status": "saved",
+            "document_id": note.document_id,
+            "revision": note.revision,
+            "content_hash": note.content_hash,
+            "title": note.title,
+            "path": note.relative_path,
+        }
+
     def get_hierarchy(self) -> Dict[str, Any]:
         return self.get_notes_service().get_hierarchy()
 
@@ -2327,10 +2354,14 @@ class FuenteConsoleBackend:
                 if children is None:
                     children = [{"type": "text", "text": block["text"]}]
                 fallback_html.append(f"<p>{fallback_children(children)}</p>")
+        catalog_record = self.get_notes_service().job_store.get_note(note_id)
+        revision = int(catalog_record["revision"]) if catalog_record else 1
         return {
             "title": title,
             "document_id": note_id,
             "path": relative,
+            "revision": revision,
+            "body_markdown": body,
             "document": document,
             "html": "".join(fallback_html),
         }

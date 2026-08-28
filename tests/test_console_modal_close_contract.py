@@ -22,6 +22,7 @@ EXPECTED_MODAL_IDS = {
     "modal-help-info",
     "modal-health",
     "modal-job-queue",
+    "modal-unsaved-changes",
 }
 
 

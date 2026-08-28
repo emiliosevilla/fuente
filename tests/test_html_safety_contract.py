@@ -57,13 +57,11 @@ def test_wikilink_ids_escape_quote_breaking_paths(temp_vault_path):
     assert 'target"' not in result["html"]
 
 
-def test_webview_csp_blocks_inline_scripts_and_search_uses_dom_nodes():
+def test_preview_keeps_dom_node_search_without_blocking_browser_annotations():
     webview = Path(__file__).resolve().parent.parent / "consola_preview.html"
     source = webview.read_text(encoding="utf-8")
 
-    csp = next(line for line in source.splitlines() if "Content-Security-Policy" in line)
-    assert "script-src 'self'" in csp
-    assert "'unsafe-inline'" not in csp.split("script-src", 1)[1].split(";", 1)[0]
+    assert "Content-Security-Policy" not in source
     assert "readerContent.innerHTML =" not in source
 
 
@@ -83,6 +81,20 @@ def test_console_has_no_inline_style_execution():
     assert ".style.cssText" not in source
     assert ".style." not in source
     assert (source_path.parent / "fuente/ui/static/console.css").is_file()
+
+
+def test_console_note_editor_has_safe_save_and_close_controls():
+    source = (Path(__file__).resolve().parent.parent / "consola_preview.html").read_text(
+        encoding="utf-8"
+    )
+    assert "function startNoteEditing()" in source
+    assert "editor.setAttribute('contenteditable', 'true')" in source
+    assert "editButton.textContent = 'Editar'" in source
+    assert "editButton.addEventListener('click'" in source
+    assert "function saveNoteChanges(options)" in source
+    assert "save_note_content" in source
+    assert 'id="modal-unsaved-changes"' in source
+    assert "editorUndoStack.length > 11" in source
 
 
 def test_console_stylesheet_link_resolves_to_local_packaged_css():

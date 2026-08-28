@@ -3,7 +3,6 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; base-uri 'none'; connect-src 'self'; font-src 'self'; img-src 'self' data:; object-src 'none'; script-src 'self' 'nonce-fuente-console' 'unsafe-eval'; style-src 'self'">
     <title>Fuente y Caudal</title>
     <!-- La tipografía global de la consola y sus modales se define en console.css. -->
     <link rel="stylesheet" data-fuente-tokens="true" href="fuente/ui/static/fuente_tokens.css">
@@ -776,6 +775,25 @@
         </div>
     </div>
 
+    <div class="modal-overlay" id="modal-unsaved-changes" role="dialog" aria-modal="true" aria-labelledby="unsaved-changes-title" aria-describedby="unsaved-changes-description" aria-hidden="true">
+        <div class="modal-container modal-compact unsaved-changes-dialog">
+            <div class="modal-header">
+                <div class="modal-title" id="unsaved-changes-title">Cambios sin guardar</div>
+                <button type="button" class="close-btn" data-onclick-command="closeModal('modal-unsaved-changes')" aria-label="Cerrar cambios sin guardar"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-close"></use></svg></button>
+            </div>
+            <div class="modal-body">
+                <p id="unsaved-changes-description">Hay cambios en esta nota que todavía no se han guardado.</p>
+                <p class="workspace-help">Puedes guardarlos, seguir editando o descartarlos.</p>
+                <p id="unsaved-changes-status" class="workspace-help" role="status" aria-live="polite"></p>
+            </div>
+            <div class="modal-footer unsaved-changes-actions">
+                <button type="button" class="btn-secondary" data-onclick-command="keepEditingNote()">Seguir editando</button>
+                <button type="button" class="btn-secondary status-error" data-onclick-command="discardNoteChanges()">Descartar</button>
+                <button type="button" class="btn-primary" data-onclick-command="saveAndCloseNoteEditor()">Guardar cambios</button>
+            </div>
+        </div>
+    </div>
+
     <!-- MODAL CREAR NUEVO TEMA -->
     <div class="modal-overlay console-layer-001" id="modal-create-theme" role="dialog" aria-modal="true" aria-labelledby="modal-create-theme-title" aria-hidden="true">
         <div class="modal-container modal-compact">
@@ -1402,9 +1420,12 @@ origen: {{origen}}
         // ponytail: browser QA uses ?preview=mock (fixture API). Real vault stays PyWebView-only.
         (function installBrowserApi() {
             if (window.pywebview) return;
-            var previewMock = new URLSearchParams(window.location.search).get('preview') === 'mock';
+            var isLoopbackBrowser = ['localhost', '127.0.0.1', '::1'].includes(window.location.hostname);
+            var previewMock = new URLSearchParams(window.location.search).get('preview') === 'mock'
+                || isLoopbackBrowser;
             if (previewMock) {
                 window.__fuenteBrowserBridge = true;
+                window.__fuenteBrowserPreview = true;
                 window.pywebview = {
                     api: new Proxy({}, {
                         get: function(_target, methodName) {
@@ -1588,6 +1609,9 @@ origen: {{origen}}
             if (command.startsWith('runCaudalImport(')) return runCaudalImport(args[0]);
             if (command === 'runCaudalExport()') return runCaudalExport();
             if (command === 'approveCaudalSelection()') return approveCaudalSelection();
+            if (command === 'formatEditorBlock(this)') return formatEditorBlock(element);
+            if (command === 'formatEditorInline(this)') return formatEditorInline(element);
+            if (command === 'insertEditorLink()') return insertEditorLink();
 
             const handlers = {
                 'promptCreateTheme()': promptCreateTheme,
@@ -1635,6 +1659,13 @@ origen: {{origen}}
                 'hideOnboardingPanel()': hideOnboardingPanel,
                 'installObsidian()': installObsidian,
                 'createGuidedVault()': createGuidedVault,
+                'startNoteEditing()': startNoteEditing,
+                'undoNoteEdit()': undoNoteEdit,
+                'saveNoteChanges()': saveNoteChanges,
+                'requestCloseNoteEditor()': requestCloseNoteEditor,
+                'keepEditingNote()': keepEditingNote,
+                'discardNoteChanges()': discardNoteChanges,
+                'saveAndCloseNoteEditor()': saveAndCloseNoteEditor,
             };
             if (handlers[command]) handlers[command]();
         }
@@ -1976,6 +2007,10 @@ document.addEventListener('keydown', handleShellKeydown);
 
         function prepareUiStateForNativeClose() {
             nativeCloseRequested = true;
+            if (typeof hasUnsavedEditorChanges === 'function' && hasUnsavedEditorChanges()) {
+                requestCloseNoteEditor({type: 'native-close'});
+                return {ready: false, pending: 0, editor: true};
+            }
             if (!pendingUiState.size) {
                 notifyNativeCloseWhenReady();
                 return {ready: false, pending: 0};
@@ -1989,7 +2024,7 @@ document.addEventListener('keydown', handleShellKeydown);
         }
 
         window.addEventListener('beforeunload', function(event) {
-            if (!pendingUiState.size) return;
+            if (!pendingUiState.size && !hasUnsavedEditorChanges()) return;
             reportUiStateFailure(
                 'guardar antes de cerrar',
                 'interfaz',
@@ -2067,8 +2102,13 @@ document.addEventListener('keydown', handleShellKeydown);
             readSourceUiState();
         }
 
-        function switchWorkspace(workspaceId) {
+        function switchWorkspace(workspaceId, options) {
             if (!WORKSPACE_IDS.includes(workspaceId)) return;
+            options = options || {};
+            if (!options.force && workspaceId !== 'source' && noteEditorActive) {
+                requestCloseNoteEditor({type: 'workspace', workspaceId: workspaceId});
+                return;
+            }
             document.querySelectorAll('[data-workspace]').forEach(function(panel) {
                 const active = panel.dataset.workspace === workspaceId;
                 panel.hidden = !active;
@@ -2180,7 +2220,10 @@ document.addEventListener('keydown', handleShellKeydown);
         }
 
         function isSourcePreviewMode() {
-            return isExplicitPreviewMode() || window.location.protocol === 'file:';
+            const nativeApi = window.pywebview && window.pywebview.api;
+            return isExplicitPreviewMode()
+                || window.__fuenteBrowserPreview === true
+                || (window.location.protocol === 'file:' && !nativeApi);
         }
 
         function nativeBackendUnavailableMessage() {
@@ -3261,6 +3304,10 @@ document.addEventListener('keydown', handleShellKeydown);
         }
 
         function closeModal(id) {
+            if (id === 'modal-unsaved-changes') {
+                keepEditingNote();
+                return;
+            }
             const el = document.getElementById(id);
             if (el) {
                 el.classList.remove('is-open');
@@ -5501,6 +5548,14 @@ document.addEventListener('keydown', handleShellKeydown);
         let currentSelectedNotePath = '';
         let currentSelectedDocumentId = '';
         let currentSelectedNoteDocumentModel = [];
+        let currentSelectedNoteMarkdown = '';
+        let currentSelectedNoteRevision = 1;
+        let noteEditorActive = false;
+        let noteEditorSaving = false;
+        let editorUndoStack = [];
+        let editorUndoTimer = null;
+        let editorSelectionRange = null;
+        let pendingEditorIntent = null;
         let readerNotes = [];
         let readerSort = {field: 'title', direction: 'asc'};
         let readerNoteHistory = [];
@@ -5684,6 +5739,7 @@ document.addEventListener('keydown', handleShellKeydown);
                             const link = document.createElement('span');
                             link.className = 'wikilink';
                             link.dataset.documentId = token.document_id || '';
+                            link.dataset.markdown = token.markdown || '[[' + token.text + ']]';
                             link.textContent = token.text;
                             if (token.document_id && !token.broken) {
                                 link.addEventListener('click', function() {
@@ -5700,6 +5756,11 @@ document.addEventListener('keydown', handleShellKeydown);
                 }
                 if (block.type === 'code_block' || block.type === 'raw_block') {
                     const pre = document.createElement('pre');
+                    if (block.type === 'raw_block') {
+                        pre.dataset.editorRawMarkdown = String((block.attrs && block.attrs.markdown) || '');
+                    } else if (block.attrs && block.attrs.language) {
+                        pre.dataset.editorLanguage = block.attrs.language;
+                    }
                     pre.textContent = block.type === 'raw_block'
                         ? String((block.attrs && block.attrs.markdown) || '')
                         : projectionInlineText(block.content);
@@ -5787,6 +5848,10 @@ document.addEventListener('keydown', handleShellKeydown);
                 updateReaderBackButton();
                 return;
             }
+            if (noteEditorActive) {
+                requestCloseNoteEditor({type: 'back'});
+                return;
+            }
             const previousId = readerNoteHistory.pop();
             updateReaderBackButton();
             if (previousId) {
@@ -5796,6 +5861,10 @@ document.addEventListener('keydown', handleShellKeydown);
 
         function navigateReaderNote(documentId) {
             if (!documentId) return;
+            if (noteEditorActive) {
+                requestCloseNoteEditor({type: 'navigate', documentId: documentId});
+                return;
+            }
             pushReaderHistory(documentId);
             loadNoteContent(documentId, { skipHistory: true });
         }
@@ -5864,9 +5933,415 @@ document.addEventListener('keydown', handleShellKeydown);
             bar.classList.add('console-layout-071');
             const badge = document.createElement('span');
             badge.className = 'source-readonly-badge';
-            badge.textContent = 'Solo lectura';
+            badge.textContent = noteEditorActive ? 'Editando' : 'Solo lectura';
             bar.appendChild(badge);
+            if (!noteEditorActive) {
+                const actions = document.createElement('div');
+                actions.className = 'reader-actions';
+                const editButton = document.createElement('button');
+                editButton.type = 'button';
+                editButton.className = 'btn-secondary';
+                editButton.setAttribute('aria-label', 'Editar nota');
+                editButton.dataset.onclickCommand = 'startNoteEditing()';
+                editButton.addEventListener('click', function() {
+                    startNoteEditing();
+                });
+                editButton.textContent = 'Editar';
+                actions.appendChild(editButton);
+                bar.appendChild(actions);
+            }
             return bar;
+        }
+
+        function createEditorButton(label, command, title) {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = 'btn-small note-editor-tool';
+            button.textContent = label;
+            button.title = title || label;
+            button.setAttribute('aria-label', title || label);
+            button.dataset.onclickCommand = command;
+            return button;
+        }
+
+        function createEditorSurface(markdown) {
+            const shell = document.createElement('section');
+            shell.className = 'note-editor-shell';
+            shell.setAttribute('aria-label', 'Editor de nota');
+
+            const toolbar = document.createElement('div');
+            toolbar.className = 'note-editor-toolbar';
+            toolbar.setAttribute('role', 'toolbar');
+            toolbar.setAttribute('aria-label', 'Formato de nota');
+            const undo = createEditorButton('Deshacer', 'undoNoteEdit()', 'Deshacer último cambio');
+            undo.id = 'btn-editor-undo';
+            undo.disabled = true;
+            toolbar.appendChild(undo);
+
+            const blockFormat = document.createElement('select');
+            blockFormat.id = 'editor-block-format';
+            blockFormat.className = 'note-editor-select';
+            blockFormat.setAttribute('aria-label', 'Formato de bloque');
+            blockFormat.dataset.onchangeCommand = 'formatEditorBlock(this)';
+            [['p', 'Texto'], ['h1', 'Título 1'], ['h2', 'Título 2'], ['h3', 'Título 3'], ['pre', 'Código']].forEach(function(optionData) {
+                const option = document.createElement('option');
+                option.value = optionData[0];
+                option.textContent = optionData[1];
+                blockFormat.appendChild(option);
+            });
+            toolbar.appendChild(blockFormat);
+            toolbar.appendChild(createEditorButton('Negrita', 'formatEditorInline(this)', 'Negrita'));
+            toolbar.lastChild.dataset.editorCommand = 'bold';
+            toolbar.appendChild(createEditorButton('Cursiva', 'formatEditorInline(this)', 'Cursiva'));
+            toolbar.lastChild.dataset.editorCommand = 'italic';
+            toolbar.appendChild(createEditorButton('Tachado', 'formatEditorInline(this)', 'Tachado'));
+            toolbar.lastChild.dataset.editorCommand = 'strikeThrough';
+            toolbar.appendChild(createEditorButton('Lista', 'formatEditorInline(this)', 'Lista con viñetas'));
+            toolbar.lastChild.dataset.editorCommand = 'insertUnorderedList';
+            toolbar.appendChild(createEditorButton('1. Lista', 'formatEditorInline(this)', 'Lista numerada'));
+            toolbar.lastChild.dataset.editorCommand = 'insertOrderedList';
+            toolbar.appendChild(createEditorButton('Enlace', 'insertEditorLink()', 'Insertar enlace'));
+            shell.appendChild(toolbar);
+
+            const editor = createNoteContent(readerMarkdownToProjection(markdown));
+            editor.classList.add('note-editor-content');
+            editor.setAttribute('contenteditable', 'true');
+            editor.setAttribute('role', 'textbox');
+            editor.setAttribute('aria-multiline', 'true');
+            editor.setAttribute('aria-label', 'Contenido de la nota');
+            editor.spellcheck = true;
+            editor.addEventListener('input', handleEditorInput);
+            editor.addEventListener('keyup', rememberEditorSelection);
+            editor.addEventListener('mouseup', rememberEditorSelection);
+            editor.addEventListener('paste', handleEditorPaste);
+            shell.appendChild(editor);
+
+            const footer = document.createElement('div');
+            footer.className = 'note-editor-footer';
+            const status = document.createElement('span');
+            status.id = 'note-editor-status';
+            status.className = 'note-editor-status';
+            status.setAttribute('role', 'status');
+            status.setAttribute('aria-live', 'polite');
+            footer.appendChild(status);
+            footer.appendChild(createEditorButton('Cerrar editor', 'requestCloseNoteEditor()', 'Cerrar editor'));
+            const save = createEditorButton('Guardar cambios', 'saveNoteChanges()', 'Guardar cambios');
+            save.id = 'btn-editor-save';
+            save.disabled = true;
+            save.classList.add('btn-primary');
+            footer.appendChild(save);
+            shell.appendChild(footer);
+            return shell;
+        }
+
+        function getNoteEditor() {
+            return document.querySelector('.note-editor-content[contenteditable="true"]');
+        }
+
+        function normalizeEditorMarkdown(value) {
+            return String(value || '').replace(/\r\n/g, '\n').replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
+        }
+
+        function editorInlineMarkdown(node) {
+            if (!node) return '';
+            if (node.nodeType === Node.TEXT_NODE) return node.nodeValue || '';
+            if (node.nodeType !== Node.ELEMENT_NODE) return '';
+            if (node.classList.contains('wikilink')) return node.dataset.markdown || '[[' + node.textContent + ']]';
+            if (node.tagName === 'BR') return '\n';
+            const content = Array.from(node.childNodes).map(editorInlineMarkdown).join('');
+            if (node.tagName === 'STRONG' || node.tagName === 'B') return '**' + content + '**';
+            if (node.tagName === 'EM' || node.tagName === 'I') return '*' + content + '*';
+            if (node.tagName === 'S' || node.tagName === 'DEL') return '~~' + content + '~~';
+            if (node.tagName === 'CODE') return '`' + content + '`';
+            if (node.tagName === 'A') {
+                const href = safeReaderHref(node.getAttribute('href'));
+                return href ? '[' + content + '](' + href + ')' : content;
+            }
+            return content;
+        }
+
+        function editorBlockMarkdown(node) {
+            if (!node || node.nodeType !== Node.ELEMENT_NODE) return '';
+            const tag = node.tagName.toLowerCase();
+            if (tag === 'pre') {
+                if (node.dataset.editorRawMarkdown && node.textContent === node.dataset.editorRawMarkdown) {
+                    return node.dataset.editorRawMarkdown;
+                }
+                const language = node.dataset.editorLanguage ? node.dataset.editorLanguage : '';
+                return '```' + language + '\n' + node.textContent + '\n```';
+            }
+            if (tag === 'ul' || tag === 'ol') {
+                return Array.from(node.children).map(function(item, index) {
+                    const prefix = tag === 'ol' ? (index + 1) + '. ' : '- ';
+                    return prefix + editorInlineMarkdown(item);
+                }).join('\n');
+            }
+            if (/^h[1-6]$/.test(tag)) return '#'.repeat(Number(tag.slice(1))) + ' ' + editorInlineMarkdown(node);
+            return editorInlineMarkdown(node);
+        }
+
+        function editorMarkdownFromDom() {
+            const editor = getNoteEditor();
+            if (!editor) return currentSelectedNoteMarkdown;
+            const blocks = Array.from(editor.children).map(editorBlockMarkdown).filter(function(block) {
+                return block.length > 0;
+            });
+            const body = blocks.join('\n\n');
+            return body ? body + '\n' : '';
+        }
+
+        function hasUnsavedEditorChanges() {
+            return noteEditorActive && normalizeEditorMarkdown(editorMarkdownFromDom()) !== normalizeEditorMarkdown(currentSelectedNoteMarkdown);
+        }
+
+        function updateEditorState(message) {
+            const dirty = hasUnsavedEditorChanges();
+            const undo = document.getElementById('btn-editor-undo');
+            const save = document.getElementById('btn-editor-save');
+            const status = document.getElementById('note-editor-status');
+            if (undo) undo.disabled = editorUndoStack.length < 2 || noteEditorSaving;
+            if (save) save.disabled = !dirty || noteEditorSaving;
+            if (status) {
+                status.textContent = message || (dirty ? 'Cambios sin guardar' : 'Sin cambios');
+                status.classList.toggle('is-dirty', dirty);
+            }
+        }
+
+        function cloneEditorSnapshot() {
+            const editor = getNoteEditor();
+            return editor ? editor.cloneNode(true) : null;
+        }
+
+        function recordEditorSnapshot() {
+            const snapshot = cloneEditorSnapshot();
+            if (!snapshot) return;
+            const previous = editorUndoStack[editorUndoStack.length - 1];
+            if (previous && previous.isEqualNode(snapshot)) return;
+            editorUndoStack.push(snapshot);
+            if (editorUndoStack.length > 11) editorUndoStack.shift();
+            updateEditorState();
+        }
+
+        function scheduleEditorSnapshot() {
+            if (editorUndoTimer) clearTimeout(editorUndoTimer);
+            editorUndoTimer = setTimeout(function() {
+                editorUndoTimer = null;
+                recordEditorSnapshot();
+            }, 350);
+        }
+
+        function flushEditorHistory() {
+            if (editorUndoTimer) clearTimeout(editorUndoTimer);
+            editorUndoTimer = null;
+            recordEditorSnapshot();
+        }
+
+        function restoreEditorSnapshot(snapshot) {
+            const editor = getNoteEditor();
+            if (!editor || !snapshot) return;
+            editor.replaceChildren.apply(editor, Array.from(snapshot.childNodes).map(function(child) {
+                return child.cloneNode(true);
+            }));
+            updateEditorState();
+        }
+
+        function rememberEditorSelection() {
+            const editor = getNoteEditor();
+            const selection = window.getSelection();
+            if (!editor || !selection || !selection.rangeCount) return;
+            if (editor.contains(selection.anchorNode)) editorSelectionRange = selection.getRangeAt(0).cloneRange();
+        }
+
+        function restoreEditorSelection() {
+            if (!editorSelectionRange) return;
+            const selection = window.getSelection();
+            selection.removeAllRanges();
+            selection.addRange(editorSelectionRange);
+        }
+
+        function handleEditorInput() {
+            scheduleEditorSnapshot();
+            updateEditorState();
+        }
+
+        function handleEditorPaste(event) {
+            event.preventDefault();
+            const text = event.clipboardData ? event.clipboardData.getData('text/plain') : '';
+            if (text) document.execCommand('insertText', false, text);
+            handleEditorInput();
+        }
+
+        function formatEditorInline(button) {
+            const editor = getNoteEditor();
+            if (!editor) return;
+            editor.focus();
+            restoreEditorSelection();
+            document.execCommand(button.dataset.editorCommand, false, null);
+            rememberEditorSelection();
+            handleEditorInput();
+        }
+
+        function formatEditorBlock(select) {
+            const editor = getNoteEditor();
+            const value = select && select.value;
+            if (!editor || !value) return;
+            editor.focus();
+            restoreEditorSelection();
+            document.execCommand('formatBlock', false, value);
+            rememberEditorSelection();
+            handleEditorInput();
+            select.value = 'p';
+        }
+
+        function insertEditorLink() {
+            const editor = getNoteEditor();
+            if (!editor) return;
+            const href = window.prompt('Dirección del enlace');
+            if (!href || !safeReaderHref(href)) return;
+            editor.focus();
+            restoreEditorSelection();
+            document.execCommand('createLink', false, href);
+            rememberEditorSelection();
+            handleEditorInput();
+        }
+
+        function startNoteEditing() {
+            if (!currentSelectedDocumentId || noteEditorActive) {
+                const editor = getNoteEditor();
+                if (editor) editor.focus();
+                return;
+            }
+            noteEditorActive = true;
+            noteEditorSaving = false;
+            editorUndoStack = [];
+            pendingEditorIntent = null;
+            const reader = document.getElementById('reader-content');
+            if (!reader) return;
+            reader.replaceChildren(createNoteActionBar(currentSelectedNoteTitle));
+            reader.appendChild(createEditorSurface(currentSelectedNoteMarkdown));
+            recordEditorSnapshot();
+            const editor = getNoteEditor();
+            if (editor) {
+                editor.focus();
+                const selection = document.createRange();
+                selection.selectNodeContents(editor);
+                selection.collapse(false);
+                const windowSelection = window.getSelection();
+                windowSelection.removeAllRanges();
+                windowSelection.addRange(selection);
+                rememberEditorSelection();
+            }
+            updateEditorState();
+        }
+
+        function exitNoteEditor(bodyOverride) {
+            const body = typeof bodyOverride === 'string' ? bodyOverride : editorMarkdownFromDom();
+            noteEditorActive = false;
+            noteEditorSaving = false;
+            editorUndoStack = [];
+            pendingEditorIntent = null;
+            if (editorUndoTimer) clearTimeout(editorUndoTimer);
+            editorUndoTimer = null;
+            currentSelectedNoteMarkdown = body;
+            renderNoteDocument(currentSelectedNoteTitle, readerMarkdownToProjection(body));
+        }
+
+        function applyPendingEditorIntent(bodyOverride) {
+            const intent = pendingEditorIntent || {type: 'close'};
+            pendingEditorIntent = null;
+            exitNoteEditor(bodyOverride);
+            if (intent.type === 'workspace') {
+                switchWorkspace(intent.workspaceId, {force: true});
+            } else if (intent.type === 'navigate') {
+                pushReaderHistory(intent.documentId);
+                loadNoteContent(intent.documentId, {skipHistory: true, force: true});
+            } else if (intent.type === 'back') {
+                const previousId = readerNoteHistory.pop();
+                updateReaderBackButton();
+                if (previousId) loadNoteContent(previousId, {skipHistory: true, force: true});
+            } else if (intent.type === 'native-close') {
+                flushPendingUiState();
+            }
+        }
+
+        function requestCloseNoteEditor(intent) {
+            if (intent) pendingEditorIntent = intent;
+            else if (!pendingEditorIntent) pendingEditorIntent = {type: 'close'};
+            if (!noteEditorActive || !hasUnsavedEditorChanges()) {
+                applyPendingEditorIntent();
+                return;
+            }
+            const status = document.getElementById('unsaved-changes-status');
+            if (status) status.textContent = 'La nota tiene cambios que todavía no se han guardado.';
+            openModal('modal-unsaved-changes');
+        }
+
+        function hideUnsavedChangesDialog() {
+            const dialog = document.getElementById('modal-unsaved-changes');
+            if (dialog) {
+                dialog.classList.remove('is-open');
+                dialog.setAttribute('aria-hidden', 'true');
+            }
+            updateModalBodyLock();
+        }
+
+        function keepEditingNote() {
+            pendingEditorIntent = null;
+            nativeCloseRequested = false;
+            const api = window.pywebview && window.pywebview.api;
+            if (api && typeof api.cancel_pending_close === 'function') {
+                Promise.resolve(api.cancel_pending_close()).catch(function(error) {
+                    log('No se pudo cancelar el cierre pendiente: ' + String(error));
+                });
+            }
+            hideUnsavedChangesDialog();
+            const editor = getNoteEditor();
+            if (editor) editor.focus();
+        }
+
+        function discardNoteChanges() {
+            hideUnsavedChangesDialog();
+            applyPendingEditorIntent(currentSelectedNoteMarkdown);
+        }
+
+        function saveAndCloseNoteEditor() {
+            saveNoteChanges({closeAfter: true});
+        }
+
+        function saveNoteChanges(options) {
+            options = options || {};
+            if (!noteEditorActive || noteEditorSaving) return;
+            flushEditorHistory();
+            const body = editorMarkdownFromDom();
+            if (!hasUnsavedEditorChanges()) {
+                if (options.closeAfter) applyPendingEditorIntent();
+                return;
+            }
+            noteEditorSaving = true;
+            updateEditorState('Guardando cambios…');
+            if (isSourcePreviewMode()) {
+                currentSelectedNoteMarkdown = body;
+                noteEditorSaving = false;
+                updateEditorState('Guardado solo en esta vista previa.');
+                if (options.closeAfter) applyPendingEditorIntent();
+                return;
+            }
+            callNativeLongRequest('save_note_content', function() {
+                return window.pywebview.api.save_note_content(currentSelectedDocumentId, currentSelectedNoteRevision, body);
+            }).then(function(result) {
+                if (!result || result.error) throw new Error((result && result.message) || 'No se pudieron guardar los cambios.');
+                currentSelectedNoteMarkdown = body;
+                currentSelectedNoteRevision = Number.isInteger(result.revision) ? result.revision : currentSelectedNoteRevision + 1;
+                noteEditorSaving = false;
+                const selected = readerNotes.find(function(note) { return note.document_id === currentSelectedDocumentId; });
+                if (selected && result.status === 'saved') selected.status = 'pending_review';
+                renderReaderProperties(currentSelectedDocumentId);
+                updateEditorState('Cambios guardados.');
+                if (options.closeAfter) applyPendingEditorIntent();
+            }).catch(function(error) {
+                noteEditorSaving = false;
+                updateEditorState(String(error || 'No se pudieron guardar los cambios.'));
+            });
         }
 
         function renderNoteDocument(title, documentModel) {
@@ -6112,9 +6587,11 @@ document.addEventListener('keydown', handleShellKeydown);
                 if (found) {
                     currentSelectedNoteTitle = found.title;
                     currentSelectedNotePath = found.path;
+                    currentSelectedNoteMarkdown = '# ' + found.title + '\n\nLa vista previa local representa esta nota mediante nodos DOM tipados.\n';
+                    currentSelectedNoteRevision = 1;
                     const reader = document.getElementById('reader-content');
                     reader.replaceChildren(createNoteActionBar(found.title));
-                    reader.appendChild(createMockNoteContent(found));
+                    reader.appendChild(createNoteContent(readerMarkdownToProjection(currentSelectedNoteMarkdown)));
                     renderReaderProperties(currentSelectedDocumentId);
                 } else {
                     currentSelectedNoteTitle = displayTitle;
@@ -6157,6 +6634,8 @@ document.addEventListener('keydown', handleShellKeydown);
                 if (res.path) currentSelectedNotePath = res.path;
                 if (res.document_id) currentSelectedDocumentId = res.document_id;
                 currentSelectedNoteTitle = displayTitle;
+                currentSelectedNoteMarkdown = typeof res.body_markdown === 'string' ? res.body_markdown : '';
+                currentSelectedNoteRevision = Number.isInteger(res.revision) ? res.revision : 1;
                 renderNoteDocument(displayTitle, res.document);
                 loadDocumentWorkspace(currentSelectedDocumentId);
                 updateReaderBackButton();

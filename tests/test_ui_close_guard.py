@@ -42,6 +42,17 @@ def test_native_close_is_cancelled_until_pending_ui_state_drains(monkeypatch):
     assert window.destroy_calls == 1
 
 
+def test_editor_can_cancel_a_pending_native_close():
+    bridge = FuentePyWebViewApi(SimpleNamespace())
+    bridge.set_window(SimpleNamespace())
+    bridge.ui_state_pending_changed(1)
+
+    assert bridge._handle_window_closing() is False
+    assert bridge.cancel_pending_close() == {"status": "cancelled"}
+    bridge.ui_state_pending_changed(0)
+    assert bridge.complete_pending_close()["error"] == "close_not_pending"
+
+
 def test_restart_waits_for_pending_ui_state_then_relaunches(monkeypatch, tmp_path):
     target = tmp_path.resolve()
     backend = SimpleNamespace(

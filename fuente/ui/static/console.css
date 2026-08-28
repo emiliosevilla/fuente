@@ -723,15 +723,6 @@
             outline-offset: 3px;
         }
 
-        .reader-sidebar-divider {
-            font-size: 0.56rem;
-            font-weight: 800;
-            letter-spacing: 1px;
-            color: var(--muted);
-            padding: 6px 7px 3px;
-            flex-shrink: 0;
-        }
-
         .reader-note-list-scroll {
             flex: 1;
             overflow-y: scroll;
@@ -767,7 +758,7 @@
         }
 
         .reader-theme-label {
-            font-size: 0.58rem;
+            font-size: 0.82rem;
             font-weight: 800;
             letter-spacing: 0.8px;
             color: var(--gold);
@@ -781,7 +772,7 @@
         }
 
         .reader-issue-label {
-            font-size: 0.6rem;
+            font-size: 0.8rem;
             font-weight: 700;
             color: var(--muted);
             padding: 6px 8px 2px 8px;
@@ -2041,10 +2032,6 @@ html[data-fuente-style="energy"] .arrow-connector::before {
 }
 
 .reader-context-grid.is-context-hidden .reader-properties-pane,
-.reader-dual-pane.is-library-hidden .reader-sidebar {
-    display: none;
-}
-
 .reader-dual-pane {
     gap: 10px;
 }
@@ -2055,13 +2042,6 @@ html[data-fuente-style="energy"] .arrow-connector::before {
     max-width: var(--library-width);
     border-color: var(--fuente-glass-border);
     box-shadow: none;
-}
-
-.reader-sidebar-divider {
-    padding: 8px 9px 4px;
-    font-size: 0.6rem;
-    letter-spacing: 0.04em;
-    text-transform: none;
 }
 
 .reader-note-list-scroll {
@@ -3188,6 +3168,19 @@ svg {
     opacity: 0.55;
 }
 
+body.is-source-dragging,
+body.is-source-dragging * {
+    user-select: none !important;
+    -webkit-user-select: none !important;
+}
+
+body.is-source-dragging,
+body.is-source-dragging .source-note-card,
+body.is-source-dragging .source-feed-note,
+body.is-source-dragging .reader-note-item {
+    cursor: grabbing;
+}
+
 .source-seal {
     display: block;
     width: 10px;
@@ -3255,6 +3248,15 @@ svg {
     border-bottom: 1px solid var(--border-subtle);
     border-radius: 0;
     font-size: var(--font-size-base);
+}
+
+#modal-reader #reader-view-list.is-note-open .reader-sidebar {
+    display: none;
+}
+
+#modal-reader #reader-view-list.is-note-open .reader-view-pane {
+    width: 100%;
+    max-width: none;
 }
 
 .source-feed-sentinel {
@@ -3440,10 +3442,6 @@ svg {
     display: grid;
     grid-template-columns: var(--library-width) minmax(0, 1fr);
     grid-template-rows: var(--header-height) minmax(0, 1fr);
-}
-
-.fuente-shell.is-active.is-library-collapsed {
-    grid-template-columns: 56px minmax(0, 1fr);
 }
 
 .fuente-topbar {
@@ -3873,21 +3871,16 @@ svg {
 .library-head h2 {
     margin: 0;
     font-size: 21px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
 }
 
-#workspace-source.is-library-collapsed #fuente-library {
-    padding-inline: 8px;
+.reader-selection-help {
+    color: var(--text-secondary);
+    font-size: var(--font-size-control);
+    white-space: nowrap;
 }
-
-#workspace-source.is-library-collapsed #fuente-library .library-head {
-    justify-content: center;
-}
-
-#workspace-source.is-library-collapsed #fuente-library h2,
-#workspace-source.is-library-collapsed #fuente-library .library-tree {
-    display: none;
-}
-
 
 #workspace-source.is-active .reader-view-pane {
     padding: 32px 40px 64px;
@@ -4836,6 +4829,26 @@ body[data-capture-scenario="keyboard-focus"] [data-keyboard-focus="true"] {
     flex: 0 0 auto;
     white-space: nowrap;
 }
+
+#note-action-bar .note-header-seal {
+    display: inline-flex;
+    align-items: center;
+    flex: 0 0 auto;
+    gap: 6px;
+    color: var(--text-secondary);
+    font-size: var(--font-size-small);
+    white-space: nowrap;
+}
+
+#note-action-bar .note-header-seal .source-seal {
+    width: 9px;
+    height: 9px;
+    margin: 0;
+}
+
+#note-action-bar .note-header-seal.red { color: var(--state-danger); }
+#note-action-bar .note-header-seal.orange { color: var(--state-warning); }
+#note-action-bar .note-header-seal.green { color: var(--state-success); }
 
 #note-action-bar .note-editor-toolbar-inline {
     min-width: 0;

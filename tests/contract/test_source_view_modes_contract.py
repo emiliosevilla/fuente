@@ -68,9 +68,30 @@ def test_html_exposes_theme_property_drag_and_drop_contract():
     html = CONSOLA_HTML.read_text(encoding="utf-8")
     assert "selectedSourceNoteIds" in html
     assert "makeSourceNoteDraggable" in html
+    assert "mousedown" in html
+    assert "mousemove" in html
+    assert "mouseup" in html
+    assert "is-source-dragging" in html
+    assert "preventDefault()" in html
     assert "installSourceThemeDropTargets" in html
     assert "moveSourceNotesToTheme" in html
+    assert "function refreshSourceThemeCounts()" in html
+    assert "refreshSourceThemeCounts()" in html
+    assert "note-header-seal" in html
+    assert "source-seal ' + sealClassName(noteSeal)" in html
+    assert "Sello: " in html
+    assert '#modal-reader #reader-view-list.is-note-open .reader-sidebar' in Path("fuente/ui/static/console.css").read_text(encoding="utf-8")
     assert 'data-source-filter="theme:General"' in html
+
+
+def test_html_exposes_the_clean_note_explorer_labels():
+    html = CONSOLA_HTML.read_text(encoding="utf-8")
+    assert 'aria-label="Notas" title="Notas"' in html
+    assert '<span>Temas (4)</span>' in html
+    assert 'aria-expanded="false"><span class="chev">›</span><span>Estado</span>' in html
+    assert 'id="source-seals-tree" hidden' in html
+    assert 'id="reader-selection-help"' in html
+    assert "Un click para seleccionar. Doble click para abrir" in html
 
 
 def test_html_exposes_status_drag_and_drop_confirmation_contract():
@@ -78,6 +99,8 @@ def test_html_exposes_status_drag_and_drop_confirmation_contract():
     assert "installSourceSealDropTargets" in html
     assert "requestSourceStatusDrop" in html
     assert "moveSourceNotesToStatus" in html
+    assert "'cancelSourceStatusDrop()': cancelSourceStatusDrop" in html
+    assert "'confirmSourceStatusDrop()': confirmSourceStatusDrop" in html
     assert 'id="modal-status-drop-confirmation"' in html
     assert "Confirmar cambio" in html
     assert 'data-source-filter="seal:in_review"' in html

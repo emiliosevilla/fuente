@@ -17,7 +17,9 @@ class FrontmatterError(ValueError):
 SCHEMA_VERSION = 3
 V2_SCHEMA_VERSION = 2
 LEGACY_SCHEMA_VERSION = 1
-ALLOWED_STATUSES = frozenset({"pending_review", "approved", "rejected", "draft", "archived"})
+ALLOWED_STATUSES = frozenset(
+    {"pending_review", "in_review", "approved", "rejected", "draft", "archived"}
+)
 NOTE_TYPES = frozenset({"source", "concept", "topic", "question", "result"})
 V3_NOTE_TYPES = frozenset({"original", "summary", "concept", "topic", "question", "result"})
 SOURCE_KINDS = frozenset(
@@ -48,6 +50,9 @@ _KEY_MIGRATIONS = {
 _STATUS_MIGRATIONS = {
     "pendiente_aprobacion": "pending_review",
     "pendiente de aprobación": "pending_review",
+    "en_revision": "in_review",
+    "en revisión": "in_review",
+    "en revision": "in_review",
     "aprobada": "approved",
     "aprobado": "approved",
     "rechazado": "rejected",
@@ -101,6 +106,7 @@ _HUMAN_SERIALIZATION_KEYS = {
 }
 _HUMAN_STATUS_VALUES = {
     "pending_review": "pendiente de aprobación",
+    "in_review": "en revisión",
     "approved": "aprobado",
     "rejected": "no aprobado",
     "draft": "borrador",

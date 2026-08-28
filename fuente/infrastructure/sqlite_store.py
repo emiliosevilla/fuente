@@ -1700,7 +1700,7 @@ class JobStore:
         """Return a stable feed page ordered with ``note_id`` as tie-breaker."""
         if not isinstance(limit, int) or isinstance(limit, bool) or limit < 1:
             raise ValueError("limit must be a positive integer")
-        if order not in {"date", "origin", "theme", "urgency"}:
+        if order not in {"date", "origin", "theme", "urgency", "note_type"}:
             raise ValueError("order is invalid")
 
         clauses: list[str] = ["tombstone.note_id IS NULL"]
@@ -1760,6 +1760,7 @@ class JobStore:
             "origin": "catalog.origin_kind ASC, catalog.note_id ASC",
             "theme": "catalog.theme ASC, catalog.note_id ASC",
             "urgency": "catalog.issue ASC, catalog.note_id ASC",
+            "note_type": "catalog.note_type ASC, catalog.note_id ASC",
         }[order]
 
         query = (
@@ -2165,6 +2166,7 @@ class JobStore:
         relative_path: str,
         content_hash: str,
         status: Optional[str] = None,
+        theme: Optional[str] = None,
     ) -> Optional[dict[str, Any]]:
         try:
             cursor = self._connection.execute(
@@ -2172,6 +2174,7 @@ class JobStore:
                 UPDATE note_catalog
                 SET relative_path = ?, content_hash = ?,
                     status = COALESCE(?, status),
+                    theme = COALESCE(?, theme),
                     revision = revision + 1, updated_at = ?
                 WHERE note_id = ? AND revision = ? AND content_hash = ?
                   AND NOT EXISTS (
@@ -2182,6 +2185,7 @@ class JobStore:
                     relative_path,
                     content_hash,
                     status,
+                    theme,
                     _timestamp(),
                     note_id,
                     expected_revision,

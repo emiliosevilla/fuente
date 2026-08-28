@@ -37,8 +37,9 @@ def test_source_bridge_exposes_read_apis(api):
 
 def test_html_exposes_source_view_modes_and_drawers():
     html = CONSOLA_HTML.read_text(encoding="utf-8")
-    for label in ("Grid", "Lista", "Individual", "Feed"):
+    for label in ("Cuadrícula", "Lista", "Feed"):
         assert label in html
+    assert 'option value="individual"' not in html
     assert "Filtrada" not in html
     assert "function switchSourceView(" in html
     assert "IntersectionObserver" in html
@@ -47,6 +48,10 @@ def test_html_exposes_source_view_modes_and_drawers():
     assert "get_hierarchy" in html
     assert "get_relation_preview" in html
     assert 'id="source-filter-drawer"' in html
+    assert 'name="source-filter-type"' in html
+    assert 'id="source-note-types-tree"' not in html
+    assert "SOURCE_ORDERS" in html
+    assert "note_type" in html
     assert 'id="source-chat-drawer"' in html
     assert 'id="source-search-drawer"' in html
     assert html.split('id="source-filter-drawer"', 1)[1].split(">", 1)[0].count("aria-hidden=\"true\"") >= 1
@@ -57,6 +62,25 @@ def test_html_exposes_source_view_modes_and_drawers():
     assert "Abrir grafo completo en Obsidian" in html
     assert 'id="source-actions-popover"' in html
     assert "Solo lectura" in html
+
+
+def test_html_exposes_theme_property_drag_and_drop_contract():
+    html = CONSOLA_HTML.read_text(encoding="utf-8")
+    assert "selectedSourceNoteIds" in html
+    assert "makeSourceNoteDraggable" in html
+    assert "installSourceThemeDropTargets" in html
+    assert "moveSourceNotesToTheme" in html
+    assert 'data-source-filter="theme:General"' in html
+
+
+def test_html_exposes_status_drag_and_drop_confirmation_contract():
+    html = CONSOLA_HTML.read_text(encoding="utf-8")
+    assert "installSourceSealDropTargets" in html
+    assert "requestSourceStatusDrop" in html
+    assert "moveSourceNotesToStatus" in html
+    assert 'id="modal-status-drop-confirmation"' in html
+    assert "Confirmar cambio" in html
+    assert 'data-source-filter="seal:in_review"' in html
 
 
 def test_css_includes_source_workspace_layout():

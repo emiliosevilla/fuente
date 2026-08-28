@@ -1,8 +1,4 @@
-"""Theme-aware Vault scope for pipeline roots (Task 3.1).
-
-Proves that processing and connected-folder sync stay inside the active Theme
-and never silently target the General vault-root tree.
-"""
+"""Tema como propiedad de nota, con una única raíz física ETL."""
 from __future__ import annotations
 
 from pathlib import Path
@@ -36,6 +32,7 @@ def _mock_generate(clean_md_content, model_name, file_name):
             "tags": [],
             "issue": "_Sin_Cuestion",
             "status": "pending_review",
+            "theme": THEME,
             "sources": [file_name],
             "history": [],
         }
@@ -66,7 +63,7 @@ def themed_pipeline(temp_vault_path):
     )
 
     config = get_default_config(temp_vault_path)
-    # Ensure General roots exist so a silent write would be detectable.
+    # The ETL roots are shared; the active Theme is metadata only.
     for root in _general_roots(temp_vault_path).values():
         root.mkdir(parents=True, exist_ok=True)
 
@@ -88,7 +85,7 @@ def themed_pipeline(temp_vault_path):
     patch_abundant_ram(pipeline.ram_governor)
     patch_test_model_inventory(pipeline.ram_governor, "qwen2.5:1.5b")
     pipeline.vault.create_theme(THEME)
-    # create_theme already activates the Theme; rebind linker caches.
+    # create_theme registers and activates the metadata value.
     pipeline.set_active_theme(THEME)
     yield pipeline
     pipeline.close()
@@ -124,16 +121,9 @@ def test_processing_writes_only_inside_active_theme(mock_gen, themed_pipeline):
     for path in (*dirty, *clean, *notes):
         _assert_under_theme(path, theme_dir)
 
-    # General root pipeline dirs must not receive any of this Theme's artifacts.
-    assert list(general["dirty"].glob(f"{Path(SOURCE_NAME).stem}*")) == []
-    assert list(general["clean"].glob(f"{Path(SOURCE_NAME).stem}*.md")) == []
-    assert list(general["output"].rglob(f"{Path(SOURCE_NAME).stem}*.md")) == []
-    assert list(general["input"].glob(SOURCE_NAME)) == []
-
-    # FolderMonitor must poll the Theme input, not config.vault.input_dir.
+    # FolderMonitor always polls the shared ETL input.
     monitor = FolderMonitor(pipeline, poll_interval_sec=3600.0)
     assert monitor.pipeline.vault.input_dir == theme_dir / "1_volcado"
-    assert monitor.pipeline.vault.input_dir != general["input"]
 
 
 def test_connected_folder_sync_stays_in_active_theme(temp_vault_path, tmp_path):
@@ -157,13 +147,11 @@ def test_connected_folder_sync_stays_in_active_theme(temp_vault_path, tmp_path):
     assert copied == 1
 
     theme_dest = vault.input_dir / sample.name
-    general_dest = temp_vault_path / "1_volcado" / sample.name
+    theme_folder_dest = temp_vault_path / THEME / "1_volcado" / sample.name
 
     assert theme_dest.exists()
     assert theme_dest.read_text(encoding="utf-8") == "documento externo del Tema"
-    assert not general_dest.exists(), (
-        "connected-folder sync silently wrote into the General root"
-    )
+    assert not theme_folder_dest.exists()
     assert sample.exists(), "source file in the connected folder must remain intact"
 
 
@@ -208,8 +196,8 @@ def test_enumerate_documents_keeps_notes_and_excludes_system_hidden_and_quaranti
         assert document_id != relative
 
 
-def test_lifecycle_set_active_theme_retargets_monitor(temp_vault_path):
-    """After a theme switch the monitor follows the active ingestion root."""
+def test_lifecycle_set_active_theme_keeps_shared_monitor_root(temp_vault_path):
+    """Changing the selected Theme does not change the physical ETL root."""
     config = get_default_config(temp_vault_path)
     for root in _general_roots(temp_vault_path).values():
         root.mkdir(parents=True, exist_ok=True)
@@ -231,14 +219,12 @@ def test_lifecycle_set_active_theme_retargets_monitor(temp_vault_path):
         lifecycle.set_active_theme(THEME)
 
         theme_input = lifecycle.pipeline.vault.input_dir
-        assert theme_input == temp_vault_path / THEME / "1_volcado"
-        assert theme_input != general_input
+        assert theme_input == temp_vault_path / "1_volcado"
+        assert theme_input == general_input
 
         # FolderMonitor reads pipeline.vault each poll / process_existing path.
         assert lifecycle.monitor.pipeline.vault.input_dir == theme_input
-        assert lifecycle.monitor.pipeline.vault.input_dir != (
-            temp_vault_path / "1_volcado"
-        )
+        assert lifecycle.monitor.pipeline.vault.input_dir == general_input
 
     finally:
         lifecycle.stop()
@@ -269,12 +255,8 @@ def test_console_set_theme_shares_lifecycle_vault_and_retargets_services(temp_va
         assert backend.vault.active_theme == THEME
         assert lifecycle.pipeline.vault.active_theme == THEME
         assert backend.sync_manager.active_theme == THEME
-        assert backend.sync_manager.active_theme_dir == (
-            temp_vault_path / THEME
-        ).resolve()
-        assert lifecycle.monitor.pipeline.vault.input_dir == (
-            temp_vault_path / THEME / "1_volcado"
-        )
+        assert backend.sync_manager.active_theme_dir == temp_vault_path.resolve()
+        assert lifecycle.monitor.pipeline.vault.input_dir == temp_vault_path / "1_volcado"
 
         backend.handle_action("set_theme", {"theme_name": "General"})
         assert lifecycle.pipeline.vault.active_theme == "General"
@@ -283,13 +265,9 @@ def test_console_set_theme_shares_lifecycle_vault_and_retargets_services(temp_va
         assert lifecycle.monitor.pipeline.vault.input_dir == temp_vault_path / "1_volcado"
 
         backend.handle_action("set_theme", {"theme_name": THEME})
-        assert lifecycle.monitor.pipeline.vault.input_dir == (
-            temp_vault_path / THEME / "1_volcado"
-        )
+        assert lifecycle.monitor.pipeline.vault.input_dir == temp_vault_path / "1_volcado"
         assert backend.sync_manager.active_theme == THEME
-        assert backend.sync_manager.active_theme_dir == (
-            temp_vault_path / THEME
-        ).resolve()
+        assert backend.sync_manager.active_theme_dir == temp_vault_path.resolve()
         assert backend.vault is lifecycle.pipeline.vault
     finally:
         lifecycle.stop()

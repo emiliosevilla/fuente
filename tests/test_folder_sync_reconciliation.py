@@ -13,7 +13,7 @@ def _manager(tmp_path, *connections):
     vault = tmp_path / "vault"
     manager = FolderSyncManager(vault, active_theme="Tema")
     assert manager.save_connections(list(connections))
-    return manager, vault / "Tema" / "1_volcado", vault / "Tema" / "2_copiado"
+    return manager, vault / "1_volcado", vault / "2_copiado"
 
 
 def _connection(root, provider="local"):
@@ -89,7 +89,7 @@ def test_replacing_same_provider_root_never_overwrites_existing_input_or_dirty(
     assert dirty_file.read_text(encoding="utf-8") == "dirty artifact"
 
 
-def test_manifest_ownership_requires_the_current_active_theme_destination(tmp_path):
+def test_active_theme_does_not_change_shared_sync_destination(tmp_path):
     source = tmp_path / "provider"
     source.mkdir()
     source_file = source / "note.md"
@@ -98,30 +98,21 @@ def test_manifest_ownership_requires_the_current_active_theme_destination(tmp_pa
     assert manager.save_connections([_connection(source)])
 
     first = manager.sync_to_input(
-        tmp_path / "vault" / "TemaA" / "1_volcado",
-        tmp_path / "vault" / "TemaA" / "2_copiado",
+        tmp_path / "vault" / "1_volcado",
+        tmp_path / "vault" / "2_copiado",
     )
     assert first.copied == 1
 
-    theme_b_input = tmp_path / "vault" / "TemaB" / "1_volcado"
-    theme_b_dirty = tmp_path / "vault" / "TemaB" / "2_copiado"
-    theme_b_input.mkdir(parents=True)
-    theme_b_dirty.mkdir(parents=True)
-    (theme_b_input / "note.md").write_text(
-        "occupied by another source", encoding="utf-8"
-    )
-    (theme_b_dirty / "note.md").write_text("dirty artifact", encoding="utf-8")
-    source_file.write_text("changed provider content", encoding="utf-8")
     manager.set_active_theme("TemaB")
 
-    report = manager.sync_to_input(theme_b_input, theme_b_dirty)
-
-    assert report.copied == 0
-    assert len(report.conflicts) == 1
-    assert (theme_b_input / "note.md").read_text(encoding="utf-8") == (
-        "occupied by another source"
+    report = manager.sync_to_input(
+        tmp_path / "vault" / "1_volcado",
+        tmp_path / "vault" / "2_copiado",
     )
-    assert (theme_b_dirty / "note.md").read_text(encoding="utf-8") == "dirty artifact"
+
+    assert (report.copied, report.unchanged, report.conflicts) == (0, 1, [])
+    assert not (tmp_path / "vault" / "TemaA").exists()
+    assert not (tmp_path / "vault" / "TemaB").exists()
 
 
 def test_sync_report_legacy_integer_skipped_is_normalized_to_diagnostics():
@@ -197,8 +188,6 @@ def test_interrupted_atomic_copy_leaves_no_partial_destination(tmp_path, monkeyp
 
 def test_changed_active_theme_never_writes_general(tmp_path):
     vault = tmp_path / "vault"
-    general_input = vault / "General" / "1_volcado"
-    general_dirty = vault / "General" / "2_copiado"
     source = tmp_path / "provider"
     source.mkdir()
     source_file = source / "note.md"
@@ -206,17 +195,13 @@ def test_changed_active_theme_never_writes_general(tmp_path):
 
     manager = FolderSyncManager(vault, active_theme="TemaA")
     assert manager.save_connections([_connection(source)])
-    first = manager.sync_to_input(
-        vault / "TemaA" / "1_volcado", vault / "TemaA" / "2_copiado"
-    )
+    first = manager.sync_to_input(vault / "1_volcado", vault / "2_copiado")
     source_file.write_text("two", encoding="utf-8")
     manager.set_active_theme("TemaB")
-    second = manager.sync_to_input(
-        vault / "TemaB" / "1_volcado", vault / "TemaB" / "2_copiado"
-    )
+    second = manager.sync_to_input(vault / "1_volcado", vault / "2_copiado")
 
     assert first.copied == second.copied == 1
-    assert (vault / "TemaA" / "1_volcado" / "note.md").read_text() == "one"
-    assert (vault / "TemaB" / "1_volcado" / "note.md").read_text() == "two"
-    assert not (general_input / "note.md").exists()
-    assert not (general_dirty / "note.md").exists()
+    assert (vault / "1_volcado" / "note.md").read_text() == "two"
+    assert not (vault / "General").exists()
+    assert not (vault / "TemaA").exists()
+    assert not (vault / "TemaB").exists()

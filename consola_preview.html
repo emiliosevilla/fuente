@@ -478,11 +478,11 @@
                 <label><input type="checkbox" name="source-filter-type" value="decision" data-onchange-command="applySourceFilters()"><span>Decisión</span><span>4</span></label>
                 <p class="clear" data-onclick-command="clearSourceFilters()">Limpiar filtros</p>
             </aside>
-            <aside class="library" id="fuente-library" aria-label="Biblioteca">
-                <div class="library-head"><h2 aria-label="Biblioteca" title="Biblioteca"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-library"></use></svg></h2><button type="button" class="icon-button" id="btn-source-library" data-onclick-command="toggleSourceLibrary()" aria-label="Colapsar biblioteca" aria-controls="fuente-library" aria-expanded="true"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-panel-left-close"></use></svg></button></div>
-                <button type="button" class="library-all-notes" data-source-filter="all:" data-onclick-command="selectSourceLibraryFilter(this)">Todas las notas</button>
+            <aside class="library" id="fuente-library" aria-label="Notas">
+                <div class="library-head"><h2 aria-label="Notas" title="Notas"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-library"></use></svg><span>Notas</span></h2></div>
+                <button type="button" class="library-all-notes" data-source-filter="all:" data-onclick-command="selectSourceLibraryFilter(this)">Ver todas</button>
                 <ul class="library-tree">
-                    <li><button type="button" class="row library-tree-toggle" data-source-filter="theme:" data-onclick-command="toggleSourceLibrarySection(this)" aria-controls="source-themes-tree" aria-expanded="false"><span class="chev">›</span><span>Temas</span></button>
+                    <li><button type="button" class="row library-tree-toggle" data-source-filter="theme:" data-onclick-command="toggleSourceLibrarySection(this)" aria-controls="source-themes-tree" aria-expanded="false"><span class="chev">›</span><span>Temas (4)</span></button>
                         <ul id="source-themes-tree" hidden>
                             <li><button type="button" class="library-tree-item-button" data-source-filter="theme:General" data-onclick-command="selectSourceLibraryFilter(this)">General</button><span class="num">2</span></li>
                             <li><button type="button" class="library-tree-item-button" data-source-filter="theme:Arquitectura" data-onclick-command="selectSourceLibraryFilter(this)">Arquitectura</button><span class="num">5</span></li>
@@ -490,8 +490,8 @@
                             <li><button type="button" class="library-tree-item-button" data-source-filter="theme:Lanzamiento" data-onclick-command="selectSourceLibraryFilter(this)">Lanzamiento</button><span class="num">5</span></li>
                         </ul>
                     </li>
-                    <li><button type="button" class="row library-tree-toggle" data-source-filter="seal:" data-onclick-command="toggleSourceLibrarySection(this)" aria-controls="source-seals-tree" aria-expanded="true"><span class="chev">⌄</span><span>Sellos</span></button>
-                        <ul id="source-seals-tree">
+                    <li><button type="button" class="row library-tree-toggle" data-source-filter="seal:" data-onclick-command="toggleSourceLibrarySection(this)" aria-controls="source-seals-tree" aria-expanded="false"><span class="chev">›</span><span>Estado</span></button>
+                        <ul id="source-seals-tree" hidden>
                             <li><button type="button" class="library-tree-item-button" data-source-filter="seal:pending_review" data-onclick-command="selectSourceLibraryFilter(this)"><span class="dot red"></span>Pendiente</button><span class="num">6</span></li>
                             <li><button type="button" class="library-tree-item-button" data-source-filter="seal:in_review" data-onclick-command="selectSourceLibraryFilter(this)"><span class="dot orange"></span>En revisión</button><span class="num">5</span></li>
                             <li><button type="button" class="library-tree-item-button" data-source-filter="seal:approved" data-onclick-command="selectSourceLibraryFilter(this)"><span class="dot green"></span>Aprobada</button><span class="num">5</span></li>
@@ -709,9 +709,10 @@
                     <div class="modal-title" id="modal-reader-title">Notas</div>
                 </div>
                 <div class="console-layout-005">
+                    <span id="reader-selection-help" class="reader-selection-help">Un click para seleccionar. Doble click para abrir</span>
                     <div id="reader-note-toolbar-host" class="reader-note-toolbar-host"></div>
-                    <button type="button" class="btn-small" id="btn-source-hierarchy" data-onclick-command="switchSourceView('hierarchy')"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-git-branch"></use></svg>Propiedades</button>
-                    <button type="button" class="btn-small" id="btn-source-relations" data-onclick-command="switchSourceView('relations')"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-network"></use></svg>Relaciones</button>
+                    <button type="button" class="btn-small" id="btn-source-hierarchy" hidden data-onclick-command="switchSourceView('hierarchy')"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-git-branch"></use></svg>Propiedades</button>
+                    <button type="button" class="btn-small" id="btn-source-relations" hidden data-onclick-command="switchSourceView('relations')"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-network"></use></svg>Relaciones</button>
                     <button type="button" class="close-btn" data-onclick-command="closeModal('modal-reader')" aria-label="Cerrar notas"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-close"></use></svg></button>
                 </div>
             </div>
@@ -720,7 +721,6 @@
                     <section class="reader-context-content" data-reader-region="content" aria-label="Contenido de la nota">
                         <div class="reader-dual-pane reader-view source-list-browser" id="reader-view-list">
                             <div class="reader-sidebar">
-                                <div class="library-head"><h2 class="reader-sidebar-divider">Notas</h2><button type="button" class="icon-button" data-onclick-command="toggleReaderLibrary()" aria-label="Ocultar lista de notas"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-panel-left-close"></use></svg></button></div>
                                 <div class="reader-note-list-scroll">
                                     <ul class="reader-note-list" id="reader-note-list">
                                         <li class="reader-note-item active">Cargando notas...</li>
@@ -1684,8 +1684,6 @@ origen: {{origen}}
                 'toggleThemeMenu()': toggleThemeMenu,
                 'toggleVisualStyle()': toggleVisualStyle,
                 'clearLogView()': clearLogView,
-                'toggleSourceLibrary()': toggleSourceLibrary,
-                'toggleReaderLibrary()': toggleReaderLibrary,
                 'toggleReaderContext()': toggleReaderContext,
                 'filterReaderNotes()': filterReaderNotes,
                 'applySourceFilters()': applySourceFilters,
@@ -1694,6 +1692,8 @@ origen: {{origen}}
                 'cycleSourceOrder()': cycleSourceOrder,
                 'clearSourceFilters()': clearSourceFilters,
                 'toggleFilterPopover()': toggleFilterPopover,
+                'cancelSourceStatusDrop()': cancelSourceStatusDrop,
+                'confirmSourceStatusDrop()': confirmSourceStatusDrop,
                 'toggleCaudalImportMenu()': toggleCaudalImportMenu,
                 'printCurrentNote()': printCurrentNote,
                 'openCurrentNoteFile()': openCurrentNoteFile,
@@ -2143,13 +2143,6 @@ document.addEventListener('keydown', handleShellKeydown);
             });
             readUiState('main-window', 'visual_style').then(function(style) {
                 if (FUENTE_STYLES.has(style)) applyVisualStyle(style, false);
-            });
-            readUiState('reader-library', 'panels').then(function(panels) {
-                const workspace = document.getElementById('reader-view-list');
-                const button = document.getElementById('btn-reader-library');
-                if (!workspace || !button || !panels || typeof panels.visible !== 'boolean') return;
-                workspace.classList.toggle('is-library-hidden', !panels.visible);
-                button.setAttribute('aria-pressed', String(panels.visible));
             });
             readUiState('reader-context', 'panels').then(function(panels) {
                 if (panels && typeof panels.visible === 'boolean') {
@@ -4893,6 +4886,21 @@ document.addEventListener('keydown', handleShellKeydown);
             }
         }
 
+        function updateReaderNoteActions() {
+            const listView = document.getElementById('reader-view-list');
+            const isNoteOpen = Boolean(
+                currentSelectedDocumentId
+                && listView
+                && listView.classList.contains('is-note-open')
+            );
+            ['btn-source-hierarchy', 'btn-source-relations'].forEach(function(id) {
+                const button = document.getElementById(id);
+                if (button) button.hidden = !isNoteOpen;
+            });
+            const help = document.getElementById('reader-selection-help');
+            if (help) help.hidden = isNoteOpen;
+        }
+
         function selectSourceView(select) {
             switchSourceView(select && select.value);
         }
@@ -5475,17 +5483,83 @@ document.addEventListener('keydown', handleShellKeydown);
             }
         }
 
+        let sourceMouseDrag = null;
+        let sourceMouseDragHandlersInstalled = false;
+
+        function sourceDropTargetAtPoint(x, y) {
+            return document.elementFromPoint(x, y)?.closest(
+                '#source-themes-tree .library-tree-item-button, #source-seals-tree .library-tree-item-button'
+            );
+        }
+
+        function clearSourceMouseDropTarget() {
+            if (sourceMouseDrag?.target) sourceMouseDrag.target.classList.remove('is-drop-target');
+            sourceMouseDrag && (sourceMouseDrag.target = null);
+        }
+
+        function installSourceMouseDragHandlers() {
+            if (sourceMouseDragHandlersInstalled) return;
+            sourceMouseDragHandlersInstalled = true;
+            function handleDragMove(event) {
+                if (!sourceMouseDrag) return;
+                const distance = Math.hypot(
+                    event.clientX - sourceMouseDrag.startX,
+                    event.clientY - sourceMouseDrag.startY
+                );
+                if (!sourceMouseDrag.moved && distance < 6) return;
+                if (!sourceMouseDrag.moved) {
+                    if (!selectedSourceNoteIds.has(sourceMouseDrag.documentId)) {
+                        selectSourceNote(sourceMouseDrag.documentId);
+                    }
+                    sourceMouseDrag.moved = true;
+                    sourceMouseDrag.element.classList.add('is-dragging');
+                }
+                clearSourceMouseDropTarget();
+                sourceMouseDrag.target = sourceDropTargetAtPoint(event.clientX, event.clientY);
+                if (sourceMouseDrag.target) {
+                    event.preventDefault();
+                    sourceMouseDrag.target.classList.add('is-drop-target');
+                }
+            }
+            function handleDragEnd(event) {
+                if (!sourceMouseDrag) return;
+                const drag = sourceMouseDrag;
+                sourceMouseDrag = null;
+                document.body.classList.remove('is-source-dragging');
+                drag.element.classList.remove('is-dragging');
+                if (drag.target) drag.target.classList.remove('is-drop-target');
+                if (!drag.moved || !drag.target) return;
+                event.preventDefault();
+                const raw = drag.target.dataset.sourceFilter || '';
+                const ids = Array.from(selectedSourceNoteIds);
+                if (raw.startsWith('theme:')) moveSourceNotesToTheme(ids, raw.slice('theme:'.length));
+                if (raw.startsWith('seal:')) requestSourceStatusDrop(ids, raw.slice('seal:'.length));
+            }
+            document.addEventListener('mousemove', handleDragMove);
+            document.addEventListener('mouseup', handleDragEnd);
+            document.addEventListener('pointermove', handleDragMove);
+            document.addEventListener('pointerup', handleDragEnd);
+            document.addEventListener('pointercancel', handleDragEnd);
+            window.addEventListener('blur', function() { handleDragEnd(new Event('pointercancel')); });
+        }
+
         function makeSourceNoteDraggable(element, documentId) {
-            element.draggable = true;
-            element.addEventListener('dragstart', function(event) {
-                if (!selectedSourceNoteIds.has(documentId)) selectSourceNote(documentId);
-                event.dataTransfer.effectAllowed = 'move';
-                event.dataTransfer.setData('text/plain', JSON.stringify(Array.from(selectedSourceNoteIds)));
-                element.classList.add('is-dragging');
-            });
-            element.addEventListener('dragend', function() {
-                element.classList.remove('is-dragging');
-            });
+            installSourceMouseDragHandlers();
+            function beginDrag(event) {
+                if (event.button !== 0) return;
+                event.preventDefault();
+                document.body.classList.add('is-source-dragging');
+                sourceMouseDrag = {
+                    element: element,
+                    documentId: documentId,
+                    startX: event.clientX,
+                    startY: event.clientY,
+                    moved: false,
+                    target: null
+                };
+            }
+            element.addEventListener('mousedown', beginDrag);
+            element.addEventListener('pointerdown', beginDrag);
         }
 
         function installSourceThemeDropTargets() {
@@ -5537,6 +5611,25 @@ document.addEventListener('keydown', handleShellKeydown);
                 const number = button.parentElement && button.parentElement.querySelector('.num');
                 if (number && count !== undefined) number.textContent = String(count);
             });
+        }
+
+        function refreshSourceThemeCounts() {
+            const notes = isSourcePreviewMode() ? LOCAL_MOCK_NOTES : sourceNoteCatalog;
+            const counts = {};
+            notes.forEach(function(note) {
+                const theme = note.theme || 'General';
+                counts[theme] = (counts[theme] || 0) + 1;
+            });
+            document.querySelectorAll('#source-themes-tree .library-tree-item-button').forEach(function(button) {
+                const raw = button.dataset.sourceFilter || '';
+                const theme = raw.slice('theme:'.length);
+                const number = button.parentElement && button.parentElement.querySelector('.num');
+                if (number) number.textContent = String(counts[theme] || 0);
+            });
+            const toggleLabel = document.querySelector('[aria-controls="source-themes-tree"] > span:nth-child(2)');
+            if (toggleLabel) {
+                toggleLabel.textContent = 'Temas (' + document.querySelectorAll('#source-themes-tree .library-tree-item-button').length + ')';
+            }
         }
 
         function installSourceSealDropTargets() {
@@ -5628,6 +5721,10 @@ document.addEventListener('keydown', handleShellKeydown);
                 documentIds.forEach(function(documentId) {
                     const index = Number(String(documentId).replace('mock-', ''));
                     if (LOCAL_MOCK_NOTES[index]) LOCAL_MOCK_NOTES[index].theme = targetTheme;
+                    [sourceNoteCatalog, readerNotes].forEach(function(notes) {
+                        const note = notes.find(function(item) { return item.document_id === documentId; });
+                        if (note) note.theme = targetTheme;
+                    });
                 });
                 selectedSourceNoteIds.clear();
                 selectedSourceNoteId = '';
@@ -5649,6 +5746,7 @@ document.addEventListener('keydown', handleShellKeydown);
         }
 
         function renderSourceAfterMove() {
+            refreshSourceThemeCounts();
             const notes = getSourceLibraryNotes();
             if (sourceView === 'list') renderNoteList(notes, {preserveCatalog: true});
             if (sourceView === 'grid') renderSourceGrid();
@@ -6214,15 +6312,6 @@ document.addEventListener('keydown', handleShellKeydown);
             loadNoteContent(documentId, { skipHistory: true });
         }
 
-        function toggleSourceLibrary() {
-            const workspace = document.getElementById('workspace-source');
-            const button = document.getElementById('btn-source-library');
-            if (!workspace || !button) return;
-            const collapsed = workspace.classList.toggle('is-library-collapsed');
-            button.setAttribute('aria-expanded', String(!collapsed));
-            button.setAttribute('aria-label', collapsed ? 'Expandir biblioteca' : 'Colapsar biblioteca');
-        }
-
         function toggleSourceLibrarySection(button) {
             const tree = document.getElementById(button && button.getAttribute('aria-controls'));
             if (!button || !tree) return;
@@ -6273,15 +6362,6 @@ document.addEventListener('keydown', handleShellKeydown);
             if (sourceView === 'filtered') renderSourceFilteredGrid();
         }
 
-        function toggleReaderLibrary() {
-            const workspace = document.getElementById('reader-view-list');
-            const button = document.getElementById('btn-reader-library');
-            if (!workspace || !button) return;
-            const visible = workspace.classList.toggle('is-library-hidden') === false;
-            button.setAttribute('aria-pressed', String(visible));
-            persistUiState('reader-library', 'panels', {visible: visible});
-        }
-
         function toggleReaderContext() {
             const button = document.getElementById('btn-reader-context');
             const drawer = document.getElementById('source-context-drawer');
@@ -6303,6 +6383,24 @@ document.addEventListener('keydown', handleShellKeydown);
             badge.className = 'source-readonly-badge';
             badge.textContent = noteEditorActive ? 'Editando' : 'Solo lectura';
             bar.appendChild(badge);
+            const currentNote = readerNotes.find(function(note) {
+                return note && note.document_id === currentSelectedDocumentId;
+            }) || (isSourcePreviewMode() ? LOCAL_MOCK_NOTES.find(function(note, index) {
+                return 'mock-' + index === currentSelectedDocumentId;
+            }) : null);
+            const noteSeal = currentNote && (currentNote.seal || currentNote.status);
+            if (noteSeal) {
+                const sealBadge = document.createElement('span');
+                sealBadge.className = 'note-header-seal ' + sealClassName(noteSeal);
+                sealBadge.setAttribute('aria-label', 'Sello: ' + sourceStatusLabel(noteSeal));
+                const sealDot = document.createElement('span');
+                sealDot.className = 'source-seal ' + sealClassName(noteSeal);
+                sealDot.setAttribute('aria-hidden', 'true');
+                const sealLabel = document.createElement('span');
+                sealLabel.textContent = sourceStatusLabel(noteSeal);
+                sealBadge.append(sealDot, sealLabel);
+                bar.appendChild(sealBadge);
+            }
             if (!noteEditorActive) {
                 const actions = document.createElement('div');
                 actions.className = 'reader-actions';
@@ -6875,6 +6973,7 @@ document.addEventListener('keydown', handleShellKeydown);
             const listView = document.getElementById('reader-view-list');
             currentSelectedNoteDocumentModel = documentModel || [];
             if (listView) listView.classList.add('is-note-open');
+            updateReaderNoteActions();
             if (toolbarHost) toolbarHost.replaceChildren(createNoteActionBar(title));
             if (!reader) return;
             reader.replaceChildren();
@@ -7028,12 +7127,14 @@ document.addEventListener('keydown', handleShellKeydown);
             readerNotes = Array.isArray(notes) ? notes.slice() : [];
             if (!options || !options.preserveCatalog) sourceNoteCatalog = readerNotes.slice();
             refreshSourceSealCounts();
+            refreshSourceThemeCounts();
             const ul = document.getElementById('reader-note-list');
             if (ul) ul.replaceChildren();
             const listView = document.getElementById('reader-view-list');
             const reader = document.getElementById('reader-content');
             const toolbarHost = document.getElementById('reader-note-toolbar-host');
             if (listView) listView.classList.remove('is-note-open');
+            updateReaderNoteActions();
             if (toolbarHost) toolbarHost.replaceChildren();
             if (reader) {
                 reader.replaceChildren();
@@ -7128,6 +7229,7 @@ document.addEventListener('keydown', handleShellKeydown);
             selectedSourceNoteId = documentId;
             const listView = document.getElementById('reader-view-list');
             if (listView) listView.classList.add('is-note-open');
+            updateReaderNoteActions();
             highlightSidebarNote(documentId);
             updateReaderBackButton();
 
@@ -7304,6 +7406,7 @@ document.addEventListener('keydown', handleShellKeydown);
                 document.querySelectorAll('.reader-note-item').forEach(el => el.classList.remove('active'));
                 currentSelectedNotePath = '';
                 currentSelectedDocumentId = '';
+                updateReaderNoteActions();
 
                 const readerContent = document.getElementById('reader-content');
                 if (readerContent) {

@@ -62,7 +62,6 @@
             display: flex;
             flex-direction: column;
             gap: 18px;
-            user-select: none;
         }
 
         body.modal-open {
@@ -2107,6 +2106,113 @@ html[data-fuente-style="energy"] .arrow-connector::before {
     border-radius: 0;
     background: var(--bg-card);
     box-shadow: none;
+}
+
+#note-action-bar .reader-actions {
+    margin-left: auto;
+}
+
+.note-editor-shell {
+    display: grid;
+    gap: 14px;
+    max-width: 820px;
+    margin: 0 auto;
+}
+
+.note-editor-toolbar {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 7px;
+    padding: 8px;
+    border: 1px solid var(--fuente-glass-border);
+    border-radius: 9px;
+    background: var(--bg-card);
+    box-shadow: var(--elevation-low);
+}
+
+.note-editor-tool,
+.note-editor-select {
+    min-height: 32px;
+    padding: 0 10px;
+    font-size: 0.72rem;
+}
+
+.note-editor-select {
+    border: 1px solid var(--border-subtle);
+    border-radius: 7px;
+    background: var(--surface-raised);
+    color: var(--text-primary);
+}
+
+.note-editor-content {
+    min-height: 360px;
+    padding: 24px clamp(18px, 3vw, 38px);
+    border: 1px solid var(--fuente-glass-border);
+    border-radius: 9px;
+    background: var(--surface-raised);
+    color: var(--text-primary);
+    cursor: text;
+    user-select: text;
+}
+
+.note-editor-content:focus {
+    border-color: var(--focus-ring);
+    outline: 2px solid color-mix(in srgb, var(--focus-ring) 28%, transparent);
+    outline-offset: 2px;
+}
+
+.note-editor-content .wikilink {
+    pointer-events: none;
+}
+
+.note-editor-content pre {
+    overflow: auto;
+    padding: 12px;
+    border: 1px solid var(--border-subtle);
+    border-radius: 7px;
+    background: var(--surface-sunken);
+    white-space: pre-wrap;
+}
+
+.note-editor-footer {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
+.note-editor-status {
+    margin-right: auto;
+    color: var(--text-secondary);
+    font-size: 0.72rem;
+}
+
+.note-editor-status.is-dirty {
+    color: var(--state-warning);
+    font-weight: 650;
+}
+
+.note-editor-tool:disabled,
+.note-editor-footer button:disabled {
+    cursor: not-allowed;
+    opacity: 0.48;
+}
+
+@media (max-width: 640px) {
+    .note-editor-content {
+        min-height: 260px;
+        padding: 18px 14px;
+    }
+
+    .note-editor-status {
+        flex-basis: 100%;
+        margin-right: 0;
+    }
 }
 
 .reader-properties-pane {

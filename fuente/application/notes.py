@@ -342,6 +342,47 @@ class NotesApplicationService:
             content_hash=str(identity.get("content_hash") or note.content_hash),
         )
 
+    def update_note_body(
+        self,
+        document_id: str,
+        *,
+        expected_revision: int,
+        body_markdown: str,
+    ) -> NoteDocument:
+        """Persist an editor body only when it still matches the loaded revision."""
+        if not isinstance(body_markdown, str):
+            raise TypeError("body_markdown must be a string")
+        if "\x00" in body_markdown:
+            raise ValueError("body_markdown must not contain null bytes")
+        if len(body_markdown) > 10_000_000:
+            raise ValueError("body_markdown is too large")
+        if (
+            isinstance(expected_revision, bool)
+            or not isinstance(expected_revision, int)
+            or expected_revision < 1
+        ):
+            raise ValueError("expected_revision must be a positive integer")
+
+        note = self.get_note(document_id)
+        if note.revision != expected_revision:
+            raise NoteRevisionConflictError(note.document_id)
+
+        metadata = dict(note.frontmatter)
+        if note.status == "approved":
+            metadata["status"] = "pending_review"
+        metadata["history"] = [
+            *metadata.get("history", []),
+            {"date": time.strftime("%Y-%m-%d %H:%M:%S"), "action": "edited"},
+        ]
+        return self._persist_note(
+            note,
+            expected_revision=expected_revision,
+            expected_content_hash=note.content_hash,
+            metadata=metadata,
+            body_markdown=body_markdown,
+            reindex=False,
+        )
+
     def _feed_service(self) -> FeedApplicationService:
         return FeedApplicationService(
             self.job_store,

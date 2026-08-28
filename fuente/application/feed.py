@@ -17,7 +17,7 @@ from fuente.infrastructure.sqlite_store import JobStore
 FEED_FILTER_FIELDS = frozenset(
     {"seal", "date_from", "date_to", "origin", "theme", "urgency", "note_type"}
 )
-FEED_ORDERS = frozenset({"date", "origin", "theme", "urgency"})
+FEED_ORDERS = frozenset({"date", "origin", "theme", "urgency", "note_type"})
 VALID_SEALS = frozenset({"pending_review", "in_review", "approved"})
 SEARCH_MODES = frozenset({"content", "metadata", "relations"})
 DEFAULT_FEED_LIMIT = 30
@@ -340,8 +340,9 @@ class FeedApplicationService:
 
     def _default_seal(self, row: Mapping[str, Any]) -> str:
         note_id = str(row["note_id"])
-        if str(row.get("status") or "") == "approved":
-            return "approved"
+        explicit_status = str(row.get("status") or "")
+        if explicit_status in {"pending_review", "in_review", "approved"}:
+            return explicit_status
         if self.job_store.has_active_review_claim(note_id):
             return "in_review"
         return "pending_review"

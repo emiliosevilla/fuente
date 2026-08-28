@@ -41,6 +41,7 @@ def write_note_under_theme(
         issue=issue,
         status=status,
         origins=origins,
+        extra_metadata={"theme": theme},
     )
     note_path.write_text(markdown, encoding="utf-8")
     catalog = store or JobStore(vault_manager.config.vault_path)

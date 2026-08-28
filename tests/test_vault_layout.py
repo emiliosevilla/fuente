@@ -60,6 +60,7 @@ def test_new_theme_uses_canonical_vault_roots(tmp_path):
     assert (manager.output_dir / "_Sin_Cuestion").is_dir()
     assert manager.processed_dir == layout.processed_dir
     assert manager.shared_dir == layout.shared_dir
+    assert not (tmp_path / "Vault" / "Tema").exists()
 
 
 def test_obsidian_hides_only_canonical_private_roots_and_preserves_rules(tmp_path):

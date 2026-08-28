@@ -44,9 +44,10 @@ def test_fuente_tokens_file_declares_semantic_nord_tokens() -> None:
 def test_console_loads_local_fuente_tokens_before_console_css() -> None:
     html = _read(HTML_PATH)
     links = re.findall(r'<link\s+[^>]*rel=["\']stylesheet["\'][^>]*href=["\']([^"\']+)', html, flags=re.IGNORECASE)
+    console_css = next((link for link in links if link.startswith("fuente/ui/static/console.css")), None)
     assert "fuente/ui/static/fuente_tokens.css" in links
-    assert "fuente/ui/static/console.css" in links
-    assert links.index("fuente/ui/static/fuente_tokens.css") < links.index("fuente/ui/static/console.css")
+    assert console_css is not None
+    assert links.index("fuente/ui/static/fuente_tokens.css") < links.index(console_css)
     assert TOKENS_CSS_PATH.is_file()
 
 def test_console_consumes_fuente_tokens_instead_of_literal_nord_palette() -> None:
@@ -149,14 +150,14 @@ def test_fuente_seals_tree_exposes_an_accessible_toggle() -> None:
     assert 'id="source-seals-tree"' in html
     assert "function toggleSourceLibrarySection(button)" in html
 
-def test_fuente_note_types_tree_exposes_an_accessible_toggle() -> None:
+def test_fuente_note_types_live_in_source_filters_not_the_explorer_tree() -> None:
     html = _read(HTML_PATH)
-    assert 'aria-controls="source-note-types-tree"' in html
-    assert 'aria-expanded="false"' in html
-    assert 'id="source-note-types-tree" hidden' in html
+    assert 'id="source-note-types-tree"' not in html
+    assert 'data-source-filter="note_type:concepto"' not in html
+    assert 'name="source-filter-type" value="concepto"' in html
+    assert 'name="source-filter-type" value="referencia"' in html
     assert "Concepto" in html
     assert "Referencia" in html
-    assert "Proyecto" in html
     assert "Decisión" in html
 
 
@@ -165,15 +166,6 @@ def test_fuente_themes_tree_exposes_an_accessible_toggle() -> None:
     assert 'aria-controls="source-themes-tree"' in html
     assert 'id="source-themes-tree" hidden' in html
     assert "General" in html
-
-
-def test_fuente_projects_tree_exposes_an_accessible_toggle() -> None:
-    html = _read(HTML_PATH)
-    assert 'aria-controls="source-projects-tree"' in html
-    assert 'id="source-projects-tree" hidden' in html
-    assert "Arquitectura" in html
-    assert "Lanzamiento" in html
-    assert "Operaciones" in html
 
 
 def test_console_reader_css_keeps_keyboard_focus_and_narrow_layout() -> None:
@@ -287,7 +279,11 @@ def test_fuente_mockup_identity_markers_are_present() -> None:
     assert "Detalle del archivo" in html
     assert "Contrato_Servicios_v3.docx" in html
     assert "function applyCaptureScenario(name)" in html
-    assert "switchSourceView('individual')" in html.split("source-view-modes", 1)[1]
+    assert "function openSourceNote(documentId)" in html
+    assert "function getPreviewSourceItemsForLibrary()" in html
+    assert "function getSourceLibraryNotes()" in html
+    assert 'id="source-browser-notes"' not in html
+    assert "dblclick" in html
     assert "source-filter-drawer" in html.split("source-view-modes", 1)[1]
     assert "restoreCaudalQueueFixture" in html
     assert "caudal-queue-fixture" in html
@@ -328,10 +324,14 @@ def test_source_preview_exposes_navigable_recent_cards_and_library_filters() -> 
     assert "function isSourcePreviewMode()" in html
     assert "function selectSourceLibraryFilter(button)" in html
     assert "function renderSourceCard(item)" in html
-    assert 'data-source-filter="project:Arquitectura"' in html
+    assert 'data-source-filter="project:Arquitectura"' not in html
+    assert 'data-source-filter="project:"' not in html
+    assert 'value="proyecto"' not in html
     assert 'data-source-filter="theme:General"' in html
-    assert 'data-source-filter="note_type:concepto"' in html
+    assert 'name="source-filter-type" value="concepto"' in html
     assert 'data-source-filter="seal:approved"' in html
+    assert "note_type" in html
+    assert "SOURCE_ORDERS" in html
     assert "card.setAttribute('role', 'button')" in html
     assert ".library-tree-item-button" in css
     assert "grid-template-columns: var(--library-width) minmax(0, 1fr);" in css

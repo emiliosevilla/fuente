@@ -1286,6 +1286,38 @@ class FuentePyWebViewApi:
     def get_notes_list(self) -> list[dict[str, Any]]:
         return self.backend.get_notes_list()
 
+    def move_notes_to_theme(
+        self, document_ids: object, target_theme: object
+    ) -> dict[str, Any] | ErrorResult:
+        if not isinstance(document_ids, list) or not document_ids:
+            return self._error("invalid_payload", "document_ids must be a non-empty list")
+        if len(document_ids) > 100 or any(not isinstance(item, str) for item in document_ids):
+            return self._error("invalid_payload", "document_ids is invalid")
+        theme = self._text(target_theme, "target_theme")
+        if isinstance(theme, dict):
+            return theme
+        try:
+            return self.backend.move_notes_to_theme(document_ids, theme)
+        except (PathAuthorizationError, ValueError, OSError) as error:
+            code = getattr(error, "code", "invalid_payload")
+            return {"error": code, "message": str(error)}
+
+    def move_notes_to_status(
+        self, document_ids: object, target_status: object
+    ) -> dict[str, Any] | ErrorResult:
+        if not isinstance(document_ids, list) or not document_ids:
+            return self._error("invalid_payload", "document_ids must be a non-empty list")
+        if len(document_ids) > 100 or any(not isinstance(item, str) for item in document_ids):
+            return self._error("invalid_payload", "document_ids is invalid")
+        status = self._text(target_status, "target_status")
+        if isinstance(status, dict):
+            return status
+        try:
+            return self.backend.move_notes_to_status(document_ids, status)
+        except (PathAuthorizationError, ValueError, OSError) as error:
+            code = getattr(error, "code", "invalid_payload")
+            return {"error": code, "message": str(error)}
+
     def get_note_content(self, note_id: object) -> dict[str, Any]:
         note = self._text(note_id, "note_id")
         if isinstance(note, dict):

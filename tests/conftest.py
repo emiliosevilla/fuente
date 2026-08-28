@@ -165,6 +165,7 @@ def v3_summary_markdown(
         "tags": list(tags or []),
         "issue": issue,
         "status": status,
+        "theme": "General",
         "origin_kind": origin_kind,
         "origins": origins or [fixture_origin_ref(identity=note_id)],
         "history": list(history or []),
@@ -199,6 +200,8 @@ def save_v3_summary_note(
         vault.config.vault_path.resolve()
     ).as_posix()
     note_id = document_id_for_relative_path(relative_path)
+    note_metadata = dict(extra_metadata or {})
+    note_metadata.setdefault("theme", vault.active_theme)
     markdown = v3_summary_markdown(
         note_id=note_id,
         title=metadata_title or title,
@@ -209,7 +212,7 @@ def save_v3_summary_note(
         origin_kind=origin_kind,
         origins=origins,
         history=history,
-        extra_metadata=extra_metadata,
+        extra_metadata=note_metadata,
     )
     note_path = vault.save_atomic_note(title, markdown, issue_name=issue_name)
     catalog = store or JobStore(vault.config.vault_path)

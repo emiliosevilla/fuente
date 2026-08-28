@@ -55,17 +55,15 @@ def test_source_is_content_first_without_map_or_editor():
     assert f'id="{markdown_editor_id}"' not in html
 
 
-def test_reader_library_and_context_are_independently_collapsible():
+def test_reader_header_avoids_redundant_content_and_context_controls():
     html = Path("consola_preview.html").read_text(encoding="utf-8")
     css = Path("fuente/ui/static/console.css").read_text(encoding="utf-8")
-    assert 'id="btn-reader-library" aria-pressed="true"' in html
-    assert 'id="btn-reader-context" aria-pressed="false"' in html
-    assert 'id="source-context-drawer"' in html
-    assert 'aria-hidden="true"' in html.split('id="source-context-drawer"', 1)[1].split(">", 1)[0]
-    assert "function toggleReaderLibrary()" in html
-    assert "function toggleReaderContext()" in html
-    assert ".reader-context-grid.is-context-hidden" in css
-    assert ".reader-dual-pane.is-library-hidden .reader-sidebar" in css
+    assert 'id="btn-reader-library"' not in html
+    assert 'id="btn-reader-context"' not in html
+    assert 'id="source-view-select"' in html
+    assert 'id="btn-source-hierarchy"' in html
+    assert '>Propiedades</button>' in html
+    assert '.reader-context-grid.is-context-hidden' in css
 
 
 def test_quick_guide_has_five_steps_and_tutor_details():

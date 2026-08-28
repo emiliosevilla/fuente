@@ -38,7 +38,7 @@ __all__ = ["VaultManager", "document_id_for_relative_path", "SYSTEM_DIR_NAME"]
 
 
 class VaultManager:
-    """Gestiona la estructura de carpetas de Obsidian, Temas, Cuestiones y la Papelera de Cuarentena."""
+    """Gestiona las raíces ETL, metadatos de Tema y la Papelera de Cuarentena."""
 
     def __init__(self, config: VaultConfig, active_theme: str = "General"):
         self.config = config
@@ -54,10 +54,8 @@ class VaultManager:
 
     @property
     def current_theme_dir(self) -> Path:
-        """Devuelve el directorio del Tema activo en la Bóveda."""
-        if self.active_theme == "General" and not (self.config.vault_path / "General").exists():
-            return self.config.vault_path
-        return self.config.vault_path / self.sanitize_filename(self.active_theme)
+        """Devuelve la única raíz física del Vault; el Tema es metadato."""
+        return self.config.vault_path
 
     @property
     def input_dir(self) -> Path:
@@ -92,7 +90,7 @@ class VaultManager:
         return self.quarantine_service.quarantine_dir
 
     def _ensure_directories(self) -> None:
-        """Crea la jerarquía de carpetas del tema activo si no existe."""
+        """Crea una sola jerarquía ETL compartida si no existe."""
         if (
             self.config.input_dir_name == self.layout.input_personal_dir.parent.name
             and self.config.dirty_dir_name == self.layout.root("dirty").name
@@ -233,49 +231,59 @@ class VaultManager:
 
     # --- GESTIÓN DE TEMAS ---
     def get_available_themes(self) -> list[str]:
-        """Obtiene la lista de Temas disponibles en la Bóveda."""
-        themes = set()
-        if (self.config.vault_path / self.config.input_dir_name).exists():
-            themes.add("General")
-        
-        for item in self.config.vault_path.iterdir():
-            if item.is_dir() and not item.name.startswith(".") and item.name not in ["__pycache__"]:
-                if (
-                    (item / self.config.input_dir_name).exists()
-                    or (item / self.config.output_dir_name).exists()
-                    or (item / self.config.shared_dir_name).exists()
-                ):
-                    themes.add(item.name)
-
-        if not themes:
-            themes.add("General")
-        return sorted(list(themes))
+        """Obtiene Temas desde metadatos, nunca desde carpetas."""
+        themes = {"General"}
+        registry = self.config.system_dir / "themes.json"
+        try:
+            stored = json.loads(registry.read_text(encoding="utf-8"))
+            if isinstance(stored, list):
+                themes.update(value.strip() for value in stored if isinstance(value, str) and value.strip())
+        except (OSError, ValueError, TypeError):
+            pass
+        for root in (self.clean_dir, self.output_dir):
+            if not root.exists():
+                continue
+            for note_path in root.rglob("*.md"):
+                if self._is_excluded_from_note_lists(note_path):
+                    continue
+                try:
+                    metadata = MarkdownDocument.from_markdown(
+                        note_path.read_text(encoding="utf-8")
+                    ).metadata
+                except (FrontmatterError, OSError, UnicodeError):
+                    continue
+                theme = metadata.get("theme")
+                if isinstance(theme, str) and theme.strip():
+                    themes.add(theme.strip())
+        return sorted(themes)
 
     def set_active_theme(self, theme_name: str) -> Path:
-        """Cambia el tema activo y asegura su estructura de carpetas."""
+        """Cambia el Tema seleccionado sin crear una carpeta física."""
         safe_theme = self.sanitize_filename(theme_name)
         if not safe_theme:
             safe_theme = "General"
         self.active_theme = safe_theme
-        self.quarantine_service.migrate_legacy(
-            [self.current_theme_dir / ".fuente_quarantine"]
-        )
         self._ensure_directories()
         logger.info(f"Tema activo cambiado a: {self.active_theme}")
         return self.current_theme_dir
 
     def create_theme(self, theme_name: str) -> Path:
-        """Crea un Tema nuevo con layout actual y superficie legacy compatible."""
+        """Registra un Tema sin convertirlo en una carpeta del Vault."""
         safe_theme = self.sanitize_filename(theme_name)
-        theme_dir = self.config.vault_path / safe_theme
-        theme_dir.mkdir(parents=True, exist_ok=True)
-        VaultLayout(theme_dir).ensure()
-        (theme_dir / self.config.input_dir_name).mkdir(exist_ok=True)
-        (theme_dir / self.config.dirty_dir_name).mkdir(exist_ok=True)
-        (theme_dir / self.config.clean_dir_name).mkdir(exist_ok=True)
-        (theme_dir / self.config.output_dir_name / "_Sin_Cuestion").mkdir(parents=True, exist_ok=True)
+        if not safe_theme:
+            raise ValueError("theme_name is required")
+        registry = self.config.system_dir / "themes.json"
+        stored: list[str] = []
+        try:
+            value = json.loads(registry.read_text(encoding="utf-8"))
+            if isinstance(value, list):
+                stored = [item for item in value if isinstance(item, str)]
+        except (OSError, ValueError, TypeError):
+            pass
+        if safe_theme not in stored:
+            atomic_write_json(registry, [*stored, safe_theme])
         self.set_active_theme(safe_theme)
-        return theme_dir
+        return self.current_theme_dir
 
     # --- GESTIÓN DE CUESTIONES ---
     def get_issues_in_theme(self) -> list[str]:

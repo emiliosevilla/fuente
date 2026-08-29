@@ -18,6 +18,7 @@ from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path, PurePosixPath
 from typing import Any, Callable, Mapping
+from threading import Thread
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote, urlparse
 from urllib.request import Request, urlopen
@@ -707,6 +708,34 @@ class GestajoAgentServer(ThreadingHTTPServer):
         self.agent = agent
         super().__init__(("127.0.0.1", port), _handler_for(agent))
         self.socket = ssl_context.wrap_socket(self.socket, server_side=True)
+
+
+@dataclass
+class GestajoAgentRuntime:
+    """Own the server thread for exactly one open Fuente Vault."""
+
+    server: GestajoAgentServer
+    thread: Thread
+
+    def stop(self) -> None:
+        self.server.shutdown()
+        self.server.server_close()
+        self.thread.join(timeout=2)
+
+
+def start_gestajo_agent(
+    vault_path: Path,
+    backend: Any,
+    ssl_context: ssl.SSLContext,
+    *,
+    port: int = 43819,
+) -> GestajoAgentRuntime:
+    """Start the loopback agent against the already running console backend."""
+    agent = GestajoAgent(vault_path, backend_factory=lambda _vault: backend)
+    server = GestajoAgentServer(agent, ssl_context, port=port)
+    thread = Thread(target=server.serve_forever, name="gestajo-agent", daemon=True)
+    thread.start()
+    return GestajoAgentRuntime(server=server, thread=thread)
 
 
 def _handler_for(agent: GestajoAgent) -> type[BaseHTTPRequestHandler]:

@@ -20,6 +20,7 @@ from typing import Any, Callable, Dict, List, Optional, Sequence
 
 from fuente.domain.sync import ConnectedFolder, SyncProvider
 from fuente.domain.vault_layout import VaultLayout
+from fuente.agent.tls import prepare_agent_tls
 from fuente.extractors.ocr_runtime import (
     resolve_tesseract_command,
 )
@@ -78,6 +79,7 @@ class InstallationContext:
     install_model: bool = True
     install_ocr: bool = False
     create_shortcuts: bool = True
+    install_gestajo_agent: bool = False
     existing_receipt: Optional[Dict[str, Any]] = None
 
 
@@ -590,6 +592,24 @@ def step_create_shortcuts(ctx: InstallationContext) -> InstallStepResult:
         )
 
 
+def step_install_gestajo_agent(ctx: InstallationContext) -> InstallStepResult:
+    if not ctx.install_gestajo_agent:
+        return InstallStepResult(
+            name="gestajo_agent_tls",
+            success=True,
+            skipped=True,
+            message="Complemento Documentos de Gestajo no seleccionado",
+        )
+    confirmed = ctx.confirm or (lambda _title, _message: False)
+    success, message = prepare_agent_tls(confirmed)
+    return InstallStepResult(
+        name="gestajo_agent_tls",
+        success=success,
+        message=message,
+        actionable=None if success else "Activa el complemento desde este instalador y confirma el certificado local.",
+    )
+
+
 def build_receipt(
     ctx: InstallationContext,
     steps: Sequence[InstallStepResult],
@@ -657,6 +677,7 @@ def run_installation(ctx: InstallationContext) -> List[InstallStepResult]:
     results.append(model_step)
 
     results.append(_run_named_step("shortcuts", lambda: step_create_shortcuts(ctx)))
+    results.append(_run_named_step("gestajo_agent_tls", lambda: step_install_gestajo_agent(ctx)))
 
     prereqs = detect_prerequisites()
     receipt = build_receipt(ctx, results, prereqs, model_name=model_step.model_name)

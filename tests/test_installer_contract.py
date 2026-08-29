@@ -24,6 +24,7 @@ from fuente.installer_contract import (
     save_receipt,
     step_save_cloud_folders,
     step_create_shortcuts,
+    step_install_gestajo_agent,
     step_install_model,
     wait_for_ollama_ready,
 )
@@ -224,6 +225,20 @@ def test_step_create_shortcuts_propagates_false(tmp_path):
     assert result.message == "Desktop shortcut creation returned false"
 
 
+def test_gestajo_agent_step_needs_opt_in_and_reuses_tls_preparer(tmp_path):
+    skipped = step_install_gestajo_agent(InstallationContext(base_dir=tmp_path))
+    assert skipped.success is True
+    assert skipped.skipped is True
+
+    ctx = InstallationContext(base_dir=tmp_path, install_gestajo_agent=True)
+    with patch("fuente.installer_contract.prepare_agent_tls", return_value=(True, "preparado")) as prepare:
+        installed = step_install_gestajo_agent(ctx)
+
+    assert installed.success is True
+    assert installed.message == "preparado"
+    prepare.assert_called_once()
+
+
 def test_receipt_stores_model_name_from_step(tmp_path):
     vault = tmp_path / "Fuente"
     ctx = InstallationContext(
@@ -270,6 +285,7 @@ def test_on_step_start_callback_fires_in_order(tmp_path):
         "ocr_runtime",
         "ollama_model",
         "shortcuts",
+        "gestajo_agent_tls",
     ]
 
 

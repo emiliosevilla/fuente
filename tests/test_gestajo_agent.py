@@ -17,6 +17,7 @@ from fuente.agent.server import (
     _binding_path,
     publish_agent_status,
     publish_document_note_metadata,
+    start_gestajo_agent,
 )
 from fuente.infrastructure.sqlite_store import JobStore
 from fuente.core.folder_sync import SyncConflict
@@ -106,6 +107,32 @@ def test_origin_and_claim_payload_fail_closed(tmp_path: Path):
 def test_server_requires_tls_context(tmp_path: Path):
     with pytest.raises(ValueError, match="TLS context"):
         GestajoAgentServer(GestajoAgent(tmp_path, verifier=_verifier, publisher=_publisher, management_verifier=_management_verifier), None)  # type: ignore[arg-type]
+
+
+def test_runtime_reuses_the_open_console_backend(monkeypatch, tmp_path: Path):
+    stopped: list[str] = []
+
+    class FakeServer:
+        def __init__(self, agent, _context, port):
+            self.agent = agent
+            assert port == 43819
+
+        def serve_forever(self):
+            return
+
+        def shutdown(self):
+            stopped.append("shutdown")
+
+        def server_close(self):
+            stopped.append("close")
+
+    monkeypatch.setattr("fuente.agent.server.GestajoAgentServer", FakeServer)
+    backend = object()
+    runtime = start_gestajo_agent(tmp_path, backend, object())
+
+    assert runtime.server.agent._backend_factory(tmp_path) is backend
+    runtime.stop()
+    assert stopped == ["shutdown", "close"]
 
 
 def test_health_is_cors_and_private_network_ready_for_gestajo(tmp_path: Path):

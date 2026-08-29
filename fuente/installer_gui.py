@@ -53,6 +53,7 @@ class FuenteInstallerWizard(tk.Tk):
         self.ocr_opt_in_var = tk.BooleanVar(
             value=os.environ.get("FUENTE_INSTALL_OCR", "0") == "1"
         )
+        self.gestajo_agent_opt_in_var = tk.BooleanVar(value=True)
         self.run_first_flush_var = tk.BooleanVar(value=True)
 
         self.current_step = 1
@@ -309,6 +310,16 @@ class FuenteInstallerWizard(tk.Tk):
         )
         ocr_opt_in.pack(fill="x", pady=(8, 0))
 
+        tk.Checkbutton(
+            req_box,
+            text="Activar complemento Documentos de Gestajo (certificado local con confirmación)",
+            variable=self.gestajo_agent_opt_in_var,
+            font=("Helvetica", 10, "bold"),
+            fg="#1F2937",
+            bg="#FFFFFF",
+            anchor="w",
+        ).pack(fill="x", pady=(8, 0))
+
         # Verificar requisitos inmediatamente
         self._check_requirements()
 
@@ -427,6 +438,7 @@ class FuenteInstallerWizard(tk.Tk):
                 confirm=self._confirm_on_main_thread,
                 log=self._log,
                 install_ocr=self.ocr_opt_in_var.get(),
+                install_gestajo_agent=self.gestajo_agent_opt_in_var.get(),
                 existing_receipt=self._existing_receipt,
             )
 
@@ -436,6 +448,7 @@ class FuenteInstallerWizard(tk.Tk):
                 "ocr_runtime": ("4. Comprobando OCR Tesseract...", 50),
                 "ollama_model": ("5. Evaluando modelo LLM recomendado...", 60),
                 "shortcuts": ("5. Generando acceso directo en el Escritorio...", 90),
+                "gestajo_agent_tls": ("6. Preparando conexión segura con Gestajo...", 95),
             }
 
             def _on_step_start(step_name: str):

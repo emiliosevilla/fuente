@@ -2712,6 +2712,16 @@ def launch_control_console(vault_path: Optional[Path] = None):
 
         # One VaultManager keeps console actions and FolderMonitor on one theme.
         backend.attach_lifecycle(lifecycle)
+        from fuente.agent.server import GestajoAgentRuntime, start_gestajo_agent
+        from fuente.agent.tls import load_agent_tls_context
+
+        agent_runtime: GestajoAgentRuntime | None = None
+        tls_context = load_agent_tls_context()
+        if tls_context is not None:
+            try:
+                agent_runtime = start_gestajo_agent(vault_path, backend, tls_context)
+            except OSError as error:
+                logger.warning("No se pudo iniciar el agente local de Gestajo: %s", error)
         if HAS_WEBVIEW and html_file.exists():
             api = FuentePyWebViewApi(backend)
             # PyWebView blocks browser downloads unless this setting is enabled
@@ -2736,6 +2746,8 @@ def launch_control_console(vault_path: Optional[Path] = None):
             app = FuenteControlConsole(vault_path, backend=backend)
             app.mainloop()
     finally:
+        if "agent_runtime" in locals() and agent_runtime is not None:
+            agent_runtime.stop()
         lifecycle.stop()
 
 

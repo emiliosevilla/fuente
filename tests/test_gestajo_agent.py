@@ -32,6 +32,11 @@ def _management_verifier(_binding: AgentBinding, _token: str, org_id: str) -> st
     return "gestion"
 
 
+def _membership_verifier(_binding: AgentBinding, _token: str, org_id: str) -> str:
+    assert org_id == "00000000-0000-0000-0000-000000000001"
+    return "consulta"
+
+
 def test_claim_binds_one_user_and_never_persists_access_token(tmp_path: Path):
     agent = GestajoAgent(tmp_path, verifier=_verifier, publisher=_publisher, management_verifier=_management_verifier)
 
@@ -58,7 +63,7 @@ def test_status_requires_the_bound_user(tmp_path: Path):
     )
 
     assert agent.status("token-a")["claimed"] is True
-    assert agent.status("token-a")["capabilities"] == ["flow"]
+    assert agent.status("token-a")["capabilities"] == ["flow", "settings"]
     with pytest.raises(AgentAuthenticationError, match="another user"):
         agent.status("token-b")
 
@@ -181,6 +186,36 @@ def test_flow_rejects_consulta(tmp_path: Path):
 
     with pytest.raises(AgentAuthorizationError, match="Caudal requires"):
         agent.flow("token-a", "00000000-0000-0000-0000-000000000001")
+
+
+def test_settings_returns_safe_suggestions_to_consulta_and_writes_only_for_management(tmp_path: Path):
+    calls = []
+    agent = GestajoAgent(
+        tmp_path, verifier=_verifier, publisher=_publisher,
+        management_verifier=_management_verifier, membership_verifier=_membership_verifier,
+        settings_reader=lambda _vault: {
+            "settings": {
+                "models": ["qwen2.5:14b"], "models_measured": True,
+                "current_model": "qwen2.5:14b", "ram_margin": "30%",
+                "resource_profile": "auto", "audio_mode": "auto",
+                "offline_mode": {"is_local_only": True, "label": "Solo local", "ollama_url": "http://127.0.0.1:11434"},
+                "vault_path": "/private/vault",
+            },
+            "sync_inputs": {"inputs": [{"id": "input-1", "provider": "onedrive", "display_name": "Compartidos", "enabled": True, "root": "/private/share"}]},
+        },
+        settings_writer=lambda _vault, payload: calls.append(payload) or {"status": "saved"},
+    )
+    agent.claim("token-a", {"supabase_url": "https://project.supabase.co", "publishable_key": "sb_publishable_test_key"})
+
+    settings = agent.settings("token-a", "00000000-0000-0000-0000-000000000001")
+
+    assert settings["can_edit"] is False
+    assert settings["ram_margin_pct"] == 0.3
+    assert settings["sync_inputs"] == [{"id": "input-1", "provider": "onedrive", "display_name": "Compartidos", "enabled": True}]
+    assert "/private" not in str(settings)
+    with pytest.raises(AgentAuthorizationError, match="Settings require"):
+        agent.save_settings("token-a", "00000000-0000-0000-0000-000000000001", {"audio_mode": "skip"})
+    assert calls == []
 
 
 def test_flow_requires_exactly_one_active_organization():

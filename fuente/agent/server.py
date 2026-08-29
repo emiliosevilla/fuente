@@ -165,7 +165,7 @@ def publish_agent_status(
         raise AgentSyncError("Supabase could not persist the agent status") from error
 
 
-def verify_supabase_management(binding: AgentBinding, access_token: str, org_id: str) -> str:
+def verify_supabase_membership(binding: AgentBinding, access_token: str, org_id: str) -> str:
     try:
         normalized_org_id = str(uuid.UUID(org_id))
     except (ValueError, AttributeError) as error:
@@ -187,6 +187,13 @@ def verify_supabase_management(binding: AgentBinding, access_token: str, org_id:
     if not isinstance(rows, list) or len(rows) != 1 or not isinstance(rows[0], Mapping):
         raise AgentAuthorizationError("active organization is not available")
     role = rows[0].get("role")
+    if role not in {"consulta", "gestion", "admin"}:
+        raise AgentAuthorizationError("active organization has an invalid role")
+    return role
+
+
+def verify_supabase_management(binding: AgentBinding, access_token: str, org_id: str) -> str:
+    role = verify_supabase_membership(binding, access_token, org_id)
     if role not in {"gestion", "admin"}:
         raise AgentAuthorizationError("Caudal requires gestion or admin access")
     return role
@@ -202,14 +209,20 @@ class GestajoAgent:
         verifier: Callable[[AgentBinding, str], str] = verify_supabase_user,
         publisher: Callable[[AgentBinding, str, Mapping[str, object]], None] = publish_agent_status,
         management_verifier: Callable[[AgentBinding, str, str], str] = verify_supabase_management,
+        membership_verifier: Callable[[AgentBinding, str, str], str] = verify_supabase_membership,
         flow_reader: Callable[[Path], Mapping[str, object]] | None = None,
+        settings_reader: Callable[[Path], Mapping[str, object]] | None = None,
+        settings_writer: Callable[[Path, Mapping[str, object]], Mapping[str, object]] | None = None,
         allowed_origins: frozenset[str] = DEFAULT_ALLOWED_ORIGINS,
     ) -> None:
         self.vault_path = Path(vault_path).expanduser().resolve()
         self._verifier = verifier
         self._publisher = publisher
         self._management_verifier = management_verifier
+        self._membership_verifier = membership_verifier
         self._flow_reader = flow_reader or _read_flow_state
+        self._settings_reader = settings_reader or _read_settings
+        self._settings_writer = settings_writer or _save_settings
         self._allowed_origins = allowed_origins
         self._binding = _read_binding(self.vault_path)
 
@@ -259,7 +272,7 @@ class GestajoAgent:
             "platform": platform.system(),
             "user_id": binding.user_id,
             "vault_fingerprint": self._vault_fingerprint(),
-            "capabilities": ["flow"],
+            "capabilities": ["flow", "settings"],
         }
 
     def flow(self, access_token: object, org_id: object) -> dict[str, object]:
@@ -269,6 +282,30 @@ class GestajoAgent:
         self._management_verifier(binding, self._access_token(access_token), org_id)
         state = self._flow_reader(self.vault_path)
         return _flow_response(state)
+
+    def settings(self, access_token: object, org_id: object) -> dict[str, object]:
+        binding = self._require_user(access_token)
+        if not isinstance(org_id, str):
+            raise AgentAuthorizationError("organization is invalid")
+        role = self._membership_verifier(binding, self._access_token(access_token), org_id)
+        return _settings_response(self._settings_reader(self.vault_path), role)
+
+    def save_settings(self, access_token: object, org_id: object, payload: object) -> dict[str, object]:
+        binding = self._require_user(access_token)
+        if not isinstance(org_id, str):
+            raise AgentAuthorizationError("organization is invalid")
+        role = self._membership_verifier(binding, self._access_token(access_token), org_id)
+        if role not in {"gestion", "admin"}:
+            raise AgentAuthorizationError("Settings require gestion or admin access")
+        if not isinstance(payload, Mapping):
+            raise AgentError("settings payload must be an object")
+        allowed = {"custom_model_override", "ram_safety_margin_pct", "resource_profile", "audio_mode"}
+        if not payload or set(payload) - allowed:
+            raise AgentError("settings payload has unsupported fields")
+        result = self._settings_writer(self.vault_path, payload)
+        if result.get("error"):
+            raise AgentError(str(result.get("message") or result["error"]))
+        return self.settings(access_token, org_id)
 
     def _require_user(self, access_token: object) -> AgentBinding:
         binding = self._binding
@@ -331,13 +368,19 @@ def _handler_for(agent: GestajoAgent) -> type[BaseHTTPRequestHandler]:
                     lambda token: agent.flow(token, _single_query_value(parsed.query, "org_id"))
                 )
                 return
+            if parsed.path == "/v1/settings":
+                self._authorized(
+                    lambda token: agent.settings(token, _single_query_value(parsed.query, "org_id"))
+                )
+                return
             if parsed.path != "/v1/status":
                 self._send_error(HTTPStatus.NOT_FOUND, "route not found")
                 return
             self._authorized(lambda token: agent.status(token))
 
         def do_POST(self) -> None:  # noqa: N802
-            if self.path != "/v1/claim":
+            parsed = urlparse(self.path)
+            if parsed.path not in {"/v1/claim", "/v1/settings"}:
                 self._send_error(HTTPStatus.NOT_FOUND, "route not found")
                 return
             try:
@@ -345,7 +388,12 @@ def _handler_for(agent: GestajoAgent) -> type[BaseHTTPRequestHandler]:
             except AgentError as error:
                 self._send_error(HTTPStatus.BAD_REQUEST, str(error))
                 return
-            self._authorized(lambda token: agent.claim(token, payload))
+            if parsed.path == "/v1/claim":
+                self._authorized(lambda token: agent.claim(token, payload))
+                return
+            self._authorized(
+                lambda token: agent.save_settings(token, _single_query_value(parsed.query, "org_id"), payload)
+            )
 
         def _authorized(self, operation: Callable[[str], dict[str, object]]) -> None:
             origin = self.headers.get("Origin")
@@ -416,6 +464,22 @@ def _read_flow_state(vault_path: Path) -> Mapping[str, object]:
     return FuenteConsoleBackend(vault_path).get_flow_state()
 
 
+def _read_settings(vault_path: Path) -> Mapping[str, object]:
+    from fuente.control_console import FuenteConsoleBackend
+
+    backend = FuenteConsoleBackend(vault_path)
+    return {
+        "settings": backend.get_settings_info(),
+        "sync_inputs": backend.get_sync_inputs(),
+    }
+
+
+def _save_settings(vault_path: Path, payload: Mapping[str, object]) -> Mapping[str, object]:
+    from fuente.control_console import FuenteConsoleBackend
+
+    return FuenteConsoleBackend(vault_path).save_settings(dict(payload))
+
+
 def _flow_response(state: Mapping[str, object]) -> dict[str, object]:
     def count(value: object) -> int:
         return max(0, int(value)) if isinstance(value, (int, float)) else 0
@@ -429,4 +493,46 @@ def _flow_response(state: Mapping[str, object]) -> dict[str, object]:
         "seals": {str(name): count(value) for name, value in seals.items()},
         "quarantine": count(state.get("quarantine")),
         "queue": {"active": count(queue.get("active")), "waiting": count(queue.get("waiting"))},
+    }
+
+
+def _settings_response(state: Mapping[str, object], role: str) -> dict[str, object]:
+    settings = state.get("settings") if isinstance(state.get("settings"), Mapping) else {}
+    sync = state.get("sync_inputs") if isinstance(state.get("sync_inputs"), Mapping) else {}
+    inputs = sync.get("inputs") if isinstance(sync.get("inputs"), list) else []
+    return {
+        "can_edit": role in {"gestion", "admin"},
+        "models": [item for item in settings.get("models", []) if isinstance(item, str)],
+        "models_measured": settings.get("models_measured") is True,
+        "current_model": settings.get("current_model") if isinstance(settings.get("current_model"), str) else None,
+        "ram_margin_pct": _percentage(settings.get("ram_margin")),
+        "resource_profile": settings.get("resource_profile") if isinstance(settings.get("resource_profile"), str) else None,
+        "audio_mode": settings.get("audio_mode") if isinstance(settings.get("audio_mode"), str) else None,
+        "offline_mode": _safe_offline_mode(settings.get("offline_mode")),
+        "sync_inputs": [
+            {
+                key: item[key]
+                for key in ("id", "provider", "display_name", "enabled")
+                if key in item and isinstance(item[key], (str, bool))
+            }
+            for item in inputs if isinstance(item, Mapping)
+        ],
+    }
+
+
+def _percentage(value: object) -> float:
+    if not isinstance(value, str):
+        return 0
+    try:
+        return float(value.removesuffix("%").strip()) / 100
+    except ValueError:
+        return 0
+
+
+def _safe_offline_mode(value: object) -> dict[str, object]:
+    if not isinstance(value, Mapping):
+        return {"is_local_only": True, "label": "Solo local"}
+    return {
+        "is_local_only": value.get("is_local_only") is True,
+        "label": value.get("label") if isinstance(value.get("label"), str) else "Solo local",
     }

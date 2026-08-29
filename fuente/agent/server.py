@@ -17,7 +17,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any, Callable, Mapping
 from urllib.error import HTTPError, URLError
-from urllib.parse import urlparse
+from urllib.parse import quote, urlparse
 from urllib.request import Request, urlopen
 
 from fuente.infrastructure.atomic_files import atomic_write_json
@@ -36,6 +36,10 @@ class AgentError(ValueError):
 
 class AgentAuthenticationError(AgentError):
     """The supplied Supabase access token is not valid for this agent."""
+
+
+class AgentSyncError(AgentError):
+    """Supabase did not accept the agent metadata update."""
 
 
 @dataclass(frozen=True)
@@ -114,6 +118,48 @@ def verify_supabase_user(binding: AgentBinding, access_token: str) -> str:
     return user_id
 
 
+def publish_agent_status(
+    binding: AgentBinding,
+    access_token: str,
+    status: Mapping[str, object],
+) -> None:
+    """Upsert only the agent row authorized by the current Supabase session."""
+    payload = {
+        "user_id": status["user_id"],
+        "version": status["version"],
+        "platform": status["platform"],
+        "vault_fingerprint": status["vault_fingerprint"],
+        "status": "connected",
+    }
+    headers = {
+        "apikey": binding.publishable_key,
+        "Authorization": f"Bearer {access_token}",
+        "Content-Type": "application/json",
+        "Prefer": "return=minimal",
+    }
+    user_id = quote(str(payload["user_id"]), safe="")
+    base_url = f"{binding.supabase_url}/rest/v1/document_agents?user_id=eq.{user_id}"
+    try:
+        with urlopen(Request(base_url + "&select=id", headers=headers), timeout=5) as response:
+            existing = json.loads(response.read().decode("utf-8"))
+        if not isinstance(existing, list):
+            raise ValueError("invalid document_agents response")
+        method = "PATCH" if existing else "POST"
+        body = dict(payload)
+        if method == "PATCH":
+            body.pop("user_id")
+        request = Request(
+            base_url,
+            data=json.dumps(body, separators=(",", ":")).encode("utf-8"),
+            headers=headers,
+            method=method,
+        )
+        with urlopen(request, timeout=5) as response:
+            response.read()
+    except (HTTPError, URLError, TimeoutError, OSError, ValueError, json.JSONDecodeError) as error:
+        raise AgentSyncError("Supabase could not persist the agent status") from error
+
+
 class GestajoAgent:
     """Own one vault and expose only an authenticated, path-free status contract."""
 
@@ -122,10 +168,12 @@ class GestajoAgent:
         vault_path: str | Path,
         *,
         verifier: Callable[[AgentBinding, str], str] = verify_supabase_user,
+        publisher: Callable[[AgentBinding, str, Mapping[str, object]], None] = publish_agent_status,
         allowed_origins: frozenset[str] = DEFAULT_ALLOWED_ORIGINS,
     ) -> None:
         self.vault_path = Path(vault_path).expanduser().resolve()
         self._verifier = verifier
+        self._publisher = publisher
         self._allowed_origins = allowed_origins
         self._binding = _read_binding(self.vault_path)
 
@@ -162,7 +210,9 @@ class GestajoAgent:
             raise AgentAuthenticationError("this vault is already bound to another user")
         atomic_write_json(_binding_path(self.vault_path), asdict(binding))
         self._binding = binding
-        return self.status(access_token)
+        status = self.status(access_token)
+        self._publisher(binding, self._access_token(access_token), status)
+        return status
 
     def status(self, access_token: object) -> dict[str, object]:
         binding = self._require_user(access_token)
@@ -260,6 +310,8 @@ def _handler_for(agent: GestajoAgent) -> type[BaseHTTPRequestHandler]:
                 self._send_json(HTTPStatus.OK, operation(header.removeprefix("Bearer ")))
             except AgentAuthenticationError as error:
                 self._send_error(HTTPStatus.UNAUTHORIZED, str(error))
+            except AgentSyncError as error:
+                self._send_error(HTTPStatus.SERVICE_UNAVAILABLE, str(error))
             except AgentError as error:
                 self._send_error(HTTPStatus.BAD_REQUEST, str(error))
 

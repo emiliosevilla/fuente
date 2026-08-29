@@ -12,6 +12,7 @@ from fuente.agent.server import (
     GestajoAgentServer,
     _handler_for,
     _binding_path,
+    publish_agent_status,
 )
 
 
@@ -21,8 +22,12 @@ def _verifier(binding: AgentBinding, token: str) -> str:
     return {"token-a": "user-a", "token-b": "user-b"}[token]
 
 
+def _publisher(_binding: AgentBinding, _token: str, _status: dict[str, object]) -> None:
+    return
+
+
 def test_claim_binds_one_user_and_never_persists_access_token(tmp_path: Path):
-    agent = GestajoAgent(tmp_path, verifier=_verifier)
+    agent = GestajoAgent(tmp_path, verifier=_verifier, publisher=_publisher)
 
     claimed = agent.claim(
         "token-a",
@@ -40,7 +45,7 @@ def test_claim_binds_one_user_and_never_persists_access_token(tmp_path: Path):
 
 
 def test_status_requires_the_bound_user(tmp_path: Path):
-    agent = GestajoAgent(tmp_path, verifier=_verifier)
+    agent = GestajoAgent(tmp_path, verifier=_verifier, publisher=_publisher)
     agent.claim(
         "token-a",
         {"supabase_url": "https://project.supabase.co", "publishable_key": "sb_publishable_test_key"},
@@ -53,7 +58,7 @@ def test_status_requires_the_bound_user(tmp_path: Path):
 
 
 def test_second_user_cannot_claim_bound_vault(tmp_path: Path):
-    agent = GestajoAgent(tmp_path, verifier=_verifier)
+    agent = GestajoAgent(tmp_path, verifier=_verifier, publisher=_publisher)
     payload = {"supabase_url": "https://project.supabase.co", "publishable_key": "sb_publishable_test_key"}
     agent.claim("token-a", payload)
 
@@ -62,7 +67,7 @@ def test_second_user_cannot_claim_bound_vault(tmp_path: Path):
 
 
 def test_origin_and_claim_payload_fail_closed(tmp_path: Path):
-    agent = GestajoAgent(tmp_path, verifier=_verifier)
+    agent = GestajoAgent(tmp_path, verifier=_verifier, publisher=_publisher)
 
     assert agent.is_origin_allowed("https://gestajo.vercel.app")
     assert not agent.is_origin_allowed("https://evil.example")
@@ -79,13 +84,13 @@ def test_origin_and_claim_payload_fail_closed(tmp_path: Path):
 
 def test_server_requires_tls_context(tmp_path: Path):
     with pytest.raises(ValueError, match="TLS context"):
-        GestajoAgentServer(GestajoAgent(tmp_path, verifier=_verifier), None)  # type: ignore[arg-type]
+        GestajoAgentServer(GestajoAgent(tmp_path, verifier=_verifier, publisher=_publisher), None)  # type: ignore[arg-type]
 
 
 def test_health_is_cors_and_private_network_ready_for_gestajo(tmp_path: Path):
     from http.server import ThreadingHTTPServer
 
-    agent = GestajoAgent(tmp_path, verifier=_verifier)
+    agent = GestajoAgent(tmp_path, verifier=_verifier, publisher=_publisher)
     server = ThreadingHTTPServer(("127.0.0.1", 0), _handler_for(agent))
     thread = Thread(target=server.serve_forever, daemon=True)
     thread.start()
@@ -107,3 +112,36 @@ def test_health_is_cors_and_private_network_ready_for_gestajo(tmp_path: Path):
         server.shutdown()
         server.server_close()
         thread.join(timeout=2)
+
+
+def test_publish_agent_status_creates_or_updates_only_agent_metadata(monkeypatch):
+    requests = []
+
+    class Response:
+        def __init__(self, payload: bytes = b"[]"):
+            self.payload = payload
+
+        def read(self):
+            return self.payload
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+    def fake_urlopen(request, timeout):
+        requests.append((request, timeout))
+        return Response(b"[]")
+
+    monkeypatch.setattr("fuente.agent.server.urlopen", fake_urlopen)
+    binding = AgentBinding("user-a", "https://project.supabase.co", "sb_publishable_test_key")
+    publish_agent_status(binding, "token-a", {
+        "user_id": "user-a", "version": "0.1", "platform": "Darwin",
+        "vault_fingerprint": "a" * 64,
+    })
+
+    assert len(requests) == 2
+    assert requests[0][0].get_method() == "GET"
+    assert requests[1][0].get_method() == "POST"
+    assert b"vault_path" not in requests[1][0].data

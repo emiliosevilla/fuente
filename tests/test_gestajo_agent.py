@@ -157,6 +157,24 @@ def test_runtime_reuses_the_open_console_backend(monkeypatch, tmp_path: Path):
     assert stopped == ["shutdown", "close"]
 
 
+def test_flow_reads_the_open_console_backend(tmp_path: Path):
+    calls = []
+
+    class Backend:
+        def get_flow_state(self):
+            calls.append("flow")
+            return {"steps": {}, "seals": {}, "queue": {"active": 0, "waiting": 1}, "pending_approvals": []}
+
+    agent = GestajoAgent(
+        tmp_path, verifier=_verifier, publisher=_publisher,
+        management_verifier=_management_verifier, backend_factory=lambda _vault: Backend(),
+    )
+    agent.claim("token-a", {"supabase_url": "https://project.supabase.co", "publishable_key": "sb_publishable_test_key"})
+
+    assert agent.flow("token-a", "00000000-0000-0000-0000-000000000001")["queue"]["waiting"] == 1
+    assert calls == ["flow"]
+
+
 def test_health_is_cors_and_private_network_ready_for_gestajo(tmp_path: Path):
     from http.server import ThreadingHTTPServer
 

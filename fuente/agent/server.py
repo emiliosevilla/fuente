@@ -333,7 +333,7 @@ class GestajoAgent:
         self._publisher = publisher
         self._management_verifier = management_verifier
         self._membership_verifier = membership_verifier
-        self._flow_reader = flow_reader or _read_flow_state
+        self._flow_reader = flow_reader
         self._settings_reader = settings_reader
         self._settings_writer = settings_writer
         self._backend_factory = backend_factory or _source_backend
@@ -403,7 +403,7 @@ class GestajoAgent:
         if not isinstance(org_id, str):
             raise AgentAuthorizationError("organization is invalid")
         self._management_verifier(binding, self._access_token(access_token), org_id)
-        state = self._flow_reader(self.vault_path)
+        state = self._read_flow()
         return _flow_response(state)
 
     def approve_flow_transition(self, access_token: object, org_id: object, payload: object) -> dict[str, object]:
@@ -433,7 +433,7 @@ class GestajoAgent:
             self._local_backend().get_job_control_service().ingestion.resume(job_id)
         except (OSError, RuntimeError, ValueError) as error:
             raise AgentError("Caudal recorded the approval but could not continue the job") from error
-        return _flow_response(self._flow_reader(self.vault_path))
+        return _flow_response(self._read_flow())
 
     def settings(self, access_token: object, org_id: object) -> dict[str, object]:
         binding = self._require_user(access_token)
@@ -710,6 +710,11 @@ class GestajoAgent:
             return self._settings_reader(self.vault_path)
         backend = self._local_backend()
         return {"settings": backend.get_settings_info(), "sync_inputs": backend.get_sync_inputs()}
+
+    def _read_flow(self) -> Mapping[str, object]:
+        if self._flow_reader is not None:
+            return self._flow_reader(self.vault_path)
+        return self._local_backend().get_flow_state()
 
     def _save_settings(self, payload: Mapping[str, object]) -> Mapping[str, object]:
         if self._settings_writer is not None:

@@ -18,6 +18,7 @@ from fuente.agent.server import (
     publish_agent_status,
     publish_document_note_metadata,
     start_gestajo_agent,
+    verify_supabase_user,
 )
 from fuente.infrastructure.sqlite_store import JobStore
 from fuente.core.folder_sync import SyncConflict
@@ -64,6 +65,16 @@ def test_claim_binds_one_user_and_never_persists_access_token(tmp_path: Path):
     assert "token-a" not in persisted
     assert USER_A in persisted
     assert str(tmp_path) not in claimed.values()
+
+
+def test_token_validation_reports_a_rejected_gestajo_session(monkeypatch):
+    def reject(request, timeout):
+        raise HTTPError(request.full_url, 401, "Unauthorized", None, None)
+
+    monkeypatch.setattr("fuente.agent.server.urlopen", reject)
+
+    with pytest.raises(AgentAuthenticationError, match="rejected the current Gestajo session"):
+        verify_supabase_user(AgentBinding(USER_A, "https://project.supabase.co", "sb_publishable_test_key"), "token-a")
 
 
 def test_status_requires_the_bound_user(tmp_path: Path):

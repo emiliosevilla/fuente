@@ -121,8 +121,14 @@ def verify_supabase_user(binding: AgentBinding, access_token: str) -> str:
     try:
         with urlopen(request, timeout=5) as response:
             payload = json.loads(response.read().decode("utf-8"))
-    except (HTTPError, URLError, TimeoutError, OSError, json.JSONDecodeError) as error:
-        raise AgentAuthenticationError("Supabase could not validate the access token") from error
+    except HTTPError as error:
+        if error.code in {HTTPStatus.UNAUTHORIZED, HTTPStatus.FORBIDDEN}:
+            raise AgentAuthenticationError("Supabase rejected the current Gestajo session") from error
+        raise AgentAuthenticationError("Supabase is unavailable to validate the Gestajo session") from error
+    except (URLError, TimeoutError, OSError):
+        raise AgentAuthenticationError("Fuente could not reach Supabase to validate the Gestajo session") from error
+    except json.JSONDecodeError as error:
+        raise AgentAuthenticationError("Supabase returned an invalid session response") from error
     user_id = payload.get("id") if isinstance(payload, Mapping) else None
     if not isinstance(user_id, str) or not user_id:
         raise AgentAuthenticationError("Supabase did not return an authenticated user")

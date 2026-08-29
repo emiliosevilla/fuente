@@ -46,6 +46,7 @@ def test_status_requires_the_bound_user(tmp_path: Path):
         {"supabase_url": "https://project.supabase.co", "publishable_key": "sb_publishable_test_key"},
     )
 
+    assert agent.status("token-a")["claimed"] is True
     assert agent.status("token-a")["capabilities"] == []
     with pytest.raises(AgentAuthenticationError, match="another user"):
         agent.status("token-b")

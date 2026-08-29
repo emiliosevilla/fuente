@@ -169,6 +169,7 @@ class GestajoAgent:
         return {
             "service": "fuente-caudal-agent",
             "version": AGENT_VERSION,
+            "claimed": True,
             "platform": platform.system(),
             "user_id": binding.user_id,
             "vault_fingerprint": self._vault_fingerprint(),

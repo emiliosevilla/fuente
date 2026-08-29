@@ -19,6 +19,7 @@ pdfplumber==0.11.10
 openpyxl==3.1.5
 python-pptx==1.0.2
 extract-msg==0.56.0
+cryptography==50.0.0
 pysqlite3-binary>=0.5.4; platform_system == "Linux"
 
 # Optional feature sets — install via extras instead of listing here:

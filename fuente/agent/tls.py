@@ -7,12 +7,19 @@ or copied and must never carry a reusable local TLS identity.
 from __future__ import annotations
 
 import os
+import ipaddress
 import ssl
 import subprocess
 import sys
 from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Callable, Mapping
+
+from cryptography import x509
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import rsa
+from cryptography.x509.oid import ExtendedKeyUsageOID, NameOID
 
 
 AGENT_CA_LABEL = "Fuente Gestajo Local CA"
@@ -26,9 +33,6 @@ class AgentTlsPaths:
     ca_key: Path
     certificate: Path
     key: Path
-    request: Path
-    serial: Path
-    extensions: Path
 
 
 def agent_tls_paths(
@@ -53,9 +57,6 @@ def agent_tls_paths(
         ca_key=directory / "ca.key",
         certificate=directory / "agent.crt",
         key=directory / "agent.key",
-        request=directory / "agent.csr",
-        serial=directory / "ca.srl",
-        extensions=directory / "agent.ext",
     )
 
 
@@ -93,7 +94,7 @@ def prepare_agent_tls(
         return False, "No se activó el agente local de Gestajo porque no se confirmó el certificado"
 
     try:
-        _ensure_certificates(paths, run)
+        _ensure_certificates(paths)
         _trust_ca(paths, platform_name, run)
     except (OSError, subprocess.SubprocessError) as error:
         return False, f"No se pudo preparar el certificado local: {error}"
@@ -109,33 +110,50 @@ def _run_checked(run: Callable[..., subprocess.CompletedProcess[str]], command: 
         raise subprocess.SubprocessError(detail)
 
 
-def _ensure_certificates(paths: AgentTlsPaths, run: Callable[..., subprocess.CompletedProcess[str]]) -> None:
+def _ensure_certificates(paths: AgentTlsPaths) -> None:
     if load_agent_tls_context(paths) is not None and paths.ca_certificate.is_file():
         return
     paths.directory.mkdir(parents=True, exist_ok=True)
     paths.directory.chmod(0o700)
-    paths.extensions.write_text(
-        "subjectAltName=DNS:localhost,IP:127.0.0.1\nextendedKeyUsage=serverAuth\n",
-        encoding="utf-8",
+    now = datetime.now(timezone.utc)
+    ca_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    ca_subject = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, AGENT_CA_LABEL)])
+    ca_certificate = (
+        x509.CertificateBuilder()
+        .subject_name(ca_subject)
+        .issuer_name(ca_subject)
+        .public_key(ca_key.public_key())
+        .serial_number(x509.random_serial_number())
+        .not_valid_before(now - timedelta(minutes=5))
+        .not_valid_after(now + timedelta(days=3650))
+        .add_extension(x509.BasicConstraints(ca=True, path_length=0), critical=True)
+        .sign(ca_key, hashes.SHA256())
     )
-    _run_checked(run, [
-        "openssl", "req", "-x509", "-new", "-nodes", "-newkey", "rsa:2048",
-        "-keyout", str(paths.ca_key), "-out", str(paths.ca_certificate), "-days", "3650",
-        "-subj", f"/CN={AGENT_CA_LABEL}",
-    ])
-    _run_checked(run, [
-        "openssl", "req", "-new", "-nodes", "-newkey", "rsa:2048",
-        "-keyout", str(paths.key), "-out", str(paths.request), "-subj", "/CN=localhost",
-    ])
-    _run_checked(run, [
-        "openssl", "x509", "-req", "-in", str(paths.request), "-CA", str(paths.ca_certificate),
-        "-CAkey", str(paths.ca_key), "-CAcreateserial", "-out", str(paths.certificate),
-        "-days", "825", "-sha256", "-extfile", str(paths.extensions),
-    ])
+    key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    certificate = (
+        x509.CertificateBuilder()
+        .subject_name(x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "localhost")]))
+        .issuer_name(ca_subject)
+        .public_key(key.public_key())
+        .serial_number(x509.random_serial_number())
+        .not_valid_before(now - timedelta(minutes=5))
+        .not_valid_after(now + timedelta(days=825))
+        .add_extension(
+            x509.SubjectAlternativeName([
+                x509.DNSName("localhost"),
+                x509.IPAddress(ipaddress.ip_address("127.0.0.1")),
+            ]),
+            critical=False,
+        )
+        .add_extension(x509.ExtendedKeyUsage([ExtendedKeyUsageOID.SERVER_AUTH]), critical=False)
+        .sign(ca_key, hashes.SHA256())
+    )
+    paths.ca_key.write_bytes(ca_key.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8, serialization.NoEncryption()))
+    paths.ca_certificate.write_bytes(ca_certificate.public_bytes(serialization.Encoding.PEM))
+    paths.key.write_bytes(key.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8, serialization.NoEncryption()))
+    paths.certificate.write_bytes(certificate.public_bytes(serialization.Encoding.PEM))
     for path in (paths.ca_key, paths.key):
         path.chmod(0o600)
-    paths.extensions.unlink(missing_ok=True)
-    paths.request.unlink(missing_ok=True)
 
 
 def _is_ca_trusted(

@@ -16,7 +16,7 @@ from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any, Callable, Mapping
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote, urlparse
@@ -384,7 +384,7 @@ class GestajoAgent:
             "platform": platform.system(),
             "user_id": binding.user_id,
             "vault_fingerprint": self._vault_fingerprint(),
-            "capabilities": ["flow", "settings", "sync_inputs", "note_read", "note_write", "note_share"],
+            "capabilities": ["flow", "settings", "sync_inputs", "sync_run", "note_read", "note_write", "note_share"],
         }
 
     def flow(self, access_token: object, org_id: object) -> dict[str, object]:
@@ -451,6 +451,32 @@ class GestajoAgent:
         if result.get("error"):
             raise AgentError(str(result.get("message") or result["error"]))
         return _sync_inputs_response(result)
+
+    def run_sync_input(self, access_token: object, org_id: object, payload: object) -> dict[str, object]:
+        binding = self._require_management(access_token, org_id)
+        connection_id = _sync_run_payload(payload)
+        backend = self._local_backend()
+        connection = next(
+            (item for item in backend.sync_manager.load_connections() if item.connection_id == connection_id),
+            None,
+        )
+        if connection is None:
+            raise AgentError("sync connection is unavailable")
+        try:
+            from fuente.core.folder_sync import FolderSyncManager
+            from fuente.domain.sync import SyncDirection
+
+            report = FolderSyncManager.public_sync_report(
+                backend.sync_manager.sync_connection(connection, direction=SyncDirection.INPUT_COMMON)
+            )
+        except (OSError, ValueError) as error:
+            raise AgentError("local folder synchronization failed") from error
+        result = _sync_report_response(report)
+        self._record_audit(binding, self._access_token(access_token), _new_audit_event(
+            None, str(org_id), str(uuid.UUID(str(org_id))), binding.user_id,
+            "sync_input", "conflict" if result["conflicts"] else "success",
+        ))
+        return result
 
     def read_note(self, access_token: object, org_id: object, note_id: object) -> dict[str, object]:
         binding = self._require_user(access_token)
@@ -680,7 +706,7 @@ def _handler_for(agent: GestajoAgent) -> type[BaseHTTPRequestHandler]:
             is_note_share = note_route.endswith("/share") and bool(note_route.removesuffix("/share")) and "/" not in note_route.removesuffix("/share")
             is_note_update = bool(note_route) and "/" not in note_route
             if not (is_note_update or is_note_share) and parsed.path not in {
-                "/v1/claim", "/v1/settings", "/v1/sync-inputs/select",
+                "/v1/claim", "/v1/settings", "/v1/sync-inputs/select", "/v1/sync-inputs/run",
                 "/v1/sync-inputs/confirm", "/v1/sync-inputs/enabled", "/v1/sync-inputs/remove", "/v1/sync",
             }:
                 self._send_error(HTTPStatus.NOT_FOUND, "route not found")
@@ -708,6 +734,9 @@ def _handler_for(agent: GestajoAgent) -> type[BaseHTTPRequestHandler]:
                 return
             if parsed.path == "/v1/sync-inputs/select":
                 self._authorized(lambda token: agent.select_sync_input(token, org_id))
+                return
+            if parsed.path == "/v1/sync-inputs/run":
+                self._authorized(lambda token: agent.run_sync_input(token, org_id, payload))
                 return
             if parsed.path == "/v1/sync-inputs/confirm":
                 self._authorized(lambda token: agent.confirm_sync_input(token, org_id, payload))
@@ -900,6 +929,45 @@ def _sync_inputs_response(value: Mapping[str, object]) -> dict[str, object]:
     return {"sync_inputs": _settings_response({"sync_inputs": {"inputs": inputs}}, "consulta")["sync_inputs"]}
 
 
+def _sync_run_payload(payload: object) -> str:
+    if not isinstance(payload, Mapping) or set(payload) != {"connection_id"}:
+        raise AgentError("sync payload has unsupported fields")
+    return _opaque_id(payload, "connection_id", "sync_")
+
+
+def _safe_sync_relative(value: object) -> str | None:
+    if not isinstance(value, str) or not value or len(value) > 512 or "\x00" in value:
+        return None
+    path = PurePosixPath(value)
+    if path.is_absolute() or ".." in path.parts:
+        return None
+    return path.as_posix()
+
+
+def _sync_report_response(value: Mapping[str, object]) -> dict[str, object]:
+    def count(key: str) -> int:
+        item = value.get(key)
+        return item if isinstance(item, int) and not isinstance(item, bool) and item >= 0 else 0
+
+    conflicts = []
+    for item in value.get("conflicts", []):
+        if not isinstance(item, Mapping):
+            continue
+        source = _safe_sync_relative(item.get("source_relative_path"))
+        destination = _safe_sync_relative(item.get("destination_relative"))
+        if source is None or destination is None:
+            continue
+        conflicts.append({
+            "source_relative_path": source,
+            "destination_relative": destination,
+            "reason": "same_destination_different_content",
+        })
+    return {
+        "copied": count("copied"), "unchanged": count("unchanged"),
+        "scanned": count("scanned"), "conflicts": conflicts,
+    }
+
+
 def _note_response(value: Mapping[str, object], note_id: str) -> dict[str, object]:
     if value.get("error"):
         raise AgentError(str(value.get("message") or value["error"]))
@@ -1001,7 +1069,7 @@ def _document_note_registration(note: Mapping[str, object]) -> dict[str, object]
 
 
 def _new_audit_event(
-    note_id: str, org_id: str, common_org_id: str, actor_user_id: str, action: str, result: str,
+    note_id: str | None, org_id: str, common_org_id: str, actor_user_id: str, action: str, result: str,
 ) -> dict[str, object]:
     return _audit_event_payload({
         "id": str(uuid.uuid4()), "note_id": note_id, "org_id": org_id,
@@ -1017,8 +1085,10 @@ def _audit_event_payload(event: Mapping[str, object]) -> dict[str, object]:
         raise AgentError("document audit has unsupported fields")
     payload = dict(event)
     try:
-        for field in ("id", "note_id", "org_id", "common_org_id", "actor_user_id"):
+        for field in ("id", "org_id", "common_org_id", "actor_user_id"):
             payload[field] = str(uuid.UUID(str(payload[field])))
+        if payload["note_id"] is not None:
+            payload["note_id"] = str(uuid.UUID(str(payload["note_id"])))
         datetime.fromisoformat(str(payload["occurred_at"]))
     except (ValueError, AttributeError) as error:
         raise AgentError("document audit has invalid identifiers") from error

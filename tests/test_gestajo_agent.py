@@ -19,6 +19,8 @@ from fuente.agent.server import (
     publish_document_note_metadata,
 )
 from fuente.infrastructure.sqlite_store import JobStore
+from fuente.core.folder_sync import SyncConflict
+from fuente.domain.sync import ConnectedFolder, SyncDirection
 
 USER_A = "00000000-0000-0000-0000-0000000000a1"
 USER_B = "00000000-0000-0000-0000-0000000000b2"
@@ -71,7 +73,7 @@ def test_status_requires_the_bound_user(tmp_path: Path):
     )
 
     assert agent.status("token-a")["claimed"] is True
-    assert agent.status("token-a")["capabilities"] == ["flow", "settings", "sync_inputs", "note_read", "note_write", "note_share"]
+    assert agent.status("token-a")["capabilities"] == ["flow", "settings", "sync_inputs", "sync_run", "note_read", "note_write", "note_share"]
     with pytest.raises(AgentAuthenticationError, match="another user"):
         agent.status("token-b")
 
@@ -324,6 +326,46 @@ def test_sync_input_uses_native_selection_token_without_returning_a_path(tmp_pat
     assert paused == {"sync_inputs": []}
     assert removed == {"sync_inputs": []}
     assert "/private" not in str(selection | confirmed)
+
+
+def test_sync_input_reuses_hash_reconciler_and_returns_no_absolute_paths(tmp_path: Path):
+    connection = ConnectedFolder("sharepoint_mount", str(tmp_path / "sharepoint"), "Compartidos", True)
+    audits = []
+
+    class SyncManager:
+        def load_connections(self):
+            return [connection]
+
+        def sync_connection(self, received, *, direction):
+            assert received == connection
+            assert direction is SyncDirection.INPUT_COMMON
+            return type("Report", (), {
+                "copied": 0, "unchanged": 1, "scanned": 2, "manifest_updates": 1,
+                "conflicts": [SyncConflict("key", "nota.md", "nota.md", "a" * 64, "b" * 64)],
+                "diagnostics": [],
+            })()
+
+    class Backend:
+        sync_manager = SyncManager()
+
+    agent = GestajoAgent(
+        tmp_path, verifier=_verifier, publisher=_publisher,
+        membership_verifier=lambda *_args: "gestion", backend_factory=lambda _vault: Backend(),
+        audit_publisher=lambda _binding, _token, event: audits.append(event),
+    )
+    agent.claim("token-a", {"supabase_url": "https://project.supabase.co", "publishable_key": "sb_publishable_test_key"})
+
+    result = agent.run_sync_input("token-a", "00000000-0000-0000-0000-000000000001", {"connection_id": connection.connection_id})
+
+    assert result == {
+        "copied": 0, "unchanged": 1, "scanned": 2,
+        "conflicts": [{"source_relative_path": "nota.md", "destination_relative": "nota.md", "reason": "same_destination_different_content"}],
+    }
+    assert "/" not in connection.connection_id
+    assert str(tmp_path) not in str(result)
+    assert audits[0]["note_id"] is None
+    assert audits[0]["action"] == "sync_input"
+    assert audits[0]["result"] == "conflict"
 
 
 def test_note_read_checks_rls_before_returning_markdown_and_never_returns_paths(tmp_path: Path):

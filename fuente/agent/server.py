@@ -311,6 +311,7 @@ class GestajoAgent:
         note_visibility_verifier: Callable[[AgentBinding, str, str], Mapping[str, str]] = verify_document_note_visibility,
         note_reader: Callable[[Path, str], Mapping[str, object]] | None = None,
         note_writer: Callable[[Path, str, int, str], Mapping[str, object]] | None = None,
+        note_sharer: Callable[[Path, str, int, str], Mapping[str, object]] | None = None,
         note_metadata_publisher: Callable[[AgentBinding, str, Mapping[str, object]], None] = publish_document_note_metadata,
         audit_publisher: Callable[[AgentBinding, str, Mapping[str, object]], None] = publish_document_audit,
         outbox_factory: Callable[[Path], Any] | None = None,
@@ -329,6 +330,7 @@ class GestajoAgent:
         self._note_visibility_verifier = note_visibility_verifier
         self._note_reader = note_reader or _read_note
         self._note_writer = note_writer or _write_note
+        self._note_sharer = note_sharer or _share_note
         self._note_metadata_publisher = note_metadata_publisher
         self._audit_publisher = audit_publisher
         self._outbox_factory = outbox_factory or _document_outbox
@@ -382,7 +384,7 @@ class GestajoAgent:
             "platform": platform.system(),
             "user_id": binding.user_id,
             "vault_fingerprint": self._vault_fingerprint(),
-            "capabilities": ["flow", "settings", "sync_inputs", "note_read", "note_write"],
+            "capabilities": ["flow", "settings", "sync_inputs", "note_read", "note_write", "note_share"],
         }
 
     def flow(self, access_token: object, org_id: object) -> dict[str, object]:
@@ -481,6 +483,38 @@ class GestajoAgent:
             sync_state = "pending_sync"
         self._record_audit(binding, self._access_token(access_token), _new_audit_event(
             note_id, str(org_id), scope["common_org_id"], binding.user_id, "note_update", sync_state,
+        ))
+        return {**local, "sync_state": sync_state}
+
+    def share_note(self, access_token: object, org_id: object, note_id: object, payload: object) -> dict[str, object]:
+        binding = self._require_management(access_token, org_id)
+        if not isinstance(note_id, str):
+            raise AgentAuthorizationError("note is invalid")
+        expected_revision = _note_share_payload(payload)
+        scope = self._note_visibility_verifier(binding, self._access_token(access_token), note_id)
+        local = _note_share_response(
+            self._note_sharer(self.vault_path, note_id, expected_revision, binding.user_id), note_id,
+        )
+        catalog = self._document_outbox().get_note(note_id) or {}
+        metadata = _document_note_sync_payload(
+            {**_note_response(self._note_reader(self.vault_path, note_id), note_id), "content_hash": local["content_hash"]},
+            catalog,
+            binding,
+            str(org_id),
+        )
+        metadata["visibility"] = "common"
+        metadata["shared_org_id"] = str(uuid.UUID(str(org_id)))
+        try:
+            self._note_metadata_publisher(binding, self._access_token(access_token), metadata)
+            self._document_outbox().delete_document_outbox(_metadata_outbox_id(note_id))
+            sync_state = "synced"
+        except AgentSyncError:
+            self._document_outbox().upsert_document_outbox(
+                outbox_id=_metadata_outbox_id(note_id), kind="note_metadata", payload=metadata,
+            )
+            sync_state = "pending_sync"
+        self._record_audit(binding, self._access_token(access_token), _new_audit_event(
+            note_id, str(org_id), scope["common_org_id"], binding.user_id, "note_share", sync_state,
         ))
         return {**local, "sync_state": sync_state}
 
@@ -642,8 +676,10 @@ def _handler_for(agent: GestajoAgent) -> type[BaseHTTPRequestHandler]:
 
         def do_POST(self) -> None:  # noqa: N802
             parsed = urlparse(self.path)
-            is_note_update = parsed.path.startswith("/v1/notes/") and bool(parsed.path.removeprefix("/v1/notes/")) and "/" not in parsed.path.removeprefix("/v1/notes/")
-            if not is_note_update and parsed.path not in {
+            note_route = parsed.path.removeprefix("/v1/notes/")
+            is_note_share = note_route.endswith("/share") and bool(note_route.removesuffix("/share")) and "/" not in note_route.removesuffix("/share")
+            is_note_update = bool(note_route) and "/" not in note_route
+            if not (is_note_update or is_note_share) and parsed.path not in {
                 "/v1/claim", "/v1/settings", "/v1/sync-inputs/select",
                 "/v1/sync-inputs/confirm", "/v1/sync-inputs/enabled", "/v1/sync-inputs/remove", "/v1/sync",
             }:
@@ -659,6 +695,9 @@ def _handler_for(agent: GestajoAgent) -> type[BaseHTTPRequestHandler]:
                 return
             if parsed.path == "/v1/sync":
                 self._authorized(lambda token: agent.sync_pending(token, _single_query_value(parsed.query, "org_id")))
+                return
+            if is_note_share:
+                self._authorized(lambda token: agent.share_note(token, _single_query_value(parsed.query, "org_id"), note_route.removesuffix("/share"), payload))
                 return
             if is_note_update:
                 self._authorized(lambda token: agent.update_note(token, _single_query_value(parsed.query, "org_id"), parsed.path.removeprefix("/v1/notes/"), payload))
@@ -759,6 +798,19 @@ def _read_note(vault_path: Path, note_id: str) -> Mapping[str, object]:
 
 def _write_note(vault_path: Path, note_id: str, expected_revision: int, body_markdown: str) -> Mapping[str, object]:
     return _source_backend(vault_path).update_note_content(note_id, expected_revision, body_markdown)
+
+
+def _share_note(vault_path: Path, note_id: str, expected_revision: int, publisher: str) -> Mapping[str, object]:
+    from fuente.application.sharing import SharingApplicationService
+
+    shared = SharingApplicationService(
+        notes_service=_source_backend(vault_path).get_notes_service()
+    ).share_processed_note(note_id, expected_revision, publisher)
+    return {
+        "document_id": shared.note_id,
+        "revision": shared.revision,
+        "content_hash": shared.content_hash,
+    }
 
 
 def _document_outbox(vault_path: Path) -> Any:
@@ -872,6 +924,15 @@ def _note_update_payload(payload: object) -> tuple[int, str]:
     return revision, body
 
 
+def _note_share_payload(payload: object) -> int:
+    if not isinstance(payload, Mapping) or set(payload) != {"expected_revision"}:
+        raise AgentError("note share has unsupported fields")
+    revision = payload.get("expected_revision")
+    if isinstance(revision, bool) or not isinstance(revision, int) or revision < 1:
+        raise AgentError("expected_revision is invalid")
+    return revision
+
+
 def _note_update_response(value: Mapping[str, object], note_id: str) -> dict[str, object]:
     if value.get("error"):
         raise AgentError(str(value.get("message") or value["error"]))
@@ -882,6 +943,15 @@ def _note_update_response(value: Mapping[str, object], note_id: str) -> dict[str
     if document_id != note_id or not isinstance(revision, int) or revision < 1 or not isinstance(title, str) or not isinstance(content_hash, str) or len(content_hash) != 64:
         raise AgentError("local note update has an invalid contract")
     return {"document_id": document_id, "revision": revision, "title": title, "content_hash": content_hash}
+
+
+def _note_share_response(value: Mapping[str, object], note_id: str) -> dict[str, object]:
+    document_id = value.get("document_id")
+    revision = value.get("revision")
+    content_hash = value.get("content_hash")
+    if document_id != note_id or not isinstance(revision, int) or revision < 1 or not isinstance(content_hash, str) or len(content_hash) != 64:
+        raise AgentError("local note share has an invalid contract")
+    return {"document_id": document_id, "revision": revision, "content_hash": content_hash}
 
 
 def _metadata_outbox_id(note_id: str) -> str:

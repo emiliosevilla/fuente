@@ -71,7 +71,7 @@ def test_status_requires_the_bound_user(tmp_path: Path):
     )
 
     assert agent.status("token-a")["claimed"] is True
-    assert agent.status("token-a")["capabilities"] == ["flow", "settings", "sync_inputs", "note_read", "note_write"]
+    assert agent.status("token-a")["capabilities"] == ["flow", "settings", "sync_inputs", "note_read", "note_write", "note_share"]
     with pytest.raises(AgentAuthenticationError, match="another user"):
         agent.status("token-b")
 
@@ -390,6 +390,47 @@ def test_note_update_uses_fuentecaudal_revision_contract_and_marks_offline_sync(
         assert "# Cambio" not in str(queued)
     finally:
         store.close()
+
+
+def test_note_share_reuses_approved_projection_and_queues_only_metadata_when_offline(tmp_path: Path):
+    note_id = "00000000-0000-0000-0000-000000000010"
+    store = JobStore(tmp_path)
+    store.register_note(
+        note_id=note_id, relative_path="4_procesado/nota.md", revision=2, content_hash="a" * 64,
+        note_type="nota", origin_kind=None, theme="General", issue="_Sin_Cuestion", status="approved",
+    )
+    store.close()
+    shared = []
+    audits = []
+    agent = GestajoAgent(
+        tmp_path, verifier=_verifier, publisher=_publisher,
+        membership_verifier=lambda *_args: "gestion",
+        note_visibility_verifier=lambda *_args: {"common_org_id": COMMON_ORG_ID},
+        note_reader=lambda _vault, received_id: {
+            "document_id": received_id, "revision": 2, "title": "Nota aprobada", "body_markdown": "# Local",
+        },
+        note_sharer=lambda _vault, received_id, revision, publisher: shared.append((received_id, revision, publisher)) or {
+            "document_id": received_id, "revision": revision, "content_hash": "a" * 64,
+        },
+        note_metadata_publisher=lambda *_args: (_ for _ in ()).throw(AgentSyncError("offline")),
+        audit_publisher=lambda _binding, _token, event: audits.append(event),
+    )
+    agent.claim("token-a", {"supabase_url": "https://project.supabase.co", "publishable_key": "sb_publishable_test_key"})
+
+    result = agent.share_note("token-a", "00000000-0000-0000-0000-000000000001", note_id, {"expected_revision": 2})
+
+    assert shared == [(note_id, 2, USER_A)]
+    assert result == {"document_id": note_id, "revision": 2, "content_hash": "a" * 64, "sync_state": "pending_sync"}
+    queued_store = JobStore(tmp_path)
+    try:
+        queued = queued_store.list_document_outbox()
+        metadata = next(item for item in queued if item["outbox_id"] == f"note_metadata:{note_id}")
+        assert '"visibility":"common"' in metadata["payload_json"]
+        assert '"shared_org_id":"00000000-0000-0000-0000-000000000001"' in metadata["payload_json"]
+        assert "# Local" not in metadata["payload_json"]
+    finally:
+        queued_store.close()
+    assert audits[0]["action"] == "note_share"
 
 
 def test_sync_pending_flushes_metadata_and_audits_without_a_token_in_sqlite(tmp_path: Path):

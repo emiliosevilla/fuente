@@ -16,7 +16,7 @@ PIP_PAYLOAD = Path("build/pip-source.zip")
 RUNTIME_EXCLUDED_DIRS = {
     "__pycache__", ".obsidian", "1_entrada", "2_sucio", "3_limpio",
     "4_salida", "1_volcado", "2_copiado", "3_capturado", "4_procesado",
-    "5_compartido", ".fuente", "chroma", "venv",
+    "5_compartido", ".fuente", "venv",
 }
 
 
@@ -25,7 +25,7 @@ def add_dir_to_zip(zf: zipfile.ZipFile, source_dir: Path, arc_dir_name: str):
     if not source_dir.exists():
         return
     for root, dirs, files in os.walk(source_dir):
-        dirs[:] = [d for d in dirs if d not in ("__pycache__", "1_entrada", "2_sucio", "3_limpio", "4_salida", "1_volcado", "2_copiado", "3_capturado", "4_procesado", "5_compartido", ".fuente", "chroma", "venv") and not d.startswith(".")]
+        dirs[:] = [d for d in dirs if d not in ("__pycache__", "1_entrada", "2_sucio", "3_limpio", "4_salida", "1_volcado", "2_copiado", "3_capturado", "4_procesado", "5_compartido", ".fuente", "venv") and not d.startswith(".")]
         for file in files:
             if file.endswith(".pyc") or file.endswith(".html") or file.startswith("."):
                 continue

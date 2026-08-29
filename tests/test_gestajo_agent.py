@@ -92,6 +92,7 @@ def test_origin_and_claim_payload_fail_closed(tmp_path: Path):
     agent = GestajoAgent(tmp_path, verifier=_verifier, publisher=_publisher, management_verifier=_management_verifier)
 
     assert agent.is_origin_allowed("https://gestajo.vercel.app")
+    assert agent.is_origin_allowed("https://gestajo-git-dev-emilio-sevilla-ortego-projects.vercel.app")
     assert not agent.is_origin_allowed("https://evil.example")
     with pytest.raises(AgentError, match="unsupported fields"):
         agent.claim(

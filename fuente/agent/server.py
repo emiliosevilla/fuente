@@ -32,6 +32,7 @@ from fuente.infrastructure.atomic_files import atomic_copy, atomic_write_json
 AGENT_VERSION = "0.1"
 DEFAULT_ALLOWED_ORIGINS = frozenset({
     "https://gestajo.vercel.app",
+    "https://gestajo-git-dev-emilio-sevilla-ortego-projects.vercel.app",
     "http://localhost:3000",
 })
 

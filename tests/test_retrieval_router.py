@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from fuente.application.retrieval import RetrievalApplicationService
 from fuente.rag.backend import RetrievalHit
-from fuente.rag.chroma_store import ChromaRetrievalBackend
+from fuente.rag.minirag_store import MiniRAGRetrievalBackend
 from fuente.rag.router import RetrievalRouter
 
 
@@ -27,20 +27,20 @@ class HitBackend(FakeBackend):
         ]
 
 
-def test_chroma_is_the_only_search_backend():
-    router = RetrievalRouter(search=HitBackend("chroma"), enrichment=None)
-    assert router.search().name == "chroma"
+def test_minirag_is_the_only_search_backend():
+    router = RetrievalRouter(search=HitBackend("minirag"), enrichment=None)
+    assert router.search().name == "minirag"
     assert router.enrichment() is None
 
 
 def test_router_exposes_search_without_enrichment_by_default():
-    router = RetrievalRouter(search=FakeBackend("chroma"))
-    assert router.search().name == "chroma"
+    router = RetrievalRouter(search=FakeBackend("minirag"))
+    assert router.search().name == "minirag"
     assert router.enrichment() is None
 
 
 def test_search_backend_is_used_for_chat_context():
-    backend = HitBackend("chroma")
+    backend = HitBackend("minirag")
     router = RetrievalRouter(search=backend, enrichment=None)
     service = RetrievalApplicationService(
         router=router, eligibility_guard=lambda hit: True
@@ -50,11 +50,11 @@ def test_search_backend_is_used_for_chat_context():
 
     assert context["has_context"] is True
     assert context["chunks"][0]["metadata"]["document_id"] == "doc-1"
-    assert context["chunks"][0].get("backend", backend.name) in {"chroma", None}
+    assert context["chunks"][0].get("backend", backend.name) in {"minirag", None}
 
 
 def test_retrieval_hit_score_survives_service_bounding():
-    backend = HitBackend("chroma")
+    backend = HitBackend("minirag")
     router = RetrievalRouter(search=backend, enrichment=None)
     service = RetrievalApplicationService(
         router=router,
@@ -67,17 +67,17 @@ def test_retrieval_hit_score_survives_service_bounding():
     assert context["chunks"][0]["score"] == 0.75
 
 
-def test_chroma_backend_is_explicitly_named_chroma():
+def test_minirag_backend_is_explicitly_named():
     class Store:
-        def query_hybrid(self, query, n_results=5):
+        def query_similar(self, query, n_results=5):
             return []
 
-    assert ChromaRetrievalBackend(Store()).name == "chroma"
+    assert MiniRAGRetrievalBackend(Store()).name == "minirag"
 
 
-def test_chroma_backend_search_preserves_chunk_id_in_metadata():
+def test_minirag_backend_search_preserves_chunk_id_in_metadata():
     class Store:
-        def query_hybrid(self, query, n_results=5):
+        def query_similar(self, query, n_results=5):
             return [
                 {
                     "id": "doc-1:hash-1:0",
@@ -87,11 +87,11 @@ def test_chroma_backend_search_preserves_chunk_id_in_metadata():
                 }
             ]
 
-    hit = ChromaRetrievalBackend(Store()).search("contenido", 1)[0]
+    hit = MiniRAGRetrievalBackend(Store()).search("contenido", 1)[0]
     assert hit.metadata.get("id") == "doc-1:hash-1:0"
 
 
-def test_chroma_backend_exposes_search_contract_and_failure():
+def test_minirag_backend_exposes_search_contract_and_failure():
     class Store:
         def __init__(self):
             self.deleted = []
@@ -99,7 +99,7 @@ def test_chroma_backend_exposes_search_contract_and_failure():
         def add_chunks(self, chunks, metadatas, ids):
             return True
 
-        def query_hybrid(self, query, n_results=5):
+        def query_similar(self, query, n_results=5):
             return [{
                 "id": "chunk-1",
                 "content": "contenido",
@@ -112,7 +112,7 @@ def test_chroma_backend_exposes_search_contract_and_failure():
             return False
 
     store = Store()
-    backend = ChromaRetrievalBackend(store)
+    backend = MiniRAGRetrievalBackend(store)
 
     result = backend.rebuild([{"id": "chunk-1", "content": "contenido", "metadata": {}}])
     hit = backend.search("contenido", 1)[0]

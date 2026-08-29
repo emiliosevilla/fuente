@@ -61,7 +61,7 @@ from fuente.application.notes import NotesApplicationService
 from fuente.application.onboarding import OnboardingService
 from fuente.application.review_export import ReviewExportApplicationService
 from fuente.application.retrieval import RetrievalApplicationService
-from fuente.rag.chroma_store import ChromaRetrievalBackend
+from fuente.rag.minirag_store import MiniRAGRetrievalBackend, MiniRAGStore
 from fuente.rag.router import RetrievalRouter
 from fuente.application.settings import SettingsService, SettingsValidationError
 from fuente.application.templates import TemplateRegistry, TemplateValidationError
@@ -98,7 +98,6 @@ from fuente.domain.runtime_policy import resolve_runtime_policy
 from fuente.infrastructure.atomic_files import atomic_write_json, atomic_write_text
 from fuente.infrastructure.sqlite_store import JobStore
 from fuente.domain.note_catalog import NoteCatalog
-from fuente.rag.chroma_store import ChromaStore
 from fuente.rag.vault_corpus import VaultCorpusProvider
 from fuente.ui.bridge import FuentePyWebViewApi
 from fuente.core.app_checker import (
@@ -375,7 +374,7 @@ class FuenteConsoleBackend:
         # Set by launch_control_console after ApplicationLifecycle.start() so
         # console theme actions and background services share one VaultManager.
         self.lifecycle: Optional[ApplicationLifecycle] = None
-        self._chroma_store: Optional[ChromaStore] = None
+        self._index_store: Optional[MiniRAGStore] = None
         self._retrieval_service: Optional[RetrievalApplicationService] = None
         self._chat_service: Optional[ChatApplicationService] = None
         self._notes_service: Optional[NotesApplicationService] = None
@@ -434,8 +433,8 @@ class FuenteConsoleBackend:
         except Exception:
             logger.exception("No se pudo medir la política local al conectar la consola")
         self.quarantine_service = self.vault.quarantine_service
-        # Prefer the pipeline chroma + reset chat/retrieval so BM25 shares one cache.
-        self._chroma_store = getattr(lifecycle.pipeline, "chroma", None)
+        # Prefer the pipeline index + reset chat/retrieval so BM25 shares one cache.
+        self._index_store = getattr(lifecycle.pipeline, "index_store", None)
         self._retrieval_service = None
         self._chat_service = None
         self._notes_service = None
@@ -488,7 +487,7 @@ class FuenteConsoleBackend:
                 active_theme_dir=self.vault.current_theme_dir,
             )
             self.quarantine_service = self.vault.quarantine_service
-            self._chroma_store = None
+            self._index_store = None
             self._retrieval_service = None
             self._notes_service = None
             self._job_store = None
@@ -557,7 +556,7 @@ class FuenteConsoleBackend:
         if self.lifecycle is not None and self.lifecycle.pipeline is not None:
             self.lifecycle.set_config(previous_config)
             self.lifecycle.set_runtime_policy(previous_policy)
-            self._chroma_store = getattr(self.lifecycle.pipeline, "chroma", None)
+            self._index_store = getattr(self.lifecycle.pipeline, "index_store", None)
         (
             self._retrieval_service,
             self._chat_service,
@@ -677,28 +676,32 @@ class FuenteConsoleBackend:
             )
         )
 
-    def _get_chroma_store(self) -> ChromaStore:
+    def _get_index_store(self) -> MiniRAGStore:
         if self.lifecycle is not None and self.lifecycle.pipeline is not None:
-            pipeline_chroma = getattr(self.lifecycle.pipeline, "chroma", None)
-            if pipeline_chroma is not None:
-                self._chroma_store = pipeline_chroma
-                return pipeline_chroma
-        if self._chroma_store is None:
-            self._chroma_store = ChromaStore(self.config.vault.chroma_dir)
-        return self._chroma_store
+            pipeline_index = getattr(self.lifecycle.pipeline, "index_store", None)
+            if pipeline_index is not None:
+                self._index_store = pipeline_index
+                return pipeline_index
+        if self._index_store is None:
+            self._index_store = MiniRAGStore(
+                self.config.vault.minirag_dir,
+                ollama_url=self.config.ollama_url,
+                model=self.config.custom_model_override,
+            )
+        return self._index_store
 
     def get_retrieval_service(self) -> RetrievalApplicationService:
-        """Shared retrieval service (hybrid searcher reused from Chroma when possible)."""
+        """Shared retrieval service backed by the local MiniRAG index."""
         if self._retrieval_service is None:
             if self.runtime_policy.vector_index_enabled:
-                chroma = self._get_chroma_store()
+                index_store = self._get_index_store()
                 self._retrieval_service = RetrievalApplicationService(
-                    chroma,
+                    index_store,
                     runtime_policy=self.runtime_policy,
                     ram_governor=self.ram_governor,
                     eligibility_guard=self._is_retrieval_hit_eligible,
                     router=RetrievalRouter(
-                        search=ChromaRetrievalBackend(chroma),
+                        search=MiniRAGRetrievalBackend(index_store),
                         enrichment=None,
                     ),
                 )
@@ -790,8 +793,8 @@ class FuenteConsoleBackend:
                 vault=self.vault,
                 path_resolver=self._path_resolver(),
                 job_store=self._job_store,
-                chroma_store=(
-                    self._get_chroma_store()
+                    index_store=(
+                    self._get_index_store()
                     if self.runtime_policy.vector_index_enabled
                     else None
                 ),
@@ -1097,8 +1100,8 @@ class FuenteConsoleBackend:
         if self._retrieval_service is not None:
             self._retrieval_service.notify_index_changed()
         elif self.runtime_policy.vector_index_enabled:
-            chroma = self._get_chroma_store()
-            invalidate = getattr(chroma, "invalidate_bm25_cache", None)
+            index_store = self._get_index_store()
+            invalidate = getattr(index_store, "invalidate_bm25_cache", None)
             if callable(invalidate):
                 invalidate()
 
@@ -1141,7 +1144,7 @@ class FuenteConsoleBackend:
                 assert self.lifecycle is not None
                 self.lifecycle.set_runtime_policy(next_policy)
                 self.runtime_policy = next_policy
-                self._chroma_store = getattr(self.lifecycle.pipeline, "chroma", None)
+                self._index_store = getattr(self.lifecycle.pipeline, "index_store", None)
                 self._retrieval_service = None
                 self._chat_service = None
                 self._notes_service = None

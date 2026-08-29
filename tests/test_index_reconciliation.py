@@ -1,16 +1,15 @@
-"""Index identity, Chroma init reporting, and N→N-2 chunk reconciliation (Task 4.1)."""
+"""Index identity and N→N-2 chunk reconciliation (Task 4.1)."""
 from __future__ import annotations
 
 import logging
-import sys
 from types import SimpleNamespace
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
 from fuente.application.ingestion import IngestionApplicationService, _RunContext
-from fuente.rag.chroma_store import resolve_index_authority
+from fuente.rag.minirag_store import resolve_index_authority
 from fuente.config import DEFAULT_ISSUE, get_default_config
 from fuente.core.vault import VaultManager
 from fuente.domain.jobs import CURRENT_PIPELINE_VERSION, JobRecord
@@ -19,7 +18,6 @@ from fuente.domain.vault_layout import (
     CANONICAL_PROCESSED_DIR_NAME,
     CANONICAL_SHARED_DIR_NAME,
 )
-from fuente.rag.chroma_store import ChromaInitError, ChromaStore, _patch_sqlite_for_chroma
 from fuente.rag.index_records import (
     REQUIRED_CHUNK_METADATA_KEYS,
     ChunkIdentity,
@@ -120,7 +118,6 @@ def _chunking_job(*, clean_artifact=None) -> JobRecord:
         pipeline_version=CURRENT_PIPELINE_VERSION,
         revision=0,
     )
-
 
 def test_chunker_internal_type_error_is_not_retried_without_identity():
     chunker = _ExplodingChunker()
@@ -406,100 +403,3 @@ def test_shared_stage_does_not_create_chunks():
         )
         is None
     )
-
-
-def test_chroma_initialize_reports_failure_explicitly(tmp_path):
-    store = ChromaStore(tmp_path / "chroma")
-    with patch.dict(sys.modules, {"chromadb": None}):
-        with pytest.raises(ChromaInitError):
-            store.initialize()
-    assert store.failed
-    assert store.init_error is not None
-    assert store.ready is False
-    # Soft callers still degrade, but the failed state remains visible.
-    assert store.add_chunks(["x"], [{"k": 1}], ["id"]) is False
-    assert store.failed
-
-
-def test_chroma_query_similar_surfaces_source_fields_via_mock(tmp_path):
-    store = ChromaStore(tmp_path / "chroma")
-    mock_collection = MagicMock()
-    mock_collection.query.return_value = {
-        "documents": [["texto"]],
-        "metadatas": [
-            [
-                {
-                    "document_id": "doc-m",
-                    "relative_path": "T/1_entrada/a.md",
-                    "theme": "T",
-                    "issue": "I",
-                    "source_hash": "s",
-                    "chunk_index": 0,
-                    "pipeline_version": "1",
-                }
-            ]
-        ],
-        "ids": [["doc-m:s:0"]],
-    }
-    mock_client = MagicMock()
-    mock_client.get_or_create_collection.return_value = mock_collection
-    mock_chromadb = MagicMock()
-    mock_chromadb.PersistentClient.return_value = mock_client
-
-    with patch.dict(sys.modules, {"chromadb": mock_chromadb}):
-        hits = store.query_similar("q", n_results=1)
-    mock_collection.query.assert_called_once_with(
-        query_texts=["q"],
-        n_results=1,
-        include=["documents", "metadatas", "distances"],
-    )
-    assert len(hits) == 1
-    assert query_result_source_fields(hits[0]) == {
-        "document_id": "doc-m",
-        "relative_path": "T/1_entrada/a.md",
-    }
-
-
-def test_sqlite_patch_fallback_branch_when_pysqlite3_missing(caplog):
-    """Fallback branch: old SQLite and no pysqlite3 → warning, no crash."""
-    fake_sqlite = MagicMock()
-    fake_sqlite.sqlite_version = "3.34.0"
-
-    import builtins
-
-    real_import = builtins.__import__
-
-    def guarded_import(name, *args, **kwargs):
-        if name == "pysqlite3":
-            raise ImportError("no pysqlite3 in test")
-        if name == "sqlite3":
-            return fake_sqlite
-        return real_import(name, *args, **kwargs)
-
-    with patch("builtins.__import__", side_effect=guarded_import):
-        with caplog.at_level(logging.WARNING):
-            _patch_sqlite_for_chroma()
-
-    assert any("pysqlite3 no está disponible" in rec.message for rec in caplog.records)
-
-
-def test_sqlite_patch_applies_pysqlite3_when_sqlite_is_old():
-    fake_sqlite = MagicMock()
-    fake_sqlite.sqlite_version = "3.34.0"
-    fake_pysqlite = MagicMock(name="pysqlite3")
-
-    import builtins
-
-    real_import = builtins.__import__
-
-    def guarded_import(name, *args, **kwargs):
-        if name == "sqlite3":
-            return fake_sqlite
-        if name == "pysqlite3":
-            return fake_pysqlite
-        return real_import(name, *args, **kwargs)
-
-    with patch("builtins.__import__", side_effect=guarded_import):
-        with patch.dict(sys.modules):
-            _patch_sqlite_for_chroma()
-            assert sys.modules.get("sqlite3") is fake_pysqlite

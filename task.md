@@ -12,7 +12,7 @@ Thymer puede aportar un entorno colaborativo en tiempo real para proyectos de
 Fuente y permitir que una IA local trabaje sobre ese contexto compartido.
 
 Por ahora no aporta valor inmediato al flujo actual de Fuente, que ya usa
-Markdown, Obsidian, SQLite, ChromaDB y Ollama local. La integración queda
+Markdown, Obsidian, SQLite, MiniRAG y Ollama local. La integración queda
 pospuesta hasta que Thymer y sus interfaces sean estables.
 
 ## Qué son las piezas

@@ -5,14 +5,49 @@ import asyncio
 import inspect
 import json
 import re
+import sys
+import types
 from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence
 
+import requests
+
 from fuente.infrastructure.atomic_files import atomic_write_json
 from fuente.rag.backend import IndexBuildResult, IndexRecord, RetrievalHit
+from fuente.domain.vault_layout import (
+    CANONICAL_CLEAN_DIR_NAME,
+    CANONICAL_PROCESSED_DIR_NAME,
+    CANONICAL_SHARED_DIR_NAME,
+)
 
 
 ApprovalChecker = Callable[[str, int, str], bool]
+
+
+def _stage_in_relative_path(relative_path: str, stage_dir: str) -> bool:
+    return stage_dir in relative_path.replace("\\", "/").split("/")
+
+
+def resolve_index_authority(
+    *,
+    relative_path: str,
+    note_id: str,
+    revision: int,
+    content_hash: str,
+    approval_service: Any,
+    processed_note_available: bool = False,
+) -> str | None:
+    """Return the authoritative MiniRAG stage for one approved note."""
+    normalized = relative_path.replace("\\", "/")
+    if _stage_in_relative_path(normalized, CANONICAL_SHARED_DIR_NAME):
+        return None
+    if not approval_service.is_eligible(note_id, revision, content_hash):
+        return None
+    if _stage_in_relative_path(normalized, CANONICAL_PROCESSED_DIR_NAME):
+        return CANONICAL_PROCESSED_DIR_NAME
+    if _stage_in_relative_path(normalized, CANONICAL_CLEAN_DIR_NAME):
+        return None if processed_note_available else CANONICAL_CLEAN_DIR_NAME
+    return None
 
 
 _MINIRAG_RECORD_KIND = re.compile(
@@ -45,11 +80,73 @@ class MiniRAGUnavailableError(RuntimeError):
     """MiniRAG cannot run now; callers should use their local fallback."""
 
 
+class MiniRAGRetrievalBackend:
+    """Expose a MiniRAG-compatible store through Fuente's backend contract."""
+
+    name = "minirag"
+
+    def __init__(self, store: Any) -> None:
+        self.store = store
+
+    def rebuild(self, records: Sequence[IndexRecord]) -> IndexBuildResult:
+        rebuild = getattr(self.store, "rebuild", None)
+        if callable(rebuild):
+            return rebuild(records)
+        add_chunks = getattr(self.store, "add_chunks", None)
+        if not callable(add_chunks):
+            raise RuntimeError("MiniRAG store does not expose rebuild/add_chunks")
+        result = add_chunks(
+            [record.get("content", "") for record in records],
+            [dict(record.get("metadata") or {}) for record in records],
+            [record["id"] for record in records],
+        )
+        return IndexBuildResult(
+            backend=self.name,
+            indexed_count=len(records),
+            success=result is not False,
+        )
+
+    def search(self, query: str, limit: int) -> list[RetrievalHit]:
+        search = getattr(self.store, "search", None)
+        if callable(search):
+            return list(search(query, limit))
+        query_similar = getattr(self.store, "query_similar", None)
+        if not callable(query_similar):
+            raise RuntimeError("MiniRAG store does not expose search/query_similar")
+        hits = []
+        for item in query_similar(query, n_results=limit) or []:
+            metadata = dict(item.get("metadata") or {})
+            hits.append(
+                RetrievalHit(
+                    document_id=str(metadata.get("document_id") or item.get("document_id") or ""),
+                    revision=int(metadata.get("revision") or 1),
+                    content_hash=str(metadata.get("content_hash") or metadata.get("source_hash") or ""),
+                    content=str(item.get("content") or ""),
+                    score=float(item.get("score") or 0.0),
+                    backend=self.name,
+                    relative_path=str(metadata.get("relative_path") or ""),
+                    metadata={**metadata, "id": item.get("id")},
+                )
+            )
+        return hits
+
+    def delete(self, document_ids: Sequence[str]) -> bool | None:
+        delete = getattr(self.store, "delete", None)
+        if callable(delete):
+            return delete(document_ids)
+        delete_chunks = getattr(self.store, "delete_chunks", None)
+        if not callable(delete_chunks):
+            raise RuntimeError("MiniRAG store does not expose delete/delete_chunks")
+        return delete_chunks(document_ids)
+
+
 class MiniRAGStore:
-    """Keep MiniRAG state and Fuente provenance under one authorized directory."""
+    """Keep the primary MiniRAG index and Fuente provenance together."""
 
     name = "minirag"
     _MANIFEST = "fuente-provenance.json"
+    DEFAULT_EMBEDDING_MODEL = "all-minilm"
+    EMBEDDING_DIMENSION = 384
 
     def __init__(
         self,
@@ -59,6 +156,7 @@ class MiniRAGStore:
         client_factory: Callable[[Path], Any] | None = None,
         ollama_url: str = "http://localhost:11434",
         model: str | None = None,
+        embedding_model: str = DEFAULT_EMBEDDING_MODEL,
         embedding_func: Any | None = None,
         llm_model_func: Callable[..., Any] | None = None,
         job_store: Any | None = None,
@@ -70,10 +168,13 @@ class MiniRAGStore:
         self._client_factory = client_factory
         self.ollama_url = ollama_url
         self.model = model
+        self.embedding_model = embedding_model
         self._embedding_func = embedding_func
         self._llm_model_func = llm_model_func
         self._job_store = job_store
         self._approval_checker = approval_checker
+        self.failed = False
+        self.init_error: Exception | None = None
 
     def set_approval_checker(self, checker: ApprovalChecker | None) -> None:
         self._approval_checker = checker
@@ -88,41 +189,60 @@ class MiniRAGStore:
         if self._client_factory is not None:
             self._client = self._client_factory(self.root)
             return self._client
+        # MiniRAG imports SentenceTransformer eagerly, even with a custom
+        # embedding callback. Keep the local runtime Ollama-only.
+        if "sentence_transformers" not in sys.modules:
+            stub = types.ModuleType("sentence_transformers")
+            stub.SentenceTransformer = type("SentenceTransformer", (), {})
+            sys.modules["sentence_transformers"] = stub
         try:
             from minirag import MiniRAG  # type: ignore[import-not-found]
             from minirag.utils import EmbeddingFunc  # type: ignore[import-not-found]
         except ImportError as exc:
-            try:
-                from fuente.runtime_loader import ensure_capability
-
-                ensure_capability("rag")
-                from minirag import MiniRAG  # type: ignore[import-not-found]
-                from minirag.utils import EmbeddingFunc  # type: ignore[import-not-found]
-            except Exception as install_error:
-                raise MiniRAGUnavailableError(
-                    "MiniRAG is not installed; use BM25 fallback"
-                ) from install_error
+            self.failed = True
+            self.init_error = exc
+            raise MiniRAGUnavailableError(
+                "MiniRAG is not installed; use BM25 fallback"
+            ) from exc
         embedding_func = self._embedding_func or self._default_embedding_func(EmbeddingFunc)
         llm_model_func = self._llm_model_func or self._default_llm_model_func()
-        self._client = MiniRAG(
-            working_dir=str(self.root),
-            embedding_func=embedding_func,
-            llm_model_func=llm_model_func,
-            entity_extract_max_gleaning=0,
-            llm_model_max_async=1,
-        )
+        try:
+            self._client = MiniRAG(
+                working_dir=str(self.root),
+                embedding_func=embedding_func,
+                llm_model_func=llm_model_func,
+                entity_extract_max_gleaning=0,
+                llm_model_max_async=1,
+            )
+        except Exception as exc:
+            self.failed = True
+            self.init_error = exc
+            raise MiniRAGUnavailableError(f"MiniRAG no está disponible: {exc}") from exc
         return self._client
 
     def _default_embedding_func(self, embedding_type: Any) -> Any:
-        """Use Chroma's local MiniLM embedder for both local indexes."""
-        from chromadb.utils.embedding_functions import DefaultEmbeddingFunction
+        """Use the configured local Ollama embedding model."""
 
-        embedder = DefaultEmbeddingFunction()
+        def embed_sync(texts: list[str]) -> list[list[float]]:
+            response = requests.post(
+                f"{self.ollama_url.rstrip('/')}/api/embed",
+                json={"model": self.embedding_model, "input": texts},
+                timeout=180,
+            )
+            response.raise_for_status()
+            embeddings = response.json().get("embeddings")
+            if not isinstance(embeddings, list) or len(embeddings) != len(texts):
+                raise RuntimeError("Ollama devolvió un número inválido de embeddings")
+            return embeddings
 
         async def embed(texts: list[str]) -> Any:
-            return embedder(texts)
+            return await asyncio.to_thread(embed_sync, texts)
 
-        return embedding_type(embedding_dim=384, max_token_size=8192, func=embed)
+        return embedding_type(
+            embedding_dim=self.EMBEDDING_DIMENSION,
+            max_token_size=8192,
+            func=embed,
+        )
 
     def _default_llm_model_func(self) -> Callable[..., Any]:
         from fuente.application.chat import OllamaChatProvider
@@ -175,7 +295,12 @@ class MiniRAGStore:
         ids = [record["id"] for record in normalized]
         ainsert = getattr(client, "ainsert", None)
         if callable(ainsert):
-            result = self._run(ainsert(contents, ids=ids))
+            try:
+                result = self._run(ainsert(contents, ids=ids))
+            except Exception as exc:
+                self.failed = True
+                self.init_error = exc
+                raise MiniRAGUnavailableError(f"MiniRAG no está disponible: {exc}") from exc
             self._map_real_ids(client, normalized)
             return IndexBuildResult(backend=self.name, indexed_count=len(normalized), success=True)
         insert = getattr(client, "insert", None)
@@ -184,7 +309,16 @@ class MiniRAGStore:
         try:
             result = insert(contents, ids=ids)
         except TypeError:
-            result = insert(contents)
+            try:
+                result = insert(contents)
+            except Exception as exc:
+                self.failed = True
+                self.init_error = exc
+                raise MiniRAGUnavailableError(f"MiniRAG no está disponible: {exc}") from exc
+        except Exception as exc:
+            self.failed = True
+            self.init_error = exc
+            raise MiniRAGUnavailableError(f"MiniRAG no está disponible: {exc}") from exc
             self._map_real_ids(client, normalized)
         if inspect.isawaitable(result):
             raise RuntimeError("async MiniRAG clients are not supported by this local adapter")
@@ -197,6 +331,40 @@ class MiniRAGStore:
             indexed_count=len(normalized),
             success=True,
         )
+
+    def add_chunks(self, contents, metadatas, ids) -> bool:
+        records = []
+        for content, metadata, item_id in zip(contents, metadatas, ids):
+            meta = dict(metadata or {})
+            records.append(
+                {
+                    "id": str(item_id),
+                    "document_id": str(meta.get("document_id") or item_id),
+                    "content": str(content),
+                    "metadata": meta,
+                    "relative_path": str(meta.get("relative_path") or ""),
+                    "revision": int(meta.get("revision") or 1),
+                    "content_hash": str(meta.get("content_hash") or meta.get("source_hash") or ""),
+                }
+            )
+        self.rebuild(records)
+        return True
+
+    def delete_chunks(self, ids) -> bool:
+        self.delete(ids)
+        return True
+
+    def query_similar(self, query: str, n_results: int = 5) -> list[dict[str, Any]]:
+        return [
+            {
+                "id": hit.metadata.get("id", hit.document_id),
+                "content": hit.content,
+                "metadata": dict(hit.metadata),
+                "score": hit.score,
+                "backend": hit.backend,
+            }
+            for hit in self.search(query, n_results)
+        ]
 
     def search(self, query: str, limit: int) -> list[RetrievalHit]:
         client = self._get_client()
@@ -217,6 +385,50 @@ class MiniRAGStore:
         for item in self._as_items(raw):
             hits.extend(self._to_hits(item, manifest))
         return hits[: max(1, int(limit))]
+
+    def get_all_chunks(self) -> list[dict[str, Any]]:
+        """Return MiniRAG's persisted chunks in the corpus shape used by BM25."""
+        client = self._get_client()
+        storage = getattr(client, "text_chunks", None)
+        if storage is None:
+            return []
+        keys = self._run(storage.all_keys())
+        values = self._run(storage.get_by_ids(keys))
+        manifest = self._load_manifest()
+        chunks: list[dict[str, Any]] = []
+        for key, value in zip(keys, values):
+            if not isinstance(value, Mapping):
+                continue
+            item_id = str(key)
+            source = self._manifest_records(manifest.get(item_id))
+            record = source[0] if source else {}
+            metadata = {
+                **dict(record.get("metadata") or {}),
+                **dict(value.get("metadata") or {}),
+            }
+            if record.get("document_id"):
+                metadata.setdefault("document_id", record["document_id"])
+            chunks.append(
+                {
+                    "id": item_id,
+                    "content": str(value.get("content") or record.get("content") or ""),
+                    "metadata": metadata,
+                }
+            )
+        return chunks
+
+    def find_concept_note_id(self, slug: str) -> str | None:
+        """Return a catalog note id from MiniRAG provenance metadata."""
+        normalized = slug.strip().lower()
+        for value in self._load_manifest().values():
+            for record in self._manifest_records(value):
+                metadata = dict(record.get("metadata") or {})
+                relative_path = str(record.get("relative_path") or metadata.get("relative_path") or "")
+                if relative_path.endswith(f"/conceptos/{normalized}.md"):
+                    note_id = str(record.get("note_id") or metadata.get("note_id") or "")
+                    if note_id:
+                        return note_id
+        return None
 
     def is_enrichment_enabled(self, note_id: str, revision: int, content_hash: str) -> bool:
         if self._approval_checker is None:
@@ -271,18 +483,18 @@ class MiniRAGStore:
             return False
         return self.is_enrichment_enabled(note_id, revision, content_hash)
 
-    def enrich(self, query: str, chroma_hits: list[RetrievalHit]) -> list[RetrievalHit]:
-        if not chroma_hits:
+    def enrich(self, query: str, primary_hits: list[RetrievalHit]) -> list[RetrievalHit]:
+        if not primary_hits:
             return []
-        gated = [hit for hit in chroma_hits if self._hit_enrichment_enabled(hit)]
+        gated = [hit for hit in primary_hits if self._hit_enrichment_enabled(hit)]
         if not gated:
-            return list(chroma_hits)
+            return list(primary_hits)
         try:
-            extra = self.search(query, limit=max(len(chroma_hits), 5))
+            extra = self.search(query, limit=max(len(primary_hits), 5))
         except MiniRAGUnavailableError:
-            return list(chroma_hits)
+            return list(primary_hits)
         extra = [hit for hit in extra if self._hit_enrichment_enabled(hit)]
-        return self._merge_hits(chroma_hits, extra)
+        return self._merge_hits(primary_hits, extra)
 
     def delete(self, document_ids: Sequence[str]) -> None:
         manifest = self._load_manifest()

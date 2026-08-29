@@ -53,7 +53,7 @@ def test_reindex_with_fewer_chunks_removes_stale_vectors(temp_vault_path):
         chunk_ids = {
             a["artifact_id"]
             for a in artifacts
-            if a["kind"] == "chroma_chunk"
+            if a["kind"] == "minirag_chunk"
         }
         assert chunk_ids == harness.chroma.chunk_ids()
     finally:

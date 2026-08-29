@@ -289,7 +289,7 @@ def test_fuente_mockup_identity_markers_are_present() -> None:
     assert "Limpiar filtros" in html
     assert 'name="source-filter-seal"' in html
     assert 'type="checkbox"' in html
-    assert "Índice de contenido con ChromaDB" in html
+    assert "Índice de contenido con MiniRAG" in html
     assert "Principios de diseño" in html
     assert "Flujo de consulta local" in html
     assert "\u2014" not in html
@@ -308,7 +308,7 @@ def test_fuente_mockup_identity_markers_are_present() -> None:
     assert "if (document.body.getAttribute('data-capture-scenario')) return;" in html
     assert 'id="aux-search-relations"' in html
     assert "Decisiones de arquitectura - Q1 2025" in html
-    assert "Contenido: ChromaDB" in html
+    assert "Contenido: MiniRAG" in html
     assert "modal-caudal-import" in html
     assert "Elegir..." in html
     assert "if (id === 'modal-template-helper' && !document.body.getAttribute('data-capture-scenario'))" in html

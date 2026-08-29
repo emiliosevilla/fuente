@@ -15,7 +15,7 @@ def tokenize(text: str) -> List[str]:
 
 
 def _hydrate_origins(document: Dict[str, Any]) -> Dict[str, Any]:
-    """Restore typed origin metadata after Chroma's scalar-only storage."""
+    """Restore typed origin metadata from the local index manifest."""
     hydrated = dict(document)
     metadata = dict(hydrated.get("metadata") or {})
     encoded = metadata.get("origins_json")
@@ -109,36 +109,20 @@ class BM25Okapi:
         return results
 
 
-def docs_from_chroma_store(chroma_store: Any) -> List[Dict[str, Any]]:
-    """Load all indexed chunks from a ChromaStore-like object."""
-    if chroma_store is None:
+def docs_from_index_store(index_store: Any) -> List[Dict[str, Any]]:
+    """Load all indexed chunks from a MiniRAG-compatible local store."""
+    if index_store is None:
         return []
 
-    getter = getattr(chroma_store, "get_all_chunks", None)
+    getter = getattr(index_store, "get_all_chunks", None)
     if callable(getter):
         return [_hydrate_origins(dict(chunk)) for chunk in (getter() or [])]
 
-    collection = getattr(chroma_store, "collection", None)
-    if collection is None:
-        return []
-    try:
-        all_data = collection.get()
-    except Exception as exc:
-        logger.debug("Unable to load Chroma documents for BM25: %s", exc)
-        return []
-
-    docs: List[Dict[str, Any]] = []
-    for d_id, doc, meta in zip(
-        all_data.get("ids", []),
-        all_data.get("documents", []),
-        all_data.get("metadatas", []),
-    ):
-        docs.append(_hydrate_origins({"id": d_id, "content": doc, "metadata": meta or {}}))
-    return docs
+    return []
 
 
 class HybridSearcher:
-    """Combina la búsqueda semántica vectorial (ChromaDB) y la búsqueda léxica (BM25) mediante RRF.
+    """Combina la búsqueda semántica de MiniRAG y la léxica BM25 mediante RRF.
 
     BM25 is cached across queries. Call ``invalidate_cache()`` (or bump the
     generation counter) whenever the underlying index changes so the next
@@ -218,7 +202,7 @@ class HybridSearcher:
             return vector_results[:top_k]
         return self.reciprocal_rank_fusion(vector_results, bm25_results, top_k=top_k)
 
-    def search(self, chroma_store, query_text: str, n_results: int = 5) -> List[Dict[str, Any]]:
+    def search(self, index_store, query_text: str, n_results: int = 5) -> List[Dict[str, Any]]:
         """Búsqueda con fallback transparente a BM25 si RAMGovernor detecta estrés de memoria."""
         try:
             from fuente.ram_governor.governor import RAMGovernor
@@ -227,22 +211,22 @@ class HybridSearcher:
                 logger.warning(
                     "[RAM GOVERNOR] Memoria RAM justa/crítica. Activando fallback degradado transparente BM25."
                 )
-                self.ensure_index(lambda: docs_from_chroma_store(chroma_store))
+                self.ensure_index(lambda: docs_from_index_store(index_store))
                 return self.bm25.search(query_text, top_k=n_results)
         except Exception as e:
             logger.debug(f"Error consultando RAMGovernor para fallback BM25: {e}")
 
-        if chroma_store:
+        if index_store:
             # Prefer the store's hybrid path when present; otherwise fuse locally with cache.
-            query_hybrid = getattr(chroma_store, "query_hybrid", None)
+            query_hybrid = getattr(index_store, "query_hybrid", None)
             if callable(query_hybrid):
                 # Still warm the cache so subsequent BM25-only calls are cheap.
-                self.ensure_index(lambda: docs_from_chroma_store(chroma_store))
+                self.ensure_index(lambda: docs_from_index_store(index_store))
                 return query_hybrid(query_text, n_results=n_results)
 
-            vector_fn = getattr(chroma_store, "query_similar", None)
+            vector_fn = getattr(index_store, "query_similar", None)
             if callable(vector_fn):
-                self.ensure_index(lambda: docs_from_chroma_store(chroma_store))
+                self.ensure_index(lambda: docs_from_index_store(index_store))
                 vector_results = vector_fn(query_text, n_results=n_results * 2)
                 return self.search_hybrid(vector_results, query_text, top_k=n_results)
         return []

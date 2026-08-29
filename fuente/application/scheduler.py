@@ -82,7 +82,7 @@ _EXTRACT_STAGES = frozenset({"discovered", "stabilized", "copied_dirty"})
 _EMBED_STAGES = frozenset({"saved_clean", "saved_note"})
 #: Stages whose next work calls the LLM.
 _LLM_STAGES = frozenset({"indexed_chunks"})
-#: Stages that mutate note/chroma identity for a document.
+#: Stages that mutate note/index identity for a document.
 _DOCUMENT_MUTATING_STAGES = frozenset(
     {
         "saved_clean",

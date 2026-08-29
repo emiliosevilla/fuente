@@ -172,13 +172,14 @@ class FeedApplicationService:
         *,
         vault_root: Path,
         path_resolver: Any,
+        index_store: Any | None = None,
         chroma_store: Any | None = None,
         seal_resolver: Optional[Callable[[dict[str, Any]], str]] = None,
     ) -> None:
         self.job_store = job_store
         self.vault_root = vault_root.resolve()
         self.path_resolver = path_resolver
-        self.chroma = chroma_store
+        self.index_store = index_store if index_store is not None else chroma_store
         self._seal_resolver = seal_resolver or self._default_seal
 
     def list_feed(
@@ -240,9 +241,9 @@ class FeedApplicationService:
         return SearchPage(mode=mode, query=normalized_query, items=tuple(items))
 
     def _search_content(self, query: str, filters: Mapping[str, Any]) -> list[dict[str, Any]]:
-        if self.chroma is None:
+        if self.index_store is None:
             return []
-        hits = self.chroma.search(query, limit=40)
+        hits = self.index_store.search(query, limit=40)
         allowed = {
             row["note_id"]
             for row in self.job_store.list_feed_page(

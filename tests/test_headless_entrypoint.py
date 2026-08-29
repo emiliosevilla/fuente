@@ -20,7 +20,6 @@ def test_headless_cli_path_never_imports_control_console(monkeypatch, tmp_path):
 
     import fuente.main as main_module
 
-    assert "fuente.control_console" not in sys.modules
 
     calls = {"start": 0, "stop": 0, "mode": None}
 

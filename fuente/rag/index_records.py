@@ -2,7 +2,7 @@
 
 Chunk IDs are derived only from ``document_id``, ``content_hash`` (source
 hash) and ``chunk_index``, so a re-index of the same bytes produces the same
-ids for the same indices. Callers (ingestion / Chroma) store the set of ids
+ids for the same indices. Callers (ingestion / MiniRAG) store the set of ids
 published per document and delete ``previous − current`` when that set
 shrinks (e.g. N → N-2).
 """
@@ -60,7 +60,7 @@ class DocumentChunkSet:
 
 
 def make_chunk_id(document_id: str, content_hash: str, chunk_index: int) -> str:
-    """Deterministic Chroma/artifact id for one chunk of a document revision."""
+    """Deterministic MiniRAG/artifact id for one chunk of a document revision."""
     if chunk_index < 0:
         raise ValueError(f"chunk_index must be >= 0, got {chunk_index}")
     if not document_id:
@@ -141,7 +141,7 @@ def chunk_ids_for_document(chunks: Sequence[Mapping[str, Any]]) -> frozenset[str
 
 
 def query_result_source_fields(result: Mapping[str, Any]) -> dict[str, str]:
-    """Pull source document id and relative path from a Chroma query hit."""
+    """Pull source document id and relative path from an index query hit."""
     metadata = result.get("metadata") or {}
     return {
         "document_id": str(metadata.get("document_id", "")),

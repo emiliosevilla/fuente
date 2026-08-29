@@ -25,7 +25,7 @@ from fuente.domain.quarantine import QuarantineService
 from fuente.extractors.registry import ExtractorRegistry
 from fuente.infrastructure.sqlite_store import JobStore
 from fuente.ram_governor.governor import RAMGovernor
-from fuente.rag.chroma_store import ChromaStore
+from fuente.rag.minirag_store import MiniRAGStore
 from fuente.rag.semantic_chunker import SemanticChunker
 from fuente.application.note_generation import AtomicNoteGenerator
 
@@ -146,8 +146,8 @@ class ETLPipeline:
             ollama_url=config.ollama_url,
             safety_margin_pct=config.ram_safety_margin_pct
         )
-        self.chroma = (
-            ChromaStore(config.vault.chroma_dir)
+        self.index_store = (
+            MiniRAGStore(config.vault.minirag_dir, ollama_url=config.ollama_url)
             if self.runtime_policy.vector_index_enabled
             else None
         )
@@ -160,7 +160,7 @@ class ETLPipeline:
             job_store=self.job_store,
             extractors=self.extractors,
             chunker=self.chunker,
-            chroma=self.chroma,
+            index_store=self.index_store,
             atomic_generator=self.atomic_gen,
             runtime_policy=self.runtime_policy,
             ram_governor=self.ram_governor,
@@ -169,15 +169,18 @@ class ETLPipeline:
         )
 
     def set_runtime_policy(self, policy: RuntimePolicy) -> None:
-        """Apply policy to existing collaborators without eager Chroma creation."""
+        """Apply policy to existing collaborators without eager index creation."""
         previous = self.runtime_policy
-        previous_chroma = self.chroma
-        next_chroma = previous_chroma
+        previous_index = self.index_store
+        next_index = previous_index
         if policy.vector_index_enabled:
-            if next_chroma is None:
-                next_chroma = ChromaStore(self.config.vault.chroma_dir)
+            if next_index is None:
+                next_index = MiniRAGStore(
+                    self.config.vault.minirag_dir,
+                    ollama_url=self.config.ollama_url,
+                )
         elif previous.vector_index_enabled:
-            next_chroma = None
+            next_index = None
 
         try:
             self.extractors.set_runtime_policy(policy)
@@ -190,13 +193,13 @@ class ETLPipeline:
                 self.ingestion.set_runtime_policy(previous)
             finally:
                 self.runtime_policy = previous
-                self.chroma = previous_chroma
-                self.ingestion.chroma = previous_chroma
+                self.index_store = previous_index
+                self.ingestion.index_store = previous_index
             raise
 
         self.runtime_policy = policy
-        self.chroma = next_chroma
-        self.ingestion.chroma = next_chroma
+        self.index_store = next_index
+        self.ingestion.index_store = next_index
 
     def set_config(self, config: AppConfig) -> None:
         """Refresh mutable runtime settings without replacing this pipeline."""

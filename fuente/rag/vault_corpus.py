@@ -19,7 +19,7 @@ class VaultCorpusProvider:
     """Load only authorized output Markdown into a stable BM25 corpus.
 
     ``output_roots`` is deliberately explicit. The provider never scans the
-    whole Vault, and it never reads Chroma or any other index adapter.
+    whole Vault, and it never reads MiniRAG or any other index adapter.
     """
 
     def __init__(

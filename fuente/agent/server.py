@@ -199,6 +199,25 @@ def verify_supabase_management(binding: AgentBinding, access_token: str, org_id:
     return role
 
 
+def verify_document_note_visibility(binding: AgentBinding, access_token: str, note_id: str) -> None:
+    try:
+        normalized_note_id = str(uuid.UUID(note_id))
+    except (ValueError, AttributeError) as error:
+        raise AgentAuthorizationError("note is invalid") from error
+    request = Request(
+        f"{binding.supabase_url}/rest/v1/document_notes?note_id=eq.{quote(normalized_note_id, safe='')}&select=note_id",
+        headers={"apikey": binding.publishable_key, "Authorization": f"Bearer {access_token}"},
+        method="GET",
+    )
+    try:
+        with urlopen(request, timeout=5) as response:
+            rows = json.loads(response.read().decode("utf-8"))
+    except (HTTPError, URLError, TimeoutError, OSError, json.JSONDecodeError) as error:
+        raise AgentSyncError("Supabase could not verify note access") from error
+    if not isinstance(rows, list) or len(rows) != 1 or not isinstance(rows[0], Mapping):
+        raise AgentAuthorizationError("note is not available")
+
+
 class GestajoAgent:
     """Own one vault and expose only an authenticated, path-free status contract."""
 
@@ -214,6 +233,8 @@ class GestajoAgent:
         settings_reader: Callable[[Path], Mapping[str, object]] | None = None,
         settings_writer: Callable[[Path, Mapping[str, object]], Mapping[str, object]] | None = None,
         backend_factory: Callable[[Path], Any] | None = None,
+        note_visibility_verifier: Callable[[AgentBinding, str, str], None] = verify_document_note_visibility,
+        note_reader: Callable[[Path, str], Mapping[str, object]] | None = None,
         allowed_origins: frozenset[str] = DEFAULT_ALLOWED_ORIGINS,
     ) -> None:
         self.vault_path = Path(vault_path).expanduser().resolve()
@@ -226,6 +247,8 @@ class GestajoAgent:
         self._settings_writer = settings_writer
         self._backend_factory = backend_factory or _source_backend
         self._backend: Any | None = None
+        self._note_visibility_verifier = note_visibility_verifier
+        self._note_reader = note_reader or _read_note
         self._allowed_origins = allowed_origins
         self._binding = _read_binding(self.vault_path)
 
@@ -275,7 +298,7 @@ class GestajoAgent:
             "platform": platform.system(),
             "user_id": binding.user_id,
             "vault_fingerprint": self._vault_fingerprint(),
-            "capabilities": ["flow", "settings", "sync_inputs"],
+            "capabilities": ["flow", "settings", "sync_inputs", "note_read"],
         }
 
     def flow(self, access_token: object, org_id: object) -> dict[str, object]:
@@ -342,6 +365,13 @@ class GestajoAgent:
         if result.get("error"):
             raise AgentError(str(result.get("message") or result["error"]))
         return _sync_inputs_response(result)
+
+    def read_note(self, access_token: object, note_id: object) -> dict[str, object]:
+        binding = self._require_user(access_token)
+        if not isinstance(note_id, str):
+            raise AgentAuthorizationError("note is invalid")
+        self._note_visibility_verifier(binding, self._access_token(access_token), note_id)
+        return _note_response(self._note_reader(self.vault_path, note_id), note_id)
 
     def _require_management(self, access_token: object, org_id: object) -> AgentBinding:
         binding = self._require_user(access_token)
@@ -433,6 +463,13 @@ def _handler_for(agent: GestajoAgent) -> type[BaseHTTPRequestHandler]:
                 self._authorized(
                     lambda token: agent.settings(token, _single_query_value(parsed.query, "org_id"))
                 )
+                return
+            if parsed.path.startswith("/v1/notes/"):
+                note_id = parsed.path.removeprefix("/v1/notes/")
+                if not note_id or "/" in note_id:
+                    self._send_error(HTTPStatus.NOT_FOUND, "route not found")
+                    return
+                self._authorized(lambda token: agent.read_note(token, note_id))
                 return
             if parsed.path != "/v1/status":
                 self._send_error(HTTPStatus.NOT_FOUND, "route not found")
@@ -545,6 +582,10 @@ def _source_backend(vault_path: Path) -> Any:
     return FuenteConsoleBackend(vault_path)
 
 
+def _read_note(vault_path: Path, note_id: str) -> Mapping[str, object]:
+    return _source_backend(vault_path).get_note_content_html(note_id)
+
+
 def _flow_response(state: Mapping[str, object]) -> dict[str, object]:
     def count(value: object) -> int:
         return max(0, int(value)) if isinstance(value, (int, float)) else 0
@@ -624,3 +665,15 @@ def _sync_selection_response(value: Mapping[str, object]) -> dict[str, object]:
 def _sync_inputs_response(value: Mapping[str, object]) -> dict[str, object]:
     inputs = value.get("inputs") if isinstance(value.get("inputs"), list) else []
     return {"sync_inputs": _settings_response({"sync_inputs": {"inputs": inputs}}, "consulta")["sync_inputs"]}
+
+
+def _note_response(value: Mapping[str, object], note_id: str) -> dict[str, object]:
+    if value.get("error"):
+        raise AgentError(str(value.get("message") or value["error"]))
+    document_id = value.get("document_id")
+    revision = value.get("revision")
+    title = value.get("title")
+    body = value.get("body_markdown")
+    if document_id != note_id or not isinstance(revision, int) or revision < 1 or not isinstance(title, str) or not isinstance(body, str):
+        raise AgentError("local note has an invalid contract")
+    return {"document_id": document_id, "revision": revision, "title": title, "body_markdown": body}

@@ -63,7 +63,7 @@ def test_status_requires_the_bound_user(tmp_path: Path):
     )
 
     assert agent.status("token-a")["claimed"] is True
-    assert agent.status("token-a")["capabilities"] == ["flow", "settings", "sync_inputs"]
+    assert agent.status("token-a")["capabilities"] == ["flow", "settings", "sync_inputs", "note_read"]
     with pytest.raises(AgentAuthenticationError, match="another user"):
         agent.status("token-b")
 
@@ -252,6 +252,26 @@ def test_sync_input_uses_native_selection_token_without_returning_a_path(tmp_pat
     assert paused == {"sync_inputs": []}
     assert removed == {"sync_inputs": []}
     assert "/private" not in str(selection | confirmed)
+
+
+def test_note_read_checks_rls_before_returning_markdown_and_never_returns_paths(tmp_path: Path):
+    checked = []
+    note_id = "00000000-0000-0000-0000-000000000010"
+    agent = GestajoAgent(
+        tmp_path, verifier=_verifier, publisher=_publisher,
+        note_visibility_verifier=lambda binding, token, received_id: checked.append((binding.user_id, token, received_id)),
+        note_reader=lambda _vault, received_id: {
+            "document_id": received_id, "revision": 2, "title": "Nota segura",
+            "body_markdown": "# Nota segura", "path": "/private/vault/nota.md", "html": "<h1>Nota segura</h1>",
+        },
+    )
+    agent.claim("token-a", {"supabase_url": "https://project.supabase.co", "publishable_key": "sb_publishable_test_key"})
+
+    note = agent.read_note("token-a", note_id)
+
+    assert checked == [("user-a", "token-a", note_id)]
+    assert note == {"document_id": note_id, "revision": 2, "title": "Nota segura", "body_markdown": "# Nota segura"}
+    assert "/private" not in str(note)
 
 
 def test_flow_requires_exactly_one_active_organization():

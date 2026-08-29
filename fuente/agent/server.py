@@ -259,7 +259,11 @@ def publish_document_note_metadata(binding: AgentBinding, access_token: str, not
     try:
         with urlopen(request, timeout=5) as response:
             rows = json.loads(response.read().decode("utf-8"))
-    except (HTTPError, URLError, TimeoutError, OSError, json.JSONDecodeError) as error:
+    except HTTPError as error:
+        if error.code == HTTPStatus.CONFLICT:
+            return
+        raise AgentSyncError("Supabase could not register note metadata") from error
+    except (URLError, TimeoutError, OSError, json.JSONDecodeError) as error:
         raise AgentSyncError("Supabase could not register note metadata") from error
     if not isinstance(rows, list) or len(rows) != 1:
         raise AgentSyncError("Supabase did not confirm note metadata")

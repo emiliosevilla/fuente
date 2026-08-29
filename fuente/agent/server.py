@@ -407,30 +407,31 @@ class GestajoAgent:
         return _flow_response(state)
 
     def approve_flow_transition(self, access_token: object, org_id: object, payload: object) -> dict[str, object]:
-        """Approve only Fuente's current first human-gated transition."""
+        """Approve Fuente's current human-gated transition."""
         binding = self._require_user(access_token)
         if not isinstance(org_id, str):
             raise AgentAuthorizationError("organization is invalid")
         self._management_verifier(binding, self._access_token(access_token), org_id)
         job_id = _flow_approval_payload(payload)
-        detail = self._local_backend().get_job_detail(job_id)
+        backend = self._local_backend()
+        detail = backend.get_job_detail(job_id)
         job = detail.get("job") if isinstance(detail, Mapping) else None
-        if not isinstance(job, Mapping) or not _is_first_transition_approval(job, job_id):
+        transition = _flow_approval_transition(job, job_id) if isinstance(job, Mapping) else None
+        if transition is None:
             raise AgentError("the requested Caudal approval is not available")
-        source_hash = job.get("source_hash")
-        if not isinstance(source_hash, str) or len(source_hash) != 64:
-            raise AgentError("local Caudal job is invalid")
-        approvals = self._local_backend().get_job_control_service().ingestion.transition_approvals
+        source_stage, target_stage = transition
+        content_hash = _flow_approval_hash(backend, job, source_stage)
+        approvals = backend.get_job_control_service().ingestion.transition_approvals
         try:
-            approvals.begin_review(job_id, "1_volcado", "2_copiado", 1, source_hash, reviewer=binding.user_id)
-            approvals.approve(job_id, "1_volcado", "2_copiado", 1, source_hash, reviewer=binding.user_id)
+            approvals.begin_review(job_id, source_stage, target_stage, 1, content_hash, reviewer=binding.user_id)
+            approvals.approve(job_id, source_stage, target_stage, 1, content_hash, reviewer=binding.user_id)
         except (OSError, RuntimeError, ValueError) as error:
             raise AgentError("Caudal could not record the approval locally") from error
         self._record_audit(binding, self._access_token(access_token), _new_audit_event(
             None, str(org_id), str(uuid.UUID(str(org_id))), binding.user_id, "caudal_transition_approve", "success",
         ))
         try:
-            self._local_backend().get_job_control_service().ingestion.resume(job_id)
+            backend.get_job_control_service().ingestion.resume(job_id)
         except (OSError, RuntimeError, ValueError) as error:
             raise AgentError("Caudal recorded the approval but could not continue the job") from error
         return _flow_response(self._read_flow())
@@ -1014,19 +1015,41 @@ def _flow_approval_payload(payload: object) -> str:
         raise AgentError("Caudal job is invalid") from error
 
 
-def _is_first_transition_approval(job: Mapping[str, object], job_id: str) -> bool:
-    return (
+def _flow_approval_transition(job: Mapping[str, object], job_id: str) -> tuple[str, str] | None:
+    if not (
         job.get("job_id") == job_id
-        and job.get("stage") == "stabilized"
         and job.get("status") == "pending"
         and job.get("error_code") == "awaiting_transition_approval"
-    )
+    ):
+        return None
+    if job.get("stage") == "stabilized":
+        return "1_volcado", "2_copiado"
+    if job.get("stage") == "extracted":
+        return "2_copiado", "3_capturado"
+    return None
+
+
+def _flow_approval_hash(backend: Any, job: Mapping[str, object], source_stage: str) -> str:
+    if source_stage == "1_volcado":
+        content_hash = job.get("source_hash")
+        if isinstance(content_hash, str) and len(content_hash) == 64:
+            return content_hash
+    if source_stage == "2_copiado":
+        relative_path = _safe_sync_relative(job.get("dirty_artifact"))
+        vault_root = Path(backend.vault.config.vault_path).resolve()
+        if relative_path is not None:
+            path = (vault_root / relative_path).resolve()
+            if path.is_relative_to(vault_root) and path.is_file():
+                content_hash = backend.vault.calculate_file_hash(path)
+                if isinstance(content_hash, str) and len(content_hash) == 64:
+                    return content_hash
+    raise AgentError("local Caudal job is invalid")
 
 
 def _flow_approval_response(job: Mapping[str, object]) -> dict[str, str] | None:
     job_id = job.get("job_id")
     relative_path = job.get("source_relative_path")
-    if not isinstance(job_id, str) or not isinstance(relative_path, str) or not _is_first_transition_approval(job, job_id):
+    if not isinstance(job_id, str) or not isinstance(relative_path, str):
         return None
     try:
         job_id = str(uuid.UUID(job_id))
@@ -1035,7 +1058,10 @@ def _flow_approval_response(job: Mapping[str, object]) -> dict[str, str] | None:
     safe_path = _safe_sync_relative(relative_path)
     if safe_path is None or not PurePosixPath(safe_path).name:
         return None
-    return {"job_id": job_id, "title": PurePosixPath(safe_path).name, "source_stage": "1_volcado", "target_stage": "2_copiado"}
+    transition = _flow_approval_transition(job, job_id)
+    if transition is None:
+        return None
+    return {"job_id": job_id, "title": PurePosixPath(safe_path).name, "source_stage": transition[0], "target_stage": transition[1]}
 
 
 def _settings_response(state: Mapping[str, object], role: str) -> dict[str, object]:

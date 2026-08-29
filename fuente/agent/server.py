@@ -422,6 +422,23 @@ class GestajoAgent:
             sync_state = "pending_sync"
         return {**local, "sync_state": sync_state}
 
+    def sync_pending(self, access_token: object) -> dict[str, object]:
+        binding = self._require_user(access_token)
+        synced = 0
+        for item in self._document_outbox().list_document_outbox():
+            if item.get("kind") != "note_metadata":
+                continue
+            try:
+                payload = json.loads(str(item["payload_json"]))
+                if not isinstance(payload, Mapping):
+                    raise ValueError("metadata payload is invalid")
+                self._note_metadata_publisher(binding, self._access_token(access_token), payload)
+            except (AgentSyncError, ValueError, json.JSONDecodeError):
+                break
+            self._document_outbox().delete_document_outbox(str(item["outbox_id"]))
+            synced += 1
+        return {"synced": synced, "pending": len(self._document_outbox().list_document_outbox())}
+
     def _require_management(self, access_token: object, org_id: object) -> AgentBinding:
         binding = self._require_user(access_token)
         if not isinstance(org_id, str):
@@ -535,7 +552,7 @@ def _handler_for(agent: GestajoAgent) -> type[BaseHTTPRequestHandler]:
             is_note_update = parsed.path.startswith("/v1/notes/") and bool(parsed.path.removeprefix("/v1/notes/")) and "/" not in parsed.path.removeprefix("/v1/notes/")
             if not is_note_update and parsed.path not in {
                 "/v1/claim", "/v1/settings", "/v1/sync-inputs/select",
-                "/v1/sync-inputs/confirm", "/v1/sync-inputs/enabled", "/v1/sync-inputs/remove",
+                "/v1/sync-inputs/confirm", "/v1/sync-inputs/enabled", "/v1/sync-inputs/remove", "/v1/sync",
             }:
                 self._send_error(HTTPStatus.NOT_FOUND, "route not found")
                 return
@@ -546,6 +563,9 @@ def _handler_for(agent: GestajoAgent) -> type[BaseHTTPRequestHandler]:
                 return
             if parsed.path == "/v1/claim":
                 self._authorized(lambda token: agent.claim(token, payload))
+                return
+            if parsed.path == "/v1/sync":
+                self._authorized(lambda token: agent.sync_pending(token))
                 return
             if is_note_update:
                 self._authorized(lambda token: agent.update_note(token, _single_query_value(parsed.query, "org_id"), parsed.path.removeprefix("/v1/notes/"), payload))

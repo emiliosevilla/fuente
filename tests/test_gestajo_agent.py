@@ -304,6 +304,28 @@ def test_note_update_uses_fuentecaudal_revision_contract_and_marks_offline_sync(
         store.close()
 
 
+def test_sync_pending_flushes_only_metadata_without_a_token_in_sqlite(tmp_path: Path):
+    note_id = "00000000-0000-0000-0000-000000000010"
+    store = JobStore(tmp_path)
+    store.upsert_document_outbox(
+        outbox_id=f"note_metadata:{note_id}", kind="note_metadata",
+        payload={"document_id": note_id, "revision": 3, "title": "Nota", "content_hash": "a" * 64},
+    )
+    published = []
+    agent = GestajoAgent(
+        tmp_path, verifier=_verifier, publisher=_publisher,
+        note_metadata_publisher=lambda _binding, token, payload: published.append((token, payload)),
+    )
+    agent.claim("token-a", {"supabase_url": "https://project.supabase.co", "publishable_key": "sb_publishable_test_key"})
+
+    result = agent.sync_pending("token-a")
+
+    assert result == {"synced": 1, "pending": 0}
+    assert published == [("token-a", {"document_id": note_id, "revision": 3, "title": "Nota", "content_hash": "a" * 64})]
+    assert "token-a" not in str(store.list_document_outbox())
+    store.close()
+
+
 def test_flow_requires_exactly_one_active_organization():
     with pytest.raises(AgentAuthorizationError, match="org_id is required"):
         from fuente.agent.server import _single_query_value

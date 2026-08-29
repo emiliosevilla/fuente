@@ -218,6 +218,30 @@ def verify_document_note_visibility(binding: AgentBinding, access_token: str, no
         raise AgentAuthorizationError("note is not available")
 
 
+def publish_document_note_metadata(binding: AgentBinding, access_token: str, note: Mapping[str, object]) -> None:
+    note_id = str(note["document_id"])
+    payload = {
+        "title": note["title"], "revision": note["revision"],
+        "content_hash": note["content_hash"], "sync_state": "synced",
+    }
+    request = Request(
+        f"{binding.supabase_url}/rest/v1/document_notes?note_id=eq.{quote(note_id, safe='')}",
+        data=json.dumps(payload, separators=(",", ":")).encode("utf-8"),
+        headers={
+            "apikey": binding.publishable_key, "Authorization": f"Bearer {access_token}",
+            "Content-Type": "application/json", "Prefer": "return=representation",
+        },
+        method="PATCH",
+    )
+    try:
+        with urlopen(request, timeout=5) as response:
+            rows = json.loads(response.read().decode("utf-8"))
+    except (HTTPError, URLError, TimeoutError, OSError, json.JSONDecodeError) as error:
+        raise AgentSyncError("Supabase could not sync note metadata") from error
+    if not isinstance(rows, list) or len(rows) != 1:
+        raise AgentSyncError("Supabase did not confirm note metadata")
+
+
 class GestajoAgent:
     """Own one vault and expose only an authenticated, path-free status contract."""
 
@@ -235,6 +259,8 @@ class GestajoAgent:
         backend_factory: Callable[[Path], Any] | None = None,
         note_visibility_verifier: Callable[[AgentBinding, str, str], None] = verify_document_note_visibility,
         note_reader: Callable[[Path, str], Mapping[str, object]] | None = None,
+        note_writer: Callable[[Path, str, int, str], Mapping[str, object]] | None = None,
+        note_metadata_publisher: Callable[[AgentBinding, str, Mapping[str, object]], None] = publish_document_note_metadata,
         allowed_origins: frozenset[str] = DEFAULT_ALLOWED_ORIGINS,
     ) -> None:
         self.vault_path = Path(vault_path).expanduser().resolve()
@@ -249,6 +275,8 @@ class GestajoAgent:
         self._backend: Any | None = None
         self._note_visibility_verifier = note_visibility_verifier
         self._note_reader = note_reader or _read_note
+        self._note_writer = note_writer or _write_note
+        self._note_metadata_publisher = note_metadata_publisher
         self._allowed_origins = allowed_origins
         self._binding = _read_binding(self.vault_path)
 
@@ -298,7 +326,7 @@ class GestajoAgent:
             "platform": platform.system(),
             "user_id": binding.user_id,
             "vault_fingerprint": self._vault_fingerprint(),
-            "capabilities": ["flow", "settings", "sync_inputs", "note_read"],
+            "capabilities": ["flow", "settings", "sync_inputs", "note_read", "note_write"],
         }
 
     def flow(self, access_token: object, org_id: object) -> dict[str, object]:
@@ -372,6 +400,20 @@ class GestajoAgent:
             raise AgentAuthorizationError("note is invalid")
         self._note_visibility_verifier(binding, self._access_token(access_token), note_id)
         return _note_response(self._note_reader(self.vault_path, note_id), note_id)
+
+    def update_note(self, access_token: object, org_id: object, note_id: object, payload: object) -> dict[str, object]:
+        binding = self._require_management(access_token, org_id)
+        if not isinstance(note_id, str):
+            raise AgentAuthorizationError("note is invalid")
+        expected_revision, body_markdown = _note_update_payload(payload)
+        self._note_visibility_verifier(binding, self._access_token(access_token), note_id)
+        local = _note_update_response(self._note_writer(self.vault_path, note_id, expected_revision, body_markdown), note_id)
+        try:
+            self._note_metadata_publisher(binding, self._access_token(access_token), local)
+            sync_state = "synced"
+        except AgentSyncError:
+            sync_state = "pending_sync"
+        return {**local, "sync_state": sync_state}
 
     def _require_management(self, access_token: object, org_id: object) -> AgentBinding:
         binding = self._require_user(access_token)
@@ -478,19 +520,23 @@ def _handler_for(agent: GestajoAgent) -> type[BaseHTTPRequestHandler]:
 
         def do_POST(self) -> None:  # noqa: N802
             parsed = urlparse(self.path)
-            if parsed.path not in {
+            is_note_update = parsed.path.startswith("/v1/notes/") and bool(parsed.path.removeprefix("/v1/notes/")) and "/" not in parsed.path.removeprefix("/v1/notes/")
+            if not is_note_update and parsed.path not in {
                 "/v1/claim", "/v1/settings", "/v1/sync-inputs/select",
                 "/v1/sync-inputs/confirm", "/v1/sync-inputs/enabled", "/v1/sync-inputs/remove",
             }:
                 self._send_error(HTTPStatus.NOT_FOUND, "route not found")
                 return
             try:
-                payload = self._json_body()
+                payload = self._json_body(max_bytes=10_000_000 if is_note_update else 16_384)
             except AgentError as error:
                 self._send_error(HTTPStatus.BAD_REQUEST, str(error))
                 return
             if parsed.path == "/v1/claim":
                 self._authorized(lambda token: agent.claim(token, payload))
+                return
+            if is_note_update:
+                self._authorized(lambda token: agent.update_note(token, _single_query_value(parsed.query, "org_id"), parsed.path.removeprefix("/v1/notes/"), payload))
                 return
             org_id = _single_query_value(parsed.query, "org_id")
             if parsed.path == "/v1/settings":
@@ -527,9 +573,9 @@ def _handler_for(agent: GestajoAgent) -> type[BaseHTTPRequestHandler]:
             except AgentError as error:
                 self._send_error(HTTPStatus.BAD_REQUEST, str(error))
 
-        def _json_body(self) -> object:
+        def _json_body(self, *, max_bytes: int = 16_384) -> object:
             length = self.headers.get("Content-Length")
-            if not length or not length.isdigit() or int(length) > 16_384:
+            if not length or not length.isdigit() or int(length) > max_bytes:
                 raise AgentError("invalid request body")
             try:
                 return json.loads(self.rfile.read(int(length)).decode("utf-8"))
@@ -584,6 +630,10 @@ def _source_backend(vault_path: Path) -> Any:
 
 def _read_note(vault_path: Path, note_id: str) -> Mapping[str, object]:
     return _source_backend(vault_path).get_note_content_html(note_id)
+
+
+def _write_note(vault_path: Path, note_id: str, expected_revision: int, body_markdown: str) -> Mapping[str, object]:
+    return _source_backend(vault_path).update_note_content(note_id, expected_revision, body_markdown)
 
 
 def _flow_response(state: Mapping[str, object]) -> dict[str, object]:
@@ -677,3 +727,27 @@ def _note_response(value: Mapping[str, object], note_id: str) -> dict[str, objec
     if document_id != note_id or not isinstance(revision, int) or revision < 1 or not isinstance(title, str) or not isinstance(body, str):
         raise AgentError("local note has an invalid contract")
     return {"document_id": document_id, "revision": revision, "title": title, "body_markdown": body}
+
+
+def _note_update_payload(payload: object) -> tuple[int, str]:
+    if not isinstance(payload, Mapping) or set(payload) != {"expected_revision", "body_markdown"}:
+        raise AgentError("note update has unsupported fields")
+    revision = payload.get("expected_revision")
+    body = payload.get("body_markdown")
+    if isinstance(revision, bool) or not isinstance(revision, int) or revision < 1:
+        raise AgentError("expected_revision is invalid")
+    if not isinstance(body, str) or "\x00" in body or len(body) > 10_000_000:
+        raise AgentError("body_markdown is invalid")
+    return revision, body
+
+
+def _note_update_response(value: Mapping[str, object], note_id: str) -> dict[str, object]:
+    if value.get("error"):
+        raise AgentError(str(value.get("message") or value["error"]))
+    document_id = value.get("document_id")
+    revision = value.get("revision")
+    title = value.get("title")
+    content_hash = value.get("content_hash")
+    if document_id != note_id or not isinstance(revision, int) or revision < 1 or not isinstance(title, str) or not isinstance(content_hash, str) or len(content_hash) != 64:
+        raise AgentError("local note update has an invalid contract")
+    return {"document_id": document_id, "revision": revision, "title": title, "content_hash": content_hash}

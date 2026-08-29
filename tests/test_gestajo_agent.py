@@ -9,6 +9,7 @@ from fuente.agent.server import (
     AgentBinding,
     AgentAuthorizationError,
     AgentError,
+    AgentSyncError,
     GestajoAgent,
     GestajoAgentServer,
     _handler_for,
@@ -63,7 +64,7 @@ def test_status_requires_the_bound_user(tmp_path: Path):
     )
 
     assert agent.status("token-a")["claimed"] is True
-    assert agent.status("token-a")["capabilities"] == ["flow", "settings", "sync_inputs", "note_read"]
+    assert agent.status("token-a")["capabilities"] == ["flow", "settings", "sync_inputs", "note_read", "note_write"]
     with pytest.raises(AgentAuthenticationError, match="another user"):
         agent.status("token-b")
 
@@ -272,6 +273,27 @@ def test_note_read_checks_rls_before_returning_markdown_and_never_returns_paths(
     assert checked == [("user-a", "token-a", note_id)]
     assert note == {"document_id": note_id, "revision": 2, "title": "Nota segura", "body_markdown": "# Nota segura"}
     assert "/private" not in str(note)
+
+
+def test_note_update_uses_fuentecaudal_revision_contract_and_marks_offline_sync(tmp_path: Path):
+    note_id = "00000000-0000-0000-0000-000000000010"
+    calls = []
+    agent = GestajoAgent(
+        tmp_path, verifier=_verifier, publisher=_publisher,
+        membership_verifier=lambda *_args: "gestion", note_visibility_verifier=lambda *_args: None,
+        note_writer=lambda _vault, received_id, revision, body: calls.append((received_id, revision, body)) or {
+            "status": "saved", "document_id": received_id, "revision": revision + 1,
+            "title": "Nota segura", "content_hash": "a" * 64, "path": "/private/vault/nota.md",
+        },
+        note_metadata_publisher=lambda *_args: (_ for _ in ()).throw(AgentSyncError("offline")),
+    )
+    agent.claim("token-a", {"supabase_url": "https://project.supabase.co", "publishable_key": "sb_publishable_test_key"})
+
+    result = agent.update_note("token-a", "00000000-0000-0000-0000-000000000001", note_id, {"expected_revision": 2, "body_markdown": "# Cambio"})
+
+    assert calls == [(note_id, 2, "# Cambio")]
+    assert result == {"document_id": note_id, "revision": 3, "title": "Nota segura", "content_hash": "a" * 64, "sync_state": "pending_sync"}
+    assert "/private" not in str(result)
 
 
 def test_flow_requires_exactly_one_active_organization():

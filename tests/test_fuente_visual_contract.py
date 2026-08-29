@@ -125,13 +125,12 @@ def test_reader_exposes_read_only_content_and_properties() -> None:
     assert 'id="reader-properties"' in html
     assert "function renderReaderProperties(" in html
 
-def test_fuente_library_exposes_a_reversible_collapse_control() -> None:
+def test_fuente_library_does_not_expose_a_collapse_control() -> None:
     html, css = _read(HTML_PATH), _read(CONSOLE_CSS_PATH)
-    assert 'id="btn-source-library"' in html
-    assert 'data-onclick-command="toggleSourceLibrary()"' in html
-    assert 'aria-controls="fuente-library"' in html
-    assert "function toggleSourceLibrary()" in html
-    assert ".fuente-shell.is-active.is-library-collapsed" in css
+    assert 'id="btn-source-library"' not in html
+    assert 'data-onclick-command="toggleSourceLibrary()"' not in html
+    assert "function toggleSourceLibrary()" not in html
+    assert "is-library-collapsed" not in css
 
 
 def test_home_status_strip_has_a_quick_diagnostics_title() -> None:
@@ -146,9 +145,28 @@ def test_fuente_seals_tree_exposes_an_accessible_toggle() -> None:
     html = _read(HTML_PATH)
     assert 'data-onclick-command="toggleSourceLibrarySection(this)"' in html
     assert 'aria-controls="source-seals-tree"' in html
-    assert 'aria-expanded="true"' in html
-    assert 'id="source-seals-tree"' in html
+    assert 'aria-expanded="false"><span class="chev">›</span><span>Estado</span>' in html
+    assert 'id="source-seals-tree" hidden' in html
     assert "function toggleSourceLibrarySection(button)" in html
+
+
+def test_fuente_reader_list_has_no_redundant_header_or_toggle() -> None:
+    html, css = _read(HTML_PATH), _read(CONSOLE_CSS_PATH)
+    assert 'id="btn-reader-library"' not in html
+    assert 'aria-label="Ocultar lista de notas"' not in html
+    assert 'reader-sidebar-divider' not in html
+    assert 'toggleReaderLibrary()' not in html
+    assert 'is-library-hidden' not in css
+    assert 'id="reader-selection-help"' in html
+    assert "Un click para seleccionar. Doble click para abrir" in html
+
+
+def test_fuente_reader_actions_are_scoped_to_an_open_note() -> None:
+    html = _read(HTML_PATH)
+    assert 'id="btn-source-hierarchy" hidden' in html
+    assert 'id="btn-source-relations" hidden' in html
+    assert "function updateReaderNoteActions()" in html
+    assert "help.hidden = isNoteOpen" in html
 
 def test_fuente_note_types_live_in_source_filters_not_the_explorer_tree() -> None:
     html = _read(HTML_PATH)

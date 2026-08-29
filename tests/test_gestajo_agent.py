@@ -16,6 +16,7 @@ from fuente.agent.server import (
     _binding_path,
     publish_agent_status,
 )
+from fuente.infrastructure.sqlite_store import JobStore
 
 
 def _verifier(binding: AgentBinding, token: str) -> str:
@@ -294,6 +295,13 @@ def test_note_update_uses_fuentecaudal_revision_contract_and_marks_offline_sync(
     assert calls == [(note_id, 2, "# Cambio")]
     assert result == {"document_id": note_id, "revision": 3, "title": "Nota segura", "content_hash": "a" * 64, "sync_state": "pending_sync"}
     assert "/private" not in str(result)
+    store = JobStore(tmp_path)
+    try:
+        queued = store.list_document_outbox()
+        assert len(queued) == 1
+        assert queued[0]["outbox_id"] == f"note_metadata:{note_id}"
+    finally:
+        store.close()
 
 
 def test_flow_requires_exactly_one_active_organization():

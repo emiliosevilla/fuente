@@ -261,6 +261,7 @@ class GestajoAgent:
         note_reader: Callable[[Path, str], Mapping[str, object]] | None = None,
         note_writer: Callable[[Path, str, int, str], Mapping[str, object]] | None = None,
         note_metadata_publisher: Callable[[AgentBinding, str, Mapping[str, object]], None] = publish_document_note_metadata,
+        outbox_factory: Callable[[Path], Any] | None = None,
         allowed_origins: frozenset[str] = DEFAULT_ALLOWED_ORIGINS,
     ) -> None:
         self.vault_path = Path(vault_path).expanduser().resolve()
@@ -277,6 +278,8 @@ class GestajoAgent:
         self._note_reader = note_reader or _read_note
         self._note_writer = note_writer or _write_note
         self._note_metadata_publisher = note_metadata_publisher
+        self._outbox_factory = outbox_factory or _document_outbox
+        self._outbox: Any | None = None
         self._allowed_origins = allowed_origins
         self._binding = _read_binding(self.vault_path)
 
@@ -410,8 +413,12 @@ class GestajoAgent:
         local = _note_update_response(self._note_writer(self.vault_path, note_id, expected_revision, body_markdown), note_id)
         try:
             self._note_metadata_publisher(binding, self._access_token(access_token), local)
+            self._document_outbox().delete_document_outbox(_metadata_outbox_id(note_id))
             sync_state = "synced"
         except AgentSyncError:
+            self._document_outbox().upsert_document_outbox(
+                outbox_id=_metadata_outbox_id(note_id), kind="note_metadata", payload=local,
+            )
             sync_state = "pending_sync"
         return {**local, "sync_state": sync_state}
 
@@ -428,6 +435,11 @@ class GestajoAgent:
         if self._backend is None:
             self._backend = self._backend_factory(self.vault_path)
         return self._backend
+
+    def _document_outbox(self) -> Any:
+        if self._outbox is None:
+            self._outbox = self._outbox_factory(self.vault_path)
+        return self._outbox
 
     def _read_settings(self) -> Mapping[str, object]:
         if self._settings_reader is not None:
@@ -636,6 +648,12 @@ def _write_note(vault_path: Path, note_id: str, expected_revision: int, body_mar
     return _source_backend(vault_path).update_note_content(note_id, expected_revision, body_markdown)
 
 
+def _document_outbox(vault_path: Path) -> Any:
+    from fuente.infrastructure.sqlite_store import JobStore
+
+    return JobStore(vault_path)
+
+
 def _flow_response(state: Mapping[str, object]) -> dict[str, object]:
     def count(value: object) -> int:
         return max(0, int(value)) if isinstance(value, (int, float)) else 0
@@ -751,3 +769,7 @@ def _note_update_response(value: Mapping[str, object], note_id: str) -> dict[str
     if document_id != note_id or not isinstance(revision, int) or revision < 1 or not isinstance(title, str) or not isinstance(content_hash, str) or len(content_hash) != 64:
         raise AgentError("local note update has an invalid contract")
     return {"document_id": document_id, "revision": revision, "title": title, "content_hash": content_hash}
+
+
+def _metadata_outbox_id(note_id: str) -> str:
+    return f"note_metadata:{note_id}"

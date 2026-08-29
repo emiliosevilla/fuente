@@ -66,6 +66,7 @@ exe = EXE(
     exclude_binaries=True,
     name="Fuente",
     console=False,
+    argv_emulation=True,
     icon=str(icon),
 )
 coll = COLLECT(exe, a.binaries, a.zipfiles, a.datas, name="Fuente")
@@ -74,4 +75,10 @@ app = BUNDLE(
     name="Fuente.app",
     icon=str(icon),
     bundle_identifier="com.emiliosevilla.fuente",
+    info_plist={
+        "CFBundleURLTypes": [{
+            "CFBundleURLName": "Fuente Gestajo Agent",
+            "CFBundleURLSchemes": ["fuente"],
+        }],
+    },
 )

@@ -110,6 +110,28 @@ def run_continuous_console(vault_path: Path | None) -> None:
     launch_control_console(vault_path)
 
 
+def run_gestajo_agent_install() -> bool:
+    """Run the companion setup without requiring a Vault to be configured."""
+    import tkinter as tk
+    from tkinter import messagebox
+
+    from fuente.agent.tls import prepare_agent_tls
+
+    root = tk.Tk()
+    root.withdraw()
+    try:
+        success, message = prepare_agent_tls(
+            lambda title, body: messagebox.askyesno(title, body, parent=root),
+        )
+        if success:
+            messagebox.showinfo("Documentos de Gestajo", message, parent=root)
+        else:
+            messagebox.showwarning("Documentos de Gestajo", message, parent=root)
+        return success
+    finally:
+        root.destroy()
+
+
 def main():
     parser = argparse.ArgumentParser(description="Fuente — Consola de Control y ETL de Conocimiento para Obsidian")
     parser.add_argument(
@@ -137,13 +159,21 @@ def main():
             "nunca abre Tkinter ni PyWebView."
         ),
     )
+    parser.add_argument(
+        "--install-gestajo-agent",
+        action="store_true",
+        help="Prepara la conexión local segura para Documentos de Gestajo.",
+    )
     args = parser.parse_args()
 
     vault_arg = args.vault or args.vault_pos
     vault_path = Path(vault_arg).expanduser().resolve() if vault_arg else load_startup_vault()
 
 
-    if args.flush:
+    if args.install_gestajo_agent:
+        if run_gestajo_agent_install():
+            run_continuous_console(vault_path)
+    elif args.flush:
         vault_path = vault_path or Path.home() / "Documents" / "Fuente_Vault"
         vault_path.mkdir(parents=True, exist_ok=True)
         # Modo Flush directo por consola

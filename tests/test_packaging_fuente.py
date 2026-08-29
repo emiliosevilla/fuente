@@ -73,6 +73,8 @@ def test_macos_gui_binary_does_not_open_terminal() -> None:
     spec = (ROOT / "fuente.spec").read_text(encoding="utf-8")
     assert "console=False" in spec
     assert 'name="Fuente.app"' in spec
+    assert '"CFBundleURLSchemes": ["fuente"]' in spec
+    assert "argv_emulation=True" in spec
     build = (ROOT / "build_installer.py").read_text(encoding="utf-8")
     assert 'add_dir_to_zip(zf, app_bundle, "Fuente.app")' in build
     assert 'codesign' in build

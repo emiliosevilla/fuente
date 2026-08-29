@@ -22,6 +22,7 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import quote, urlparse
 from urllib.request import Request, urlopen
 
+from fuente.domain.sync import SyncDirection
 from fuente.infrastructure.atomic_files import atomic_write_json
 
 
@@ -384,7 +385,7 @@ class GestajoAgent:
             "platform": platform.system(),
             "user_id": binding.user_id,
             "vault_fingerprint": self._vault_fingerprint(),
-            "capabilities": ["flow", "settings", "sync_inputs", "sync_run", "note_read", "note_write", "note_share"],
+            "capabilities": ["flow", "settings", "sync_inputs", "sync_run", "sync_output", "note_read", "note_write", "note_share"],
         }
 
     def flow(self, access_token: object, org_id: object) -> dict[str, object]:
@@ -453,6 +454,14 @@ class GestajoAgent:
         return _sync_inputs_response(result)
 
     def run_sync_input(self, access_token: object, org_id: object, payload: object) -> dict[str, object]:
+        return self._run_sync(access_token, org_id, payload, "sync_input", SyncDirection.INPUT_COMMON)
+
+    def run_sync_output(self, access_token: object, org_id: object, payload: object) -> dict[str, object]:
+        return self._run_sync(access_token, org_id, payload, "sync_output", SyncDirection.OUTPUT_SHARED)
+
+    def _run_sync(
+        self, access_token: object, org_id: object, payload: object, action: str, direction: SyncDirection,
+    ) -> dict[str, object]:
         binding = self._require_management(access_token, org_id)
         connection_id = _sync_run_payload(payload)
         backend = self._local_backend()
@@ -464,17 +473,15 @@ class GestajoAgent:
             raise AgentError("sync connection is unavailable")
         try:
             from fuente.core.folder_sync import FolderSyncManager
-            from fuente.domain.sync import SyncDirection
-
             report = FolderSyncManager.public_sync_report(
-                backend.sync_manager.sync_connection(connection, direction=SyncDirection.INPUT_COMMON)
+                backend.sync_manager.sync_connection(connection, direction=direction)
             )
         except (OSError, ValueError) as error:
             raise AgentError("local folder synchronization failed") from error
         result = _sync_report_response(report)
         self._record_audit(binding, self._access_token(access_token), _new_audit_event(
             None, str(org_id), str(uuid.UUID(str(org_id))), binding.user_id,
-            "sync_input", "conflict" if result["conflicts"] else "success",
+            action, "conflict" if result["conflicts"] else "success",
         ))
         return result
 
@@ -706,7 +713,7 @@ def _handler_for(agent: GestajoAgent) -> type[BaseHTTPRequestHandler]:
             is_note_share = note_route.endswith("/share") and bool(note_route.removesuffix("/share")) and "/" not in note_route.removesuffix("/share")
             is_note_update = bool(note_route) and "/" not in note_route
             if not (is_note_update or is_note_share) and parsed.path not in {
-                "/v1/claim", "/v1/settings", "/v1/sync-inputs/select", "/v1/sync-inputs/run",
+                "/v1/claim", "/v1/settings", "/v1/sync-inputs/select", "/v1/sync-inputs/run", "/v1/sync-outputs/run",
                 "/v1/sync-inputs/confirm", "/v1/sync-inputs/enabled", "/v1/sync-inputs/remove", "/v1/sync",
             }:
                 self._send_error(HTTPStatus.NOT_FOUND, "route not found")
@@ -737,6 +744,9 @@ def _handler_for(agent: GestajoAgent) -> type[BaseHTTPRequestHandler]:
                 return
             if parsed.path == "/v1/sync-inputs/run":
                 self._authorized(lambda token: agent.run_sync_input(token, org_id, payload))
+                return
+            if parsed.path == "/v1/sync-outputs/run":
+                self._authorized(lambda token: agent.run_sync_output(token, org_id, payload))
                 return
             if parsed.path == "/v1/sync-inputs/confirm":
                 self._authorized(lambda token: agent.confirm_sync_input(token, org_id, payload))

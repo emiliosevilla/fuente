@@ -11,6 +11,7 @@ import hashlib
 import json
 import platform
 import ssl
+import uuid
 from dataclasses import asdict, dataclass
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -40,6 +41,10 @@ class AgentAuthenticationError(AgentError):
 
 class AgentSyncError(AgentError):
     """Supabase did not accept the agent metadata update."""
+
+
+class AgentAuthorizationError(AgentError):
+    """The authenticated user lacks the capability required by an agent route."""
 
 
 @dataclass(frozen=True)
@@ -160,6 +165,33 @@ def publish_agent_status(
         raise AgentSyncError("Supabase could not persist the agent status") from error
 
 
+def verify_supabase_management(binding: AgentBinding, access_token: str, org_id: str) -> str:
+    try:
+        normalized_org_id = str(uuid.UUID(org_id))
+    except (ValueError, AttributeError) as error:
+        raise AgentAuthorizationError("organization is invalid") from error
+    query = f"user_id=eq.{quote(binding.user_id, safe='')}&org_id=eq.{quote(normalized_org_id, safe='')}&select=role"
+    request = Request(
+        f"{binding.supabase_url}/rest/v1/memberships?{query}",
+        headers={
+            "apikey": binding.publishable_key,
+            "Authorization": f"Bearer {access_token}",
+        },
+        method="GET",
+    )
+    try:
+        with urlopen(request, timeout=5) as response:
+            rows = json.loads(response.read().decode("utf-8"))
+    except (HTTPError, URLError, TimeoutError, OSError, json.JSONDecodeError) as error:
+        raise AgentSyncError("Supabase could not verify the active organization") from error
+    if not isinstance(rows, list) or len(rows) != 1 or not isinstance(rows[0], Mapping):
+        raise AgentAuthorizationError("active organization is not available")
+    role = rows[0].get("role")
+    if role not in {"gestion", "admin"}:
+        raise AgentAuthorizationError("Caudal requires gestion or admin access")
+    return role
+
+
 class GestajoAgent:
     """Own one vault and expose only an authenticated, path-free status contract."""
 
@@ -169,11 +201,15 @@ class GestajoAgent:
         *,
         verifier: Callable[[AgentBinding, str], str] = verify_supabase_user,
         publisher: Callable[[AgentBinding, str, Mapping[str, object]], None] = publish_agent_status,
+        management_verifier: Callable[[AgentBinding, str, str], str] = verify_supabase_management,
+        flow_reader: Callable[[Path], Mapping[str, object]] | None = None,
         allowed_origins: frozenset[str] = DEFAULT_ALLOWED_ORIGINS,
     ) -> None:
         self.vault_path = Path(vault_path).expanduser().resolve()
         self._verifier = verifier
         self._publisher = publisher
+        self._management_verifier = management_verifier
+        self._flow_reader = flow_reader or _read_flow_state
         self._allowed_origins = allowed_origins
         self._binding = _read_binding(self.vault_path)
 
@@ -223,8 +259,16 @@ class GestajoAgent:
             "platform": platform.system(),
             "user_id": binding.user_id,
             "vault_fingerprint": self._vault_fingerprint(),
-            "capabilities": [],
+            "capabilities": ["flow"],
         }
+
+    def flow(self, access_token: object, org_id: object) -> dict[str, object]:
+        binding = self._require_user(access_token)
+        if not isinstance(org_id, str):
+            raise AgentAuthorizationError("organization is invalid")
+        self._management_verifier(binding, self._access_token(access_token), org_id)
+        state = self._flow_reader(self.vault_path)
+        return _flow_response(state)
 
     def _require_user(self, access_token: object) -> AgentBinding:
         binding = self._binding
@@ -275,13 +319,19 @@ def _handler_for(agent: GestajoAgent) -> type[BaseHTTPRequestHandler]:
             self.end_headers()
 
         def do_GET(self) -> None:  # noqa: N802
-            if self.path == "/v1/health":
+            parsed = urlparse(self.path)
+            if parsed.path == "/v1/health":
                 if not agent.is_origin_allowed(self.headers.get("Origin")):
                     self._send_error(HTTPStatus.FORBIDDEN, "origin is not allowed")
                     return
                 self._send_json(HTTPStatus.OK, agent.health())
                 return
-            if self.path != "/v1/status":
+            if parsed.path == "/v1/flow":
+                self._authorized(
+                    lambda token: agent.flow(token, _single_query_value(parsed.query, "org_id"))
+                )
+                return
+            if parsed.path != "/v1/status":
                 self._send_error(HTTPStatus.NOT_FOUND, "route not found")
                 return
             self._authorized(lambda token: agent.status(token))
@@ -310,6 +360,8 @@ def _handler_for(agent: GestajoAgent) -> type[BaseHTTPRequestHandler]:
                 self._send_json(HTTPStatus.OK, operation(header.removeprefix("Bearer ")))
             except AgentAuthenticationError as error:
                 self._send_error(HTTPStatus.UNAUTHORIZED, str(error))
+            except AgentAuthorizationError as error:
+                self._send_error(HTTPStatus.FORBIDDEN, str(error))
             except AgentSyncError as error:
                 self._send_error(HTTPStatus.SERVICE_UNAVAILABLE, str(error))
             except AgentError as error:
@@ -347,3 +399,34 @@ def _handler_for(agent: GestajoAgent) -> type[BaseHTTPRequestHandler]:
             self._send_json(status, {"error": message})
 
     return Handler
+
+
+def _single_query_value(query: str, name: str) -> str:
+    from urllib.parse import parse_qs
+
+    values = parse_qs(query, keep_blank_values=True).get(name, [])
+    if len(values) != 1 or not values[0]:
+        raise AgentAuthorizationError(f"{name} is required")
+    return values[0]
+
+
+def _read_flow_state(vault_path: Path) -> Mapping[str, object]:
+    from fuente.control_console import FuenteConsoleBackend
+
+    return FuenteConsoleBackend(vault_path).get_flow_state()
+
+
+def _flow_response(state: Mapping[str, object]) -> dict[str, object]:
+    def count(value: object) -> int:
+        return max(0, int(value)) if isinstance(value, (int, float)) else 0
+
+    steps = state.get("steps") if isinstance(state.get("steps"), Mapping) else {}
+    seals = state.get("seals") if isinstance(state.get("seals"), Mapping) else {}
+    queue = state.get("queue") if isinstance(state.get("queue"), Mapping) else {}
+    return {
+        "active_theme": state.get("active_theme") if isinstance(state.get("active_theme"), str) else None,
+        "steps": {str(name): count(item.get("count")) for name, item in steps.items() if isinstance(item, Mapping)},
+        "seals": {str(name): count(value) for name, value in seals.items()},
+        "quarantine": count(state.get("quarantine")),
+        "queue": {"active": count(queue.get("active")), "waiting": count(queue.get("waiting"))},
+    }

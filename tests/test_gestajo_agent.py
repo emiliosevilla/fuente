@@ -7,6 +7,7 @@ import pytest
 from fuente.agent.server import (
     AgentAuthenticationError,
     AgentBinding,
+    AgentAuthorizationError,
     AgentError,
     GestajoAgent,
     GestajoAgentServer,
@@ -26,8 +27,13 @@ def _publisher(_binding: AgentBinding, _token: str, _status: dict[str, object]) 
     return
 
 
+def _management_verifier(_binding: AgentBinding, _token: str, org_id: str) -> str:
+    assert org_id == "00000000-0000-0000-0000-000000000001"
+    return "gestion"
+
+
 def test_claim_binds_one_user_and_never_persists_access_token(tmp_path: Path):
-    agent = GestajoAgent(tmp_path, verifier=_verifier, publisher=_publisher)
+    agent = GestajoAgent(tmp_path, verifier=_verifier, publisher=_publisher, management_verifier=_management_verifier)
 
     claimed = agent.claim(
         "token-a",
@@ -45,20 +51,20 @@ def test_claim_binds_one_user_and_never_persists_access_token(tmp_path: Path):
 
 
 def test_status_requires_the_bound_user(tmp_path: Path):
-    agent = GestajoAgent(tmp_path, verifier=_verifier, publisher=_publisher)
+    agent = GestajoAgent(tmp_path, verifier=_verifier, publisher=_publisher, management_verifier=_management_verifier)
     agent.claim(
         "token-a",
         {"supabase_url": "https://project.supabase.co", "publishable_key": "sb_publishable_test_key"},
     )
 
     assert agent.status("token-a")["claimed"] is True
-    assert agent.status("token-a")["capabilities"] == []
+    assert agent.status("token-a")["capabilities"] == ["flow"]
     with pytest.raises(AgentAuthenticationError, match="another user"):
         agent.status("token-b")
 
 
 def test_second_user_cannot_claim_bound_vault(tmp_path: Path):
-    agent = GestajoAgent(tmp_path, verifier=_verifier, publisher=_publisher)
+    agent = GestajoAgent(tmp_path, verifier=_verifier, publisher=_publisher, management_verifier=_management_verifier)
     payload = {"supabase_url": "https://project.supabase.co", "publishable_key": "sb_publishable_test_key"}
     agent.claim("token-a", payload)
 
@@ -67,7 +73,7 @@ def test_second_user_cannot_claim_bound_vault(tmp_path: Path):
 
 
 def test_origin_and_claim_payload_fail_closed(tmp_path: Path):
-    agent = GestajoAgent(tmp_path, verifier=_verifier, publisher=_publisher)
+    agent = GestajoAgent(tmp_path, verifier=_verifier, publisher=_publisher, management_verifier=_management_verifier)
 
     assert agent.is_origin_allowed("https://gestajo.vercel.app")
     assert not agent.is_origin_allowed("https://evil.example")
@@ -84,13 +90,13 @@ def test_origin_and_claim_payload_fail_closed(tmp_path: Path):
 
 def test_server_requires_tls_context(tmp_path: Path):
     with pytest.raises(ValueError, match="TLS context"):
-        GestajoAgentServer(GestajoAgent(tmp_path, verifier=_verifier, publisher=_publisher), None)  # type: ignore[arg-type]
+        GestajoAgentServer(GestajoAgent(tmp_path, verifier=_verifier, publisher=_publisher, management_verifier=_management_verifier), None)  # type: ignore[arg-type]
 
 
 def test_health_is_cors_and_private_network_ready_for_gestajo(tmp_path: Path):
     from http.server import ThreadingHTTPServer
 
-    agent = GestajoAgent(tmp_path, verifier=_verifier, publisher=_publisher)
+    agent = GestajoAgent(tmp_path, verifier=_verifier, publisher=_publisher, management_verifier=_management_verifier)
     server = ThreadingHTTPServer(("127.0.0.1", 0), _handler_for(agent))
     thread = Thread(target=server.serve_forever, daemon=True)
     thread.start()
@@ -145,3 +151,40 @@ def test_publish_agent_status_creates_or_updates_only_agent_metadata(monkeypatch
     assert requests[0][0].get_method() == "GET"
     assert requests[1][0].get_method() == "POST"
     assert b"vault_path" not in requests[1][0].data
+
+
+def test_flow_requires_management_and_never_returns_local_paths(tmp_path: Path):
+    agent = GestajoAgent(
+        tmp_path, verifier=_verifier, publisher=_publisher,
+        management_verifier=_management_verifier,
+        flow_reader=lambda _vault: {
+            "active_theme": "General",
+            "steps": {"4_procesado": {"count": 2, "path": "/private/vault"}},
+            "seals": {"approved": 1}, "quarantine": 0,
+            "queue": {"active": 1, "waiting": 3},
+        },
+    )
+    agent.claim("token-a", {"supabase_url": "https://project.supabase.co", "publishable_key": "sb_publishable_test_key"})
+
+    flow = agent.flow("token-a", "00000000-0000-0000-0000-000000000001")
+
+    assert flow["steps"] == {"4_procesado": 2}
+    assert "/private/vault" not in str(flow)
+
+
+def test_flow_rejects_consulta(tmp_path: Path):
+    agent = GestajoAgent(
+        tmp_path, verifier=_verifier, publisher=_publisher,
+        management_verifier=lambda *_args: (_ for _ in ()).throw(AgentAuthorizationError("Caudal requires gestion or admin access")),
+    )
+    agent.claim("token-a", {"supabase_url": "https://project.supabase.co", "publishable_key": "sb_publishable_test_key"})
+
+    with pytest.raises(AgentAuthorizationError, match="Caudal requires"):
+        agent.flow("token-a", "00000000-0000-0000-0000-000000000001")
+
+
+def test_flow_requires_exactly_one_active_organization():
+    with pytest.raises(AgentAuthorizationError, match="org_id is required"):
+        from fuente.agent.server import _single_query_value
+
+        _single_query_value("", "org_id")

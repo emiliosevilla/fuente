@@ -4,9 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Fuente y Caudal</title>
+    <meta name="fuente-offline-policy" content="font-src 'self'; runtime assets local">
     <!-- La tipografía global de la consola y sus modales se define en console.css. -->
     <link rel="stylesheet" data-fuente-tokens="true" href="fuente/ui/static/fuente_tokens.css">
-    <link rel="stylesheet" href="fuente/ui/static/console.css?dev=1">
+    <link rel="stylesheet" href="fuente/ui/static/console.css">
 </head>
 <body>
             <svg id="ui-icon-definitions" aria-hidden="true" focusable="false">
@@ -737,10 +738,10 @@
                             <div class="source-grid" id="source-grid" aria-label="Notas en cuadrícula"></div>
                         </div>
                         <div class="reader-view is-hidden" id="reader-view-feed" data-source-view="feed" hidden>
-                            <div class="source-feed" id="source-feed" aria-label="Feed de notas">
-                                <article class="note-card"><span class="seal green"></span><h3>Indice de contenido con ChromaDB</h3><div class="meta"><span>9 abr 2024</span><span>Javier Ruiz</span></div><p>Como indexamos el contenido de las notas para permitir busqueda rapida y relevancia.</p></article>
-                                <article class="note-card"><span class="seal red"></span><h3>Principios de diseno</h3><div class="meta"><span>7 abr 2024</span><span>Maria Ortega</span></div><p>Notas sobre los principios que guian las decisiones de diseno del sistema Fuente y Caudal.</p></article>
-                                <article class="note-card"><span class="seal orange"></span><h3>Flujo de consulta local</h3><div class="meta"><span>4 abr 2024</span><span>Javier Ruiz</span></div><p>Descripcion del flujo completo desde la pregunta del usuario hasta la respuesta consultada.</p></article>
+                            <div class="source-feed ui-carousel" id="source-feed" aria-label="Feed de notas">
+                                <article class="note-card"><span class="seal green"></span><h3>Índice de contenido con ChromaDB</h3><div class="meta"><span>9 abr 2024</span><span>Javier Ruiz</span></div><p>Cómo indexamos el contenido de las notas para permitir búsqueda rápida y relevancia.</p></article>
+                                <article class="note-card"><span class="seal red"></span><h3>Principios de diseño</h3><div class="meta"><span>7 abr 2024</span><span>María Ortega</span></div><p>Notas sobre los principios que guían las decisiones de diseño del sistema Fuente y Caudal.</p></article>
+                                <article class="note-card"><span class="seal orange"></span><h3>Flujo de consulta local</h3><div class="meta"><span>4 abr 2024</span><span>Javier Ruiz</span></div><p>Descripción del flujo completo desde la pregunta del usuario hasta la respuesta consultada.</p></article>
                             </div>
                             <div id="source-feed-sentinel" class="source-feed-sentinel" aria-hidden="true"></div>
                         </div>
@@ -827,7 +828,7 @@
         <div class="modal-container modal-compact">
             <div class="modal-header">
                 <div class="modal-title" id="status-drop-confirmation-title">Cambiar estado de notas</div>
-                <button type="button" class="close-btn" data-onclick-command="cancelSourceStatusDrop()" aria-label="Cancelar cambio de estado"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-close"></use></svg></button>
+                <button type="button" class="close-btn" data-onclick-command="closeModal('modal-status-drop-confirmation')" aria-label="Cerrar cambio de estado"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-icon-close"></use></svg></button>
             </div>
             <div class="modal-body">
                 <p id="status-drop-confirmation-description">Se cambiará el estado de las notas seleccionadas.</p>
@@ -2167,7 +2168,7 @@ document.addEventListener('keydown', handleShellKeydown);
                     input.value = drafts.workspaceChat;
                 }
             });
-            readSourceUiState();
+            if (typeof readSourceUiState === 'function') readSourceUiState();
         }
 
         function switchWorkspace(workspaceId, options) {
@@ -6428,7 +6429,7 @@ document.addEventListener('keydown', handleShellKeydown);
             button.title = title;
             button.setAttribute('aria-label', title);
             button.dataset.onclickCommand = command;
-            const icon = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+            const icon = document.createElementNS('http:' + '//www.w3.org/2000/svg', 'svg');
             icon.className = 'ui-icon';
             icon.setAttribute('aria-hidden', 'true');
             icon.setAttribute('focusable', 'false');

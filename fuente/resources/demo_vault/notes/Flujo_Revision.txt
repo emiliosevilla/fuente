@@ -1,0 +1,16 @@
+---
+schema_version: 1
+title: Flujo de revisión
+date: '2026-08-25'
+author: Fuente
+tags:
+- demo
+- revisión
+issue: Demo
+status: approved
+history: []
+sources: []
+---
+# Flujo de revisión
+
+Fuente captura, ordena y prepara cada nota. Nada se comparte sin revisión. Vuelve a [[Introduccion]] para ver el conjunto.

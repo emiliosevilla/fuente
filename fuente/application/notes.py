@@ -1133,6 +1133,12 @@ class NotesApplicationService:
             and not self.runtime_policy.vector_index_enabled
         ):
             return
+        if bool(getattr(self.chroma, "failed", False)):
+            logger.warning(
+                "Chroma index unavailable; approval remains durable for %s",
+                note.document_id,
+            )
+            return
 
         normalized = note.relative_path.replace("\\", "/").split("/")
         if CANONICAL_SHARED_DIR_NAME in normalized:
@@ -1176,6 +1182,12 @@ class NotesApplicationService:
         backend = ChromaRetrievalBackend(self.chroma)
         result = backend.rebuild(chunks)
         if not result.success:
+            if bool(getattr(self.chroma, "failed", False)):
+                logger.warning(
+                    "Chroma index unavailable; approval remains durable for %s",
+                    note.document_id,
+                )
+                return
             raise RuntimeError(
                 f"Chroma index rebuild failed for approved note {note.document_id}"
             )

@@ -5,7 +5,7 @@ from threading import Thread
 
 from cryptography import x509
 
-from fuente.agent.tls import _ensure_certificates, agent_tls_paths, load_agent_tls_context, prepare_agent_tls
+from fuente.agent.tls import _ensure_certificates, agent_tls_paths, load_agent_tls_context, prepare_agent_tls, register_agent_protocol
 from fuente.agent.server import GestajoAgent, GestajoAgentServer
 
 
@@ -62,3 +62,23 @@ def test_agent_tls_serves_the_loopback_health_contract(tmp_path: Path):
         server.shutdown()
         server.server_close()
         thread.join(timeout=2)
+
+
+def test_windows_protocol_registration_is_scoped_to_the_current_user(tmp_path: Path):
+    commands: list[list[str]] = []
+
+    class Result:
+        returncode = 0
+        stdout = ""
+        stderr = ""
+
+    ready, message = register_agent_protocol(
+        platform_name="win32",
+        executable=tmp_path / "Fuente.exe",
+        run=lambda command, **_kwargs: commands.append(command) or Result(),
+    )
+
+    assert ready is True
+    assert "fuente://" in message
+    assert all(command[2].startswith("HKCU\\Software\\Classes\\fuente") for command in commands)
+    assert commands[-1][-2] == f'"{(tmp_path / "Fuente.exe").resolve()}" "%1"'

@@ -231,12 +231,15 @@ def test_gestajo_agent_step_needs_opt_in_and_reuses_tls_preparer(tmp_path):
     assert skipped.skipped is True
 
     ctx = InstallationContext(base_dir=tmp_path, install_gestajo_agent=True)
-    with patch("fuente.installer_contract.prepare_agent_tls", return_value=(True, "preparado")) as prepare:
+    with patch("fuente.installer_contract.prepare_agent_tls", return_value=(True, "preparado")) as prepare, patch(
+        "fuente.installer_contract.register_agent_protocol", return_value=(True, "conector listo")
+    ) as register:
         installed = step_install_gestajo_agent(ctx)
 
     assert installed.success is True
-    assert installed.message == "preparado"
+    assert installed.message == "preparado. conector listo"
     prepare.assert_called_once()
+    register.assert_called_once()
 
 
 def test_receipt_stores_model_name_from_step(tmp_path):

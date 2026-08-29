@@ -103,6 +103,29 @@ def prepare_agent_tls(
     return True, "Agente local de Gestajo preparado y certificado confiado"
 
 
+def register_agent_protocol(
+    *,
+    platform_name: str | None = None,
+    executable: Path | None = None,
+    run: Callable[..., subprocess.CompletedProcess[str]] = subprocess.run,
+) -> tuple[bool, str]:
+    """Register Fuente's fixed installer URL for the current Windows user."""
+    platform_name = platform_name or sys.platform
+    if platform_name == "darwin":
+        return True, "El protocolo fuente:// está incluido en Fuente.app"
+    if platform_name != "win32":
+        return False, "Esta plataforma no puede registrar el protocolo fuente://"
+    command = str((executable or Path(sys.executable)).resolve())
+    key = r"HKCU\Software\Classes\fuente"
+    try:
+        _run_checked(run, ["reg", "add", key, "/ve", "/d", "URL:Fuente Protocol", "/f"])
+        _run_checked(run, ["reg", "add", key, "/v", "URL Protocol", "/d", "", "/f"])
+        _run_checked(run, ["reg", "add", key + r"\shell\open\command", "/ve", "/d", f'"{command}" "%1"', "/f"])
+    except (OSError, subprocess.SubprocessError) as error:
+        return False, f"No se pudo registrar fuente://: {error}"
+    return True, "El protocolo fuente:// quedó registrado para este usuario"
+
+
 def _run_checked(run: Callable[..., subprocess.CompletedProcess[str]], command: list[str]) -> None:
     result = run(command, capture_output=True, text=True, check=False)
     if result.returncode != 0:

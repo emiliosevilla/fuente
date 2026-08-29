@@ -20,7 +20,7 @@ from typing import Any, Callable, Dict, List, Optional, Sequence
 
 from fuente.domain.sync import ConnectedFolder, SyncProvider
 from fuente.domain.vault_layout import VaultLayout
-from fuente.agent.tls import prepare_agent_tls
+from fuente.agent.tls import prepare_agent_tls, register_agent_protocol
 from fuente.extractors.ocr_runtime import (
     resolve_tesseract_command,
 )
@@ -602,6 +602,16 @@ def step_install_gestajo_agent(ctx: InstallationContext) -> InstallStepResult:
         )
     confirmed = ctx.confirm or (lambda _title, _message: False)
     success, message = prepare_agent_tls(confirmed)
+    if success:
+        protocol_ready, protocol_message = register_agent_protocol()
+        if not protocol_ready:
+            return InstallStepResult(
+                name="gestajo_agent_tls",
+                success=False,
+                message=protocol_message,
+                actionable="Vuelve a ejecutar el instalador para registrar el conector local.",
+            )
+        message = f"{message}. {protocol_message}"
     return InstallStepResult(
         name="gestajo_agent_tls",
         success=success,

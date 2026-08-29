@@ -204,11 +204,6 @@ class VaultConfig:
     def minirag_dir(self) -> Path:
         return self.system_dir / "minirag"
 
-    @property
-    def chroma_dir(self) -> Path:
-        """Compatibility alias for callers migrating to the MiniRAG directory."""
-        return self.minirag_dir
-
 
 @dataclass
 class AppConfig:

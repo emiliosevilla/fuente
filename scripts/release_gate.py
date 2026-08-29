@@ -58,7 +58,6 @@ FYC_CAPTURE_SIZES: dict[str, tuple[int, int]] = {
 }
 FYC_RUNTIME_JSON = {
     "G4": "sqlite-runtime.json",
-    "G5": "chroma-runtime.json",
     "G6": "anythingllm-runtime.json",
     "G7": "smart-notes-runtime.json",
     "G9": "caudal-runtime.json",
@@ -1222,13 +1221,9 @@ def evaluate_release(
     else:
         gates["G4"] = {"status": "PASS", "detail": "sqlite restart and approval contract PASS"}
 
-    # G5 chroma
-    chroma_path = evidence_dir / FYC_RUNTIME_JSON["G5"]
-    chroma_runtime = _read_json(chroma_path)
+    # G5 MiniRAG
     minirag = _read_json(evidence_dir / FYC_MINIRAG_JSON)
-    if chroma_runtime and chroma_runtime.get("status") == "PASS":
-        gates["G5"] = {"status": "PASS", "detail": "chroma-runtime PASS"}
-    elif minirag and minirag.get("g5_status") == "PASS" and minirag.get("complete"):
+    if minirag and minirag.get("g5_status") == "PASS" and minirag.get("complete"):
         gates["G5"] = {
             "status": "PASS",
             "detail": "MiniRAG A/B measured; enrichment disabled after rejection",
@@ -1236,7 +1231,7 @@ def evaluate_release(
     else:
         gates["G5"] = {
             "status": "BLOCKED",
-            "detail": f"missing {chroma_path.name} or minirag-ab g5_status PASS",
+            "detail": "missing minirag-ab.json or MiniRAG A/B g5_status PASS",
         }
 
     # G6 MiniRAG + AnythingLLM

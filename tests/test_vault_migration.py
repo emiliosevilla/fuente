@@ -513,23 +513,23 @@ def test_rollback_restores_runtime_state_snapshot(vault_tree: Path, monkeypatch:
     note = _write_note(vault_tree, "4_salida/_Sin_Cuestion/legacy.md", LEGACY_NOTE)
     state_db = vault_tree / ".fuente" / "state.db"
     state_db.write_bytes(b"state-before")
-    chroma_dir = vault_tree / ".fuente" / "chroma"
-    chroma_dir.mkdir(parents=True)
-    (chroma_dir / "index.bin").write_bytes(b"index-before")
+    index_dir = vault_tree / ".fuente" / "minirag"
+    index_dir.mkdir(parents=True)
+    (index_dir / "index.bin").write_bytes(b"index-before")
     chroma = FakeChroma()
     migrator = VaultMigrator(vault_tree, chroma=chroma)
-    monkeypatch.setattr(migrator, "_chroma", None)
-    monkeypatch.setattr(migrator, "_chroma_store", lambda: chroma)
+    monkeypatch.setattr(migrator, "_index_store", None)
+    monkeypatch.setattr(migrator, "_index", lambda: chroma)
 
     before_state = state_db.read_bytes()
-    before_index = (chroma_dir / "index.bin").read_bytes()
+    before_index = (index_dir / "index.bin").read_bytes()
     manifest = migrator.apply(rebuild_index=True)
     assert (vault_tree / manifest.runtime_backup_dir / ".fuente/state.db").read_bytes() == before_state
     state_db.write_bytes(b"state-after")
-    (chroma_dir / "index.bin").write_bytes(b"index-after")
+    (index_dir / "index.bin").write_bytes(b"index-after")
 
     migrator.rollback(migrator._manifest_file(manifest))
 
     assert state_db.read_bytes() == before_state
-    assert (chroma_dir / "index.bin").read_bytes() == before_index
-    assert not (chroma_dir / "generated.bin").exists()
+    assert (index_dir / "index.bin").read_bytes() == before_index
+    assert not (index_dir / "generated.bin").exists()

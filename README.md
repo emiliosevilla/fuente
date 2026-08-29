@@ -6,7 +6,7 @@ Markdown canónico como fuente de verdad, exige aprobación humana antes de
 publicar derivados y ofrece consola de escritorio, ejecución sin interfaz,
 búsqueda local y exportación controlada.
 
-El proyecto funciona sin servicios cloud obligatorios. Ollama, Chroma,
+El proyecto funciona sin servicios cloud obligatorios. Ollama,
 Tesseract, FFmpeg y los convertidores opcionales se usan sólo cuando están
 instalados y la política de ejecución los permite.
 
@@ -17,8 +17,7 @@ Fuente. La revisión fijada es
 `e204d239421f45004852953679927fdf6733f236` y su licencia declarada es MIT:
 [LICENSE oficial de MiniRAG](https://github.com/HKUDS/MiniRAG/blob/e204d239421f45004852953679927fdf6733f236/LICENSE).
 El estado de MiniRAG se guarda bajo `.fuente/minirag`; si no está instalado o
-el presupuesto local no permite usarlo, Fuente degrada a BM25. ChromaDB no es
-la ruta primaria: se conserva para refinamiento explícito y evaluado.
+el presupuesto local no permite usarlo, Fuente degrada a BM25.
 
 ## Qué hace
 
@@ -137,15 +136,14 @@ Los jobs son durables, reanudables y tienen estados y razones explícitos.
 ### Búsqueda, RAG y recursos
 
 - BM25 sobre el Markdown autorizado del Vault.
-- MiniRAG local como backend primario de recuperación; Chroma queda reservado
-  para ciclos explícitos de refinamiento evaluado.
+- MiniRAG local como backend primario de recuperación.
 - Búsqueda híbrida/BM25 como degradación local cuando el presupuesto o MiniRAG
   no están disponibles.
 - Chunk IDs deterministas y reconciliación del índice.
 - Ollama por loopback (`http://localhost:11434`) como ruta predeterminada.
 - RAM Governor que mide memoria, catálogo local y presupuesto antes de elegir
   un modelo.
-- Perfil `Eco estricto`, que usa BM25, no inicializa Chroma y omite audio
+- Perfil `Eco estricto`, que usa BM25, no inicializa MiniRAG y omite audio
   automático por defecto; una elección explícita de `Tiny local CPU` permite
   transcripción local si existe el modelo seleccionado.
 - La selección del modelo depende de la RAM instalada y de la RAM disponible
@@ -196,7 +194,7 @@ de vuelta al proveedor. La carpeta debe estar montada por el cliente oficial.
 | `fuente/core/` | Gestión del Vault, sincronización de carpetas y comprobaciones de aplicaciones. |
 | `fuente/watcher/` | Monitor de archivos y pipeline ETL reanudable. |
 | `fuente/extractors/` | Extractores nativos y adaptadores opcionales de Office, audio, OCR y TeX. |
-| `fuente/rag/` | Chroma, BM25, chunking, corpus autorizado e índices deterministas. |
+| `fuente/rag/` | MiniRAG, BM25, chunking, corpus autorizado e índices deterministas. |
 | `fuente/ram_governor/` | Medición de recursos, presupuestos y selección de política/modelo. |
 | `fuente/infrastructure/` | Escrituras atómicas, SQLite, migraciones y manifiestos reversibles. |
 | `fuente/ui/` | Bridge PyWebView, proyecciones Markdown e historial del lector. |

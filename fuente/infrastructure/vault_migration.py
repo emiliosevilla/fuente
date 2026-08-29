@@ -60,7 +60,7 @@ class MigrationBlockedError(RuntimeError):
         super().__init__(f"Migration blocked by scan findings: {', '.join(kinds)}")
 
 
-class ChromaLike(Protocol):
+class IndexStoreLike(Protocol):
     def add_chunks(self, chunks, metadatas, ids) -> bool: ...
 
     def delete_chunks(self, ids) -> bool: ...
@@ -285,13 +285,14 @@ class VaultMigrator:
         vault_path: str | Path,
         *,
         config: Optional[AppConfig] = None,
-        chroma: Optional[ChromaLike] = None,
+        index_store: Optional[IndexStoreLike] = None,
+        chroma: Optional[IndexStoreLike] = None,
         chunker: Optional[SemanticChunker] = None,
     ) -> None:
         self.vault_path = Path(vault_path).resolve()
         self.config = config or get_default_config(self.vault_path)
         self._vault: VaultManager | None = None
-        self._chroma = chroma
+        self._index_store = index_store if index_store is not None else chroma
         self._chunker = chunker or SemanticChunker()
 
     @property
@@ -434,7 +435,7 @@ class VaultMigrator:
 
         backup_root = self.vault_path / manifest.backup_dir
         backup_root.mkdir(parents=True, exist_ok=True)
-        if self._chroma is None:
+        if self._index_store is None:
             self._snapshot_runtime_state(manifest)
         self._persist_manifest(manifest, manifest_path)
         with JobStore(self.vault_path) as store:
@@ -528,7 +529,7 @@ class VaultMigrator:
 
         backup_root = self.vault_path / manifest.backup_dir
         backup_root.mkdir(parents=True, exist_ok=True)
-        if self._chroma is None:
+        if self._index_store is None:
             self._snapshot_runtime_state(manifest)
         self._persist_manifest(manifest, manifest_path)
 
@@ -620,7 +621,7 @@ class VaultMigrator:
 
         manifest.status = "rolled_back"
         self._persist_manifest(manifest, manifest_path)
-        if self._chroma is None and self._restore_runtime_state(manifest):
+        if self._index_store is None and self._restore_runtime_state(manifest):
             return manifest, restored_count
         if manifest.index_rebuilt:
             self._rebuild_index(
@@ -634,7 +635,7 @@ class VaultMigrator:
             state_dir / "state.db",
             state_dir / "state.db-wal",
             state_dir / "state.db-shm",
-            self.vault.config.chroma_dir,
+            self.vault.config.minirag_dir,
         )
 
     def _snapshot_runtime_state(self, manifest: MigrationManifest) -> None:
@@ -845,25 +846,27 @@ class VaultMigrator:
         payload = json.loads(Path(manifest_path).read_text(encoding="utf-8"))
         return MigrationManifest.from_dict(payload)
 
-    def _chroma_store(self) -> Optional[ChromaLike]:
-        if self._chroma is not None:
-            return self._chroma
+    def _index(self) -> Optional[IndexStoreLike]:
+        if self._index_store is not None:
+            return self._index_store
         try:
-            from fuente.rag.chroma_store import ChromaStore
+            from fuente.rag.minirag_store import MiniRAGStore
 
-            store = ChromaStore(self.vault.config.chroma_dir)
-            store.initialize()
+            store = MiniRAGStore(
+                self.vault.config.minirag_dir,
+                ollama_url=self.config.ollama_url,
+            )
             return store
         except Exception as error:
-            logger.warning("Chroma unavailable for migration index rebuild: %s", error)
+            logger.warning("MiniRAG unavailable for migration index rebuild: %s", error)
             return None
 
     def _rebuild_index(self, themes: list[str]) -> bool:
-        chroma = self._chroma_store()
-        if chroma is None:
+        index_store = self._index()
+        if index_store is None:
             return False
 
-        existing = chroma.get_all_chunks()
+        existing = index_store.get_all_chunks()
         previous_by_document: dict[str, set[str]] = {}
         for chunk in existing:
             metadata = chunk.get("metadata") or {}
@@ -911,7 +914,7 @@ class VaultMigrator:
                         previous_by_document.get(document_id, set()), set()
                     )
                     if obsolete:
-                        chroma.delete_chunks(obsolete)
+                        index_store.delete_chunks(obsolete)
                     previous_by_document[document_id] = set()
                     continue
 
@@ -922,8 +925,8 @@ class VaultMigrator:
                     previous_by_document.get(document_id, set()), new_ids
                 )
                 if obsolete:
-                    chroma.delete_chunks(obsolete)
-                chroma.add_chunks(
+                    index_store.delete_chunks(obsolete)
+                index_store.add_chunks(
                     [chunk["content"] for chunk in materialized],
                     [chunk["metadata"] for chunk in materialized],
                     [chunk["id"] for chunk in materialized],
@@ -937,5 +940,5 @@ class VaultMigrator:
             if chunk_id not in desired_ids
         )
         if stale:
-            chroma.delete_chunks(stale)
+            index_store.delete_chunks(stale)
         return True

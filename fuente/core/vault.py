@@ -106,7 +106,7 @@ class VaultManager:
             self.output_dir / "_Sin_Cuestion",
             self.shared_dir,
             self.config.system_dir,
-            self.config.chroma_dir,
+            self.config.minirag_dir,
         ]
         for d in dirs:
             d.mkdir(parents=True, exist_ok=True)

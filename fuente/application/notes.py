@@ -11,7 +11,7 @@ from fuente.application.approval import (
     ApprovalApplicationService,
     TransitionApprovalService,
 )
-from fuente.application.ingestion import CHUNK_ARTIFACT_KIND
+from fuente.application.ingestion import CHUNK_ARTIFACT_KIND, LEGACY_CHUNK_ARTIFACT_KINDS
 from fuente.application.feed import (
     FeedApplicationService,
     FeedPage,
@@ -39,7 +39,7 @@ from fuente.domain.vault_layout import (
     CANONICAL_PROCESSED_DIR_NAME,
     CANONICAL_SHARED_DIR_NAME,
 )
-from fuente.rag.chroma_store import ChromaRetrievalBackend, ChromaStore
+from fuente.rag.minirag_store import MiniRAGRetrievalBackend
 from fuente.rag.semantic_chunker import SemanticChunker
 
 logger = logging.getLogger(__name__)
@@ -64,7 +64,8 @@ class NotesApplicationService:
         vault: VaultManager,
         path_resolver: AuthorizedPathResolver,
         job_store: JobStore,
-        chroma_store: Optional[ChromaStore] = None,
+        index_store: Any | None = None,
+        chroma_store: Any | None = None,
         chunker: Optional[SemanticChunker] = None,
         index_notifier: Optional[IndexNotifier] = None,
         runtime_policy: RuntimePolicy | None = None,
@@ -73,7 +74,7 @@ class NotesApplicationService:
         self.vault = vault
         self.path_resolver = path_resolver
         self.job_store = job_store
-        self.chroma = chroma_store
+        self.index_store = index_store if index_store is not None else chroma_store
         self.chunker = chunker or SemanticChunker()
         self._index_notifier = index_notifier
         self.runtime_policy = runtime_policy
@@ -509,7 +510,7 @@ class NotesApplicationService:
             self.job_store,
             vault_root=self.vault.config.vault_path,
             path_resolver=self.path_resolver,
-            chroma_store=self.chroma,
+            index_store=self.index_store,
         )
 
     def list_readonly_notes(self, query: str, scope: str) -> dict[str, Any]:
@@ -1128,14 +1129,14 @@ class NotesApplicationService:
 
     def _reindex_after_approval(self, note: NoteDocument) -> None:
         """Publish chunk vectors only after the approved note is durable on disk."""
-        if self.chroma is None or (
+        if self.index_store is None or (
             self.runtime_policy is not None
             and not self.runtime_policy.vector_index_enabled
         ):
             return
-        if bool(getattr(self.chroma, "failed", False)):
+        if bool(getattr(self.index_store, "failed", False)):
             logger.warning(
-                "Chroma index unavailable; approval remains durable for %s",
+                "MiniRAG index unavailable; approval remains durable for %s",
                 note.document_id,
             )
             return
@@ -1175,21 +1176,32 @@ class NotesApplicationService:
         published = {
             artifact["artifact_id"]
             for artifact in self.job_store.list_index_artifacts(note.document_id)
-            if artifact["kind"] == CHUNK_ARTIFACT_KIND
+            if artifact["kind"] in LEGACY_CHUNK_ARTIFACT_KINDS
         }
 
         obsolete = sorted(published - set(chunk_ids))
-        backend = ChromaRetrievalBackend(self.chroma)
-        result = backend.rebuild(chunks)
-        if not result.success:
-            if bool(getattr(self.chroma, "failed", False)):
+        backend = MiniRAGRetrievalBackend(self.index_store)
+        try:
+            result = backend.rebuild(chunks)
+        except Exception as error:
+            from fuente.rag.minirag_store import MiniRAGUnavailableError
+
+            if isinstance(error, MiniRAGUnavailableError):
                 logger.warning(
-                    "Chroma index unavailable; approval remains durable for %s",
+                    "MiniRAG index unavailable; approval remains durable for %s",
+                    note.document_id,
+                )
+                return
+            raise
+        if not result.success:
+            if bool(getattr(self.index_store, "failed", False)):
+                logger.warning(
+                    "MiniRAG index unavailable; approval remains durable for %s",
                     note.document_id,
                 )
                 return
             raise RuntimeError(
-                f"Chroma index rebuild failed for approved note {note.document_id}"
+                f"MiniRAG index rebuild failed for approved note {note.document_id}"
             )
 
         # New vectors are durable before the published artifact set changes.
@@ -1199,7 +1211,7 @@ class NotesApplicationService:
         previous_artifacts = [
             artifact
             for artifact in self.job_store.list_index_artifacts(note.document_id)
-            if artifact["kind"] == CHUNK_ARTIFACT_KIND
+            if artifact["kind"] in LEGACY_CHUNK_ARTIFACT_KINDS
         ]
         try:
             for chunk_id in chunk_ids:
@@ -1212,7 +1224,7 @@ class NotesApplicationService:
         except Exception:
             rollback_errors = []
             if new_chunk_ids and backend.delete(new_chunk_ids) is False:
-                rollback_errors.append("chroma")
+                rollback_errors.append("minirag")
             try:
                 self.job_store.delete_index_artifacts(
                     note.document_id, artifact_ids=chunk_ids
@@ -1247,7 +1259,7 @@ class NotesApplicationService:
                 )
             else:
                 logger.warning(
-                    "Keeping previous artifacts for approved note %s after Chroma delete failure",
+                    "Keeping previous artifacts for approved note %s after MiniRAG delete failure",
                     note.document_id,
                 )
         if self._index_notifier is not None:

@@ -1,6 +1,6 @@
 """Scoped hybrid retrieval with bounded context and RAM-aware degradation.
 
-``RetrievalApplicationService`` sits between chat (Task 4.3) and the Chroma /
+``RetrievalApplicationService`` sits between chat (Task 4.3) and the MiniRAG /
 BM25 stack. It:
 
 - filters hits by ``single_note`` / ``issue`` / ``theme`` / ``all_notes``;
@@ -13,7 +13,7 @@ from __future__ import annotations
 import logging
 from typing import Any, Callable, Mapping, Optional, Protocol, Sequence
 
-from fuente.rag.hybrid_search import HybridSearcher, docs_from_chroma_store
+from fuente.rag.hybrid_search import HybridSearcher, docs_from_index_store
 from fuente.rag.index_records import query_result_source_fields
 from fuente.rag.backend import IndexBuildResult, RetrievalHit
 from fuente.rag.router import RetrievalRouter
@@ -53,12 +53,12 @@ class CorpusProvider(Protocol):
         """Return the current deterministic retrieval corpus."""
 
 
-class _ChromaCorpusProvider:
-    def __init__(self, chroma_store: Any) -> None:
-        self.chroma_store = chroma_store
+class _IndexCorpusProvider:
+    def __init__(self, index_store: Any) -> None:
+        self.index_store = index_store
 
     def load(self) -> list[dict[str, object]]:
-        return list(docs_from_chroma_store(self.chroma_store))
+        return list(docs_from_index_store(self.index_store))
 
 
 class _EmptyCorpusProvider:
@@ -193,12 +193,13 @@ def matches_scope(
 
 
 class RetrievalApplicationService:
-    """Policy-selected retrieval over Vault BM25 or Chroma hybrid search."""
+    """Policy-selected retrieval over Vault BM25 or MiniRAG hybrid search."""
 
     def __init__(
         self,
-        chroma_store: Any | None = None,
+        index_store: Any | None = None,
         *,
+        chroma_store: Any | None = None,
         corpus_provider: CorpusProvider | None = None,
         runtime_policy: RuntimePolicy | None = None,
         ram_governor: Any = None,
@@ -210,7 +211,7 @@ class RetrievalApplicationService:
         snippet_chars: int = DEFAULT_SNIPPET_CHARS,
         router: RetrievalRouter | None = None,
     ) -> None:
-        self.chroma_store = chroma_store
+        self.index_store = index_store if index_store is not None else chroma_store
         self.runtime_policy = runtime_policy
         selected_mode = getattr(runtime_policy, "retrieval_mode", MODE_HYBRID)
         self._uses_vault_corpus = selected_mode == MODE_BM25_VAULT
@@ -218,23 +219,22 @@ class RetrievalApplicationService:
         if self._uses_vault_corpus and router is None:
             if corpus_provider is None:
                 raise ValueError("corpus_provider is required for bm25_vault retrieval")
-        elif chroma_store is None and router is None:
-            raise ValueError("chroma_store is required for hybrid retrieval")
+        elif self.index_store is None and router is None:
+            raise ValueError("index_store is required for hybrid retrieval")
         self.corpus_provider = corpus_provider or (
-            _ChromaCorpusProvider(chroma_store)
-            if chroma_store is not None
+            _IndexCorpusProvider(self.index_store)
+            if self.index_store is not None
             else _EmptyCorpusProvider()
         )
         self._ram_governor = ram_governor
-        # Prefer the store's process-local searcher so add/delete invalidation
-        # (ChromaStore.invalidate_bm25_cache) keeps chat retrieval warm/coherent.
+        # Prefer a store-owned searcher when available.
         if hybrid_searcher is None and not self._uses_vault_corpus:
-            store_searcher = getattr(chroma_store, "_hybrid_searcher", None)
+            store_searcher = getattr(self.index_store, "_hybrid_searcher", None)
             if callable(store_searcher):
                 try:
                     hybrid_searcher = store_searcher()
                 except Exception as exc:
-                    logger.debug("Could not reuse chroma HybridSearcher: %s", exc)
+                    logger.debug("Could not reuse index HybridSearcher: %s", exc)
                     hybrid_searcher = None
         self._searcher = hybrid_searcher or HybridSearcher()
         self._should_fallback = should_fallback_to_bm25
@@ -243,7 +243,7 @@ class RetrievalApplicationService:
         self.max_sources = max(1, int(max_sources))
         self.snippet_chars = max(32, int(snippet_chars))
         self.router = router or RetrievalRouter(
-            search=_ServiceRetrievalBackend(self, "chroma"),
+            search=_ServiceRetrievalBackend(self, "minirag"),
             enrichment=None,
         )
 
@@ -251,7 +251,7 @@ class RetrievalApplicationService:
         """Invalidate the BM25 cache after ingestion add/delete."""
         self._searcher.invalidate_cache()
         if not self._uses_vault_corpus:
-            invalidate = getattr(self.chroma_store, "invalidate_bm25_cache", None)
+            invalidate = getattr(self.index_store, "invalidate_bm25_cache", None)
             if callable(invalidate):
                 invalidate()
 
@@ -375,7 +375,16 @@ class RetrievalApplicationService:
     def _search_backend(
         self, backend: Any, query: str, *, candidate_limit: int
     ) -> list[dict]:
-        return [self._hit_as_dict(hit) for hit in backend.search(query, candidate_limit)]
+        try:
+            hits = backend.search(query, candidate_limit)
+        except Exception as exc:
+            logger.warning("MiniRAG search unavailable; continuing with BM25: %s", exc)
+            try:
+                return self._bm25_search(query, candidate_limit=candidate_limit)
+            except Exception as fallback_exc:
+                logger.warning("BM25 fallback unavailable: %s", fallback_exc)
+                return []
+        return [self._hit_as_dict(hit) for hit in hits]
 
     def _search_role(self, role: str, query: str, limit: int) -> list[dict]:
         backend = self._backend_for_role(role)
@@ -418,7 +427,7 @@ class RetrievalApplicationService:
             ),
             content=str(item.get("content") or ""),
             score=float(item.get("score") or 0.0),
-            backend=str(item.get("backend") or "chroma"),
+            backend=str(item.get("backend") or "minirag"),
             relative_path=str(metadata.get("relative_path") or item.get("relative_path") or ""),
             metadata=metadata,
         )
@@ -429,14 +438,14 @@ class RetrievalApplicationService:
         enrichment = self.router.enrichment()
         if enrichment is None or not hits:
             return hits
-        chroma_hits = [self._dict_to_retrieval_hit(item) for item in hits]
+        primary_hits = [self._dict_to_retrieval_hit(item) for item in hits]
         hit_enabled = getattr(enrichment, "_hit_enrichment_enabled", None)
-        if not callable(hit_enabled) or not any(hit_enabled(hit) for hit in chroma_hits):
+        if not callable(hit_enabled) or not any(hit_enabled(hit) for hit in primary_hits):
             return hits
         enrich = getattr(enrichment, "enrich", None)
         if not callable(enrich):
             enrich = self.router.enrich
-        enriched = enrich(query, chroma_hits)
+        enriched = enrich(query, primary_hits)
         converted = [self._hit_as_dict(hit) for hit in enriched]
         return self._bound_hits(converted, limit=max(len(hits), 1))
 
@@ -482,7 +491,7 @@ class RetrievalApplicationService:
     def _hybrid_search(self, query: str, *, candidate_limit: int) -> list[dict]:
         fetch_n = max(candidate_limit * _CANDIDATE_MULTIPLIER, candidate_limit)
         vector_results: list[dict] = []
-        query_similar = getattr(self.chroma_store, "query_similar", None)
+        query_similar = getattr(self.index_store, "query_similar", None)
         if callable(query_similar):
             try:
                 vector_results = list(query_similar(query, n_results=fetch_n) or [])

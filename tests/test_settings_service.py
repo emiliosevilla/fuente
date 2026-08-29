@@ -295,8 +295,8 @@ def test_saved_model_and_url_drive_generation_and_chat_requests(
     chat_result = backend.process_chat("hello")
 
     assert pipeline.atomic_gen.ollama_url == configured_url
-    assert generation_calls == [
-        (f"{configured_url}/api/generate", generation_calls[0][1], 180)
+    assert [call for call in generation_calls if call[0].endswith("/api/generate")] == [
+        (f"{configured_url}/api/generate", next(call[1] for call in generation_calls if call[0].endswith("/api/generate")), 180)
     ]
     assert generation_calls[0][1]["model"] == "configured-model"
     assert len(chat_calls) == 1

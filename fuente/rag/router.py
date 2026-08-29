@@ -5,7 +5,7 @@ from fuente.rag.backend import RetrievalBackend, RetrievalHit
 
 
 class RetrievalRouter:
-    """Route search to Chroma and optional MiniRAG enrichment (Task 7)."""
+    """Route primary retrieval and optional enrichment."""
 
     def __init__(
         self,
@@ -22,11 +22,11 @@ class RetrievalRouter:
     def enrichment(self) -> RetrievalBackend | None:
         return self._enrichment
 
-    def enrich(self, query: str, chroma_hits: list[RetrievalHit]) -> list[RetrievalHit]:
+    def enrich(self, query: str, primary_hits: list[RetrievalHit]) -> list[RetrievalHit]:
         backend = self._enrichment
         if backend is None:
-            return list(chroma_hits)
+            return list(primary_hits)
         enricher = getattr(backend, "enrich", None)
         if not callable(enricher):
-            return list(chroma_hits)
-        return enricher(query, chroma_hits)
+            return list(primary_hits)
+        return enricher(query, primary_hits)

@@ -13,7 +13,6 @@ from fuente.extractors.office_pdf import TextAndOfficeExtractor
 from fuente.extractors.tex_tm import TeXAndTeXmacsExtractor
 from fuente.infrastructure.sqlite_store import JobStore
 from fuente.ram_governor.governor import RAMGovernor
-from fuente.rag.chroma_store import ChromaStore
 from fuente.rag.semantic_chunker import SemanticChunker
 from fuente.watcher.watcher import ETLPipeline, wait_until_file_stable
 from tests.integration.conftest import FakeChroma, FakeGenerator, FakeGovernor
@@ -173,26 +172,6 @@ E = mc^2
         extractor = TextAndOfficeExtractor()
         content, meta = extractor.extract(bad_utf8_file)
         self.assertIn("Texto valido", content)
-
-    def test_adversarial_chromadb_complex_metadata(self):
-        """Prueba inserción en ChromaStore de metadatos con objetos no primitivos, listas y None."""
-        store = ChromaStore(self.config.vault.chroma_dir)
-        
-        complex_metadatas = [
-            {
-                "str_val": "hola",
-                "int_val": 123,
-                "float_val": 45.67,
-                "bool_val": True,
-                "none_val": None,
-                "list_val": [1, 2, "tres"],
-                "dict_val": {"nested": "value"},
-                "set_val": {1, 2, 3},
-            }
-        ]
-
-        res = store.add_chunks(["fragmento de prueba"], complex_metadatas, ["chunk_id_1"])
-        self.assertIn(res, [True, False])
 
     def test_adversarial_huge_paragraph_chunking(self):
         """Prueba chunking semántico sobre un texto gigante de 50,000 caracteres sin saltos de línea."""

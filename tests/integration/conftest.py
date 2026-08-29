@@ -17,7 +17,7 @@ from fuente.core.vault import VaultManager
 from fuente.domain.frontmatter import parse_frontmatter, serialize_frontmatter
 from fuente.extractors.registry import ExtractorRegistry
 from fuente.infrastructure.sqlite_store import JobStore
-from fuente.rag.chroma_store import ChromaRetrievalBackend
+from fuente.rag.minirag_store import MiniRAGRetrievalBackend
 from fuente.rag.minirag_store import MiniRAGUnavailableError
 from fuente.rag.router import RetrievalRouter
 from fuente.rag.semantic_chunker import SemanticChunker
@@ -83,7 +83,7 @@ class MissingMiniRAG:
 
 def offline_router(chroma: FakeChroma) -> RetrievalRouter:
     return RetrievalRouter(
-        search=ChromaRetrievalBackend(chroma),
+        search=MiniRAGRetrievalBackend(chroma),
         enrichment=None,
     )
 

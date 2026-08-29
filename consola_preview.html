@@ -403,7 +403,7 @@
                                 <div><dt>Ollama</dt><dd id="dash-tool-ollama">No medido</dd></div>
                                 <div><dt>Obsidian</dt><dd id="dash-tool-obsidian">No medido</dd></div>
                                 <div><dt>AnythingLLM</dt><dd id="dash-tool-anythingllm">Opcional</dd></div>
-                                <div><dt>ChromaDB</dt><dd id="dash-tool-chroma">Local</dd></div>
+                                <div><dt>MiniRAG</dt><dd id="dash-tool-minirag">Local</dd></div>
                             </dl>
                         </div>
                         <div class="dash-group">
@@ -512,7 +512,7 @@
                         <h2>Principios</h2>
                         <p>Local-first, formato abierto, mínima magia, interoperabilidad y control total de los datos. Inspirado en los principios de [[Para Qué]] y [[Luhmann en Zettelkasten]].</p>
                         <h2>Componentes</h2>
-                        <p>El sistema se apoya en tres componentes principales: (1) el almacén local de notas (Obsidian), (2) el índice semántico (ChromaDB) y (3) la capa de consulta (la consulta local). Para más detalles, ver [[Componentes del sistema]].</p>
+                                <p>El sistema se apoya en tres componentes principales: (1) el almacén local de notas (Obsidian), (2) el índice semántico (MiniRAG) y (3) la capa de consulta local. Para más detalles, ver [[Componentes del sistema]].</p>
                     </article>
                 </section>
                 <div id="reader-workspace-host"></div>
@@ -551,7 +551,7 @@
                             <article><h3>Plan de lanzamiento v2.0</h3><span>Temas/Lanzamiento/plan-lanzamiento-v2.0.md</span><p>Objetivo: lanzar la version 2.0 en Q3. Dependencias: [[Infraestructura]], [[Seguridad]].</p></article>
                         </section>
                     </div>
-                    <footer>Contenido: ChromaDB   ·   Metadatos: SQLite   ·   Relaciones: catalogo de wikilinks</footer>
+                    <footer>Contenido: MiniRAG   ·   Metadatos: SQLite   ·   Relaciones: catalogo de wikilinks</footer>
                 </section>
                 <section class="aux-relations-pane" aria-label="Jerarquia y relaciones">
                     <aside class="aux-relations-nav">
@@ -739,7 +739,7 @@
                         </div>
                         <div class="reader-view is-hidden" id="reader-view-feed" data-source-view="feed" hidden>
                             <div class="source-feed ui-carousel" id="source-feed" aria-label="Feed de notas">
-                                <article class="note-card"><span class="seal green"></span><h3>Índice de contenido con ChromaDB</h3><div class="meta"><span>9 abr 2024</span><span>Javier Ruiz</span></div><p>Cómo indexamos el contenido de las notas para permitir búsqueda rápida y relevancia.</p></article>
+                                <article class="note-card"><span class="seal green"></span><h3>Índice de contenido con MiniRAG</h3><div class="meta"><span>9 abr 2024</span><span>Javier Ruiz</span></div><p>Cómo indexamos el contenido de las notas para permitir búsqueda rápida y relevancia.</p></article>
                                 <article class="note-card"><span class="seal red"></span><h3>Principios de diseño</h3><div class="meta"><span>7 abr 2024</span><span>María Ortega</span></div><p>Notas sobre los principios que guían las decisiones de diseño del sistema Fuente y Caudal.</p></article>
                                 <article class="note-card"><span class="seal orange"></span><h3>Flujo de consulta local</h3><div class="meta"><span>4 abr 2024</span><span>Javier Ruiz</span></div><p>Descripción del flujo completo desde la pregunta del usuario hasta la respuesta consultada.</p></article>
                             </div>
@@ -5189,7 +5189,7 @@ document.addEventListener('keydown', handleShellKeydown);
             setDash('dash-tool-ollama', 'Lista');
             setDash('dash-tool-obsidian', 'Detectada');
             setDash('dash-tool-anythingllm', 'Loopback');
-            setDash('dash-tool-chroma', 'Local');
+            setDash('dash-tool-minirag', 'Local');
             setDash('dash-config-mode', 'Solo local');
             setDash('dash-config-vault', 'Vista previa demo');
             setDash('status-ollama', 'Lista');
@@ -7027,7 +7027,7 @@ document.addEventListener('keydown', handleShellKeydown);
             {title: "Arquitectura General de Fuente", path: "Nota_Arquitectura_Fuente.md", theme: "Arquitectura", issue: "Fundamentos", note_type: "concepto", seal: "approved"},
             {title: "Pipeline ETL de Ingesta y Procesamiento", path: "Nota_ETL_Pipeline_Ingesta.md", theme: "Operaciones", issue: "Procesamiento", note_type: "concepto", seal: "in_review"},
             {title: "Motor de IA Local y Ollama", path: "Nota_Motor_IA_Local.md", theme: "General", issue: "Consulta local", note_type: "referencia", seal: "in_review"},
-            {title: "Base de Datos Vectorial ChromaDB", path: "Nota_Base_Datos_Vectorial.md", theme: "Arquitectura", issue: "Búsqueda", note_type: "concepto", seal: "in_review"},
+            {title: "Base de Datos Vectorial MiniRAG", path: "Nota_Base_Datos_Vectorial.md", theme: "Arquitectura", issue: "Búsqueda", note_type: "concepto", seal: "in_review"},
             {title: "Gobernador de RAM y Memoria", path: "Nota_Optimizacion_RAM.md", theme: "Operaciones", issue: "Rendimiento", note_type: "concepto", seal: "pending_review"},
             {title: "Estética Editorial Papiro y Consola UI", path: "Nota_Formato_Papiro.md", theme: "Arquitectura", issue: "Presentación", note_type: "referencia", seal: "approved"},
             {title: "Estructuración en Notas Atómicas", path: "Nota_Notas_Atomicas.md", theme: "Lanzamiento", issue: "Captura", note_type: "concepto", seal: "pending_review"},

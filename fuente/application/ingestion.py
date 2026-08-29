@@ -16,7 +16,7 @@ Durability rules that the stage order encodes:
 
 - Index entries are reconciled per document id: whatever chunk ids were
   previously published for a document are recorded *before* they are written
-  to Chroma, so a resumed job can delete the obsolete ones instead of leaving
+  to MiniRAG, so a resumed job can delete the obsolete ones instead of leaving
   orphaned vectors behind.
 - Generated Markdown is validated (frontmatter schema) before it is written,
   and the note is written atomically before its index entries are published.
@@ -85,7 +85,12 @@ from fuente.domain.vault_layout import (
     CANONICAL_CLEAN_DIR_NAME,
     CANONICAL_PROCESSED_DIR_NAME,
 )
-from fuente.rag.chroma_store import ChromaRetrievalBackend, resolve_index_authority
+from fuente.rag.minirag_store import (
+    MiniRAGRetrievalBackend,
+    MiniRAGStore,
+    MiniRAGUnavailableError,
+    resolve_index_authority,
+)
 from fuente.rag.minirag_store import MiniRAGStore, MiniRAGUnavailableError
 from fuente.rag.router import RetrievalRouter
 
@@ -97,7 +102,8 @@ TERMINAL_STAGES: frozenset[str] = frozenset(
 )
 
 #: `index_artifacts.kind` values this service publishes.
-CHUNK_ARTIFACT_KIND = "chroma_chunk"
+CHUNK_ARTIFACT_KIND = "minirag_chunk"
+LEGACY_CHUNK_ARTIFACT_KINDS = {CHUNK_ARTIFACT_KIND, "chroma_chunk"}
 NOTE_ARTIFACT_KIND = "note_index"
 
 # Stored on a job while a human reviews its canonical clean Markdown.  The
@@ -244,7 +250,8 @@ class IngestionApplicationService:
         job_store: JobStore,
         extractors: Any,
         chunker: Any,
-        chroma: Any,
+        index_store: Any | None = None,
+        chroma: Any | None = None,
         atomic_generator: Any,
         smart_note_generator: Any | None = None,
         runtime_policy: RuntimePolicy | None = None,
@@ -262,16 +269,19 @@ class IngestionApplicationService:
         # replacing its public ``extract`` method remain connected.
         self.extraction_policy = ExtractionPolicy([extractors])
         self.chunker = chunker
-        self.chroma = chroma
+        self.index_store = index_store if index_store is not None else chroma
         self._minirag_store = MiniRAGStore(
             config.vault.minirag_dir,
             ollama_url=config.ollama_url,
             model=config.custom_model_override,
             job_store=job_store,
         )
+        if self.index_store is None and (
+            runtime_policy is None or runtime_policy.vector_index_enabled
+        ):
+            self.index_store = self._minirag_store
         self.router = router or RetrievalRouter(
-            search=ChromaRetrievalBackend(chroma),
-            enrichment=self._minirag_store,
+            search=MiniRAGRetrievalBackend(self.index_store), enrichment=None
         )
         self.atomic_generator = atomic_generator
         self.smart_note_generator = smart_note_generator
@@ -323,7 +333,7 @@ class IngestionApplicationService:
     def _vector_index_available(self) -> bool:
         """Keep a failed optional vector backend from blocking durable ETL."""
         return self._vector_index_enabled() and not bool(
-            getattr(self.chroma, "failed", False)
+            getattr(self.index_store, "failed", False)
         )
 
     def _delete_search_chunks(self, chunk_ids) -> bool:
@@ -396,7 +406,7 @@ class IngestionApplicationService:
                     content_hash=origin.content_hash,
                     content=str(chunk.get("content") or ""),
                     score=0.5,
-                    backend="chroma",
+                    backend="minirag",
                     relative_path=str(chunk.get("metadata", {}).get("relative_path") or ""),
                     metadata=dict(chunk.get("metadata") or {}),
                 )
@@ -947,10 +957,10 @@ class IngestionApplicationService:
         published = {
             artifact["artifact_id"]
             for artifact in self.job_store.list_index_artifacts(document_id)
-            if artifact["kind"] == CHUNK_ARTIFACT_KIND
+            if artifact["kind"] in LEGACY_CHUNK_ARTIFACT_KINDS
         }
 
-        # Record the ids before writing them: a crash between the Chroma write
+        # Record the ids before writing them: a crash between the MiniRAG write
         # and the stage transition must still leave every id this attempt may
         # have published discoverable, or the resumed attempt cannot tell which
         # vectors became obsolete.
@@ -971,7 +981,14 @@ class IngestionApplicationService:
                 len(obsolete),
             )
             self._delete_search_chunks(obsolete)
-        result = self.router.search().rebuild(chunks)
+        try:
+            result = self.router.search().rebuild(chunks)
+        except MiniRAGUnavailableError:
+            self.job_store.delete_index_artifacts(
+                document_id, artifact_ids=chunk_ids
+            )
+            self._record_vector_degradation(job, reason="vector_index_unavailable")
+            return self._advance(job, "indexed_chunks", note_document_id=document_id)
         if not result.success:
             if not self._vector_index_available():
                 self.job_store.delete_index_artifacts(
@@ -980,7 +997,7 @@ class IngestionApplicationService:
                 self._record_vector_degradation(job, reason="vector_index_unavailable")
                 return self._advance(job, "indexed_chunks", note_document_id=document_id)
             raise RuntimeError(
-                f"Chroma index rebuild failed for job {job.job_id}"
+                f"MiniRAG index rebuild failed for job {job.job_id}"
             )
         self._maybe_rebuild_enrichment_index(chunks, origin)
         self._maybe_evaluate_enrichment(origin, chunks)
@@ -1257,7 +1274,7 @@ class IngestionApplicationService:
             chunk_ids = [
                 artifact["artifact_id"]
                 for artifact in artifacts
-                if artifact["kind"] == CHUNK_ARTIFACT_KIND
+                if artifact["kind"] in LEGACY_CHUNK_ARTIFACT_KINDS
             ]
             if plan.invalidate_chunk_index and not self._delete_search_chunks(chunk_ids):
                 return False
@@ -1301,7 +1318,7 @@ class IngestionApplicationService:
 
         Passes identity kwargs into ``SemanticChunker``. Doubles that keep
         custom ids are only stamped with the required metadata so
-        JobStore/Chroma reconcile stays intact.
+        JobStore/MiniRAG reconcile stays intact.
         """
         from fuente.rag.index_records import ChunkIdentity, materialize_chunks
 
@@ -1625,7 +1642,7 @@ class IngestionApplicationService:
             chunk_ids = [
                 artifact["artifact_id"]
                 for artifact in artifacts
-                if artifact["kind"] == CHUNK_ARTIFACT_KIND
+                if artifact["kind"] in LEGACY_CHUNK_ARTIFACT_KINDS
             ]
             if chunk_ids and self._vector_index_enabled():
                 if not self._delete_search_chunks(chunk_ids):

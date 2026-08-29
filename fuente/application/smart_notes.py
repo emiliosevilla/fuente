@@ -136,6 +136,7 @@ class SmartNoteGenerator:
         transition_approvals: Any,
         chat_client: ConversationClient,
         ram_governor: RAMGovernor | None = None,
+        index_store: Any | None = None,
         chroma: Any | None = None,
         model_name: str = "test-model",
     ) -> None:
@@ -145,7 +146,7 @@ class SmartNoteGenerator:
         self.transition_approvals = transition_approvals
         self.chat_client = chat_client
         self.ram_governor = ram_governor
-        self.chroma = chroma
+        self.index_store = index_store if index_store is not None else chroma
         self.model_name = model_name
         self._vault_root = vault.config.vault_path.resolve()
         self._processed_root = vault.processed_dir.resolve()
@@ -534,8 +535,8 @@ class SmartNoteGenerator:
         row = self.store.get_note_by_path(relative)
         if row is not None:
             return row
-        if self.chroma is not None:
-            note_id = self.chroma.find_concept_note_id(slug)
+        if self.index_store is not None:
+            note_id = self.index_store.find_concept_note_id(slug)
             if note_id:
                 return self.store.get_note(note_id)
         return None

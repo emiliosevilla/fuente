@@ -146,7 +146,7 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--skip-index",
         action="store_true",
-        help="Skip Chroma index rebuild after migration",
+        help="Skip MiniRAG index rebuild after migration",
     )
     return parser
 

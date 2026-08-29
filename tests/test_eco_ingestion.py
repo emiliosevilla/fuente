@@ -15,9 +15,9 @@ from tests.test_ingestion_recovery import _build_harness
 from fuente.domain.frontmatter import parse_frontmatter
 
 
-class ForbiddenChroma:
+class ForbiddenIndex:
     def __getattr__(self, name):
-        raise AssertionError(f"Eco touched Chroma: {name}")
+        raise AssertionError(f"Eco touched MiniRAG: {name}")
 
 
 def _eco_policy(tmp_path: Path):
@@ -30,7 +30,7 @@ def test_eco_ingestion_skips_vectors_and_waits_without_fake_llm(temp_vault_path)
     harness = _build_harness(temp_vault_path)
     try:
         harness.service.set_runtime_policy(_eco_policy(temp_vault_path))
-        harness.service.chroma = ForbiddenChroma()
+        harness.service.index_store = ForbiddenIndex()
 
         submitted = harness.service.submit("1_volcado/informe_trimestral.txt")
         waiting = harness.service.resume(submitted.job_id)
@@ -68,20 +68,20 @@ def test_eco_ingestion_skips_vectors_and_waits_without_fake_llm(temp_vault_path)
         harness.store.close()
 
 
-def test_eco_pipeline_does_not_construct_chroma(tmp_path, monkeypatch):
+def test_eco_pipeline_does_not_construct_minirag(tmp_path, monkeypatch):
     config = get_default_config(tmp_path / "vault")
     config.resource_profile = "eco_strict"
     monkeypatch.setattr(
-        "fuente.watcher.watcher.ChromaStore",
+        "fuente.watcher.watcher.MiniRAGStore",
         lambda *_args, **_kwargs: (_ for _ in ()).throw(
-            AssertionError("Eco constructed Chroma")
+            AssertionError("Eco constructed MiniRAG")
         ),
     )
 
     pipeline = ETLPipeline(config)
     try:
-        assert pipeline.chroma is None
-        assert pipeline.ingestion.chroma is None
+        assert pipeline.index_store is None
+        assert pipeline.ingestion.index_store is None
     finally:
         pipeline.close()
 
@@ -113,7 +113,7 @@ def test_eco_approval_updates_markdown_without_reindex(temp_vault_path):
             vault=vault,
             path_resolver=resolver,
             job_store=store,
-            chroma_store=ForbiddenChroma(),
+            index_store=ForbiddenIndex(),
             runtime_policy=policy,
         )
         approved = service.approve(document_id, service.get_note(document_id).revision)

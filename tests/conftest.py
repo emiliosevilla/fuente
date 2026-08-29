@@ -41,7 +41,7 @@ def isolate_optional_minirag(monkeypatch):
     """Keep optional MiniRAG offline in modules that still reference it."""
     for target in (
         "fuente.application.ingestion.MiniRAGStore",
-        "fuente.application.notes.MiniRAGStore",
+        "fuente.watcher.watcher.MiniRAGStore",
     ):
         module_path, _, attr = target.rpartition(".")
         module = __import__(module_path, fromlist=[attr])

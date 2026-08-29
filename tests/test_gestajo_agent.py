@@ -63,7 +63,7 @@ def test_status_requires_the_bound_user(tmp_path: Path):
     )
 
     assert agent.status("token-a")["claimed"] is True
-    assert agent.status("token-a")["capabilities"] == ["flow", "settings"]
+    assert agent.status("token-a")["capabilities"] == ["flow", "settings", "sync_inputs"]
     with pytest.raises(AgentAuthenticationError, match="another user"):
         agent.status("token-b")
 
@@ -216,6 +216,42 @@ def test_settings_returns_safe_suggestions_to_consulta_and_writes_only_for_manag
     with pytest.raises(AgentAuthorizationError, match="Settings require"):
         agent.save_settings("token-a", "00000000-0000-0000-0000-000000000001", {"audio_mode": "skip"})
     assert calls == []
+
+
+def test_sync_input_uses_native_selection_token_without_returning_a_path(tmp_path: Path):
+    class Backend:
+        def select_sync_folder(self, title):
+            assert title == "Vincular carpeta compartida"
+            return {"status": "pending_confirmation", "selection_id": "sel_token", "provider": "onedrive", "display_name": "Compartidos", "root": "/private/share"}
+
+        def confirm_sync_input(self, selection_id):
+            assert selection_id == "sel_token"
+            return {"status": "saved", "inputs": [{"id": "sync_123", "provider": "onedrive", "display_name": "Compartidos", "enabled": True, "root": "/private/share"}]}
+
+        def set_sync_input_enabled(self, connection_id, enabled):
+            assert (connection_id, enabled) == ("sync_123", False)
+            return {"status": "updated", "inputs": []}
+
+        def remove_sync_input(self, connection_id):
+            assert connection_id == "sync_123"
+            return {"status": "removed", "inputs": []}
+
+    agent = GestajoAgent(
+        tmp_path, verifier=_verifier, publisher=_publisher,
+        membership_verifier=lambda *_args: "gestion", backend_factory=lambda _vault: Backend(),
+    )
+    agent.claim("token-a", {"supabase_url": "https://project.supabase.co", "publishable_key": "sb_publishable_test_key"})
+
+    selection = agent.select_sync_input("token-a", "00000000-0000-0000-0000-000000000001")
+    confirmed = agent.confirm_sync_input("token-a", "00000000-0000-0000-0000-000000000001", {"selection_id": "sel_token"})
+    paused = agent.set_sync_input_enabled("token-a", "00000000-0000-0000-0000-000000000001", {"connection_id": "sync_123", "enabled": False})
+    removed = agent.remove_sync_input("token-a", "00000000-0000-0000-0000-000000000001", {"connection_id": "sync_123"})
+
+    assert selection == {"status": "pending_confirmation", "selection_id": "sel_token", "provider": "onedrive", "display_name": "Compartidos"}
+    assert confirmed == {"sync_inputs": [{"id": "sync_123", "provider": "onedrive", "display_name": "Compartidos", "enabled": True}]}
+    assert paused == {"sync_inputs": []}
+    assert removed == {"sync_inputs": []}
+    assert "/private" not in str(selection | confirmed)
 
 
 def test_flow_requires_exactly_one_active_organization():

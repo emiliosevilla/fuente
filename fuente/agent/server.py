@@ -213,6 +213,7 @@ class GestajoAgent:
         flow_reader: Callable[[Path], Mapping[str, object]] | None = None,
         settings_reader: Callable[[Path], Mapping[str, object]] | None = None,
         settings_writer: Callable[[Path, Mapping[str, object]], Mapping[str, object]] | None = None,
+        backend_factory: Callable[[Path], Any] | None = None,
         allowed_origins: frozenset[str] = DEFAULT_ALLOWED_ORIGINS,
     ) -> None:
         self.vault_path = Path(vault_path).expanduser().resolve()
@@ -221,8 +222,10 @@ class GestajoAgent:
         self._management_verifier = management_verifier
         self._membership_verifier = membership_verifier
         self._flow_reader = flow_reader or _read_flow_state
-        self._settings_reader = settings_reader or _read_settings
-        self._settings_writer = settings_writer or _save_settings
+        self._settings_reader = settings_reader
+        self._settings_writer = settings_writer
+        self._backend_factory = backend_factory or _source_backend
+        self._backend: Any | None = None
         self._allowed_origins = allowed_origins
         self._binding = _read_binding(self.vault_path)
 
@@ -272,7 +275,7 @@ class GestajoAgent:
             "platform": platform.system(),
             "user_id": binding.user_id,
             "vault_fingerprint": self._vault_fingerprint(),
-            "capabilities": ["flow", "settings"],
+            "capabilities": ["flow", "settings", "sync_inputs"],
         }
 
     def flow(self, access_token: object, org_id: object) -> dict[str, object]:
@@ -288,7 +291,7 @@ class GestajoAgent:
         if not isinstance(org_id, str):
             raise AgentAuthorizationError("organization is invalid")
         role = self._membership_verifier(binding, self._access_token(access_token), org_id)
-        return _settings_response(self._settings_reader(self.vault_path), role)
+        return _settings_response(self._read_settings(), role)
 
     def save_settings(self, access_token: object, org_id: object, payload: object) -> dict[str, object]:
         binding = self._require_user(access_token)
@@ -302,10 +305,68 @@ class GestajoAgent:
         allowed = {"custom_model_override", "ram_safety_margin_pct", "resource_profile", "audio_mode"}
         if not payload or set(payload) - allowed:
             raise AgentError("settings payload has unsupported fields")
-        result = self._settings_writer(self.vault_path, payload)
+        result = self._save_settings(payload)
         if result.get("error"):
             raise AgentError(str(result.get("message") or result["error"]))
         return self.settings(access_token, org_id)
+
+    def select_sync_input(self, access_token: object, org_id: object) -> dict[str, object]:
+        self._require_management(access_token, org_id)
+        result = self._local_backend().select_sync_folder("Vincular carpeta compartida")
+        if result.get("error"):
+            raise AgentError(str(result.get("message") or result["error"]))
+        return _sync_selection_response(result)
+
+    def confirm_sync_input(self, access_token: object, org_id: object, payload: object) -> dict[str, object]:
+        self._require_management(access_token, org_id)
+        selection_id = _opaque_id(payload, "selection_id", "sel_")
+        result = self._local_backend().confirm_sync_input(selection_id)
+        if result.get("error"):
+            raise AgentError(str(result.get("message") or result["error"]))
+        return _sync_inputs_response(result)
+
+    def set_sync_input_enabled(self, access_token: object, org_id: object, payload: object) -> dict[str, object]:
+        self._require_management(access_token, org_id)
+        connection_id = _opaque_id(payload, "connection_id", "sync_")
+        if not isinstance(payload, Mapping) or not isinstance(payload.get("enabled"), bool):
+            raise AgentError("enabled must be a boolean")
+        result = self._local_backend().set_sync_input_enabled(connection_id, payload["enabled"])
+        if result.get("error"):
+            raise AgentError(str(result.get("message") or result["error"]))
+        return _sync_inputs_response(result)
+
+    def remove_sync_input(self, access_token: object, org_id: object, payload: object) -> dict[str, object]:
+        self._require_management(access_token, org_id)
+        connection_id = _opaque_id(payload, "connection_id", "sync_")
+        result = self._local_backend().remove_sync_input(connection_id)
+        if result.get("error"):
+            raise AgentError(str(result.get("message") or result["error"]))
+        return _sync_inputs_response(result)
+
+    def _require_management(self, access_token: object, org_id: object) -> AgentBinding:
+        binding = self._require_user(access_token)
+        if not isinstance(org_id, str):
+            raise AgentAuthorizationError("organization is invalid")
+        role = self._membership_verifier(binding, self._access_token(access_token), org_id)
+        if role not in {"gestion", "admin"}:
+            raise AgentAuthorizationError("Settings require gestion or admin access")
+        return binding
+
+    def _local_backend(self) -> Any:
+        if self._backend is None:
+            self._backend = self._backend_factory(self.vault_path)
+        return self._backend
+
+    def _read_settings(self) -> Mapping[str, object]:
+        if self._settings_reader is not None:
+            return self._settings_reader(self.vault_path)
+        backend = self._local_backend()
+        return {"settings": backend.get_settings_info(), "sync_inputs": backend.get_sync_inputs()}
+
+    def _save_settings(self, payload: Mapping[str, object]) -> Mapping[str, object]:
+        if self._settings_writer is not None:
+            return self._settings_writer(self.vault_path, payload)
+        return self._local_backend().save_settings(dict(payload))
 
     def _require_user(self, access_token: object) -> AgentBinding:
         binding = self._binding
@@ -380,7 +441,10 @@ def _handler_for(agent: GestajoAgent) -> type[BaseHTTPRequestHandler]:
 
         def do_POST(self) -> None:  # noqa: N802
             parsed = urlparse(self.path)
-            if parsed.path not in {"/v1/claim", "/v1/settings"}:
+            if parsed.path not in {
+                "/v1/claim", "/v1/settings", "/v1/sync-inputs/select",
+                "/v1/sync-inputs/confirm", "/v1/sync-inputs/enabled", "/v1/sync-inputs/remove",
+            }:
                 self._send_error(HTTPStatus.NOT_FOUND, "route not found")
                 return
             try:
@@ -391,9 +455,20 @@ def _handler_for(agent: GestajoAgent) -> type[BaseHTTPRequestHandler]:
             if parsed.path == "/v1/claim":
                 self._authorized(lambda token: agent.claim(token, payload))
                 return
-            self._authorized(
-                lambda token: agent.save_settings(token, _single_query_value(parsed.query, "org_id"), payload)
-            )
+            org_id = _single_query_value(parsed.query, "org_id")
+            if parsed.path == "/v1/settings":
+                self._authorized(lambda token: agent.save_settings(token, org_id, payload))
+                return
+            if parsed.path == "/v1/sync-inputs/select":
+                self._authorized(lambda token: agent.select_sync_input(token, org_id))
+                return
+            if parsed.path == "/v1/sync-inputs/confirm":
+                self._authorized(lambda token: agent.confirm_sync_input(token, org_id, payload))
+                return
+            if parsed.path == "/v1/sync-inputs/enabled":
+                self._authorized(lambda token: agent.set_sync_input_enabled(token, org_id, payload))
+                return
+            self._authorized(lambda token: agent.remove_sync_input(token, org_id, payload))
 
         def _authorized(self, operation: Callable[[str], dict[str, object]]) -> None:
             origin = self.headers.get("Origin")
@@ -464,20 +539,10 @@ def _read_flow_state(vault_path: Path) -> Mapping[str, object]:
     return FuenteConsoleBackend(vault_path).get_flow_state()
 
 
-def _read_settings(vault_path: Path) -> Mapping[str, object]:
+def _source_backend(vault_path: Path) -> Any:
     from fuente.control_console import FuenteConsoleBackend
 
-    backend = FuenteConsoleBackend(vault_path)
-    return {
-        "settings": backend.get_settings_info(),
-        "sync_inputs": backend.get_sync_inputs(),
-    }
-
-
-def _save_settings(vault_path: Path, payload: Mapping[str, object]) -> Mapping[str, object]:
-    from fuente.control_console import FuenteConsoleBackend
-
-    return FuenteConsoleBackend(vault_path).save_settings(dict(payload))
+    return FuenteConsoleBackend(vault_path)
 
 
 def _flow_response(state: Mapping[str, object]) -> dict[str, object]:
@@ -536,3 +601,26 @@ def _safe_offline_mode(value: object) -> dict[str, object]:
         "is_local_only": value.get("is_local_only") is True,
         "label": value.get("label") if isinstance(value.get("label"), str) else "Solo local",
     }
+
+
+def _opaque_id(payload: object, key: str, prefix: str) -> str:
+    if not isinstance(payload, Mapping) or set(payload) - {key, "enabled"}:
+        raise AgentError("sync payload has unsupported fields")
+    value = payload.get(key)
+    if not isinstance(value, str) or not value.startswith(prefix) or len(value) > 128:
+        raise AgentError(f"{key} is invalid")
+    return value
+
+
+def _sync_selection_response(value: Mapping[str, object]) -> dict[str, object]:
+    return {
+        "status": value.get("status") if isinstance(value.get("status"), str) else "cancelled",
+        "selection_id": value.get("selection_id") if isinstance(value.get("selection_id"), str) else None,
+        "provider": value.get("provider") if isinstance(value.get("provider"), str) else None,
+        "display_name": value.get("display_name") if isinstance(value.get("display_name"), str) else None,
+    }
+
+
+def _sync_inputs_response(value: Mapping[str, object]) -> dict[str, object]:
+    inputs = value.get("inputs") if isinstance(value.get("inputs"), list) else []
+    return {"sync_inputs": _settings_response({"sync_inputs": {"inputs": inputs}}, "consulta")["sync_inputs"]}

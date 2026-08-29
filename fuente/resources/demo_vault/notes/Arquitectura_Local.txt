@@ -1,0 +1,16 @@
+---
+schema_version: 1
+title: Arquitectura local
+date: '2026-08-25'
+author: Fuente
+tags:
+- demo
+- local
+issue: Demo
+status: approved
+history: []
+sources: []
+---
+# Arquitectura local
+
+El Vault, los índices y los modelos de Fuente permanecen en el equipo. Esta arquitectura mantiene el servicio vivo incluso sin conexión. La nota [[Introduccion]] resume el recorrido.

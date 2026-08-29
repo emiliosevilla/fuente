@@ -320,6 +320,12 @@ class IngestionApplicationService:
         """Legacy harnesses remain Auto; an injected policy is authoritative."""
         return self.runtime_policy is None or self.runtime_policy.vector_index_enabled
 
+    def _vector_index_available(self) -> bool:
+        """Keep a failed optional vector backend from blocking durable ETL."""
+        return self._vector_index_enabled() and not bool(
+            getattr(self.chroma, "failed", False)
+        )
+
     def _delete_search_chunks(self, chunk_ids) -> bool:
         """Treat the contract's ``None`` delete result as successful."""
         return self.router.search().delete(chunk_ids) is not False
@@ -908,7 +914,7 @@ class IngestionApplicationService:
         if waiting is not None:
             return waiting
         document_id = self._document_id(job)
-        if not self._vector_index_enabled():
+        if not self._vector_index_available():
             self._record_vector_degradation(job)
             if self.job_store.get_document_identity(document_id) is None:
                 self.job_store.upsert_document_identity(
@@ -967,6 +973,12 @@ class IngestionApplicationService:
             self._delete_search_chunks(obsolete)
         result = self.router.search().rebuild(chunks)
         if not result.success:
+            if not self._vector_index_available():
+                self.job_store.delete_index_artifacts(
+                    document_id, artifact_ids=chunk_ids
+                )
+                self._record_vector_degradation(job, reason="vector_index_unavailable")
+                return self._advance(job, "indexed_chunks", note_document_id=document_id)
             raise RuntimeError(
                 f"Chroma index rebuild failed for job {job.job_id}"
             )
@@ -1043,7 +1055,7 @@ class IngestionApplicationService:
         document_id = self._document_id(job)
         # Index entries are published only for a note that is already on disk.
         self._durable_note_path(job)
-        if not self._vector_index_enabled():
+        if not self._vector_index_available():
             return self._advance(job, "indexed_note")
         self.job_store.add_index_artifact(
             artifact_id=f"{document_id}:note",
@@ -1062,7 +1074,7 @@ class IngestionApplicationService:
         # it is dropped only after the note and its index entry are durable
         # *and* the job has committed `completed`.
         self._durable_note_path(job)
-        if not self._vector_index_enabled():
+        if not self._vector_index_available():
             completed = self._advance(job, "completed")
             self._delete_source(completed)
             return completed
@@ -1073,12 +1085,14 @@ class IngestionApplicationService:
         self._delete_source(completed)
         return completed
 
-    def _record_vector_degradation(self, job: JobRecord) -> None:
+    def _record_vector_degradation(
+        self, job: JobRecord, *, reason: str = "eco_strict_vector_index_disabled"
+    ) -> None:
         decision = ScheduleDecision(
             job=job,
             task_class=TaskClass.EMBEDDING,
             action=ScheduleAction.DEGRADE,
-            reason="eco_strict_vector_index_disabled",
+            reason=reason,
         )
         persist = getattr(self.scheduler, "_persist", None)
         if callable(persist):

@@ -125,7 +125,7 @@ def verify_supabase_user(binding: AgentBinding, access_token: str) -> str:
         if error.code in {HTTPStatus.UNAUTHORIZED, HTTPStatus.FORBIDDEN}:
             raise AgentAuthenticationError("Supabase rejected the current Gestajo session") from error
         raise AgentAuthenticationError("Supabase is unavailable to validate the Gestajo session") from error
-    except (URLError, TimeoutError, OSError):
+    except (URLError, TimeoutError, OSError) as error:
         raise AgentAuthenticationError("Fuente could not reach Supabase to validate the Gestajo session") from error
     except json.JSONDecodeError as error:
         raise AgentAuthenticationError("Supabase returned an invalid session response") from error

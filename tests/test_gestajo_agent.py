@@ -1,7 +1,7 @@
 from http.client import HTTPConnection
 from pathlib import Path
 from threading import Thread
-from urllib.error import HTTPError
+from urllib.error import HTTPError, URLError
 
 import pytest
 
@@ -74,6 +74,16 @@ def test_token_validation_reports_a_rejected_gestajo_session(monkeypatch):
     monkeypatch.setattr("fuente.agent.server.urlopen", reject)
 
     with pytest.raises(AgentAuthenticationError, match="rejected the current Gestajo session"):
+        verify_supabase_user(AgentBinding(USER_A, "https://project.supabase.co", "sb_publishable_test_key"), "token-a")
+
+
+def test_token_validation_reports_when_fuente_cannot_reach_supabase(monkeypatch):
+    def unavailable(_request, timeout):
+        raise URLError("certificate verification failed")
+
+    monkeypatch.setattr("fuente.agent.server.urlopen", unavailable)
+
+    with pytest.raises(AgentAuthenticationError, match="Fuente could not reach Supabase"):
         verify_supabase_user(AgentBinding(USER_A, "https://project.supabase.co", "sb_publishable_test_key"), "token-a")
 
 

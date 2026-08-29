@@ -225,7 +225,10 @@ def _handler_for(agent: GestajoAgent) -> type[BaseHTTPRequestHandler]:
 
         def do_GET(self) -> None:  # noqa: N802
             if self.path == "/v1/health":
-                self._send_json(HTTPStatus.OK, agent.health(), cors=False)
+                if not agent.is_origin_allowed(self.headers.get("Origin")):
+                    self._send_error(HTTPStatus.FORBIDDEN, "origin is not allowed")
+                    return
+                self._send_json(HTTPStatus.OK, agent.health())
                 return
             if self.path != "/v1/status":
                 self._send_error(HTTPStatus.NOT_FOUND, "route not found")
@@ -273,6 +276,8 @@ def _handler_for(agent: GestajoAgent) -> type[BaseHTTPRequestHandler]:
             if agent.is_origin_allowed(origin):
                 self.send_header("Access-Control-Allow-Origin", origin)
                 self.send_header("Vary", "Origin")
+                if self.headers.get("Access-Control-Request-Private-Network") == "true":
+                    self.send_header("Access-Control-Allow-Private-Network", "true")
 
         def _send_json(self, status: HTTPStatus, payload: object, *, cors: bool = True) -> None:
             body = json.dumps(payload, separators=(",", ":")).encode("utf-8")

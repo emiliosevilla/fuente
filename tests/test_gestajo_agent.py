@@ -1,4 +1,6 @@
+from http.client import HTTPConnection
 from pathlib import Path
+from threading import Thread
 
 import pytest
 
@@ -8,6 +10,7 @@ from fuente.agent.server import (
     AgentError,
     GestajoAgent,
     GestajoAgentServer,
+    _handler_for,
     _binding_path,
 )
 
@@ -76,3 +79,30 @@ def test_origin_and_claim_payload_fail_closed(tmp_path: Path):
 def test_server_requires_tls_context(tmp_path: Path):
     with pytest.raises(ValueError, match="TLS context"):
         GestajoAgentServer(GestajoAgent(tmp_path, verifier=_verifier), None)  # type: ignore[arg-type]
+
+
+def test_health_is_cors_and_private_network_ready_for_gestajo(tmp_path: Path):
+    from http.server import ThreadingHTTPServer
+
+    agent = GestajoAgent(tmp_path, verifier=_verifier)
+    server = ThreadingHTTPServer(("127.0.0.1", 0), _handler_for(agent))
+    thread = Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        connection = HTTPConnection("127.0.0.1", server.server_port, timeout=2)
+        connection.request(
+            "GET",
+            "/v1/health",
+            headers={
+                "Origin": "https://gestajo.vercel.app",
+                "Access-Control-Request-Private-Network": "true",
+            },
+        )
+        response = connection.getresponse()
+        assert response.status == 200
+        assert response.getheader("Access-Control-Allow-Origin") == "https://gestajo.vercel.app"
+        assert response.getheader("Access-Control-Allow-Private-Network") == "true"
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)

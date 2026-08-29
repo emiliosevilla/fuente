@@ -15,6 +15,7 @@ from fuente.agent.server import (
     _handler_for,
     _binding_path,
     publish_agent_status,
+    publish_document_note_metadata,
 )
 from fuente.infrastructure.sqlite_store import JobStore
 
@@ -164,6 +165,39 @@ def test_publish_agent_status_creates_or_updates_only_agent_metadata(monkeypatch
     assert b"vault_path" not in requests[1][0].data
 
 
+def test_publish_note_metadata_registers_when_the_remote_catalog_has_no_note(monkeypatch):
+    requests = []
+
+    class Response:
+        def __init__(self, payload: bytes):
+            self.payload = payload
+
+        def read(self):
+            return self.payload
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+    def fake_urlopen(request, timeout):
+        requests.append((request, timeout))
+        return Response(b"[]" if len(requests) == 1 else b"[{}]")
+
+    monkeypatch.setattr("fuente.agent.server.urlopen", fake_urlopen)
+    publish_document_note_metadata(AgentBinding(USER_A, "https://project.supabase.co", "sb_publishable_test_key"), "token-a", {
+        "document_id": "00000000-0000-0000-0000-000000000010", "title": "Nota", "revision": 1, "content_hash": "a" * 64,
+        "owner_user_id": USER_A, "owner_org_id": "00000000-0000-0000-0000-000000000001",
+        "common_org_id": "00000000-0000-0000-0000-000000000001", "visibility": "private",
+        "shared_org_id": None, "note_type": "nota", "status": "pending_review",
+    })
+
+    assert [request.get_method() for request, _ in requests] == ["PATCH", "POST"]
+    assert b"body_markdown" not in requests[1][0].data
+    assert b"relative_path" not in requests[1][0].data
+
+
 def test_flow_requires_management_and_never_returns_local_paths(tmp_path: Path):
     agent = GestajoAgent(
         tmp_path, verifier=_verifier, publisher=_publisher,
@@ -292,6 +326,12 @@ def test_note_read_checks_rls_before_returning_markdown_and_never_returns_paths(
 def test_note_update_uses_fuentecaudal_revision_contract_and_marks_offline_sync(tmp_path: Path):
     note_id = "00000000-0000-0000-0000-000000000010"
     calls = []
+    store = JobStore(tmp_path)
+    store.register_note(
+        note_id=note_id, relative_path="4_salida/nota.md", revision=2, content_hash="b" * 64,
+        note_type="nota", origin_kind=None, theme="General", issue="_Sin_Cuestion", status="pending_review",
+    )
+    store.close()
     agent = GestajoAgent(
         tmp_path, verifier=_verifier, publisher=_publisher,
         membership_verifier=lambda *_args: "gestion", note_visibility_verifier=lambda *_args: {"common_org_id": COMMON_ORG_ID},
@@ -340,18 +380,48 @@ def test_sync_pending_flushes_metadata_and_audits_without_a_token_in_sqlite(tmp_
     audits = []
     agent = GestajoAgent(
         tmp_path, verifier=_verifier, publisher=_publisher,
+        membership_verifier=lambda *_args: "gestion",
         note_metadata_publisher=lambda _binding, token, payload: published.append((token, payload)),
         audit_publisher=lambda _binding, token, payload: audits.append((token, payload)),
     )
     agent.claim("token-a", {"supabase_url": "https://project.supabase.co", "publishable_key": "sb_publishable_test_key"})
 
-    result = agent.sync_pending("token-a")
+    result = agent.sync_pending("token-a", "00000000-0000-0000-0000-000000000001")
 
     assert result == {"synced": 2, "pending": 0}
     assert published == [("token-a", {"document_id": note_id, "revision": 3, "title": "Nota", "content_hash": "a" * 64})]
     assert audits[0][1]["action"] == "note_read"
     assert "token-a" not in str(store.list_document_outbox())
     store.close()
+
+
+def test_sync_pending_registers_local_catalog_notes_as_private_metadata(tmp_path: Path):
+    note_id = "00000000-0000-0000-0000-000000000010"
+    store = JobStore(tmp_path)
+    store.register_note(
+        note_id=note_id, relative_path="4_salida/nota.md", revision=2, content_hash="a" * 64,
+        note_type="nota", origin_kind=None, theme="General", issue="_Sin_Cuestion", status="pending_review",
+    )
+    store.close()
+    published = []
+    agent = GestajoAgent(
+        tmp_path, verifier=_verifier, publisher=_publisher, membership_verifier=lambda *_args: "gestion",
+        note_reader=lambda _vault, received_id: {
+            "document_id": received_id, "revision": 2, "title": "Nota local", "body_markdown": "# Nota local",
+        },
+        note_metadata_publisher=lambda _binding, _token, payload: published.append(payload),
+    )
+    agent.claim("token-a", {"supabase_url": "https://project.supabase.co", "publishable_key": "sb_publishable_test_key"})
+
+    result = agent.sync_pending("token-a", "00000000-0000-0000-0000-000000000001")
+
+    assert result == {"synced": 1, "pending": 0}
+    assert published == [{
+        "document_id": note_id, "title": "Nota local", "revision": 2, "content_hash": "a" * 64,
+        "owner_user_id": USER_A, "owner_org_id": "00000000-0000-0000-0000-000000000001",
+        "common_org_id": "00000000-0000-0000-0000-000000000001", "visibility": "private",
+        "shared_org_id": None, "note_type": "nota", "status": "pending_review",
+    }]
 
 
 def test_flow_requires_exactly_one_active_organization():

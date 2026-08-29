@@ -244,6 +244,23 @@ def publish_document_note_metadata(binding: AgentBinding, access_token: str, not
             rows = json.loads(response.read().decode("utf-8"))
     except (HTTPError, URLError, TimeoutError, OSError, json.JSONDecodeError) as error:
         raise AgentSyncError("Supabase could not sync note metadata") from error
+    if isinstance(rows, list) and len(rows) == 1:
+        return
+    registration = _document_note_registration(note)
+    request = Request(
+        f"{binding.supabase_url}/rest/v1/document_notes",
+        data=json.dumps(registration, separators=(",", ":")).encode("utf-8"),
+        headers={
+            "apikey": binding.publishable_key, "Authorization": f"Bearer {access_token}",
+            "Content-Type": "application/json", "Prefer": "return=representation",
+        },
+        method="POST",
+    )
+    try:
+        with urlopen(request, timeout=5) as response:
+            rows = json.loads(response.read().decode("utf-8"))
+    except (HTTPError, URLError, TimeoutError, OSError, json.JSONDecodeError) as error:
+        raise AgentSyncError("Supabase could not register note metadata") from error
     if not isinstance(rows, list) or len(rows) != 1:
         raise AgentSyncError("Supabase did not confirm note metadata")
 
@@ -448,13 +465,14 @@ class GestajoAgent:
         expected_revision, body_markdown = _note_update_payload(payload)
         scope = self._note_visibility_verifier(binding, self._access_token(access_token), note_id)
         local = _note_update_response(self._note_writer(self.vault_path, note_id, expected_revision, body_markdown), note_id)
+        metadata = _document_note_sync_payload(local, self._document_outbox().get_note(note_id) or {}, binding, str(org_id))
         try:
-            self._note_metadata_publisher(binding, self._access_token(access_token), local)
+            self._note_metadata_publisher(binding, self._access_token(access_token), metadata)
             self._document_outbox().delete_document_outbox(_metadata_outbox_id(note_id))
             sync_state = "synced"
         except AgentSyncError:
             self._document_outbox().upsert_document_outbox(
-                outbox_id=_metadata_outbox_id(note_id), kind="note_metadata", payload=local,
+                outbox_id=_metadata_outbox_id(note_id), kind="note_metadata", payload=metadata,
             )
             sync_state = "pending_sync"
         self._record_audit(binding, self._access_token(access_token), _new_audit_event(
@@ -462,8 +480,8 @@ class GestajoAgent:
         ))
         return {**local, "sync_state": sync_state}
 
-    def sync_pending(self, access_token: object) -> dict[str, object]:
-        binding = self._require_user(access_token)
+    def sync_pending(self, access_token: object, org_id: object) -> dict[str, object]:
+        binding = self._require_management(access_token, org_id)
         synced = 0
         for item in self._document_outbox().list_document_outbox():
             try:
@@ -479,6 +497,26 @@ class GestajoAgent:
             except (AgentSyncError, ValueError, json.JSONDecodeError):
                 break
             self._document_outbox().delete_document_outbox(str(item["outbox_id"]))
+            synced += 1
+        for catalog in self._document_outbox().list_notes():
+            note_id = catalog.get("note_id")
+            if not isinstance(note_id, str):
+                continue
+            try:
+                local = _note_response(self._note_reader(self.vault_path, note_id), note_id)
+                payload = _document_note_sync_payload({
+                    "document_id": note_id, "title": local["title"],
+                    "revision": catalog.get("revision"), "content_hash": catalog.get("content_hash"),
+                }, catalog, binding, str(org_id))
+            except (AgentError, ValueError):
+                continue
+            try:
+                self._note_metadata_publisher(binding, self._access_token(access_token), payload)
+            except AgentSyncError:
+                self._document_outbox().upsert_document_outbox(
+                    outbox_id=_metadata_outbox_id(note_id), kind="note_metadata", payload=payload,
+                )
+                break
             synced += 1
         return {"synced": synced, "pending": len(self._document_outbox().list_document_outbox())}
 
@@ -616,7 +654,7 @@ def _handler_for(agent: GestajoAgent) -> type[BaseHTTPRequestHandler]:
                 self._authorized(lambda token: agent.claim(token, payload))
                 return
             if parsed.path == "/v1/sync":
-                self._authorized(lambda token: agent.sync_pending(token))
+                self._authorized(lambda token: agent.sync_pending(token, _single_query_value(parsed.query, "org_id")))
                 return
             if is_note_update:
                 self._authorized(lambda token: agent.update_note(token, _single_query_value(parsed.query, "org_id"), parsed.path.removeprefix("/v1/notes/"), payload))
@@ -844,6 +882,48 @@ def _note_update_response(value: Mapping[str, object], note_id: str) -> dict[str
 
 def _metadata_outbox_id(note_id: str) -> str:
     return f"note_metadata:{note_id}"
+
+
+def _document_note_sync_payload(
+    note: Mapping[str, object], catalog: Mapping[str, object], binding: AgentBinding, org_id: str,
+) -> dict[str, object]:
+    note_id = str(uuid.UUID(str(note.get("document_id"))))
+    owner_org_id = str(uuid.UUID(org_id))
+    title = note.get("title")
+    note_type = catalog.get("note_type")
+    status = catalog.get("status")
+    content_hash = note.get("content_hash")
+    revision = note.get("revision")
+    if (
+        not isinstance(title, str) or not 1 <= len(title) <= 512
+        or not isinstance(note_type, str) or not 1 <= len(note_type) <= 64
+        or not isinstance(status, str) or not 1 <= len(status) <= 64
+        or not isinstance(content_hash, str) or len(content_hash) != 64
+        or isinstance(revision, bool) or not isinstance(revision, int) or revision < 1
+    ):
+        raise AgentError("local note metadata is invalid")
+    return {
+        "document_id": note_id, "title": title, "revision": revision, "content_hash": content_hash,
+        "owner_user_id": str(uuid.UUID(binding.user_id)), "owner_org_id": owner_org_id,
+        "common_org_id": owner_org_id, "visibility": "private", "shared_org_id": None,
+        "note_type": note_type, "status": status,
+    }
+
+
+def _document_note_registration(note: Mapping[str, object]) -> dict[str, object]:
+    required = {
+        "document_id", "title", "revision", "content_hash", "owner_user_id", "owner_org_id",
+        "common_org_id", "visibility", "shared_org_id", "note_type", "status",
+    }
+    if set(note) != required:
+        raise AgentError("document note registration is invalid")
+    return {
+        "note_id": note["document_id"], "owner_user_id": note["owner_user_id"],
+        "owner_org_id": note["owner_org_id"], "common_org_id": note["common_org_id"],
+        "visibility": note["visibility"], "shared_org_id": note["shared_org_id"],
+        "title": note["title"], "note_type": note["note_type"], "status": note["status"],
+        "revision": note["revision"], "content_hash": note["content_hash"], "sync_state": "synced",
+    }
 
 
 def _new_audit_event(

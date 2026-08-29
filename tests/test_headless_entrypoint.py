@@ -124,6 +124,68 @@ def test_main_headless_argv(monkeypatch, tmp_path):
     assert calls[0][0] == "headless"
 
 
+def test_main_gestajo_agent_argv(monkeypatch, tmp_path):
+    """The persistent Gestajo agent uses its UI-free entrypoint."""
+    import fuente.main as main_module
+
+    calls = []
+    monkeypatch.setattr(
+        main_module,
+        "run_gestajo_agent_service",
+        lambda vault_path: calls.append(vault_path),
+    )
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["fuente", "--serve-gestajo-agent", "--vault", str(tmp_path / "vault")],
+    )
+
+    main_module.main()
+
+    assert calls == [tmp_path / "vault"]
+
+
+def test_gestajo_agent_service_stops_owned_services(monkeypatch, tmp_path):
+    import fuente.main as main_module
+
+    calls = {"start": 0, "stop": 0, "attach": 0, "agent_stop": 0}
+
+    class FakeLifecycle:
+        def __init__(self, _config, mode="continuous", **_kwargs):
+            assert mode == "headless"
+
+        def start(self):
+            calls["start"] += 1
+
+        def stop(self):
+            calls["stop"] += 1
+
+    class FakeBackend:
+        config = object()
+
+        def __init__(self, _vault_path):
+            pass
+
+        def attach_lifecycle(self, _lifecycle):
+            calls["attach"] += 1
+
+    class FakeRuntime:
+        def stop(self):
+            calls["agent_stop"] += 1
+
+    monkeypatch.setattr(main_module, "ApplicationLifecycle", FakeLifecycle)
+    monkeypatch.setattr("fuente.control_console.FuenteConsoleBackend", FakeBackend)
+    monkeypatch.setattr("fuente.agent.tls.load_agent_tls_context", lambda: object())
+    monkeypatch.setattr(
+        "fuente.agent.server.start_gestajo_agent",
+        lambda _vault, _backend, _tls: FakeRuntime(),
+    )
+
+    main_module.run_gestajo_agent_service(tmp_path / "vault", wait_for_shutdown=lambda: None)
+
+    assert calls == {"start": 1, "stop": 1, "attach": 1, "agent_stop": 1}
+
+
 def test_headless_subprocess_help():
     """Smoke: fuente --help advertises --headless (no GUI imports)."""
     result = subprocess.run(

@@ -102,6 +102,31 @@ def run_headless(vault_path: Path, wait_for_shutdown=None) -> None:
         lifecycle.stop()
 
 
+def run_gestajo_agent_service(vault_path: Path, wait_for_shutdown=None) -> None:
+    """Run Fuente's ETL and the Gestajo loopback agent without opening a UI."""
+    from fuente.agent.server import start_gestajo_agent
+    from fuente.agent.tls import load_agent_tls_context
+    from fuente.control_console import FuenteConsoleBackend
+
+    backend = FuenteConsoleBackend(vault_path)
+    lifecycle = ApplicationLifecycle(backend.config, mode="headless")
+    runtime = None
+    wait = wait_for_shutdown or _wait_for_shutdown_signal
+    try:
+        lifecycle.start()
+        backend.attach_lifecycle(lifecycle)
+        tls_context = load_agent_tls_context()
+        if tls_context is None:
+            raise RuntimeError("El agente local de Gestajo necesita completar su activación")
+        runtime = start_gestajo_agent(vault_path, backend, tls_context)
+        logger.info("Agente local de Gestajo listo en https://127.0.0.1:43819")
+        wait()
+    finally:
+        if runtime is not None:
+            runtime.stop()
+        lifecycle.stop()
+
+
 def run_continuous_console(vault_path: Path | None) -> None:
     """Modo predeterminado: lanza la Consola Central de Control (posee su propio ciclo de vida)."""
     require_graphical_display()
@@ -164,6 +189,11 @@ def main():
         action="store_true",
         help="Prepara la conexión local segura para Documentos de Gestajo.",
     )
+    parser.add_argument(
+        "--serve-gestajo-agent",
+        action="store_true",
+        help="Ejecuta Fuente y el agente local para Documentos de Gestajo sin abrir una ventana.",
+    )
     args = parser.parse_args()
 
     vault_arg = args.vault or args.vault_pos
@@ -172,7 +202,11 @@ def main():
 
     if args.install_gestajo_agent:
         if run_gestajo_agent_install():
-            run_continuous_console(vault_path)
+            vault_path = vault_path or Path.home() / "Fuente_Vault"
+            run_gestajo_agent_service(vault_path)
+    elif args.serve_gestajo_agent:
+        vault_path = vault_path or Path.home() / "Fuente_Vault"
+        run_gestajo_agent_service(vault_path)
     elif args.flush:
         vault_path = vault_path or Path.home() / "Documents" / "Fuente_Vault"
         vault_path.mkdir(parents=True, exist_ok=True)

@@ -234,6 +234,7 @@ class ChromaStore:
             logger.info(f"Insertados/Actualizados {len(chunks)} vectores en ChromaDB.")
             return True
         except Exception as e:
+            self.init_error = e
             logger.error(f"Error al insertar en ChromaDB: {e}")
             return False
 

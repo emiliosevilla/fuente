@@ -2399,7 +2399,7 @@ svg {
     overflow: visible;
 }
 
-/* ponytail: hide sprite without overflow:hidden — WebKit clips <use> targets otherwise */
+/* ponytail: hide sprite without overflow:hidden - WebKit clips <use> targets otherwise */
 #ui-icon-definitions {
     position: absolute;
     width: 0;

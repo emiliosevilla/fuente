@@ -23,6 +23,11 @@ EXPECTED_MODAL_IDS = {
     "modal-health",
     "modal-job-queue",
     "modal-unsaved-changes",
+    "modal-status-drop-confirmation",
+    "modal-editor-link-helper",
+    "modal-template-helper",
+    "modal-caudal-import",
+    "modal-caudal-export",
 }
 
 

@@ -1,0 +1,17 @@
+---
+schema_version: 1
+title: Introducción a Fuente
+date: '2026-08-25'
+author: Fuente
+tags:
+- demo
+issue: Demo
+status: pending_review
+history: []
+sources: []
+---
+# Introducción a Fuente
+
+Fuente convierte archivos y conversaciones en notas locales que puedes revisar antes de compartir.
+
+Empieza por [[Arquitectura_Local]] y continúa con [[Flujo_Revision]].

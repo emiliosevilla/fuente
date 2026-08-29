@@ -1447,6 +1447,12 @@ class FuentePyWebViewApi:
             return self._error("invalid_payload", "format is not supported")
         return self.backend.export_note_to_downloads(note, export_fmt)
 
+    def export_note_to_downloads(
+        self, note_id: object, export_format: object
+    ) -> dict[str, Any]:
+        """Compatibility name matching the canonical backend operation."""
+        return self.save_export_to_downloads(note_id, export_format)
+
     def get_category_files(self, category_id: object) -> list[dict[str, Any]] | ErrorResult:
         category = self._text(category_id, "category_id")
         if isinstance(category, dict):

@@ -212,26 +212,37 @@ def test_invalid_mode_raises(tmp_path):
 
 
 def test_headless_cli_path_never_imports_control_console(monkeypatch, tmp_path):
+    original_modules = {
+        module_name: sys.modules.get(module_name)
+        for module_name in ("fuente.control_console", "fuente.main")
+    }
     for module_name in ("fuente.control_console", "fuente.main"):
         sys.modules.pop(module_name, None)
-    import fuente.main as main_module
+    try:
+        import fuente.main as main_module
 
-    calls = {"start": 0, "stop": 0, "mode": None}
+        calls = {"start": 0, "stop": 0, "mode": None}
 
-    class FakeLifecycle:
-        def __init__(self, _config, mode="continuous", **_kwargs):
-            calls["mode"] = mode
+        class FakeLifecycle:
+            def __init__(self, _config, mode="continuous", **_kwargs):
+                calls["mode"] = mode
 
-        def start(self):
-            calls["start"] += 1
+            def start(self):
+                calls["start"] += 1
 
-        def stop(self):
-            calls["stop"] += 1
+            def stop(self):
+                calls["stop"] += 1
 
-    monkeypatch.setattr(main_module, "ApplicationLifecycle", FakeLifecycle)
-    main_module.run_headless(tmp_path / "vault", wait_for_shutdown=lambda: None)
-    assert calls == {"start": 1, "stop": 1, "mode": "headless"}
-    assert "fuente.control_console" not in sys.modules
+        monkeypatch.setattr(main_module, "ApplicationLifecycle", FakeLifecycle)
+        main_module.run_headless(tmp_path / "vault", wait_for_shutdown=lambda: None)
+        assert calls == {"start": 1, "stop": 1, "mode": "headless"}
+        assert "fuente.control_console" not in sys.modules
+    finally:
+        for module_name, module in original_modules.items():
+            if module is None:
+                sys.modules.pop(module_name, None)
+            else:
+                sys.modules[module_name] = module
 
 
 def test_run_headless_stops_after_start_failure(monkeypatch, tmp_path):

@@ -1336,7 +1336,16 @@ class FuenteConsoleBackend:
 
     def get_sync_inputs(self) -> Dict[str, Any]:
         """Return mounted inputs with provider metadata and no trusted paths."""
-        return self._canonical_input_sync_result(self.get_sync_sources())
+        result = self._canonical_input_sync_result(self.get_sync_sources())
+        result["inputs"] = [
+            {
+                key: item[key]
+                for key in ("id", "provider", "display_name", "enabled")
+                if key in item
+            }
+            for item in result.get("inputs", [])
+        ]
+        return result
 
     def select_sync_folder(self, title: str = "Vincular carpeta de sincronización") -> Dict[str, Any]:
         """Select a source natively and return only a confirmation token."""

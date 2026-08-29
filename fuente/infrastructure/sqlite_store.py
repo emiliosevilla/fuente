@@ -1672,6 +1672,53 @@ class JobStore:
         ).fetchall()
         return [dict(row) for row in rows]
 
+    # -- Gestajo Documentos outbox --------------------------------------
+
+    def upsert_document_outbox(
+        self, *, outbox_id: str, kind: str, payload: dict[str, Any]
+    ) -> dict[str, Any]:
+        if kind not in {"note_metadata", "audit_event"}:
+            raise ValueError("document outbox kind is invalid")
+        if not isinstance(outbox_id, str) or not outbox_id or len(outbox_id) > 160:
+            raise ValueError("document outbox id is invalid")
+        if not isinstance(payload, dict) or any(
+            key in {"body_markdown", "path", "vault_path"} or key.endswith("_path")
+            for key in payload
+        ):
+            raise ValueError("document outbox payload is invalid")
+        encoded = json.dumps(payload, separators=(",", ":"), sort_keys=True)
+        if len(encoded.encode("utf-8")) > 64 * 1024:
+            raise ValueError("document outbox payload is too large")
+        now = _timestamp()
+        self._connection.execute(
+            """
+            INSERT INTO document_agent_outbox (outbox_id, kind, payload_json, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(outbox_id) DO UPDATE SET kind = excluded.kind,
+                payload_json = excluded.payload_json, updated_at = excluded.updated_at
+            """,
+            (outbox_id, kind, encoded, now, now),
+        )
+        row = self._connection.execute(
+            "SELECT * FROM document_agent_outbox WHERE outbox_id = ?", (outbox_id,)
+        ).fetchone()
+        assert row is not None
+        return dict(row)
+
+    def list_document_outbox(self, *, limit: int = 100) -> list[dict[str, Any]]:
+        if not isinstance(limit, int) or not 1 <= limit <= 1_000:
+            raise ValueError("document outbox limit is invalid")
+        rows = self._connection.execute(
+            "SELECT * FROM document_agent_outbox ORDER BY created_at ASC LIMIT ?", (limit,)
+        ).fetchall()
+        return [dict(row) for row in rows]
+
+    def delete_document_outbox(self, outbox_id: str) -> bool:
+        cursor = self._connection.execute(
+            "DELETE FROM document_agent_outbox WHERE outbox_id = ?", (outbox_id,)
+        )
+        return cursor.rowcount == 1
+
     def has_active_review_claim(self, artifact_id: str) -> bool:
         now = _timestamp()
         row = self._connection.execute(

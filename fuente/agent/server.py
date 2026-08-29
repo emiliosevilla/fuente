@@ -395,7 +395,7 @@ class GestajoAgent:
             "platform": platform.system(),
             "user_id": binding.user_id,
             "vault_fingerprint": self._vault_fingerprint(),
-            "capabilities": ["flow", "settings", "sync_inputs", "sync_run", "sync_output", "sync_conflict_read", "sync_conflict_resolve", "note_read", "note_write", "note_share"],
+            "capabilities": ["flow", "flow_approve", "settings", "sync_inputs", "sync_run", "sync_output", "sync_conflict_read", "sync_conflict_resolve", "note_read", "note_write", "note_share"],
         }
 
     def flow(self, access_token: object, org_id: object) -> dict[str, object]:
@@ -405,6 +405,35 @@ class GestajoAgent:
         self._management_verifier(binding, self._access_token(access_token), org_id)
         state = self._flow_reader(self.vault_path)
         return _flow_response(state)
+
+    def approve_flow_transition(self, access_token: object, org_id: object, payload: object) -> dict[str, object]:
+        """Approve only Fuente's current first human-gated transition."""
+        binding = self._require_user(access_token)
+        if not isinstance(org_id, str):
+            raise AgentAuthorizationError("organization is invalid")
+        self._management_verifier(binding, self._access_token(access_token), org_id)
+        job_id = _flow_approval_payload(payload)
+        detail = self._local_backend().get_job_detail(job_id)
+        job = detail.get("job") if isinstance(detail, Mapping) else None
+        if not isinstance(job, Mapping) or not _is_first_transition_approval(job, job_id):
+            raise AgentError("the requested Caudal approval is not available")
+        source_hash = job.get("source_hash")
+        if not isinstance(source_hash, str) or len(source_hash) != 64:
+            raise AgentError("local Caudal job is invalid")
+        approvals = self._local_backend().get_job_control_service().ingestion.transition_approvals
+        try:
+            approvals.begin_review(job_id, "1_volcado", "2_copiado", 1, source_hash, reviewer=binding.user_id)
+            approvals.approve(job_id, "1_volcado", "2_copiado", 1, source_hash, reviewer=binding.user_id)
+        except (OSError, RuntimeError, ValueError) as error:
+            raise AgentError("Caudal could not record the approval locally") from error
+        self._record_audit(binding, self._access_token(access_token), _new_audit_event(
+            None, str(org_id), str(uuid.UUID(str(org_id))), binding.user_id, "caudal_transition_approve", "success",
+        ))
+        try:
+            self._local_backend().get_job_control_service().ingestion.resume(job_id)
+        except (OSError, RuntimeError, ValueError) as error:
+            raise AgentError("Caudal recorded the approval but could not continue the job") from error
+        return _flow_response(self._flow_reader(self.vault_path))
 
     def settings(self, access_token: object, org_id: object) -> dict[str, object]:
         binding = self._require_user(access_token)
@@ -799,7 +828,7 @@ def _handler_for(agent: GestajoAgent) -> type[BaseHTTPRequestHandler]:
             is_note_share = note_route.endswith("/share") and bool(note_route.removesuffix("/share")) and "/" not in note_route.removesuffix("/share")
             is_note_update = bool(note_route) and "/" not in note_route
             if not (is_note_update or is_note_share) and parsed.path not in {
-                "/v1/claim", "/v1/settings", "/v1/sync-inputs/select", "/v1/sync-inputs/run", "/v1/sync-outputs/run", "/v1/sync-conflicts/read", "/v1/sync-conflicts/resolve",
+                "/v1/claim", "/v1/flow/approve", "/v1/settings", "/v1/sync-inputs/select", "/v1/sync-inputs/run", "/v1/sync-outputs/run", "/v1/sync-conflicts/read", "/v1/sync-conflicts/resolve",
                 "/v1/sync-inputs/confirm", "/v1/sync-inputs/enabled", "/v1/sync-inputs/remove", "/v1/sync",
             }:
                 self._send_error(HTTPStatus.NOT_FOUND, "route not found")
@@ -822,6 +851,9 @@ def _handler_for(agent: GestajoAgent) -> type[BaseHTTPRequestHandler]:
                 self._authorized(lambda token: agent.update_note(token, _single_query_value(parsed.query, "org_id"), parsed.path.removeprefix("/v1/notes/"), payload))
                 return
             org_id = _single_query_value(parsed.query, "org_id")
+            if parsed.path == "/v1/flow/approve":
+                self._authorized(lambda token: agent.approve_flow_transition(token, org_id, payload))
+                return
             if parsed.path == "/v1/settings":
                 self._authorized(lambda token: agent.save_settings(token, org_id, payload))
                 return
@@ -957,13 +989,48 @@ def _flow_response(state: Mapping[str, object]) -> dict[str, object]:
     steps = state.get("steps") if isinstance(state.get("steps"), Mapping) else {}
     seals = state.get("seals") if isinstance(state.get("seals"), Mapping) else {}
     queue = state.get("queue") if isinstance(state.get("queue"), Mapping) else {}
+    approvals = state.get("pending_approvals") if isinstance(state.get("pending_approvals"), list) else []
     return {
         "active_theme": state.get("active_theme") if isinstance(state.get("active_theme"), str) else None,
         "steps": {str(name): count(item.get("count")) for name, item in steps.items() if isinstance(item, Mapping)},
         "seals": {str(name): count(value) for name, value in seals.items()},
         "quarantine": count(state.get("quarantine")),
         "queue": {"active": count(queue.get("active")), "waiting": count(queue.get("waiting"))},
+        "pending_approvals": [_flow_approval_response(item) for item in approvals if isinstance(item, Mapping) and _flow_approval_response(item) is not None],
     }
+
+
+def _flow_approval_payload(payload: object) -> str:
+    if not isinstance(payload, Mapping) or set(payload) != {"job_id"}:
+        raise AgentError("Caudal approval has unsupported fields")
+    try:
+        return str(uuid.UUID(str(payload["job_id"])))
+    except (ValueError, AttributeError) as error:
+        raise AgentError("Caudal job is invalid") from error
+
+
+def _is_first_transition_approval(job: Mapping[str, object], job_id: str) -> bool:
+    return (
+        job.get("job_id") == job_id
+        and job.get("stage") == "stabilized"
+        and job.get("status") == "pending"
+        and job.get("error_code") == "awaiting_transition_approval"
+    )
+
+
+def _flow_approval_response(job: Mapping[str, object]) -> dict[str, str] | None:
+    job_id = job.get("job_id")
+    relative_path = job.get("source_relative_path")
+    if not isinstance(job_id, str) or not isinstance(relative_path, str) or not _is_first_transition_approval(job, job_id):
+        return None
+    try:
+        job_id = str(uuid.UUID(job_id))
+    except ValueError:
+        return None
+    safe_path = _safe_sync_relative(relative_path)
+    if safe_path is None or not PurePosixPath(safe_path).name:
+        return None
+    return {"job_id": job_id, "title": PurePosixPath(safe_path).name, "source_stage": "1_volcado", "target_stage": "2_copiado"}
 
 
 def _settings_response(state: Mapping[str, object], role: str) -> dict[str, object]:

@@ -901,13 +901,13 @@ class FuenteConsoleBackend:
             for note_type in ("resumen", "propiedades", "contexto", "concepto")
         }
         queue_counts = {"active": 0, "waiting": 0}
+        pending_jobs: list[dict[str, Any]] = []
         try:
             queue_counts["active"] = len(
-                self.get_jobs({"status": "active"}, limit=100).get("items", [])
+                self.get_jobs({"status": "claimed"}, limit=100).get("items", [])
             )
-            queue_counts["waiting"] = len(
-                self.get_jobs({"status": "waiting"}, limit=100).get("items", [])
-            )
+            pending_jobs = self.get_jobs({"status": "pending"}, limit=100).get("items", [])
+            queue_counts["waiting"] = len(pending_jobs)
         except RuntimeError:
             pass
         step_keys = (
@@ -927,6 +927,7 @@ class FuenteConsoleBackend:
             "note_types": note_types,
             "quarantine": int(metrics.get("quarantine", {}).get("count", 0)),
             "queue": queue_counts,
+            "pending_approvals": pending_jobs,
             "stats": self.get_stats_dict(),
         }
 

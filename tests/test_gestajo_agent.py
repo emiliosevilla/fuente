@@ -95,7 +95,7 @@ def test_status_requires_the_bound_user(tmp_path: Path):
     )
 
     assert agent.status("token-a")["claimed"] is True
-    assert agent.status("token-a")["capabilities"] == ["flow", "settings", "sync_inputs", "sync_run", "sync_output", "sync_conflict_read", "sync_conflict_resolve", "note_read", "note_write", "note_share"]
+    assert agent.status("token-a")["capabilities"] == ["flow", "flow_approve", "settings", "sync_inputs", "sync_run", "sync_output", "sync_conflict_read", "sync_conflict_resolve", "note_read", "note_write", "note_share"]
     with pytest.raises(AgentAuthenticationError, match="another user"):
         agent.status("token-b")
 
@@ -290,6 +290,12 @@ def test_flow_requires_management_and_never_returns_local_paths(tmp_path: Path):
             "steps": {"4_procesado": {"count": 2, "path": "/private/vault"}},
             "seals": {"approved": 1}, "quarantine": 0,
             "queue": {"active": 1, "waiting": 3},
+            "pending_approvals": [{
+                "job_id": "00000000-0000-0000-0000-000000000123",
+                "source_relative_path": "1_volcado/personal/03 El loco.md",
+                "stage": "stabilized", "status": "pending",
+                "error_code": "awaiting_transition_approval",
+            }],
         },
     )
     agent.claim("token-a", {"supabase_url": "https://project.supabase.co", "publishable_key": "sb_publishable_test_key"})
@@ -297,7 +303,56 @@ def test_flow_requires_management_and_never_returns_local_paths(tmp_path: Path):
     flow = agent.flow("token-a", "00000000-0000-0000-0000-000000000001")
 
     assert flow["steps"] == {"4_procesado": 2}
+    assert flow["pending_approvals"] == [{
+        "job_id": "00000000-0000-0000-0000-000000000123", "title": "03 El loco.md",
+        "source_stage": "1_volcado", "target_stage": "2_copiado",
+    }]
     assert "/private/vault" not in str(flow)
+
+
+def test_management_can_approve_the_exact_first_caudal_transition(tmp_path: Path):
+    job_id = "00000000-0000-0000-0000-000000000123"
+    calls: list[tuple[object, ...]] = []
+
+    class Approvals:
+        def begin_review(self, *args, **kwargs):
+            calls.append(("begin_review", *args, kwargs["reviewer"]))
+
+        def approve(self, *args, **kwargs):
+            calls.append(("approve", *args, kwargs["reviewer"]))
+
+    class Ingestion:
+        transition_approvals = Approvals()
+
+        def resume(self, value):
+            calls.append(("resume", value))
+
+    class Backend:
+        def get_job_detail(self, value):
+            assert value == job_id
+            return {"job": {
+                "job_id": job_id, "stage": "stabilized", "status": "pending",
+                "error_code": "awaiting_transition_approval", "source_hash": "a" * 64,
+            }}
+
+        def get_job_control_service(self):
+            return type("Control", (), {"ingestion": Ingestion()})()
+
+    agent = GestajoAgent(
+        tmp_path, verifier=_verifier, publisher=_publisher,
+        management_verifier=_management_verifier, backend_factory=lambda _vault: Backend(),
+        flow_reader=lambda _vault: {"steps": {}, "seals": {}, "queue": {}, "pending_approvals": []},
+        audit_publisher=lambda *_args: None,
+    )
+    agent.claim("token-a", {"supabase_url": "https://project.supabase.co", "publishable_key": "sb_publishable_test_key"})
+
+    agent.approve_flow_transition("token-a", "00000000-0000-0000-0000-000000000001", {"job_id": job_id})
+
+    assert calls == [
+        ("begin_review", job_id, "1_volcado", "2_copiado", 1, "a" * 64, USER_A),
+        ("approve", job_id, "1_volcado", "2_copiado", 1, "a" * 64, USER_A),
+        ("resume", job_id),
+    ]
 
 
 def test_flow_rejects_consulta(tmp_path: Path):

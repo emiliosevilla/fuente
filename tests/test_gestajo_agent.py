@@ -73,7 +73,7 @@ def test_status_requires_the_bound_user(tmp_path: Path):
     )
 
     assert agent.status("token-a")["claimed"] is True
-    assert agent.status("token-a")["capabilities"] == ["flow", "settings", "sync_inputs", "sync_run", "sync_output", "note_read", "note_write", "note_share"]
+    assert agent.status("token-a")["capabilities"] == ["flow", "settings", "sync_inputs", "sync_run", "sync_output", "sync_conflict_read", "note_read", "note_write", "note_share"]
     with pytest.raises(AgentAuthenticationError, match="another user"):
         agent.status("token-b")
 
@@ -401,6 +401,40 @@ def test_sync_output_reuses_hash_reconciler_and_never_overwrites_a_conflict(tmp_
     assert str(tmp_path) not in str(result)
     assert audits[0]["action"] == "sync_output"
     assert audits[0]["result"] == "conflict"
+
+
+def test_sync_conflict_reads_only_two_local_markdown_copies(tmp_path: Path):
+    connection = ConnectedFolder("sharepoint_mount", str(tmp_path / "sharepoint"), "Compartidos", True)
+    shared = tmp_path / "5_compartido"
+    shared.mkdir()
+    (shared / "nota.md").write_text("# Vault", encoding="utf-8")
+    Path(connection.root).mkdir()
+    (Path(connection.root) / "nota.md").write_text("# Compartida", encoding="utf-8")
+    audits = []
+
+    class SyncManager:
+        active_theme_dir = tmp_path
+
+        def load_connections(self):
+            return [connection]
+
+    class Backend:
+        sync_manager = SyncManager()
+
+    agent = GestajoAgent(
+        tmp_path, verifier=_verifier, publisher=_publisher,
+        membership_verifier=lambda *_args: "gestion", backend_factory=lambda _vault: Backend(),
+        audit_publisher=lambda _binding, _token, event: audits.append(event),
+    )
+    agent.claim("token-a", {"supabase_url": "https://project.supabase.co", "publishable_key": "sb_publishable_test_key"})
+
+    result = agent.read_sync_conflict("token-a", "00000000-0000-0000-0000-000000000001", {"connection_id": connection.connection_id, "relative_path": "nota.md"})
+
+    assert result == {"relative_path": "nota.md", "vault_markdown": "# Vault", "shared_markdown": "# Compartida"}
+    assert str(tmp_path) not in str(result)
+    assert audits[0]["action"] == "sync_conflict_read"
+    with pytest.raises(AgentError, match="relative Markdown"):
+        agent.read_sync_conflict("token-a", "00000000-0000-0000-0000-000000000001", {"connection_id": connection.connection_id, "relative_path": "../secret.md"})
 
 
 def test_note_read_checks_rls_before_returning_markdown_and_never_returns_paths(tmp_path: Path):

@@ -23,6 +23,8 @@ from urllib.parse import quote, urlparse
 from urllib.request import Request, urlopen
 
 from fuente.domain.sync import SyncDirection
+from fuente.domain.paths import SourcePathAuthorizer
+from fuente.domain.vault_layout import VaultLayout
 from fuente.infrastructure.atomic_files import atomic_write_json
 
 
@@ -385,7 +387,7 @@ class GestajoAgent:
             "platform": platform.system(),
             "user_id": binding.user_id,
             "vault_fingerprint": self._vault_fingerprint(),
-            "capabilities": ["flow", "settings", "sync_inputs", "sync_run", "sync_output", "note_read", "note_write", "note_share"],
+            "capabilities": ["flow", "settings", "sync_inputs", "sync_run", "sync_output", "sync_conflict_read", "note_read", "note_write", "note_share"],
         }
 
     def flow(self, access_token: object, org_id: object) -> dict[str, object]:
@@ -458,6 +460,27 @@ class GestajoAgent:
 
     def run_sync_output(self, access_token: object, org_id: object, payload: object) -> dict[str, object]:
         return self._run_sync(access_token, org_id, payload, "sync_output", SyncDirection.OUTPUT_SHARED)
+
+    def read_sync_conflict(self, access_token: object, org_id: object, payload: object) -> dict[str, object]:
+        binding = self._require_management(access_token, org_id)
+        connection_id, relative_path = _sync_conflict_payload(payload)
+        backend = self._local_backend()
+        connection = next(
+            (item for item in backend.sync_manager.load_connections() if item.connection_id == connection_id),
+            None,
+        )
+        if connection is None:
+            raise AgentError("sync connection is unavailable")
+        vault_root = VaultLayout(backend.sync_manager.active_theme_dir).shared_dir
+        result = {
+            "relative_path": relative_path,
+            "vault_markdown": _read_sync_markdown(vault_root, relative_path),
+            "shared_markdown": _read_sync_markdown(Path(connection.root), relative_path),
+        }
+        self._record_audit(binding, self._access_token(access_token), _new_audit_event(
+            None, str(org_id), str(uuid.UUID(str(org_id))), binding.user_id, "sync_conflict_read", "success",
+        ))
+        return result
 
     def _run_sync(
         self, access_token: object, org_id: object, payload: object, action: str, direction: SyncDirection,
@@ -713,7 +736,7 @@ def _handler_for(agent: GestajoAgent) -> type[BaseHTTPRequestHandler]:
             is_note_share = note_route.endswith("/share") and bool(note_route.removesuffix("/share")) and "/" not in note_route.removesuffix("/share")
             is_note_update = bool(note_route) and "/" not in note_route
             if not (is_note_update or is_note_share) and parsed.path not in {
-                "/v1/claim", "/v1/settings", "/v1/sync-inputs/select", "/v1/sync-inputs/run", "/v1/sync-outputs/run",
+                "/v1/claim", "/v1/settings", "/v1/sync-inputs/select", "/v1/sync-inputs/run", "/v1/sync-outputs/run", "/v1/sync-conflicts/read",
                 "/v1/sync-inputs/confirm", "/v1/sync-inputs/enabled", "/v1/sync-inputs/remove", "/v1/sync",
             }:
                 self._send_error(HTTPStatus.NOT_FOUND, "route not found")
@@ -747,6 +770,9 @@ def _handler_for(agent: GestajoAgent) -> type[BaseHTTPRequestHandler]:
                 return
             if parsed.path == "/v1/sync-outputs/run":
                 self._authorized(lambda token: agent.run_sync_output(token, org_id, payload))
+                return
+            if parsed.path == "/v1/sync-conflicts/read":
+                self._authorized(lambda token: agent.read_sync_conflict(token, org_id, payload))
                 return
             if parsed.path == "/v1/sync-inputs/confirm":
                 self._authorized(lambda token: agent.confirm_sync_input(token, org_id, payload))
@@ -943,6 +969,28 @@ def _sync_run_payload(payload: object) -> str:
     if not isinstance(payload, Mapping) or set(payload) != {"connection_id"}:
         raise AgentError("sync payload has unsupported fields")
     return _opaque_id(payload, "connection_id", "sync_")
+
+
+def _sync_conflict_payload(payload: object) -> tuple[str, str]:
+    if not isinstance(payload, Mapping) or set(payload) != {"connection_id", "relative_path"}:
+        raise AgentError("sync conflict payload has unsupported fields")
+    connection_id = _opaque_id({"connection_id": payload.get("connection_id")}, "connection_id", "sync_")
+    relative_path = _safe_sync_relative(payload.get("relative_path"))
+    if relative_path is None or not relative_path.lower().endswith(".md"):
+        raise AgentError("only a relative Markdown conflict can be compared")
+    return connection_id, relative_path
+
+
+def _read_sync_markdown(root: Path, relative_path: str) -> str:
+    try:
+        path = SourcePathAuthorizer(root).resolve(relative_path)
+        if not path.is_file():
+            raise ValueError("conflict file is unavailable")
+        if path.stat().st_size > 10_000_000:
+            raise ValueError("conflict file is too large")
+        return path.read_text(encoding="utf-8")
+    except (OSError, UnicodeError, ValueError) as error:
+        raise AgentError("conflict file cannot be read locally") from error
 
 
 def _safe_sync_relative(value: object) -> str | None:

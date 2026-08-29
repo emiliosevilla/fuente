@@ -18,11 +18,15 @@ from fuente.agent.server import (
 )
 from fuente.infrastructure.sqlite_store import JobStore
 
+USER_A = "00000000-0000-0000-0000-0000000000a1"
+USER_B = "00000000-0000-0000-0000-0000000000b2"
+COMMON_ORG_ID = "00000000-0000-0000-0000-000000000099"
+
 
 def _verifier(binding: AgentBinding, token: str) -> str:
     assert binding.supabase_url == "https://project.supabase.co"
     assert binding.publishable_key == "sb_publishable_test_key"
-    return {"token-a": "user-a", "token-b": "user-b"}[token]
+    return {"token-a": USER_A, "token-b": USER_B}[token]
 
 
 def _publisher(_binding: AgentBinding, _token: str, _status: dict[str, object]) -> None:
@@ -50,10 +54,10 @@ def test_claim_binds_one_user_and_never_persists_access_token(tmp_path: Path):
         },
     )
 
-    assert claimed["user_id"] == "user-a"
+    assert claimed["user_id"] == USER_A
     persisted = _binding_path(tmp_path).read_text(encoding="utf-8")
     assert "token-a" not in persisted
-    assert "user-a" in persisted
+    assert USER_A in persisted
     assert str(tmp_path) not in claimed.values()
 
 
@@ -148,9 +152,9 @@ def test_publish_agent_status_creates_or_updates_only_agent_metadata(monkeypatch
         return Response(b"[]")
 
     monkeypatch.setattr("fuente.agent.server.urlopen", fake_urlopen)
-    binding = AgentBinding("user-a", "https://project.supabase.co", "sb_publishable_test_key")
+    binding = AgentBinding(USER_A, "https://project.supabase.co", "sb_publishable_test_key")
     publish_agent_status(binding, "token-a", {
-        "user_id": "user-a", "version": "0.1", "platform": "Darwin",
+        "user_id": USER_A, "version": "0.1", "platform": "Darwin",
         "vault_fingerprint": "a" * 64,
     })
 
@@ -258,10 +262,13 @@ def test_sync_input_uses_native_selection_token_without_returning_a_path(tmp_pat
 
 def test_note_read_checks_rls_before_returning_markdown_and_never_returns_paths(tmp_path: Path):
     checked = []
+    audits = []
     note_id = "00000000-0000-0000-0000-000000000010"
     agent = GestajoAgent(
         tmp_path, verifier=_verifier, publisher=_publisher,
-        note_visibility_verifier=lambda binding, token, received_id: checked.append((binding.user_id, token, received_id)),
+        membership_verifier=_membership_verifier,
+        note_visibility_verifier=lambda binding, token, received_id: checked.append((binding.user_id, token, received_id)) or {"common_org_id": COMMON_ORG_ID},
+        audit_publisher=lambda _binding, _token, event: audits.append(event),
         note_reader=lambda _vault, received_id: {
             "document_id": received_id, "revision": 2, "title": "Nota segura",
             "body_markdown": "# Nota segura", "path": "/private/vault/nota.md", "html": "<h1>Nota segura</h1>",
@@ -269,11 +276,17 @@ def test_note_read_checks_rls_before_returning_markdown_and_never_returns_paths(
     )
     agent.claim("token-a", {"supabase_url": "https://project.supabase.co", "publishable_key": "sb_publishable_test_key"})
 
-    note = agent.read_note("token-a", note_id)
+    note = agent.read_note("token-a", "00000000-0000-0000-0000-000000000001", note_id)
 
-    assert checked == [("user-a", "token-a", note_id)]
+    assert checked == [(USER_A, "token-a", note_id)]
     assert note == {"document_id": note_id, "revision": 2, "title": "Nota segura", "body_markdown": "# Nota segura"}
     assert "/private" not in str(note)
+    assert {key: audits[0][key] for key in ("note_id", "org_id", "common_org_id", "actor_user_id", "action", "llm_model", "result")} == {
+        "note_id": note_id, "org_id": "00000000-0000-0000-0000-000000000001",
+        "common_org_id": COMMON_ORG_ID, "actor_user_id": USER_A, "action": "note_read",
+        "llm_model": None, "result": "success",
+    }
+    assert "token-a" not in str(audits)
 
 
 def test_note_update_uses_fuentecaudal_revision_contract_and_marks_offline_sync(tmp_path: Path):
@@ -281,12 +294,13 @@ def test_note_update_uses_fuentecaudal_revision_contract_and_marks_offline_sync(
     calls = []
     agent = GestajoAgent(
         tmp_path, verifier=_verifier, publisher=_publisher,
-        membership_verifier=lambda *_args: "gestion", note_visibility_verifier=lambda *_args: None,
+        membership_verifier=lambda *_args: "gestion", note_visibility_verifier=lambda *_args: {"common_org_id": COMMON_ORG_ID},
         note_writer=lambda _vault, received_id, revision, body: calls.append((received_id, revision, body)) or {
             "status": "saved", "document_id": received_id, "revision": revision + 1,
             "title": "Nota segura", "content_hash": "a" * 64, "path": "/private/vault/nota.md",
         },
         note_metadata_publisher=lambda *_args: (_ for _ in ()).throw(AgentSyncError("offline")),
+        audit_publisher=lambda *_args: (_ for _ in ()).throw(AgentSyncError("offline")),
     )
     agent.claim("token-a", {"supabase_url": "https://project.supabase.co", "publishable_key": "sb_publishable_test_key"})
 
@@ -298,30 +312,44 @@ def test_note_update_uses_fuentecaudal_revision_contract_and_marks_offline_sync(
     store = JobStore(tmp_path)
     try:
         queued = store.list_document_outbox()
-        assert len(queued) == 1
-        assert queued[0]["outbox_id"] == f"note_metadata:{note_id}"
+        assert {item["kind"] for item in queued} == {"note_metadata", "audit_event"}
+        assert f"note_metadata:{note_id}" in {item["outbox_id"] for item in queued}
+        assert "token-a" not in str(queued)
+        assert "# Cambio" not in str(queued)
     finally:
         store.close()
 
 
-def test_sync_pending_flushes_only_metadata_without_a_token_in_sqlite(tmp_path: Path):
+def test_sync_pending_flushes_metadata_and_audits_without_a_token_in_sqlite(tmp_path: Path):
     note_id = "00000000-0000-0000-0000-000000000010"
     store = JobStore(tmp_path)
     store.upsert_document_outbox(
         outbox_id=f"note_metadata:{note_id}", kind="note_metadata",
         payload={"document_id": note_id, "revision": 3, "title": "Nota", "content_hash": "a" * 64},
     )
+    store.upsert_document_outbox(
+        outbox_id="audit_event:00000000-0000-0000-0000-000000000020", kind="audit_event",
+        payload={
+            "id": "00000000-0000-0000-0000-000000000020", "note_id": note_id,
+            "org_id": "00000000-0000-0000-0000-000000000001", "common_org_id": COMMON_ORG_ID,
+            "actor_user_id": USER_A, "action": "note_read", "llm_model": None,
+            "result": "success", "occurred_at": "2026-08-29T12:00:00+00:00",
+        },
+    )
     published = []
+    audits = []
     agent = GestajoAgent(
         tmp_path, verifier=_verifier, publisher=_publisher,
         note_metadata_publisher=lambda _binding, token, payload: published.append((token, payload)),
+        audit_publisher=lambda _binding, token, payload: audits.append((token, payload)),
     )
     agent.claim("token-a", {"supabase_url": "https://project.supabase.co", "publishable_key": "sb_publishable_test_key"})
 
     result = agent.sync_pending("token-a")
 
-    assert result == {"synced": 1, "pending": 0}
+    assert result == {"synced": 2, "pending": 0}
     assert published == [("token-a", {"document_id": note_id, "revision": 3, "title": "Nota", "content_hash": "a" * 64})]
+    assert audits[0][1]["action"] == "note_read"
     assert "token-a" not in str(store.list_document_outbox())
     store.close()
 

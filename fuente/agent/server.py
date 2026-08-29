@@ -13,6 +13,7 @@ import platform
 import ssl
 import uuid
 from dataclasses import asdict, dataclass
+from datetime import datetime, timezone
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -199,13 +200,13 @@ def verify_supabase_management(binding: AgentBinding, access_token: str, org_id:
     return role
 
 
-def verify_document_note_visibility(binding: AgentBinding, access_token: str, note_id: str) -> None:
+def verify_document_note_visibility(binding: AgentBinding, access_token: str, note_id: str) -> dict[str, str]:
     try:
         normalized_note_id = str(uuid.UUID(note_id))
     except (ValueError, AttributeError) as error:
         raise AgentAuthorizationError("note is invalid") from error
     request = Request(
-        f"{binding.supabase_url}/rest/v1/document_notes?note_id=eq.{quote(normalized_note_id, safe='')}&select=note_id",
+        f"{binding.supabase_url}/rest/v1/document_notes?note_id=eq.{quote(normalized_note_id, safe='')}&select=note_id,common_org_id",
         headers={"apikey": binding.publishable_key, "Authorization": f"Bearer {access_token}"},
         method="GET",
     )
@@ -216,6 +217,11 @@ def verify_document_note_visibility(binding: AgentBinding, access_token: str, no
         raise AgentSyncError("Supabase could not verify note access") from error
     if not isinstance(rows, list) or len(rows) != 1 or not isinstance(rows[0], Mapping):
         raise AgentAuthorizationError("note is not available")
+    common_org_id = rows[0].get("common_org_id")
+    try:
+        return {"common_org_id": str(uuid.UUID(str(common_org_id)))}
+    except (ValueError, AttributeError) as error:
+        raise AgentSyncError("Supabase returned an invalid note scope") from error
 
 
 def publish_document_note_metadata(binding: AgentBinding, access_token: str, note: Mapping[str, object]) -> None:
@@ -242,6 +248,30 @@ def publish_document_note_metadata(binding: AgentBinding, access_token: str, not
         raise AgentSyncError("Supabase did not confirm note metadata")
 
 
+def publish_document_audit(binding: AgentBinding, access_token: str, event: Mapping[str, object]) -> None:
+    payload = _audit_event_payload(event)
+    request = Request(
+        f"{binding.supabase_url}/rest/v1/document_audit_events",
+        data=json.dumps(payload, separators=(",", ":")).encode("utf-8"),
+        headers={
+            "apikey": binding.publishable_key, "Authorization": f"Bearer {access_token}",
+            "Content-Type": "application/json", "Prefer": "return=representation",
+        },
+        method="POST",
+    )
+    try:
+        with urlopen(request, timeout=5) as response:
+            rows = json.loads(response.read().decode("utf-8"))
+    except HTTPError as error:
+        if error.code == HTTPStatus.CONFLICT:
+            return
+        raise AgentSyncError("Supabase could not persist the document audit") from error
+    except (URLError, TimeoutError, OSError, json.JSONDecodeError) as error:
+        raise AgentSyncError("Supabase could not persist the document audit") from error
+    if not isinstance(rows, list) or len(rows) != 1:
+        raise AgentSyncError("Supabase did not confirm the document audit")
+
+
 class GestajoAgent:
     """Own one vault and expose only an authenticated, path-free status contract."""
 
@@ -257,10 +287,11 @@ class GestajoAgent:
         settings_reader: Callable[[Path], Mapping[str, object]] | None = None,
         settings_writer: Callable[[Path, Mapping[str, object]], Mapping[str, object]] | None = None,
         backend_factory: Callable[[Path], Any] | None = None,
-        note_visibility_verifier: Callable[[AgentBinding, str, str], None] = verify_document_note_visibility,
+        note_visibility_verifier: Callable[[AgentBinding, str, str], Mapping[str, str]] = verify_document_note_visibility,
         note_reader: Callable[[Path, str], Mapping[str, object]] | None = None,
         note_writer: Callable[[Path, str, int, str], Mapping[str, object]] | None = None,
         note_metadata_publisher: Callable[[AgentBinding, str, Mapping[str, object]], None] = publish_document_note_metadata,
+        audit_publisher: Callable[[AgentBinding, str, Mapping[str, object]], None] = publish_document_audit,
         outbox_factory: Callable[[Path], Any] | None = None,
         allowed_origins: frozenset[str] = DEFAULT_ALLOWED_ORIGINS,
     ) -> None:
@@ -278,6 +309,7 @@ class GestajoAgent:
         self._note_reader = note_reader or _read_note
         self._note_writer = note_writer or _write_note
         self._note_metadata_publisher = note_metadata_publisher
+        self._audit_publisher = audit_publisher
         self._outbox_factory = outbox_factory or _document_outbox
         self._outbox: Any | None = None
         self._allowed_origins = allowed_origins
@@ -397,19 +429,24 @@ class GestajoAgent:
             raise AgentError(str(result.get("message") or result["error"]))
         return _sync_inputs_response(result)
 
-    def read_note(self, access_token: object, note_id: object) -> dict[str, object]:
+    def read_note(self, access_token: object, org_id: object, note_id: object) -> dict[str, object]:
         binding = self._require_user(access_token)
-        if not isinstance(note_id, str):
+        if not isinstance(org_id, str) or not isinstance(note_id, str):
             raise AgentAuthorizationError("note is invalid")
-        self._note_visibility_verifier(binding, self._access_token(access_token), note_id)
-        return _note_response(self._note_reader(self.vault_path, note_id), note_id)
+        self._membership_verifier(binding, self._access_token(access_token), org_id)
+        scope = self._note_visibility_verifier(binding, self._access_token(access_token), note_id)
+        note = _note_response(self._note_reader(self.vault_path, note_id), note_id)
+        self._record_audit(binding, self._access_token(access_token), _new_audit_event(
+            note_id, org_id, scope["common_org_id"], binding.user_id, "note_read", "success",
+        ))
+        return note
 
     def update_note(self, access_token: object, org_id: object, note_id: object, payload: object) -> dict[str, object]:
         binding = self._require_management(access_token, org_id)
         if not isinstance(note_id, str):
             raise AgentAuthorizationError("note is invalid")
         expected_revision, body_markdown = _note_update_payload(payload)
-        self._note_visibility_verifier(binding, self._access_token(access_token), note_id)
+        scope = self._note_visibility_verifier(binding, self._access_token(access_token), note_id)
         local = _note_update_response(self._note_writer(self.vault_path, note_id, expected_revision, body_markdown), note_id)
         try:
             self._note_metadata_publisher(binding, self._access_token(access_token), local)
@@ -420,24 +457,38 @@ class GestajoAgent:
                 outbox_id=_metadata_outbox_id(note_id), kind="note_metadata", payload=local,
             )
             sync_state = "pending_sync"
+        self._record_audit(binding, self._access_token(access_token), _new_audit_event(
+            note_id, str(org_id), scope["common_org_id"], binding.user_id, "note_update", sync_state,
+        ))
         return {**local, "sync_state": sync_state}
 
     def sync_pending(self, access_token: object) -> dict[str, object]:
         binding = self._require_user(access_token)
         synced = 0
         for item in self._document_outbox().list_document_outbox():
-            if item.get("kind") != "note_metadata":
-                continue
             try:
                 payload = json.loads(str(item["payload_json"]))
                 if not isinstance(payload, Mapping):
-                    raise ValueError("metadata payload is invalid")
-                self._note_metadata_publisher(binding, self._access_token(access_token), payload)
+                    raise ValueError("document outbox payload is invalid")
+                if item.get("kind") == "note_metadata":
+                    self._note_metadata_publisher(binding, self._access_token(access_token), payload)
+                elif item.get("kind") == "audit_event":
+                    self._audit_publisher(binding, self._access_token(access_token), payload)
+                else:
+                    raise ValueError("document outbox kind is invalid")
             except (AgentSyncError, ValueError, json.JSONDecodeError):
                 break
             self._document_outbox().delete_document_outbox(str(item["outbox_id"]))
             synced += 1
         return {"synced": synced, "pending": len(self._document_outbox().list_document_outbox())}
+
+    def _record_audit(self, binding: AgentBinding, access_token: str, event: dict[str, object]) -> None:
+        try:
+            self._audit_publisher(binding, access_token, event)
+        except AgentSyncError:
+            self._document_outbox().upsert_document_outbox(
+                outbox_id=f"audit_event:{event['id']}", kind="audit_event", payload=event,
+            )
 
     def _require_management(self, access_token: object, org_id: object) -> AgentBinding:
         binding = self._require_user(access_token)
@@ -540,7 +591,7 @@ def _handler_for(agent: GestajoAgent) -> type[BaseHTTPRequestHandler]:
                 if not note_id or "/" in note_id:
                     self._send_error(HTTPStatus.NOT_FOUND, "route not found")
                     return
-                self._authorized(lambda token: agent.read_note(token, note_id))
+                self._authorized(lambda token: agent.read_note(token, _single_query_value(parsed.query, "org_id"), note_id))
                 return
             if parsed.path != "/v1/status":
                 self._send_error(HTTPStatus.NOT_FOUND, "route not found")
@@ -793,3 +844,35 @@ def _note_update_response(value: Mapping[str, object], note_id: str) -> dict[str
 
 def _metadata_outbox_id(note_id: str) -> str:
     return f"note_metadata:{note_id}"
+
+
+def _new_audit_event(
+    note_id: str, org_id: str, common_org_id: str, actor_user_id: str, action: str, result: str,
+) -> dict[str, object]:
+    return _audit_event_payload({
+        "id": str(uuid.uuid4()), "note_id": note_id, "org_id": org_id,
+        "common_org_id": common_org_id, "actor_user_id": actor_user_id,
+        "action": action, "llm_model": None, "result": result,
+        "occurred_at": datetime.now(timezone.utc).isoformat(),
+    })
+
+
+def _audit_event_payload(event: Mapping[str, object]) -> dict[str, object]:
+    expected = {"id", "note_id", "org_id", "common_org_id", "actor_user_id", "action", "llm_model", "result", "occurred_at"}
+    if set(event) != expected:
+        raise AgentError("document audit has unsupported fields")
+    payload = dict(event)
+    try:
+        for field in ("id", "note_id", "org_id", "common_org_id", "actor_user_id"):
+            payload[field] = str(uuid.UUID(str(payload[field])))
+        datetime.fromisoformat(str(payload["occurred_at"]))
+    except (ValueError, AttributeError) as error:
+        raise AgentError("document audit has invalid identifiers") from error
+    for field, limit in (("action", 128), ("result", 128)):
+        if not isinstance(payload[field], str) or not 1 <= len(payload[field]) <= limit:
+            raise AgentError("document audit has invalid fields")
+    if payload["llm_model"] is not None and (not isinstance(payload["llm_model"], str) or not 1 <= len(payload["llm_model"]) <= 256):
+        raise AgentError("document audit has invalid fields")
+    if not isinstance(payload["occurred_at"], str) or len(payload["occurred_at"]) > 64:
+        raise AgentError("document audit has invalid fields")
+    return payload

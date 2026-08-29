@@ -23,6 +23,7 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import quote, urlparse
 from urllib.request import Request, urlopen
 
+from fuente.application.ingestion import document_id_for_source
 from fuente.domain.sync import SyncDirection
 from fuente.domain.paths import SourcePathAuthorizer
 from fuente.domain.vault_layout import VaultLayout
@@ -420,18 +421,27 @@ class GestajoAgent:
         if transition is None:
             raise AgentError("the requested Caudal approval is not available")
         source_stage, target_stage = transition
-        content_hash = _flow_approval_hash(backend, job, source_stage)
-        approvals = backend.get_job_control_service().ingestion.transition_approvals
+        control = backend.get_job_control_service()
         try:
-            approvals.begin_review(job_id, source_stage, target_stage, 1, content_hash, reviewer=binding.user_id)
-            approvals.approve(job_id, source_stage, target_stage, 1, content_hash, reviewer=binding.user_id)
+            if source_stage == "3_capturado":
+                source_path = job.get("source_relative_path")
+                if not isinstance(source_path, str):
+                    raise AgentError("local Caudal job is invalid")
+                request = control.ingestion.approval_service.request_approval(document_id_for_source(source_path))
+                control.ingestion.approval_service.approve_clean(request.note_id, request.revision, binding.user_id)
+            else:
+                content_hash = _flow_approval_hash(backend, job, source_stage)
+                approvals = control.ingestion.transition_approvals
+                approvals.begin_review(job_id, source_stage, target_stage, 1, content_hash, reviewer=binding.user_id)
+                approvals.approve(job_id, source_stage, target_stage, 1, content_hash, reviewer=binding.user_id)
         except (OSError, RuntimeError, ValueError) as error:
             raise AgentError("Caudal could not record the approval locally") from error
         self._record_audit(binding, self._access_token(access_token), _new_audit_event(
-            None, str(org_id), str(uuid.UUID(str(org_id))), binding.user_id, "caudal_transition_approve", "success",
+            None, str(org_id), str(uuid.UUID(str(org_id))), binding.user_id,
+            "caudal_clean_approve" if source_stage == "3_capturado" else "caudal_transition_approve", "success",
         ))
         try:
-            backend.get_job_control_service().ingestion.resume(job_id)
+            control.ingestion.resume(job_id)
         except (OSError, RuntimeError, ValueError) as error:
             raise AgentError("Caudal recorded the approval but could not continue the job") from error
         return _flow_response(self._read_flow())
@@ -1016,16 +1026,14 @@ def _flow_approval_payload(payload: object) -> str:
 
 
 def _flow_approval_transition(job: Mapping[str, object], job_id: str) -> tuple[str, str] | None:
-    if not (
-        job.get("job_id") == job_id
-        and job.get("status") == "pending"
-        and job.get("error_code") == "awaiting_transition_approval"
-    ):
+    if job.get("job_id") != job_id or job.get("status") != "pending":
         return None
-    if job.get("stage") == "stabilized":
+    if job.get("error_code") == "awaiting_transition_approval" and job.get("stage") == "stabilized":
         return "1_volcado", "2_copiado"
-    if job.get("stage") == "extracted":
+    if job.get("error_code") == "awaiting_transition_approval" and job.get("stage") == "extracted":
         return "2_copiado", "3_capturado"
+    if job.get("error_code") == "awaiting_clean_approval" and job.get("stage") == "saved_clean":
+        return "3_capturado", "4_procesado"
     return None
 
 

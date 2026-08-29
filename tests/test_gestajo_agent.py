@@ -426,6 +426,51 @@ def test_management_can_approve_copied_content_for_capture(tmp_path: Path):
     ]
 
 
+def test_management_can_approve_the_canonical_capture_note(tmp_path: Path):
+    job_id = "00000000-0000-0000-0000-000000000125"
+    calls: list[tuple[object, ...]] = []
+
+    class Approvals:
+        def request_approval(self, note_id):
+            calls.append(("request", note_id))
+            return type("Request", (), {"note_id": note_id, "revision": 1})()
+
+        def approve_clean(self, note_id, revision, reviewer):
+            calls.append(("approve_clean", note_id, revision, reviewer))
+
+    class Ingestion:
+        approval_service = Approvals()
+
+        def resume(self, value):
+            calls.append(("resume", value))
+
+    class Backend:
+        def get_job_detail(self, value):
+            assert value == job_id
+            return {"job": {
+                "job_id": job_id, "source_relative_path": "1_volcado/personal/03 El loco.md",
+                "stage": "saved_clean", "status": "pending", "error_code": "awaiting_clean_approval",
+            }}
+
+        def get_job_control_service(self):
+            return type("Control", (), {"ingestion": Ingestion()})()
+
+    agent = GestajoAgent(
+        tmp_path, verifier=_verifier, publisher=_publisher,
+        management_verifier=_management_verifier, backend_factory=lambda _vault: Backend(),
+        flow_reader=lambda _vault: {"steps": {}, "seals": {}, "queue": {}, "pending_approvals": []},
+        audit_publisher=lambda *_args: None,
+    )
+    agent.claim("token-a", {"supabase_url": "https://project.supabase.co", "publishable_key": "sb_publishable_test_key"})
+
+    agent.approve_flow_transition("token-a", "00000000-0000-0000-0000-000000000001", {"job_id": job_id})
+
+    assert calls[-1] == ("resume", job_id)
+    assert calls[0][0] == "request"
+    assert calls[1][0] == "approve_clean"
+    assert calls[1][3] == USER_A
+
+
 def test_flow_rejects_consulta(tmp_path: Path):
     agent = GestajoAgent(
         tmp_path, verifier=_verifier, publisher=_publisher,

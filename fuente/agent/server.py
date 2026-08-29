@@ -25,7 +25,7 @@ from urllib.request import Request, urlopen
 from fuente.domain.sync import SyncDirection
 from fuente.domain.paths import SourcePathAuthorizer
 from fuente.domain.vault_layout import VaultLayout
-from fuente.infrastructure.atomic_files import atomic_write_json
+from fuente.infrastructure.atomic_files import atomic_copy, atomic_write_json
 
 
 AGENT_VERSION = "0.1"
@@ -387,7 +387,7 @@ class GestajoAgent:
             "platform": platform.system(),
             "user_id": binding.user_id,
             "vault_fingerprint": self._vault_fingerprint(),
-            "capabilities": ["flow", "settings", "sync_inputs", "sync_run", "sync_output", "sync_conflict_read", "note_read", "note_write", "note_share"],
+            "capabilities": ["flow", "settings", "sync_inputs", "sync_run", "sync_output", "sync_conflict_read", "sync_conflict_resolve", "note_read", "note_write", "note_share"],
         }
 
     def flow(self, access_token: object, org_id: object) -> dict[str, object]:
@@ -481,6 +481,33 @@ class GestajoAgent:
             None, str(org_id), str(uuid.UUID(str(org_id))), binding.user_id, "sync_conflict_read", "success",
         ))
         return result
+
+    def resolve_sync_conflict(self, access_token: object, org_id: object, payload: object) -> dict[str, object]:
+        binding = self._require_management(access_token, org_id)
+        connection_id, relative_path, winner = _sync_conflict_resolution_payload(payload)
+        backend = self._local_backend()
+        connection = next(
+            (item for item in backend.sync_manager.load_connections() if item.connection_id == connection_id),
+            None,
+        )
+        if connection is None:
+            raise AgentError("sync connection is unavailable")
+        shared_root = backend.sync_manager._authorized_theme_root(
+            VaultLayout(backend.sync_manager.active_theme_dir).shared_dir,
+            VaultLayout(backend.sync_manager.active_theme_dir).shared_dir.name,
+        )
+        connected_root = backend.sync_manager._authorized_output_destination(Path(connection.root))
+        vault_path = _sync_markdown_path(shared_root, relative_path)
+        shared_path = _sync_markdown_path(connected_root, relative_path)
+        source, destination = (vault_path, shared_path) if winner == "vault" else (shared_path, vault_path)
+        try:
+            atomic_copy(source, destination)
+        except OSError as error:
+            raise AgentError("conflict resolution could not be written locally") from error
+        self._record_audit(binding, self._access_token(access_token), _new_audit_event(
+            None, str(org_id), str(uuid.UUID(str(org_id))), binding.user_id, "sync_conflict_resolve", winner,
+        ))
+        return {"relative_path": relative_path, "winner": winner}
 
     def _run_sync(
         self, access_token: object, org_id: object, payload: object, action: str, direction: SyncDirection,
@@ -736,7 +763,7 @@ def _handler_for(agent: GestajoAgent) -> type[BaseHTTPRequestHandler]:
             is_note_share = note_route.endswith("/share") and bool(note_route.removesuffix("/share")) and "/" not in note_route.removesuffix("/share")
             is_note_update = bool(note_route) and "/" not in note_route
             if not (is_note_update or is_note_share) and parsed.path not in {
-                "/v1/claim", "/v1/settings", "/v1/sync-inputs/select", "/v1/sync-inputs/run", "/v1/sync-outputs/run", "/v1/sync-conflicts/read",
+                "/v1/claim", "/v1/settings", "/v1/sync-inputs/select", "/v1/sync-inputs/run", "/v1/sync-outputs/run", "/v1/sync-conflicts/read", "/v1/sync-conflicts/resolve",
                 "/v1/sync-inputs/confirm", "/v1/sync-inputs/enabled", "/v1/sync-inputs/remove", "/v1/sync",
             }:
                 self._send_error(HTTPStatus.NOT_FOUND, "route not found")
@@ -773,6 +800,9 @@ def _handler_for(agent: GestajoAgent) -> type[BaseHTTPRequestHandler]:
                 return
             if parsed.path == "/v1/sync-conflicts/read":
                 self._authorized(lambda token: agent.read_sync_conflict(token, org_id, payload))
+                return
+            if parsed.path == "/v1/sync-conflicts/resolve":
+                self._authorized(lambda token: agent.resolve_sync_conflict(token, org_id, payload))
                 return
             if parsed.path == "/v1/sync-inputs/confirm":
                 self._authorized(lambda token: agent.confirm_sync_input(token, org_id, payload))
@@ -981,14 +1011,31 @@ def _sync_conflict_payload(payload: object) -> tuple[str, str]:
     return connection_id, relative_path
 
 
-def _read_sync_markdown(root: Path, relative_path: str) -> str:
+def _sync_conflict_resolution_payload(payload: object) -> tuple[str, str, str]:
+    if not isinstance(payload, Mapping) or set(payload) != {"connection_id", "relative_path", "winner"}:
+        raise AgentError("sync conflict payload has unsupported fields")
+    connection_id, relative_path = _sync_conflict_payload({
+        "connection_id": payload.get("connection_id"), "relative_path": payload.get("relative_path"),
+    })
+    winner = payload.get("winner")
+    if winner not in {"vault", "shared"}:
+        raise AgentError("conflict winner is invalid")
+    return connection_id, relative_path, winner
+
+
+def _sync_markdown_path(root: Path, relative_path: str) -> Path:
     try:
         path = SourcePathAuthorizer(root).resolve(relative_path)
-        if not path.is_file():
+        if not path.is_file() or path.stat().st_size > 10_000_000:
             raise ValueError("conflict file is unavailable")
-        if path.stat().st_size > 10_000_000:
-            raise ValueError("conflict file is too large")
-        return path.read_text(encoding="utf-8")
+        return path
+    except (OSError, ValueError) as error:
+        raise AgentError("conflict file cannot be read locally") from error
+
+
+def _read_sync_markdown(root: Path, relative_path: str) -> str:
+    try:
+        return _sync_markdown_path(root, relative_path).read_text(encoding="utf-8")
     except (OSError, UnicodeError, ValueError) as error:
         raise AgentError("conflict file cannot be read locally") from error
 

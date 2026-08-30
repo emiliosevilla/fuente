@@ -33,7 +33,7 @@ import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
 
 from fuente.application.approval import ApprovalApplicationService
-from fuente.application.chat import ChatApplicationService, OllamaChatProvider, AnythingLLMChatProvider
+from fuente.application.chat import ChatApplicationService, OllamaChatProvider
 from fuente.application.ingestion import (
     TERMINAL_STAGES,
     IngestionApplicationService,
@@ -72,7 +72,6 @@ from fuente.config import (
     load_config,
     describe_offline_mode,
 )
-from fuente.integrations.anythingllm import AnythingLLMConversationClient, AnythingLLMError
 from fuente.core.vault import VaultManager
 from fuente.domain.documents import MarkdownDocument
 from fuente.domain.errors import (
@@ -756,14 +755,6 @@ class FuenteConsoleBackend:
         return True
 
     def _build_chat_provider(self):
-        anything_url = (self.config.anythingllm_url or "").strip()
-        if anything_url:
-            client = AnythingLLMConversationClient(
-                anything_url,
-                self.config.anythingllm_workspace_slug,
-                api_key=self.config.anythingllm_api_key,
-            )
-            return AnythingLLMChatProvider(client)
         return OllamaChatProvider(self.config.ollama_url, timeout=12.0)
 
     def get_chat_service(self) -> ChatApplicationService:
@@ -2216,9 +2207,9 @@ class FuenteConsoleBackend:
             "models_measured": self._ollama_models_measured,
             "current_model": configured_model,
             "ram_recommended_model": recommended_model,
-            "ai_provider": "anythingllm" if self.config.anythingllm_url else "ollama",
-            "anythingllm_url": self.config.anythingllm_url,
-            "anythingllm_workspace_slug": self.config.anythingllm_workspace_slug,
+            "ai_provider": "ollama",
+            "anythingllm_url": "",
+            "anythingllm_workspace_slug": "",
             "ollama_url": str(self.config.ollama_url),
             "ram_margin": f"{self.config.ram_safety_margin_pct * 100:g}%",
             "allow_non_loopback_ollama": self.config.allow_non_loopback_ollama,
@@ -2230,9 +2221,9 @@ class FuenteConsoleBackend:
         }
 
     def prepare_local_ai(self) -> Dict[str, Any]:
-        """Start the selected local provider and ensure Fuente's RAM-safe model exists."""
+        """Start Ollama only for an explicit local-AI request and ensure its model exists."""
         model = self.config.custom_model_override or self.ram_governor.recommend_model()
-        provider = "anythingllm" if self.config.anythingllm_url else "ollama"
+        provider = "ollama"
         if not model:
             return {"ready": False, "provider": provider, "model": None, "reason": "ram_policy"}
         if not self.ram_governor.check_ollama_status():
@@ -2243,30 +2234,6 @@ class FuenteConsoleBackend:
                 return {"ready": False, "provider": provider, "model": model, "reason": "ollama_installation_required"}
         if not self.ram_governor.ensure_model_available(model, authorize_download=True):
             return {"ready": False, "provider": provider, "model": model, "reason": "model_unavailable"}
-        if provider == "anythingllm":
-            def configure_anythingllm() -> bool:
-                client = AnythingLLMConversationClient(
-                    self.config.anythingllm_url, self.config.anythingllm_workspace_slug,
-                    api_key=self.config.anythingllm_api_key,
-                )
-                client.health()
-                client.set_chat_model(model)
-                return True
-
-            try:
-                configure_anythingllm()
-            except (AnythingLLMError, ValueError) as error:
-                if (
-                    isinstance(error, AnythingLLMError)
-                    and error.code == "anythingllm_access_required"
-                ):
-                    return {"ready": False, "provider": provider, "model": model, "reason": "anythingllm_access_required"}
-                from fuente.installer_contract import open_official_installer, start_anythingllm_service
-
-                if start_anythingllm_service(configure_anythingllm):
-                    return {"ready": True, "provider": provider, "model": model, "reason": None}
-                open_official_installer("anythingllm")
-                return {"ready": False, "provider": provider, "model": model, "reason": "anythingllm_installation_required"}
         return {"ready": True, "provider": provider, "model": model, "reason": None}
 
     def _template_registry(self) -> TemplateRegistry:

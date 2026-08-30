@@ -26,7 +26,6 @@ from fuente.domain.jobs import (
 from fuente.domain.quarantine import QuarantineService
 from fuente.extractors.registry import ExtractorRegistry
 from fuente.infrastructure.sqlite_store import JobStore
-from fuente.integrations.anythingllm import AnythingLLMConversationClient
 from fuente.ram_governor.governor import RAMGovernor
 from fuente.rag.lancedb_store import LanceDBStore
 from fuente.rag.semantic_chunker import SemanticChunker
@@ -180,13 +179,6 @@ class ETLPipeline:
         )
 
     def _smart_notes_client(self):
-        anything_url = (self.config.anythingllm_url or "").strip()
-        if anything_url:
-            return AnythingLLMConversationClient(
-                anything_url,
-                self.config.anythingllm_workspace_slug,
-                api_key=self.config.anythingllm_api_key,
-            )
         return OllamaConversationClient(self.config.ollama_url)
 
     def set_runtime_policy(self, policy: RuntimePolicy) -> None:

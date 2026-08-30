@@ -306,21 +306,44 @@ class ChatApplicationService:
             self._refinement_guard(candidate_id, revision)
 
         scope, scope_kwargs = _normalize_scope(ctx)
-        selected_markdown = str(ctx.get("selected_note_markdown") or "").strip()
-        selected_note_id = str(ctx.get("document_id") or "").strip()
-        selected_note_title = str(ctx.get("selected_note_title") or "").strip()
-        if scope == SCOPE_SINGLE_NOTE and selected_markdown and selected_note_id:
+        selected_notes: list[tuple[str, str, str]] = []
+        if scope == SCOPE_SINGLE_NOTE:
+            selected_markdown = str(ctx.get("selected_note_markdown") or "").strip()
+            selected_note_id = str(ctx.get("document_id") or "").strip()
+            selected_note_title = str(ctx.get("selected_note_title") or "").strip()
+            if selected_markdown and selected_note_id:
+                selected_notes.append((selected_note_id, selected_note_title, selected_markdown))
+        elif scope == SCOPE_MULTIPLE_NOTES and isinstance(ctx.get("selected_notes"), list):
+            for item in ctx["selected_notes"]:
+                if not isinstance(item, Mapping):
+                    continue
+                note_id = str(item.get("document_id") or "").strip()
+                title = str(item.get("title") or "").strip()
+                body = str(item.get("body_markdown") or "").strip()
+                if note_id and body:
+                    selected_notes.append((note_id, title, body))
+
+        if selected_notes:
             # A selected draft is visible only to its already-authorized caller. It is
             # intentionally not admitted to the general approved-note retriever.
-            evidence = selected_markdown[: self.retrieval.max_chars]
-            sources = [{
-                "document_id": selected_note_id,
-                "title": selected_note_title or selected_note_id,
-                "snippet": evidence[: self.retrieval.snippet_chars],
-                "origin": "selected_local_note",
-            }]
+            remaining = self.retrieval.max_chars
+            evidence_parts: list[str] = []
+            sources = []
+            for note_id, title, body in selected_notes:
+                if remaining <= 0:
+                    break
+                excerpt = body[:remaining]
+                evidence_parts.append(f"# {title or note_id}\n\n{excerpt}")
+                sources.append({
+                    "document_id": note_id,
+                    "title": title or note_id,
+                    "snippet": excerpt[: self.retrieval.snippet_chars],
+                    "origin": "selected_local_note",
+                })
+                remaining -= len(excerpt)
+            evidence = "\n\n---\n\n".join(evidence_parts)
             retrieval_mode = "selected_local_note"
-            has_context = True
+            has_context = bool(evidence)
             retrieval_ctx = {"degraded": False, "degradation_reason": None}
         else:
             retrieval_ctx = self.retrieval.build_context(query, scope, **scope_kwargs)

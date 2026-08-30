@@ -1429,7 +1429,15 @@ class GestajoAgent:
             visible_ids = self._visible_note_ids_reader(binding, self._access_token(access_token), org_id)
             if not set(document_ids).issubset(visible_ids):
                 raise AgentAuthorizationError("selected note is not available")
-            context = {"context_mode": "multiple_notes", "document_ids": document_ids}
+            selected_notes = [
+                _note_response(self._note_reader(self.vault_path, note_id), note_id)
+                for note_id in document_ids
+            ]
+            context = {
+                "context_mode": "multiple_notes",
+                "document_ids": document_ids,
+                "selected_notes": selected_notes,
+            }
             session_scope = ",".join(document_ids)
         context["session_id"] = f"gestajo-kb:{binding.user_id}:{org_id}:{session_scope}"
         answer = _assistant_response(self._local_backend().process_chat(

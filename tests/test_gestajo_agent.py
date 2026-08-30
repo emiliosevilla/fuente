@@ -1367,12 +1367,23 @@ def test_knowledge_assistant_rejects_selected_notes_outside_the_visible_catalog(
         tmp_path, verifier=_verifier, publisher=_publisher, membership_verifier=_management_verifier,
         backend_factory=lambda _vault: Backend(), visible_note_ids_reader=lambda *_args: {visible_id},
         audit_publisher=lambda *_args: None,
+        note_reader=lambda _vault, received_id: {
+            "document_id": received_id, "revision": 1, "title": "Informe",
+            "body_markdown": "# Informe\n\nDato verificable.",
+        },
     )
     agent.claim("token-a", {"supabase_url": "https://project.supabase.co", "publishable_key": "sb_publishable_test_key"})
 
     answer = agent.ask_knowledge_assistant("token-a", org_id, {"message": "Compara", "document_ids": [visible_id]})
     assert answer["ok"] is True
-    assert calls == [("Compara", {"context_mode": "multiple_notes", "document_ids": [visible_id], "session_id": f"gestajo-kb:{USER_A}:{org_id}:{visible_id}"})]
+    assert calls == [("Compara", {
+        "context_mode": "multiple_notes", "document_ids": [visible_id],
+        "selected_notes": [{
+            "document_id": visible_id, "revision": 1, "title": "Informe",
+            "body_markdown": "# Informe\n\nDato verificable.",
+        }],
+        "session_id": f"gestajo-kb:{USER_A}:{org_id}:{visible_id}",
+    })]
     with pytest.raises(AgentAuthorizationError, match="selected note is not available"):
         agent.ask_knowledge_assistant("token-a", org_id, {"message": "Compara", "document_ids": [hidden_id]})
 
@@ -1393,6 +1404,10 @@ def test_knowledge_assistant_allows_consulta_only_for_selected_visible_notes(tmp
         membership_verifier=_membership_verifier,
         backend_factory=lambda _vault: Backend(), visible_note_ids_reader=lambda *_args: {visible_id},
         audit_publisher=lambda *_args: None,
+        note_reader=lambda _vault, received_id: {
+            "document_id": received_id, "revision": 1, "title": "Compartida",
+            "body_markdown": "# Compartida\n\nDato verificable.",
+        },
     )
     agent.claim("token-a", {"supabase_url": "https://project.supabase.co", "publishable_key": "sb_publishable_test_key"})
 
@@ -1405,7 +1420,14 @@ def test_knowledge_assistant_allows_consulta_only_for_selected_visible_notes(tmp
     )
 
     assert answer["ok"] is True
-    assert calls == [("Encuentra relaciones", {"context_mode": "multiple_notes", "document_ids": [visible_id], "session_id": f"gestajo-kb:{USER_A}:{org_id}:{visible_id}"})]
+    assert calls == [("Encuentra relaciones", {
+        "context_mode": "multiple_notes", "document_ids": [visible_id],
+        "selected_notes": [{
+            "document_id": visible_id, "revision": 1, "title": "Compartida",
+            "body_markdown": "# Compartida\n\nDato verificable.",
+        }],
+        "session_id": f"gestajo-kb:{USER_A}:{org_id}:{visible_id}",
+    })]
 
 
 def test_local_ai_prepare_runs_for_the_authenticated_member_without_exposing_local_details(tmp_path: Path):

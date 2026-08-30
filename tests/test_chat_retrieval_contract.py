@@ -215,6 +215,27 @@ def test_selected_pending_note_is_sent_directly_to_the_local_model(grounded_serv
     assert "Chesterton" in provider.calls[-1]["prompt"]
 
 
+def test_selected_pending_notes_are_sent_together_to_the_local_model(grounded_service):
+    service, provider, _store = grounded_service
+
+    result = service.ask(
+        "¿Qué relación hay entre ambas?",
+        {
+            "context_mode": "multiple_notes",
+            "document_ids": ["note-a", "note-b"],
+            "selected_notes": [
+                {"document_id": "note-a", "title": "A", "body_markdown": "Origen: Chesterton."},
+                {"document_id": "note-b", "title": "B", "body_markdown": "Relación: Ortodoxia."},
+            ],
+        },
+    )
+
+    assert result["ok"] is True
+    assert [citation["document_id"] for citation in result["citations"]] == ["note-a", "note-b"]
+    assert "Chesterton" in provider.calls[-1]["prompt"]
+    assert "Ortodoxia" in provider.calls[-1]["prompt"]
+
+
 def test_multiple_note_scope_only_cites_the_selected_notes(grounded_service):
     service, _provider, _store = grounded_service
     result = service.ask(

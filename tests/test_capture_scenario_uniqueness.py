@@ -33,12 +33,14 @@ def test_verify_unique_rejects_duplicate_bytes(tmp_path: Path, capsys) -> None:
 
 def test_prune_manifest_entries_removes_retired_capture_only() -> None:
     entries = [
+        {"file": "00-baseline.png"},
         {"file": "01-setup-empty.png"},
         {"file": "home-1440.png"},
         {"file": "10-fuente-obsidian.png"},
     ]
 
     assert prune_manifest_entries(entries) == [
+        {"file": "00-baseline.png"},
         {"file": "01-setup-empty.png"},
         {"file": "10-fuente-obsidian.png"},
     ]

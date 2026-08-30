@@ -6398,23 +6398,6 @@ document.addEventListener('keydown', handleShellKeydown);
                 sealBadge.append(sealDot, sealLabel);
                 bar.appendChild(sealBadge);
             }
-            if (!noteEditorActive) {
-                const actions = document.createElement('div');
-                actions.className = 'reader-actions';
-                const editButton = document.createElement('button');
-                editButton.type = 'button';
-                editButton.className = 'btn-secondary';
-                editButton.setAttribute('aria-label', 'Editar nota');
-                editButton.dataset.onclickCommand = 'startNoteEditing()';
-                editButton.addEventListener('click', function() {
-                    startNoteEditing();
-                });
-                editButton.textContent = 'Editar';
-                actions.appendChild(editButton);
-                bar.appendChild(actions);
-            } else {
-                bar.appendChild(createEditorToolbar());
-            }
             return bar;
         }
 
@@ -6978,22 +6961,9 @@ document.addEventListener('keydown', handleShellKeydown);
                 if (options.closeAfter) applyPendingEditorIntent();
                 return;
             }
-            callNativeLongRequest('save_note_content', function() {
-                return window.pywebview.api.save_note_content(currentSelectedDocumentId, currentSelectedNoteRevision, body);
-            }).then(function(result) {
-                if (!result || result.error) throw new Error((result && result.message) || 'No se pudieron guardar los cambios.');
-                currentSelectedNoteMarkdown = body;
-                currentSelectedNoteRevision = Number.isInteger(result.revision) ? result.revision : currentSelectedNoteRevision + 1;
-                noteEditorSaving = false;
-                const selected = readerNotes.find(function(note) { return note.document_id === currentSelectedDocumentId; });
-                if (selected && result.status === 'saved') selected.status = 'pending_review';
-                renderReaderProperties(currentSelectedDocumentId);
-                updateEditorState('Cambios guardados.');
-                if (options.closeAfter) applyPendingEditorIntent();
-            }).catch(function(error) {
-                noteEditorSaving = false;
-                updateEditorState(String(error || 'No se pudieron guardar los cambios.'));
-            });
+            noteEditorSaving = false;
+            updateEditorState('La edición de Notas se realiza en Documentos de Gestajo.');
+            if (options.closeAfter) applyPendingEditorIntent();
         }
 
         function renderNoteDocument(title, documentModel) {

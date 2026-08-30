@@ -90,7 +90,8 @@ def _save(scenario: str, filename: str, record: dict[str, object]) -> None:
 
 
 def prune_manifest_entries(entries: list[dict[str, object]]) -> list[dict[str, object]]:
-    active_files = {filename for _scenario, filename, _size, _max in SCENARIOS}
+    active_files = {"00-baseline.png"}
+    active_files.update(filename for _scenario, filename, _size, _max in SCENARIOS)
     active_files.add("10-fuente-obsidian.png")
     return [entry for entry in entries if entry.get("file") in active_files]
 

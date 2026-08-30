@@ -510,7 +510,7 @@ class GestajoAgent:
             "platform": platform.system(),
             "user_id": binding.user_id,
             "vault_fingerprint": self._vault_fingerprint(),
-            "capabilities": ["flow", "flow_import", "flow_approve", "flow_jobs", "flow_job_detail", "flow_job_resume", "flow_job_cancel", "flow_review", "flow_review_captured", "flow_discard", "settings", "sync_inputs", "sync_run", "sync_output", "sync_conflict_read", "sync_conflict_resolve", "document_conflict_read", "document_conflict_resolve", "note_read", "note_relations", "note_lineage", "note_write", "note_merge", "note_approve_processed", "note_share", "note_assistant", "knowledge_assistant", "templates_read", "templates_write"],
+            "capabilities": ["flow", "flow_import", "flow_approve", "flow_jobs", "flow_job_detail", "flow_job_resume", "flow_job_cancel", "flow_review", "flow_review_captured", "flow_discard", "settings", "sync_inputs", "sync_run", "sync_output", "sync_conflict_read", "sync_conflict_resolve", "document_conflict_read", "document_conflict_resolve", "note_read", "note_search", "note_relations", "note_lineage", "note_write", "note_merge", "note_approve_processed", "note_share", "note_assistant", "knowledge_assistant", "templates_read", "templates_write"],
         }
 
     def flow(self, access_token: object, org_id: object) -> dict[str, object]:
@@ -538,6 +538,35 @@ class GestajoAgent:
         self._record_audit(binding, self._access_token(access_token), _new_audit_event(
             None, str(org_id), str(uuid.UUID(str(org_id))), binding.user_id, "caudal_job_read", "success",
             llm_model=result["llm_readiness"]["compatible_model"] or None,
+        ))
+        return result
+
+    def search_notes(
+        self, access_token: object, org_id: object, mode: object, query: object,
+    ) -> dict[str, object]:
+        """Search the local Vault and return only metadata for visible notes."""
+        binding = self._require_user(access_token)
+        if not isinstance(org_id, str):
+            raise AgentAuthorizationError("organization is invalid")
+        self._membership_verifier(binding, self._access_token(access_token), org_id)
+        valid_mode, valid_query = _note_search_request(mode, query)
+        page = _note_search_response(
+            self._local_backend().search_source(valid_mode, valid_query, {}),
+            valid_mode,
+            valid_query,
+        )
+        visible = []
+        for item in page["items"]:
+            try:
+                self._note_visibility_verifier(
+                    binding, self._access_token(access_token), item["document_id"],
+                )
+            except AgentAuthorizationError:
+                continue
+            visible.append(item)
+        result = {**page, "items": visible}
+        self._record_audit(binding, self._access_token(access_token), _new_audit_event(
+            None, org_id, str(uuid.UUID(org_id)), binding.user_id, "note_search", "success",
         ))
         return result
 
@@ -1445,6 +1474,14 @@ def _handler_for(agent: GestajoAgent) -> type[BaseHTTPRequestHandler]:
                     lambda token: agent.read_template(token, _single_query_value(parsed.query, "org_id"), template_id)
                 )
                 return
+            if parsed.path == "/v1/notes/search":
+                self._authorized(
+                    lambda token: agent.search_notes(
+                        token, _single_query_value(parsed.query, "org_id"),
+                        _single_query_value(parsed.query, "mode"), _single_query_value(parsed.query, "q"),
+                    )
+                )
+                return
             if parsed.path.startswith("/v1/notes/"):
                 note_id = parsed.path.removeprefix("/v1/notes/")
                 if note_id.endswith("/relations"):
@@ -2328,6 +2365,39 @@ def _note_response(value: Mapping[str, object], note_id: str) -> dict[str, objec
     if document_id != note_id or not isinstance(revision, int) or revision < 1 or not isinstance(title, str) or not isinstance(body, str):
         raise AgentError("local note has an invalid contract")
     return {"document_id": document_id, "revision": revision, "title": title, "body_markdown": body}
+
+
+def _note_search_request(mode: object, query: object) -> tuple[str, str]:
+    if mode not in {"content", "metadata", "relations"}:
+        raise AgentError("note search mode is invalid")
+    if not isinstance(query, str) or not (1 <= len(query.strip()) <= 512):
+        raise AgentError("note search query is invalid")
+    return mode, query.strip()
+
+
+def _note_search_response(value: object, mode: str, query: str) -> dict[str, object]:
+    if not isinstance(value, Mapping) or value.get("error"):
+        raise AgentError(str(value.get("message") if isinstance(value, Mapping) else "local note search is invalid"))
+    items = value.get("items")
+    if not isinstance(items, list) or len(items) > 40:
+        raise AgentError("local note search has an invalid contract")
+    safe_items = []
+    for item in items:
+        if not isinstance(item, Mapping):
+            raise AgentError("local note search has an invalid item")
+        document_id = item.get("document_id")
+        try:
+            uuid.UUID(str(document_id))
+        except (ValueError, AttributeError) as error:
+            raise AgentError("local note search has an invalid item") from error
+        fields = {name: item.get(name) for name in ("title", "seal", "updated_at", "theme", "issue", "note_type", "author")}
+        if any(not isinstance(field, str) or len(field) > 4_096 for field in fields.values()):
+            raise AgentError("local note search has an invalid item")
+        optional = {name: item.get(name) for name in ("origin_kind", "urgency")}
+        if any(field is not None and (not isinstance(field, str) or len(field) > 512) for field in optional.values()):
+            raise AgentError("local note search has an invalid item")
+        safe_items.append({"document_id": str(document_id), **fields, **optional})
+    return {"mode": mode, "query": query, "items": safe_items}
 
 
 def _note_update_payload(payload: object) -> tuple[int, str]:

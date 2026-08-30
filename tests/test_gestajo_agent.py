@@ -97,7 +97,7 @@ def test_status_requires_the_bound_user(tmp_path: Path):
     )
 
     assert agent.status("token-a")["claimed"] is True
-    assert agent.status("token-a")["capabilities"] == ["flow", "flow_import", "flow_approve", "flow_jobs", "flow_job_detail", "flow_job_resume", "flow_job_cancel", "flow_review", "flow_review_captured", "flow_discard", "settings", "sync_inputs", "sync_run", "sync_output", "sync_conflict_read", "sync_conflict_resolve", "document_conflict_read", "document_conflict_resolve", "note_read", "note_relations", "note_lineage", "note_write", "note_merge", "note_approve_processed", "note_share", "note_assistant", "knowledge_assistant", "templates_read", "templates_write"]
+    assert agent.status("token-a")["capabilities"] == ["flow", "flow_import", "flow_approve", "flow_jobs", "flow_job_detail", "flow_job_resume", "flow_job_cancel", "flow_review", "flow_review_captured", "flow_discard", "settings", "sync_inputs", "sync_run", "sync_output", "sync_conflict_read", "sync_conflict_resolve", "document_conflict_read", "document_conflict_resolve", "note_read", "note_search", "note_relations", "note_lineage", "note_write", "note_merge", "note_approve_processed", "note_share", "note_assistant", "knowledge_assistant", "templates_read", "templates_write"]
     with pytest.raises(AgentAuthenticationError, match="another user"):
         agent.status("token-b")
 
@@ -372,6 +372,59 @@ def test_flow_job_controls_expose_ram_decision_without_local_routes(tmp_path: Pa
     assert route_detail["llm_readiness"]["compatible_model"] == "qwen2.5:7b"
     assert resumed_response.status == 200
     assert route_resumed["status"] == "claimed"
+
+
+def test_note_search_returns_only_notes_visible_to_the_current_access(tmp_path: Path):
+    from http.server import ThreadingHTTPServer
+
+    org_id = "00000000-0000-0000-0000-000000000001"
+    visible_id = "00000000-0000-0000-0000-000000000010"
+    hidden_id = "00000000-0000-0000-0000-000000000011"
+    audits: list[dict[str, object]] = []
+
+    class Backend:
+        @staticmethod
+        def search_source(mode, query, filters):
+            assert (mode, query, filters) == ("metadata", "agenda", {})
+            return {
+                "mode": mode, "query": query,
+                "items": [
+                    {"document_id": visible_id, "title": "Agenda pública", "seal": "approved", "updated_at": "2026-08-30T10:00:00Z", "theme": "General", "issue": "_Sin_Cuestion", "note_type": "reunion", "origin_kind": "working_document", "urgency": None, "author": "Fuente", "relative_path": "/private/vault/5_compartido/agenda.md"},
+                    {"document_id": hidden_id, "title": "Agenda privada", "seal": "approved", "updated_at": "2026-08-30T10:00:00Z", "theme": "General", "issue": "_Sin_Cuestion", "note_type": "reunion", "origin_kind": "working_document", "urgency": None, "author": "Fuente", "relative_path": "/private/vault/4_procesado/privada.md"},
+                ],
+            }
+
+    def visibility(_binding, _token, note_id):
+        if note_id == hidden_id:
+            raise AgentAuthorizationError("note is not shared with this access")
+        return {"common_org_id": COMMON_ORG_ID}
+
+    agent = GestajoAgent(
+        tmp_path, verifier=_verifier, publisher=_publisher,
+        membership_verifier=_membership_verifier, backend_factory=lambda _vault: Backend(),
+        note_visibility_verifier=visibility, audit_publisher=lambda _binding, _token, event: audits.append(event),
+    )
+    agent.claim("token-a", {"supabase_url": "https://project.supabase.co", "publishable_key": "sb_publishable_test_key"})
+    server = ThreadingHTTPServer(("127.0.0.1", 0), _handler_for(agent))
+    thread = Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        connection = HTTPConnection("127.0.0.1", server.server_port, timeout=2)
+        connection.request("GET", f"/v1/notes/search?org_id={org_id}&mode=metadata&q=agenda", headers={"Origin": "http://localhost:3000", "Authorization": "Bearer token-a"})
+        response = connection.getresponse()
+        page = json.loads(response.read())
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
+
+    assert response.status == 200
+    assert page == {"mode": "metadata", "query": "agenda", "items": [{
+        "document_id": visible_id, "title": "Agenda pública", "seal": "approved", "updated_at": "2026-08-30T10:00:00Z", "theme": "General", "issue": "_Sin_Cuestion", "note_type": "reunion", "origin_kind": "working_document", "urgency": None, "author": "Fuente",
+    }]}
+    assert "/private" not in str(page)
+    assert hidden_id not in str(page)
+    assert audits[0]["action"] == "note_search"
 
 
 def test_health_is_cors_and_private_network_ready_for_gestajo(tmp_path: Path):

@@ -97,7 +97,7 @@ def test_status_requires_the_bound_user(tmp_path: Path):
     )
 
     assert agent.status("token-a")["claimed"] is True
-    assert agent.status("token-a")["capabilities"] == ["flow", "flow_import", "flow_approve", "flow_jobs", "flow_job_detail", "flow_job_resume", "flow_job_cancel", "flow_review", "flow_review_captured", "flow_discard", "settings", "sync_inputs", "sync_run", "sync_output", "sync_conflict_read", "sync_conflict_resolve", "document_conflict_read", "document_conflict_resolve", "note_read", "note_search", "note_relations", "note_lineage", "note_write", "note_merge", "note_approve_processed", "note_share", "note_assistant", "note_assistant_persist", "knowledge_assistant", "templates_read", "templates_write"]
+    assert agent.status("token-a")["capabilities"] == ["flow", "flow_import", "flow_approve", "flow_jobs", "flow_job_detail", "flow_job_resume", "flow_job_cancel", "flow_review", "flow_review_captured", "flow_discard", "settings", "sync_inputs", "sync_run", "sync_output", "sync_conflict_read", "sync_conflict_resolve", "document_conflict_read", "document_conflict_resolve", "taxonomy_read", "taxonomy_write", "note_read", "note_search", "note_relations", "note_lineage", "note_write", "note_theme", "note_merge", "note_approve_processed", "note_share", "note_assistant", "note_assistant_persist", "knowledge_assistant", "templates_read", "templates_write"]
     with pytest.raises(AgentAuthenticationError, match="another user"):
         agent.status("token-b")
 
@@ -109,6 +109,106 @@ def test_second_user_cannot_claim_bound_vault(tmp_path: Path):
 
     with pytest.raises(AgentAuthenticationError, match="another user"):
         agent.claim("token-b", payload)
+
+
+def test_management_updates_local_taxonomy_and_note_theme_without_paths(tmp_path: Path):
+    note_id = "00000000-0000-0000-0000-000000000010"
+    org_id = "00000000-0000-0000-0000-000000000001"
+    published: list[dict[str, object]] = []
+
+    class Vault:
+        active_theme = "General"
+
+        @staticmethod
+        def get_available_themes():
+            return ["General", "Contratos"]
+
+        @staticmethod
+        def get_issues_in_theme():
+            return ["_Sin_Cuestion", "Licitacion"]
+
+    class Notes:
+        @staticmethod
+        def get_note(received_id):
+            assert received_id == note_id
+            return type("Note", (), {
+                "document_id": note_id, "revision": 2, "title": "Pliego",
+                "content_hash": "a" * 64,
+            })()
+
+    class Backend:
+        vault = Vault()
+        calls: list[tuple[str, dict[str, str]]] = []
+
+        @classmethod
+        def handle_action(cls, action, payload):
+            cls.calls.append((action, payload))
+            if action == "set_theme":
+                cls.vault.active_theme = payload["theme_name"]
+            return {"ok": True}
+
+        @staticmethod
+        def move_notes_to_theme(document_ids, theme):
+            assert (document_ids, theme) == ([note_id], "Contratos")
+            return {"moved": [{"document_id": note_id}], "errors": []}
+
+        @staticmethod
+        def get_notes_service():
+            return Notes()
+
+    class Outbox:
+        @staticmethod
+        def get_note(received_id):
+            assert received_id == note_id
+            return {"note_type": "summary", "status": "pending_review", "theme": "Contratos", "issue": "_Sin_Cuestion"}
+
+        @staticmethod
+        def delete_document_outbox(_outbox_id):
+            return None
+
+    agent = GestajoAgent(
+        tmp_path, verifier=_verifier, publisher=_publisher,
+        membership_verifier=_management_verifier, backend_factory=lambda _vault: Backend(),
+        note_visibility_verifier=lambda *_args: {"common_org_id": COMMON_ORG_ID},
+        note_metadata_publisher=lambda _binding, _token, metadata: published.append(dict(metadata)),
+        audit_publisher=lambda *_args: None, outbox_factory=lambda _vault: Outbox(),
+    )
+    agent.claim("token-a", {"supabase_url": "https://project.supabase.co", "publishable_key": "sb_publishable_test_key"})
+
+    assert agent.save_taxonomy_theme("token-a", org_id, {"action": "select", "theme": "Contratos"}) == {
+        "themes": ["Contratos", "General"], "active_theme": "Contratos", "issues": ["Licitacion", "_Sin_Cuestion"],
+    }
+    assert agent.move_note_to_theme("token-a", org_id, note_id, {"theme": "Contratos"}) == {
+        "document_id": note_id, "revision": 2, "title": "Pliego", "content_hash": "a" * 64, "sync_state": "synced",
+    }
+    assert Backend.calls == [("set_theme", {"theme_name": "Contratos"})]
+    assert published[0]["theme"] == "Contratos"
+    assert "/private" not in str(published)
+
+    from http.client import HTTPConnection
+    from http.server import ThreadingHTTPServer
+    from threading import Thread
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), _handler_for(agent))
+    thread = Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        connection = HTTPConnection("127.0.0.1", server.server_port, timeout=2)
+        connection.request("GET", f"/v1/taxonomy?org_id={org_id}", headers={"Origin": "http://localhost:3000", "Authorization": "Bearer token-a"})
+        response = connection.getresponse()
+        route_taxonomy = json.loads(response.read())
+        connection.request("POST", f"/v1/notes/{note_id}/theme?org_id={org_id}", body=json.dumps({"theme": "Contratos"}), headers={"Origin": "http://localhost:3000", "Authorization": "Bearer token-a", "Content-Type": "application/json"})
+        moved_response = connection.getresponse()
+        route_move = json.loads(moved_response.read())
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
+
+    assert response.status == 200
+    assert route_taxonomy["active_theme"] == "Contratos"
+    assert moved_response.status == 200
+    assert route_move["sync_state"] == "synced"
 
 
 def test_templates_are_readable_but_only_management_can_write(tmp_path: Path):

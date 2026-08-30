@@ -516,8 +516,80 @@ class GestajoAgent:
             "platform": platform.system(),
             "user_id": binding.user_id,
             "vault_fingerprint": self._vault_fingerprint(),
-            "capabilities": ["flow", "flow_import", "flow_approve", "flow_jobs", "flow_job_detail", "flow_job_resume", "flow_job_cancel", "flow_review", "flow_review_captured", "flow_discard", "settings", "sync_inputs", "sync_run", "sync_output", "sync_conflict_read", "sync_conflict_resolve", "document_conflict_read", "document_conflict_resolve", "note_read", "note_search", "note_relations", "note_lineage", "note_write", "note_merge", "note_approve_processed", "note_share", "note_assistant", "note_assistant_persist", "knowledge_assistant", "templates_read", "templates_write"],
+            "capabilities": ["flow", "flow_import", "flow_approve", "flow_jobs", "flow_job_detail", "flow_job_resume", "flow_job_cancel", "flow_review", "flow_review_captured", "flow_discard", "settings", "sync_inputs", "sync_run", "sync_output", "sync_conflict_read", "sync_conflict_resolve", "document_conflict_read", "document_conflict_resolve", "taxonomy_read", "taxonomy_write", "note_read", "note_search", "note_relations", "note_lineage", "note_write", "note_theme", "note_merge", "note_approve_processed", "note_share", "note_assistant", "note_assistant_persist", "knowledge_assistant", "templates_read", "templates_write"],
         }
+
+    def taxonomy(self, access_token: object, org_id: object) -> dict[str, object]:
+        binding = self._require_user(access_token)
+        if not isinstance(org_id, str):
+            raise AgentAuthorizationError("organization is invalid")
+        self._membership_verifier(binding, self._access_token(access_token), org_id)
+        vault = self._local_backend().vault
+        result = _taxonomy_response({
+            "themes": vault.get_available_themes(),
+            "active_theme": vault.active_theme,
+            "issues": vault.get_issues_in_theme(),
+        })
+        self._record_audit(binding, self._access_token(access_token), _new_audit_event(
+            None, org_id, str(uuid.UUID(org_id)), binding.user_id, "taxonomy_read", "success",
+        ))
+        return result
+
+    def save_taxonomy_theme(self, access_token: object, org_id: object, payload: object) -> dict[str, object]:
+        binding = self._require_management(access_token, org_id)
+        action, theme = _taxonomy_theme_payload(payload)
+        result = self._local_backend().handle_action(
+            "create_theme" if action == "create" else "set_theme", {"theme_name": theme},
+        )
+        if not isinstance(result, Mapping) or result.get("error"):
+            raise AgentError(str(result.get("message") or result.get("error") or "local Theme update failed"))
+        self._record_audit(binding, self._access_token(access_token), _new_audit_event(
+            None, str(org_id), str(uuid.UUID(str(org_id))), binding.user_id,
+            "taxonomy_theme_create" if action == "create" else "taxonomy_theme_select", "success",
+        ))
+        return self.taxonomy(access_token, org_id)
+
+    def create_taxonomy_issue(self, access_token: object, org_id: object, payload: object) -> dict[str, object]:
+        binding = self._require_management(access_token, org_id)
+        issue_name = _taxonomy_issue_payload(payload)
+        result = self._local_backend().handle_action("create_issue", {"issue_name": issue_name})
+        if not isinstance(result, Mapping) or result.get("error"):
+            raise AgentError(str(result.get("message") or result.get("error") or "local Issue creation failed"))
+        self._record_audit(binding, self._access_token(access_token), _new_audit_event(
+            None, str(org_id), str(uuid.UUID(str(org_id))), binding.user_id, "taxonomy_issue_create", "success",
+        ))
+        return self.taxonomy(access_token, org_id)
+
+    def move_note_to_theme(self, access_token: object, org_id: object, note_id: object, payload: object) -> dict[str, object]:
+        binding = self._require_management(access_token, org_id)
+        if not isinstance(note_id, str):
+            raise AgentAuthorizationError("note is invalid")
+        theme = _taxonomy_note_theme_payload(payload)
+        scope = self._note_visibility_verifier(binding, self._access_token(access_token), note_id)
+        result = self._local_backend().move_notes_to_theme([note_id], theme)
+        if not isinstance(result, Mapping) or result.get("errors") or not result.get("moved"):
+            raise AgentError("local Note Theme update failed")
+        note = self._local_backend().get_notes_service().get_note(note_id)
+        local = _note_update_response({
+            "document_id": note.document_id, "revision": note.revision,
+            "title": note.title, "content_hash": note.content_hash,
+        }, note_id)
+        metadata = _document_note_sync_payload(
+            local, self._document_outbox().get_note(note_id) or {}, binding, str(org_id),
+        )
+        try:
+            self._note_metadata_publisher(binding, self._access_token(access_token), metadata)
+            self._document_outbox().delete_document_outbox(_metadata_outbox_id(note_id))
+            sync_state = "synced"
+        except AgentSyncError:
+            self._document_outbox().upsert_document_outbox(
+                outbox_id=_metadata_outbox_id(note_id), kind="note_metadata", payload=metadata,
+            )
+            sync_state = "pending_sync"
+        self._record_audit(binding, self._access_token(access_token), _new_audit_event(
+            note_id, str(org_id), scope["common_org_id"], binding.user_id, "note_theme_update", sync_state,
+        ))
+        return {**local, "sync_state": sync_state}
 
     def flow(self, access_token: object, org_id: object) -> dict[str, object]:
         binding = self._require_user(access_token)
@@ -1503,6 +1575,11 @@ def _handler_for(agent: GestajoAgent) -> type[BaseHTTPRequestHandler]:
                     lambda token: agent.settings(token, _single_query_value(parsed.query, "org_id"))
                 )
                 return
+            if parsed.path == "/v1/taxonomy":
+                self._authorized(
+                    lambda token: agent.taxonomy(token, _single_query_value(parsed.query, "org_id"))
+                )
+                return
             if parsed.path == "/v1/templates":
                 self._authorized(
                     lambda token: agent.list_templates(token, _single_query_value(parsed.query, "org_id"))
@@ -1565,6 +1642,7 @@ def _handler_for(agent: GestajoAgent) -> type[BaseHTTPRequestHandler]:
             is_note_assistant_output = note_route.endswith("/assistant-output") and bool(note_route.removesuffix("/assistant-output")) and "/" not in note_route.removesuffix("/assistant-output")
             is_note_assistant = note_route.endswith("/assistant") and bool(note_route.removesuffix("/assistant")) and "/" not in note_route.removesuffix("/assistant")
             is_note_processed_approval = note_route.endswith("/approve-processed") and bool(note_route.removesuffix("/approve-processed")) and "/" not in note_route.removesuffix("/approve-processed")
+            is_note_theme = note_route.endswith("/theme") and bool(note_route.removesuffix("/theme")) and "/" not in note_route.removesuffix("/theme")
             is_note_merge = parsed.path == "/v1/notes/merge"
             is_note_update = bool(note_route) and "/" not in note_route and not is_note_merge
             is_knowledge_assistant = parsed.path == "/v1/knowledge-assistant"
@@ -1580,9 +1658,9 @@ def _handler_for(agent: GestajoAgent) -> type[BaseHTTPRequestHandler]:
             is_template_save = bool(template_id) and "/" not in template_id
             conflict_route = parsed.path.removeprefix("/v1/document-conflicts/") if parsed.path.startswith("/v1/document-conflicts/") else ""
             is_document_conflict_resolve = conflict_route.endswith("/resolve") and bool(conflict_route.removesuffix("/resolve")) and "/" not in conflict_route.removesuffix("/resolve")
-            if not (is_note_merge or is_note_update or is_note_share or is_note_assistant or is_note_assistant_output or is_note_processed_approval or is_knowledge_assistant or is_flow_job_resume or is_flow_job_cancel or is_review_captured_update or is_review_captured_assistant or is_template_save or is_document_conflict_resolve) and parsed.path not in {
+            if not (is_note_merge or is_note_update or is_note_share or is_note_assistant or is_note_assistant_output or is_note_processed_approval or is_note_theme or is_knowledge_assistant or is_flow_job_resume or is_flow_job_cancel or is_review_captured_update or is_review_captured_assistant or is_template_save or is_document_conflict_resolve) and parsed.path not in {
                 "/v1/claim", "/v1/flow/import", "/v1/flow/approve", "/v1/flow/discard", "/v1/settings", "/v1/sync-inputs/select", "/v1/sync-inputs/run", "/v1/sync-outputs/run", "/v1/sync-conflicts/read", "/v1/sync-conflicts/resolve",
-                "/v1/sync-inputs/confirm", "/v1/sync-inputs/enabled", "/v1/sync-inputs/remove", "/v1/sync",
+                "/v1/sync-inputs/confirm", "/v1/sync-inputs/enabled", "/v1/sync-inputs/remove", "/v1/sync", "/v1/taxonomy/themes", "/v1/taxonomy/issues",
             }:
                 self._send_error(HTTPStatus.NOT_FOUND, "route not found")
                 return
@@ -1621,6 +1699,9 @@ def _handler_for(agent: GestajoAgent) -> type[BaseHTTPRequestHandler]:
             if is_note_processed_approval:
                 self._authorized(lambda token: agent.approve_processed_note(token, _single_query_value(parsed.query, "org_id"), note_route.removesuffix("/approve-processed"), payload))
                 return
+            if is_note_theme:
+                self._authorized(lambda token: agent.move_note_to_theme(token, _single_query_value(parsed.query, "org_id"), note_route.removesuffix("/theme"), payload))
+                return
             if is_note_assistant_output:
                 self._authorized(lambda token: agent.create_note_from_assistant(token, _single_query_value(parsed.query, "org_id"), note_route.removesuffix("/assistant-output"), payload))
                 return
@@ -1654,6 +1735,12 @@ def _handler_for(agent: GestajoAgent) -> type[BaseHTTPRequestHandler]:
                 return
             if parsed.path == "/v1/settings":
                 self._authorized(lambda token: agent.save_settings(token, org_id, payload))
+                return
+            if parsed.path == "/v1/taxonomy/themes":
+                self._authorized(lambda token: agent.save_taxonomy_theme(token, org_id, payload))
+                return
+            if parsed.path == "/v1/taxonomy/issues":
+                self._authorized(lambda token: agent.create_taxonomy_issue(token, org_id, payload))
                 return
             if parsed.path == "/v1/sync-inputs/select":
                 self._authorized(lambda token: agent.select_sync_input(token, org_id))
@@ -2481,6 +2568,53 @@ def _note_update_payload(payload: object) -> tuple[int, str]:
     if not isinstance(body, str) or "\x00" in body or len(body) > 10_000_000:
         raise AgentError("body_markdown is invalid")
     return revision, body
+
+
+def _taxonomy_response(value: object) -> dict[str, object]:
+    if not isinstance(value, Mapping):
+        raise AgentError("local taxonomy has an invalid contract")
+    themes = value.get("themes")
+    active_theme = value.get("active_theme")
+    issues = value.get("issues")
+    if (
+        not isinstance(themes, list)
+        or not isinstance(issues, list)
+        or not isinstance(active_theme, str)
+        or not 1 <= len(active_theme) <= 256
+        or len(themes) > 200
+        or len(issues) > 500
+        or any(not isinstance(item, str) or not 1 <= len(item) <= 256 for item in [*themes, *issues])
+    ):
+        raise AgentError("local taxonomy has an invalid contract")
+    return {"themes": sorted(set(themes)), "active_theme": active_theme, "issues": sorted(set(issues))}
+
+
+def _taxonomy_theme_payload(payload: object) -> tuple[str, str]:
+    if not isinstance(payload, Mapping) or set(payload) != {"action", "theme"}:
+        raise AgentError("Theme update has unsupported fields")
+    action = payload.get("action")
+    theme = payload.get("theme")
+    if action not in {"select", "create"} or not isinstance(theme, str) or not theme.strip() or "\x00" in theme or len(theme.strip()) > 256:
+        raise AgentError("Theme update is invalid")
+    return action, theme.strip()
+
+
+def _taxonomy_issue_payload(payload: object) -> str:
+    if not isinstance(payload, Mapping) or set(payload) != {"issue"}:
+        raise AgentError("Issue creation has unsupported fields")
+    issue = payload.get("issue")
+    if not isinstance(issue, str) or not issue.strip() or "\x00" in issue or len(issue.strip()) > 256:
+        raise AgentError("Issue creation is invalid")
+    return issue.strip()
+
+
+def _taxonomy_note_theme_payload(payload: object) -> str:
+    if not isinstance(payload, Mapping) or set(payload) != {"theme"}:
+        raise AgentError("Note Theme update has unsupported fields")
+    theme = payload.get("theme")
+    if not isinstance(theme, str) or not theme.strip() or "\x00" in theme or len(theme.strip()) > 256:
+        raise AgentError("Note Theme update is invalid")
+    return theme.strip()
 
 
 def _note_merge_payload(payload: object) -> tuple[str, str, str]:

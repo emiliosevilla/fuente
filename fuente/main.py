@@ -106,9 +106,9 @@ def run_gestajo_agent_service(vault_path: Path, wait_for_shutdown=None) -> None:
     """Run Fuente's ETL and the Gestajo loopback agent without opening a UI."""
     from fuente.agent.server import start_gestajo_agent
     from fuente.agent.tls import load_agent_tls_context
-    from fuente.control_console import FuenteConsoleBackend
+    from fuente import control_console
 
-    backend = FuenteConsoleBackend(vault_path)
+    backend = control_console.FuenteConsoleBackend(vault_path)
     lifecycle = ApplicationLifecycle(backend.config, mode="headless")
     runtime = None
     wait = wait_for_shutdown or _wait_for_shutdown_signal

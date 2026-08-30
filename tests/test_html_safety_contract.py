@@ -97,6 +97,17 @@ def test_console_note_editor_has_safe_save_and_close_controls():
     assert "editorUndoStack.length > 11" in source
 
 
+def test_console_note_editor_can_toggle_a_rendered_preview():
+    source = (Path(__file__).resolve().parent.parent / "consola_preview.html").read_text(
+        encoding="utf-8"
+    )
+
+    assert "function toggleEditorPreview()" in source
+    assert "Vista previa" in source
+    assert "readerMarkdownToProjection(editorMarkdownFromDom())" in source
+    assert "preview.id = 'note-editor-preview'" in source
+
+
 def test_console_stylesheet_link_resolves_to_local_packaged_css():
     source_path = Path(__file__).resolve().parent.parent / "consola_preview.html"
     source = source_path.read_text(encoding="utf-8")

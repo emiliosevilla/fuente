@@ -96,7 +96,7 @@ def test_status_requires_the_bound_user(tmp_path: Path):
     )
 
     assert agent.status("token-a")["claimed"] is True
-    assert agent.status("token-a")["capabilities"] == ["flow", "flow_approve", "flow_review", "settings", "sync_inputs", "sync_run", "sync_output", "sync_conflict_read", "sync_conflict_resolve", "note_read", "note_relations", "note_write", "note_share", "note_assistant", "templates_read", "templates_write"]
+    assert agent.status("token-a")["capabilities"] == ["flow", "flow_approve", "flow_review", "flow_discard", "settings", "sync_inputs", "sync_run", "sync_output", "sync_conflict_read", "sync_conflict_resolve", "note_read", "note_relations", "note_write", "note_share", "note_assistant", "templates_read", "templates_write"]
     with pytest.raises(AgentAuthenticationError, match="another user"):
         agent.status("token-b")
 
@@ -515,6 +515,46 @@ def test_management_can_approve_captured_content_for_local_processing(tmp_path: 
         ("approve", job_id, "3_capturado", "4_procesado", 1, "c" * 64, USER_A),
         ("resume", job_id),
     ]
+
+
+def test_management_can_discard_a_pending_capture(tmp_path: Path):
+    job_id = "00000000-0000-0000-0000-000000000127"
+    calls: list[tuple[object, ...]] = []
+    audits: list[dict[str, object]] = []
+
+    class Backend:
+        @staticmethod
+        def get_job_detail(value):
+            assert value == job_id
+            return {"job": {
+                "job_id": job_id, "stage": "saved_clean", "status": "pending",
+                "error_code": "awaiting_clean_approval", "revision": 4,
+                "source_relative_path": "1_volcado/Informe.pdf",
+                "clean_artifact": "3_capturado/Informe.md",
+            }}
+
+        @staticmethod
+        def get_job_control_service():
+            class Control:
+                @staticmethod
+                def request_cancel(value, *, expected_revision, reason):
+                    calls.append((value, expected_revision, reason))
+
+            return Control()
+
+    agent = GestajoAgent(
+        tmp_path, verifier=_verifier, publisher=_publisher,
+        management_verifier=_management_verifier, membership_verifier=_management_verifier,
+        backend_factory=lambda _vault: Backend(),
+        flow_reader=lambda _vault: {"steps": {}, "seals": {}, "queue": {}, "pending_approvals": []},
+        audit_publisher=lambda _binding, _token, event: audits.append(event),
+    )
+    agent.claim("token-a", {"supabase_url": "https://project.supabase.co", "publishable_key": "sb_publishable_test_key"})
+
+    agent.discard_flow_review("token-a", "00000000-0000-0000-0000-000000000001", {"job_id": job_id})
+
+    assert calls == [(job_id, 4, "captura descartada desde Gestajo")]
+    assert audits[0]["action"] == "caudal_capture_discard"
 
 
 def test_management_can_read_captured_review_without_local_paths(tmp_path: Path):

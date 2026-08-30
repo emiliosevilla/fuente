@@ -403,7 +403,7 @@ class GestajoAgent:
             "platform": platform.system(),
             "user_id": binding.user_id,
             "vault_fingerprint": self._vault_fingerprint(),
-            "capabilities": ["flow", "flow_approve", "flow_review", "settings", "sync_inputs", "sync_run", "sync_output", "sync_conflict_read", "sync_conflict_resolve", "note_read", "note_relations", "note_write", "note_share", "note_assistant", "templates_read", "templates_write"],
+            "capabilities": ["flow", "flow_approve", "flow_review", "flow_discard", "settings", "sync_inputs", "sync_run", "sync_output", "sync_conflict_read", "sync_conflict_resolve", "note_read", "note_relations", "note_write", "note_share", "note_assistant", "templates_read", "templates_write"],
         }
 
     def flow(self, access_token: object, org_id: object) -> dict[str, object]:
@@ -488,6 +488,30 @@ class GestajoAgent:
             path=source_path,
             media_type=_flow_review_media_type(source_path),
         )
+
+    def discard_flow_review(self, access_token: object, org_id: object, payload: object) -> dict[str, object]:
+        """Discard the pending captured artifact, preserving the original input."""
+        binding = self._require_management(access_token, org_id)
+        job_id = _flow_approval_payload(payload)
+        backend = self._local_backend()
+        detail = backend.get_job_detail(job_id)
+        job = detail.get("job") if isinstance(detail, Mapping) else None
+        if _flow_review_summary(job) is None or not isinstance(job, Mapping):
+            raise AgentError("the requested Caudal review is not available")
+        revision = job.get("revision")
+        if not isinstance(revision, int) or isinstance(revision, bool) or revision < 0:
+            raise AgentError("local Caudal job is invalid")
+        try:
+            backend.get_job_control_service().request_cancel(
+                job_id, expected_revision=revision, reason="captura descartada desde Gestajo"
+            )
+        except (OSError, RuntimeError, ValueError) as error:
+            raise AgentError("Caudal could not discard the captured material locally") from error
+        self._record_audit(binding, self._access_token(access_token), _new_audit_event(
+            None, str(org_id), str(uuid.UUID(str(org_id))), binding.user_id,
+            "caudal_capture_discard", "success",
+        ))
+        return _flow_response(self._read_flow())
 
     def settings(self, access_token: object, org_id: object) -> dict[str, object]:
         binding = self._require_user(access_token)
@@ -988,7 +1012,7 @@ def _handler_for(agent: GestajoAgent) -> type[BaseHTTPRequestHandler]:
             template_id = parsed.path.removeprefix("/v1/templates/") if parsed.path.startswith("/v1/templates/") else ""
             is_template_save = bool(template_id) and "/" not in template_id
             if not (is_note_update or is_note_share or is_note_assistant or is_template_save) and parsed.path not in {
-                "/v1/claim", "/v1/flow/approve", "/v1/settings", "/v1/sync-inputs/select", "/v1/sync-inputs/run", "/v1/sync-outputs/run", "/v1/sync-conflicts/read", "/v1/sync-conflicts/resolve",
+                "/v1/claim", "/v1/flow/approve", "/v1/flow/discard", "/v1/settings", "/v1/sync-inputs/select", "/v1/sync-inputs/run", "/v1/sync-outputs/run", "/v1/sync-conflicts/read", "/v1/sync-conflicts/resolve",
                 "/v1/sync-inputs/confirm", "/v1/sync-inputs/enabled", "/v1/sync-inputs/remove", "/v1/sync",
             }:
                 self._send_error(HTTPStatus.NOT_FOUND, "route not found")
@@ -1019,6 +1043,9 @@ def _handler_for(agent: GestajoAgent) -> type[BaseHTTPRequestHandler]:
             org_id = _single_query_value(parsed.query, "org_id")
             if parsed.path == "/v1/flow/approve":
                 self._authorized(lambda token: agent.approve_flow_transition(token, org_id, payload))
+                return
+            if parsed.path == "/v1/flow/discard":
+                self._authorized(lambda token: agent.discard_flow_review(token, org_id, payload))
                 return
             if parsed.path == "/v1/settings":
                 self._authorized(lambda token: agent.save_settings(token, org_id, payload))

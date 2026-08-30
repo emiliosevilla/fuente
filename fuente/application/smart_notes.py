@@ -31,14 +31,20 @@ _PROCESSED_SUBDIRS = {
     "propiedades": "propiedades",
     "contexto": "contextos",
     "concepto": "conceptos",
+    "tareas": "tareas",
+    "reunion": "reuniones",
+    "objetivos": "objetivos",
 }
 _FRONTMATTER_NOTE_TYPE = {
     "resumen": "summary",
     "propiedades": "summary",
     "contexto": "concept",
     "concepto": "concept",
+    "tareas": "summary",
+    "reunion": "summary",
+    "objetivos": "summary",
 }
-_REQUIRED_FIXED = ("resumen", "propiedades", "contexto")
+_REQUIRED_FIXED = ("resumen", "propiedades", "contexto", "tareas", "reunion", "objetivos")
 
 
 class ConversationClient(Protocol):
@@ -276,7 +282,7 @@ class SmartNoteGenerator:
     ) -> list[dict[str, Any]]:
         source_title = str(metadata.get("title") or origin.note_id)
         source_wikilink = self._wikilink_for_path(origin.path, source_title)
-        chat_payload = self._chat_payload(body, origin, source_wikilink)
+        chat_payload = self._chat_payload(body, origin, source_wikilink, model)
         concept_slugs = [
             normalize_concept_slug(slug)
             for slug in chat_payload.get("concepts", [])
@@ -361,17 +367,20 @@ class SmartNoteGenerator:
         return plan
 
     def _chat_payload(
-        self, body: str, origin: OriginRef, source_wikilink: str
+        self, body: str, origin: OriginRef, source_wikilink: str, model: str
     ) -> dict[str, Any]:
         prompt = (
             "Genera notas procesadas en JSON con claves resumen, propiedades, "
-            "contexto, concepts (lista de slugs) y concept_bodies (mapa slug->markdown).\n\n"
+            "contexto, tareas, reunion, objetivos, concepts (lista de slugs) y "
+            "concept_bodies (mapa slug->markdown). Conserva sólo hechos de la "
+            "fuente; en tareas no inventes responsables y en reunion separa "
+            "acuerdos de pendientes.\n\n"
             f"Fuente: {origin.path}\n{body}"
         )
         response = self.chat_client.chat(
             session_id=f"smart-notes:{origin.note_id}",
             prompt=prompt,
-            model=self.model_name,
+            model=model,
         )
         text = str(response.get("text") or response.get("response") or "")
         if text.lstrip().startswith("{"):
@@ -385,6 +394,9 @@ class SmartNoteGenerator:
             "resumen": text or f"Resumen de {source_wikilink}.",
             "propiedades": f"Propiedades de {source_wikilink}.",
             "contexto": f"Contexto de {source_wikilink}.",
+            "tareas": f"Tareas extraídas de {source_wikilink}.",
+            "reunion": f"Acuerdos y pendientes de {source_wikilink}.",
+            "objetivos": f"Objetivos derivados de {source_wikilink}.",
             "concepts": extract_concept_slugs(body),
             "concept_bodies": {},
         }
@@ -554,7 +566,7 @@ class SmartNoteGenerator:
             "origins": [origin.to_dict()],
             "history": [],
         }
-        if note_type in {"resumen", "propiedades"}:
+        if _FRONTMATTER_NOTE_TYPE[note_type] == "summary":
             frontmatter["origin_kind"] = "working_document"
         return serialize_frontmatter(frontmatter, human_labels=True) + body
 
@@ -664,6 +676,9 @@ class FakeConversationClient:
             "resumen": "Resumen generado para la fuente aprobada.",
             "propiedades": "Propiedades extraídas de la fuente aprobada.",
             "contexto": "Contexto relacionado con la fuente aprobada.",
+            "tareas": "Tareas concretas extraídas de la fuente aprobada.",
+            "reunion": "Acuerdos y próximos pasos de la fuente aprobada.",
+            "objetivos": "Objetivos verificables de la fuente aprobada.",
             "concepts": concepts,
             "concept_bodies": bodies,
         }

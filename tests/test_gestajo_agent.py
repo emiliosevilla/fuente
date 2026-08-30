@@ -16,6 +16,7 @@ from fuente.agent.server import (
     GestajoAgent,
     GestajoAgentServer,
     _handler_for,
+    _assistant_note_create_payload,
     _binding_path,
     publish_agent_status,
     publish_document_note_metadata,
@@ -30,6 +31,14 @@ from fuente.domain.sync import ConnectedFolder, SyncDirection
 USER_A = "00000000-0000-0000-0000-0000000000a1"
 USER_B = "00000000-0000-0000-0000-0000000000b2"
 COMMON_ORG_ID = "00000000-0000-0000-0000-000000000099"
+
+
+@pytest.mark.parametrize("kind", ["apunte", "diario"])
+def test_assistant_note_payload_accepts_manual_note_kinds(kind: str):
+    assert _assistant_note_create_payload({
+        "title": "Nota local", "kind": kind,
+        "body_markdown": "Contenido.", "model": "qwen2.5:0.5b",
+    }) == ("Nota local", kind, "Contenido.", "qwen2.5:0.5b")
 
 
 def _verifier(binding: AgentBinding, token: str) -> str:

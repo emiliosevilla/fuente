@@ -2642,7 +2642,7 @@ def _assistant_note_create_payload(payload: object) -> tuple[str, str, str, str]
         or not 1 <= len(title.strip()) <= 200
         or "\x00" in title
         or not isinstance(kind, str)
-        or kind not in {"summary", "properties", "context", "concept", "tasks", "meeting", "objectives", "decision", "conclusion"}
+        or kind not in {"summary", "apunte", "diario", "properties", "context", "concept", "tasks", "meeting", "objectives", "decision", "conclusion"}
         or not isinstance(body_markdown, str)
         or not 1 <= len(body_markdown.strip()) <= 100_000
         or not isinstance(model, str)

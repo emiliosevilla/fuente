@@ -49,6 +49,8 @@ IndexNotifier = Callable[[], None]
 
 _ASSISTANT_NOTE_TYPES = frozenset({
     "summary",
+    "apunte",
+    "diario",
     "properties",
     "context",
     "concept",

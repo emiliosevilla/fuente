@@ -818,6 +818,10 @@ class GestajoAgent:
             approvals = control.ingestion.transition_approvals
             approvals.begin_review(approval_id, source_stage, target_stage, approval_revision, content_hash, reviewer=binding.user_id)
             approvals.approve(approval_id, source_stage, target_stage, approval_revision, content_hash, reviewer=binding.user_id)
+            if source_stage == "3_capturado":
+                control.ingestion.approval_service.ledger.approve(
+                    approval_id, approval_revision, content_hash, binding.user_id,
+                )
         except (OSError, RuntimeError, ValueError) as error:
             raise AgentError("Caudal could not record the approval locally") from error
         self._record_audit(binding, self._access_token(access_token), _new_audit_event(

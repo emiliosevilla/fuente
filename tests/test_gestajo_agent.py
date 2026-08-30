@@ -1017,6 +1017,11 @@ def test_management_can_approve_captured_content_for_local_processing(tmp_path: 
 
     class Ingestion:
         transition_approvals = Approvals()
+        approval_service = type("ApprovalService", (), {
+            "ledger": type("Ledger", (), {
+                "approve": staticmethod(lambda *args: calls.append(("approve_note", *args))),
+            })(),
+        })()
         job_store = type("Store", (), {
             "get_note": staticmethod(lambda _note_id: {"revision": 2, "content_hash": "c" * 64}),
             "list_generated_note_lineage": staticmethod(lambda **_kwargs: [{
@@ -1058,6 +1063,7 @@ def test_management_can_approve_captured_content_for_local_processing(tmp_path: 
     assert calls == [
         ("begin_review", document_id_for_relative_path("3_capturado/03 El loco.md"), "3_capturado", "4_procesado", 2, "c" * 64, USER_A),
         ("approve", document_id_for_relative_path("3_capturado/03 El loco.md"), "3_capturado", "4_procesado", 2, "c" * 64, USER_A),
+        ("approve_note", document_id_for_relative_path("3_capturado/03 El loco.md"), 2, "c" * 64, USER_A),
         ("resume", job_id),
     ]
     assert result["processed_notes"] == [{

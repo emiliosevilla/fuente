@@ -1408,12 +1408,13 @@ def test_sync_pending_registers_local_catalog_notes_as_private_metadata(tmp_path
             "document_id": received_id, "revision": 2, "title": "Nota local", "body_markdown": "# Nota local",
         },
         note_metadata_publisher=lambda _binding, _token, payload: published.append(payload),
+        document_catalog_reader=lambda *_args: {},
     )
     agent.claim("token-a", {"supabase_url": "https://project.supabase.co", "publishable_key": "sb_publishable_test_key"})
 
     result = agent.sync_pending("token-a", "00000000-0000-0000-0000-000000000001")
 
-    assert result == {"synced": 1, "pending": 0}
+    assert result == {"synced": 1, "pending": 0, "catalog": {"registered": 1, "updated": 0, "unchanged": 0}}
     assert published == [{
         "document_id": note_id, "title": "Nota local", "revision": 2, "content_hash": "a" * 64,
         "owner_user_id": USER_A, "owner_org_id": "00000000-0000-0000-0000-000000000001",

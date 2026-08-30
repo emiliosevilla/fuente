@@ -290,6 +290,48 @@ def publish_document_note_metadata(binding: AgentBinding, access_token: str, not
         raise AgentSyncError("Supabase did not confirm note metadata")
 
 
+def read_document_note_catalog(binding: AgentBinding, access_token: str) -> dict[str, tuple[int, str]]:
+    """Read the RLS-visible metadata projection for an initial sync report."""
+    rows: list[object] = []
+    offset = 0
+    while True:
+        request = Request(
+            f"{binding.supabase_url}/rest/v1/document_notes?select=note_id,revision,content_hash",
+            headers={
+                "apikey": binding.publishable_key, "Authorization": f"Bearer {access_token}",
+                "Range": f"{offset}-{offset + 999}",
+            },
+            method="GET",
+        )
+        try:
+            with urlopen(request, timeout=5) as response:
+                page = json.loads(response.read().decode("utf-8"))
+        except (HTTPError, URLError, TimeoutError, OSError, json.JSONDecodeError) as error:
+            raise AgentSyncError("Supabase could not read the document catalog") from error
+        if not isinstance(page, list):
+            raise AgentSyncError("Supabase returned an invalid document catalog")
+        rows.extend(page)
+        if len(page) < 1000:
+            break
+        offset += len(page)
+    catalog: dict[str, tuple[int, str]] = {}
+    for row in rows:
+        if not isinstance(row, Mapping):
+            raise AgentSyncError("Supabase returned an invalid document catalog")
+        try:
+            note_id = str(uuid.UUID(str(row["note_id"])))
+        except (KeyError, ValueError, TypeError) as error:
+            raise AgentSyncError("Supabase returned an invalid document catalog") from error
+        revision, content_hash = row.get("revision"), row.get("content_hash")
+        if (
+            isinstance(revision, bool) or not isinstance(revision, int) or revision < 1
+            or not isinstance(content_hash, str) or len(content_hash) != 64
+        ):
+            raise AgentSyncError("Supabase returned an invalid document catalog")
+        catalog[note_id] = (revision, content_hash)
+    return catalog
+
+
 def publish_document_audit(binding: AgentBinding, access_token: str, event: Mapping[str, object]) -> None:
     payload = _audit_event_payload(event)
     request = Request(
@@ -390,6 +432,7 @@ class GestajoAgent:
         note_merger: Callable[[Path, str, str, str], Mapping[str, object]] | None = None,
         note_sharer: Callable[[Path, str, int, str], Mapping[str, object]] | None = None,
         note_metadata_publisher: Callable[[AgentBinding, str, Mapping[str, object]], None] = publish_document_note_metadata,
+        document_catalog_reader: Callable[[AgentBinding, str], Mapping[str, tuple[int, str]]] = read_document_note_catalog,
         audit_publisher: Callable[[AgentBinding, str, Mapping[str, object]], None] = publish_document_audit,
         conflict_publisher: Callable[[AgentBinding, str, Mapping[str, object]], None] = publish_document_conflict,
         conflict_resolver: Callable[[AgentBinding, str, Mapping[str, object]], None] = resolve_document_conflict,
@@ -412,6 +455,7 @@ class GestajoAgent:
         self._note_merger = note_merger or _merge_notes
         self._note_sharer = note_sharer or _share_note
         self._note_metadata_publisher = note_metadata_publisher
+        self._document_catalog_reader = document_catalog_reader
         self._audit_publisher = audit_publisher
         self._conflict_publisher = conflict_publisher
         self._conflict_resolver = conflict_resolver
@@ -1055,6 +1099,12 @@ class GestajoAgent:
     def sync_pending(self, access_token: object, org_id: object) -> dict[str, object]:
         binding = self._require_management(access_token, org_id)
         synced = 0
+        local_catalog = self._document_outbox().list_notes()
+        try:
+            remote_catalog = self._document_catalog_reader(binding, self._access_token(access_token))
+            catalog_report = _catalog_sync_report(local_catalog, remote_catalog)
+        except AgentSyncError:
+            catalog_report = None
         for item in self._document_outbox().list_document_outbox():
             try:
                 payload = json.loads(str(item["payload_json"]))
@@ -1074,7 +1124,7 @@ class GestajoAgent:
                 break
             self._document_outbox().delete_document_outbox(str(item["outbox_id"]))
             synced += 1
-        for catalog in self._document_outbox().list_notes():
+        for catalog in local_catalog:
             note_id = catalog.get("note_id")
             if not isinstance(note_id, str):
                 continue
@@ -1094,7 +1144,10 @@ class GestajoAgent:
                 )
                 break
             synced += 1
-        return {"synced": synced, "pending": len(self._document_outbox().list_document_outbox())}
+        result: dict[str, object] = {"synced": synced, "pending": len(self._document_outbox().list_document_outbox())}
+        if catalog_report is not None:
+            result["catalog"] = catalog_report
+        return result
 
     def _record_audit(self, binding: AgentBinding, access_token: str, event: dict[str, object]) -> None:
         try:
@@ -1944,6 +1997,25 @@ def _sync_conflict_metadata(
         }
     except (FrontmatterError, ValueError, TypeError):
         return None
+
+
+def _catalog_sync_report(
+    local_catalog: list[dict[str, object]], remote_catalog: Mapping[str, tuple[int, str]],
+) -> dict[str, int]:
+    registered = updated = unchanged = 0
+    for local in local_catalog:
+        note_id = local.get("note_id")
+        revision, content_hash = local.get("revision"), local.get("content_hash")
+        if not isinstance(note_id, str) or isinstance(revision, bool) or not isinstance(revision, int) or not isinstance(content_hash, str):
+            continue
+        remote = remote_catalog.get(note_id)
+        if remote is None:
+            registered += 1
+        elif remote == (revision, content_hash):
+            unchanged += 1
+        else:
+            updated += 1
+    return {"registered": registered, "updated": updated, "unchanged": unchanged}
 
 
 def _sync_report_response(value: Mapping[str, object]) -> dict[str, object]:

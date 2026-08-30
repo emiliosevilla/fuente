@@ -516,12 +516,20 @@ class GestajoAgent:
     def list_templates(self, access_token: object, org_id: object) -> dict[str, object]:
         binding = self._require_user(access_token)
         self._membership_verifier(binding, self._access_token(access_token), org_id)
-        return _template_list_response(self._local_backend().list_templates())
+        result = _template_list_response(self._local_backend().list_templates())
+        self._record_audit(binding, self._access_token(access_token), _new_audit_event(
+            None, str(org_id), str(uuid.UUID(str(org_id))), binding.user_id, "template_list", "success",
+        ))
+        return result
 
     def read_template(self, access_token: object, org_id: object, template_id: object) -> dict[str, object]:
         binding = self._require_user(access_token)
         self._membership_verifier(binding, self._access_token(access_token), org_id)
-        return _template_response(self._local_backend().load_template(_template_id(template_id)))
+        result = _template_response(self._local_backend().load_template(_template_id(template_id)))
+        self._record_audit(binding, self._access_token(access_token), _new_audit_event(
+            None, str(org_id), str(uuid.UUID(str(org_id))), binding.user_id, "template_read", "success",
+        ))
+        return result
 
     def save_template(self, access_token: object, org_id: object, template_id: object, payload: object) -> dict[str, object]:
         binding = self._require_management(access_token, org_id)
@@ -530,7 +538,11 @@ class GestajoAgent:
             raise AgentError("template payload has unsupported fields")
         if not isinstance(payload["template"], str) or not isinstance(payload["agents"], str) or not isinstance(payload["expected_revision"], int):
             raise AgentError("template payload is invalid")
-        return _template_response(self._local_backend().save_template({"template_id": template_id, **payload}))
+        result = _template_response(self._local_backend().save_template({"template_id": template_id, **payload}))
+        self._record_audit(binding, self._access_token(access_token), _new_audit_event(
+            None, str(org_id), str(uuid.UUID(str(org_id))), binding.user_id, "template_update", "success",
+        ))
+        return result
 
     def select_sync_input(self, access_token: object, org_id: object) -> dict[str, object]:
         self._require_management(access_token, org_id)
@@ -702,8 +714,12 @@ class GestajoAgent:
         if not isinstance(org_id, str) or not isinstance(note_id, str):
             raise AgentAuthorizationError("note is invalid")
         self._membership_verifier(binding, self._access_token(access_token), org_id)
-        self._note_visibility_verifier(binding, self._access_token(access_token), note_id)
-        return _note_relations_response(self._local_backend().get_relation_preview(note_id))
+        scope = self._note_visibility_verifier(binding, self._access_token(access_token), note_id)
+        result = _note_relations_response(self._local_backend().get_relation_preview(note_id))
+        self._record_audit(binding, self._access_token(access_token), _new_audit_event(
+            note_id, str(org_id), scope["common_org_id"], binding.user_id, "note_relations_read", "success",
+        ))
+        return result
 
     def share_note(self, access_token: object, org_id: object, note_id: object, payload: object) -> dict[str, object]:
         binding = self._require_management(access_token, org_id)

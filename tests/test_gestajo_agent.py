@@ -127,13 +127,15 @@ def test_templates_are_readable_but_only_management_can_write(tmp_path: Path):
             calls.append(payload)
             return {"template_id": payload["template_id"], "revision": 3, "template": payload["template"], "agents": payload["agents"]}
 
-    agent = GestajoAgent(tmp_path, verifier=_verifier, publisher=_publisher, management_verifier=_management_verifier, membership_verifier=_management_verifier, backend_factory=lambda _vault: Backend())
+    audits: list[dict[str, object]] = []
+    agent = GestajoAgent(tmp_path, verifier=_verifier, publisher=_publisher, management_verifier=_management_verifier, membership_verifier=_management_verifier, backend_factory=lambda _vault: Backend(), audit_publisher=lambda _binding, _token, event: audits.append(event))
     agent.claim("token-a", {"supabase_url": "https://project.supabase.co", "publishable_key": "sb_publishable_test_key"})
 
     assert agent.list_templates("token-a", "00000000-0000-0000-0000-000000000001") == {"templates": [{"template_id": "resumen", "label": "Resumen", "revision": 2}]}
     assert agent.read_template("token-a", "00000000-0000-0000-0000-000000000001", "resumen") == {"template_id": "resumen", "revision": 2, "template": "# Resumen", "agents": "Resume"}
     assert agent.save_template("token-a", "00000000-0000-0000-0000-000000000001", "resumen", {"template": "x", "agents": "x", "expected_revision": 2}) == {"template_id": "resumen", "revision": 3, "template": "x", "agents": "x"}
     assert calls == [{"template_id": "resumen", "template": "x", "agents": "x", "expected_revision": 2}]
+    assert [event["action"] for event in audits] == ["template_list", "template_read", "template_update"]
 
 
 def test_origin_and_claim_payload_fail_closed(tmp_path: Path):
@@ -637,10 +639,11 @@ def test_visible_note_exposes_safe_local_relations(tmp_path: Path):
                 "outgoing": [{"document_id": "00000000-0000-0000-0000-000000000011", "title": "Relacionado", "seal": "approved"}],
             }
 
+    audits: list[dict[str, object]] = []
     agent = GestajoAgent(
         tmp_path, verifier=_verifier, publisher=_publisher, membership_verifier=_membership_verifier,
         note_visibility_verifier=lambda *_args: {"note_id": note_id, "common_org_id": COMMON_ORG_ID},
-        backend_factory=lambda _vault: Backend(), audit_publisher=lambda *_args: None,
+        backend_factory=lambda _vault: Backend(), audit_publisher=lambda _binding, _token, event: audits.append(event),
     )
     agent.claim("token-a", {"supabase_url": "https://project.supabase.co", "publishable_key": "sb_publishable_test_key"})
 
@@ -648,6 +651,7 @@ def test_visible_note_exposes_safe_local_relations(tmp_path: Path):
 
     assert relations == {"center": {"document_id": note_id, "title": "Central"}, "outgoing": [{"document_id": "00000000-0000-0000-0000-000000000011", "title": "Relacionado", "seal": "approved", "broken": False}]}
     assert "/private" not in str(relations)
+    assert audits[0]["action"] == "note_relations_read"
 
 
 def test_flow_rejects_consulta(tmp_path: Path):

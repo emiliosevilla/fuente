@@ -330,6 +330,7 @@ class GestajoAgent:
         note_visibility_verifier: Callable[[AgentBinding, str, str], Mapping[str, str]] = verify_document_note_visibility,
         note_reader: Callable[[Path, str], Mapping[str, object]] | None = None,
         note_writer: Callable[[Path, str, int, str], Mapping[str, object]] | None = None,
+        note_merger: Callable[[Path, str, str, str], Mapping[str, object]] | None = None,
         note_sharer: Callable[[Path, str, int, str], Mapping[str, object]] | None = None,
         note_metadata_publisher: Callable[[AgentBinding, str, Mapping[str, object]], None] = publish_document_note_metadata,
         audit_publisher: Callable[[AgentBinding, str, Mapping[str, object]], None] = publish_document_audit,
@@ -349,6 +350,7 @@ class GestajoAgent:
         self._note_visibility_verifier = note_visibility_verifier
         self._note_reader = note_reader or _read_note
         self._note_writer = note_writer or _write_note
+        self._note_merger = note_merger or _merge_notes
         self._note_sharer = note_sharer or _share_note
         self._note_metadata_publisher = note_metadata_publisher
         self._audit_publisher = audit_publisher
@@ -403,7 +405,7 @@ class GestajoAgent:
             "platform": platform.system(),
             "user_id": binding.user_id,
             "vault_fingerprint": self._vault_fingerprint(),
-            "capabilities": ["flow", "flow_import", "flow_approve", "flow_review", "flow_review_captured", "flow_discard", "settings", "sync_inputs", "sync_run", "sync_output", "sync_conflict_read", "sync_conflict_resolve", "note_read", "note_relations", "note_lineage", "note_write", "note_approve_processed", "note_share", "note_assistant", "templates_read", "templates_write"],
+            "capabilities": ["flow", "flow_import", "flow_approve", "flow_review", "flow_review_captured", "flow_discard", "settings", "sync_inputs", "sync_run", "sync_output", "sync_conflict_read", "sync_conflict_resolve", "note_read", "note_relations", "note_lineage", "note_write", "note_merge", "note_approve_processed", "note_share", "note_assistant", "templates_read", "templates_write"],
         }
 
     def flow(self, access_token: object, org_id: object) -> dict[str, object]:
@@ -797,6 +799,38 @@ class GestajoAgent:
         ))
         return {**local, "sync_state": sync_state}
 
+    def merge_notes(self, access_token: object, org_id: object, payload: object) -> dict[str, object]:
+        """Create a private, pending-review third note from two visible notes."""
+        binding = self._require_management(access_token, org_id)
+        left_note_id, right_note_id, title = _note_merge_payload(payload)
+        self._note_visibility_verifier(binding, self._access_token(access_token), left_note_id)
+        self._note_visibility_verifier(binding, self._access_token(access_token), right_note_id)
+        local = _note_create_response(
+            self._note_merger(self.vault_path, left_note_id, right_note_id, title)
+        )
+        catalog = self._document_outbox().get_note(str(local["document_id"])) or {}
+        metadata = _document_note_sync_payload(
+            local, catalog, binding, str(org_id)
+        )
+        try:
+            self._note_metadata_publisher(binding, self._access_token(access_token), metadata)
+            self._document_outbox().delete_document_outbox(
+                _metadata_outbox_id(str(local["document_id"]))
+            )
+            sync_state = "synced"
+        except AgentSyncError:
+            self._document_outbox().upsert_document_outbox(
+                outbox_id=_metadata_outbox_id(str(local["document_id"])),
+                kind="note_metadata",
+                payload=metadata,
+            )
+            sync_state = "pending_sync"
+        self._record_audit(binding, self._access_token(access_token), _new_audit_event(
+            str(local["document_id"]), str(org_id), str(uuid.UUID(str(org_id))),
+            binding.user_id, "note_merge_create", sync_state,
+        ))
+        return {**local, "sync_state": sync_state}
+
     def ask_note_assistant(self, access_token: object, org_id: object, note_id: object, payload: object) -> dict[str, object]:
         """Run a local, retrieval-grounded assistant request for one visible note."""
         binding = self._require_user(access_token)
@@ -1153,14 +1187,15 @@ def _handler_for(agent: GestajoAgent) -> type[BaseHTTPRequestHandler]:
             is_note_share = note_route.endswith("/share") and bool(note_route.removesuffix("/share")) and "/" not in note_route.removesuffix("/share")
             is_note_assistant = note_route.endswith("/assistant") and bool(note_route.removesuffix("/assistant")) and "/" not in note_route.removesuffix("/assistant")
             is_note_processed_approval = note_route.endswith("/approve-processed") and bool(note_route.removesuffix("/approve-processed")) and "/" not in note_route.removesuffix("/approve-processed")
-            is_note_update = bool(note_route) and "/" not in note_route
+            is_note_merge = parsed.path == "/v1/notes/merge"
+            is_note_update = bool(note_route) and "/" not in note_route and not is_note_merge
             review_route = parsed.path.removeprefix("/v1/flow/reviews/") if parsed.path.startswith("/v1/flow/reviews/") else ""
             review_parts = review_route.split("/") if review_route else []
             is_review_captured_update = len(review_parts) == 2 and bool(review_parts[0]) and review_parts[1] == "captured"
             is_review_captured_assistant = len(review_parts) == 3 and bool(review_parts[0]) and review_parts[1:] == ["captured", "assistant"]
             template_id = parsed.path.removeprefix("/v1/templates/") if parsed.path.startswith("/v1/templates/") else ""
             is_template_save = bool(template_id) and "/" not in template_id
-            if not (is_note_update or is_note_share or is_note_assistant or is_note_processed_approval or is_review_captured_update or is_review_captured_assistant or is_template_save) and parsed.path not in {
+            if not (is_note_merge or is_note_update or is_note_share or is_note_assistant or is_note_processed_approval or is_review_captured_update or is_review_captured_assistant or is_template_save) and parsed.path not in {
                 "/v1/claim", "/v1/flow/import", "/v1/flow/approve", "/v1/flow/discard", "/v1/settings", "/v1/sync-inputs/select", "/v1/sync-inputs/run", "/v1/sync-outputs/run", "/v1/sync-conflicts/read", "/v1/sync-conflicts/resolve",
                 "/v1/sync-inputs/confirm", "/v1/sync-inputs/enabled", "/v1/sync-inputs/remove", "/v1/sync",
             }:
@@ -1176,6 +1211,11 @@ def _handler_for(agent: GestajoAgent) -> type[BaseHTTPRequestHandler]:
                 return
             if parsed.path == "/v1/sync":
                 self._authorized(lambda token: agent.sync_pending(token, _single_query_value(parsed.query, "org_id")))
+                return
+            if is_note_merge:
+                self._authorized(lambda token: agent.merge_notes(
+                    token, _single_query_value(parsed.query, "org_id"), payload,
+                ))
                 return
             if is_review_captured_update:
                 self._authorized(lambda token: agent.update_flow_review_captured(
@@ -1357,6 +1397,12 @@ def _read_note(vault_path: Path, note_id: str) -> Mapping[str, object]:
 
 def _write_note(vault_path: Path, note_id: str, expected_revision: int, body_markdown: str) -> Mapping[str, object]:
     return _source_backend(vault_path).update_note_content(note_id, expected_revision, body_markdown)
+
+
+def _merge_notes(vault_path: Path, left_note_id: str, right_note_id: str, title: str) -> Mapping[str, object]:
+    return _source_backend(vault_path).create_merged_note(
+        left_note_id, right_note_id, title
+    )
 
 
 def _share_note(vault_path: Path, note_id: str, expected_revision: int, publisher: str) -> Mapping[str, object]:
@@ -1796,6 +1842,30 @@ def _note_update_payload(payload: object) -> tuple[int, str]:
     return revision, body
 
 
+def _note_merge_payload(payload: object) -> tuple[str, str, str]:
+    if not isinstance(payload, Mapping) or set(payload) != {"left_note_id", "right_note_id", "title"}:
+        raise AgentError("note merge has unsupported fields")
+    left_note_id = payload.get("left_note_id")
+    right_note_id = payload.get("right_note_id")
+    title = payload.get("title")
+    if (
+        not isinstance(left_note_id, str)
+        or not isinstance(right_note_id, str)
+        or left_note_id == right_note_id
+        or not isinstance(title, str)
+        or not title.strip()
+        or "\x00" in title
+        or len(title) > 512
+    ):
+        raise AgentError("note merge is invalid")
+    try:
+        uuid.UUID(left_note_id)
+        uuid.UUID(right_note_id)
+    except (ValueError, AttributeError) as error:
+        raise AgentError("note merge is invalid") from error
+    return left_note_id, right_note_id, title.strip()
+
+
 def _note_share_payload(payload: object) -> int:
     if not isinstance(payload, Mapping) or set(payload) != {"expected_revision"}:
         raise AgentError("note share has unsupported fields")
@@ -1815,6 +1885,35 @@ def _note_update_response(value: Mapping[str, object], note_id: str) -> dict[str
     if document_id != note_id or not isinstance(revision, int) or revision < 1 or not isinstance(title, str) or not isinstance(content_hash, str) or len(content_hash) != 64:
         raise AgentError("local note update has an invalid contract")
     return {"document_id": document_id, "revision": revision, "title": title, "content_hash": content_hash}
+
+
+def _note_create_response(value: Mapping[str, object]) -> dict[str, object]:
+    if value.get("error"):
+        raise AgentError(str(value.get("message") or value["error"]))
+    document_id = value.get("document_id")
+    revision = value.get("revision")
+    title = value.get("title")
+    content_hash = value.get("content_hash")
+    try:
+        uuid.UUID(str(document_id))
+    except (ValueError, AttributeError) as error:
+        raise AgentError("local note merge has an invalid contract") from error
+    if (
+        isinstance(revision, bool)
+        or not isinstance(revision, int)
+        or revision < 1
+        or not isinstance(title, str)
+        or not 1 <= len(title) <= 512
+        or not isinstance(content_hash, str)
+        or len(content_hash) != 64
+    ):
+        raise AgentError("local note merge has an invalid contract")
+    return {
+        "document_id": str(document_id),
+        "revision": revision,
+        "title": title,
+        "content_hash": content_hash,
+    }
 
 
 def _note_share_response(value: Mapping[str, object], note_id: str) -> dict[str, object]:

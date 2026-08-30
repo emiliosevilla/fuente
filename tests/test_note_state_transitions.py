@@ -207,6 +207,47 @@ def test_editor_update_is_revision_checked_and_reopens_review(
         )
 
 
+def test_merge_creates_a_third_pending_note_and_preserves_both_inputs(
+    notes_service, temp_vault_manager
+):
+    first_origin = approved_clean_origin(
+        temp_vault_manager, notes_service.job_store, filename="origen-fusion-uno.md"
+    )
+    second_origin = approved_clean_origin(
+        temp_vault_manager, notes_service.job_store, filename="origen-fusion-dos.md"
+    )
+    first_id, first_path = _write_pending_note(
+        temp_vault_manager,
+        title="Nota Uno",
+        body="Contenido de la primera Nota.\n",
+        origins=[first_origin],
+        store=notes_service.job_store,
+    )
+    second_id, second_path = _write_pending_note(
+        temp_vault_manager,
+        title="Nota Dos",
+        body="Contenido de la segunda Nota.\n",
+        origins=[second_origin],
+        store=notes_service.job_store,
+    )
+    first_before = first_path.read_text(encoding="utf-8")
+    second_before = second_path.read_text(encoding="utf-8")
+
+    merged = notes_service.create_merged_note(
+        first_id, second_id, title="Fusión revisable"
+    )
+
+    assert merged.document_id not in {first_id, second_id}
+    assert merged.status == "pending_review"
+    assert merged.frontmatter["origins"] == [first_origin, second_origin]
+    assert "Contenido de la primera Nota." in merged.body_markdown
+    assert "Contenido de la segunda Nota." in merged.body_markdown
+    assert (temp_vault_manager.config.vault_path / merged.relative_path).is_file()
+    assert notes_service.job_store.get_note(merged.document_id)["status"] == "pending_review"
+    assert first_path.read_text(encoding="utf-8") == first_before
+    assert second_path.read_text(encoding="utf-8") == second_before
+
+
 def test_inbox_pending_path_approves_successfully(temp_vault_manager):
     backend = FuenteConsoleBackend(temp_vault_manager.config.vault_path)
     backend.vault = temp_vault_manager

@@ -96,7 +96,7 @@ def test_status_requires_the_bound_user(tmp_path: Path):
     )
 
     assert agent.status("token-a")["claimed"] is True
-    assert agent.status("token-a")["capabilities"] == ["flow", "flow_import", "flow_approve", "flow_review", "flow_review_captured", "flow_discard", "settings", "sync_inputs", "sync_run", "sync_output", "sync_conflict_read", "sync_conflict_resolve", "note_read", "note_relations", "note_lineage", "note_write", "note_approve_processed", "note_share", "note_assistant", "templates_read", "templates_write"]
+    assert agent.status("token-a")["capabilities"] == ["flow", "flow_import", "flow_approve", "flow_review", "flow_review_captured", "flow_discard", "settings", "sync_inputs", "sync_run", "sync_output", "sync_conflict_read", "sync_conflict_resolve", "note_read", "note_relations", "note_lineage", "note_write", "note_merge", "note_approve_processed", "note_share", "note_assistant", "templates_read", "templates_write"]
     with pytest.raises(AgentAuthenticationError, match="another user"):
         agent.status("token-b")
 
@@ -1121,6 +1121,50 @@ def test_note_update_uses_fuentecaudal_revision_contract_and_marks_offline_sync(
         assert "# Cambio" not in str(queued)
     finally:
         store.close()
+
+
+def test_note_merge_creates_a_new_private_pending_note_and_audits_it(tmp_path: Path):
+    left_id = "00000000-0000-0000-0000-000000000010"
+    right_id = "00000000-0000-0000-0000-000000000011"
+    merged_id = "00000000-0000-0000-0000-000000000012"
+    store = JobStore(tmp_path)
+    store.register_note(
+        note_id=merged_id, relative_path="4_procesado/_Sin_Cuestion/fusion.md",
+        revision=1, content_hash="a" * 64, note_type="summary",
+        origin_kind="working_document", theme="General", issue="_Sin_Cuestion",
+        status="pending_review",
+    )
+    store.close()
+    checked = []
+    published = []
+    audits = []
+    agent = GestajoAgent(
+        tmp_path, verifier=_verifier, publisher=_publisher,
+        membership_verifier=lambda *_args: "gestion",
+        note_visibility_verifier=lambda _binding, _token, note_id: checked.append(note_id) or {"common_org_id": COMMON_ORG_ID},
+        note_merger=lambda _vault, received_left, received_right, title: {
+            "status": "created", "document_id": merged_id, "revision": 1,
+            "title": title, "content_hash": "a" * 64,
+            "path": "/private/vault/fusion.md",
+        },
+        note_metadata_publisher=lambda _binding, _token, metadata: published.append(dict(metadata)),
+        audit_publisher=lambda _binding, _token, event: audits.append(event),
+    )
+    agent.claim("token-a", {"supabase_url": "https://project.supabase.co", "publishable_key": "sb_publishable_test_key"})
+
+    result = agent.merge_notes(
+        "token-a", "00000000-0000-0000-0000-000000000001",
+        {"left_note_id": left_id, "right_note_id": right_id, "title": "Fusión revisable"},
+    )
+
+    assert checked == [left_id, right_id]
+    assert result == {
+        "document_id": merged_id, "revision": 1, "title": "Fusión revisable",
+        "content_hash": "a" * 64, "sync_state": "synced",
+    }
+    assert published[0]["visibility"] == "private"
+    assert "/private" not in str(result)
+    assert audits[0]["action"] == "note_merge_create"
 
 
 def test_note_share_reuses_approved_projection_and_queues_only_metadata_when_offline(tmp_path: Path):

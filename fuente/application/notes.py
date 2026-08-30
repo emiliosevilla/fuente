@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import logging
 import time
+import uuid
 from pathlib import Path
 from typing import Any, Callable, Mapping, Optional, Protocol
 
@@ -382,6 +383,88 @@ class NotesApplicationService:
             metadata=metadata,
             body_markdown=body_markdown,
             reindex=False,
+        )
+
+    def create_merged_note(
+        self,
+        left_document_id: str,
+        right_document_id: str,
+        *,
+        title: str,
+    ) -> NoteDocument:
+        """Create a reviewable third note without modifying either input."""
+        if not isinstance(title, str) or not title.strip() or "\x00" in title:
+            raise ValueError("title is required")
+
+        left = self.get_note(left_document_id)
+        right = self.get_note(right_document_id)
+        if left.document_id == right.document_id:
+            raise ValueError("two different notes are required")
+        self.require_eligible_origins(left)
+        self.require_eligible_origins(right)
+
+        origins = tuple(dict.fromkeys(
+            origin for note in (left, right) for origin in note.origins
+        ))
+        path = self.vault.atomic_note_path(
+            f"fusion-{uuid.uuid4().hex}", "_Sin_Cuestion"
+        )
+        relative_path = path.resolve().relative_to(
+            self.vault.config.vault_path.resolve()
+        ).as_posix()
+        document_id = document_id_for_relative_path(relative_path)
+        metadata = {
+            "schema_version": 3,
+            "note_id": document_id,
+            "note_type": "summary",
+            "title": title.strip(),
+            "date": time.strftime("%Y-%m-%d"),
+            "author": "Fuente",
+            "tags": ["fusion"],
+            "issue": "_Sin_Cuestion",
+            "status": "pending_review",
+            "origin_kind": "working_document",
+            "origins": [origin.to_dict() for origin in origins],
+            "history": [{
+                "date": time.strftime("%Y-%m-%d %H:%M:%S"),
+                "action": "merged",
+                "source_note_ids": [left.document_id, right.document_id],
+            }],
+        }
+        body = self._merged_note_body(left, right)
+        markdown = serialize_human_frontmatter(metadata) + body
+        created = NoteDocument.from_persisted(
+            document_id=document_id,
+            relative_path=relative_path,
+            markdown=markdown,
+            revision=1,
+        )
+        with document_file_lock(
+            self.vault.config.vault_path / ".fuente" / "note-editor-locks",
+            document_id,
+        ):
+            atomic_write_text(path, markdown)
+            try:
+                self.job_store.register_note(
+                    note_id=document_id,
+                    relative_path=relative_path,
+                    content_hash=created.content_hash,
+                    note_type="summary",
+                    origin_kind="working_document",
+                    theme=self.vault.active_theme,
+                    issue="_Sin_Cuestion",
+                    status="pending_review",
+                )
+            except BaseException:
+                path.unlink(missing_ok=True)
+                raise
+        return created
+
+    @staticmethod
+    def _merged_note_body(left: NoteDocument, right: NoteDocument) -> str:
+        return (
+            f"## {left.title}\n\n{left.body_markdown.rstrip()}\n\n"
+            f"---\n\n## {right.title}\n\n{right.body_markdown.rstrip()}\n"
         )
 
     def move_notes_to_theme(

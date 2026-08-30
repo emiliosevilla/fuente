@@ -516,7 +516,7 @@ class GestajoAgent:
             "platform": platform.system(),
             "user_id": binding.user_id,
             "vault_fingerprint": self._vault_fingerprint(),
-            "capabilities": ["flow", "flow_import", "flow_approve", "flow_jobs", "flow_job_detail", "flow_job_resume", "flow_job_cancel", "flow_review", "flow_review_captured", "flow_discard", "settings", "sync_inputs", "sync_run", "sync_output", "sync_conflict_read", "sync_conflict_resolve", "document_conflict_read", "document_conflict_resolve", "taxonomy_read", "taxonomy_write", "note_read", "note_search", "note_relations", "note_lineage", "note_write", "note_theme", "note_merge", "note_approve_processed", "note_share", "note_assistant", "note_assistant_persist", "knowledge_assistant", "templates_read", "templates_write"],
+            "capabilities": ["flow", "flow_import", "flow_approve", "flow_jobs", "flow_job_detail", "flow_job_resume", "flow_job_cancel", "flow_review", "flow_review_captured", "flow_discard", "quarantine_read", "quarantine_restore", "settings", "sync_inputs", "sync_run", "sync_output", "sync_conflict_read", "sync_conflict_resolve", "document_conflict_read", "document_conflict_resolve", "taxonomy_read", "taxonomy_write", "note_read", "note_search", "note_relations", "note_lineage", "note_write", "note_theme", "note_merge", "note_approve_processed", "note_share", "note_assistant", "note_assistant_persist", "knowledge_assistant", "templates_read", "templates_write"],
         }
 
     def taxonomy(self, access_token: object, org_id: object) -> dict[str, object]:
@@ -590,6 +590,27 @@ class GestajoAgent:
             note_id, str(org_id), scope["common_org_id"], binding.user_id, "note_theme_update", sync_state,
         ))
         return {**local, "sync_state": sync_state}
+
+    def list_quarantine(self, access_token: object, org_id: object) -> dict[str, object]:
+        binding = self._require_management(access_token, org_id)
+        result = _quarantine_response(self._local_backend().handle_action("get_quarantine", {}))
+        self._record_audit(binding, self._access_token(access_token), _new_audit_event(
+            None, str(org_id), str(uuid.UUID(str(org_id))), binding.user_id, "quarantine_read", "success",
+        ))
+        return result
+
+    def restore_quarantine(self, access_token: object, org_id: object, payload: object) -> dict[str, object]:
+        binding = self._require_management(access_token, org_id)
+        quarantine_id, issue = _quarantine_restore_payload(payload)
+        result = self._local_backend().handle_action(
+            "restore_note", {"filename": quarantine_id, "target_issue": issue},
+        )
+        if not isinstance(result, Mapping) or result.get("error"):
+            raise AgentError(str(result.get("message") or result.get("error") or "local quarantine restore failed"))
+        self._record_audit(binding, self._access_token(access_token), _new_audit_event(
+            None, str(org_id), str(uuid.UUID(str(org_id))), binding.user_id, "quarantine_restore", "success",
+        ))
+        return {"quarantine_id": quarantine_id, "status": "restored"}
 
     def flow(self, access_token: object, org_id: object) -> dict[str, object]:
         binding = self._require_user(access_token)
@@ -1580,6 +1601,11 @@ def _handler_for(agent: GestajoAgent) -> type[BaseHTTPRequestHandler]:
                     lambda token: agent.taxonomy(token, _single_query_value(parsed.query, "org_id"))
                 )
                 return
+            if parsed.path == "/v1/quarantine":
+                self._authorized(
+                    lambda token: agent.list_quarantine(token, _single_query_value(parsed.query, "org_id"))
+                )
+                return
             if parsed.path == "/v1/templates":
                 self._authorized(
                     lambda token: agent.list_templates(token, _single_query_value(parsed.query, "org_id"))
@@ -1660,7 +1686,7 @@ def _handler_for(agent: GestajoAgent) -> type[BaseHTTPRequestHandler]:
             is_document_conflict_resolve = conflict_route.endswith("/resolve") and bool(conflict_route.removesuffix("/resolve")) and "/" not in conflict_route.removesuffix("/resolve")
             if not (is_note_merge or is_note_update or is_note_share or is_note_assistant or is_note_assistant_output or is_note_processed_approval or is_note_theme or is_knowledge_assistant or is_flow_job_resume or is_flow_job_cancel or is_review_captured_update or is_review_captured_assistant or is_template_save or is_document_conflict_resolve) and parsed.path not in {
                 "/v1/claim", "/v1/flow/import", "/v1/flow/approve", "/v1/flow/discard", "/v1/settings", "/v1/sync-inputs/select", "/v1/sync-inputs/run", "/v1/sync-outputs/run", "/v1/sync-conflicts/read", "/v1/sync-conflicts/resolve",
-                "/v1/sync-inputs/confirm", "/v1/sync-inputs/enabled", "/v1/sync-inputs/remove", "/v1/sync", "/v1/taxonomy/themes", "/v1/taxonomy/issues",
+                "/v1/sync-inputs/confirm", "/v1/sync-inputs/enabled", "/v1/sync-inputs/remove", "/v1/sync", "/v1/taxonomy/themes", "/v1/taxonomy/issues", "/v1/quarantine/restore",
             }:
                 self._send_error(HTTPStatus.NOT_FOUND, "route not found")
                 return
@@ -1741,6 +1767,9 @@ def _handler_for(agent: GestajoAgent) -> type[BaseHTTPRequestHandler]:
                 return
             if parsed.path == "/v1/taxonomy/issues":
                 self._authorized(lambda token: agent.create_taxonomy_issue(token, org_id, payload))
+                return
+            if parsed.path == "/v1/quarantine/restore":
+                self._authorized(lambda token: agent.restore_quarantine(token, org_id, payload))
                 return
             if parsed.path == "/v1/sync-inputs/select":
                 self._authorized(lambda token: agent.select_sync_input(token, org_id))
@@ -2615,6 +2644,50 @@ def _taxonomy_note_theme_payload(payload: object) -> str:
     if not isinstance(theme, str) or not theme.strip() or "\x00" in theme or len(theme.strip()) > 256:
         raise AgentError("Note Theme update is invalid")
     return theme.strip()
+
+
+def _quarantine_response(value: object) -> dict[str, object]:
+    if not isinstance(value, Mapping) or not isinstance(value.get("quarantine_notes"), list):
+        raise AgentError("local quarantine has an invalid contract")
+    items = value["quarantine_notes"]
+    if len(items) > 200:
+        raise AgentError("local quarantine has an invalid contract")
+    safe_items = []
+    for item in items:
+        if not isinstance(item, Mapping):
+            raise AgentError("local quarantine has an invalid item")
+        quarantine_id = item.get("quarantine_id")
+        filename = item.get("filename")
+        error_code = item.get("error_code")
+        quarantined_at = item.get("quarantined_at")
+        status = item.get("status")
+        if any(not isinstance(field, str) or not field or len(field) > 512 for field in (quarantine_id, filename, error_code, quarantined_at, status)):
+            raise AgentError("local quarantine has an invalid item")
+        safe_items.append({
+            "quarantine_id": quarantine_id, "filename": filename,
+            "error_code": error_code, "quarantined_at": quarantined_at, "status": status,
+        })
+    return {"items": safe_items}
+
+
+def _quarantine_restore_payload(payload: object) -> tuple[str, str]:
+    if not isinstance(payload, Mapping) or set(payload) != {"quarantine_id", "issue"}:
+        raise AgentError("quarantine restore has unsupported fields")
+    quarantine_id = payload.get("quarantine_id")
+    issue = payload.get("issue")
+    if (
+        not isinstance(quarantine_id, str)
+        or not quarantine_id.strip()
+        or "/" in quarantine_id
+        or "\\" in quarantine_id
+        or len(quarantine_id.strip()) > 256
+        or not isinstance(issue, str)
+        or not issue.strip()
+        or "\x00" in issue
+        or len(issue.strip()) > 256
+    ):
+        raise AgentError("quarantine restore is invalid")
+    return quarantine_id.strip(), issue.strip()
 
 
 def _note_merge_payload(payload: object) -> tuple[str, str, str]:

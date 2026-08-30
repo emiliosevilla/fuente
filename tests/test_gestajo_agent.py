@@ -97,7 +97,7 @@ def test_status_requires_the_bound_user(tmp_path: Path):
     )
 
     assert agent.status("token-a")["claimed"] is True
-    assert agent.status("token-a")["capabilities"] == ["flow", "flow_import", "flow_approve", "flow_jobs", "flow_job_detail", "flow_job_resume", "flow_job_cancel", "flow_review", "flow_review_captured", "flow_discard", "settings", "sync_inputs", "sync_run", "sync_output", "sync_conflict_read", "sync_conflict_resolve", "document_conflict_read", "document_conflict_resolve", "taxonomy_read", "taxonomy_write", "note_read", "note_search", "note_relations", "note_lineage", "note_write", "note_theme", "note_merge", "note_approve_processed", "note_share", "note_assistant", "note_assistant_persist", "knowledge_assistant", "templates_read", "templates_write"]
+    assert agent.status("token-a")["capabilities"] == ["flow", "flow_import", "flow_approve", "flow_jobs", "flow_job_detail", "flow_job_resume", "flow_job_cancel", "flow_review", "flow_review_captured", "flow_discard", "quarantine_read", "quarantine_restore", "settings", "sync_inputs", "sync_run", "sync_output", "sync_conflict_read", "sync_conflict_resolve", "document_conflict_read", "document_conflict_resolve", "taxonomy_read", "taxonomy_write", "note_read", "note_search", "note_relations", "note_lineage", "note_write", "note_theme", "note_merge", "note_approve_processed", "note_share", "note_assistant", "note_assistant_persist", "knowledge_assistant", "templates_read", "templates_write"]
     with pytest.raises(AgentAuthenticationError, match="another user"):
         agent.status("token-b")
 
@@ -209,6 +209,31 @@ def test_management_updates_local_taxonomy_and_note_theme_without_paths(tmp_path
     assert route_taxonomy["active_theme"] == "Contratos"
     assert moved_response.status == 200
     assert route_move["sync_state"] == "synced"
+
+
+def test_management_restores_quarantine_by_opaque_id_without_routes(tmp_path: Path):
+    org_id = "00000000-0000-0000-0000-000000000001"
+    quarantine_id = "q_123"
+
+    class Backend:
+        @staticmethod
+        def handle_action(action, payload):
+            if action == "get_quarantine":
+                return {"quarantine_notes": [{
+                    "quarantine_id": quarantine_id, "filename": "Informe.pdf",
+                    "error_code": "processing_error", "quarantined_at": "2026-08-30T12:00:00Z", "status": "active",
+                    "stored_filename": "/private/vault/.fuente/quarantine/secret",
+                }]}
+            assert (action, payload) == ("restore_note", {"filename": quarantine_id, "target_issue": "_Sin_Cuestion"})
+            return {"log": "restored", "path": "/private/vault/4_procesado/Informe.pdf"}
+
+    agent = GestajoAgent(tmp_path, verifier=_verifier, publisher=_publisher, membership_verifier=_management_verifier, backend_factory=lambda _vault: Backend(), audit_publisher=lambda *_args: None)
+    agent.claim("token-a", {"supabase_url": "https://project.supabase.co", "publishable_key": "sb_publishable_test_key"})
+
+    assert agent.list_quarantine("token-a", org_id) == {"items": [{
+        "quarantine_id": quarantine_id, "filename": "Informe.pdf", "error_code": "processing_error", "quarantined_at": "2026-08-30T12:00:00Z", "status": "active",
+    }]}
+    assert agent.restore_quarantine("token-a", org_id, {"quarantine_id": quarantine_id, "issue": "_Sin_Cuestion"}) == {"quarantine_id": quarantine_id, "status": "restored"}
 
 
 def test_templates_are_readable_but_only_management_can_write(tmp_path: Path):

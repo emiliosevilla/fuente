@@ -4,7 +4,7 @@ from __future__ import annotations
 import hashlib
 from pathlib import Path
 
-from scripts.capture_fyc_batch import unique_png_groups, verify_unique
+from scripts.capture_fyc_batch import prune_manifest_entries, unique_png_groups, verify_unique
 
 
 def test_unique_png_groups_splits_distinct_bytes(tmp_path: Path, monkeypatch) -> None:
@@ -29,6 +29,19 @@ def test_verify_unique_rejects_duplicate_bytes(tmp_path: Path, capsys) -> None:
         assert batch.verify_unique(required=["one.png", "two.png"]) == 1
     finally:
         batch.EVIDENCE = original
+
+
+def test_prune_manifest_entries_removes_retired_capture_only() -> None:
+    entries = [
+        {"file": "01-setup-empty.png"},
+        {"file": "home-1440.png"},
+        {"file": "10-fuente-obsidian.png"},
+    ]
+
+    assert prune_manifest_entries(entries) == [
+        {"file": "01-setup-empty.png"},
+        {"file": "10-fuente-obsidian.png"},
+    ]
 
 
 def test_evidence_directory_pngs_are_unique() -> None:

@@ -46,7 +46,6 @@ FYC_GATE_CAPTURE_SCENARIOS: dict[str, tuple[str, ...]] = {
         "caudal-pipeline",
         "caudal-seals",
         "caudal-feed-link",
-        "home-1440",
     ),
 }
 # Measured on this host: visible PyWebView frame maxes at 1280x802 (not 850/900).
@@ -54,7 +53,6 @@ FYC_GATE_CAPTURE_SCENARIOS: dict[str, tuple[str, ...]] = {
 FYC_CAPTURE_SIZES: dict[str, tuple[int, int]] = {
     "home-1024": (1024, 700),
     "home-1280": (1280, 802),
-    "home-1440": (1280, 802),
 }
 FYC_RUNTIME_JSON = {
     "G4": "sqlite-runtime.json",
@@ -931,7 +929,7 @@ def _acceptable_evidence_heads(repo_root: Path, head: str) -> set[str]:
         return heads
     allowed_prefix = "docs/evidence/fuente-y-caudal/"
     if not all(
-        name.startswith(allowed_prefix) and name.endswith((".json",)) for name in names
+        name.startswith(allowed_prefix) and name.endswith((".json", ".png")) for name in names
     ):
         return heads
     try:

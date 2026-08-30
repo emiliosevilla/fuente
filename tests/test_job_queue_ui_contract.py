@@ -214,6 +214,7 @@ def test_queue_backend_uses_lifecycle_owned_store_and_returns_json_safe_projecti
 
     detail = bridge.get_job_detail(job.job_id)
     assert detail["job"]["job_id"] == job.job_id
+    assert detail["job"]["resume_available"] is False
     assert detail["events"][0]["job_id"] == job.job_id
     json.dumps(page)
     json.dumps(detail)

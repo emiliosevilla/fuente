@@ -605,12 +605,13 @@ class FuenteConsoleBackend:
     def get_job_detail(self, job_id: str) -> Dict[str, Any]:
         """Return a JSON-safe job detail and its durable history."""
         validate_job_id(job_id)
-        detail = self.get_job_control_service().get_job(job_id)
+        control = self.get_job_control_service()
+        detail = control.get_job(job_id)
         readiness = self._llm_readiness_projection(
             detail.job, detail.schedule_decisions
         )
         return {
-            "job": asdict(detail.job),
+            "job": {**asdict(detail.job), "resume_available": control._resume_available(detail.job)},
             "events": [asdict(event) for event in detail.events],
             "schedule_decisions": [dict(decision) for decision in detail.schedule_decisions],
             "reason": detail.reason,

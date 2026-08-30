@@ -692,7 +692,7 @@ def test_publish_agent_status_creates_or_updates_only_agent_metadata(monkeypatch
     monkeypatch.setattr("fuente.agent.server.urlopen", fake_urlopen)
     binding = AgentBinding(USER_A, "https://project.supabase.co", "sb_publishable_test_key")
     publish_agent_status(binding, "token-a", {
-        "user_id": USER_A, "version": "0.1", "platform": "Darwin",
+        "user_id": USER_A, "version": "0.2", "platform": "Darwin",
         "vault_fingerprint": "a" * 64,
     })
 

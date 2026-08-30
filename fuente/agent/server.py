@@ -36,7 +36,7 @@ from fuente.extractors.office_pdf import TextAndOfficeExtractor
 from fuente.infrastructure.atomic_files import atomic_copy, atomic_write_json
 
 
-AGENT_VERSION = "0.1"
+AGENT_VERSION = "0.2"
 SOURCE_PREVIEW_MAX_CHARS = 1_000_000
 DEFAULT_ALLOWED_ORIGINS = frozenset({
     "https://gestajo.vercel.app",

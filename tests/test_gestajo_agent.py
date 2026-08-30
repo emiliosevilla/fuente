@@ -690,6 +690,24 @@ def test_management_can_approve_copied_content_for_capture(tmp_path: Path):
     ]
 
 
+def test_consulta_cannot_approve_a_caudal_transition(tmp_path: Path):
+    def consulta(_binding, _token, _org_id):
+        raise AgentAuthorizationError("Caudal requires gestion or admin access")
+
+    agent = GestajoAgent(
+        tmp_path, verifier=_verifier, publisher=_publisher,
+        management_verifier=consulta,
+        backend_factory=lambda _vault: pytest.fail("Caudal must not run for consulta"),
+    )
+    agent.claim("token-a", {"supabase_url": "https://project.supabase.co", "publishable_key": "sb_publishable_test_key"})
+
+    with pytest.raises(AgentAuthorizationError, match="Caudal requires gestion or admin access"):
+        agent.approve_flow_transition(
+            "token-a", "00000000-0000-0000-0000-000000000001",
+            {"job_id": "00000000-0000-0000-0000-000000000124"},
+        )
+
+
 def test_management_can_approve_captured_content_for_local_processing(tmp_path: Path):
     job_id = "00000000-0000-0000-0000-000000000126"
     captured = tmp_path / "3_capturado" / "03 El loco.md"

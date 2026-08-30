@@ -1355,8 +1355,15 @@ class GestajoAgent:
 
     def ask_knowledge_assistant(self, access_token: object, org_id: object, payload: object) -> dict[str, object]:
         """Run the existing local retrieval assistant over this user's Knowledge Base."""
-        binding = self._require_management(access_token, org_id)
+        binding = self._require_user(access_token)
+        if not isinstance(org_id, str):
+            raise AgentAuthorizationError("organization is invalid")
+        role = self._membership_verifier(binding, self._access_token(access_token), org_id)
+        if role not in {"consulta", "gestion", "admin"}:
+            raise AgentAuthorizationError("organization role is invalid")
         message, document_ids = _knowledge_assistant_payload(payload)
+        if role == "consulta" and not document_ids:
+            raise AgentAuthorizationError("consulta requires selected notes")
         context: dict[str, object] = {"context_mode": "all_notes"}
         session_scope = "all"
         if document_ids:

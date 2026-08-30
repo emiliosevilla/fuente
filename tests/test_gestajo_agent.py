@@ -1310,17 +1310,35 @@ def test_knowledge_assistant_rejects_selected_notes_outside_the_visible_catalog(
         agent.ask_knowledge_assistant("token-a", org_id, {"message": "Compara", "document_ids": [hidden_id]})
 
 
-def test_knowledge_assistant_requires_management_access(tmp_path: Path):
+def test_knowledge_assistant_allows_consulta_only_for_selected_visible_notes(tmp_path: Path):
+    org_id = "00000000-0000-0000-0000-000000000001"
+    visible_id = "00000000-0000-0000-0000-000000000010"
+    calls: list[object] = []
+
+    class Backend:
+        @staticmethod
+        def process_chat(message, context):
+            calls.append((message, context))
+            return {"ok": True, "text": "Respuesta", "model": "qwen", "degraded": False, "citations": []}
+
     agent = GestajoAgent(
         tmp_path, verifier=_verifier, publisher=_publisher,
         membership_verifier=_membership_verifier,
+        backend_factory=lambda _vault: Backend(), visible_note_ids_reader=lambda *_args: {visible_id},
+        audit_publisher=lambda *_args: None,
     )
     agent.claim("token-a", {"supabase_url": "https://project.supabase.co", "publishable_key": "sb_publishable_test_key"})
 
-    with pytest.raises(AgentAuthorizationError, match="gestion or admin"):
+    with pytest.raises(AgentAuthorizationError, match="selected notes"):
         agent.ask_knowledge_assistant(
-            "token-a", "00000000-0000-0000-0000-000000000001", {"message": "Encuentra relaciones"},
+            "token-a", org_id, {"message": "Encuentra relaciones"},
         )
+    answer = agent.ask_knowledge_assistant(
+        "token-a", org_id, {"message": "Encuentra relaciones", "document_ids": [visible_id]},
+    )
+
+    assert answer["ok"] is True
+    assert calls == [("Encuentra relaciones", {"context_mode": "multiple_notes", "document_ids": [visible_id], "session_id": f"gestajo-kb:{USER_A}:{org_id}:{visible_id}"})]
 
 
 def test_visible_note_exposes_safe_local_relations(tmp_path: Path):

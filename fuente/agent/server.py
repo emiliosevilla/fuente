@@ -403,7 +403,7 @@ class GestajoAgent:
             "platform": platform.system(),
             "user_id": binding.user_id,
             "vault_fingerprint": self._vault_fingerprint(),
-            "capabilities": ["flow", "flow_approve", "flow_review", "settings", "sync_inputs", "sync_run", "sync_output", "sync_conflict_read", "sync_conflict_resolve", "note_read", "note_write", "note_share", "note_assistant"],
+            "capabilities": ["flow", "flow_approve", "flow_review", "settings", "sync_inputs", "sync_run", "sync_output", "sync_conflict_read", "sync_conflict_resolve", "note_read", "note_relations", "note_write", "note_share", "note_assistant"],
         }
 
     def flow(self, access_token: object, org_id: object) -> dict[str, object]:
@@ -678,6 +678,14 @@ class GestajoAgent:
         ))
         return answer
 
+    def read_note_relations(self, access_token: object, org_id: object, note_id: object) -> dict[str, object]:
+        binding = self._require_user(access_token)
+        if not isinstance(org_id, str) or not isinstance(note_id, str):
+            raise AgentAuthorizationError("note is invalid")
+        self._membership_verifier(binding, self._access_token(access_token), org_id)
+        self._note_visibility_verifier(binding, self._access_token(access_token), note_id)
+        return _note_relations_response(self._local_backend().get_relation_preview(note_id))
+
     def share_note(self, access_token: object, org_id: object, note_id: object, payload: object) -> dict[str, object]:
         binding = self._require_management(access_token, org_id)
         if not isinstance(note_id, str):
@@ -905,6 +913,13 @@ def _handler_for(agent: GestajoAgent) -> type[BaseHTTPRequestHandler]:
                 return
             if parsed.path.startswith("/v1/notes/"):
                 note_id = parsed.path.removeprefix("/v1/notes/")
+                if note_id.endswith("/relations"):
+                    note_id = note_id.removesuffix("/relations")
+                    if not note_id or "/" in note_id:
+                        self._send_error(HTTPStatus.NOT_FOUND, "route not found")
+                        return
+                    self._authorized(lambda token: agent.read_note_relations(token, _single_query_value(parsed.query, "org_id"), note_id))
+                    return
                 if not note_id or "/" in note_id:
                     self._send_error(HTTPStatus.NOT_FOUND, "route not found")
                     return
@@ -1298,6 +1313,20 @@ def _assistant_response(value: object) -> dict[str, object]:
             }
             for item in citations
             if isinstance(item, Mapping)
+        ][:24],
+    }
+
+
+def _note_relations_response(value: object) -> dict[str, object]:
+    if not isinstance(value, Mapping) or not isinstance(value.get("center"), Mapping):
+        raise AgentError("local relations returned an invalid response")
+    center = value["center"]
+    outgoing = value.get("outgoing") if isinstance(value.get("outgoing"), list) else []
+    return {
+        "center": {"document_id": str(center.get("document_id") or ""), "title": str(center.get("title") or "")[:512]},
+        "outgoing": [
+            {"document_id": str(item.get("document_id") or ""), "title": str(item.get("title") or "")[:512], "seal": str(item.get("seal") or "")[:64], "broken": item.get("broken") is True}
+            for item in outgoing if isinstance(item, Mapping)
         ][:24],
     }
 

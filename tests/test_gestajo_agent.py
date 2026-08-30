@@ -96,7 +96,7 @@ def test_status_requires_the_bound_user(tmp_path: Path):
     )
 
     assert agent.status("token-a")["claimed"] is True
-    assert agent.status("token-a")["capabilities"] == ["flow", "flow_approve", "flow_review", "settings", "sync_inputs", "sync_run", "sync_output", "sync_conflict_read", "sync_conflict_resolve", "note_read", "note_write", "note_share", "note_assistant"]
+    assert agent.status("token-a")["capabilities"] == ["flow", "flow_approve", "flow_review", "settings", "sync_inputs", "sync_run", "sync_output", "sync_conflict_read", "sync_conflict_resolve", "note_read", "note_relations", "note_write", "note_share", "note_assistant"]
     with pytest.raises(AgentAuthenticationError, match="another user"):
         agent.status("token-b")
 
@@ -597,6 +597,31 @@ def test_visible_note_can_use_local_assistant_without_exposing_paths(tmp_path: P
     assert "/private" not in str(answer)
     assert audits[0]["action"] == "note_assistant_ask"
     assert audits[0]["llm_model"] == "qwen2.5:7b"
+
+
+def test_visible_note_exposes_safe_local_relations(tmp_path: Path):
+    note_id = "00000000-0000-0000-0000-000000000010"
+
+    class Backend:
+        @staticmethod
+        def get_relation_preview(value):
+            assert value == note_id
+            return {
+                "center": {"document_id": note_id, "title": "Central", "relative_path": "/private/vault/nota.md"},
+                "outgoing": [{"document_id": "00000000-0000-0000-0000-000000000011", "title": "Relacionado", "seal": "approved"}],
+            }
+
+    agent = GestajoAgent(
+        tmp_path, verifier=_verifier, publisher=_publisher, membership_verifier=_membership_verifier,
+        note_visibility_verifier=lambda *_args: {"note_id": note_id, "common_org_id": COMMON_ORG_ID},
+        backend_factory=lambda _vault: Backend(), audit_publisher=lambda *_args: None,
+    )
+    agent.claim("token-a", {"supabase_url": "https://project.supabase.co", "publishable_key": "sb_publishable_test_key"})
+
+    relations = agent.read_note_relations("token-a", "00000000-0000-0000-0000-000000000001", note_id)
+
+    assert relations == {"center": {"document_id": note_id, "title": "Central"}, "outgoing": [{"document_id": "00000000-0000-0000-0000-000000000011", "title": "Relacionado", "seal": "approved", "broken": False}]}
+    assert "/private" not in str(relations)
 
 
 def test_flow_rejects_consulta(tmp_path: Path):

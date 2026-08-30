@@ -150,7 +150,7 @@ def test_task_class_for_job_maps_pipeline_stages(tmp_path):
         ocr = _job(store, path="1_entrada/b.png", stage="copied_dirty")
         save_clean = _job(store, path="1_entrada/a.txt", stage="extracted")
         embed = _job(store, path="1_entrada/a.txt", stage="saved_clean")
-        llm = _job(store, path="1_entrada/a.txt", stage="indexed_chunks")
+        llm = _job(store, path="1_entrada/a.txt", stage="generated_candidate")
         assert task_class_for_job(text) is TaskClass.IO_TEXT
         assert task_class_for_job(ocr) is TaskClass.MEDIA_OCR
         assert task_class_for_job(save_clean) is TaskClass.IO_TEXT
@@ -205,7 +205,7 @@ def test_unmeasured_llm_uses_evaluate_resource_not_select_llm(tmp_path):
         assert not gate.allowed
 
         sched = _scheduler(store, snap)
-        job = _job(store, path="1_entrada/a.txt", stage="indexed_chunks")
+        job = _job(store, path="1_entrada/a.txt", stage="generated_candidate")
         decision = sched.admit(job, persist=True, acquire=False)
         assert decision.action is ScheduleAction.WAIT
         assert "measurement_unavailable" in decision.reason
@@ -245,8 +245,8 @@ def test_llm_one_per_endpoint_model_unless_capacity_permits(tmp_path):
     try:
         tight = measured_snapshot(total_gb=16.0, available_gb=5.0, safety_margin_pct=0.35)
         sched = _scheduler(store, tight, ollama_url="http://localhost:11434")
-        j1 = _job(store, path="1_entrada/a.txt", stage="indexed_chunks")
-        j2 = _job(store, path="1_entrada/b.txt", stage="indexed_chunks")
+        j1 = _job(store, path="1_entrada/a.txt", stage="generated_candidate")
+        j2 = _job(store, path="1_entrada/b.txt", stage="generated_candidate")
         assert sched.admit(j1, persist=True, acquire=True).action is ScheduleAction.RUN
         second = sched.admit(j2, persist=True, acquire=False)
         assert second.action is ScheduleAction.WAIT
@@ -649,7 +649,7 @@ def test_claim_resource_lease_is_atomic_under_concurrency(tmp_path):
         store_b.close()
 
 
-def test_unavailable_policy_llm_waits_at_indexed_chunks_without_fake_success(tmp_path):
+def test_unavailable_policy_llm_waits_at_legacy_generation_without_fake_success(tmp_path):
     vault_path = tmp_path / "vault"
     config = get_default_config(vault_path)
     vault = VaultManager(config.vault)
@@ -680,11 +680,11 @@ def test_unavailable_policy_llm_waits_at_indexed_chunks_without_fake_success(tmp
         stabilize=lambda _p: True,
     )
     try:
-        job = _job(store, path="1_entrada/no-model.txt", stage="indexed_chunks")
+        job = _job(store, path="1_entrada/no-model.txt", stage="generated_candidate")
 
         result = service.resume(job.job_id)
 
-        assert result.stage == "indexed_chunks"
+        assert result.stage == "generated_candidate"
         assert result.status == "pending"
         decisions = store.list_schedule_decisions(job.job_id)
         assert decisions[-1]["action"] == ScheduleAction.WAIT.value

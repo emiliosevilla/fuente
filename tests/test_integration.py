@@ -3,7 +3,6 @@ import tempfile
 from pathlib import Path
 
 from fuente.config import get_default_config
-from fuente.application.smart_notes import FakeConversationClient
 from fuente.watcher.watcher import ETLPipeline
 
 class TestIntegration(unittest.TestCase):
@@ -19,7 +18,6 @@ class TestIntegration(unittest.TestCase):
         self.vault_path = Path(self.temp_dir.name)
         self.config = get_default_config(self.vault_path)
         self.pipeline = ETLPipeline(self.config)
-        self.pipeline.ingestion.smart_note_generator.chat_client = FakeConversationClient()
         from tests.conftest import auto_approve_early_transitions
         auto_approve_early_transitions(self.pipeline.ingestion)
         self.pipeline.set_runtime_policy(explicit_test_runtime_policy())
@@ -49,7 +47,7 @@ class TestIntegration(unittest.TestCase):
             self.pipeline.ingestion.resume(first_waiting.job_id).stage, "completed"
         )
 
-        # Verificar que el archivo fue movido a 2_sucio, limpio en 3_limpio y creado en 4_salida
+        # La captura deja el original y termina en 3_capturado; 4_procesado es manual.
         dirty_files = list(self.config.vault.dirty_dir.glob("Informe_Financiero_2026*"))
         self.assertEqual(len(dirty_files), 1)
 
@@ -57,9 +55,9 @@ class TestIntegration(unittest.TestCase):
         self.assertEqual(len(clean_files), 1)
 
         output_files = list(self.config.vault.output_dir.rglob("*--resumen.md"))
-        self.assertEqual(len(output_files), 1)
+        self.assertEqual(output_files, [])
 
-        # 3. Procesar segundo archivo (que debería hacer WikiLink hacia el primero)
+        # 3. Capturar el segundo archivo; los wikilinks se crean sólo por petición.
         self.assertFalse(self.pipeline.process_file(file2))
         second_waiting = max(
             self.pipeline.job_store.list_jobs(), key=lambda job: job.created_at
@@ -69,8 +67,8 @@ class TestIntegration(unittest.TestCase):
             self.pipeline.ingestion.resume(second_waiting.job_id).stage, "completed"
         )
 
-        context_files = list(self.config.vault.output_dir.rglob("contextos/*.md"))
-        self.assertEqual(len(context_files), 2)
+        self.assertEqual(len(list(self.config.vault.clean_dir.glob("*.md"))), 2)
+        self.assertEqual(list(self.config.vault.output_dir.rglob("contextos/*.md")), [])
 
 
 if __name__ == "__main__":

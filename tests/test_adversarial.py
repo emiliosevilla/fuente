@@ -5,7 +5,6 @@ from pathlib import Path
 
 from fuente.application.ingestion import IngestionApplicationService
 from fuente.config import get_default_config
-from fuente.application.smart_notes import FakeConversationClient
 from fuente.domain.frontmatter import parse_frontmatter
 from fuente.core.vault import VaultManager
 from fuente.extractors.registry import ExtractorRegistry
@@ -38,7 +37,6 @@ class TestAdversarial(unittest.TestCase):
             )
 
             self.pipeline = ETLPipeline(self.config)
-            self.pipeline.ingestion.smart_note_generator.chat_client = FakeConversationClient()
             auto_approve_early_transitions(self.pipeline.ingestion)
             self.pipeline.set_runtime_policy(explicit_test_runtime_policy())
             patch_abundant_ram(self.pipeline.ram_governor)
@@ -148,19 +146,12 @@ E = mc^2
             completed = service.resume(waiting.job_id)
             self.assertEqual(completed.stage, "completed")
             self.assertEqual(completed.status, "completed")
-            self.assertFalse(junk_file.exists())
+            self.assertTrue(junk_file.exists())
 
             output_notes = sorted(self.vault.output_dir.rglob("*.md"))
-            self.assertEqual(len(output_notes), 1)
-            note_metadata, note_body = parse_frontmatter(
-                output_notes[0].read_text(encoding="utf-8")
-            )
-            self.assertEqual(note_metadata["schema_version"], 3)
-            self.assertEqual(note_metadata["note_type"], "summary")
-            self.assertNotIn("sources", note_metadata)
-            self.assertEqual(note_metadata["title"], "basura_random")
-            self.assertEqual(note_metadata["status"], "pending_review")
-            self.assertTrue(note_body.startswith("# basura_random\n\n"))
+            self.assertEqual(output_notes, [])
+            clean_notes = sorted(self.vault.clean_dir.glob("basura_random*.md"))
+            self.assertEqual(len(clean_notes), 1)
         finally:
             job_store.close()
 
@@ -213,9 +204,8 @@ E = mc^2
             p = self.config.vault.input_dir / f"archivo_masivo_{i:02d}.txt"
             self.assertTrue(pipeline.process_file(p))
 
-        self.assertEqual(
-            len(list(self.config.vault.output_dir.rglob("resumenes/*.md"))), 20
-        )
+        self.assertEqual(list(self.config.vault.output_dir.rglob("resumenes/*.md")), [])
+        self.assertEqual(len(list(self.config.vault.clean_dir.glob("*.md"))), 20)
 
 
 if __name__ == "__main__":

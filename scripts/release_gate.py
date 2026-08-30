@@ -747,6 +747,7 @@ historial: []
             chunker=SemanticChunker(),
             chroma=fake_chroma,
             atomic_generator=SmokeGenerator(),
+            legacy_auto_processing=True,
             ram_governor=FakeGovernor(),
             stabilize=lambda path: path.is_file() and path.stat().st_size > 0,
         )

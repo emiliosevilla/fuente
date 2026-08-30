@@ -18,7 +18,7 @@ def _approval_snapshot(harness, job):
 def test_clean_record_waits_for_exact_human_approval_before_any_derivative(
     temp_vault_path,
 ):
-    harness = _build_harness(temp_vault_path)
+    harness = _build_harness(temp_vault_path, legacy_auto_processing=False)
     try:
         submitted = harness.service.submit(SOURCE_IDENTITY)
         waiting = harness.service.resume(submitted.job_id)
@@ -68,7 +68,7 @@ def test_wrong_approval_revision_or_hash_does_not_unlock_clean_job(temp_vault_pa
 
 
 def test_exact_approval_finishes_at_capture_without_generating_notes(temp_vault_path):
-    harness = _build_harness(temp_vault_path)
+    harness = _build_harness(temp_vault_path, legacy_auto_processing=False)
     try:
         waiting = harness.service.resume(
             harness.service.submit(SOURCE_IDENTITY).job_id

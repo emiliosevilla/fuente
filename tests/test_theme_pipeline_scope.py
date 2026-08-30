@@ -9,7 +9,6 @@ from fuente.config import get_default_config
 from fuente.control_console import FuenteConsoleBackend
 from fuente.core.folder_sync import FolderSyncManager
 from fuente.core.vault import VaultManager, document_id_for_relative_path
-from fuente.application.smart_notes import FakeConversationClient
 from fuente.domain.runtime_policy import ExecutionProfile, RuntimePolicy
 from fuente.watcher.watcher import ETLPipeline, FolderMonitor
 
@@ -48,7 +47,6 @@ def themed_pipeline(temp_vault_path):
         root.mkdir(parents=True, exist_ok=True)
 
     pipeline = ETLPipeline(config)
-    pipeline.ingestion.smart_note_generator.chat_client = FakeConversationClient()
     auto_approve_early_transitions(pipeline.ingestion)
     pipeline.set_runtime_policy(
         RuntimePolicy(
@@ -94,7 +92,7 @@ def test_processing_writes_only_inside_active_theme(themed_pipeline):
 
     assert len(dirty) == 1
     assert len(clean) == 1
-    assert len(notes) >= 8
+    assert notes == []
     for path in (*dirty, *clean, *notes):
         _assert_under_theme(path, theme_dir)
 

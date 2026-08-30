@@ -253,6 +253,7 @@ class IngestionApplicationService:
         chroma: Any | None = None,
         atomic_generator: Any,
         smart_note_generator: Any | None = None,
+        legacy_auto_processing: bool = False,
         runtime_policy: RuntimePolicy | None = None,
         ram_governor: Any = None,
         scheduler: Optional[ResourceScheduler] = None,
@@ -283,6 +284,10 @@ class IngestionApplicationService:
         )
         self.atomic_generator = atomic_generator
         self.smart_note_generator = smart_note_generator
+        # Compatibility seam for offline recovery tests only.  Production
+        # callers leave this disabled: a capture ends in 3_capturado and a
+        # user must explicitly choose any 4_procesado derivative in Gestajo.
+        self.legacy_auto_processing = legacy_auto_processing
         self.runtime_policy = runtime_policy
         self.ram_governor = ram_governor
         self._copy_to_dirty = copy_to_dirty
@@ -607,7 +612,10 @@ class IngestionApplicationService:
                 if cancelled is not None:
                     return cancelled
 
-                handler = getattr(self, _STAGE_HANDLERS[job.stage])
+                handler_name = _STAGE_HANDLERS[job.stage]
+                if job.stage == "indexed_chunks" and self.legacy_auto_processing:
+                    handler_name = "_run_generate_candidate"
+                handler = getattr(self, handler_name)
                 try:
                     job = handler(job, context)
                 except BudgetDeferredError as error:

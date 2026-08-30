@@ -96,7 +96,7 @@ def test_status_requires_the_bound_user(tmp_path: Path):
     )
 
     assert agent.status("token-a")["claimed"] is True
-    assert agent.status("token-a")["capabilities"] == ["flow", "flow_approve", "flow_review", "flow_discard", "settings", "sync_inputs", "sync_run", "sync_output", "sync_conflict_read", "sync_conflict_resolve", "note_read", "note_relations", "note_write", "note_share", "note_assistant", "templates_read", "templates_write"]
+    assert agent.status("token-a")["capabilities"] == ["flow", "flow_approve", "flow_review", "flow_review_captured", "flow_discard", "settings", "sync_inputs", "sync_run", "sync_output", "sync_conflict_read", "sync_conflict_resolve", "note_read", "note_relations", "note_write", "note_share", "note_assistant", "templates_read", "templates_write"]
     with pytest.raises(AgentAuthenticationError, match="another user"):
         agent.status("token-b")
 
@@ -627,6 +627,78 @@ def test_management_can_read_captured_review_without_local_paths(tmp_path: Path)
     assert str(tmp_path) not in str(review)
     assert source.path.read_bytes() == b"%PDF-1.7"
     assert source.media_type == "application/pdf"
+
+
+def test_management_can_refine_pending_capture_before_supabase_catalogue_sync(tmp_path: Path):
+    job_id = "00000000-0000-0000-0000-000000000128"
+    captured_id = document_id_for_relative_path("3_capturado/Informe.md")
+    (tmp_path / "1_volcado").mkdir()
+    (tmp_path / "1_volcado" / "Informe.pdf").write_bytes(b"%PDF-1.7")
+    (tmp_path / "3_capturado").mkdir()
+    (tmp_path / "3_capturado" / "Informe.md").write_text("# Capturado", encoding="utf-8")
+    calls: list[tuple[object, ...]] = []
+    audits: list[dict[str, object]] = []
+
+    class Vault:
+        config = type("Config", (), {"vault_path": tmp_path})()
+
+        @staticmethod
+        def path_resolver():
+            class Resolver:
+                @staticmethod
+                def resolve_input(relative_path):
+                    return tmp_path / relative_path
+
+                @staticmethod
+                def resolve(relative_path, *, root_name):
+                    assert root_name == "vault"
+                    return tmp_path / relative_path
+
+            return Resolver()
+
+    class Backend:
+        vault = Vault()
+
+        @staticmethod
+        def get_job_detail(value):
+            assert value == job_id
+            return {"job": {
+                "job_id": job_id, "stage": "saved_clean", "status": "pending",
+                "error_code": "awaiting_clean_approval", "source_relative_path": "1_volcado/Informe.pdf",
+                "clean_artifact": "3_capturado/Informe.md",
+            }}
+
+        @staticmethod
+        def process_chat(message, context):
+            calls.append((message, context))
+            return {"ok": True, "text": "# Refinado", "model": "qwen2.5:7b", "degraded": False, "citations": []}
+
+    agent = GestajoAgent(
+        tmp_path, verifier=_verifier, publisher=_publisher,
+        management_verifier=_management_verifier, membership_verifier=lambda *_args: "gestion",
+        note_visibility_verifier=lambda *_args: (_ for _ in ()).throw(AssertionError("must not require Supabase catalogue")),
+        backend_factory=lambda _vault: Backend(),
+        note_reader=lambda _vault, received_id: {
+            "document_id": received_id, "revision": 4, "title": "Informe", "body_markdown": "# Capturado",
+        },
+        note_writer=lambda _vault, received_id, revision, body: calls.append((received_id, revision, body)) or {
+            "document_id": received_id, "revision": revision + 1, "title": "Informe", "content_hash": "a" * 64,
+        },
+        audit_publisher=lambda _binding, _token, event: audits.append(event),
+    )
+    agent.claim("token-a", {"supabase_url": "https://project.supabase.co", "publishable_key": "sb_publishable_test_key"})
+
+    note = agent.read_flow_review_captured("token-a", "00000000-0000-0000-0000-000000000001", job_id)
+    updated = agent.update_flow_review_captured("token-a", "00000000-0000-0000-0000-000000000001", job_id, {"expected_revision": 4, "body_markdown": "# Editada"})
+    answer = agent.ask_flow_review_captured_assistant("token-a", "00000000-0000-0000-0000-000000000001", job_id, {"message": "Refina"})
+
+    assert note["document_id"] == captured_id
+    assert updated == {"document_id": captured_id, "revision": 5, "title": "Informe", "content_hash": "a" * 64, "sync_state": "pending_sync"}
+    assert calls == [(captured_id, 4, "# Editada"), ("Refina", {"context_mode": "single_note", "document_id": captured_id})]
+    assert answer["text"] == "# Refinado"
+    assert [event["action"] for event in audits] == [
+        "caudal_review_captured_read", "caudal_review_captured_update", "caudal_review_captured_assistant",
+    ]
 
 
 def test_visible_note_can_use_local_assistant_without_exposing_paths(tmp_path: Path):

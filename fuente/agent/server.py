@@ -403,7 +403,7 @@ class GestajoAgent:
             "platform": platform.system(),
             "user_id": binding.user_id,
             "vault_fingerprint": self._vault_fingerprint(),
-            "capabilities": ["flow", "flow_approve", "flow_review", "flow_discard", "settings", "sync_inputs", "sync_run", "sync_output", "sync_conflict_read", "sync_conflict_resolve", "note_read", "note_relations", "note_write", "note_share", "note_assistant", "templates_read", "templates_write"],
+            "capabilities": ["flow", "flow_approve", "flow_review", "flow_review_captured", "flow_discard", "settings", "sync_inputs", "sync_run", "sync_output", "sync_conflict_read", "sync_conflict_resolve", "note_read", "note_relations", "note_write", "note_share", "note_assistant", "templates_read", "templates_write"],
         }
 
     def flow(self, access_token: object, org_id: object) -> dict[str, object]:
@@ -489,6 +489,50 @@ class GestajoAgent:
             media_type=_flow_review_media_type(source_path),
         )
 
+    def read_flow_review_captured(self, access_token: object, org_id: object, job_id: object) -> dict[str, object]:
+        """Read the captured note while its Caudal approval is still pending locally."""
+        binding = self._require_management(access_token, org_id)
+        note_id = self._flow_review_captured_note_id(job_id)
+        note = _note_response(self._note_reader(self.vault_path, note_id), note_id)
+        self._record_audit(binding, self._access_token(access_token), _new_audit_event(
+            note_id, str(org_id), str(uuid.UUID(str(org_id))), binding.user_id,
+            "caudal_review_captured_read", "success",
+        ))
+        return note
+
+    def update_flow_review_captured(
+        self, access_token: object, org_id: object, job_id: object, payload: object,
+    ) -> dict[str, object]:
+        """Update only the pending capture; its metadata stays local until the flow advances."""
+        binding = self._require_management(access_token, org_id)
+        expected_revision, body_markdown = _note_update_payload(payload)
+        note_id = self._flow_review_captured_note_id(job_id)
+        note = _note_update_response(
+            self._note_writer(self.vault_path, note_id, expected_revision, body_markdown), note_id,
+        )
+        self._record_audit(binding, self._access_token(access_token), _new_audit_event(
+            note_id, str(org_id), str(uuid.UUID(str(org_id))), binding.user_id,
+            "caudal_review_captured_update", "pending_sync",
+        ))
+        return {**note, "sync_state": "pending_sync"}
+
+    def ask_flow_review_captured_assistant(
+        self, access_token: object, org_id: object, job_id: object, payload: object,
+    ) -> dict[str, object]:
+        """Refine the pending capture with the local assistant without remote catalogue access."""
+        binding = self._require_management(access_token, org_id)
+        note_id = self._flow_review_captured_note_id(job_id)
+        answer = _assistant_response(self._local_backend().process_chat(
+            _note_assistant_payload(payload),
+            {"context_mode": "single_note", "document_id": note_id},
+        ))
+        self._record_audit(binding, self._access_token(access_token), _new_audit_event(
+            note_id, str(org_id), str(uuid.UUID(str(org_id))), binding.user_id,
+            "caudal_review_captured_assistant", "success" if answer["ok"] else "error",
+            llm_model=answer["model"] or None,
+        ))
+        return answer
+
     def discard_flow_review(self, access_token: object, org_id: object, payload: object) -> dict[str, object]:
         """Discard the pending captured artifact, preserving the original input."""
         binding = self._require_management(access_token, org_id)
@@ -512,6 +556,21 @@ class GestajoAgent:
             "caudal_capture_discard", "success",
         ))
         return _flow_response(self._read_flow())
+
+    def _flow_review_captured_note_id(self, job_id: object) -> str:
+        try:
+            valid_job_id = str(uuid.UUID(str(job_id)))
+        except (ValueError, AttributeError) as error:
+            raise AgentError("Caudal job is invalid") from error
+        backend = self._local_backend()
+        detail = backend.get_job_detail(valid_job_id)
+        job = detail.get("job") if isinstance(detail, Mapping) else None
+        if not isinstance(job, Mapping) or _flow_review_summary(job) is None:
+            raise AgentError("the requested Caudal review is not available")
+        _source_relative, _source_path, captured_relative, _captured_path = _flow_review_artifacts(
+            backend, job, valid_job_id,
+        )
+        return document_id_for_relative_path(captured_relative)
 
     def settings(self, access_token: object, org_id: object) -> dict[str, object]:
         binding = self._require_user(access_token)
@@ -951,14 +1010,19 @@ def _handler_for(agent: GestajoAgent) -> type[BaseHTTPRequestHandler]:
                 return
             if parsed.path.startswith("/v1/flow/reviews/"):
                 review_route = parsed.path.removeprefix("/v1/flow/reviews/")
-                is_source = review_route.endswith("/source")
-                job_id = review_route.removesuffix("/source") if is_source else review_route
-                if not job_id or "/" in job_id:
+                parts = review_route.split("/")
+                if len(parts) not in {1, 2} or not parts[0] or (len(parts) == 2 and parts[1] not in {"source", "captured"}):
                     self._send_error(HTTPStatus.NOT_FOUND, "route not found")
                     return
-                if is_source:
+                job_id = parts[0]
+                if len(parts) == 2 and parts[1] == "source":
                     self._authorized_file(
                         lambda token: agent.read_flow_review_source(token, _single_query_value(parsed.query, "org_id"), job_id)
+                    )
+                    return
+                if len(parts) == 2:
+                    self._authorized(
+                        lambda token: agent.read_flow_review_captured(token, _single_query_value(parsed.query, "org_id"), job_id)
                     )
                     return
                 self._authorized(
@@ -1009,16 +1073,20 @@ def _handler_for(agent: GestajoAgent) -> type[BaseHTTPRequestHandler]:
             is_note_share = note_route.endswith("/share") and bool(note_route.removesuffix("/share")) and "/" not in note_route.removesuffix("/share")
             is_note_assistant = note_route.endswith("/assistant") and bool(note_route.removesuffix("/assistant")) and "/" not in note_route.removesuffix("/assistant")
             is_note_update = bool(note_route) and "/" not in note_route
+            review_route = parsed.path.removeprefix("/v1/flow/reviews/") if parsed.path.startswith("/v1/flow/reviews/") else ""
+            review_parts = review_route.split("/") if review_route else []
+            is_review_captured_update = len(review_parts) == 2 and bool(review_parts[0]) and review_parts[1] == "captured"
+            is_review_captured_assistant = len(review_parts) == 3 and bool(review_parts[0]) and review_parts[1:] == ["captured", "assistant"]
             template_id = parsed.path.removeprefix("/v1/templates/") if parsed.path.startswith("/v1/templates/") else ""
             is_template_save = bool(template_id) and "/" not in template_id
-            if not (is_note_update or is_note_share or is_note_assistant or is_template_save) and parsed.path not in {
+            if not (is_note_update or is_note_share or is_note_assistant or is_review_captured_update or is_review_captured_assistant or is_template_save) and parsed.path not in {
                 "/v1/claim", "/v1/flow/approve", "/v1/flow/discard", "/v1/settings", "/v1/sync-inputs/select", "/v1/sync-inputs/run", "/v1/sync-outputs/run", "/v1/sync-conflicts/read", "/v1/sync-conflicts/resolve",
                 "/v1/sync-inputs/confirm", "/v1/sync-inputs/enabled", "/v1/sync-inputs/remove", "/v1/sync",
             }:
                 self._send_error(HTTPStatus.NOT_FOUND, "route not found")
                 return
             try:
-                payload = self._json_body(max_bytes=10_000_000 if is_note_update else 16_384)
+                payload = self._json_body(max_bytes=10_000_000 if is_note_update or is_review_captured_update else 16_384)
             except AgentError as error:
                 self._send_error(HTTPStatus.BAD_REQUEST, str(error))
                 return
@@ -1027,6 +1095,16 @@ def _handler_for(agent: GestajoAgent) -> type[BaseHTTPRequestHandler]:
                 return
             if parsed.path == "/v1/sync":
                 self._authorized(lambda token: agent.sync_pending(token, _single_query_value(parsed.query, "org_id")))
+                return
+            if is_review_captured_update:
+                self._authorized(lambda token: agent.update_flow_review_captured(
+                    token, _single_query_value(parsed.query, "org_id"), review_parts[0], payload,
+                ))
+                return
+            if is_review_captured_assistant:
+                self._authorized(lambda token: agent.ask_flow_review_captured_assistant(
+                    token, _single_query_value(parsed.query, "org_id"), review_parts[0], payload,
+                ))
                 return
             if is_template_save:
                 self._authorized(lambda token: agent.save_template(token, _single_query_value(parsed.query, "org_id"), template_id, payload))

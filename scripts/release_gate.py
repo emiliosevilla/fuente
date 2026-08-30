@@ -929,8 +929,11 @@ def _acceptable_evidence_heads(repo_root: Path, head: str) -> set[str]:
     if not names:
         return heads
     allowed_prefix = "docs/evidence/fuente-y-caudal/"
+    current_sdd = "docs/evidence/current-sdd.json"
     if not all(
-        name.startswith(allowed_prefix) and name.endswith((".json", ".png")) for name in names
+        name == current_sdd
+        or (name.startswith(allowed_prefix) and name.endswith((".json", ".png")))
+        for name in names
     ):
         return heads
     try:

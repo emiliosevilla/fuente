@@ -203,6 +203,23 @@ def test_sync_contract_is_registered_in_release_gate(gate_module):
     assert "sync" in suite_ids
 
 
+def test_evidence_restamp_accepts_current_sdd_with_native_capture(gate_module, tmp_path, monkeypatch):
+    commands = {
+        ("diff-tree", "--no-commit-id", "--name-only", "-r", "head"): (
+            "docs/evidence/current-sdd.json\n"
+            "docs/evidence/fuente-y-caudal/manifest.json\n"
+        ),
+        ("rev-parse", "head^"): "parent",
+    }
+    monkeypatch.setattr(
+        gate_module,
+        "_git_output",
+        lambda _repo_root, *args: commands[args],
+    )
+
+    assert gate_module._acceptable_evidence_heads(tmp_path, "head") == {"head", "parent"}
+
+
 def test_active_artifact_hygiene_is_registered_in_release_gate(gate_module):
     checks = gate_module.run_all_checks(
         skip_pytest=True,

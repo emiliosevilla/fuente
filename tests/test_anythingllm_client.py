@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import io
 from typing import Any
 from urllib.error import HTTPError
 
@@ -9,6 +10,7 @@ import pytest
 
 from fuente.integrations.anythingllm import (
     ERROR_ANYTHINGLLM,
+    ERROR_ANYTHINGLLM_ACCESS_REQUIRED,
     ERROR_DOCUMENTS_PRESENT,
     AnythingLLMConversationClient,
     AnythingLLMError,
@@ -32,6 +34,7 @@ def fake_anythingllm(monkeypatch):
     workspace_documents: list[dict[str, Any]] = []
     chat_history: dict[str, list[str]] = {}
     auth_headers: list[str] = []
+    workspace_model = "qwen2.5:0.5b"
 
     class Response:
         def __init__(self, payload: dict[str, Any]) -> None:
@@ -47,6 +50,7 @@ def fake_anythingllm(monkeypatch):
             return json.dumps(self._payload).encode("utf-8")
 
     def fake_urlopen(request, timeout=30.0):
+        nonlocal workspace_model
         url = request.full_url
         method = request.method
         body = None
@@ -72,10 +76,15 @@ def fake_anythingllm(monkeypatch):
                         {
                             "slug": "fuente",
                             "documents": list(workspace_documents),
+                            "chatModel": workspace_model,
                         }
                     ]
                 }
             )
+
+        if url.endswith("/api/v1/workspace/fuente/update"):
+            workspace_model = str((body or {}).get("chatModel") or "")
+            return Response({"workspace": {"slug": "fuente", "chatModel": workspace_model}})
 
         if url.endswith("/api/v1/workspace/fuente/chat"):
             assert body is not None
@@ -115,6 +124,21 @@ def test_document_count_and_health(fake_anythingllm):
     assert any("/api/v1/system" in url for _method, url, _body in calls)
 
 
+def test_health_reports_when_anythingllm_requires_an_api_key(monkeypatch):
+    def forbidden(request, timeout=30.0):
+        raise HTTPError(
+            request.full_url, 403, "forbidden", hdrs=None, fp=io.BytesIO(b"forbidden")
+        )
+
+    monkeypatch.setattr("urllib.request.urlopen", forbidden)
+    client = AnythingLLMConversationClient("http://127.0.0.1:3001", "fuente")
+
+    with pytest.raises(AnythingLLMError) as exc:
+        client.health()
+
+    assert exc.value.code == ERROR_ANYTHINGLLM_ACCESS_REQUIRED
+
+
 def test_chat_requires_zero_documents(fake_anythingllm):
     client, _calls, documents, history, _auth = fake_anythingllm
     documents.append({"id": 1, "name": "forbidden.pdf"})
@@ -143,9 +167,13 @@ def test_chat_uses_session_and_returns_response(fake_anythingllm):
     assert first["textResponse"]
     assert "PLASMA-77" in str(second["textResponse"])
     assert len(history["fuente-session"]) == 2
-    chat_calls = [entry for entry in calls if entry[0] == "POST" and entry[2]]
+    chat_calls = [entry for entry in calls if entry[0] == "POST" and entry[1].endswith("/chat")]
     assert chat_calls[0][2]["sessionId"] == "fuente-session"
     assert chat_calls[0][2]["mode"] == "chat"
+    assert [entry[2] for entry in calls if entry[1].endswith("/update")] == [
+        {"chatModel": "qwen2.5:0.5b"},
+        {"chatModel": "qwen2.5:0.5b"},
+    ]
     assert auth_headers
     assert all(header == "Bearer test-key" for header in auth_headers)
 

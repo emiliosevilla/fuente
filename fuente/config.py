@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import ipaddress
 import json
 import logging
@@ -25,7 +27,8 @@ from fuente.infrastructure.atomic_files import atomic_write_json
 
 logger = logging.getLogger(__name__)
 DEFAULT_OLLAMA_URL = "http://localhost:11434"
-DEFAULT_ANYTHINGLLM_URL = "http://127.0.0.1:13001"
+DEFAULT_ANYTHINGLLM_URL = "http://127.0.0.1:3001"
+LEGACY_ANYTHINGLLM_URL = "http://127.0.0.1:13001"
 DEFAULT_ANYTHINGLLM_WORKSPACE = "fuente"
 DEFAULT_ISSUE = "_Sin_Cuestion"
 VALID_RESOURCE_PROFILES = ("auto", "eco_strict")
@@ -204,6 +207,10 @@ class VaultConfig:
     def minirag_dir(self) -> Path:
         return self.system_dir / "minirag"
 
+    @property
+    def lancedb_dir(self) -> Path:
+        return self.system_dir / "lancedb"
+
 
 @dataclass
 class AppConfig:
@@ -217,7 +224,7 @@ class AppConfig:
     resource_profile: str = "auto"
     audio_mode: str = "auto"
     whisper_model_path: str | None = None
-    anythingllm_url: str = ""
+    anythingllm_url: str = DEFAULT_ANYTHINGLLM_URL
     anythingllm_workspace_slug: str = DEFAULT_ANYTHINGLLM_WORKSPACE
     anythingllm_api_key: str = ""
 
@@ -267,12 +274,14 @@ class AppConfig:
             if isinstance(raw_whisper_path, str) and raw_whisper_path.strip()
             else None
         )
-        raw_anything_url = data.get("anythingllm_url", "")
+        raw_anything_url = data.get("anythingllm_url", DEFAULT_ANYTHINGLLM_URL)
         anythingllm_url = (
             raw_anything_url.strip()
             if isinstance(raw_anything_url, str) and raw_anything_url.strip()
-            else ""
+            else DEFAULT_ANYTHINGLLM_URL
         )
+        if anythingllm_url == LEGACY_ANYTHINGLLM_URL:
+            anythingllm_url = DEFAULT_ANYTHINGLLM_URL
         if anythingllm_url:
             try:
                 from fuente.integrations.anythingllm import validate_loopback_anythingllm_url

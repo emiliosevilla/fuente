@@ -18,10 +18,14 @@ INITIAL_TEMPLATE_IDS: frozenset[str] = frozenset(
         "reunion",
         "tareas",
         "objetivos",
+        "decision",
+        "conclusion",
         "resumen",
         "propiedades",
         "contexto",
         "concepto",
+        "apunte",
+        "diario",
     }
 )
 
@@ -45,10 +49,14 @@ DISPLAY_NAMES: dict[str, str] = {
     "reunion": "Reunión",
     "tareas": "Tareas",
     "objetivos": "Objetivos",
+    "decision": "Hoja de decisión",
+    "conclusion": "Conclusiones",
     "resumen": "Resumen",
     "propiedades": "Propiedades",
     "contexto": "Contexto",
     "concepto": "Concepto",
+    "apunte": "Apunte",
+    "diario": "Diario",
 }
 
 
@@ -201,6 +209,17 @@ class TemplateRegistry:
         return self.save(
             normalized,
             packaged_template,
+            packaged_agents,
+            expected_revision=int(expected_revision),
+        )
+
+    def restore_agents(self, template_id: str, expected_revision: int) -> TemplateBundle:
+        """Restore only the packaged AGENTS.md, preserving the Markdown template."""
+        bundle = self.load(template_id)
+        _, packaged_agents = self._packaged_content(bundle.template_id)
+        return self.save(
+            bundle.template_id,
+            bundle.template,
             packaged_agents,
             expected_revision=int(expected_revision),
         )

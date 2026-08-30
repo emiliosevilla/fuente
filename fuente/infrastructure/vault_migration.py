@@ -636,6 +636,7 @@ class VaultMigrator:
             state_dir / "state.db-wal",
             state_dir / "state.db-shm",
             self.vault.config.minirag_dir,
+            self.vault.config.lancedb_dir,
         )
 
     def _snapshot_runtime_state(self, manifest: MigrationManifest) -> None:
@@ -850,15 +851,15 @@ class VaultMigrator:
         if self._index_store is not None:
             return self._index_store
         try:
-            from fuente.rag.minirag_store import MiniRAGStore
+            from fuente.rag.lancedb_store import LanceDBStore
 
-            store = MiniRAGStore(
-                self.vault.config.minirag_dir,
+            store = LanceDBStore(
+                self.vault.config.lancedb_dir,
                 ollama_url=self.config.ollama_url,
             )
             return store
         except Exception as error:
-            logger.warning("MiniRAG unavailable for migration index rebuild: %s", error)
+            logger.warning("LanceDB unavailable for migration index rebuild: %s", error)
             return None
 
     def _rebuild_index(self, themes: list[str]) -> bool:

@@ -9,6 +9,7 @@ from __future__ import annotations
 import html
 import json
 import logging
+import re
 import urllib.error
 import urllib.request
 from typing import Any, Callable, Mapping, Optional, Protocol
@@ -23,6 +24,7 @@ from fuente.application.retrieval import (
     MODE_NONE,
     MODE_BM25_VAULT,
     SCOPE_ALL_NOTES,
+    SCOPE_MULTIPLE_NOTES,
     SCOPE_ISSUE,
     SCOPE_SINGLE_NOTE,
     SCOPE_THEME,
@@ -37,6 +39,11 @@ CHAT_SYSTEM_PROMPT = (
     "contexto recuperado (evidencia) y (2) inferencias, lagunas o incertidumbre "
     "cuando el contexto no basta. Si no hay evidencia suficiente, dilo con "
     "claridad y no inventes citas ni fuentes. Responde en español."
+)
+
+_RELATION_REQUEST = re.compile(
+    r"\b(relaci(?:ó|o)n(?:es)?|wikilinks?|enlaces?|v[íi]nculos?)\b",
+    re.IGNORECASE,
 )
 
 ERROR_OLLAMA = "ollama_unavailable"
@@ -223,6 +230,7 @@ def _normalize_scope(context: Mapping[str, Any]) -> tuple[str, dict[str, str]]:
     ).strip()
     if ":" in raw_mode and raw_mode.split(":", 1)[0] in {
         SCOPE_SINGLE_NOTE,
+        SCOPE_MULTIPLE_NOTES,
         SCOPE_ISSUE,
         SCOPE_THEME,
         SCOPE_ALL_NOTES,
@@ -246,6 +254,12 @@ def _normalize_scope(context: Mapping[str, Any]) -> tuple[str, dict[str, str]]:
         theme = str(context.get("theme") or "").strip()
         if theme:
             kwargs["theme"] = theme
+    elif kind == SCOPE_MULTIPLE_NOTES:
+        values = context.get("document_ids")
+        if isinstance(values, (list, tuple)):
+            selected = sorted({str(item).strip() for item in values if str(item).strip()})
+            if selected:
+                kwargs["document_ids"] = ",".join(selected)
     elif kind != SCOPE_ALL_NOTES:
         kind = SCOPE_ALL_NOTES
     return kind, kwargs
@@ -298,16 +312,108 @@ class ChatApplicationService:
             self._refinement_guard(candidate_id, revision)
 
         scope, scope_kwargs = _normalize_scope(ctx)
-        retrieval_ctx = self.retrieval.build_context(query, scope, **scope_kwargs)
-        sources = list(retrieval_ctx.get("sources") or [])
-        retrieval_mode = str(retrieval_ctx.get("mode") or MODE_NONE)
-        has_context = bool(retrieval_ctx.get("has_context"))
-        evidence = str(retrieval_ctx.get("text") or "").strip()
+        task_instructions = str(ctx.get("task_instructions") or "").strip()
+        selected_notes: list[tuple[str, str, str]] = []
+        if scope == SCOPE_SINGLE_NOTE:
+            selected_markdown = str(ctx.get("selected_note_markdown") or "").strip()
+            selected_note_id = str(ctx.get("document_id") or "").strip()
+            selected_note_title = str(ctx.get("selected_note_title") or "").strip()
+            if selected_markdown and selected_note_id:
+                selected_notes.append((selected_note_id, selected_note_title, selected_markdown))
+        elif scope == SCOPE_MULTIPLE_NOTES and isinstance(ctx.get("selected_notes"), list):
+            for item in ctx["selected_notes"]:
+                if not isinstance(item, Mapping):
+                    continue
+                note_id = str(item.get("document_id") or "").strip()
+                title = str(item.get("title") or "").strip()
+                body = str(item.get("body_markdown") or "").strip()
+                if note_id and body:
+                    selected_notes.append((note_id, title, body))
 
+        raw_related_document_ids = ctx.get("related_document_ids", ())
+        related_document_ids = sorted({
+            str(note_id).strip()
+            for note_id in raw_related_document_ids
+            if isinstance(note_id, str) and note_id.strip()
+        }) if isinstance(raw_related_document_ids, (list, tuple, set)) else []
+        if selected_notes:
+            # A selected draft is visible only to its already-authorized caller. It is
+            # intentionally not admitted to the general approved-note retriever.
+            remaining = self.retrieval.max_chars
+            evidence_parts: list[str] = []
+            sources = []
+            for note_id, title, body in selected_notes:
+                if remaining <= 0:
+                    break
+                excerpt = body[:remaining]
+                evidence_parts.append(f"# {title or note_id}\n\n{excerpt}")
+                sources.append({
+                    "document_id": note_id,
+                    "title": title or note_id,
+                    "snippet": excerpt[: self.retrieval.snippet_chars],
+                    "origin": "selected_local_note",
+                })
+                remaining -= len(excerpt)
+            evidence = "\n\n---\n\n".join(evidence_parts)
+            retrieval_mode = "selected_local_note"
+            has_context = bool(evidence)
+            retrieval_ctx = {"degraded": False, "degradation_reason": None}
+            if related_document_ids and _RELATION_REQUEST.search(query):
+                selected_title = selected_notes[0][1]
+                selected_body = selected_notes[0][2]
+                related_ctx = self.retrieval.build_context(
+                    "\n".join(part for part in (query, selected_title, selected_body[:1_200]) if part),
+                    SCOPE_MULTIPLE_NOTES,
+                    document_ids=",".join(related_document_ids),
+                )
+                related_sources = [
+                    source for source in related_ctx.get("sources") or []
+                    if str(source.get("document_id") or "") != selected_notes[0][0]
+                ]
+                related_evidence = str(related_ctx.get("text") or "").strip()
+                if related_evidence:
+                    evidence = f"{evidence}\n\n---\n\nNotas relacionadas recuperadas:\n{related_evidence}"
+                    sources.extend(related_sources)
+                    retrieval_mode = f"selected_local_note+{related_ctx.get('mode') or MODE_NONE}"
+                retrieval_ctx = {
+                    "degraded": bool(related_ctx.get("degraded")),
+                    "degradation_reason": related_ctx.get("degradation_reason"),
+                }
+        else:
+            retrieval_ctx = self.retrieval.build_context(query, scope, **scope_kwargs)
+            sources = list(retrieval_ctx.get("sources") or [])
+            retrieval_mode = str(retrieval_ctx.get("mode") or MODE_NONE)
+            has_context = bool(retrieval_ctx.get("has_context"))
+            evidence = str(retrieval_ctx.get("text") or "").strip()
+
+        explicit_wikilinks = sorted({
+            match.group(0)
+            for _note_id, _title, body in selected_notes
+            for match in re.finditer(r"\[\[[^\]\n]+\]\]", body)
+        })
+        related_wikilinks = _related_wikilink_candidates(
+            sources,
+            {note_id for note_id, _title, _body in selected_notes},
+        ) if _RELATION_REQUEST.search(query) else []
         if has_context and evidence:
+            wikilink_instruction = ""
+            if explicit_wikilinks:
+                wikilink_instruction = (
+                    "\n\nWikilinks explícitos de la Nota:\n"
+                    + "\n".join(f"- `{link}`" for link in explicit_wikilinks)
+                    + "\nSi propones wikilinks, usa únicamente estos destinos "
+                    "exactos y no inventes otros."
+                )
+            if related_wikilinks:
+                wikilink_instruction += (
+                    "\n\nNotas recuperadas disponibles para enlazar:\n"
+                    + "\n".join(f"- `{link}`" for link in related_wikilinks)
+                    + "\nÚsalas sólo como propuestas y explica el nexo respaldado por la evidencia."
+                )
             user_prompt = (
                 "Contexto recuperado (evidencia):\n"
                 f"{evidence}\n\n"
+                f"{wikilink_instruction}\n\n"
                 "Pregunta del usuario:\n"
                 f"{query}\n\n"
                 "Responde citando solo lo respaldado por el contexto. "
@@ -371,8 +477,13 @@ class ChatApplicationService:
                 self.provider.bind_context(ctx)
             answer = self.provider.generate(
                 model=model,
-                system=self.system_prompt,
+                system=(
+                    self.system_prompt
+                    if not task_instructions
+                    else f"{self.system_prompt}\n\nInstrucciones del tipo de Nota:\n{task_instructions}"
+                ),
                 prompt=user_prompt,
+                think=False,
             )
         except ChatProviderError as exc:
             detail = str(exc)
@@ -420,7 +531,9 @@ class ChatApplicationService:
             )
 
         return self._result(
-            text=answer,
+            text=_append_grounded_wikilinks(
+                answer, query, explicit_wikilinks, related_wikilinks,
+            ),
             sources=sources,
             retrieval_mode=retrieval_mode,
             has_context=has_context,
@@ -517,3 +630,45 @@ class ChatApplicationService:
             "policy_reason": policy_reason,
             "model": model,
         }
+
+
+def _append_grounded_wikilinks(
+    answer: str,
+    query: str,
+    explicit_wikilinks: list[str],
+    related_wikilinks: list[str],
+) -> str:
+    """Report only links grounded in the Note or retrieved visible Notes."""
+    if not _RELATION_REQUEST.search(query):
+        return answer
+    sections = [answer.rstrip()]
+    if explicit_wikilinks:
+        sections.append(
+            "## Wikilinks presentes en la Nota\n"
+            + "\n".join(f"- {link}" for link in explicit_wikilinks)
+        )
+    if related_wikilinks:
+        sections.append(
+            "## Wikilinks disponibles para la relación\n"
+            + "\n".join(f"- {link}" for link in related_wikilinks)
+        )
+    else:
+        sections.append(
+            "## Wikilinks disponibles para la relación\n"
+            "No se recuperó otra Nota visible con evidencia suficiente para proponer un wikilink."
+        )
+    return "\n\n".join(sections)
+
+
+def _related_wikilink_candidates(
+    sources: list[Mapping[str, Any]], selected_note_ids: set[str],
+) -> list[str]:
+    """Return exact, authorized note titles that are safe to render as wikilinks."""
+    candidates = set()
+    for source in sources:
+        if str(source.get("document_id") or "") in selected_note_ids:
+            continue
+        title = str(source.get("title") or "").strip()
+        if title and not any(character in title for character in "[]|\r\n"):
+            candidates.add(f"[[{title}]]")
+    return sorted(candidates)

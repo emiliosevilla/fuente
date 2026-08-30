@@ -16,7 +16,7 @@ Durability rules that the stage order encodes:
 
 - Index entries are reconciled per document id: whatever chunk ids were
   previously published for a document are recorded *before* they are written
-  to MiniRAG, so a resumed job can delete the obsolete ones instead of leaving
+  to LanceDB, so a resumed job can delete the obsolete ones instead of leaving
   orphaned vectors behind.
 - Generated Markdown is validated (frontmatter schema) before it is written,
   and the note is written atomically before its index entries are published.
@@ -85,13 +85,12 @@ from fuente.domain.vault_layout import (
     CANONICAL_CLEAN_DIR_NAME,
     CANONICAL_PROCESSED_DIR_NAME,
 )
-from fuente.rag.minirag_store import (
-    MiniRAGRetrievalBackend,
-    MiniRAGStore,
-    MiniRAGUnavailableError,
-    resolve_index_authority,
+from fuente.rag.lancedb_store import (
+    LanceDBRetrievalBackend,
+    LanceDBStore,
+    LanceDBUnavailableError,
 )
-from fuente.rag.minirag_store import MiniRAGStore, MiniRAGUnavailableError
+from fuente.rag.minirag_store import resolve_index_authority
 from fuente.rag.router import RetrievalRouter
 
 logger = logging.getLogger(__name__)
@@ -102,8 +101,8 @@ TERMINAL_STAGES: frozenset[str] = frozenset(
 )
 
 #: `index_artifacts.kind` values this service publishes.
-CHUNK_ARTIFACT_KIND = "minirag_chunk"
-LEGACY_CHUNK_ARTIFACT_KINDS = {CHUNK_ARTIFACT_KIND, "chroma_chunk"}
+CHUNK_ARTIFACT_KIND = "lancedb_chunk"
+LEGACY_CHUNK_ARTIFACT_KINDS = {CHUNK_ARTIFACT_KIND, "minirag_chunk", "chroma_chunk"}
 NOTE_ARTIFACT_KIND = "note_index"
 
 # Stored on a job while a human reviews its canonical clean Markdown.  The
@@ -133,7 +132,7 @@ _STAGE_HANDLERS: dict[str, str] = {
     "copied_dirty": "_run_extract",
     "extracted": "_run_save_clean",
     "saved_clean": "_run_index_chunks",
-    "indexed_chunks": "_run_generate_candidate",
+    "indexed_chunks": "_run_complete_capture",
     "generated_candidate": "_run_validate_candidate",
     "validated_candidate": "_run_save_note",
     "saved_note": "_run_index_note",
@@ -254,6 +253,7 @@ class IngestionApplicationService:
         chroma: Any | None = None,
         atomic_generator: Any,
         smart_note_generator: Any | None = None,
+        legacy_auto_processing: bool = False,
         runtime_policy: RuntimePolicy | None = None,
         ram_governor: Any = None,
         scheduler: Optional[ResourceScheduler] = None,
@@ -270,21 +270,24 @@ class IngestionApplicationService:
         self.extraction_policy = ExtractionPolicy([extractors])
         self.chunker = chunker
         self.index_store = index_store if index_store is not None else chroma
-        self._minirag_store = MiniRAGStore(
-            config.vault.minirag_dir,
+        self._lancedb_store = LanceDBStore(
+            config.vault.lancedb_dir,
             ollama_url=config.ollama_url,
             model=config.custom_model_override,
-            job_store=job_store,
         )
         if self.index_store is None and (
             runtime_policy is None or runtime_policy.vector_index_enabled
         ):
-            self.index_store = self._minirag_store
+            self.index_store = self._lancedb_store
         self.router = router or RetrievalRouter(
-            search=MiniRAGRetrievalBackend(self.index_store), enrichment=None
+            search=LanceDBRetrievalBackend(self.index_store), enrichment=None
         )
         self.atomic_generator = atomic_generator
         self.smart_note_generator = smart_note_generator
+        # Compatibility seam for offline recovery tests only.  Production
+        # callers leave this disabled: a capture ends in 3_capturado and a
+        # user must explicitly choose any 4_procesado derivative in Gestajo.
+        self.legacy_auto_processing = legacy_auto_processing
         self.runtime_policy = runtime_policy
         self.ram_governor = ram_governor
         self._copy_to_dirty = copy_to_dirty
@@ -306,7 +309,7 @@ class IngestionApplicationService:
             ledger=approval_ledger,
             transition_approvals=self.transition_approvals,
         )
-        setter = getattr(self._minirag_store, "set_approval_checker", None)
+        setter = getattr(self._lancedb_store, "set_approval_checker", None)
         if callable(setter):
             setter(self.approval_service.is_eligible)
 
@@ -347,7 +350,7 @@ class IngestionApplicationService:
             return True
         try:
             return enrichment.delete(chunk_ids) is not False
-        except MiniRAGUnavailableError:
+        except LanceDBUnavailableError:
             return True
 
     def _stamp_note_identity_on_chunks(
@@ -372,21 +375,21 @@ class IngestionApplicationService:
             return
         try:
             result = enrichment.rebuild(chunks)
-        except (MiniRAGUnavailableError, Exception) as exc:
+        except (LanceDBUnavailableError, Exception) as exc:
             logger.info(
-                "MiniRAG enrichment index unavailable for %s: %s",
+                "Legacy enrichment index unavailable for %s: %s",
                 origin.note_id,
                 exc,
             )
             return
         if not result.success:
             logger.warning(
-                "MiniRAG enrichment rebuild failed for %s",
+                "Legacy enrichment rebuild failed for %s",
                 origin.note_id,
             )
 
     def _maybe_evaluate_enrichment(self, origin, chunks) -> None:
-        """Run one local A/B probe when an approved note gains a MiniRAG index."""
+        """Run one local A/B probe when an approved note gains a legacy enrichment index."""
         enrichment = self.router.enrichment()
         if enrichment is None or origin is None or not chunks:
             return
@@ -609,7 +612,10 @@ class IngestionApplicationService:
                 if cancelled is not None:
                     return cancelled
 
-                handler = getattr(self, _STAGE_HANDLERS[job.stage])
+                handler_name = _STAGE_HANDLERS[job.stage]
+                if job.stage == "indexed_chunks" and self.legacy_auto_processing:
+                    handler_name = "_run_generate_candidate"
+                handler = getattr(self, handler_name)
                 try:
                     job = handler(job, context)
                 except BudgetDeferredError as error:
@@ -744,7 +750,7 @@ class IngestionApplicationService:
         self, job: JobRecord, *, authorize_model_load: bool = False
     ) -> dict[str, Any] | None:
         policy = self.runtime_policy
-        if policy is None or job.stage != "indexed_chunks":
+        if policy is None or job.stage != "generated_candidate":
             return None
         governor = self.ram_governor
         checker = getattr(governor, "check_cycle_model", None)
@@ -887,6 +893,7 @@ class IngestionApplicationService:
             raise ValueError("completed extraction returned no content")
         context.content = result.content
         context.metadata = result.metadata
+        self._write_extraction_cache(job, result.content, result.metadata)
         return self._advance(job, "extracted")
 
     def _run_save_clean(self, job: JobRecord, context: _RunContext) -> JobRecord:
@@ -906,6 +913,7 @@ class IngestionApplicationService:
         clean_path = self.vault.save_clean_md(
             self._source_name(job), content, dict(context.metadata)
         )
+        self._delete_extraction_cache(job)
         self._register_clean_canonical(clean_path)
         # Saving the canonical record and entering human review are one durable
         # boundary.  A restart after this CAS sees ``saved_clean`` already
@@ -960,7 +968,7 @@ class IngestionApplicationService:
             if artifact["kind"] in LEGACY_CHUNK_ARTIFACT_KINDS
         }
 
-        # Record the ids before writing them: a crash between the MiniRAG write
+        # Record the ids before writing them: a crash between the LanceDB write
         # and the stage transition must still leave every id this attempt may
         # have published discoverable, or the resumed attempt cannot tell which
         # vectors became obsolete.
@@ -983,7 +991,7 @@ class IngestionApplicationService:
             self._delete_search_chunks(obsolete)
         try:
             result = self.router.search().rebuild(chunks)
-        except MiniRAGUnavailableError:
+        except LanceDBUnavailableError:
             self.job_store.delete_index_artifacts(
                 document_id, artifact_ids=chunk_ids
             )
@@ -997,7 +1005,7 @@ class IngestionApplicationService:
                 self._record_vector_degradation(job, reason="vector_index_unavailable")
                 return self._advance(job, "indexed_chunks", note_document_id=document_id)
             raise RuntimeError(
-                f"MiniRAG index rebuild failed for job {job.job_id}"
+                f"LanceDB index rebuild failed for job {job.job_id}"
             )
         self._maybe_rebuild_enrichment_index(chunks, origin)
         self._maybe_evaluate_enrichment(origin, chunks)
@@ -1021,6 +1029,22 @@ class IngestionApplicationService:
             return waiting
         self._generate_candidate(job, context)
         return self._advance(job, "generated_candidate")
+
+    def _run_complete_capture(self, job: JobRecord, context: _RunContext) -> JobRecord:
+        """Finish ETL at the approved capture; processing is user-initiated."""
+        waiting = self._revalidate_clean_approval(job, context)
+        if waiting is not None:
+            return waiting
+        origin = context.approved_origin or self._approved_clean_origin(job)
+        if origin is None:
+            return self._rewind_to_clean_approval(job)
+        document_id = self._document_id(job)
+        self.job_store.upsert_document_identity(
+            document_id=document_id,
+            relative_path=origin.path,
+            content_hash=origin.content_hash,
+        )
+        return self._advance(job, "completed", note_document_id=document_id)
 
     def _run_validate_candidate(self, job: JobRecord, context: _RunContext) -> JobRecord:
         waiting = self._revalidate_clean_approval(job, context)
@@ -1318,7 +1342,7 @@ class IngestionApplicationService:
 
         Passes identity kwargs into ``SemanticChunker``. Doubles that keep
         custom ids are only stamped with the required metadata so
-        JobStore/MiniRAG reconcile stays intact.
+        JobStore/LanceDB reconcile stays intact.
         """
         from fuente.rag.index_records import ChunkIdentity, materialize_chunks
 
@@ -1413,10 +1437,6 @@ class IngestionApplicationService:
                     identity,
                 )
                 return None
-            # A job that committed `completed` but died before dropping its
-            # source finishes that cleanup here; only its own recorded source
-            # path is touched, never another file that happens to match.
-            self._delete_source(existing)
             logger.info(
                 "Reusing completed job %s for %s (identical source hash)",
                 existing.job_id,
@@ -1452,6 +1472,11 @@ class IngestionApplicationService:
             context.metadata = metadata
             return body
 
+        cached = self._read_extraction_cache(job)
+        if cached is not None:
+            context.content, context.metadata = cached
+            return context.content
+
         dirty_path = self._recorded_artifact(job.dirty_artifact)
         if dirty_path is None:
             raise MissingArtifactError(job.job_id, "dirty copy")
@@ -1460,7 +1485,45 @@ class IngestionApplicationService:
             raise MissingArtifactError(job.job_id, "completed extraction content")
         context.content = result.content
         context.metadata = result.metadata
+        self._write_extraction_cache(job, result.content, result.metadata)
         return context.content
+
+    def _extraction_cache_path(self, job: JobRecord) -> Path:
+        """Hidden durable text cache for an approved-but-not-yet-captured source."""
+        return (
+            self.vault.config.vault_path
+            / ".fuente"
+            / "extraction-cache"
+            / f"{uuid.UUID(job.job_id)}.json"
+        )
+
+    def _write_extraction_cache(
+        self, job: JobRecord, content: str, metadata: dict[str, Any]
+    ) -> None:
+        atomic_write_text(
+            self._extraction_cache_path(job),
+            json.dumps({"content": content, "metadata": metadata}, ensure_ascii=False),
+        )
+
+    def _read_extraction_cache(
+        self, job: JobRecord
+    ) -> tuple[str, dict[str, Any]] | None:
+        path = self._extraction_cache_path(job)
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError, TypeError):
+            return None
+        content = payload.get("content") if isinstance(payload, dict) else None
+        metadata = payload.get("metadata") if isinstance(payload, dict) else None
+        if not isinstance(content, str) or not isinstance(metadata, dict):
+            return None
+        return content, metadata
+
+    def _delete_extraction_cache(self, job: JobRecord) -> None:
+        try:
+            self._extraction_cache_path(job).unlink(missing_ok=True)
+        except OSError:
+            logger.warning("Could not remove extraction cache for %s", job.job_id)
 
     def _candidate(self, job: JobRecord, context: _RunContext) -> str:
         """The generated note candidate, regenerated when a job is resumed."""
@@ -1475,7 +1538,12 @@ class IngestionApplicationService:
             raise PermissionError(AWAITING_CLEAN_APPROVAL)
         if self.smart_note_generator is not None:
             context.generated_notes = self.smart_note_generator.generate(
-                origin.note_id, origin.revision, origin.content_hash
+                origin.note_id,
+                origin.revision,
+                origin.content_hash,
+                model_name=self._selected_model(
+                    job, authorize_model_load=context.authorize_model_load
+                ),
             )
             if context.generated_notes:
                 first = context.generated_notes[0]

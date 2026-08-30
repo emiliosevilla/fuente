@@ -13,6 +13,7 @@ import shutil
 import subprocess
 import sys
 import time
+import webbrowser
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -20,6 +21,7 @@ from typing import Any, Callable, Dict, List, Optional, Sequence
 
 from fuente.domain.sync import ConnectedFolder, SyncProvider
 from fuente.domain.vault_layout import VaultLayout
+from fuente.agent.tls import prepare_agent_tls, register_agent_protocol
 from fuente.extractors.ocr_runtime import (
     resolve_tesseract_command,
 )
@@ -33,8 +35,12 @@ DEFAULT_OLLAMA_URL = "http://localhost:11434"
 VAULT_SUBDIRS = VAULT_DIRECTORIES[:5]
 OLLAMA_READY_TIMEOUT_SEC = 30.0
 OLLAMA_READY_POLL_SEC = 1.0
+ANYTHINGLLM_READY_TIMEOUT_SEC = 45.0
 OCR_REQUIRED_LANGUAGES = frozenset({"eng", "spa"})
 WINDOWS_TESSERACT_DOWNLOAD = "https://tesseract-ocr.github.io/tessdoc/Downloads.html"
+OLLAMA_DOWNLOAD_URL = "https://ollama.com/download"
+ANYTHINGLLM_DOWNLOAD_URL = "https://anythingllm.com/download"
+_OPENED_LOCAL_AI_INSTALLERS: set[str] = set()
 
 ConfirmCallback = Callable[[str, str], bool]
 LogCallback = Callable[[str], None]
@@ -78,6 +84,7 @@ class InstallationContext:
     install_model: bool = True
     install_ocr: bool = False
     create_shortcuts: bool = True
+    install_gestajo_agent: bool = False
     existing_receipt: Optional[Dict[str, Any]] = None
 
 
@@ -321,6 +328,82 @@ def start_ollama_service() -> bool:
         return False
 
     return wait_for_ollama_ready()
+
+
+def _anythingllm_launch_command() -> list[str] | None:
+    executable = shutil.which("anythingllm")
+    if executable:
+        return [executable]
+    if sys.platform == "darwin" and Path("/Applications/AnythingLLM.app").exists():
+        return ["open", "-a", "AnythingLLM"]
+    if sys.platform == "win32":
+        roots = [os.environ.get("LOCALAPPDATA"), os.environ.get("ProgramFiles")]
+        for root in filter(None, roots):
+            candidate = Path(root) / "Programs" / "AnythingLLM" / "AnythingLLM.exe"
+            if candidate.exists():
+                return [str(candidate)]
+            candidate = Path(root) / "AnythingLLM" / "AnythingLLM.exe"
+            if candidate.exists():
+                return [str(candidate)]
+    return None
+
+
+def wait_for_local_service_ready(
+    is_ready: Callable[[], bool],
+    *,
+    timeout_sec: float = ANYTHINGLLM_READY_TIMEOUT_SEC,
+    poll_sec: float = OLLAMA_READY_POLL_SEC,
+) -> bool:
+    deadline = time.monotonic() + timeout_sec
+    while time.monotonic() < deadline:
+        try:
+            ready = bool(is_ready())
+        except Exception:
+            ready = False
+        if ready:
+            return True
+        time.sleep(poll_sec)
+    return False
+
+
+def start_anythingllm_service(is_ready: Callable[[], bool]) -> bool:
+    """Start an installed AnythingLLM desktop app and wait for its local API."""
+    try:
+        already_ready = bool(is_ready())
+    except Exception:
+        already_ready = False
+    if already_ready:
+        return True
+    command = _anythingllm_launch_command()
+    if command is None:
+        return False
+    try:
+        subprocess.Popen(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except Exception as exc:
+        logger.warning("Could not start AnythingLLM service: %s", exc)
+        return False
+    return wait_for_local_service_ready(is_ready)
+
+
+def open_official_installer(product: str) -> bool:
+    """Open the vendor's native installer instead of downloading executables ourselves."""
+    urls = {
+        "ollama": OLLAMA_DOWNLOAD_URL,
+        "anythingllm": ANYTHINGLLM_DOWNLOAD_URL,
+    }
+    url = urls.get(product)
+    if url is None:
+        raise ValueError(f"unknown local AI product: {product}")
+    if product in _OPENED_LOCAL_AI_INSTALLERS:
+        return True
+    try:
+        opened = bool(webbrowser.open(url, new=2))
+        if opened:
+            _OPENED_LOCAL_AI_INSTALLERS.add(product)
+        return opened
+    except Exception as exc:
+        logger.warning("Could not open %s installer: %s", product, exc)
+        return False
 
 
 def detect_prerequisites(
@@ -590,6 +673,34 @@ def step_create_shortcuts(ctx: InstallationContext) -> InstallStepResult:
         )
 
 
+def step_install_gestajo_agent(ctx: InstallationContext) -> InstallStepResult:
+    if not ctx.install_gestajo_agent:
+        return InstallStepResult(
+            name="gestajo_agent_tls",
+            success=True,
+            skipped=True,
+            message="Complemento Documentos de Gestajo no seleccionado",
+        )
+    confirmed = ctx.confirm or (lambda _title, _message: False)
+    success, message = prepare_agent_tls(confirmed)
+    if success:
+        protocol_ready, protocol_message = register_agent_protocol()
+        if not protocol_ready:
+            return InstallStepResult(
+                name="gestajo_agent_tls",
+                success=False,
+                message=protocol_message,
+                actionable="Vuelve a ejecutar el instalador para registrar el conector local.",
+            )
+        message = f"{message}. {protocol_message}"
+    return InstallStepResult(
+        name="gestajo_agent_tls",
+        success=success,
+        message=message,
+        actionable=None if success else "Activa el complemento desde este instalador y confirma el certificado local.",
+    )
+
+
 def build_receipt(
     ctx: InstallationContext,
     steps: Sequence[InstallStepResult],
@@ -657,6 +768,7 @@ def run_installation(ctx: InstallationContext) -> List[InstallStepResult]:
     results.append(model_step)
 
     results.append(_run_named_step("shortcuts", lambda: step_create_shortcuts(ctx)))
+    results.append(_run_named_step("gestajo_agent_tls", lambda: step_install_gestajo_agent(ctx)))
 
     prereqs = detect_prerequisites()
     receipt = build_receipt(ctx, results, prereqs, model_name=model_step.model_name)

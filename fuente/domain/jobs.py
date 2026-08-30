@@ -22,7 +22,7 @@ from typing import Optional
 
 #: Bumped when the ETL pipeline's behavior changes in a way that should
 #: invalidate reuse of previously completed jobs for the same source hash.
-CURRENT_PIPELINE_VERSION = "1"
+CURRENT_PIPELINE_VERSION = "2"
 
 #: Pipeline stage vocabulary that Task 2.2 will enforce as a transition
 #: graph. The job store itself (Task 2.1) stores `stage` as plain text.
@@ -229,6 +229,12 @@ for _index, _stage in enumerate(_ACTIVE_STAGES):
         _ACTIVE_STAGES[_index + 1] if _index + 1 < len(_ACTIVE_STAGES) else "completed"
     )
     PIPELINE_TRANSITIONS[_stage] = (_next_stage,) + _TERMINAL_FAILURE_STAGES
+# `3_capturado` is the final automatic product of Caudal. Derivatives in
+# `4_procesado` are created explicitly from Gestajo, one template at a time.
+PIPELINE_TRANSITIONS["indexed_chunks"] = (
+    "completed",
+    "generated_candidate",
+) + _TERMINAL_FAILURE_STAGES
 for _stage in _TERMINAL_STAGES:
     PIPELINE_TRANSITIONS[_stage] = ()
 del _index, _stage, _next_stage

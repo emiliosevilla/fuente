@@ -93,7 +93,7 @@ def test_invalid_model_output_is_not_converted_to_successful_fallback():
             generator.generate_atomic_note("clean input", "model", "source.txt")
 
 
-def test_watcher_preserves_source_when_model_output_is_invalid(tmp_path):
+def test_watcher_capture_does_not_run_model_automatically(tmp_path):
     config = get_default_config(tmp_path / "vault")
     pipeline = ETLPipeline(config)
     auto_approve_early_transitions(pipeline.ingestion)
@@ -104,19 +104,16 @@ def test_watcher_preserves_source_when_model_output_is_invalid(tmp_path):
     source.write_text("input", encoding="utf-8")
     pipeline.vault.copy_to_dirty = Mock(return_value=source)
     pipeline.extractors.extract = Mock(return_value=("clean input", {}))
-    pipeline.atomic_gen.generate_atomic_note = Mock(
-        side_effect=InvalidModelOutputError("invalid schema")
-    )
+    pipeline.atomic_gen.generate_atomic_note = Mock()
 
     with patch("fuente.watcher.watcher.wait_until_file_stable", return_value=True):
         assert pipeline.process_file(source) is False
 
     waiting = list(pipeline.job_store.list_jobs())[0]
     approve_saved_clean_job(pipeline.ingestion, pipeline.vault, waiting)
-    failed = pipeline.ingestion.resume(waiting.job_id)
-    assert failed.stage == "failed"
+    completed = pipeline.ingestion.resume(waiting.job_id)
+    assert completed.stage == "completed"
 
     assert source.exists()
-    failure = pipeline.vault.quarantine_service.list_items()[0]
-    assert failure["status"] == "failed_for_review"
-    assert failure["error_code"] == "invalid_model_output"
+    pipeline.atomic_gen.generate_atomic_note.assert_not_called()
+    assert pipeline.vault.quarantine_service.list_items() == []

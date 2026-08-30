@@ -1,14 +1,9 @@
-import time
 import unittest
 import tempfile
 from pathlib import Path
 
 from fuente.config import get_default_config
-from fuente.domain.frontmatter import serialize_frontmatter
 from fuente.watcher.watcher import ETLPipeline
-
-
-from unittest.mock import patch
 
 class TestIntegration(unittest.TestCase):
 
@@ -32,20 +27,8 @@ class TestIntegration(unittest.TestCase):
     def tearDown(self):
         self.temp_dir.cleanup()
 
-    @patch("fuente.watcher.watcher.AtomicNoteGenerator.generate_atomic_note")
-    def test_end_to_end_etl_pipeline(self, mock_gen):
+    def test_end_to_end_etl_pipeline(self):
         from tests.conftest import approve_saved_clean_job
-
-        # Configurar mock para devolver notas con referencias a títulos existentes
-        def mock_generate(clean_md_content, model_name, file_name):
-            stem = file_name.rsplit(".", 1)[0]
-            return serialize_frontmatter({
-                "schema_version": 1, "title": stem, "date": "", "author": "Fuente",
-                "tags": [], "issue": "_Sin_Cuestion", "status": "pending_review",
-                "sources": [file_name], "history": [],
-            }) + f"# {stem}\n\n{clean_md_content}"
-
-        mock_gen.side_effect = mock_generate
 
         # 1. Crear 2 archivos ficticios en 1_entrada
         file1 = self.config.vault.input_dir / "Informe_Financiero_2026.txt"
@@ -64,17 +47,17 @@ class TestIntegration(unittest.TestCase):
             self.pipeline.ingestion.resume(first_waiting.job_id).stage, "completed"
         )
 
-        # Verificar que el archivo fue movido a 2_sucio, limpio en 3_limpio y creado en 4_salida
+        # La captura deja el original y termina en 3_capturado; 4_procesado es manual.
         dirty_files = list(self.config.vault.dirty_dir.glob("Informe_Financiero_2026*"))
         self.assertEqual(len(dirty_files), 1)
 
         clean_files = list(self.config.vault.clean_dir.glob("Informe_Financiero_2026.md"))
         self.assertEqual(len(clean_files), 1)
 
-        output_files = list(self.config.vault.output_dir.glob("Informe_Financiero_2026.md"))
-        self.assertEqual(len(output_files), 1)
+        output_files = list(self.config.vault.output_dir.rglob("*--resumen.md"))
+        self.assertEqual(output_files, [])
 
-        # 3. Procesar segundo archivo (que debería hacer WikiLink hacia el primero)
+        # 3. Capturar el segundo archivo; los wikilinks se crean sólo por petición.
         self.assertFalse(self.pipeline.process_file(file2))
         second_waiting = max(
             self.pipeline.job_store.list_jobs(), key=lambda job: job.created_at
@@ -84,13 +67,8 @@ class TestIntegration(unittest.TestCase):
             self.pipeline.ingestion.resume(second_waiting.job_id).stage, "completed"
         )
 
-        output_file2 = self.config.vault.output_dir / "Proyecto_Alpha_Estrategia.md"
-        with open(output_file2, "r", encoding="utf-8") as f:
-            content2 = f.read()
-
-        # La salida recién generada sigue pendiente de aprobación editorial;
-        # por tanto todavía no entra en el grafo ni recibe WikiLinks.
-        self.assertNotIn("[[Informe_Financiero_2026", content2)
+        self.assertEqual(len(list(self.config.vault.clean_dir.glob("*.md"))), 2)
+        self.assertEqual(list(self.config.vault.output_dir.rglob("contextos/*.md")), [])
 
 
 if __name__ == "__main__":

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import subprocess
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -24,7 +25,10 @@ from fuente.installer_contract import (
     save_receipt,
     step_save_cloud_folders,
     step_create_shortcuts,
+    step_install_gestajo_agent,
     step_install_model,
+    open_official_installer,
+    start_anythingllm_service,
     wait_for_ollama_ready,
 )
 from fuente.core.folder_sync import FolderSyncManager
@@ -199,6 +203,25 @@ def test_model_install_skipped_when_already_present(install_ctx):
     governor.ensure_model_available.assert_not_called()
 
 
+def test_start_anythingllm_opens_the_installed_desktop_app_and_waits_for_its_api():
+    def unavailable():
+        raise RuntimeError("AnythingLLM is not started")
+
+    with patch("fuente.installer_contract.sys.platform", "darwin"), patch(
+        "fuente.installer_contract.shutil.which", return_value=None
+    ), patch("fuente.installer_contract.Path.exists", return_value=True), patch(
+        "fuente.installer_contract.subprocess.Popen"
+    ) as launch, patch(
+        "fuente.installer_contract.wait_for_local_service_ready", return_value=True
+    ) as wait:
+        assert start_anythingllm_service(unavailable) is True
+
+    launch.assert_called_once_with(
+        ["open", "-a", "AnythingLLM"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+    )
+    wait.assert_called_once()
+
+
 def test_run_installation_without_log_does_not_raise(tmp_path):
     vault = tmp_path / "Fuente"
     ctx = InstallationContext(
@@ -222,6 +245,23 @@ def test_step_create_shortcuts_propagates_false(tmp_path):
 
     assert result.success is False
     assert result.message == "Desktop shortcut creation returned false"
+
+
+def test_gestajo_agent_step_needs_opt_in_and_reuses_tls_preparer(tmp_path):
+    skipped = step_install_gestajo_agent(InstallationContext(base_dir=tmp_path))
+    assert skipped.success is True
+    assert skipped.skipped is True
+
+    ctx = InstallationContext(base_dir=tmp_path, install_gestajo_agent=True)
+    with patch("fuente.installer_contract.prepare_agent_tls", return_value=(True, "preparado")) as prepare, patch(
+        "fuente.installer_contract.register_agent_protocol", return_value=(True, "conector listo")
+    ) as register:
+        installed = step_install_gestajo_agent(ctx)
+
+    assert installed.success is True
+    assert installed.message == "preparado. conector listo"
+    prepare.assert_called_once()
+    register.assert_called_once()
 
 
 def test_receipt_stores_model_name_from_step(tmp_path):
@@ -270,6 +310,7 @@ def test_on_step_start_callback_fires_in_order(tmp_path):
         "ocr_runtime",
         "ollama_model",
         "shortcuts",
+        "gestajo_agent_tls",
     ]
 
 
@@ -394,3 +435,12 @@ def test_wait_for_ollama_ready_polls_until_ready():
     ):
         assert wait_for_ollama_ready(timeout_sec=5, poll_sec=0.01) is True
     assert calls["count"] >= 2
+
+
+def test_official_local_ai_installer_uses_the_system_browser(monkeypatch):
+    monkeypatch.setattr("fuente.installer_contract._OPENED_LOCAL_AI_INSTALLERS", set())
+    with patch("fuente.installer_contract.webbrowser.open", return_value=True) as open_browser:
+        assert open_official_installer("ollama") is True
+        assert open_official_installer("ollama") is True
+
+    open_browser.assert_called_once_with("https://ollama.com/download", new=2)

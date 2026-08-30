@@ -16,6 +16,12 @@ def test_pywebview_allows_downloads_before_native_window_creation():
     assert LAUNCHER.index(settings) < LAUNCHER.index("webview.create_window(")
 
 
+def test_configured_fuente_hides_its_console_except_during_native_capture():
+    launcher = LAUNCHER[LAUNCHER.index("def launch_control_console") :]
+    configured_start = launcher[launcher.index("if HAS_WEBVIEW and html_file.exists():") :]
+    assert 'hidden=os.environ.get("FUENTE_CAPTURE_DRIVER") != "1"' in configured_start
+
+
 def test_reader_export_routes_formats_to_typed_downloads_or_assisted_print():
     response_handler = _between(
         CONSOLE, "function handleCanonicalExportResponse", "function downloadTextBlob"

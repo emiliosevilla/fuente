@@ -33,7 +33,7 @@ import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
 
 from fuente.application.approval import ApprovalApplicationService
-from fuente.application.chat import ChatApplicationService, OllamaChatProvider, AnythingLLMChatProvider
+from fuente.application.chat import ChatApplicationService, OllamaChatProvider
 from fuente.application.ingestion import (
     TERMINAL_STAGES,
     IngestionApplicationService,
@@ -61,7 +61,7 @@ from fuente.application.notes import NotesApplicationService
 from fuente.application.onboarding import OnboardingService
 from fuente.application.review_export import ReviewExportApplicationService
 from fuente.application.retrieval import RetrievalApplicationService
-from fuente.rag.minirag_store import MiniRAGRetrievalBackend, MiniRAGStore
+from fuente.rag.lancedb_store import LanceDBRetrievalBackend, LanceDBStore
 from fuente.rag.router import RetrievalRouter
 from fuente.application.settings import SettingsService, SettingsValidationError
 from fuente.application.templates import TemplateRegistry, TemplateValidationError
@@ -72,7 +72,6 @@ from fuente.config import (
     load_config,
     describe_offline_mode,
 )
-from fuente.integrations.anythingllm import AnythingLLMConversationClient
 from fuente.core.vault import VaultManager
 from fuente.domain.documents import MarkdownDocument
 from fuente.domain.errors import (
@@ -374,7 +373,7 @@ class FuenteConsoleBackend:
         # Set by launch_control_console after ApplicationLifecycle.start() so
         # console theme actions and background services share one VaultManager.
         self.lifecycle: Optional[ApplicationLifecycle] = None
-        self._index_store: Optional[MiniRAGStore] = None
+        self._index_store: Optional[LanceDBStore] = None
         self._retrieval_service: Optional[RetrievalApplicationService] = None
         self._chat_service: Optional[ChatApplicationService] = None
         self._notes_service: Optional[NotesApplicationService] = None
@@ -605,12 +604,13 @@ class FuenteConsoleBackend:
     def get_job_detail(self, job_id: str) -> Dict[str, Any]:
         """Return a JSON-safe job detail and its durable history."""
         validate_job_id(job_id)
-        detail = self.get_job_control_service().get_job(job_id)
+        control = self.get_job_control_service()
+        detail = control.get_job(job_id)
         readiness = self._llm_readiness_projection(
             detail.job, detail.schedule_decisions
         )
         return {
-            "job": asdict(detail.job),
+            "job": {**asdict(detail.job), "resume_available": control._resume_available(detail.job)},
             "events": [asdict(event) for event in detail.events],
             "schedule_decisions": [dict(decision) for decision in detail.schedule_decisions],
             "reason": detail.reason,
@@ -676,22 +676,22 @@ class FuenteConsoleBackend:
             )
         )
 
-    def _get_index_store(self) -> MiniRAGStore:
+    def _get_index_store(self) -> LanceDBStore:
         if self.lifecycle is not None and self.lifecycle.pipeline is not None:
             pipeline_index = getattr(self.lifecycle.pipeline, "index_store", None)
             if pipeline_index is not None:
                 self._index_store = pipeline_index
                 return pipeline_index
         if self._index_store is None:
-            self._index_store = MiniRAGStore(
-                self.config.vault.minirag_dir,
+            self._index_store = LanceDBStore(
+                self.config.vault.lancedb_dir,
                 ollama_url=self.config.ollama_url,
                 model=self.config.custom_model_override,
             )
         return self._index_store
 
     def get_retrieval_service(self) -> RetrievalApplicationService:
-        """Shared retrieval service backed by the local MiniRAG index."""
+        """Shared retrieval service backed by the local LanceDB index."""
         if self._retrieval_service is None:
             if self.runtime_policy.vector_index_enabled:
                 index_store = self._get_index_store()
@@ -701,7 +701,7 @@ class FuenteConsoleBackend:
                     ram_governor=self.ram_governor,
                     eligibility_guard=self._is_retrieval_hit_eligible,
                     router=RetrievalRouter(
-                        search=MiniRAGRetrievalBackend(index_store),
+                        search=LanceDBRetrievalBackend(index_store),
                         enrichment=None,
                     ),
                 )
@@ -755,15 +755,9 @@ class FuenteConsoleBackend:
         return True
 
     def _build_chat_provider(self):
-        anything_url = (self.config.anythingllm_url or "").strip()
-        if anything_url:
-            client = AnythingLLMConversationClient(
-                anything_url,
-                self.config.anythingllm_workspace_slug,
-                api_key=self.config.anythingllm_api_key,
-            )
-            return AnythingLLMChatProvider(client)
-        return OllamaChatProvider(self.config.ollama_url, timeout=12.0)
+        # A complete local note can take longer than the small UI timeout.
+        # Keep chat responsive without rejecting a valid, grounded answer.
+        return OllamaChatProvider(self.config.ollama_url, timeout=180.0)
 
     def get_chat_service(self) -> ChatApplicationService:
         """Shared chat contract used by WebView bridge and native modal."""
@@ -836,6 +830,67 @@ class FuenteConsoleBackend:
             "path": note.relative_path,
         }
 
+    def create_merged_note(
+        self, left_document_id: str, right_document_id: str, title: str
+    ) -> Dict[str, Any]:
+        try:
+            note = self.get_notes_service().create_merged_note(
+                left_document_id, right_document_id, title=title
+            )
+        except PathAuthorizationError as error:
+            return self._path_error(error)
+        except (TypeError, ValueError, OSError) as error:
+            return {"error": "note_merge_failed", "message": str(error)}
+        return {
+            "status": "created",
+            "document_id": note.document_id,
+            "revision": note.revision,
+            "content_hash": note.content_hash,
+            "title": note.title,
+            "path": note.relative_path,
+        }
+
+    def create_assistant_note(
+        self,
+        source_document_id: str,
+        title: str,
+        kind: str,
+        body_markdown: str,
+        model: str,
+    ) -> Dict[str, Any]:
+        try:
+            note = self.get_notes_service().create_assistant_note(
+                source_document_id,
+                title=title,
+                kind=kind,
+                body_markdown=body_markdown,
+                model=model,
+            )
+        except PathAuthorizationError as error:
+            return self._path_error(error)
+        except (TypeError, ValueError, OSError) as error:
+            return {"error": "note_assistant_create_failed", "message": str(error)}
+        return {
+            "status": "created",
+            "document_id": note.document_id,
+            "revision": note.revision,
+            "content_hash": note.content_hash,
+            "title": note.title,
+            "path": note.relative_path,
+        }
+
+    def create_manual_note(self, title: str, body_markdown: str, note_type: str = "manual") -> Dict[str, Any]:
+        try:
+            note = self.get_notes_service().create_manual_note(title=title, body_markdown=body_markdown, note_type=note_type)
+        except PathAuthorizationError as error:
+            return self._path_error(error)
+        except (TypeError, ValueError, OSError) as error:
+            return {"error": "note_manual_create_failed", "message": str(error)}
+        return {
+            "status": "created", "document_id": note.document_id, "revision": note.revision,
+            "content_hash": note.content_hash, "title": note.title, "path": note.relative_path,
+        }
+
     def move_notes_to_theme(
         self, document_ids: list[str], target_theme: str
     ) -> Dict[str, Any]:
@@ -863,6 +918,20 @@ class FuenteConsoleBackend:
 
     def get_relation_preview(self, document_id: str) -> Dict[str, Any]:
         return self.get_notes_service().get_relation_preview(document_id)
+
+    def get_note_lineage(self, document_id: str) -> List[Dict[str, Any]]:
+        if self._job_store is None:
+            self._job_store = JobStore(self.vault.config.vault_path)
+        rows = self._job_store.list_generated_note_lineage_for_note(document_id)
+        return [{
+            "source_note_id": str(row["source_note_id"]),
+            "source_revision": int(row["source_revision"]),
+            "note_type": str(row["note_type"]),
+            "template_id": str(row["template_id"]),
+            "template_revision": int(row["template_revision"]),
+            "model": str(row["model"]),
+            "created_at": str(row["created_at"]),
+        } for row in rows]
 
     def list_feed(
         self,
@@ -898,16 +967,16 @@ class FuenteConsoleBackend:
         }
         note_types = {
             note_type: store.count_feed_catalog(note_type=note_type)
-            for note_type in ("resumen", "propiedades", "contexto", "concepto")
+            for note_type in ("resumen", "propiedades", "contexto", "concepto", "tareas", "reunion", "objetivos", "decision", "conclusion")
         }
         queue_counts = {"active": 0, "waiting": 0}
+        pending_jobs: list[dict[str, Any]] = []
         try:
             queue_counts["active"] = len(
-                self.get_jobs({"status": "active"}, limit=100).get("items", [])
+                self.get_jobs({"status": "claimed"}, limit=100).get("items", [])
             )
-            queue_counts["waiting"] = len(
-                self.get_jobs({"status": "waiting"}, limit=100).get("items", [])
-            )
+            pending_jobs = self.get_jobs({"status": "pending"}, limit=100).get("items", [])
+            queue_counts["waiting"] = len(pending_jobs)
         except RuntimeError:
             pass
         step_keys = (
@@ -927,6 +996,7 @@ class FuenteConsoleBackend:
             "note_types": note_types,
             "quarantine": int(metrics.get("quarantine", {}).get("count", 0)),
             "queue": queue_counts,
+            "pending_approvals": pending_jobs,
             "stats": self.get_stats_dict(),
         }
 
@@ -964,11 +1034,10 @@ class FuenteConsoleBackend:
                 for child in resolved.rglob("*"):
                     if not child.is_file() or child.name.startswith("."):
                         continue
-                    target = destination / child.name
-                    shutil.copy2(child, target)
+                    shutil.copy2(child, self._next_import_target(destination, child.name))
                     copied += 1
             elif resolved.is_file():
-                shutil.copy2(resolved, destination / resolved.name)
+                shutil.copy2(resolved, self._next_import_target(destination, resolved.name))
                 copied += 1
             else:
                 return {"error": "import_source_missing", "message": "Selected path is unavailable"}
@@ -979,6 +1048,20 @@ class FuenteConsoleBackend:
             "stats": self.get_stats_dict(),
             "flow_state": self.get_flow_state(),
         }
+
+    @staticmethod
+    def _next_import_target(destination: Path, filename: str) -> Path:
+        """Choose a free input filename without replacing an earlier import."""
+        candidate = destination / filename
+        if not candidate.exists():
+            return candidate
+        source = Path(filename)
+        index = 2
+        while True:
+            candidate = destination / f"{source.stem}-{index}{source.suffix}"
+            if not candidate.exists():
+                return candidate
+            index += 1
 
     def get_approval_service(self) -> ApprovalApplicationService:
         """Return the approval ledger facade for canonical clean notes."""
@@ -2115,12 +2198,23 @@ class FuenteConsoleBackend:
             except Exception:
                 pass
 
+        configured_model = self.config.custom_model_override
+        ram_decision = self.ram_governor.recommend_model_decision()
+        recommended_model = None if configured_model else (ram_decision.model_id if ram_decision.allowed else None)
         return {
             "vault_path": str(self.vault_path),
             "output_connected_folders": connected_output,
             "models": self.get_ollama_models(),
             "models_measured": self._ollama_models_measured,
-            "current_model": self.config.custom_model_override,
+            "current_model": configured_model,
+            "ram_recommended_model": recommended_model,
+            "ram_governor": {
+                "recommended_model": ram_decision.model_id if ram_decision.allowed else None,
+                "available_gb": ram_decision.available_gb,
+            },
+            "ai_provider": "ollama",
+            "anythingllm_url": "",
+            "anythingllm_workspace_slug": "",
             "ollama_url": str(self.config.ollama_url),
             "ram_margin": f"{self.config.ram_safety_margin_pct * 100:g}%",
             "allow_non_loopback_ollama": self.config.allow_non_loopback_ollama,
@@ -2130,6 +2224,22 @@ class FuenteConsoleBackend:
             "policy": self._policy_dict(self.runtime_policy),
             "offline_mode": describe_offline_mode(self.config),
         }
+
+    def prepare_local_ai(self) -> Dict[str, Any]:
+        """Start Ollama only for an explicit local-AI request and ensure its model exists."""
+        model = self.config.custom_model_override or self.ram_governor.recommend_model()
+        provider = "ollama"
+        if not model:
+            return {"ready": False, "provider": provider, "model": None, "reason": "ram_policy"}
+        if not self.ram_governor.check_ollama_status():
+            from fuente.installer_contract import open_official_installer, start_ollama_service
+
+            if not start_ollama_service():
+                open_official_installer("ollama")
+                return {"ready": False, "provider": provider, "model": model, "reason": "ollama_installation_required"}
+        if not self.ram_governor.ensure_model_available(model, authorize_download=True):
+            return {"ready": False, "provider": provider, "model": model, "reason": "model_unavailable"}
+        return {"ready": True, "provider": provider, "model": model, "reason": None}
 
     def _template_registry(self) -> TemplateRegistry:
         if self._job_store is None:
@@ -2161,6 +2271,12 @@ class FuenteConsoleBackend:
     def restore_template(self, template_id: str, expected_revision: int) -> Dict[str, Any]:
         try:
             return self._template_registry().restore(template_id, expected_revision).to_dict()
+        except (PathAuthorizationError, TemplateRevisionConflictError, TemplateValidationError) as error:
+            return {"error": error.code, "message": str(error)}
+
+    def restore_template_agents(self, template_id: str, expected_revision: int) -> Dict[str, Any]:
+        try:
+            return self._template_registry().restore_agents(template_id, expected_revision).to_dict()
         except (PathAuthorizationError, TemplateRevisionConflictError, TemplateValidationError) as error:
             return {"error": error.code, "message": str(error)}
 
@@ -2712,6 +2828,16 @@ def launch_control_console(vault_path: Optional[Path] = None):
 
         # One VaultManager keeps console actions and FolderMonitor on one theme.
         backend.attach_lifecycle(lifecycle)
+        from fuente.agent.server import GestajoAgentRuntime, start_gestajo_agent
+        from fuente.agent.tls import load_agent_tls_context
+
+        agent_runtime: GestajoAgentRuntime | None = None
+        tls_context = load_agent_tls_context()
+        if tls_context is not None:
+            try:
+                agent_runtime = start_gestajo_agent(vault_path, backend, tls_context)
+            except OSError as error:
+                logger.warning("No se pudo iniciar el agente local de Gestajo: %s", error)
         if HAS_WEBVIEW and html_file.exists():
             api = FuentePyWebViewApi(backend)
             # PyWebView blocks browser downloads unless this setting is enabled
@@ -2724,18 +2850,19 @@ def launch_control_console(vault_path: Optional[Path] = None):
                 width=1280,
                 height=850,
                 min_size=(980, 680),
-                background_color="#ECEFF4"
+                background_color="#ECEFF4",
+                hidden=os.environ.get("FUENTE_CAPTURE_DRIVER") != "1",
             )
             api.set_window(window)
             _start_capture_driver(window)
             window.events.closing += api._handle_window_closing
-            window.events.shown += _activate_webview_window
-            window.events.loaded += _activate_webview_window
             webview.start(debug=False)
         else:
             app = FuenteControlConsole(vault_path, backend=backend)
             app.mainloop()
     finally:
+        if "agent_runtime" in locals() and agent_runtime is not None:
+            agent_runtime.stop()
         lifecycle.stop()
 
 

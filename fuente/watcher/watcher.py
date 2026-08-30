@@ -25,7 +25,7 @@ from fuente.domain.quarantine import QuarantineService
 from fuente.extractors.registry import ExtractorRegistry
 from fuente.infrastructure.sqlite_store import JobStore
 from fuente.ram_governor.governor import RAMGovernor
-from fuente.rag.minirag_store import MiniRAGStore
+from fuente.rag.lancedb_store import LanceDBStore
 from fuente.rag.semantic_chunker import SemanticChunker
 from fuente.application.note_generation import AtomicNoteGenerator
 
@@ -147,7 +147,7 @@ class ETLPipeline:
             safety_margin_pct=config.ram_safety_margin_pct
         )
         self.index_store = (
-            MiniRAGStore(config.vault.minirag_dir, ollama_url=config.ollama_url)
+            LanceDBStore(config.vault.lancedb_dir, ollama_url=config.ollama_url)
             if self.runtime_policy.vector_index_enabled
             else None
         )
@@ -167,7 +167,6 @@ class ETLPipeline:
             copy_to_dirty=self._safe_copy_to_dirty,
             stabilize=self._wait_until_stable,
         )
-
     def set_runtime_policy(self, policy: RuntimePolicy) -> None:
         """Apply policy to existing collaborators without eager index creation."""
         previous = self.runtime_policy
@@ -175,8 +174,8 @@ class ETLPipeline:
         next_index = previous_index
         if policy.vector_index_enabled:
             if next_index is None:
-                next_index = MiniRAGStore(
-                    self.config.vault.minirag_dir,
+                next_index = LanceDBStore(
+                    self.config.vault.lancedb_dir,
                     ollama_url=self.config.ollama_url,
                 )
         elif previous.vector_index_enabled:

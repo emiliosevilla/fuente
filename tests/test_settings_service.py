@@ -59,6 +59,23 @@ def test_settings_service_persists_canonical_settings_and_connected_folders(
     ) == {"folders": [str(output_folder.resolve())]}
 
 
+def test_settings_service_persists_loopback_anythingllm_workspace(temp_vault_path):
+    result = SettingsService(load_config(temp_vault_path)).apply(
+        anythingllm_url="http://127.0.0.1:13001",
+        anythingllm_workspace_slug="gestajo",
+    )
+
+    assert result.config.anythingllm_url == "http://127.0.0.1:13001"
+    assert load_config(temp_vault_path).anythingllm_workspace_slug == "gestajo"
+
+
+def test_settings_service_rejects_unsafe_anythingllm_workspace(temp_vault_path):
+    with pytest.raises(SettingsValidationError, match="workspace slug"):
+        SettingsService(load_config(temp_vault_path)).apply(
+            anythingllm_workspace_slug="../../not-a-workspace",
+        )
+
+
 def test_load_config_migrates_legacy_model_and_ram_keys_to_canonical_json(temp_vault_path):
     config_path = get_config_file_path(temp_vault_path)
     config_path.parent.mkdir(parents=True)
@@ -143,6 +160,23 @@ def test_settings_service_persists_runtime_policy_settings(temp_vault_path, tmp_
     assert reloaded.resource_profile == "eco_strict"
     assert reloaded.audio_mode == "tiny_cpu"
     assert reloaded.whisper_model_path == str(whisper_dir.resolve())
+
+
+def test_settings_service_detects_the_existing_tiny_whisper_model(
+    temp_vault_path, tmp_path, monkeypatch
+):
+    whisper_dir = tmp_path / "tiny"
+    whisper_dir.mkdir()
+    (whisper_dir / "model.bin").write_bytes(b"local model")
+    (whisper_dir / "config.json").write_text("{}", encoding="utf-8")
+    monkeypatch.setattr(
+        "fuente.application.settings.discover_local_tiny_whisper_model",
+        lambda: whisper_dir,
+    )
+
+    result = SettingsService(load_config(temp_vault_path)).apply(audio_mode="tiny_cpu")
+
+    assert result.config.whisper_model_path == str(whisper_dir.resolve())
 
 
 @pytest.mark.parametrize(
@@ -301,9 +335,10 @@ def test_saved_model_and_url_drive_generation_and_chat_requests(
     assert generation_calls[0][1]["model"] == "configured-model"
     assert len(chat_calls) == 1
     assert chat_calls[0][0] == f"{configured_url}/api/generate"
-    assert chat_calls[0][2] == 12
+    assert chat_calls[0][2] == 180
     assert chat_calls[0][1]["model"] == "configured-model"
     assert chat_calls[0][1]["stream"] is False
+    assert chat_calls[0][1]["think"] is False
     assert "system" in chat_calls[0][1]
     assert "evidencia" in chat_calls[0][1]["system"].lower() or "uncertainty" in chat_calls[0][1]["system"].lower() or "incertidumbre" in chat_calls[0][1]["system"].lower()
     assert "prompt" in chat_calls[0][1]

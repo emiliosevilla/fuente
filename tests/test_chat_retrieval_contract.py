@@ -192,6 +192,159 @@ def test_single_note_scope_does_not_cite_other_notes(grounded_service):
     assert CHAT_SYSTEM_PROMPT in provider.calls[-1]["system"]
 
 
+def test_selected_pending_note_is_sent_directly_to_the_local_model(grounded_service):
+    service, provider, _store = grounded_service
+
+    result = service.ask(
+        "¿Cómo se llama esta Nota?",
+        {
+            "context_mode": "single_note",
+            "document_id": "note-pending",
+            "selected_note_title": "03 El loco",
+            "selected_note_markdown": "# 03 El loco\n\nGilbert K. Chesterton escribió Ortodoxia.",
+        },
+    )
+
+    assert result["ok"] is True
+    assert result["has_context"] is True
+    assert result["citations"] == [{
+        "document_id": "note-pending", "revision": 1, "content_hash": "",
+        "title": "03 El loco", "origin": "selected_local_note",
+        "snippet": "# 03 El loco\n\nGilbert K. Chesterton escribió Ortodoxia.",
+    }]
+    assert "Chesterton" in provider.calls[-1]["prompt"]
+
+
+def test_selected_note_exposes_its_existing_wikilinks_without_inventing_targets(grounded_service):
+    service, provider, _store = grounded_service
+
+    result = service.ask(
+        "Resume y señala relaciones.",
+        {
+            "context_mode": "single_note",
+            "document_id": "note-pending",
+            "selected_note_title": "03 El loco",
+            "selected_note_markdown": "Véase [[01 Presentación|Chesterton]] y [[> Reseña|materialistas]].",
+        },
+    )
+
+    assert result["ok"] is True
+    prompt = provider.calls[-1]["prompt"]
+    assert "Wikilinks explícitos de la Nota" in prompt
+    assert "[[01 Presentación|Chesterton]]" in prompt
+    assert "[[> Reseña|materialistas]]" in prompt
+
+
+def test_relation_request_reports_existing_links_and_missing_related_candidates(grounded_service):
+    service, provider, _store = grounded_service
+    provider.response = "Resumen breve sin enlaces."
+
+    result = service.ask(
+        "Resume y señala relaciones y wikilinks útiles.",
+        {
+            "context_mode": "single_note",
+            "document_id": "note-pending",
+            "selected_note_title": "03 El loco",
+            "selected_note_markdown": "Véase [[01 Presentación|Chesterton]] y [[> Reseña|materialistas]].",
+        },
+    )
+
+    assert "Resumen breve sin enlaces." in result["text"]
+    assert "## Wikilinks presentes en la Nota" in result["text"]
+    assert "- [[01 Presentación|Chesterton]]" in result["text"]
+    assert "- [[> Reseña|materialistas]]" in result["text"]
+    assert "No se recuperó otra Nota visible" in result["text"]
+
+
+def test_relation_request_adds_only_authorized_related_note_evidence(grounded_service):
+    service, provider, _store = grounded_service
+
+    result = service.ask(
+        "Resume y señala relaciones y wikilinks útiles.",
+        {
+            "context_mode": "single_note",
+            "document_id": "note-pending",
+            "selected_note_title": "Despido improcedente",
+            "selected_note_markdown": "El despido improcedente genera salarios de tramitación.",
+            "related_document_ids": ["note-laboral", "note-pending"],
+        },
+    )
+
+    assert result["ok"] is True
+    assert {source["document_id"] for source in result["sources"]} <= {"note-pending", "note-laboral"}
+    assert "Notas relacionadas recuperadas" in provider.calls[-1]["prompt"]
+
+
+def test_relation_request_exposes_only_retrieved_note_titles_as_wikilink_candidates(grounded_service):
+    service, provider, _store = grounded_service
+    provider.response = "## Relaciones\n\nHay una relación laboral relevante."
+
+    result = service.ask(
+        "Resume y señala relaciones y wikilinks útiles.",
+        {
+            "context_mode": "single_note",
+            "document_id": "note-pending",
+            "selected_note_title": "Informe pendiente",
+            "selected_note_markdown": "El despido improcedente genera salarios de tramitación.",
+            "related_document_ids": ["note-laboral", "note-pending"],
+        },
+    )
+
+    assert "Notas recuperadas disponibles para enlazar" in provider.calls[-1]["prompt"]
+    assert "## Wikilinks disponibles para la relación" in result["text"]
+    assert "- [[despido]]" in result["text"]
+    assert "[[Informe pendiente]]" not in result["text"]
+
+
+def test_selected_note_passes_its_local_type_instructions_to_the_model(grounded_service):
+    service, provider, _store = grounded_service
+
+    result = service.ask(
+        "Resume esta Nota.",
+        {
+            "context_mode": "single_note",
+            "document_id": "note-pending",
+            "selected_note_title": "03 El loco",
+            "selected_note_markdown": "Hecho verificable.",
+            "task_instructions": "## Propósito\nResume sólo la evidencia.",
+        },
+    )
+
+    assert result["ok"] is True
+    assert "Instrucciones del tipo de Nota" in provider.calls[-1]["system"]
+    assert "Resume sólo la evidencia." in provider.calls[-1]["system"]
+
+
+def test_selected_pending_notes_are_sent_together_to_the_local_model(grounded_service):
+    service, provider, _store = grounded_service
+
+    result = service.ask(
+        "¿Qué relación hay entre ambas?",
+        {
+            "context_mode": "multiple_notes",
+            "document_ids": ["note-a", "note-b"],
+            "selected_notes": [
+                {"document_id": "note-a", "title": "A", "body_markdown": "Origen: Chesterton."},
+                {"document_id": "note-b", "title": "B", "body_markdown": "Relación: Ortodoxia."},
+            ],
+        },
+    )
+
+    assert result["ok"] is True
+    assert [citation["document_id"] for citation in result["citations"]] == ["note-a", "note-b"]
+    assert "Chesterton" in provider.calls[-1]["prompt"]
+    assert "Ortodoxia" in provider.calls[-1]["prompt"]
+
+
+def test_multiple_note_scope_only_cites_the_selected_notes(grounded_service):
+    service, _provider, _store = grounded_service
+    result = service.ask(
+        "despido improcedente salarios",
+        {"context_mode": "multiple_notes", "document_ids": ["note-laboral", "note-fianza"]},
+    )
+    assert {src["document_id"] for src in result["sources"]} <= {"note-laboral", "note-fianza"}
+
+
 def test_bridge_and_backend_share_contract(temp_vault_path, monkeypatch):
     backend = FuenteConsoleBackend(temp_vault_path)
     fake = FakeChatProvider("Respuesta bridge con evidencia.")
@@ -230,6 +383,12 @@ def test_bridge_and_backend_share_contract(temp_vault_path, monkeypatch):
         assert payload["html"] == html.escape(payload["text"], quote=True)
 
     assert len(fake.calls) == 2
+
+
+def test_console_chat_provider_allows_a_complete_note_response(temp_vault_path):
+    provider = FuenteConsoleBackend(temp_vault_path)._build_chat_provider()
+
+    assert provider.timeout == 180.0
 
 
 def test_chat_skips_ollama_when_budget_denies_llm(grounded_service):

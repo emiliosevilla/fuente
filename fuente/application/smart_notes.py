@@ -31,14 +31,24 @@ _PROCESSED_SUBDIRS = {
     "propiedades": "propiedades",
     "contexto": "contextos",
     "concepto": "conceptos",
+    "tareas": "tareas",
+    "reunion": "reuniones",
+    "objetivos": "objetivos",
+    "decision": "decisiones",
+    "conclusion": "conclusiones",
 }
 _FRONTMATTER_NOTE_TYPE = {
     "resumen": "summary",
     "propiedades": "summary",
     "contexto": "concept",
     "concepto": "concept",
+    "tareas": "summary",
+    "reunion": "summary",
+    "objetivos": "summary",
+    "decision": "summary",
+    "conclusion": "summary",
 }
-_REQUIRED_FIXED = ("resumen", "propiedades", "contexto")
+_REQUIRED_FIXED = ("resumen", "propiedades", "contexto", "tareas", "reunion", "objetivos", "decision", "conclusion")
 
 
 class ConversationClient(Protocol):
@@ -47,6 +57,28 @@ class ConversationClient(Protocol):
 
 class RAMGovernor(Protocol):
     def ensure_model_available(self, model_name: str) -> None: ...
+
+
+class OllamaConversationClient:
+    """Adapt the existing Ollama chat provider to smart-note generation."""
+
+    def __init__(self, ollama_url: str) -> None:
+        from fuente.application.chat import OllamaChatProvider
+
+        self._provider = OllamaChatProvider(ollama_url, timeout=180.0)
+
+    def chat(self, *, session_id: str, prompt: str, model: str) -> dict[str, object]:
+        del session_id
+        return {
+            "text": self._provider.generate(
+                model=model,
+                system=(
+                    "Eres el procesador local de Fuente. Devuelve únicamente "
+                    "el JSON solicitado y conserva la trazabilidad documental."
+                ),
+                prompt=prompt,
+            )
+        }
 
 
 @dataclass(frozen=True)
@@ -153,7 +185,12 @@ class SmartNoteGenerator:
         self._staging_root = self._vault_root / ".fuente" / "staging"
 
     def generate(
-        self, source_id: str, revision: int, content_hash: str
+        self,
+        source_id: str,
+        revision: int,
+        content_hash: str,
+        *,
+        model_name: str | None = None,
     ) -> list[GeneratedNote]:
         self.transition_approvals.require_current(
             source_id,
@@ -184,7 +221,7 @@ class SmartNoteGenerator:
             content_hash=content_hash,
             path=str(source_row["relative_path"]),
         )
-        model = self._selected_model()
+        model = self._selected_model(model_name)
         generation_id = str(uuid.uuid4())
         staging_dir = self._staging_root / generation_id
         staging_dir.mkdir(parents=True, exist_ok=True)
@@ -231,10 +268,13 @@ class SmartNoteGenerator:
         finally:
             shutil.rmtree(staging_dir, ignore_errors=True)
 
-    def _selected_model(self) -> str:
+    def _selected_model(self, model_name: str | None = None) -> str:
+        selected = (model_name or self.model_name).strip()
+        if not selected:
+            raise SmartNoteGenerationError("No local model is available for smart-note generation")
         if self.ram_governor is not None:
-            self.ram_governor.ensure_model_available(self.model_name)
-        return self.model_name
+            self.ram_governor.ensure_model_available(selected)
+        return selected
 
     def _build_plan(
         self,
@@ -246,7 +286,7 @@ class SmartNoteGenerator:
     ) -> list[dict[str, Any]]:
         source_title = str(metadata.get("title") or origin.note_id)
         source_wikilink = self._wikilink_for_path(origin.path, source_title)
-        chat_payload = self._chat_payload(body, origin, source_wikilink)
+        chat_payload = self._chat_payload(body, origin, source_wikilink, model)
         concept_slugs = [
             normalize_concept_slug(slug)
             for slug in chat_payload.get("concepts", [])
@@ -331,17 +371,27 @@ class SmartNoteGenerator:
         return plan
 
     def _chat_payload(
-        self, body: str, origin: OriginRef, source_wikilink: str
+        self, body: str, origin: OriginRef, source_wikilink: str, model: str
     ) -> dict[str, Any]:
         prompt = (
-            "Genera notas procesadas en JSON con claves resumen, propiedades, "
-            "contexto, concepts (lista de slugs) y concept_bodies (mapa slug->markdown).\n\n"
-            f"Fuente: {origin.path}\n{body}"
+            "Eres Fuente, un agente local que compila una fuente capturada y aprobada "
+            "en notas Markdown trazables. La fuente es canónica: no la modifiques ni "
+            "atribuyas datos que no contiene. Conserva sólo hechos verificables; marca "
+            "las ausencias como 'No consta'. No inventes personas, fechas, decisiones, "
+            "enlaces ni wikilinks. Si hay ambigüedad, exprésala como duda.\n\n"
+            "Devuelve únicamente un objeto JSON válido, sin bloques de código, con las "
+            "claves resumen, propiedades, contexto, tareas, reunion, objetivos, decision, "
+            "conclusion, concepts (lista de slugs) y concept_bodies (mapa slug->markdown). "
+            "Cada valor de nota debe seguir exclusivamente su sección de instrucciones. "
+            "Los conceptos deben ser atómicos y no duplicar equivalentes.\n\n"
+            "# Instrucciones por tipo de nota\n\n"
+            f"{self._agent_instructions()}\n\n"
+            f"# Fuente aprobada\nRuta relativa: {origin.path}\nEnlace al origen: {source_wikilink}\n\n{body}"
         )
         response = self.chat_client.chat(
             session_id=f"smart-notes:{origin.note_id}",
             prompt=prompt,
-            model=self.model_name,
+            model=model,
         )
         text = str(response.get("text") or response.get("response") or "")
         if text.lstrip().startswith("{"):
@@ -355,9 +405,20 @@ class SmartNoteGenerator:
             "resumen": text or f"Resumen de {source_wikilink}.",
             "propiedades": f"Propiedades de {source_wikilink}.",
             "contexto": f"Contexto de {source_wikilink}.",
+            "tareas": f"Tareas extraídas de {source_wikilink}.",
+            "reunion": f"Acuerdos y pendientes de {source_wikilink}.",
+            "objetivos": f"Objetivos derivados de {source_wikilink}.",
+            "decision": f"Hoja de decisión derivada de {source_wikilink}.",
+            "conclusion": f"Conclusiones derivadas de {source_wikilink}.",
             "concepts": extract_concept_slugs(body),
             "concept_bodies": {},
         }
+
+    def _agent_instructions(self) -> str:
+        return "\n\n".join(
+            f"## {template_id}\n{self.templates.load(template_id).agents.strip()}"
+            for template_id in (*_REQUIRED_FIXED, "concepto")
+        )
 
     def _planned_note(
         self,
@@ -524,7 +585,7 @@ class SmartNoteGenerator:
             "origins": [origin.to_dict()],
             "history": [],
         }
-        if note_type in {"resumen", "propiedades"}:
+        if _FRONTMATTER_NOTE_TYPE[note_type] == "summary":
             frontmatter["origin_kind"] = "working_document"
         return serialize_frontmatter(frontmatter, human_labels=True) + body
 
@@ -634,6 +695,11 @@ class FakeConversationClient:
             "resumen": "Resumen generado para la fuente aprobada.",
             "propiedades": "Propiedades extraídas de la fuente aprobada.",
             "contexto": "Contexto relacionado con la fuente aprobada.",
+            "tareas": "Tareas concretas extraídas de la fuente aprobada.",
+            "reunion": "Acuerdos y próximos pasos de la fuente aprobada.",
+            "objetivos": "Objetivos verificables de la fuente aprobada.",
+            "decision": "Hoja de decisión basada en la fuente aprobada.",
+            "conclusion": "Conclusiones basadas en la fuente aprobada.",
             "concepts": concepts,
             "concept_bodies": bodies,
         }

@@ -1,3 +1,11 @@
 # Resumen
 
-## Fuente
+## Fuente y alcance
+
+## Idea central
+
+## Puntos decisivos
+
+## Matices y límites
+
+## Relaciones verificables

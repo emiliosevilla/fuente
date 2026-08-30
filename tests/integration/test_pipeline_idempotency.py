@@ -38,7 +38,7 @@ def test_duplicate_source_hash_reuses_completed_job_without_regenerating(temp_va
         assert second.stage == "completed"
         assert len(harness.generator.calls) == 1
         assert_single_note(harness)
-        assert not harness.source_path.exists()
+        assert harness.source_path.exists()
         assert_job_history_explains_recovery(harness.store, first.job_id)
     finally:
         harness.close()

@@ -83,18 +83,23 @@ def test_console_has_no_inline_style_execution():
     assert (source_path.parent / "fuente/ui/static/console.css").is_file()
 
 
-def test_console_note_editor_has_safe_save_and_close_controls():
+def test_console_reader_does_not_offer_local_note_editing():
     source = (Path(__file__).resolve().parent.parent / "consola_preview.html").read_text(
         encoding="utf-8"
     )
-    assert "function startNoteEditing()" in source
-    assert "editor.setAttribute('contenteditable', 'true')" in source
-    assert "editButton.textContent = 'Editar'" in source
-    assert "editButton.addEventListener('click'" in source
-    assert "function saveNoteChanges(options)" in source
-    assert "save_note_content" in source
-    assert 'id="modal-unsaved-changes"' in source
-    assert "editorUndoStack.length > 11" in source
+    assert "editButton.textContent = 'Editar'" not in source
+    assert "save_note_content" not in source
+
+
+def test_console_note_editor_can_toggle_a_rendered_preview():
+    source = (Path(__file__).resolve().parent.parent / "consola_preview.html").read_text(
+        encoding="utf-8"
+    )
+
+    assert "function toggleEditorPreview()" in source
+    assert "Vista previa" in source
+    assert "readerMarkdownToProjection(editorMarkdownFromDom())" in source
+    assert "preview.id = 'note-editor-preview'" in source
 
 
 def test_console_stylesheet_link_resolves_to_local_packaged_css():

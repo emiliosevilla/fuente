@@ -18,7 +18,7 @@ def _approval_snapshot(harness, job):
 def test_clean_record_waits_for_exact_human_approval_before_any_derivative(
     temp_vault_path,
 ):
-    harness = _build_harness(temp_vault_path)
+    harness = _build_harness(temp_vault_path, legacy_auto_processing=False)
     try:
         submitted = harness.service.submit(SOURCE_IDENTITY)
         waiting = harness.service.resume(submitted.job_id)
@@ -67,8 +67,8 @@ def test_wrong_approval_revision_or_hash_does_not_unlock_clean_job(temp_vault_pa
         harness.store.close()
 
 
-def test_exact_approval_unlocks_resume_and_stamps_v3_origin(temp_vault_path):
-    harness = _build_harness(temp_vault_path)
+def test_exact_approval_finishes_at_capture_without_generating_notes(temp_vault_path):
+    harness = _build_harness(temp_vault_path, legacy_auto_processing=False)
     try:
         waiting = harness.service.resume(
             harness.service.submit(SOURCE_IDENTITY).job_id
@@ -81,19 +81,11 @@ def test_exact_approval_unlocks_resume_and_stamps_v3_origin(temp_vault_path):
         completed = harness.service.resume(waiting.job_id)
         assert completed.stage == "completed"
         assert completed.status == "completed"
-        assert len(harness.generator.calls) == 1
-        metadata, _body = parse_frontmatter(harness.notes()[0].read_text(encoding="utf-8"))
-        assert metadata["schema_version"] == 3
-        assert metadata["note_type"] == "summary"
-        assert "sources" not in metadata
-        assert metadata["origins"] == [
-            {
-                "note_id": snapshot.note_id,
-                "revision": snapshot.revision,
-                "content_hash": snapshot.content_hash,
-                "path": snapshot.relative_path,
-            }
-        ]
+        assert harness.generator.calls == []
+        assert harness.notes() == []
+        identity = harness.store.get_document_identity(harness.service._document_id(completed))
+        assert identity["relative_path"] == snapshot.relative_path
+        assert identity["content_hash"] == snapshot.content_hash
     finally:
         harness.store.close()
 

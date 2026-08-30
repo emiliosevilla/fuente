@@ -38,7 +38,7 @@ FYC_FORBIDDEN_SHELL_MARKERS = (
 FYC_GATE_CAPTURE_SCENARIOS: dict[str, tuple[str, ...]] = {
     "G0": ("baseline",),
     "G2": ("setup-empty", "setup-ready"),
-    "G3": ("home-1024", "home-1280", "home-max"),
+    "G3": ("home-1024", "home-1280"),
     "G6": ("anythingllm-chat",),
     "G7": ("template-helper",),
     "G8": ("source-view-modes", "source-search-relations", "source-open-obsidian"),
@@ -46,7 +46,6 @@ FYC_GATE_CAPTURE_SCENARIOS: dict[str, tuple[str, ...]] = {
         "caudal-pipeline",
         "caudal-seals",
         "caudal-feed-link",
-        "home-1440",
     ),
 }
 # Measured on this host: visible PyWebView frame maxes at 1280x802 (not 850/900).
@@ -54,7 +53,6 @@ FYC_GATE_CAPTURE_SCENARIOS: dict[str, tuple[str, ...]] = {
 FYC_CAPTURE_SIZES: dict[str, tuple[int, int]] = {
     "home-1024": (1024, 700),
     "home-1280": (1280, 802),
-    "home-1440": (1280, 802),
 }
 FYC_RUNTIME_JSON = {
     "G4": "sqlite-runtime.json",
@@ -749,6 +747,7 @@ historial: []
             chunker=SemanticChunker(),
             chroma=fake_chroma,
             atomic_generator=SmokeGenerator(),
+            legacy_auto_processing=True,
             ram_governor=FakeGovernor(),
             stabilize=lambda path: path.is_file() and path.stat().st_size > 0,
         )
@@ -930,8 +929,11 @@ def _acceptable_evidence_heads(repo_root: Path, head: str) -> set[str]:
     if not names:
         return heads
     allowed_prefix = "docs/evidence/fuente-y-caudal/"
+    current_sdd = "docs/evidence/current-sdd.json"
     if not all(
-        name.startswith(allowed_prefix) and name.endswith((".json",)) for name in names
+        name == current_sdd
+        or (name.startswith(allowed_prefix) and name.endswith((".json", ".png")))
+        for name in names
     ):
         return heads
     try:

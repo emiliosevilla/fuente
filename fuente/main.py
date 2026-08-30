@@ -102,12 +102,65 @@ def run_headless(vault_path: Path, wait_for_shutdown=None) -> None:
         lifecycle.stop()
 
 
+def run_gestajo_agent_service(vault_path: Path, wait_for_shutdown=None) -> None:
+    """Run Fuente's ETL and the Gestajo loopback agent without opening a UI."""
+    from fuente.agent.server import start_gestajo_agent
+    from fuente.agent.tls import load_agent_tls_context
+    from fuente import control_console
+
+    backend = control_console.FuenteConsoleBackend(vault_path)
+    lifecycle = ApplicationLifecycle(backend.config, mode="headless")
+    runtime = None
+    wait = wait_for_shutdown or _wait_for_shutdown_signal
+    try:
+        lifecycle.start()
+        backend.attach_lifecycle(lifecycle)
+        tls_context = load_agent_tls_context()
+        if tls_context is None:
+            raise RuntimeError("El agente local de Gestajo necesita completar su activación")
+        runtime = start_gestajo_agent(vault_path, backend, tls_context)
+        logger.info("Agente local de Gestajo listo en https://127.0.0.1:43819")
+        wait()
+    finally:
+        if runtime is not None:
+            runtime.stop()
+        lifecycle.stop()
+
+
 def run_continuous_console(vault_path: Path | None) -> None:
     """Modo predeterminado: lanza la Consola Central de Control (posee su propio ciclo de vida)."""
     require_graphical_display()
     from fuente.control_console import launch_control_console
 
     launch_control_console(vault_path)
+
+
+def run_gestajo_agent_install() -> bool:
+    """Run the companion setup without requiring a Vault to be configured."""
+    import tkinter as tk
+    from tkinter import messagebox
+
+    from fuente.agent.tls import prepare_agent_tls, register_agent_protocol
+
+    root = tk.Tk()
+    root.withdraw()
+    try:
+        success, message = prepare_agent_tls(
+            lambda title, body: messagebox.askyesno(title, body, parent=root),
+        )
+        if success:
+            protocol_ready, protocol_message = register_agent_protocol()
+            if not protocol_ready:
+                success, message = False, protocol_message
+            else:
+                message = f"{message}. {protocol_message}"
+        if success:
+            messagebox.showinfo("Documentos de Gestajo", message, parent=root)
+        else:
+            messagebox.showwarning("Documentos de Gestajo", message, parent=root)
+        return success
+    finally:
+        root.destroy()
 
 
 def main():
@@ -137,13 +190,30 @@ def main():
             "nunca abre Tkinter ni PyWebView."
         ),
     )
+    parser.add_argument(
+        "--install-gestajo-agent",
+        action="store_true",
+        help="Prepara la conexión local segura para Documentos de Gestajo.",
+    )
+    parser.add_argument(
+        "--serve-gestajo-agent",
+        action="store_true",
+        help="Ejecuta Fuente y el agente local para Documentos de Gestajo sin abrir una ventana.",
+    )
     args = parser.parse_args()
 
     vault_arg = args.vault or args.vault_pos
     vault_path = Path(vault_arg).expanduser().resolve() if vault_arg else load_startup_vault()
 
 
-    if args.flush:
+    if args.install_gestajo_agent:
+        if run_gestajo_agent_install():
+            vault_path = vault_path or Path.home() / "Fuente_Vault"
+            run_gestajo_agent_service(vault_path)
+    elif args.serve_gestajo_agent:
+        vault_path = vault_path or Path.home() / "Fuente_Vault"
+        run_gestajo_agent_service(vault_path)
+    elif args.flush:
         vault_path = vault_path or Path.home() / "Documents" / "Fuente_Vault"
         vault_path.mkdir(parents=True, exist_ok=True)
         # Modo Flush directo por consola

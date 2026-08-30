@@ -3,6 +3,7 @@
 watchdog==6.0.0
 psutil==7.2.2
 minirag-hku @ git+https://github.com/HKUDS/MiniRAG.git@e204d239421f45004852953679927fdf6733f236
+lancedb==0.37.1
 json-repair==0.63.3
 tiktoken==0.14.0
 nltk==3.10.3
@@ -19,6 +20,7 @@ pdfplumber==0.11.10
 openpyxl==3.1.5
 python-pptx==1.0.2
 extract-msg==0.56.0
+cryptography==50.0.0
 pysqlite3-binary>=0.5.4; platform_system == "Linux"
 
 # Optional feature sets — install via extras instead of listing here:

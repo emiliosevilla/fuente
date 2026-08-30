@@ -2178,6 +2178,10 @@ html[data-fuente-style="energy"] .arrow-connector::before {
     outline-offset: 2px;
 }
 
+.note-editor-preview {
+    cursor: default;
+}
+
 .note-editor-content .wikilink {
     pointer-events: none;
 }

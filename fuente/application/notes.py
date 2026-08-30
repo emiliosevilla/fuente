@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import logging
 import time
+import uuid
 from pathlib import Path
 from typing import Any, Callable, Mapping, Optional, Protocol
 
@@ -39,12 +40,26 @@ from fuente.domain.vault_layout import (
     CANONICAL_PROCESSED_DIR_NAME,
     CANONICAL_SHARED_DIR_NAME,
 )
-from fuente.rag.minirag_store import MiniRAGRetrievalBackend
+from fuente.rag.lancedb_store import LanceDBRetrievalBackend, LanceDBUnavailableError
 from fuente.rag.semantic_chunker import SemanticChunker
 
 logger = logging.getLogger(__name__)
 
 IndexNotifier = Callable[[], None]
+
+_ASSISTANT_NOTE_TYPES = frozenset({
+    "summary",
+    "apunte",
+    "diario",
+    "properties",
+    "context",
+    "concept",
+    "tasks",
+    "meeting",
+    "objectives",
+    "decision",
+    "conclusion",
+})
 
 
 class PublishedOutputTarget(Protocol):
@@ -126,7 +141,7 @@ class NotesApplicationService:
             raise OutputApprovalRequiredError(note.document_id)
         self.require_eligible_origins(
             note,
-            requires_origins=note.note_type != "original",
+            requires_origins=note.note_type not in {"original", "manual"},
         )
 
     def approve_processed_output(
@@ -143,7 +158,7 @@ class NotesApplicationService:
             content_hash = self._current_processed_hash(note, path)
             if note.revision != expected_revision:
                 raise NoteRevisionConflictError(note.document_id)
-            self.require_eligible_origins(note, requires_origins=note.note_type != "original")
+            self.require_eligible_origins(note, requires_origins=note.note_type not in {"original", "manual"})
             return self.approval_service.approve_processed(
                 note.document_id,
                 expected_revision,
@@ -161,7 +176,7 @@ class NotesApplicationService:
             if not path.resolve().is_relative_to(self.vault.processed_dir.resolve()):
                 raise OutputApprovalRequiredError(note.document_id)
             content_hash = self._current_processed_hash(note, path)
-            self.require_eligible_origins(note, requires_origins=note.note_type != "original")
+            self.require_eligible_origins(note, requires_origins=note.note_type not in {"original", "manual"})
             if not self.approval_service.is_processed_current(
                 note.document_id, note.revision, content_hash
             ):
@@ -384,6 +399,216 @@ class NotesApplicationService:
             reindex=False,
         )
 
+    def create_merged_note(
+        self,
+        left_document_id: str,
+        right_document_id: str,
+        *,
+        title: str,
+    ) -> NoteDocument:
+        """Create a reviewable third note without modifying either input."""
+        if not isinstance(title, str) or not title.strip() or "\x00" in title:
+            raise ValueError("title is required")
+
+        left = self.get_note(left_document_id)
+        right = self.get_note(right_document_id)
+        if left.document_id == right.document_id:
+            raise ValueError("two different notes are required")
+        self.require_eligible_origins(left)
+        self.require_eligible_origins(right)
+
+        origins = tuple(dict.fromkeys(
+            origin for note in (left, right) for origin in note.origins
+        ))
+        path = self.vault.atomic_note_path(
+            f"fusion-{uuid.uuid4().hex}", "_Sin_Cuestion"
+        )
+        relative_path = path.resolve().relative_to(
+            self.vault.config.vault_path.resolve()
+        ).as_posix()
+        document_id = document_id_for_relative_path(relative_path)
+        metadata = {
+            "schema_version": 3,
+            "note_id": document_id,
+            "note_type": "summary",
+            "title": title.strip(),
+            "date": time.strftime("%Y-%m-%d"),
+            "author": "Fuente",
+            "tags": ["fusion"],
+            "issue": "_Sin_Cuestion",
+            "status": "pending_review",
+            "origin_kind": "working_document",
+            "origins": [origin.to_dict() for origin in origins],
+            "history": [{
+                "date": time.strftime("%Y-%m-%d %H:%M:%S"),
+                "action": "merged",
+                "source_note_ids": [left.document_id, right.document_id],
+            }],
+        }
+        body = self._merged_note_body(left, right)
+        markdown = serialize_human_frontmatter(metadata) + body
+        created = NoteDocument.from_persisted(
+            document_id=document_id,
+            relative_path=relative_path,
+            markdown=markdown,
+            revision=1,
+        )
+        with document_file_lock(
+            self.vault.config.vault_path / ".fuente" / "note-editor-locks",
+            document_id,
+        ):
+            atomic_write_text(path, markdown)
+            try:
+                self.job_store.register_note(
+                    note_id=document_id,
+                    relative_path=relative_path,
+                    content_hash=created.content_hash,
+                    note_type="summary",
+                    origin_kind="working_document",
+                    theme=self.vault.active_theme,
+                    issue="_Sin_Cuestion",
+                    status="pending_review",
+                )
+            except BaseException:
+                path.unlink(missing_ok=True)
+                raise
+        return created
+
+    def create_assistant_note(
+        self,
+        source_document_id: str,
+        *,
+        title: str,
+        kind: str,
+        body_markdown: str,
+        model: str,
+    ) -> NoteDocument:
+        """Persist an explicitly requested local assistant result for review."""
+        if (
+            not isinstance(title, str)
+            or not 1 <= len(title.strip()) <= 200
+            or "\x00" in title
+            or not isinstance(kind, str)
+            or kind not in _ASSISTANT_NOTE_TYPES
+            or not isinstance(body_markdown, str)
+            or not 1 <= len(body_markdown.strip()) <= 100_000
+            or not isinstance(model, str)
+            or not 1 <= len(model.strip()) <= 256
+        ):
+            raise ValueError("assistant note payload is invalid")
+
+        source = self.get_note(source_document_id)
+        self.require_published_output(source)
+        note_type = "concept" if kind == "concept" else "summary"
+        origin_kind = source.origin_kind or "working_document"
+        path = self.vault.atomic_note_path(f"ia-{uuid.uuid4().hex}", "_Sin_Cuestion")
+        relative_path = path.resolve().relative_to(
+            self.vault.config.vault_path.resolve()
+        ).as_posix()
+        document_id = document_id_for_relative_path(relative_path)
+        metadata = {
+            "schema_version": 3,
+            "note_id": document_id,
+            "note_type": note_type,
+            "title": title.strip(),
+            "date": time.strftime("%Y-%m-%d"),
+            "author": "Fuente",
+            "tags": ["ia-local", kind],
+            "issue": "_Sin_Cuestion",
+            "status": "pending_review",
+            "origins": [origin.to_dict() for origin in source.origins],
+            "history": [{
+                "date": time.strftime("%Y-%m-%d %H:%M:%S"),
+                "action": "assistant_note_created",
+                "source_note_id": source.document_id,
+                "source_revision": source.revision,
+                "llm_model": model.strip(),
+                "result_kind": kind,
+            }],
+        }
+        if note_type == "summary":
+            metadata["origin_kind"] = origin_kind
+        markdown = serialize_human_frontmatter(metadata) + body_markdown.rstrip() + "\n"
+        created = NoteDocument.from_persisted(
+            document_id=document_id,
+            relative_path=relative_path,
+            markdown=markdown,
+            revision=1,
+        )
+        with document_file_lock(
+            self.vault.config.vault_path / ".fuente" / "note-editor-locks",
+            document_id,
+        ):
+            atomic_write_text(path, markdown)
+            try:
+                self.job_store.register_note(
+                    note_id=document_id,
+                    relative_path=relative_path,
+                    content_hash=created.content_hash,
+                    note_type=note_type,
+                    origin_kind=origin_kind if note_type == "summary" else None,
+                    theme=self.vault.active_theme,
+                    issue="_Sin_Cuestion",
+                    status="pending_review",
+                )
+            except BaseException:
+                path.unlink(missing_ok=True)
+                raise
+        return created
+
+    def create_manual_note(self, *, title: str, body_markdown: str, note_type: str = "manual") -> NoteDocument:
+        """Create a local note authored directly in Gestajo."""
+        if (
+            not isinstance(title, str)
+            or not 1 <= len(title.strip()) <= 200
+            or "\x00" in title
+            or not isinstance(body_markdown, str)
+            or len(body_markdown) > 100_000
+            or "\x00" in body_markdown
+            or not isinstance(note_type, str)
+            or not 1 <= len(note_type.strip()) <= 64
+            or not note_type.replace("_", "").replace("-", "").isalnum()
+        ):
+            raise ValueError("manual note payload is invalid")
+        note_type = note_type.strip()
+        path = self.vault.atomic_note_path(f"manual-{uuid.uuid4().hex}", "_Sin_Cuestion")
+        relative_path = path.resolve().relative_to(self.vault.config.vault_path.resolve()).as_posix()
+        document_id = document_id_for_relative_path(relative_path)
+        metadata = {
+            "schema_version": 3,
+            "note_id": document_id,
+            "note_type": note_type,
+            "title": title.strip(),
+            "date": time.strftime("%Y-%m-%d"),
+            "author": "Gestajo",
+            "tags": ["manual", note_type],
+            "issue": "_Sin_Cuestion",
+            "status": "pending_review",
+            "origins": [],
+            "history": [{"date": time.strftime("%Y-%m-%d %H:%M:%S"), "action": "manual_note_created"}],
+        }
+        markdown = serialize_human_frontmatter(metadata) + body_markdown.rstrip() + "\n"
+        created = NoteDocument.from_persisted(document_id=document_id, relative_path=relative_path, markdown=markdown, revision=1)
+        with document_file_lock(self.vault.config.vault_path / ".fuente" / "note-editor-locks", document_id):
+            atomic_write_text(path, markdown)
+            try:
+                self.job_store.register_note(
+                    note_id=document_id, relative_path=relative_path, content_hash=created.content_hash,
+                    note_type=note_type, origin_kind=None, theme=self.vault.active_theme,
+                    issue="_Sin_Cuestion", status="pending_review",
+                )
+            except BaseException:
+                path.unlink(missing_ok=True)
+                raise
+        return created
+
+    @staticmethod
+    def _merged_note_body(left: NoteDocument, right: NoteDocument) -> str:
+        return (
+            f"## {left.title}\n\n{left.body_markdown.rstrip()}\n\n"
+            f"---\n\n## {right.title}\n\n{right.body_markdown.rstrip()}\n"
+        )
+
     def move_notes_to_theme(
         self, document_ids: list[str], target_theme: str
     ) -> dict[str, Any]:
@@ -449,8 +674,10 @@ class NotesApplicationService:
             for document_id in document_ids
         ):
             raise ValueError("document_ids is invalid")
-        if target_status not in {"pending_review", "in_review", "approved"}:
-            raise ValueError("target_status is invalid")
+        if target_status not in {"pending_review", "in_review"}:
+            raise ValueError(
+                "approved status requires approve_processed_output"
+            )
 
         moved: list[dict[str, Any]] = []
         errors: list[dict[str, str]] = []
@@ -1136,7 +1363,7 @@ class NotesApplicationService:
             return
         if bool(getattr(self.index_store, "failed", False)):
             logger.warning(
-                "MiniRAG index unavailable; approval remains durable for %s",
+                "LanceDB index unavailable; approval remains durable for %s",
                 note.document_id,
             )
             return
@@ -1180,15 +1407,13 @@ class NotesApplicationService:
         }
 
         obsolete = sorted(published - set(chunk_ids))
-        backend = MiniRAGRetrievalBackend(self.index_store)
+        backend = LanceDBRetrievalBackend(self.index_store)
         try:
             result = backend.rebuild(chunks)
         except Exception as error:
-            from fuente.rag.minirag_store import MiniRAGUnavailableError
-
-            if isinstance(error, MiniRAGUnavailableError):
+            if isinstance(error, LanceDBUnavailableError):
                 logger.warning(
-                    "MiniRAG index unavailable; approval remains durable for %s",
+                    "LanceDB index unavailable; approval remains durable for %s",
                     note.document_id,
                 )
                 return
@@ -1196,12 +1421,12 @@ class NotesApplicationService:
         if not result.success:
             if bool(getattr(self.index_store, "failed", False)):
                 logger.warning(
-                    "MiniRAG index unavailable; approval remains durable for %s",
+                    "LanceDB index unavailable; approval remains durable for %s",
                     note.document_id,
                 )
                 return
             raise RuntimeError(
-                f"MiniRAG index rebuild failed for approved note {note.document_id}"
+                f"LanceDB index rebuild failed for approved note {note.document_id}"
             )
 
         # New vectors are durable before the published artifact set changes.
@@ -1224,7 +1449,7 @@ class NotesApplicationService:
         except Exception:
             rollback_errors = []
             if new_chunk_ids and backend.delete(new_chunk_ids) is False:
-                rollback_errors.append("minirag")
+                rollback_errors.append("lancedb")
             try:
                 self.job_store.delete_index_artifacts(
                     note.document_id, artifact_ids=chunk_ids
@@ -1259,7 +1484,7 @@ class NotesApplicationService:
                 )
             else:
                 logger.warning(
-                    "Keeping previous artifacts for approved note %s after MiniRAG delete failure",
+                    "Keeping previous artifacts for approved note %s after LanceDB delete failure",
                     note.document_id,
                 )
         if self._index_notifier is not None:

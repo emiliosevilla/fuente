@@ -1,6 +1,6 @@
 """Scoped hybrid retrieval with bounded context and RAM-aware degradation.
 
-``RetrievalApplicationService`` sits between chat (Task 4.3) and the MiniRAG /
+``RetrievalApplicationService`` sits between chat (Task 4.3) and the LanceDB /
 BM25 stack. It:
 
 - filters hits by ``single_note`` / ``issue`` / ``theme`` / ``all_notes``;
@@ -23,10 +23,11 @@ logger = logging.getLogger(__name__)
 
 SCOPE_ALL_NOTES = "all_notes"
 SCOPE_SINGLE_NOTE = "single_note"
+SCOPE_MULTIPLE_NOTES = "multiple_notes"
 SCOPE_ISSUE = "issue"
 SCOPE_THEME = "theme"
 VALID_SCOPES: frozenset[str] = frozenset(
-    {SCOPE_ALL_NOTES, SCOPE_SINGLE_NOTE, SCOPE_ISSUE, SCOPE_THEME}
+    {SCOPE_ALL_NOTES, SCOPE_SINGLE_NOTE, SCOPE_MULTIPLE_NOTES, SCOPE_ISSUE, SCOPE_THEME}
 )
 
 MODE_HYBRID = "hybrid"
@@ -132,6 +133,7 @@ def parse_scope(
     scope: str,
     *,
     document_id: Optional[str] = None,
+    document_ids: Optional[str] = None,
     issue: Optional[str] = None,
     theme: Optional[str] = None,
 ) -> tuple[str, dict[str, str]]:
@@ -162,6 +164,12 @@ def parse_scope(
         filters["document_id"] = (document_id or value or "").strip()
         if not filters["document_id"]:
             raise ValueError("single_note scope requires document_id")
+    elif kind == SCOPE_MULTIPLE_NOTES:
+        ids = (document_ids or value or "").strip()
+        selected = sorted({item.strip() for item in ids.split(",") if item.strip()})
+        if not selected:
+            raise ValueError("multiple_notes scope requires document_ids")
+        filters["document_ids"] = ",".join(selected)
     elif kind == SCOPE_ISSUE:
         filters["issue"] = (issue or value or "").strip()
         if not filters["issue"]:
@@ -185,6 +193,8 @@ def matches_scope(
         return True
     if scope_kind == SCOPE_SINGLE_NOTE:
         return str(meta.get("document_id", "")) == filters["document_id"]
+    if scope_kind == SCOPE_MULTIPLE_NOTES:
+        return str(meta.get("document_id", "")) in filters["document_ids"].split(",")
     if scope_kind == SCOPE_ISSUE:
         return str(meta.get("issue", "")) == filters["issue"]
     if scope_kind == SCOPE_THEME:
@@ -193,7 +203,7 @@ def matches_scope(
 
 
 class RetrievalApplicationService:
-    """Policy-selected retrieval over Vault BM25 or MiniRAG hybrid search."""
+    """Policy-selected retrieval over Vault BM25 or LanceDB hybrid search."""
 
     def __init__(
         self,
@@ -243,7 +253,7 @@ class RetrievalApplicationService:
         self.max_sources = max(1, int(max_sources))
         self.snippet_chars = max(32, int(snippet_chars))
         self.router = router or RetrievalRouter(
-            search=_ServiceRetrievalBackend(self, "minirag"),
+            search=_ServiceRetrievalBackend(self, "lancedb"),
             enrichment=None,
         )
 
@@ -262,6 +272,7 @@ class RetrievalApplicationService:
         limit: int = DEFAULT_LIMIT,
         *,
         document_id: Optional[str] = None,
+        document_ids: Optional[str] = None,
         issue: Optional[str] = None,
         theme: Optional[str] = None,
         role: str = "search",
@@ -272,6 +283,7 @@ class RetrievalApplicationService:
             scope,
             limit=limit,
             document_id=document_id,
+            document_ids=document_ids,
             issue=issue,
             theme=theme,
             role=role,
@@ -285,6 +297,7 @@ class RetrievalApplicationService:
         limit: int = DEFAULT_LIMIT,
         *,
         document_id: Optional[str] = None,
+        document_ids: Optional[str] = None,
         issue: Optional[str] = None,
         theme: Optional[str] = None,
         role: str = "search",
@@ -293,7 +306,7 @@ class RetrievalApplicationService:
         """Build an LLM-ready context payload (or a clear no-context result)."""
         try:
             scope_kind, filters = parse_scope(
-                scope, document_id=document_id, issue=issue, theme=theme
+                scope, document_id=document_id, document_ids=document_ids, issue=issue, theme=theme
             )
         except ValueError as exc:
             logger.warning("Invalid retrieval scope: %s", exc)
@@ -378,7 +391,7 @@ class RetrievalApplicationService:
         try:
             hits = backend.search(query, candidate_limit)
         except Exception as exc:
-            logger.warning("MiniRAG search unavailable; continuing with BM25: %s", exc)
+            logger.warning("LanceDB search unavailable; continuing with BM25: %s", exc)
             try:
                 return self._bm25_search(query, candidate_limit=candidate_limit)
             except Exception as fallback_exc:
@@ -427,7 +440,7 @@ class RetrievalApplicationService:
             ),
             content=str(item.get("content") or ""),
             score=float(item.get("score") or 0.0),
-            backend=str(item.get("backend") or "minirag"),
+            backend=str(item.get("backend") or "lancedb"),
             relative_path=str(metadata.get("relative_path") or item.get("relative_path") or ""),
             metadata=metadata,
         )

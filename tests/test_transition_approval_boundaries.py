@@ -49,6 +49,44 @@ def test_copiado_to_capturado_blocks_before_clean_write(temp_vault_path) -> None
         harness.store.close()
 
 
+def test_copiado_to_capturado_reuses_durable_extraction(temp_vault_path, monkeypatch) -> None:
+    harness = _build_harness(temp_vault_path, approve_early_transitions=False)
+    try:
+        job = harness.service.submit(SOURCE_IDENTITY)
+        _approve(
+            harness.service.transition_approvals,
+            job.job_id,
+            "1_volcado",
+            "2_copiado",
+            1,
+            job.source_hash,
+        )
+        extracted = harness.service.resume(job.job_id)
+        assert extracted.stage == "extracted"
+        assert harness.service._extraction_cache_path(extracted).is_file()
+
+        dirty = harness.vault.config.vault_path / extracted.dirty_artifact
+        _approve(
+            harness.service.transition_approvals,
+            extracted.job_id,
+            "2_copiado",
+            "3_capturado",
+            1,
+            harness.vault.calculate_file_hash(dirty),
+        )
+        monkeypatch.setattr(
+            harness.service,
+            "_extract_with_content_retries",
+            lambda *_args: (_ for _ in ()).throw(AssertionError("must reuse extraction cache")),
+        )
+
+        captured = harness.service.resume(extracted.job_id)
+        assert captured.stage == "saved_clean"
+        assert not harness.service._extraction_cache_path(captured).exists()
+    finally:
+        harness.store.close()
+
+
 def test_capturado_to_procesado_blocks_before_note_write(temp_vault_path) -> None:
     harness = _build_harness(temp_vault_path, approve_early_transitions=False)
     try:

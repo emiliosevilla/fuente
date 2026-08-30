@@ -11,6 +11,14 @@ from fuente.ui.setup_api import FuenteSetupApi
 from fuente.ui.setup_backend import FuenteSetupBackend, load_startup_vault
 
 
+_GESTAJO_AGENT_INSTALL_URL = "fuente://gestajo-agent/install"
+
+
+def is_gestajo_agent_install_request(arguments: list[str]) -> bool:
+    """Accept one fixed URL only; custom protocol input is an external boundary."""
+    return any(argument == _GESTAJO_AGENT_INSTALL_URL for argument in arguments)
+
+
 def _html_file() -> Path:
     bundle_root = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parents[1]))
     candidates = (
@@ -55,8 +63,18 @@ def _launch_runtime(arguments: list[str]) -> None:
     main()
 
 
+def _launch_gestajo_agent_installer() -> None:
+    _launch_runtime(["--install-gestajo-agent"])
+
+
 def main() -> None:
     arguments = sys.argv[1:]
+    if is_gestajo_agent_install_request(arguments):
+        try:
+            _launch_gestajo_agent_installer()
+        except RuntimeCapabilityError as error:
+            _launch_setup(str(error))
+        return
     if "--runtime" in arguments:
         arguments.remove("--runtime")
         try:

@@ -26,8 +26,8 @@ def _eco_policy(tmp_path: Path):
     return resolve_runtime_policy(config, budget=None)
 
 
-def test_eco_ingestion_skips_vectors_and_waits_without_fake_llm(temp_vault_path):
-    harness = _build_harness(temp_vault_path)
+def test_eco_ingestion_skips_vectors_without_running_a_fake_llm(temp_vault_path):
+    harness = _build_harness(temp_vault_path, legacy_auto_processing=False)
     try:
         harness.service.set_runtime_policy(_eco_policy(temp_vault_path))
         harness.service.index_store = ForbiddenIndex()
@@ -46,8 +46,8 @@ def test_eco_ingestion_skips_vectors_and_waits_without_fake_llm(temp_vault_path)
         )
         result = harness.service.resume(submitted.job_id)
 
-        assert result.stage == "indexed_chunks"
-        assert result.status == "pending"
+        assert result.stage == "completed"
+        assert result.status == "completed"
         assert harness.generator.calls == []
         assert harness.source_path.exists()
         assert harness.store.list_index_artifacts(result.note_document_id) == []
@@ -59,22 +59,18 @@ def test_eco_ingestion_skips_vectors_and_waits_without_fake_llm(temp_vault_path)
             and decision["action"] == "degrade"
             for decision in decisions
         )
-        assert any(
-            decision["reason"].startswith("llm_unavailable_under_policy;")
-            and decision["action"] == "wait"
-            for decision in decisions
-        )
+        assert not any(decision["task_class"] == "llm" for decision in decisions)
     finally:
         harness.store.close()
 
 
-def test_eco_pipeline_does_not_construct_minirag(tmp_path, monkeypatch):
+def test_eco_pipeline_does_not_construct_lancedb(tmp_path, monkeypatch):
     config = get_default_config(tmp_path / "vault")
     config.resource_profile = "eco_strict"
     monkeypatch.setattr(
-        "fuente.watcher.watcher.MiniRAGStore",
+        "fuente.watcher.watcher.LanceDBStore",
         lambda *_args, **_kwargs: (_ for _ in ()).throw(
-            AssertionError("Eco constructed MiniRAG")
+            AssertionError("Eco constructed LanceDB")
         ),
     )
 

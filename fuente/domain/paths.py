@@ -5,6 +5,8 @@ from __future__ import annotations
 import os
 import uuid
 import logging
+import re
+import unicodedata
 from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Any, Literal, Protocol
 
@@ -14,6 +16,13 @@ from fuente.domain.frontmatter import FrontmatterError, parse_frontmatter
 
 RootName = Literal["vault", "output", "input", "dirty", "clean", "quarantine"]
 logger = logging.getLogger(__name__)
+
+
+def _wikilink_filename_key(filename: str) -> str:
+    """Match a wikilink name to the safe filename Fuente writes on disk."""
+    return unicodedata.normalize(
+        "NFC", re.sub(r'[\\\\/*?:"<>|]', "_", filename)
+    )
 
 
 class NoteCatalogProtocol(Protocol):
@@ -307,20 +316,28 @@ class AuthorizedPathResolver:
         return identifier
 
     def resolve_unique_note_basename(self, filename: str) -> Path:
-        """Resolve one unique Markdown note basename below the output root."""
+        """Resolve one unique Markdown basename in reader-visible Note roots."""
         if not isinstance(filename, str) or Path(filename).name != filename:
             raise PathAuthorizationError()
         if Path(filename).suffix.lower() != ".md":
             raise PathAuthorizationError()
 
+        expected_key = _wikilink_filename_key(filename)
         matches = []
-        for candidate in self.roots["output"].rglob(filename):
-            try:
-                authorized = self.resolve_note(self._vault_relative_identity(candidate))
-            except PathAuthorizationError:
-                continue
-            if authorized.is_file():
-                matches.append(authorized)
+        for root_name in ("output", "clean"):
+            for candidate in self.roots[root_name].rglob("*.md"):
+                if _wikilink_filename_key(candidate.name) != expected_key:
+                    continue
+                try:
+                    authorized = self.resolve(
+                        self._vault_relative_identity(candidate),
+                        root_name=root_name,
+                        allowed_extensions={".md"},
+                    )
+                except PathAuthorizationError:
+                    continue
+                if authorized.is_file():
+                    matches.append(authorized)
 
         if len(matches) != 1:
             raise PathAuthorizationError()

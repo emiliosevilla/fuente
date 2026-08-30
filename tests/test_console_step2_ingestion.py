@@ -27,6 +27,7 @@ def _build_offline_ingestion(vault_root: Path) -> tuple[IngestionApplicationServ
         chunker=SemanticChunker(),
         chroma=FakeChroma(),
         atomic_generator=FakeGenerator(),
+        legacy_auto_processing=True,
         ram_governor=FakeGovernor(),
         stabilize=lambda path: path.is_file() and path.stat().st_size > 0,
     )

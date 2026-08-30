@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-import test_a
+from tests import test_a
 
 from fuente.config import get_default_config
 from fuente.core.vault import VaultManager

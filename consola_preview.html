@@ -5252,10 +5252,6 @@ document.addEventListener('keydown', handleShellKeydown);
                 renderSetupSettings({setup_mode: true, obsidian_installed: true});
                 const pathInput = document.getElementById('setting-vault-path');
                 if (pathInput && !pathInput.value) pathInput.value = '/Users/emiliosevillaortego/Documents/Fuente_Vault';
-            } else if (name === 'home-max') {
-                switchWorkspace('home');
-            } else if (name === 'home-1440') {
-                switchWorkspace('home');
             } else if (name === 'keyboard-focus') {
                 switchWorkspace('home');
                 const homeButton = document.querySelector('#primary-navigation .workspace-trigger');
@@ -6402,23 +6398,6 @@ document.addEventListener('keydown', handleShellKeydown);
                 sealBadge.append(sealDot, sealLabel);
                 bar.appendChild(sealBadge);
             }
-            if (!noteEditorActive) {
-                const actions = document.createElement('div');
-                actions.className = 'reader-actions';
-                const editButton = document.createElement('button');
-                editButton.type = 'button';
-                editButton.className = 'btn-secondary';
-                editButton.setAttribute('aria-label', 'Editar nota');
-                editButton.dataset.onclickCommand = 'startNoteEditing()';
-                editButton.addEventListener('click', function() {
-                    startNoteEditing();
-                });
-                editButton.textContent = 'Editar';
-                actions.appendChild(editButton);
-                bar.appendChild(actions);
-            } else {
-                bar.appendChild(createEditorToolbar());
-            }
             return bar;
         }
 
@@ -6456,6 +6435,10 @@ document.addEventListener('keydown', handleShellKeydown);
             undo.id = 'btn-editor-undo';
             undo.disabled = true;
             toolbar.appendChild(undo);
+            const preview = createEditorButton('ui-icon-eye', 'toggleEditorPreview()', 'Vista previa');
+            preview.id = 'btn-editor-preview';
+            preview.setAttribute('aria-pressed', 'false');
+            toolbar.appendChild(preview);
 
             const blockFormat = document.createElement('select');
             blockFormat.id = 'editor-block-format';
@@ -6526,6 +6509,13 @@ document.addEventListener('keydown', handleShellKeydown);
             editor.addEventListener('paste', handleEditorPaste);
             shell.appendChild(editor);
 
+            const preview = document.createElement('div');
+            preview.id = 'note-editor-preview';
+            preview.className = 'note-editor-content note-editor-preview';
+            preview.setAttribute('aria-label', 'Vista previa de la nota');
+            preview.hidden = true;
+            shell.appendChild(preview);
+
             const footer = document.createElement('div');
             footer.className = 'note-editor-footer';
             const status = document.createElement('span');
@@ -6549,6 +6539,27 @@ document.addEventListener('keydown', handleShellKeydown);
 
         function getNoteEditor() {
             return document.querySelector('.note-editor-content[contenteditable="true"]');
+        }
+
+        function toggleEditorPreview() {
+            const editor = getNoteEditor();
+            const preview = document.getElementById('note-editor-preview');
+            const button = document.getElementById('btn-editor-preview');
+            if (!editor || !preview || !button) return;
+            const showingPreview = preview.hidden;
+            if (showingPreview) {
+                preview.replaceChildren(createNoteContent(readerMarkdownToProjection(editorMarkdownFromDom())));
+            }
+            preview.hidden = !showingPreview;
+            editor.hidden = showingPreview;
+            button.setAttribute('aria-pressed', String(showingPreview));
+            button.title = showingPreview ? 'Volver a editar' : 'Vista previa';
+            button.setAttribute('aria-label', button.title);
+            document.querySelectorAll('#note-action-bar .note-editor-tool, #note-action-bar .note-editor-select').forEach(function(control) {
+                if (control !== button) control.disabled = showingPreview;
+            });
+            if (!showingPreview) editor.focus();
+            updateEditorState(showingPreview ? 'Vista previa: los cambios aún no se han guardado.' : undefined);
         }
 
         function normalizeEditorMarkdown(value) {
@@ -6950,22 +6961,9 @@ document.addEventListener('keydown', handleShellKeydown);
                 if (options.closeAfter) applyPendingEditorIntent();
                 return;
             }
-            callNativeLongRequest('save_note_content', function() {
-                return window.pywebview.api.save_note_content(currentSelectedDocumentId, currentSelectedNoteRevision, body);
-            }).then(function(result) {
-                if (!result || result.error) throw new Error((result && result.message) || 'No se pudieron guardar los cambios.');
-                currentSelectedNoteMarkdown = body;
-                currentSelectedNoteRevision = Number.isInteger(result.revision) ? result.revision : currentSelectedNoteRevision + 1;
-                noteEditorSaving = false;
-                const selected = readerNotes.find(function(note) { return note.document_id === currentSelectedDocumentId; });
-                if (selected && result.status === 'saved') selected.status = 'pending_review';
-                renderReaderProperties(currentSelectedDocumentId);
-                updateEditorState('Cambios guardados.');
-                if (options.closeAfter) applyPendingEditorIntent();
-            }).catch(function(error) {
-                noteEditorSaving = false;
-                updateEditorState(String(error || 'No se pudieron guardar los cambios.'));
-            });
+            noteEditorSaving = false;
+            updateEditorState('La edición de Notas se realiza en Documentos de Gestajo.');
+            if (options.closeAfter) applyPendingEditorIntent();
         }
 
         function renderNoteDocument(title, documentModel) {

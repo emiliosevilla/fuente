@@ -25,8 +25,6 @@ SCENARIOS: list[tuple[str, str, tuple[int, int] | None, bool]] = [
     ("setup-ready", "02-setup-ready.png", (1280, 802), False),
     ("home-1024", "03-home-1024.png", (1024, 700), False),
     ("home-1280", "04-home-1280.png", (1280, 802), False),
-    ("home-max", "05-home-max.png", None, True),
-    ("home-1440", "home-1440.png", (1280, 802), False),
     ("keyboard-focus", "06-keyboard-focus.png", (1280, 802), False),
     ("home-gruvbox-1024", "09-home-gruvbox-1024.png", (1024, 700), False),
     ("settings-focus", "11-settings-focus-1024.png", (1024, 700), False),
@@ -91,6 +89,13 @@ def _save(scenario: str, filename: str, record: dict[str, object]) -> None:
     print(f"OK {scenario} {record['width']}x{record['height']} {record['sha256'][:12]}")
 
 
+def prune_manifest_entries(entries: list[dict[str, object]]) -> list[dict[str, object]]:
+    active_files = {"00-baseline.png"}
+    active_files.update(filename for _scenario, filename, _size, _max in SCENARIOS)
+    active_files.add("10-fuente-obsidian.png")
+    return [entry for entry in entries if entry.get("file") in active_files]
+
+
 def unique_png_groups(evidence: Path | None = None) -> dict[str, list[str]]:
     folder = EVIDENCE if evidence is None else evidence
     groups: dict[str, list[str]] = {}
@@ -134,6 +139,9 @@ def main(argv: list[str] | None = None) -> int:
             maximize=maximize,
         )
         _save(scenario, filename, record)
+    manifest = EVIDENCE / "manifest.json"
+    entries, wrapper = _load_manifest_entries(manifest)
+    _write_manifest(manifest, prune_manifest_entries(entries), wrapper)
     _restamp_obsidian()
     return verify_unique()
 

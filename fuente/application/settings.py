@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
+import os
 from pathlib import Path
+import re
 from typing import Callable, Iterable
 
 from fuente.config import (
@@ -52,6 +54,34 @@ def _validate_tiny_cpu_path(path: str | None) -> str:
     return str(candidate.resolve())
 
 
+def discover_local_tiny_whisper_model() -> Path | None:
+    """Return an already-downloaded Faster Whisper tiny model, never downloading."""
+    cache_root = Path(
+        os.environ.get("HF_HUB_CACHE")
+        or os.environ.get("HUGGINGFACE_HUB_CACHE")
+        or Path.home() / ".cache" / "huggingface" / "hub"
+    )
+    snapshots = cache_root / "models--Systran--faster-whisper-tiny" / "snapshots"
+    try:
+        candidates = [
+            model.parent
+            for model in snapshots.glob("*/model.bin")
+            if (model.parent / "config.json").is_file()
+        ]
+    except OSError:
+        return None
+    if not candidates:
+        return None
+    return max(candidates, key=lambda candidate: candidate.stat().st_mtime)
+
+
+def _validated_anythingllm_workspace(value: object) -> str:
+    candidate = value.strip() if isinstance(value, str) else ""
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]{0,127}", candidate):
+        raise SettingsValidationError("anythingllm_workspace_slug must be a workspace slug")
+    return candidate
+
+
 @dataclass(frozen=True)
 class SettingsApplicationResult:
     config: AppConfig
@@ -80,6 +110,8 @@ class SettingsService:
         resource_profile: str | None = None,
         audio_mode: str | None = None,
         whisper_model_path: str | Path | None = None,
+        anythingllm_url: str | None = None,
+        anythingllm_workspace_slug: str | None = None,
         input_connected_folders: Iterable[str | Path] | None = None,
         output_connected_folders: Iterable[str | Path] | None = None,
     ) -> SettingsApplicationResult:
@@ -92,6 +124,8 @@ class SettingsService:
             resource_profile=resource_profile,
             audio_mode=audio_mode,
             whisper_model_path=whisper_model_path,
+            anythingllm_url=anythingllm_url,
+            anythingllm_workspace_slug=anythingllm_workspace_slug,
             input_connected_folders=input_connected_folders,
             output_connected_folders=output_connected_folders,
         )
@@ -124,6 +158,8 @@ class SettingsService:
         resource_profile: str | None = None,
         audio_mode: str | None = None,
         whisper_model_path: str | Path | None = None,
+        anythingllm_url: str | None = None,
+        anythingllm_workspace_slug: str | None = None,
         input_connected_folders: Iterable[str | Path] | None = None,
         output_connected_folders: Iterable[str | Path] | None = None,
     ) -> SettingsApplicationResult:
@@ -184,7 +220,27 @@ class SettingsService:
             else whisper_model_path
         )
         if selected_audio_mode == "tiny_cpu":
+            if selected_whisper_path is None:
+                detected_model = discover_local_tiny_whisper_model()
+                selected_whisper_path = str(detected_model) if detected_model else None
             selected_whisper_path = _validate_tiny_cpu_path(selected_whisper_path)
+
+        raw_anything_url = self.config.anythingllm_url if anythingllm_url is None else anythingllm_url
+        if not isinstance(raw_anything_url, str):
+            raise SettingsValidationError("anythingllm_url must be a string")
+        selected_anything_url = raw_anything_url.strip()
+        if selected_anything_url:
+            from fuente.integrations.anythingllm import validate_loopback_anythingllm_url
+
+            try:
+                selected_anything_url = validate_loopback_anythingllm_url(selected_anything_url)
+            except ValueError as error:
+                raise SettingsValidationError(str(error)) from error
+        selected_anything_workspace = _validated_anythingllm_workspace(
+            self.config.anythingllm_workspace_slug
+            if anythingllm_workspace_slug is None
+            else anythingllm_workspace_slug
+        )
 
         updated_config = replace(
             self.config,
@@ -196,6 +252,8 @@ class SettingsService:
             resource_profile=selected_profile,
             audio_mode=selected_audio_mode,
             whisper_model_path=selected_whisper_path,
+            anythingllm_url=selected_anything_url,
+            anythingllm_workspace_slug=selected_anything_workspace,
         )
         return SettingsApplicationResult(updated_config, warning)
 

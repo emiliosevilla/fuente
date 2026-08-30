@@ -107,6 +107,7 @@ class VaultManager:
             self.shared_dir,
             self.config.system_dir,
             self.config.minirag_dir,
+            self.config.lancedb_dir,
         ]
         for d in dirs:
             d.mkdir(parents=True, exist_ok=True)

@@ -1,3 +1,9 @@
 # Tareas
 
-## Pendientes
+## Compromisos confirmados
+
+## Acciones propuestas
+
+## Dependencias y riesgos
+
+## Datos no constatados

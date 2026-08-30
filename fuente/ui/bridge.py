@@ -791,6 +791,8 @@ class FuentePyWebViewApi:
             "resource_profile",
             "audio_mode",
             "whisper_model_path",
+            "anythingllm_url",
+            "anythingllm_workspace_slug",
             "output_connected_folders",
         }
         if "input_connected_folders" in parsed:
@@ -806,6 +808,8 @@ class FuentePyWebViewApi:
             "ollama_url",
             "resource_profile",
             "audio_mode",
+            "anythingllm_url",
+            "anythingllm_workspace_slug",
         }
         for field in string_fields & set(parsed):
             if not isinstance(parsed[field], str):
@@ -1326,22 +1330,6 @@ class FuentePyWebViewApi:
         if "/" in note or "\\" in note or note.endswith(".md"):
             return self._error("path_not_authorized", "Path is not authorized")
         return self.backend.get_note_content_html(note)
-
-    def save_note_content(
-        self, note_id: object, expected_revision: object, body_markdown: object
-    ) -> dict[str, Any]:
-        note = self._note_id(note_id)
-        if isinstance(note, dict):
-            return note
-        if isinstance(expected_revision, bool) or not isinstance(expected_revision, int):
-            return self._error("invalid_payload", "expected_revision must be an integer")
-        if expected_revision < 1:
-            return self._error("invalid_payload", "expected_revision must be positive")
-        if not isinstance(body_markdown, str):
-            return self._error("invalid_payload", "body_markdown must be a string")
-        if "\x00" in body_markdown or len(body_markdown) > 10_000_000:
-            return self._error("invalid_payload", "body_markdown is invalid")
-        return self.backend.update_note_content(note, expected_revision, body_markdown)
 
     def get_document_workspace(self, document_id: object) -> dict[str, Any]:
         """Return a path-free read-only note and sharing projection."""

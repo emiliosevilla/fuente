@@ -2,11 +2,10 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch
 
 from fuente.application.ingestion import IngestionApplicationService
 from fuente.config import get_default_config
-from fuente.domain.frontmatter import parse_frontmatter, serialize_frontmatter
+from fuente.domain.frontmatter import parse_frontmatter
 from fuente.core.vault import VaultManager
 from fuente.extractors.registry import ExtractorRegistry
 from fuente.extractors.office_pdf import TextAndOfficeExtractor
@@ -147,19 +146,12 @@ E = mc^2
             completed = service.resume(waiting.job_id)
             self.assertEqual(completed.stage, "completed")
             self.assertEqual(completed.status, "completed")
-            self.assertFalse(junk_file.exists())
+            self.assertTrue(junk_file.exists())
 
             output_notes = sorted(self.vault.output_dir.rglob("*.md"))
-            self.assertEqual(len(output_notes), 1)
-            note_metadata, note_body = parse_frontmatter(
-                output_notes[0].read_text(encoding="utf-8")
-            )
-            self.assertEqual(note_metadata["schema_version"], 3)
-            self.assertEqual(note_metadata["note_type"], "summary")
-            self.assertNotIn("sources", note_metadata)
-            self.assertEqual(note_metadata["title"], "basura_random")
-            self.assertEqual(note_metadata["status"], "pending_review")
-            self.assertTrue(note_body.startswith("# basura_random\n\n"))
+            self.assertEqual(output_notes, [])
+            clean_notes = sorted(self.vault.clean_dir.glob("basura_random*.md"))
+            self.assertEqual(len(clean_notes), 1)
         finally:
             job_store.close()
 
@@ -183,16 +175,8 @@ E = mc^2
         for c in chunks:
             self.assertLessEqual(len(c["content"]), 700)
 
-    @patch("fuente.watcher.watcher.AtomicNoteGenerator.generate_atomic_note")
-    def test_adversarial_concurrent_batch_ingestion(self, mock_gen):
+    def test_adversarial_concurrent_batch_ingestion(self):
         """Prueba volcado simultáneo de 20 archivos en 1_entrada."""
-        mock_gen.side_effect = lambda clean_md_content, model_name, file_name: (
-            serialize_frontmatter({
-                "schema_version": 1, "title": file_name, "date": "", "author": "Fuente",
-                "tags": [], "issue": "_Sin_Cuestion", "status": "pending_review",
-                "sources": [file_name], "history": [],
-            }) + f"# {file_name}\n\n{clean_md_content}"
-        )
         for i in range(20):
             p = self.config.vault.input_dir / f"archivo_masivo_{i:02d}.txt"
             with open(p, "w", encoding="utf-8") as f:
@@ -220,8 +204,8 @@ E = mc^2
             p = self.config.vault.input_dir / f"archivo_masivo_{i:02d}.txt"
             self.assertTrue(pipeline.process_file(p))
 
-        out_count = len(list(self.config.vault.output_dir.glob("archivo_masivo_*.md")))
-        self.assertEqual(out_count, 20)
+        self.assertEqual(list(self.config.vault.output_dir.rglob("resumenes/*.md")), [])
+        self.assertEqual(len(list(self.config.vault.clean_dir.glob("*.md"))), 20)
 
 
 if __name__ == "__main__":

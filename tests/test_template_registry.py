@@ -37,9 +37,27 @@ def test_template_bundle_stays_inside_hidden_vault_folder(registry):
     assert "/.fuente/agents/resumen/AGENTS.md" in bundle.agents_path.as_posix()
 
 
-def test_lists_seven_initial_template_types(registry):
+def test_lists_initial_template_types(registry):
     summaries = registry.list()
     assert {item.template_id for item in summaries} == set(INITIAL_TEMPLATE_IDS)
+
+
+def test_apunte_and_diario_are_packaged_manual_examples(registry):
+    summaries = {item.template_id: item.label for item in registry.list()}
+
+    assert summaries["apunte"] == "Apunte"
+    assert summaries["diario"] == "Diario"
+    assert "## Preguntas abiertas" in registry.load("apunte").template
+    assert "## Próximo paso" in registry.load("diario").template
+
+
+def test_packaged_agent_instructions_preserve_evidence_and_verified_links(registry):
+    for template_id in INITIAL_TEMPLATE_IDS:
+        agents = registry.load(template_id).packaged_agents
+        assert "## Propósito" in agents
+        assert "## Procedimiento" in agents
+        assert "## Comprobación" in agents
+        assert "fuente original intacta" in agents
 
 
 @pytest.mark.parametrize(
@@ -112,6 +130,22 @@ def test_restore_packaged_resource(registry):
     )
     restored = registry.restore("propiedades", expected_revision=edited.revision)
     assert restored.template == edited.packaged_template
+    assert restored.agents == edited.packaged_agents
+    assert restored.revision == edited.revision + 1
+
+
+def test_restore_agents_preserves_the_markdown_template(registry):
+    bundle = registry.load("resumen")
+    edited = registry.save(
+        "resumen",
+        bundle.template + "\n\nEncabezado local.",
+        "Instrucción local.",
+        expected_revision=bundle.revision,
+    )
+
+    restored = registry.restore_agents("resumen", expected_revision=edited.revision)
+
+    assert restored.template == edited.template
     assert restored.agents == edited.packaged_agents
     assert restored.revision == edited.revision + 1
 

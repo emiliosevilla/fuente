@@ -5,6 +5,7 @@ from threading import Thread
 from urllib.error import HTTPError, URLError
 
 import pytest
+from docx import Document
 
 from fuente.agent.server import (
     AgentAuthenticationError,
@@ -97,7 +98,7 @@ def test_status_requires_the_bound_user(tmp_path: Path):
     )
 
     assert agent.status("token-a")["claimed"] is True
-    assert agent.status("token-a")["capabilities"] == ["flow", "flow_import", "flow_approve", "flow_jobs", "flow_job_detail", "flow_job_resume", "flow_job_cancel", "flow_review", "flow_review_captured", "flow_discard", "quarantine_read", "quarantine_restore", "settings", "sync_inputs", "sync_run", "sync_output", "sync_conflict_read", "sync_conflict_resolve", "document_conflict_read", "document_conflict_resolve", "taxonomy_read", "taxonomy_write", "note_read", "note_search", "note_relations", "note_lineage", "note_export", "note_write", "note_theme", "note_merge", "note_approve_processed", "note_share", "note_assistant", "note_assistant_persist", "knowledge_assistant", "templates_read", "templates_write"]
+    assert agent.status("token-a")["capabilities"] == ["flow", "flow_import", "flow_approve", "flow_jobs", "flow_job_detail", "flow_job_resume", "flow_job_cancel", "flow_review", "flow_review_captured", "flow_review_source_preview", "flow_discard", "quarantine_read", "quarantine_restore", "settings", "sync_inputs", "sync_run", "sync_output", "sync_conflict_read", "sync_conflict_resolve", "document_conflict_read", "document_conflict_resolve", "taxonomy_read", "taxonomy_write", "note_read", "note_search", "note_relations", "note_lineage", "note_export", "note_write", "note_theme", "note_merge", "note_approve_processed", "note_share", "note_assistant", "note_assistant_persist", "knowledge_assistant", "templates_read", "templates_write"]
     with pytest.raises(AgentAuthenticationError, match="another user"):
         agent.status("token-b")
 
@@ -992,9 +993,11 @@ def test_management_can_discard_a_pending_capture(tmp_path: Path):
 def test_management_can_read_captured_review_without_local_paths(tmp_path: Path):
     job_id = "00000000-0000-0000-0000-000000000125"
     captured_id = document_id_for_relative_path("3_capturado/03 El loco.md")
-    original = tmp_path / "1_volcado" / "03 El loco.pdf"
+    original = tmp_path / "1_volcado" / "03 El loco.docx"
     original.parent.mkdir()
-    original.write_bytes(b"%PDF-1.7")
+    document = Document()
+    document.add_paragraph("Original de oficina")
+    document.save(original)
     captured = tmp_path / "3_capturado" / "03 El loco.md"
     captured.parent.mkdir()
     captured.write_text(
@@ -1027,7 +1030,7 @@ def test_management_can_read_captured_review_without_local_paths(tmp_path: Path)
             assert value == job_id
             return {"job": {
                 "job_id": job_id,
-                "source_relative_path": "1_volcado/03 El loco.pdf",
+                "source_relative_path": "1_volcado/03 El loco.docx",
                 "clean_artifact": "3_capturado/03 El loco.md",
             }}
 
@@ -1044,11 +1047,12 @@ def test_management_can_read_captured_review_without_local_paths(tmp_path: Path)
 
     review = agent.read_flow_review("token-a", "00000000-0000-0000-0000-000000000001", job_id)
     source = agent.read_flow_review_source("token-a", "00000000-0000-0000-0000-000000000001", job_id)
+    preview = agent.read_flow_review_source_preview("token-a", "00000000-0000-0000-0000-000000000001", job_id)
 
     assert review == {
         "job_id": job_id,
-        "title": "03 El loco.pdf",
-        "source": {"filename": "03 El loco.pdf", "media_type": "application/pdf", "size_bytes": 8},
+        "title": "03 El loco.docx",
+        "source": {"filename": "03 El loco.docx", "media_type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "size_bytes": original.stat().st_size},
         "captured": {
             "document_id": captured_id,
             "revision": 4,
@@ -1057,8 +1061,29 @@ def test_management_can_read_captured_review_without_local_paths(tmp_path: Path)
         },
     }
     assert str(tmp_path) not in str(review)
-    assert source.path.read_bytes() == b"%PDF-1.7"
-    assert source.media_type == "application/pdf"
+    assert source.path == original
+    assert source.media_type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    assert preview == {"body_markdown": "Original de oficina", "truncated": False}
+    assert str(tmp_path) not in str(preview)
+
+    from http.server import ThreadingHTTPServer
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), _handler_for(agent))
+    thread = Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        connection = HTTPConnection("127.0.0.1", server.server_port, timeout=2)
+        connection.request(
+            "GET", f"/v1/flow/reviews/{job_id}/source-preview?org_id=00000000-0000-0000-0000-000000000001",
+            headers={"Origin": "http://localhost:3000", "Authorization": "Bearer token-a"},
+        )
+        response = connection.getresponse()
+        assert response.status == 200
+        assert json.loads(response.read()) == preview
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
 
 
 def test_management_can_refine_pending_capture_before_supabase_catalogue_sync(tmp_path: Path):

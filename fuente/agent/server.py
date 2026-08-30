@@ -30,10 +30,13 @@ from fuente.domain.paths import SourcePathAuthorizer, document_id_for_relative_p
 from fuente.domain.documents import content_hash_for_markdown
 from fuente.domain.frontmatter import FrontmatterError, parse_frontmatter
 from fuente.domain.vault_layout import VaultLayout
+from fuente.extractors.base import ExtractionResult
+from fuente.extractors.office_pdf import TextAndOfficeExtractor
 from fuente.infrastructure.atomic_files import atomic_copy, atomic_write_json
 
 
 AGENT_VERSION = "0.1"
+SOURCE_PREVIEW_MAX_CHARS = 1_000_000
 DEFAULT_ALLOWED_ORIGINS = frozenset({
     "https://gestajo.vercel.app",
     "https://gestajo-git-dev-emilio-sevilla-ortego-projects.vercel.app",
@@ -516,7 +519,7 @@ class GestajoAgent:
             "platform": platform.system(),
             "user_id": binding.user_id,
             "vault_fingerprint": self._vault_fingerprint(),
-            "capabilities": ["flow", "flow_import", "flow_approve", "flow_jobs", "flow_job_detail", "flow_job_resume", "flow_job_cancel", "flow_review", "flow_review_captured", "flow_discard", "quarantine_read", "quarantine_restore", "settings", "sync_inputs", "sync_run", "sync_output", "sync_conflict_read", "sync_conflict_resolve", "document_conflict_read", "document_conflict_resolve", "taxonomy_read", "taxonomy_write", "note_read", "note_search", "note_relations", "note_lineage", "note_export", "note_write", "note_theme", "note_merge", "note_approve_processed", "note_share", "note_assistant", "note_assistant_persist", "knowledge_assistant", "templates_read", "templates_write"],
+            "capabilities": ["flow", "flow_import", "flow_approve", "flow_jobs", "flow_job_detail", "flow_job_resume", "flow_job_cancel", "flow_review", "flow_review_captured", "flow_review_source_preview", "flow_discard", "quarantine_read", "quarantine_restore", "settings", "sync_inputs", "sync_run", "sync_output", "sync_conflict_read", "sync_conflict_resolve", "document_conflict_read", "document_conflict_resolve", "taxonomy_read", "taxonomy_write", "note_read", "note_search", "note_relations", "note_lineage", "note_export", "note_write", "note_theme", "note_merge", "note_approve_processed", "note_share", "note_assistant", "note_assistant_persist", "knowledge_assistant", "templates_read", "templates_write"],
         }
 
     def taxonomy(self, access_token: object, org_id: object) -> dict[str, object]:
@@ -793,6 +796,28 @@ class GestajoAgent:
             path=source_path,
             media_type=_flow_review_media_type(source_path),
         )
+
+    def read_flow_review_source_preview(self, access_token: object, org_id: object, job_id: object) -> dict[str, object]:
+        """Extract an unsupported original locally for its Gestajo side-by-side review."""
+        binding = self._require_management(access_token, org_id)
+        try:
+            valid_job_id = str(uuid.UUID(str(job_id)))
+        except (ValueError, AttributeError) as error:
+            raise AgentError("Caudal job is invalid") from error
+        detail = self._local_backend().get_job_detail(valid_job_id)
+        job = detail.get("job") if isinstance(detail, Mapping) else None
+        if not isinstance(job, Mapping):
+            raise AgentError("local Caudal job is invalid")
+        _source_relative, source_path, captured_relative, _captured_path = _flow_review_artifacts(
+            self._local_backend(), job, valid_job_id,
+        )
+        preview = _flow_review_source_preview(source_path)
+        captured_id = document_id_for_relative_path(captured_relative)
+        self._record_audit(binding, self._access_token(access_token), _new_audit_event(
+            captured_id, str(org_id), str(uuid.UUID(str(org_id))), binding.user_id,
+            "caudal_review_original_preview", "success",
+        ))
+        return preview
 
     def read_flow_review_captured(self, access_token: object, org_id: object, job_id: object) -> dict[str, object]:
         """Read the captured note while its Caudal approval is still pending locally."""
@@ -1588,13 +1613,18 @@ def _handler_for(agent: GestajoAgent) -> type[BaseHTTPRequestHandler]:
             if parsed.path.startswith("/v1/flow/reviews/"):
                 review_route = parsed.path.removeprefix("/v1/flow/reviews/")
                 parts = review_route.split("/")
-                if len(parts) not in {1, 2} or not parts[0] or (len(parts) == 2 and parts[1] not in {"source", "captured"}):
+                if len(parts) not in {1, 2} or not parts[0] or (len(parts) == 2 and parts[1] not in {"source", "source-preview", "captured"}):
                     self._send_error(HTTPStatus.NOT_FOUND, "route not found")
                     return
                 job_id = parts[0]
                 if len(parts) == 2 and parts[1] == "source":
                     self._authorized_file(
                         lambda token: agent.read_flow_review_source(token, _single_query_value(parsed.query, "org_id"), job_id)
+                    )
+                    return
+                if len(parts) == 2 and parts[1] == "source-preview":
+                    self._authorized(
+                        lambda token: agent.read_flow_review_source_preview(token, _single_query_value(parsed.query, "org_id"), job_id)
                     )
                     return
                 if len(parts) == 2:
@@ -2231,6 +2261,21 @@ def _flow_review_artifacts(backend: Any, job: Mapping[str, object], job_id: str)
 def _flow_review_media_type(path: Path) -> str:
     media_type = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
     return "text/plain; charset=utf-8" if media_type in {"text/html", "application/xhtml+xml"} else media_type
+
+
+def _flow_review_source_preview(path: Path) -> dict[str, object]:
+    """Build a bounded Markdown preview without sending the source outside the device."""
+    extractor = TextAndOfficeExtractor()
+    if not extractor.can_handle(path):
+        raise AgentError("the original format cannot be previewed locally")
+    try:
+        result = extractor._extract_native(path, {"original_file": path.name, "format": path.suffix.lower()})
+    except (OSError, RuntimeError, ValueError) as error:
+        raise AgentError("the original could not be previewed locally") from error
+    content = result.content if isinstance(result, ExtractionResult) else result
+    if not isinstance(content, str) or not content.strip():
+        raise AgentError("the original could not be previewed locally")
+    return {"body_markdown": content[:SOURCE_PREVIEW_MAX_CHARS], "truncated": len(content) > SOURCE_PREVIEW_MAX_CHARS}
 
 
 def _note_export_format(value: object) -> str:

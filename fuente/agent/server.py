@@ -573,7 +573,10 @@ class GestajoAgent:
             control.ingestion.resume(job_id)
         except (OSError, RuntimeError, ValueError) as error:
             raise AgentError("Caudal recorded the approval but could not continue the job") from error
-        return _flow_response(self._read_flow())
+        result = _flow_response(self._read_flow())
+        if source_stage == "3_capturado":
+            result["processed_notes"] = _flow_processed_notes(control, job)
+        return result
 
     def read_flow_review(self, access_token: object, org_id: object, job_id: object) -> dict[str, object]:
         """Return the safe original/captured review projection for Gestajo."""
@@ -1613,6 +1616,35 @@ def _flow_response(state: Mapping[str, object]) -> dict[str, object]:
         ],
         "pending_reviews": [_flow_review_summary(item) for item in approvals if isinstance(item, Mapping) and _flow_review_summary(item) is not None],
     }
+
+
+def _flow_processed_notes(control: Any, job: Mapping[str, object]) -> list[dict[str, str]]:
+    """Return only the local generation projection needed by Gestajo."""
+    captured = _safe_sync_relative(job.get("clean_artifact"))
+    store = getattr(getattr(control, "ingestion", None), "job_store", None)
+    if captured is None or store is None:
+        return []
+    try:
+        source_id = document_id_for_relative_path(captured)
+        source = store.get_note(source_id)
+        if not isinstance(source, Mapping):
+            return []
+        rows = store.list_generated_note_lineage(
+            source_note_id=source_id,
+            source_revision=int(source["revision"]),
+            source_content_hash=str(source["content_hash"]),
+        )
+    except (KeyError, TypeError, ValueError):
+        return []
+    return [
+        {
+            "document_id": str(row["generated_note_id"]),
+            "note_type": str(row["note_type"]),
+            "model": str(row["model"]),
+        }
+        for row in rows
+        if isinstance(row, Mapping)
+    ]
 
 
 def _flow_approval_payload(payload: object) -> str:

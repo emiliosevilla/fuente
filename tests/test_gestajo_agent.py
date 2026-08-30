@@ -515,6 +515,14 @@ def test_management_can_approve_captured_content_for_local_processing(tmp_path: 
 
     class Ingestion:
         transition_approvals = Approvals()
+        job_store = type("Store", (), {
+            "get_note": staticmethod(lambda _note_id: {"revision": 2, "content_hash": "c" * 64}),
+            "list_generated_note_lineage": staticmethod(lambda **_kwargs: [{
+                "generated_note_id": "00000000-0000-0000-0000-000000000010",
+                "note_type": "resumen",
+                "model": "qwen2.5:7b",
+            }]),
+        })()
 
         def resume(self, value):
             calls.append(("resume", value))
@@ -543,13 +551,18 @@ def test_management_can_approve_captured_content_for_local_processing(tmp_path: 
     )
     agent.claim("token-a", {"supabase_url": "https://project.supabase.co", "publishable_key": "sb_publishable_test_key"})
 
-    agent.approve_flow_transition("token-a", "00000000-0000-0000-0000-000000000001", {"job_id": job_id})
+    result = agent.approve_flow_transition("token-a", "00000000-0000-0000-0000-000000000001", {"job_id": job_id})
 
     assert calls == [
         ("begin_review", job_id, "3_capturado", "4_procesado", 1, "c" * 64, USER_A),
         ("approve", job_id, "3_capturado", "4_procesado", 1, "c" * 64, USER_A),
         ("resume", job_id),
     ]
+    assert result["processed_notes"] == [{
+        "document_id": "00000000-0000-0000-0000-000000000010",
+        "note_type": "resumen",
+        "model": "qwen2.5:7b",
+    }]
 
 
 def test_management_can_discard_a_pending_capture(tmp_path: Path):

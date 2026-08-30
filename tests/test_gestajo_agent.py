@@ -98,7 +98,7 @@ def test_status_requires_the_bound_user(tmp_path: Path):
     )
 
     assert agent.status("token-a")["claimed"] is True
-    assert agent.status("token-a")["capabilities"] == ["flow", "flow_import", "flow_approve", "flow_jobs", "flow_job_detail", "flow_job_resume", "flow_job_cancel", "flow_review", "flow_review_captured", "flow_review_source_preview", "flow_discard", "quarantine_read", "quarantine_restore", "settings", "sync_inputs", "sync_run", "sync_output", "sync_conflict_read", "sync_conflict_resolve", "document_conflict_read", "document_conflict_resolve", "taxonomy_read", "taxonomy_write", "note_read", "note_search", "note_relations", "note_graph", "note_lineage", "note_export", "note_write", "note_create", "note_theme", "note_merge", "note_approve_processed", "note_share", "note_assistant", "note_assistant_persist", "knowledge_assistant", "templates_read", "templates_write"]
+    assert agent.status("token-a")["capabilities"] == ["flow", "flow_import", "flow_approve", "flow_jobs", "flow_job_detail", "flow_job_resume", "flow_job_cancel", "flow_review", "flow_review_captured", "flow_review_source_preview", "flow_discard", "quarantine_read", "quarantine_restore", "settings", "sync_inputs", "sync_run", "sync_output", "sync_conflict_read", "sync_conflict_resolve", "document_conflict_read", "document_conflict_resolve", "taxonomy_read", "taxonomy_write", "note_read", "note_search", "note_feed", "note_relations", "note_graph", "note_lineage", "note_export", "note_write", "note_create", "note_theme", "note_merge", "note_approve_processed", "note_share", "note_assistant", "note_assistant_persist", "knowledge_assistant", "templates_read", "templates_write"]
     with pytest.raises(AgentAuthenticationError, match="another user"):
         agent.status("token-b")
 
@@ -1389,6 +1389,36 @@ def test_note_graph_only_contains_the_active_suborganization_visible_nodes(tmp_p
 
     assert response.status == 200
     assert route_graph == graph
+
+
+def test_note_feed_exposes_only_visible_local_excerpts_without_paths(tmp_path: Path):
+    org_id = "00000000-0000-0000-0000-000000000001"
+    visible_id = "00000000-0000-0000-0000-000000000010"
+    hidden_id = "00000000-0000-0000-0000-000000000011"
+
+    class Backend:
+        @staticmethod
+        def list_feed(cursor, limit, filters, order):
+            assert (cursor, limit, filters, order) == (None, 30, {}, "date")
+            return {"items": [
+                {"document_id": visible_id, "title": "Agenda", "seal": "approved", "updated_at": "2026-08-30T10:00:00Z", "theme": "General", "issue": "_Sin_Cuestion", "note_type": "reunion", "origin_kind": "working_document", "urgency": None, "excerpt": "Resumen visible", "author": "Fuente", "relative_path": "/private/agenda.md"},
+                {"document_id": hidden_id, "title": "Privada ajena", "seal": "approved", "updated_at": "2026-08-30T09:00:00Z", "theme": "General", "issue": "_Sin_Cuestion", "note_type": "summary", "origin_kind": None, "urgency": None, "excerpt": "No visible", "author": "Fuente"},
+            ], "next_cursor": None, "has_more": False}
+
+    audits: list[dict[str, object]] = []
+    agent = GestajoAgent(
+        tmp_path, verifier=_verifier, publisher=_publisher, membership_verifier=_membership_verifier,
+        backend_factory=lambda _vault: Backend(), visible_note_ids_reader=lambda *_args: {visible_id},
+        audit_publisher=lambda _binding, _token, event: audits.append(event),
+    )
+    agent.claim("token-a", {"supabase_url": "https://project.supabase.co", "publishable_key": "sb_publishable_test_key"})
+
+    feed = agent.read_note_feed("token-a", org_id, None, None, None)
+
+    assert feed == {"items": [{"document_id": visible_id, "title": "Agenda", "seal": "approved", "updated_at": "2026-08-30T10:00:00Z", "theme": "General", "issue": "_Sin_Cuestion", "note_type": "reunion", "origin_kind": "working_document", "urgency": None, "excerpt": "Resumen visible", "author": "Fuente"}], "next_cursor": None, "has_more": False}
+    assert "/private" not in str(feed)
+    assert hidden_id not in str(feed)
+    assert audits[0]["action"] == "note_feed_read"
 
 
 def test_flow_rejects_consulta(tmp_path: Path):

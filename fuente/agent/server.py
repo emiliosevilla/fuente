@@ -30,6 +30,7 @@ from fuente.domain.paths import SourcePathAuthorizer, document_id_for_relative_p
 from fuente.domain.documents import content_hash_for_markdown
 from fuente.domain.frontmatter import FrontmatterError, parse_frontmatter
 from fuente.domain.vault_layout import VaultLayout
+from fuente.application.feed import DEFAULT_FEED_LIMIT, FEED_ORDERS, MAX_CURSOR_LENGTH, MAX_FEED_LIMIT
 from fuente.extractors.base import ExtractionResult
 from fuente.extractors.office_pdf import TextAndOfficeExtractor
 from fuente.infrastructure.atomic_files import atomic_copy, atomic_write_json
@@ -556,7 +557,7 @@ class GestajoAgent:
             "platform": platform.system(),
             "user_id": binding.user_id,
             "vault_fingerprint": self._vault_fingerprint(),
-            "capabilities": ["flow", "flow_import", "flow_approve", "flow_jobs", "flow_job_detail", "flow_job_resume", "flow_job_cancel", "flow_review", "flow_review_captured", "flow_review_source_preview", "flow_discard", "quarantine_read", "quarantine_restore", "settings", "sync_inputs", "sync_run", "sync_output", "sync_conflict_read", "sync_conflict_resolve", "document_conflict_read", "document_conflict_resolve", "taxonomy_read", "taxonomy_write", "note_read", "note_search", "note_relations", "note_graph", "note_lineage", "note_export", "note_write", "note_create", "note_theme", "note_merge", "note_approve_processed", "note_share", "note_assistant", "note_assistant_persist", "knowledge_assistant", "templates_read", "templates_write"],
+            "capabilities": ["flow", "flow_import", "flow_approve", "flow_jobs", "flow_job_detail", "flow_job_resume", "flow_job_cancel", "flow_review", "flow_review_captured", "flow_review_source_preview", "flow_discard", "quarantine_read", "quarantine_restore", "settings", "sync_inputs", "sync_run", "sync_output", "sync_conflict_read", "sync_conflict_resolve", "document_conflict_read", "document_conflict_resolve", "taxonomy_read", "taxonomy_write", "note_read", "note_search", "note_feed", "note_relations", "note_graph", "note_lineage", "note_export", "note_write", "note_create", "note_theme", "note_merge", "note_approve_processed", "note_share", "note_assistant", "note_assistant_persist", "knowledge_assistant", "templates_read", "templates_write"],
         }
 
     def taxonomy(self, access_token: object, org_id: object) -> dict[str, object]:
@@ -1415,6 +1416,28 @@ class GestajoAgent:
         ))
         return result
 
+    def read_note_feed(
+        self, access_token: object, org_id: object, cursor: object, limit: object, order: object,
+    ) -> dict[str, object]:
+        binding = self._require_user(access_token)
+        if not isinstance(org_id, str):
+            raise AgentAuthorizationError("organization is invalid")
+        try:
+            normalized_org_id = str(uuid.UUID(org_id))
+        except ValueError as error:
+            raise AgentAuthorizationError("organization is invalid") from error
+        self._membership_verifier(binding, self._access_token(access_token), normalized_org_id)
+        valid_cursor, valid_limit, valid_order = _note_feed_request(cursor, limit, order)
+        page = self._local_backend().list_feed(valid_cursor, valid_limit, {}, valid_order)
+        if not isinstance(page, Mapping):
+            raise AgentError("local note feed returned an invalid response")
+        visible_ids = self._visible_note_ids_reader(binding, self._access_token(access_token), normalized_org_id)
+        result = _note_feed_response(page, visible_ids)
+        self._record_audit(binding, self._access_token(access_token), _new_audit_event(
+            None, normalized_org_id, normalized_org_id, binding.user_id, "note_feed_read", "success",
+        ))
+        return result
+
     def read_note_lineage(self, access_token: object, org_id: object, note_id: object) -> dict[str, object]:
         binding = self._require_user(access_token)
         if not isinstance(org_id, str) or not isinstance(note_id, str):
@@ -1768,6 +1791,16 @@ def _handler_for(agent: GestajoAgent) -> type[BaseHTTPRequestHandler]:
                     lambda token: agent.search_notes(
                         token, _single_query_value(parsed.query, "org_id"),
                         _single_query_value(parsed.query, "mode"), _single_query_value(parsed.query, "q"),
+                    )
+                )
+                return
+            if parsed.path == "/v1/notes/feed":
+                self._authorized(
+                    lambda token: agent.read_note_feed(
+                        token, _single_query_value(parsed.query, "org_id"),
+                        _optional_query_value(parsed.query, "cursor"),
+                        _optional_query_value(parsed.query, "limit"),
+                        _optional_query_value(parsed.query, "order"),
                     )
                 )
                 return
@@ -2803,6 +2836,52 @@ def _note_search_request(mode: object, query: object) -> tuple[str, str]:
     if not isinstance(query, str) or not (1 <= len(query.strip()) <= 512):
         raise AgentError("note search query is invalid")
     return mode, query.strip()
+
+
+def _note_feed_request(cursor: object, limit: object, order: object) -> tuple[str | None, int, str]:
+    if cursor is not None and (not isinstance(cursor, str) or len(cursor) > MAX_CURSOR_LENGTH):
+        raise AgentError("note feed cursor is invalid")
+    if limit is None:
+        valid_limit = DEFAULT_FEED_LIMIT
+    elif isinstance(limit, str) and limit.isdecimal():
+        valid_limit = int(limit)
+    else:
+        raise AgentError("note feed limit is invalid")
+    if not 1 <= valid_limit <= MAX_FEED_LIMIT:
+        raise AgentError("note feed limit is invalid")
+    valid_order = "date" if order is None else order
+    if valid_order not in FEED_ORDERS:
+        raise AgentError("note feed order is invalid")
+    return cursor, valid_limit, valid_order
+
+
+def _note_feed_response(value: Mapping[str, object], visible_ids: set[str]) -> dict[str, object]:
+    items = value.get("items")
+    if not isinstance(items, list) or len(items) > MAX_FEED_LIMIT:
+        raise AgentError("local note feed returned an invalid response")
+    next_cursor, has_more = value.get("next_cursor"), value.get("has_more")
+    if next_cursor is not None and (not isinstance(next_cursor, str) or len(next_cursor) > MAX_CURSOR_LENGTH):
+        raise AgentError("local note feed returned an invalid response")
+    if not isinstance(has_more, bool):
+        raise AgentError("local note feed returned an invalid response")
+    safe_items = []
+    for item in items:
+        if not isinstance(item, Mapping):
+            raise AgentError("local note feed returned an invalid item")
+        try:
+            document_id = str(uuid.UUID(str(item["document_id"])))
+        except (KeyError, TypeError, ValueError) as error:
+            raise AgentError("local note feed returned an invalid item") from error
+        if document_id not in visible_ids:
+            continue
+        fields = {name: item.get(name) for name in ("title", "seal", "updated_at", "theme", "issue", "note_type", "excerpt", "author")}
+        if any(not isinstance(field, str) or len(field) > 4_096 for field in fields.values()):
+            raise AgentError("local note feed returned an invalid item")
+        optional = {name: item.get(name) for name in ("origin_kind", "urgency")}
+        if any(field is not None and (not isinstance(field, str) or len(field) > 512) for field in optional.values()):
+            raise AgentError("local note feed returned an invalid item")
+        safe_items.append({"document_id": document_id, **fields, **optional})
+    return {"items": safe_items, "next_cursor": next_cursor, "has_more": has_more}
 
 
 def _note_search_response(value: object, mode: str, query: str) -> dict[str, object]:

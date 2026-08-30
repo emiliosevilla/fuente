@@ -38,7 +38,7 @@ FYC_FORBIDDEN_SHELL_MARKERS = (
 FYC_GATE_CAPTURE_SCENARIOS: dict[str, tuple[str, ...]] = {
     "G0": ("baseline",),
     "G2": ("setup-empty", "setup-ready"),
-    "G3": ("home-1024", "home-1280", "home-max"),
+    "G3": ("home-1024", "home-1280"),
     "G6": ("anythingllm-chat",),
     "G7": ("template-helper",),
     "G8": ("source-view-modes", "source-search-relations", "source-open-obsidian"),

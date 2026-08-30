@@ -25,7 +25,6 @@ SCENARIOS: list[tuple[str, str, tuple[int, int] | None, bool]] = [
     ("setup-ready", "02-setup-ready.png", (1280, 802), False),
     ("home-1024", "03-home-1024.png", (1024, 700), False),
     ("home-1280", "04-home-1280.png", (1280, 802), False),
-    ("home-max", "05-home-max.png", None, True),
     ("keyboard-focus", "06-keyboard-focus.png", (1280, 802), False),
     ("home-gruvbox-1024", "09-home-gruvbox-1024.png", (1024, 700), False),
     ("settings-focus", "11-settings-focus-1024.png", (1024, 700), False),

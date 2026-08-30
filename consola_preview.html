@@ -5252,10 +5252,6 @@ document.addEventListener('keydown', handleShellKeydown);
                 renderSetupSettings({setup_mode: true, obsidian_installed: true});
                 const pathInput = document.getElementById('setting-vault-path');
                 if (pathInput && !pathInput.value) pathInput.value = '/Users/emiliosevillaortego/Documents/Fuente_Vault';
-            } else if (name === 'home-max') {
-                switchWorkspace('home');
-            } else if (name === 'home-1440') {
-                switchWorkspace('home');
             } else if (name === 'keyboard-focus') {
                 switchWorkspace('home');
                 const homeButton = document.querySelector('#primary-navigation .workspace-trigger');

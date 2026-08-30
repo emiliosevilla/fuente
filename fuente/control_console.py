@@ -2851,7 +2851,7 @@ def launch_control_console(vault_path: Optional[Path] = None):
                 height=850,
                 min_size=(980, 680),
                 background_color="#ECEFF4",
-                hidden=True,
+                hidden=os.environ.get("FUENTE_CAPTURE_DRIVER") != "1",
             )
             api.set_window(window)
             _start_capture_driver(window)

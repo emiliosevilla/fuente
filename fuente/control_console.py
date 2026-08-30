@@ -864,6 +864,20 @@ class FuenteConsoleBackend:
     def get_relation_preview(self, document_id: str) -> Dict[str, Any]:
         return self.get_notes_service().get_relation_preview(document_id)
 
+    def get_note_lineage(self, document_id: str) -> List[Dict[str, Any]]:
+        if self._job_store is None:
+            self._job_store = JobStore(self.vault.config.vault_path)
+        rows = self._job_store.list_generated_note_lineage_for_note(document_id)
+        return [{
+            "source_note_id": str(row["source_note_id"]),
+            "source_revision": int(row["source_revision"]),
+            "note_type": str(row["note_type"]),
+            "template_id": str(row["template_id"]),
+            "template_revision": int(row["template_revision"]),
+            "model": str(row["model"]),
+            "created_at": str(row["created_at"]),
+        } for row in rows]
+
     def list_feed(
         self,
         cursor: Optional[str],

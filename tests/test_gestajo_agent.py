@@ -96,7 +96,7 @@ def test_status_requires_the_bound_user(tmp_path: Path):
     )
 
     assert agent.status("token-a")["claimed"] is True
-    assert agent.status("token-a")["capabilities"] == ["flow", "flow_import", "flow_approve", "flow_review", "flow_review_captured", "flow_discard", "settings", "sync_inputs", "sync_run", "sync_output", "sync_conflict_read", "sync_conflict_resolve", "note_read", "note_relations", "note_write", "note_approve_processed", "note_share", "note_assistant", "templates_read", "templates_write"]
+    assert agent.status("token-a")["capabilities"] == ["flow", "flow_import", "flow_approve", "flow_review", "flow_review_captured", "flow_discard", "settings", "sync_inputs", "sync_run", "sync_output", "sync_conflict_read", "sync_conflict_resolve", "note_read", "note_relations", "note_lineage", "note_write", "note_approve_processed", "note_share", "note_assistant", "templates_read", "templates_write"]
     with pytest.raises(AgentAuthenticationError, match="another user"):
         agent.status("token-b")
 
@@ -136,6 +136,41 @@ def test_templates_are_readable_but_only_management_can_write(tmp_path: Path):
     assert agent.save_template("token-a", "00000000-0000-0000-0000-000000000001", "resumen", {"template": "x", "agents": "x", "expected_revision": 2}) == {"template_id": "resumen", "revision": 3, "template": "x", "agents": "x"}
     assert calls == [{"template_id": "resumen", "template": "x", "agents": "x", "expected_revision": 2}]
     assert [event["action"] for event in audits] == ["template_list", "template_read", "template_update"]
+
+
+def test_note_lineage_exposes_only_safe_processing_metadata(tmp_path: Path):
+    note_id = "00000000-0000-0000-0000-000000000010"
+
+    class Backend:
+        @staticmethod
+        def get_note_lineage(requested_note_id):
+            assert requested_note_id == note_id
+            return [{
+                "source_note_id": "00000000-0000-0000-0000-000000000001", "source_revision": 2,
+                "note_type": "resumen", "template_id": "resumen", "template_revision": 3,
+                "model": "qwen2.5:7b", "created_at": "2026-08-30T12:00:00+00:00",
+                "relative_path": "4_procesado/privado.md", "content_hash": "secret",
+            }]
+
+    audits: list[dict[str, object]] = []
+    agent = GestajoAgent(
+        tmp_path, verifier=_verifier, publisher=_publisher, management_verifier=_management_verifier,
+        membership_verifier=_membership_verifier, backend_factory=lambda _vault: Backend(),
+        note_visibility_verifier=lambda *_args: {"common_org_id": COMMON_ORG_ID},
+        audit_publisher=lambda _binding, _token, event: audits.append(event),
+    )
+    agent.claim("token-a", {"supabase_url": "https://project.supabase.co", "publishable_key": "sb_publishable_test_key"})
+
+    result = agent.read_note_lineage("token-a", "00000000-0000-0000-0000-000000000001", note_id)
+
+    assert result == {"records": [{
+        "source_note_id": "00000000-0000-0000-0000-000000000001", "source_revision": 2,
+        "note_type": "resumen", "template_id": "resumen", "template_revision": 3,
+        "model": "qwen2.5:7b", "created_at": "2026-08-30T12:00:00+00:00",
+    }]}
+    assert "relative_path" not in str(result)
+    assert "content_hash" not in str(result)
+    assert audits[0]["action"] == "note_lineage_read"
 
 
 def test_origin_and_claim_payload_fail_closed(tmp_path: Path):

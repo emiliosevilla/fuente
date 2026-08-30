@@ -403,7 +403,7 @@ class GestajoAgent:
             "platform": platform.system(),
             "user_id": binding.user_id,
             "vault_fingerprint": self._vault_fingerprint(),
-            "capabilities": ["flow", "flow_import", "flow_approve", "flow_review", "flow_review_captured", "flow_discard", "settings", "sync_inputs", "sync_run", "sync_output", "sync_conflict_read", "sync_conflict_resolve", "note_read", "note_relations", "note_write", "note_approve_processed", "note_share", "note_assistant", "templates_read", "templates_write"],
+            "capabilities": ["flow", "flow_import", "flow_approve", "flow_review", "flow_review_captured", "flow_discard", "settings", "sync_inputs", "sync_run", "sync_output", "sync_conflict_read", "sync_conflict_resolve", "note_read", "note_relations", "note_lineage", "note_write", "note_approve_processed", "note_share", "note_assistant", "templates_read", "templates_write"],
         }
 
     def flow(self, access_token: object, org_id: object) -> dict[str, object]:
@@ -827,6 +827,18 @@ class GestajoAgent:
         ))
         return result
 
+    def read_note_lineage(self, access_token: object, org_id: object, note_id: object) -> dict[str, object]:
+        binding = self._require_user(access_token)
+        if not isinstance(org_id, str) or not isinstance(note_id, str):
+            raise AgentAuthorizationError("note is invalid")
+        self._membership_verifier(binding, self._access_token(access_token), org_id)
+        scope = self._note_visibility_verifier(binding, self._access_token(access_token), note_id)
+        result = _note_lineage_response(self._local_backend().get_note_lineage(note_id))
+        self._record_audit(binding, self._access_token(access_token), _new_audit_event(
+            note_id, str(org_id), scope["common_org_id"], binding.user_id, "note_lineage_read", "success",
+        ))
+        return result
+
     def share_note(self, access_token: object, org_id: object, note_id: object, payload: object) -> dict[str, object]:
         binding = self._require_management(access_token, org_id)
         if not isinstance(note_id, str):
@@ -1117,6 +1129,13 @@ def _handler_for(agent: GestajoAgent) -> type[BaseHTTPRequestHandler]:
                         self._send_error(HTTPStatus.NOT_FOUND, "route not found")
                         return
                     self._authorized(lambda token: agent.read_note_relations(token, _single_query_value(parsed.query, "org_id"), note_id))
+                    return
+                if note_id.endswith("/lineage"):
+                    note_id = note_id.removesuffix("/lineage")
+                    if not note_id or "/" in note_id:
+                        self._send_error(HTTPStatus.NOT_FOUND, "route not found")
+                        return
+                    self._authorized(lambda token: agent.read_note_lineage(token, _single_query_value(parsed.query, "org_id"), note_id))
                     return
                 if not note_id or "/" in note_id:
                     self._send_error(HTTPStatus.NOT_FOUND, "route not found")
@@ -1556,6 +1575,30 @@ def _note_relations_response(value: object) -> dict[str, object]:
             for item in outgoing if isinstance(item, Mapping)
         ][:24],
     }
+
+
+def _note_lineage_response(value: object) -> dict[str, object]:
+    if not isinstance(value, list):
+        raise AgentError("local note lineage returned an invalid response")
+    records: list[dict[str, object]] = []
+    for item in value[:24]:
+        if not isinstance(item, Mapping):
+            continue
+        source_note_id, source_revision = item.get("source_note_id"), item.get("source_revision")
+        template_id, template_revision = item.get("template_id"), item.get("template_revision")
+        note_type, model, created_at = item.get("note_type"), item.get("model"), item.get("created_at")
+        if not isinstance(source_note_id, str) or not isinstance(source_revision, int):
+            continue
+        if not isinstance(template_id, str) or not isinstance(template_revision, int):
+            continue
+        if not isinstance(note_type, str) or not isinstance(model, str) or not isinstance(created_at, str):
+            continue
+        records.append({
+            "source_note_id": source_note_id[:64], "source_revision": source_revision,
+            "note_type": note_type[:64], "template_id": template_id[:64],
+            "template_revision": template_revision, "model": model[:256], "created_at": created_at[:64],
+        })
+    return {"records": records}
 
 
 def _template_id(value: object) -> str:

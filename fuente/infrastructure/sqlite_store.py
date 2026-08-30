@@ -629,6 +629,17 @@ class JobStore:
         ).fetchall()
         return [dict(row) for row in rows]
 
+    def list_generated_note_lineage_for_note(self, generated_note_id: str) -> list[dict[str, Any]]:
+        rows = self._connection.execute(
+            """
+            SELECT * FROM generated_note_lineage
+            WHERE generated_note_id = ?
+            ORDER BY created_at DESC, lineage_id DESC
+            """,
+            (generated_note_id,),
+        ).fetchall()
+        return [dict(row) for row in rows]
+
     def invalidate_processed_approval(self, note_id: str) -> None:
         self._connection.execute(
             """

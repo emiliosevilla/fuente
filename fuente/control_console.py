@@ -856,6 +856,35 @@ class FuenteConsoleBackend:
             "path": note.relative_path,
         }
 
+    def create_assistant_note(
+        self,
+        source_document_id: str,
+        title: str,
+        kind: str,
+        body_markdown: str,
+        model: str,
+    ) -> Dict[str, Any]:
+        try:
+            note = self.get_notes_service().create_assistant_note(
+                source_document_id,
+                title=title,
+                kind=kind,
+                body_markdown=body_markdown,
+                model=model,
+            )
+        except PathAuthorizationError as error:
+            return self._path_error(error)
+        except (TypeError, ValueError, OSError) as error:
+            return {"error": "note_assistant_create_failed", "message": str(error)}
+        return {
+            "status": "created",
+            "document_id": note.document_id,
+            "revision": note.revision,
+            "content_hash": note.content_hash,
+            "title": note.title,
+            "path": note.relative_path,
+        }
+
     def move_notes_to_theme(
         self, document_ids: list[str], target_theme: str
     ) -> Dict[str, Any]:

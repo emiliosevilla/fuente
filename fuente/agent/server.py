@@ -510,7 +510,7 @@ class GestajoAgent:
             "platform": platform.system(),
             "user_id": binding.user_id,
             "vault_fingerprint": self._vault_fingerprint(),
-            "capabilities": ["flow", "flow_import", "flow_approve", "flow_jobs", "flow_job_detail", "flow_job_resume", "flow_job_cancel", "flow_review", "flow_review_captured", "flow_discard", "settings", "sync_inputs", "sync_run", "sync_output", "sync_conflict_read", "sync_conflict_resolve", "document_conflict_read", "document_conflict_resolve", "note_read", "note_search", "note_relations", "note_lineage", "note_write", "note_merge", "note_approve_processed", "note_share", "note_assistant", "knowledge_assistant", "templates_read", "templates_write"],
+            "capabilities": ["flow", "flow_import", "flow_approve", "flow_jobs", "flow_job_detail", "flow_job_resume", "flow_job_cancel", "flow_review", "flow_review_captured", "flow_discard", "settings", "sync_inputs", "sync_run", "sync_output", "sync_conflict_read", "sync_conflict_resolve", "document_conflict_read", "document_conflict_resolve", "note_read", "note_search", "note_relations", "note_lineage", "note_write", "note_merge", "note_approve_processed", "note_share", "note_assistant", "note_assistant_persist", "knowledge_assistant", "templates_read", "templates_write"],
         }
 
     def flow(self, access_token: object, org_id: object) -> dict[str, object]:
@@ -1116,6 +1116,43 @@ class GestajoAgent:
         ))
         return answer
 
+    def create_note_from_assistant(
+        self, access_token: object, org_id: object, note_id: object, payload: object,
+    ) -> dict[str, object]:
+        """Keep an explicitly saved local assistant result as a reviewable Note."""
+        binding = self._require_management(access_token, org_id)
+        if not isinstance(note_id, str):
+            raise AgentAuthorizationError("note is invalid")
+        title, kind, body_markdown, model = _assistant_note_create_payload(payload)
+        scope = self._note_visibility_verifier(
+            binding, self._access_token(access_token), note_id
+        )
+        local = _note_create_response(self._local_backend().create_assistant_note(
+            note_id, title, kind, body_markdown, model,
+        ))
+        created_note_id = str(local["document_id"])
+        metadata = _document_note_sync_payload(
+            local, self._document_outbox().get_note(created_note_id) or {},
+            binding, str(org_id),
+        )
+        try:
+            self._note_metadata_publisher(binding, self._access_token(access_token), metadata)
+            self._document_outbox().delete_document_outbox(
+                _metadata_outbox_id(created_note_id)
+            )
+            sync_state = "synced"
+        except AgentSyncError:
+            self._document_outbox().upsert_document_outbox(
+                outbox_id=_metadata_outbox_id(created_note_id),
+                kind="note_metadata", payload=metadata,
+            )
+            sync_state = "pending_sync"
+        self._record_audit(binding, self._access_token(access_token), _new_audit_event(
+            created_note_id, str(org_id), scope["common_org_id"], binding.user_id,
+            "note_assistant_persist", sync_state, llm_model=model,
+        ))
+        return {**local, "sync_state": sync_state}
+
     def ask_knowledge_assistant(self, access_token: object, org_id: object, payload: object) -> dict[str, object]:
         """Run the existing local retrieval assistant over this user's Knowledge Base."""
         binding = self._require_management(access_token, org_id)
@@ -1519,6 +1556,7 @@ def _handler_for(agent: GestajoAgent) -> type[BaseHTTPRequestHandler]:
             parsed = urlparse(self.path)
             note_route = parsed.path.removeprefix("/v1/notes/")
             is_note_share = note_route.endswith("/share") and bool(note_route.removesuffix("/share")) and "/" not in note_route.removesuffix("/share")
+            is_note_assistant_output = note_route.endswith("/assistant-output") and bool(note_route.removesuffix("/assistant-output")) and "/" not in note_route.removesuffix("/assistant-output")
             is_note_assistant = note_route.endswith("/assistant") and bool(note_route.removesuffix("/assistant")) and "/" not in note_route.removesuffix("/assistant")
             is_note_processed_approval = note_route.endswith("/approve-processed") and bool(note_route.removesuffix("/approve-processed")) and "/" not in note_route.removesuffix("/approve-processed")
             is_note_merge = parsed.path == "/v1/notes/merge"
@@ -1536,14 +1574,14 @@ def _handler_for(agent: GestajoAgent) -> type[BaseHTTPRequestHandler]:
             is_template_save = bool(template_id) and "/" not in template_id
             conflict_route = parsed.path.removeprefix("/v1/document-conflicts/") if parsed.path.startswith("/v1/document-conflicts/") else ""
             is_document_conflict_resolve = conflict_route.endswith("/resolve") and bool(conflict_route.removesuffix("/resolve")) and "/" not in conflict_route.removesuffix("/resolve")
-            if not (is_note_merge or is_note_update or is_note_share or is_note_assistant or is_note_processed_approval or is_knowledge_assistant or is_flow_job_resume or is_flow_job_cancel or is_review_captured_update or is_review_captured_assistant or is_template_save or is_document_conflict_resolve) and parsed.path not in {
+            if not (is_note_merge or is_note_update or is_note_share or is_note_assistant or is_note_assistant_output or is_note_processed_approval or is_knowledge_assistant or is_flow_job_resume or is_flow_job_cancel or is_review_captured_update or is_review_captured_assistant or is_template_save or is_document_conflict_resolve) and parsed.path not in {
                 "/v1/claim", "/v1/flow/import", "/v1/flow/approve", "/v1/flow/discard", "/v1/settings", "/v1/sync-inputs/select", "/v1/sync-inputs/run", "/v1/sync-outputs/run", "/v1/sync-conflicts/read", "/v1/sync-conflicts/resolve",
                 "/v1/sync-inputs/confirm", "/v1/sync-inputs/enabled", "/v1/sync-inputs/remove", "/v1/sync",
             }:
                 self._send_error(HTTPStatus.NOT_FOUND, "route not found")
                 return
             try:
-                payload = self._json_body(max_bytes=10_000_000 if is_note_update or is_review_captured_update else 16_384)
+                payload = self._json_body(max_bytes=10_000_000 if is_note_update or is_review_captured_update else 524_288 if is_note_assistant_output else 16_384)
             except AgentError as error:
                 self._send_error(HTTPStatus.BAD_REQUEST, str(error))
                 return
@@ -1576,6 +1614,9 @@ def _handler_for(agent: GestajoAgent) -> type[BaseHTTPRequestHandler]:
                 return
             if is_note_processed_approval:
                 self._authorized(lambda token: agent.approve_processed_note(token, _single_query_value(parsed.query, "org_id"), note_route.removesuffix("/approve-processed"), payload))
+                return
+            if is_note_assistant_output:
+                self._authorized(lambda token: agent.create_note_from_assistant(token, _single_query_value(parsed.query, "org_id"), note_route.removesuffix("/assistant-output"), payload))
                 return
             if is_note_assistant:
                 self._authorized(lambda token: agent.ask_note_assistant(token, _single_query_value(parsed.query, "org_id"), note_route.removesuffix("/assistant"), payload))
@@ -2052,6 +2093,30 @@ def _note_assistant_payload(payload: object) -> str:
     if not isinstance(message, str) or not 1 <= len(message.strip()) <= 16_000:
         raise AgentError("assistant message is invalid")
     return message.strip()
+
+
+def _assistant_note_create_payload(payload: object) -> tuple[str, str, str, str]:
+    if not isinstance(payload, Mapping) or set(payload) != {
+        "title", "kind", "body_markdown", "model",
+    }:
+        raise AgentError("assistant note payload has unsupported fields")
+    title = payload.get("title")
+    kind = payload.get("kind")
+    body_markdown = payload.get("body_markdown")
+    model = payload.get("model")
+    if (
+        not isinstance(title, str)
+        or not 1 <= len(title.strip()) <= 200
+        or "\x00" in title
+        or not isinstance(kind, str)
+        or kind not in {"summary", "properties", "context", "concept", "tasks", "meeting", "objectives", "decision", "conclusion"}
+        or not isinstance(body_markdown, str)
+        or not 1 <= len(body_markdown.strip()) <= 100_000
+        or not isinstance(model, str)
+        or not 1 <= len(model.strip()) <= 256
+    ):
+        raise AgentError("assistant note payload is invalid")
+    return title.strip(), kind, body_markdown, model.strip()
 
 
 def _assistant_response(value: object) -> dict[str, object]:

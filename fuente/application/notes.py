@@ -47,6 +47,18 @@ logger = logging.getLogger(__name__)
 
 IndexNotifier = Callable[[], None]
 
+_ASSISTANT_NOTE_TYPES = frozenset({
+    "summary",
+    "properties",
+    "context",
+    "concept",
+    "tasks",
+    "meeting",
+    "objectives",
+    "decision",
+    "conclusion",
+})
+
 
 class PublishedOutputTarget(Protocol):
     """Concrete graph target whose output path must remain authoritative."""
@@ -451,6 +463,88 @@ class NotesApplicationService:
                     content_hash=created.content_hash,
                     note_type="summary",
                     origin_kind="working_document",
+                    theme=self.vault.active_theme,
+                    issue="_Sin_Cuestion",
+                    status="pending_review",
+                )
+            except BaseException:
+                path.unlink(missing_ok=True)
+                raise
+        return created
+
+    def create_assistant_note(
+        self,
+        source_document_id: str,
+        *,
+        title: str,
+        kind: str,
+        body_markdown: str,
+        model: str,
+    ) -> NoteDocument:
+        """Persist an explicitly requested local assistant result for review."""
+        if (
+            not isinstance(title, str)
+            or not 1 <= len(title.strip()) <= 200
+            or "\x00" in title
+            or not isinstance(kind, str)
+            or kind not in _ASSISTANT_NOTE_TYPES
+            or not isinstance(body_markdown, str)
+            or not 1 <= len(body_markdown.strip()) <= 100_000
+            or not isinstance(model, str)
+            or not 1 <= len(model.strip()) <= 256
+        ):
+            raise ValueError("assistant note payload is invalid")
+
+        source = self.get_note(source_document_id)
+        self.require_published_output(source)
+        note_type = "concept" if kind == "concept" else "summary"
+        origin_kind = source.origin_kind or "working_document"
+        path = self.vault.atomic_note_path(f"ia-{uuid.uuid4().hex}", "_Sin_Cuestion")
+        relative_path = path.resolve().relative_to(
+            self.vault.config.vault_path.resolve()
+        ).as_posix()
+        document_id = document_id_for_relative_path(relative_path)
+        metadata = {
+            "schema_version": 3,
+            "note_id": document_id,
+            "note_type": note_type,
+            "title": title.strip(),
+            "date": time.strftime("%Y-%m-%d"),
+            "author": "Fuente",
+            "tags": ["ia-local", kind],
+            "issue": "_Sin_Cuestion",
+            "status": "pending_review",
+            "origins": [origin.to_dict() for origin in source.origins],
+            "history": [{
+                "date": time.strftime("%Y-%m-%d %H:%M:%S"),
+                "action": "assistant_note_created",
+                "source_note_id": source.document_id,
+                "source_revision": source.revision,
+                "llm_model": model.strip(),
+                "result_kind": kind,
+            }],
+        }
+        if note_type == "summary":
+            metadata["origin_kind"] = origin_kind
+        markdown = serialize_human_frontmatter(metadata) + body_markdown.rstrip() + "\n"
+        created = NoteDocument.from_persisted(
+            document_id=document_id,
+            relative_path=relative_path,
+            markdown=markdown,
+            revision=1,
+        )
+        with document_file_lock(
+            self.vault.config.vault_path / ".fuente" / "note-editor-locks",
+            document_id,
+        ):
+            atomic_write_text(path, markdown)
+            try:
+                self.job_store.register_note(
+                    note_id=document_id,
+                    relative_path=relative_path,
+                    content_hash=created.content_hash,
+                    note_type=note_type,
+                    origin_kind=origin_kind if note_type == "summary" else None,
                     theme=self.vault.active_theme,
                     issue="_Sin_Cuestion",
                     status="pending_review",

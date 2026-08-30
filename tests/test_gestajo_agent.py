@@ -97,7 +97,7 @@ def test_status_requires_the_bound_user(tmp_path: Path):
     )
 
     assert agent.status("token-a")["claimed"] is True
-    assert agent.status("token-a")["capabilities"] == ["flow", "flow_import", "flow_approve", "flow_jobs", "flow_job_detail", "flow_job_resume", "flow_job_cancel", "flow_review", "flow_review_captured", "flow_discard", "settings", "sync_inputs", "sync_run", "sync_output", "sync_conflict_read", "sync_conflict_resolve", "document_conflict_read", "document_conflict_resolve", "note_read", "note_search", "note_relations", "note_lineage", "note_write", "note_merge", "note_approve_processed", "note_share", "note_assistant", "knowledge_assistant", "templates_read", "templates_write"]
+    assert agent.status("token-a")["capabilities"] == ["flow", "flow_import", "flow_approve", "flow_jobs", "flow_job_detail", "flow_job_resume", "flow_job_cancel", "flow_review", "flow_review_captured", "flow_discard", "settings", "sync_inputs", "sync_run", "sync_output", "sync_conflict_read", "sync_conflict_resolve", "document_conflict_read", "document_conflict_resolve", "note_read", "note_search", "note_relations", "note_lineage", "note_write", "note_merge", "note_approve_processed", "note_share", "note_assistant", "note_assistant_persist", "knowledge_assistant", "templates_read", "templates_write"]
     with pytest.raises(AgentAuthenticationError, match="another user"):
         agent.status("token-b")
 
@@ -1557,6 +1557,123 @@ def test_note_merge_creates_a_new_private_pending_note_and_audits_it(tmp_path: P
     assert published[0]["visibility"] == "private"
     assert "/private" not in str(result)
     assert audits[0]["action"] == "note_merge_create"
+
+
+def test_management_persists_an_assistant_result_as_a_private_pending_note(tmp_path: Path):
+    source_id = "00000000-0000-0000-0000-000000000010"
+    created_id = "00000000-0000-0000-0000-000000000011"
+    store = JobStore(tmp_path)
+    store.register_note(
+        note_id=created_id, relative_path="4_procesado/_Sin_Cuestion/ia.md",
+        revision=1, content_hash="a" * 64, note_type="summary",
+        origin_kind="working_document", theme="General", issue="_Sin_Cuestion",
+        status="pending_review",
+    )
+    store.close()
+    calls = []
+    published = []
+    audits = []
+
+    class Backend:
+        @staticmethod
+        def create_assistant_note(note_id, title, kind, body_markdown, model):
+            calls.append((note_id, title, kind, body_markdown, model))
+            return {
+                "status": "created", "document_id": created_id, "revision": 1,
+                "title": title, "content_hash": "a" * 64,
+                "path": "/private/vault/ia.md",
+            }
+
+    agent = GestajoAgent(
+        tmp_path, verifier=_verifier, publisher=_publisher,
+        membership_verifier=lambda *_args: "gestion",
+        note_visibility_verifier=lambda *_args: {"common_org_id": COMMON_ORG_ID},
+        backend_factory=lambda _vault: Backend(),
+        note_metadata_publisher=lambda _binding, _token, metadata: published.append(dict(metadata)),
+        audit_publisher=lambda _binding, _token, event: audits.append(event),
+    )
+    agent.claim("token-a", {"supabase_url": "https://project.supabase.co", "publishable_key": "sb_publishable_test_key"})
+
+    result = agent.create_note_from_assistant(
+        "token-a", "00000000-0000-0000-0000-000000000001", source_id,
+        {
+            "title": "Decisión propuesta", "kind": "decision",
+            "body_markdown": "# Decisión\n\nAceptar la alternativa A.\n",
+            "model": "qwen2.5:7b",
+        },
+    )
+
+    assert calls == [(source_id, "Decisión propuesta", "decision", "# Decisión\n\nAceptar la alternativa A.\n", "qwen2.5:7b")]
+    assert result == {
+        "document_id": created_id, "revision": 1, "title": "Decisión propuesta",
+        "content_hash": "a" * 64, "sync_state": "synced",
+    }
+    assert published[0]["visibility"] == "private"
+    assert "/private" not in str(result)
+    assert audits[0]["action"] == "note_assistant_persist"
+    assert audits[0]["llm_model"] == "qwen2.5:7b"
+
+
+def test_assistant_output_route_creates_only_a_reviewable_local_note(tmp_path: Path):
+    from http.server import ThreadingHTTPServer
+
+    source_id = "00000000-0000-0000-0000-000000000010"
+    created_id = "00000000-0000-0000-0000-000000000011"
+    store = JobStore(tmp_path)
+    store.register_note(
+        note_id=created_id, relative_path="4_procesado/_Sin_Cuestion/ia.md",
+        revision=1, content_hash="a" * 64, note_type="summary",
+        origin_kind="working_document", theme="General", issue="_Sin_Cuestion",
+        status="pending_review",
+    )
+    store.close()
+
+    class Backend:
+        @staticmethod
+        def create_assistant_note(note_id, title, kind, body_markdown, model):
+            assert (note_id, title, kind, body_markdown, model) == (
+                source_id, "Decisión propuesta", "decision", "# Decisión", "qwen2.5:7b",
+            )
+            return {
+                "status": "created", "document_id": created_id, "revision": 1,
+                "title": title, "content_hash": "a" * 64,
+            }
+
+    agent = GestajoAgent(
+        tmp_path, verifier=_verifier, publisher=_publisher,
+        membership_verifier=lambda *_args: "gestion",
+        note_visibility_verifier=lambda *_args: {"common_org_id": COMMON_ORG_ID},
+        backend_factory=lambda _vault: Backend(),
+        note_metadata_publisher=lambda *_args: None,
+        audit_publisher=lambda *_args: None,
+    )
+    agent.claim("token-a", {"supabase_url": "https://project.supabase.co", "publishable_key": "sb_publishable_test_key"})
+    server = ThreadingHTTPServer(("127.0.0.1", 0), _handler_for(agent))
+    thread = Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        connection = HTTPConnection("127.0.0.1", server.server_port, timeout=2)
+        connection.request(
+            "POST", f"/v1/notes/{source_id}/assistant-output?org_id=00000000-0000-0000-0000-000000000001",
+            body=json.dumps({
+                "title": "Decisión propuesta", "kind": "decision",
+                "body_markdown": "# Decisión", "model": "qwen2.5:7b",
+            }),
+            headers={"Origin": "http://localhost:3000", "Authorization": "Bearer token-a", "Content-Type": "application/json"},
+        )
+        response = connection.getresponse()
+        result = json.loads(response.read())
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
+
+    assert response.status == 200
+    assert result == {
+        "document_id": created_id, "revision": 1, "title": "Decisión propuesta",
+        "content_hash": "a" * 64, "sync_state": "synced",
+    }
+    assert "/private" not in str(result)
 
 
 def test_note_share_reuses_approved_projection_and_queues_only_metadata_when_offline(tmp_path: Path):

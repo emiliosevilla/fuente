@@ -192,6 +192,15 @@ def test_single_note_scope_does_not_cite_other_notes(grounded_service):
     assert CHAT_SYSTEM_PROMPT in provider.calls[-1]["system"]
 
 
+def test_multiple_note_scope_only_cites_the_selected_notes(grounded_service):
+    service, _provider, _store = grounded_service
+    result = service.ask(
+        "despido improcedente salarios",
+        {"context_mode": "multiple_notes", "document_ids": ["note-laboral", "note-fianza"]},
+    )
+    assert {src["document_id"] for src in result["sources"]} <= {"note-laboral", "note-fianza"}
+
+
 def test_bridge_and_backend_share_contract(temp_vault_path, monkeypatch):
     backend = FuenteConsoleBackend(temp_vault_path)
     fake = FakeChatProvider("Respuesta bridge con evidencia.")

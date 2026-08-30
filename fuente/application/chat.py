@@ -23,6 +23,7 @@ from fuente.application.retrieval import (
     MODE_NONE,
     MODE_BM25_VAULT,
     SCOPE_ALL_NOTES,
+    SCOPE_MULTIPLE_NOTES,
     SCOPE_ISSUE,
     SCOPE_SINGLE_NOTE,
     SCOPE_THEME,
@@ -223,6 +224,7 @@ def _normalize_scope(context: Mapping[str, Any]) -> tuple[str, dict[str, str]]:
     ).strip()
     if ":" in raw_mode and raw_mode.split(":", 1)[0] in {
         SCOPE_SINGLE_NOTE,
+        SCOPE_MULTIPLE_NOTES,
         SCOPE_ISSUE,
         SCOPE_THEME,
         SCOPE_ALL_NOTES,
@@ -246,6 +248,12 @@ def _normalize_scope(context: Mapping[str, Any]) -> tuple[str, dict[str, str]]:
         theme = str(context.get("theme") or "").strip()
         if theme:
             kwargs["theme"] = theme
+    elif kind == SCOPE_MULTIPLE_NOTES:
+        values = context.get("document_ids")
+        if isinstance(values, (list, tuple)):
+            selected = sorted({str(item).strip() for item in values if str(item).strip()})
+            if selected:
+                kwargs["document_ids"] = ",".join(selected)
     elif kind != SCOPE_ALL_NOTES:
         kind = SCOPE_ALL_NOTES
     return kind, kwargs

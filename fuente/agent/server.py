@@ -403,7 +403,7 @@ class GestajoAgent:
             "platform": platform.system(),
             "user_id": binding.user_id,
             "vault_fingerprint": self._vault_fingerprint(),
-            "capabilities": ["flow", "flow_approve", "flow_review", "flow_review_captured", "flow_discard", "settings", "sync_inputs", "sync_run", "sync_output", "sync_conflict_read", "sync_conflict_resolve", "note_read", "note_relations", "note_write", "note_share", "note_assistant", "templates_read", "templates_write"],
+            "capabilities": ["flow", "flow_approve", "flow_review", "flow_review_captured", "flow_discard", "settings", "sync_inputs", "sync_run", "sync_output", "sync_conflict_read", "sync_conflict_resolve", "note_read", "note_relations", "note_write", "note_approve_processed", "note_share", "note_assistant", "templates_read", "templates_write"],
         }
 
     def flow(self, access_token: object, org_id: object) -> dict[str, object]:
@@ -836,6 +836,44 @@ class GestajoAgent:
         ))
         return {**local, "sync_state": sync_state}
 
+    def approve_processed_note(self, access_token: object, org_id: object, note_id: object, payload: object) -> dict[str, object]:
+        """Use Fuente's existing output approval gate before any sharing action."""
+        binding = self._require_management(access_token, org_id)
+        if not isinstance(note_id, str):
+            raise AgentAuthorizationError("note is invalid")
+        expected_revision = _note_share_payload(payload)
+        scope = self._note_visibility_verifier(binding, self._access_token(access_token), note_id)
+        from fuente.ui.bridge import FuentePyWebViewApi
+
+        approved = _note_approval_response(
+            FuentePyWebViewApi(self._local_backend()).approve_processed_output(
+                note_id, expected_revision, binding.user_id,
+            ),
+            note_id,
+        )
+        catalog = self._document_outbox().get_note(note_id)
+        local = _note_response(self._note_reader(self.vault_path, note_id), note_id)
+        if not isinstance(catalog, Mapping) or catalog.get("revision") != approved["revision"]:
+            raise AgentError("local processed note metadata is unavailable")
+        metadata = _document_note_sync_payload({
+            "document_id": note_id, "title": local["title"], "revision": approved["revision"],
+            "content_hash": catalog.get("content_hash"),
+        }, catalog, binding, str(org_id))
+        try:
+            self._note_metadata_publisher(binding, self._access_token(access_token), metadata)
+            self._document_outbox().delete_document_outbox(_metadata_outbox_id(note_id))
+            sync_state = "synced"
+        except AgentSyncError:
+            self._document_outbox().upsert_document_outbox(
+                outbox_id=_metadata_outbox_id(note_id), kind="note_metadata", payload=metadata,
+            )
+            sync_state = "pending_sync"
+        self._record_audit(binding, self._access_token(access_token), _new_audit_event(
+            note_id, str(org_id), scope["common_org_id"], binding.user_id,
+            "note_processed_approve", sync_state,
+        ))
+        return {**approved, "sync_state": sync_state}
+
     def sync_pending(self, access_token: object, org_id: object) -> dict[str, object]:
         binding = self._require_management(access_token, org_id)
         synced = 0
@@ -1072,6 +1110,7 @@ def _handler_for(agent: GestajoAgent) -> type[BaseHTTPRequestHandler]:
             note_route = parsed.path.removeprefix("/v1/notes/")
             is_note_share = note_route.endswith("/share") and bool(note_route.removesuffix("/share")) and "/" not in note_route.removesuffix("/share")
             is_note_assistant = note_route.endswith("/assistant") and bool(note_route.removesuffix("/assistant")) and "/" not in note_route.removesuffix("/assistant")
+            is_note_processed_approval = note_route.endswith("/approve-processed") and bool(note_route.removesuffix("/approve-processed")) and "/" not in note_route.removesuffix("/approve-processed")
             is_note_update = bool(note_route) and "/" not in note_route
             review_route = parsed.path.removeprefix("/v1/flow/reviews/") if parsed.path.startswith("/v1/flow/reviews/") else ""
             review_parts = review_route.split("/") if review_route else []
@@ -1079,7 +1118,7 @@ def _handler_for(agent: GestajoAgent) -> type[BaseHTTPRequestHandler]:
             is_review_captured_assistant = len(review_parts) == 3 and bool(review_parts[0]) and review_parts[1:] == ["captured", "assistant"]
             template_id = parsed.path.removeprefix("/v1/templates/") if parsed.path.startswith("/v1/templates/") else ""
             is_template_save = bool(template_id) and "/" not in template_id
-            if not (is_note_update or is_note_share or is_note_assistant or is_review_captured_update or is_review_captured_assistant or is_template_save) and parsed.path not in {
+            if not (is_note_update or is_note_share or is_note_assistant or is_note_processed_approval or is_review_captured_update or is_review_captured_assistant or is_template_save) and parsed.path not in {
                 "/v1/claim", "/v1/flow/approve", "/v1/flow/discard", "/v1/settings", "/v1/sync-inputs/select", "/v1/sync-inputs/run", "/v1/sync-outputs/run", "/v1/sync-conflicts/read", "/v1/sync-conflicts/resolve",
                 "/v1/sync-inputs/confirm", "/v1/sync-inputs/enabled", "/v1/sync-inputs/remove", "/v1/sync",
             }:
@@ -1111,6 +1150,9 @@ def _handler_for(agent: GestajoAgent) -> type[BaseHTTPRequestHandler]:
                 return
             if is_note_share:
                 self._authorized(lambda token: agent.share_note(token, _single_query_value(parsed.query, "org_id"), note_route.removesuffix("/share"), payload))
+                return
+            if is_note_processed_approval:
+                self._authorized(lambda token: agent.approve_processed_note(token, _single_query_value(parsed.query, "org_id"), note_route.removesuffix("/approve-processed"), payload))
                 return
             if is_note_assistant:
                 self._authorized(lambda token: agent.ask_note_assistant(token, _single_query_value(parsed.query, "org_id"), note_route.removesuffix("/assistant"), payload))
@@ -1711,6 +1753,16 @@ def _note_share_response(value: Mapping[str, object], note_id: str) -> dict[str,
     if document_id != note_id or not isinstance(revision, int) or revision < 1 or not isinstance(content_hash, str) or len(content_hash) != 64:
         raise AgentError("local note share has an invalid contract")
     return {"document_id": document_id, "revision": revision, "content_hash": content_hash}
+
+
+def _note_approval_response(value: Mapping[str, object], note_id: str) -> dict[str, object]:
+    if value.get("error"):
+        raise AgentError(str(value.get("message") or value["error"]))
+    document_id = value.get("document_id")
+    revision = value.get("revision")
+    if document_id != note_id or isinstance(revision, bool) or not isinstance(revision, int) or revision < 1 or value.get("status") != "approved":
+        raise AgentError("local processed note approval has an invalid contract")
+    return {"document_id": document_id, "revision": revision, "status": "approved"}
 
 
 def _metadata_outbox_id(note_id: str) -> str:

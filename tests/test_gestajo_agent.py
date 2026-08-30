@@ -96,7 +96,7 @@ def test_status_requires_the_bound_user(tmp_path: Path):
     )
 
     assert agent.status("token-a")["claimed"] is True
-    assert agent.status("token-a")["capabilities"] == ["flow", "flow_approve", "flow_review", "flow_review_captured", "flow_discard", "settings", "sync_inputs", "sync_run", "sync_output", "sync_conflict_read", "sync_conflict_resolve", "note_read", "note_relations", "note_write", "note_share", "note_assistant", "templates_read", "templates_write"]
+    assert agent.status("token-a")["capabilities"] == ["flow", "flow_approve", "flow_review", "flow_review_captured", "flow_discard", "settings", "sync_inputs", "sync_run", "sync_output", "sync_conflict_read", "sync_conflict_resolve", "note_read", "note_relations", "note_write", "note_approve_processed", "note_share", "note_assistant", "templates_read", "templates_write"]
     with pytest.raises(AgentAuthenticationError, match="another user"):
         agent.status("token-b")
 
@@ -1098,6 +1098,68 @@ def test_note_share_reuses_approved_projection_and_queues_only_metadata_when_off
     finally:
         queued_store.close()
     assert audits[0]["action"] == "note_share"
+
+
+def test_management_approves_processed_note_through_existing_fuente_gate(tmp_path: Path):
+    note_id = "00000000-0000-0000-0000-000000000010"
+    published: list[dict[str, object]] = []
+    audits: list[dict[str, object]] = []
+
+    class Notes:
+        current = type("Note", (), {"revision": 2, "status": "pending_review"})()
+
+        @classmethod
+        def get_note(cls, received_id):
+            assert received_id == note_id
+            return cls.current
+
+        @classmethod
+        def approve(cls, received_id, revision):
+            assert (received_id, revision) == (note_id, 2)
+            cls.current = type("Note", (), {"revision": 3, "status": "approved"})()
+            return cls.current
+
+        @classmethod
+        def approve_processed_output(cls, received_id, revision, reviewer):
+            assert (received_id, revision, reviewer) == (note_id, 3, USER_A)
+            return type("Approval", (), {"note_id": note_id, "revision": 3, "reviewer": reviewer})()
+
+    class Backend:
+        @staticmethod
+        def get_notes_service():
+            return Notes
+
+    class Outbox:
+        @staticmethod
+        def get_note(received_id):
+            assert received_id == note_id
+            return {
+                "note_id": note_id, "revision": 3, "content_hash": "a" * 64,
+                "note_type": "summary", "status": "approved",
+            }
+
+        @staticmethod
+        def delete_document_outbox(_outbox_id):
+            return None
+
+    agent = GestajoAgent(
+        tmp_path, verifier=_verifier, publisher=_publisher,
+        membership_verifier=lambda *_args: "gestion",
+        note_visibility_verifier=lambda *_args: {"common_org_id": COMMON_ORG_ID},
+        backend_factory=lambda _vault: Backend(), outbox_factory=lambda _vault: Outbox(),
+        note_reader=lambda _vault, received_id: {
+            "document_id": received_id, "revision": 3, "title": "Resumen", "body_markdown": "# Resumen",
+        },
+        note_metadata_publisher=lambda _binding, _token, metadata: published.append(dict(metadata)),
+        audit_publisher=lambda _binding, _token, event: audits.append(event),
+    )
+    agent.claim("token-a", {"supabase_url": "https://project.supabase.co", "publishable_key": "sb_publishable_test_key"})
+
+    result = agent.approve_processed_note("token-a", "00000000-0000-0000-0000-000000000001", note_id, {"expected_revision": 2})
+
+    assert result == {"document_id": note_id, "revision": 3, "status": "approved", "sync_state": "synced"}
+    assert published[0]["status"] == "approved"
+    assert audits[0]["action"] == "note_processed_approve"
 
 
 def test_sync_pending_flushes_metadata_and_audits_without_a_token_in_sqlite(tmp_path: Path):

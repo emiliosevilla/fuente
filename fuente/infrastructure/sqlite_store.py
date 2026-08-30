@@ -24,7 +24,7 @@ import uuid
 import json
 from contextlib import contextmanager, suppress
 from datetime import datetime, timedelta, timezone
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any, Iterable, Optional, Sequence
 
 from fuente.domain.jobs import (
@@ -1727,6 +1727,48 @@ class JobStore:
     def delete_document_outbox(self, outbox_id: str) -> bool:
         cursor = self._connection.execute(
             "DELETE FROM document_agent_outbox WHERE outbox_id = ?", (outbox_id,)
+        )
+        return cursor.rowcount == 1
+
+    def upsert_document_conflict_route(
+        self, *, conflict_id: str, user_id: str, org_id: str, connection_id: str, relative_path: str,
+    ) -> None:
+        try:
+            conflict_id, user_id, org_id = str(uuid.UUID(conflict_id)), str(uuid.UUID(user_id)), str(uuid.UUID(org_id))
+        except (ValueError, AttributeError) as error:
+            raise ValueError("document conflict route identity is invalid") from error
+        path = PurePosixPath(relative_path)
+        if not connection_id.startswith("sync_") or path.is_absolute() or ".." in path.parts or not path.parts:
+            raise ValueError("document conflict route is invalid")
+        self._connection.execute(
+            """
+            INSERT INTO document_conflict_routes
+                (conflict_id, user_id, org_id, connection_id, relative_path, created_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT(conflict_id) DO UPDATE SET
+                user_id = excluded.user_id, org_id = excluded.org_id,
+                connection_id = excluded.connection_id, relative_path = excluded.relative_path,
+                created_at = excluded.created_at
+            """,
+            (conflict_id, user_id, org_id, connection_id, path.as_posix(), _timestamp()),
+        )
+
+    def get_document_conflict_route(
+        self, *, conflict_id: str, user_id: str, org_id: str,
+    ) -> dict[str, Any] | None:
+        row = self._connection.execute(
+            """
+            SELECT conflict_id, connection_id, relative_path
+            FROM document_conflict_routes
+            WHERE conflict_id = ? AND user_id = ? AND org_id = ?
+            """,
+            (str(uuid.UUID(conflict_id)), str(uuid.UUID(user_id)), str(uuid.UUID(org_id))),
+        ).fetchone()
+        return dict(row) if row is not None else None
+
+    def delete_document_conflict_route(self, conflict_id: str) -> bool:
+        cursor = self._connection.execute(
+            "DELETE FROM document_conflict_routes WHERE conflict_id = ?", (str(uuid.UUID(conflict_id)),)
         )
         return cursor.rowcount == 1
 

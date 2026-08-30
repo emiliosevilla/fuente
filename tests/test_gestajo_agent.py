@@ -96,7 +96,7 @@ def test_status_requires_the_bound_user(tmp_path: Path):
     )
 
     assert agent.status("token-a")["claimed"] is True
-    assert agent.status("token-a")["capabilities"] == ["flow", "flow_import", "flow_approve", "flow_review", "flow_review_captured", "flow_discard", "settings", "sync_inputs", "sync_run", "sync_output", "sync_conflict_read", "sync_conflict_resolve", "note_read", "note_relations", "note_lineage", "note_write", "note_merge", "note_approve_processed", "note_share", "note_assistant", "templates_read", "templates_write"]
+    assert agent.status("token-a")["capabilities"] == ["flow", "flow_import", "flow_approve", "flow_review", "flow_review_captured", "flow_discard", "settings", "sync_inputs", "sync_run", "sync_output", "sync_conflict_read", "sync_conflict_resolve", "document_conflict_read", "document_conflict_resolve", "note_read", "note_relations", "note_lineage", "note_write", "note_merge", "note_approve_processed", "note_share", "note_assistant", "templates_read", "templates_write"]
     with pytest.raises(AgentAuthenticationError, match="another user"):
         agent.status("token-b")
 
@@ -1115,6 +1115,42 @@ def test_sync_conflict_reads_only_two_local_markdown_copies(tmp_path: Path):
     assert audits[0]["action"] == "sync_conflict_read"
     with pytest.raises(AgentError, match="relative Markdown"):
         agent.read_sync_conflict("token-a", "00000000-0000-0000-0000-000000000001", {"connection_id": connection.connection_id, "relative_path": "../secret.md"})
+
+
+def test_document_conflict_route_keeps_paths_local_and_opens_the_existing_comparison(tmp_path: Path):
+    conflict_id = "00000000-0000-0000-0000-000000000020"
+    connection = ConnectedFolder("sharepoint_mount", str(tmp_path / "sharepoint"), "Compartidos", True)
+    shared = tmp_path / "5_compartido"
+    shared.mkdir()
+    (shared / "nota.md").write_text("# Vault", encoding="utf-8")
+    Path(connection.root).mkdir()
+    (Path(connection.root) / "nota.md").write_text("# Compartida", encoding="utf-8")
+    store = JobStore(tmp_path)
+    store.upsert_document_conflict_route(
+        conflict_id=conflict_id, user_id=USER_A, org_id="00000000-0000-0000-0000-000000000001",
+        connection_id=connection.connection_id, relative_path="nota.md",
+    )
+
+    class SyncManager:
+        active_theme_dir = tmp_path
+
+        def load_connections(self):
+            return [connection]
+
+    class Backend:
+        sync_manager = SyncManager()
+
+    agent = GestajoAgent(
+        tmp_path, verifier=_verifier, publisher=_publisher,
+        membership_verifier=lambda *_args: "gestion", backend_factory=lambda _vault: Backend(),
+    )
+    agent.claim("token-a", {"supabase_url": "https://project.supabase.co", "publishable_key": "sb_publishable_test_key"})
+
+    result = agent.read_document_conflict("token-a", "00000000-0000-0000-0000-000000000001", conflict_id)
+
+    assert result == {"relative_path": "nota.md", "vault_markdown": "# Vault", "shared_markdown": "# Compartida"}
+    assert str(tmp_path) not in str(result)
+    store.close()
 
 
 def test_sync_conflict_resolution_requires_the_selected_winner(tmp_path: Path):

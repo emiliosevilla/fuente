@@ -510,7 +510,7 @@ class GestajoAgent:
             "platform": platform.system(),
             "user_id": binding.user_id,
             "vault_fingerprint": self._vault_fingerprint(),
-            "capabilities": ["flow", "flow_import", "flow_approve", "flow_review", "flow_review_captured", "flow_discard", "settings", "sync_inputs", "sync_run", "sync_output", "sync_conflict_read", "sync_conflict_resolve", "note_read", "note_relations", "note_lineage", "note_write", "note_merge", "note_approve_processed", "note_share", "note_assistant", "templates_read", "templates_write"],
+            "capabilities": ["flow", "flow_import", "flow_approve", "flow_review", "flow_review_captured", "flow_discard", "settings", "sync_inputs", "sync_run", "sync_output", "sync_conflict_read", "sync_conflict_resolve", "document_conflict_read", "document_conflict_resolve", "note_read", "note_relations", "note_lineage", "note_write", "note_merge", "note_approve_processed", "note_share", "note_assistant", "templates_read", "templates_write"],
         }
 
     def flow(self, access_token: object, org_id: object) -> dict[str, object]:
@@ -862,6 +862,25 @@ class GestajoAgent:
         ))
         return {"relative_path": relative_path, "winner": winner}
 
+    def read_document_conflict(self, access_token: object, org_id: object, conflict_id: object) -> dict[str, object]:
+        binding = self._require_management(access_token, org_id)
+        route = self._document_conflict_route(binding, org_id, conflict_id)
+        return self.read_sync_conflict(access_token, org_id, {
+            "connection_id": route["connection_id"], "relative_path": route["relative_path"],
+        })
+
+    def resolve_document_conflict(self, access_token: object, org_id: object, conflict_id: object, payload: object) -> dict[str, object]:
+        binding = self._require_management(access_token, org_id)
+        conflict_id = _document_conflict_id(conflict_id)
+        route = self._document_conflict_route(binding, org_id, conflict_id)
+        if not isinstance(payload, Mapping) or set(payload) != {"winner"}:
+            raise AgentError("document conflict resolution is invalid")
+        result = self.resolve_sync_conflict(access_token, org_id, {
+            "connection_id": route["connection_id"], "relative_path": route["relative_path"], "winner": payload["winner"],
+        })
+        self._document_outbox().delete_document_conflict_route(conflict_id)
+        return result
+
     def _run_sync(
         self, access_token: object, org_id: object, payload: object, action: str, direction: SyncDirection,
     ) -> dict[str, object]:
@@ -886,6 +905,13 @@ class GestajoAgent:
             metadata = self._sync_conflict_metadata(backend, connection, conflict, binding, str(org_id))
             if metadata is None:
                 continue
+            relative_path = _safe_sync_relative(conflict.get("source_relative_path"))
+            if relative_path is None:
+                continue
+            self._document_outbox().upsert_document_conflict_route(
+                conflict_id=str(metadata["id"]), user_id=binding.user_id, org_id=str(org_id),
+                connection_id=connection.connection_id, relative_path=relative_path,
+            )
             try:
                 self._conflict_publisher(binding, self._access_token(access_token), metadata)
                 self._document_outbox().delete_document_outbox(f"document_conflict:{metadata['id']}")
@@ -1179,6 +1205,16 @@ class GestajoAgent:
             self._outbox = self._outbox_factory(self.vault_path)
         return self._outbox
 
+    def _document_conflict_route(self, binding: AgentBinding, org_id: object, conflict_id: object) -> Mapping[str, object]:
+        if not isinstance(org_id, str):
+            raise AgentAuthorizationError("organization is invalid")
+        route = self._document_outbox().get_document_conflict_route(
+            conflict_id=_document_conflict_id(conflict_id), user_id=binding.user_id, org_id=str(uuid.UUID(org_id)),
+        )
+        if route is None:
+            raise AgentError("conflict is not available in this local Vault")
+        return route
+
     def _read_settings(self) -> Mapping[str, object]:
         if self._settings_reader is not None:
             return self._settings_reader(self.vault_path)
@@ -1345,6 +1381,13 @@ def _handler_for(agent: GestajoAgent) -> type[BaseHTTPRequestHandler]:
                     return
                 self._authorized(lambda token: agent.read_note(token, _single_query_value(parsed.query, "org_id"), note_id))
                 return
+            if parsed.path.startswith("/v1/document-conflicts/"):
+                conflict_id = parsed.path.removeprefix("/v1/document-conflicts/")
+                if not conflict_id or "/" in conflict_id:
+                    self._send_error(HTTPStatus.NOT_FOUND, "route not found")
+                    return
+                self._authorized(lambda token: agent.read_document_conflict(token, _single_query_value(parsed.query, "org_id"), conflict_id))
+                return
             if parsed.path != "/v1/status":
                 self._send_error(HTTPStatus.NOT_FOUND, "route not found")
                 return
@@ -1364,7 +1407,9 @@ def _handler_for(agent: GestajoAgent) -> type[BaseHTTPRequestHandler]:
             is_review_captured_assistant = len(review_parts) == 3 and bool(review_parts[0]) and review_parts[1:] == ["captured", "assistant"]
             template_id = parsed.path.removeprefix("/v1/templates/") if parsed.path.startswith("/v1/templates/") else ""
             is_template_save = bool(template_id) and "/" not in template_id
-            if not (is_note_merge or is_note_update or is_note_share or is_note_assistant or is_note_processed_approval or is_review_captured_update or is_review_captured_assistant or is_template_save) and parsed.path not in {
+            conflict_route = parsed.path.removeprefix("/v1/document-conflicts/") if parsed.path.startswith("/v1/document-conflicts/") else ""
+            is_document_conflict_resolve = conflict_route.endswith("/resolve") and bool(conflict_route.removesuffix("/resolve")) and "/" not in conflict_route.removesuffix("/resolve")
+            if not (is_note_merge or is_note_update or is_note_share or is_note_assistant or is_note_processed_approval or is_review_captured_update or is_review_captured_assistant or is_template_save or is_document_conflict_resolve) and parsed.path not in {
                 "/v1/claim", "/v1/flow/import", "/v1/flow/approve", "/v1/flow/discard", "/v1/settings", "/v1/sync-inputs/select", "/v1/sync-inputs/run", "/v1/sync-outputs/run", "/v1/sync-conflicts/read", "/v1/sync-conflicts/resolve",
                 "/v1/sync-inputs/confirm", "/v1/sync-inputs/enabled", "/v1/sync-inputs/remove", "/v1/sync",
             }:
@@ -1410,6 +1455,9 @@ def _handler_for(agent: GestajoAgent) -> type[BaseHTTPRequestHandler]:
                 return
             if is_note_update:
                 self._authorized(lambda token: agent.update_note(token, _single_query_value(parsed.query, "org_id"), parsed.path.removeprefix("/v1/notes/"), payload))
+                return
+            if is_document_conflict_resolve:
+                self._authorized(lambda token: agent.resolve_document_conflict(token, _single_query_value(parsed.query, "org_id"), conflict_route.removesuffix("/resolve"), payload))
                 return
             org_id = _single_query_value(parsed.query, "org_id")
             if parsed.path == "/v1/flow/import":
@@ -1990,6 +2038,13 @@ def _safe_sync_relative(value: object) -> str | None:
     if path.is_absolute() or ".." in path.parts:
         return None
     return path.as_posix()
+
+
+def _document_conflict_id(value: object) -> str:
+    try:
+        return str(uuid.UUID(str(value)))
+    except (ValueError, AttributeError) as error:
+        raise AgentError("document conflict is invalid") from error
 
 
 def _sync_conflict_metadata(

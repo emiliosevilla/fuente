@@ -512,10 +512,13 @@ def test_publish_note_metadata_registers_when_the_remote_catalog_has_no_note(mon
         "document_id": "00000000-0000-0000-0000-000000000010", "title": "Nota", "revision": 1, "content_hash": "a" * 64,
         "owner_user_id": USER_A, "owner_org_id": "00000000-0000-0000-0000-000000000001",
         "common_org_id": "00000000-0000-0000-0000-000000000001", "visibility": "private",
-        "shared_org_id": None, "note_type": "nota", "status": "pending_review",
+        "shared_org_id": None, "note_type": "nota", "status": "pending_review", "theme": "Agua", "issue": "Planificación",
     })
 
     assert [request.get_method() for request, _ in requests] == ["PATCH", "POST"]
+    registration = json.loads(requests[1][0].data)
+    assert registration["theme"] == "Agua"
+    assert registration["issue"] == "Planificación"
     assert b"body_markdown" not in requests[1][0].data
     assert b"relative_path" not in requests[1][0].data
 
@@ -545,7 +548,7 @@ def test_publish_note_metadata_accepts_an_already_registered_note_after_retry(mo
         "document_id": "00000000-0000-0000-0000-000000000010", "title": "Nota", "revision": 1, "content_hash": "a" * 64,
         "owner_user_id": USER_A, "owner_org_id": "00000000-0000-0000-0000-000000000001",
         "common_org_id": "00000000-0000-0000-0000-000000000001", "visibility": "private",
-        "shared_org_id": None, "note_type": "nota", "status": "pending_review",
+        "shared_org_id": None, "note_type": "nota", "status": "pending_review", "theme": "General", "issue": "_Sin_Cuestion",
     })
 
     assert calls == 2
@@ -1840,7 +1843,7 @@ def test_sync_pending_registers_local_catalog_notes_as_private_metadata(tmp_path
         "document_id": note_id, "title": "Nota local", "revision": 2, "content_hash": "a" * 64,
         "owner_user_id": USER_A, "owner_org_id": "00000000-0000-0000-0000-000000000001",
         "common_org_id": "00000000-0000-0000-0000-000000000001", "visibility": "private",
-        "shared_org_id": None, "note_type": "nota", "status": "pending_review",
+        "shared_org_id": None, "note_type": "nota", "status": "pending_review", "theme": "General", "issue": "_Sin_Cuestion",
     }]
 
 

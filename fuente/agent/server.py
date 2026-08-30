@@ -246,10 +246,16 @@ def verify_document_note_visibility(binding: AgentBinding, access_token: str, no
 
 
 def publish_document_note_metadata(binding: AgentBinding, access_token: str, note: Mapping[str, object]) -> None:
+    note = {
+        **note,
+        "theme": note.get("theme") or "General",
+        "issue": note.get("issue") or "_Sin_Cuestion",
+    }
     note_id = str(note["document_id"])
     payload = {
         "title": note["title"], "revision": note["revision"],
-        "content_hash": note["content_hash"], "sync_state": "synced",
+        "content_hash": note["content_hash"], "theme": note["theme"],
+        "issue": note["issue"], "sync_state": "synced",
     }
     request = Request(
         f"{binding.supabase_url}/rest/v1/document_notes?note_id=eq.{quote(note_id, safe='')}",
@@ -2582,12 +2588,16 @@ def _document_note_sync_payload(
     title = note.get("title")
     note_type = catalog.get("note_type")
     status = catalog.get("status")
+    theme = catalog.get("theme") or "General"
+    issue = catalog.get("issue") or "_Sin_Cuestion"
     content_hash = note.get("content_hash")
     revision = note.get("revision")
     if (
         not isinstance(title, str) or not 1 <= len(title) <= 512
         or not isinstance(note_type, str) or not 1 <= len(note_type) <= 64
         or not isinstance(status, str) or not 1 <= len(status) <= 64
+        or not isinstance(theme, str) or not 1 <= len(theme) <= 256
+        or not isinstance(issue, str) or not 1 <= len(issue) <= 256
         or not isinstance(content_hash, str) or len(content_hash) != 64
         or isinstance(revision, bool) or not isinstance(revision, int) or revision < 1
     ):
@@ -2596,14 +2606,14 @@ def _document_note_sync_payload(
         "document_id": note_id, "title": title, "revision": revision, "content_hash": content_hash,
         "owner_user_id": str(uuid.UUID(binding.user_id)), "owner_org_id": owner_org_id,
         "common_org_id": owner_org_id, "visibility": "private", "shared_org_id": None,
-        "note_type": note_type, "status": status,
+        "note_type": note_type, "status": status, "theme": theme, "issue": issue,
     }
 
 
 def _document_note_registration(note: Mapping[str, object]) -> dict[str, object]:
     required = {
         "document_id", "title", "revision", "content_hash", "owner_user_id", "owner_org_id",
-        "common_org_id", "visibility", "shared_org_id", "note_type", "status",
+        "common_org_id", "visibility", "shared_org_id", "note_type", "status", "theme", "issue",
     }
     if set(note) != required:
         raise AgentError("document note registration is invalid")
@@ -2612,6 +2622,7 @@ def _document_note_registration(note: Mapping[str, object]) -> dict[str, object]
         "owner_org_id": note["owner_org_id"], "common_org_id": note["common_org_id"],
         "visibility": note["visibility"], "shared_org_id": note["shared_org_id"],
         "title": note["title"], "note_type": note["note_type"], "status": note["status"],
+        "theme": note["theme"], "issue": note["issue"],
         "revision": note["revision"], "content_hash": note["content_hash"], "sync_state": "synced",
     }
 

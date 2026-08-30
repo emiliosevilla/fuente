@@ -140,7 +140,7 @@ def run_gestajo_agent_install() -> bool:
     import tkinter as tk
     from tkinter import messagebox
 
-    from fuente.agent.tls import prepare_agent_tls
+    from fuente.agent.tls import prepare_agent_tls, register_agent_protocol
 
     root = tk.Tk()
     root.withdraw()
@@ -148,6 +148,12 @@ def run_gestajo_agent_install() -> bool:
         success, message = prepare_agent_tls(
             lambda title, body: messagebox.askyesno(title, body, parent=root),
         )
+        if success:
+            protocol_ready, protocol_message = register_agent_protocol()
+            if not protocol_ready:
+                success, message = False, protocol_message
+            else:
+                message = f"{message}. {protocol_message}"
         if success:
             messagebox.showinfo("Documentos de Gestajo", message, parent=root)
         else:

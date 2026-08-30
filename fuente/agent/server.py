@@ -33,7 +33,7 @@ from fuente.domain.vault_layout import VaultLayout
 from fuente.application.feed import DEFAULT_FEED_LIMIT, FEED_ORDERS, MAX_CURSOR_LENGTH, MAX_FEED_LIMIT
 from fuente.extractors.base import ExtractionResult
 from fuente.extractors.office_pdf import TextAndOfficeExtractor
-from fuente.infrastructure.atomic_files import atomic_copy, atomic_write_json
+from fuente.infrastructure.atomic_files import atomic_write_json
 from fuente.agent.update import AgentUpdater
 
 
@@ -1112,32 +1112,21 @@ class GestajoAgent:
         )
         if connection is None:
             raise AgentError("sync connection is unavailable")
-        shared_root = backend.sync_manager._authorized_theme_root(
-            VaultLayout(backend.sync_manager.active_theme_dir).shared_dir,
-            VaultLayout(backend.sync_manager.active_theme_dir).shared_dir.name,
-        )
-        connected_root = backend.sync_manager._authorized_output_destination(Path(connection.root))
-        vault_path = _sync_markdown_path(shared_root, relative_path)
-        shared_path = _sync_markdown_path(connected_root, relative_path)
         conflict = _sync_conflict_metadata(
-            _read_sync_markdown(shared_root, relative_path), _read_sync_markdown(connected_root, relative_path),
+            _read_sync_markdown(VaultLayout(backend.sync_manager.active_theme_dir).shared_dir, relative_path),
+            _read_sync_markdown(Path(connection.root), relative_path),
             self._document_outbox(), binding, str(org_id),
         )
-        source, destination = (vault_path, shared_path) if winner == "vault" else (shared_path, vault_path)
         try:
-            atomic_copy(source, destination)
-        except OSError as error:
-            raise AgentError("conflict resolution could not be written locally") from error
-        if conflict is not None:
-            resolution = {**conflict, "resolution": "local" if winner == "vault" else "sharepoint"}
-            try:
-                self._conflict_resolver(binding, self._access_token(access_token), resolution)
-                self._document_outbox().delete_document_outbox(f"document_conflict_resolution:{conflict['id']}")
-            except AgentSyncError:
-                self._document_outbox().upsert_document_outbox(
-                    outbox_id=f"document_conflict_resolution:{conflict['id']}",
-                    kind="document_conflict_resolution", payload=resolution,
-                )
+            self._document_outbox().set_document_conflict_skin(
+                user_id=binding.user_id,
+                org_id=str(org_id),
+                connection_id=connection_id,
+                relative_path=relative_path,
+                winner=winner,
+            )
+        except (OSError, ValueError) as error:
+            raise AgentError("local conflict preference could not be saved") from error
         self._record_audit(binding, self._access_token(access_token), _new_audit_event(
             conflict["note_id"] if conflict is not None else None,
             str(org_id), str(uuid.UUID(str(org_id))), binding.user_id, "sync_conflict_resolve", winner,

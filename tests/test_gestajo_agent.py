@@ -1929,7 +1929,14 @@ def test_sync_conflict_resolution_requires_the_selected_winner(tmp_path: Path):
     result = agent.resolve_sync_conflict("token-a", "00000000-0000-0000-0000-000000000001", {"connection_id": connection.connection_id, "relative_path": "nota.md", "winner": "vault"})
 
     assert result == {"relative_path": "nota.md", "winner": "vault"}
-    assert remote_note.read_text(encoding="utf-8") == "# Vault"
+    assert (shared / "nota.md").read_text(encoding="utf-8") == "# Vault"
+    assert remote_note.read_text(encoding="utf-8") == "# Compartida"
+    assert agent._document_outbox().get_document_conflict_skin(
+        user_id=USER_A,
+        org_id="00000000-0000-0000-0000-000000000001",
+        connection_id=connection.connection_id,
+        relative_path="nota.md",
+    ) == {"winner": "vault"}
     assert audits[0]["action"] == "sync_conflict_resolve"
     with pytest.raises(AgentError, match="winner"):
         agent.resolve_sync_conflict("token-a", "00000000-0000-0000-0000-000000000001", {"connection_id": connection.connection_id, "relative_path": "nota.md", "winner": "auto"})

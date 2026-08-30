@@ -1772,6 +1772,45 @@ class JobStore:
         )
         return cursor.rowcount == 1
 
+    def set_document_conflict_skin(
+        self, *, user_id: str, org_id: str, connection_id: str, relative_path: str, winner: str,
+    ) -> None:
+        try:
+            user_id, org_id = str(uuid.UUID(user_id)), str(uuid.UUID(org_id))
+        except (ValueError, AttributeError) as error:
+            raise ValueError("document conflict skin identity is invalid") from error
+        path = PurePosixPath(relative_path)
+        if (
+            not connection_id.startswith("sync_")
+            or path.is_absolute()
+            or ".." in path.parts
+            or not path.parts
+            or winner not in {"vault", "shared"}
+        ):
+            raise ValueError("document conflict skin is invalid")
+        self._connection.execute(
+            """
+            INSERT INTO document_conflict_skins
+                (user_id, org_id, connection_id, relative_path, winner, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT(user_id, org_id, connection_id, relative_path) DO UPDATE SET
+                winner = excluded.winner, updated_at = excluded.updated_at
+            """,
+            (user_id, org_id, connection_id, path.as_posix(), winner, _timestamp()),
+        )
+
+    def get_document_conflict_skin(
+        self, *, user_id: str, org_id: str, connection_id: str, relative_path: str,
+    ) -> dict[str, Any] | None:
+        row = self._connection.execute(
+            """
+            SELECT winner FROM document_conflict_skins
+            WHERE user_id = ? AND org_id = ? AND connection_id = ? AND relative_path = ?
+            """,
+            (str(uuid.UUID(user_id)), str(uuid.UUID(org_id)), connection_id, PurePosixPath(relative_path).as_posix()),
+        ).fetchone()
+        return dict(row) if row is not None else None
+
     def has_active_review_claim(self, artifact_id: str) -> bool:
         now = _timestamp()
         row = self._connection.execute(

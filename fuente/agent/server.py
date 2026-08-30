@@ -516,7 +516,7 @@ class GestajoAgent:
             "platform": platform.system(),
             "user_id": binding.user_id,
             "vault_fingerprint": self._vault_fingerprint(),
-            "capabilities": ["flow", "flow_import", "flow_approve", "flow_jobs", "flow_job_detail", "flow_job_resume", "flow_job_cancel", "flow_review", "flow_review_captured", "flow_discard", "quarantine_read", "quarantine_restore", "settings", "sync_inputs", "sync_run", "sync_output", "sync_conflict_read", "sync_conflict_resolve", "document_conflict_read", "document_conflict_resolve", "taxonomy_read", "taxonomy_write", "note_read", "note_search", "note_relations", "note_lineage", "note_write", "note_theme", "note_merge", "note_approve_processed", "note_share", "note_assistant", "note_assistant_persist", "knowledge_assistant", "templates_read", "templates_write"],
+            "capabilities": ["flow", "flow_import", "flow_approve", "flow_jobs", "flow_job_detail", "flow_job_resume", "flow_job_cancel", "flow_review", "flow_review_captured", "flow_discard", "quarantine_read", "quarantine_restore", "settings", "sync_inputs", "sync_run", "sync_output", "sync_conflict_read", "sync_conflict_resolve", "document_conflict_read", "document_conflict_resolve", "taxonomy_read", "taxonomy_write", "note_read", "note_search", "note_relations", "note_lineage", "note_export", "note_write", "note_theme", "note_merge", "note_approve_processed", "note_share", "note_assistant", "note_assistant_persist", "knowledge_assistant", "templates_read", "templates_write"],
         }
 
     def taxonomy(self, access_token: object, org_id: object) -> dict[str, object]:
@@ -1143,6 +1143,21 @@ class GestajoAgent:
         ))
         return note
 
+    def export_note(self, access_token: object, org_id: object, note_id: object, export_format: object) -> dict[str, object]:
+        """Prepare a canonical local export for the authorized Gestajo session."""
+        binding = self._require_user(access_token)
+        if not isinstance(org_id, str) or not isinstance(note_id, str):
+            raise AgentAuthorizationError("note is invalid")
+        self._membership_verifier(binding, self._access_token(access_token), org_id)
+        scope = self._note_visibility_verifier(binding, self._access_token(access_token), note_id)
+        result = _note_export_response(
+            self._local_backend().export_note(note_id, _note_export_format(export_format))
+        )
+        self._record_audit(binding, self._access_token(access_token), _new_audit_event(
+            note_id, org_id, scope["common_org_id"], binding.user_id, "note_export", "success",
+        ))
+        return result
+
     def update_note(self, access_token: object, org_id: object, note_id: object, payload: object) -> dict[str, object]:
         binding = self._require_management(access_token, org_id)
         if not isinstance(note_id, str):
@@ -1630,6 +1645,16 @@ def _handler_for(agent: GestajoAgent) -> type[BaseHTTPRequestHandler]:
                 return
             if parsed.path.startswith("/v1/notes/"):
                 note_id = parsed.path.removeprefix("/v1/notes/")
+                if note_id.endswith("/export"):
+                    note_id = note_id.removesuffix("/export")
+                    if not note_id or "/" in note_id:
+                        self._send_error(HTTPStatus.NOT_FOUND, "route not found")
+                        return
+                    self._authorized(lambda token: agent.export_note(
+                        token, _single_query_value(parsed.query, "org_id"), note_id,
+                        _single_query_value(parsed.query, "format"),
+                    ))
+                    return
                 if note_id.endswith("/relations"):
                     note_id = note_id.removesuffix("/relations")
                     if not note_id or "/" in note_id:
@@ -2206,6 +2231,47 @@ def _flow_review_artifacts(backend: Any, job: Mapping[str, object], job_id: str)
 def _flow_review_media_type(path: Path) -> str:
     media_type = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
     return "text/plain; charset=utf-8" if media_type in {"text/html", "application/xhtml+xml"} else media_type
+
+
+def _note_export_format(value: object) -> str:
+    if value not in {"markdown", "docx", "pdf"}:
+        raise AgentError("note export format is invalid")
+    return str(value)
+
+
+def _note_export_response(value: object) -> dict[str, object]:
+    if not isinstance(value, Mapping) or value.get("error"):
+        raise AgentError("local note export failed")
+    export_format = value.get("format")
+    filename = value.get("filename")
+    content_type = value.get("content_type")
+    mode = value.get("mode")
+    expected = {
+        "markdown": ("text/markdown;charset=utf-8", "download", "content", ".md"),
+        "docx": ("application/vnd.openxmlformats-officedocument.wordprocessingml.document", "download", "content_base64", ".docx"),
+        "pdf": ("application/pdf", "user_assisted_print", "print_html", ".pdf"),
+    }
+    contract = expected.get(export_format)
+    if (
+        contract is None
+        or not isinstance(filename, str)
+        or not filename.endswith(contract[3])
+        or "/" in filename
+        or "\\" in filename
+        or len(filename) > 512
+        or content_type != contract[0]
+        or mode != contract[1]
+        or not isinstance(value.get(contract[2]), str)
+        or len(str(value[contract[2]])) > 20_000_000
+    ):
+        raise AgentError("local note export has an invalid contract")
+    return {
+        "format": export_format,
+        "filename": filename,
+        "content_type": content_type,
+        "mode": mode,
+        contract[2]: value[contract[2]],
+    }
 
 
 def _note_assistant_payload(payload: object) -> str:

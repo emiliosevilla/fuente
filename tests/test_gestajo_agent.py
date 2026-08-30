@@ -97,7 +97,7 @@ def test_status_requires_the_bound_user(tmp_path: Path):
     )
 
     assert agent.status("token-a")["claimed"] is True
-    assert agent.status("token-a")["capabilities"] == ["flow", "flow_import", "flow_approve", "flow_jobs", "flow_job_detail", "flow_job_resume", "flow_job_cancel", "flow_review", "flow_review_captured", "flow_discard", "quarantine_read", "quarantine_restore", "settings", "sync_inputs", "sync_run", "sync_output", "sync_conflict_read", "sync_conflict_resolve", "document_conflict_read", "document_conflict_resolve", "taxonomy_read", "taxonomy_write", "note_read", "note_search", "note_relations", "note_lineage", "note_write", "note_theme", "note_merge", "note_approve_processed", "note_share", "note_assistant", "note_assistant_persist", "knowledge_assistant", "templates_read", "templates_write"]
+    assert agent.status("token-a")["capabilities"] == ["flow", "flow_import", "flow_approve", "flow_jobs", "flow_job_detail", "flow_job_resume", "flow_job_cancel", "flow_review", "flow_review_captured", "flow_discard", "quarantine_read", "quarantine_restore", "settings", "sync_inputs", "sync_run", "sync_output", "sync_conflict_read", "sync_conflict_resolve", "document_conflict_read", "document_conflict_resolve", "taxonomy_read", "taxonomy_write", "note_read", "note_search", "note_relations", "note_lineage", "note_export", "note_write", "note_theme", "note_merge", "note_approve_processed", "note_share", "note_assistant", "note_assistant_persist", "knowledge_assistant", "templates_read", "templates_write"]
     with pytest.raises(AgentAuthenticationError, match="another user"):
         agent.status("token-b")
 
@@ -550,6 +550,56 @@ def test_note_search_returns_only_notes_visible_to_the_current_access(tmp_path: 
     assert "/private" not in str(page)
     assert hidden_id not in str(page)
     assert audits[0]["action"] == "note_search"
+
+
+def test_note_export_returns_only_canonical_download_payload_to_gestajo(tmp_path: Path):
+    from http.server import ThreadingHTTPServer
+
+    org_id = "00000000-0000-0000-0000-000000000001"
+    note_id = "00000000-0000-0000-0000-000000000010"
+    audits: list[dict[str, object]] = []
+
+    class Backend:
+        @staticmethod
+        def export_note(received_note_id, export_format):
+            assert (received_note_id, export_format) == (note_id, "docx")
+            return {
+                "format": "docx",
+                "filename": "Resumen.docx",
+                "content_type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                "mode": "download",
+                "content_base64": "UEs=",
+                "path": "/private/vault/4_procesado/Resumen.docx",
+            }
+
+    agent = GestajoAgent(
+        tmp_path, verifier=_verifier, publisher=_publisher,
+        membership_verifier=_membership_verifier,
+        note_visibility_verifier=lambda *_args: {"common_org_id": COMMON_ORG_ID},
+        backend_factory=lambda _vault: Backend(), audit_publisher=lambda _binding, _token, event: audits.append(event),
+    )
+    agent.claim("token-a", {"supabase_url": "https://project.supabase.co", "publishable_key": "sb_publishable_test_key"})
+    server = ThreadingHTTPServer(("127.0.0.1", 0), _handler_for(agent))
+    thread = Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        connection = HTTPConnection("127.0.0.1", server.server_port, timeout=2)
+        connection.request("GET", f"/v1/notes/{note_id}/export?org_id={org_id}&format=docx", headers={"Origin": "http://localhost:3000", "Authorization": "Bearer token-a"})
+        response = connection.getresponse()
+        payload = json.loads(response.read())
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
+
+    assert response.status == 200
+    assert payload == {
+        "format": "docx", "filename": "Resumen.docx",
+        "content_type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "mode": "download", "content_base64": "UEs=",
+    }
+    assert "/private" not in str(payload)
+    assert audits[0]["action"] == "note_export"
 
 
 def test_health_is_cors_and_private_network_ready_for_gestajo(tmp_path: Path):

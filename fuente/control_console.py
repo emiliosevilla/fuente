@@ -755,7 +755,9 @@ class FuenteConsoleBackend:
         return True
 
     def _build_chat_provider(self):
-        return OllamaChatProvider(self.config.ollama_url, timeout=12.0)
+        # A complete local note can take longer than the small UI timeout.
+        # Keep chat responsive without rejecting a valid, grounded answer.
+        return OllamaChatProvider(self.config.ollama_url, timeout=60.0)
 
     def get_chat_service(self) -> ChatApplicationService:
         """Shared chat contract used by WebView bridge and native modal."""

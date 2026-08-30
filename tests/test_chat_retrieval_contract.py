@@ -285,6 +285,12 @@ def test_bridge_and_backend_share_contract(temp_vault_path, monkeypatch):
     assert len(fake.calls) == 2
 
 
+def test_console_chat_provider_allows_a_complete_note_response(temp_vault_path):
+    provider = FuenteConsoleBackend(temp_vault_path)._build_chat_provider()
+
+    assert provider.timeout == 60.0
+
+
 def test_chat_skips_ollama_when_budget_denies_llm(grounded_service):
     service, provider, _store = grounded_service
     deny = BudgetDecision(

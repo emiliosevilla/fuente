@@ -510,7 +510,7 @@ class GestajoAgent:
             "platform": platform.system(),
             "user_id": binding.user_id,
             "vault_fingerprint": self._vault_fingerprint(),
-            "capabilities": ["flow", "flow_import", "flow_approve", "flow_jobs", "flow_review", "flow_review_captured", "flow_discard", "settings", "sync_inputs", "sync_run", "sync_output", "sync_conflict_read", "sync_conflict_resolve", "document_conflict_read", "document_conflict_resolve", "note_read", "note_relations", "note_lineage", "note_write", "note_merge", "note_approve_processed", "note_share", "note_assistant", "knowledge_assistant", "templates_read", "templates_write"],
+            "capabilities": ["flow", "flow_import", "flow_approve", "flow_jobs", "flow_job_detail", "flow_job_resume", "flow_job_cancel", "flow_review", "flow_review_captured", "flow_discard", "settings", "sync_inputs", "sync_run", "sync_output", "sync_conflict_read", "sync_conflict_resolve", "document_conflict_read", "document_conflict_resolve", "note_read", "note_relations", "note_lineage", "note_write", "note_merge", "note_approve_processed", "note_share", "note_assistant", "knowledge_assistant", "templates_read", "templates_write"],
         }
 
     def flow(self, access_token: object, org_id: object) -> dict[str, object]:
@@ -530,6 +530,40 @@ class GestajoAgent:
             None, str(org_id), str(uuid.UUID(str(org_id))), binding.user_id, "caudal_queue_read", "success",
         ))
         return page
+
+    def read_flow_job(self, access_token: object, org_id: object, job_id: object) -> dict[str, object]:
+        binding = self._require_management(access_token, org_id)
+        valid_job_id = _flow_job_id(job_id)
+        result = _flow_job_detail_response(self._local_backend().get_job_detail(valid_job_id))
+        self._record_audit(binding, self._access_token(access_token), _new_audit_event(
+            None, str(org_id), str(uuid.UUID(str(org_id))), binding.user_id, "caudal_job_read", "success",
+            llm_model=result["llm_readiness"]["compatible_model"] or None,
+        ))
+        return result
+
+    def resume_flow_job(self, access_token: object, org_id: object, job_id: object, payload: object) -> dict[str, object]:
+        binding = self._require_management(access_token, org_id)
+        valid_job_id = _flow_job_id(job_id)
+        expected_revision, authorize_model_load = _flow_job_resume_payload(payload)
+        detail = _flow_job_detail_response(self._local_backend().get_job_detail(valid_job_id))
+        result = _flow_job_response(self._local_backend().resume_job(valid_job_id, expected_revision, authorize_model_load))
+        self._record_audit(binding, self._access_token(access_token), _new_audit_event(
+            None, str(org_id), str(uuid.UUID(str(org_id))), binding.user_id, "caudal_job_resume", "success",
+            llm_model=detail["llm_readiness"]["compatible_model"] or None,
+        ))
+        return result
+
+    def cancel_flow_job(self, access_token: object, org_id: object, job_id: object, payload: object) -> dict[str, object]:
+        binding = self._require_management(access_token, org_id)
+        valid_job_id = _flow_job_id(job_id)
+        expected_revision, reason = _flow_job_cancel_payload(payload)
+        detail = _flow_job_detail_response(self._local_backend().get_job_detail(valid_job_id))
+        result = _flow_job_response(self._local_backend().cancel_job(valid_job_id, expected_revision, reason))
+        self._record_audit(binding, self._access_token(access_token), _new_audit_event(
+            None, str(org_id), str(uuid.UUID(str(org_id))), binding.user_id, "caudal_job_cancel", "success",
+            llm_model=detail["llm_readiness"]["compatible_model"] or None,
+        ))
+        return result
 
     def import_flow_files(self, access_token: object, org_id: object, payload: object) -> dict[str, object]:
         """Choose local files natively, then copy them into Caudal's input stage."""
@@ -1362,6 +1396,15 @@ def _handler_for(agent: GestajoAgent) -> type[BaseHTTPRequestHandler]:
                     )
                 )
                 return
+            if parsed.path.startswith("/v1/flow/jobs/"):
+                job_id = parsed.path.removeprefix("/v1/flow/jobs/")
+                if not job_id or "/" in job_id:
+                    self._send_error(HTTPStatus.NOT_FOUND, "route not found")
+                    return
+                self._authorized(
+                    lambda token: agent.read_flow_job(token, _single_query_value(parsed.query, "org_id"), job_id)
+                )
+                return
             if parsed.path.startswith("/v1/flow/reviews/"):
                 review_route = parsed.path.removeprefix("/v1/flow/reviews/")
                 parts = review_route.split("/")
@@ -1444,6 +1487,10 @@ def _handler_for(agent: GestajoAgent) -> type[BaseHTTPRequestHandler]:
             is_note_merge = parsed.path == "/v1/notes/merge"
             is_note_update = bool(note_route) and "/" not in note_route and not is_note_merge
             is_knowledge_assistant = parsed.path == "/v1/knowledge-assistant"
+            flow_job_route = parsed.path.removeprefix("/v1/flow/jobs/") if parsed.path.startswith("/v1/flow/jobs/") else ""
+            flow_job_parts = flow_job_route.split("/") if flow_job_route else []
+            is_flow_job_resume = len(flow_job_parts) == 2 and bool(flow_job_parts[0]) and flow_job_parts[1] == "resume"
+            is_flow_job_cancel = len(flow_job_parts) == 2 and bool(flow_job_parts[0]) and flow_job_parts[1] == "cancel"
             review_route = parsed.path.removeprefix("/v1/flow/reviews/") if parsed.path.startswith("/v1/flow/reviews/") else ""
             review_parts = review_route.split("/") if review_route else []
             is_review_captured_update = len(review_parts) == 2 and bool(review_parts[0]) and review_parts[1] == "captured"
@@ -1452,7 +1499,7 @@ def _handler_for(agent: GestajoAgent) -> type[BaseHTTPRequestHandler]:
             is_template_save = bool(template_id) and "/" not in template_id
             conflict_route = parsed.path.removeprefix("/v1/document-conflicts/") if parsed.path.startswith("/v1/document-conflicts/") else ""
             is_document_conflict_resolve = conflict_route.endswith("/resolve") and bool(conflict_route.removesuffix("/resolve")) and "/" not in conflict_route.removesuffix("/resolve")
-            if not (is_note_merge or is_note_update or is_note_share or is_note_assistant or is_note_processed_approval or is_knowledge_assistant or is_review_captured_update or is_review_captured_assistant or is_template_save or is_document_conflict_resolve) and parsed.path not in {
+            if not (is_note_merge or is_note_update or is_note_share or is_note_assistant or is_note_processed_approval or is_knowledge_assistant or is_flow_job_resume or is_flow_job_cancel or is_review_captured_update or is_review_captured_assistant or is_template_save or is_document_conflict_resolve) and parsed.path not in {
                 "/v1/claim", "/v1/flow/import", "/v1/flow/approve", "/v1/flow/discard", "/v1/settings", "/v1/sync-inputs/select", "/v1/sync-inputs/run", "/v1/sync-outputs/run", "/v1/sync-conflicts/read", "/v1/sync-conflicts/resolve",
                 "/v1/sync-inputs/confirm", "/v1/sync-inputs/enabled", "/v1/sync-inputs/remove", "/v1/sync",
             }:
@@ -1498,6 +1545,12 @@ def _handler_for(agent: GestajoAgent) -> type[BaseHTTPRequestHandler]:
                 return
             if is_knowledge_assistant:
                 self._authorized(lambda token: agent.ask_knowledge_assistant(token, _single_query_value(parsed.query, "org_id"), payload))
+                return
+            if is_flow_job_resume:
+                self._authorized(lambda token: agent.resume_flow_job(token, _single_query_value(parsed.query, "org_id"), flow_job_parts[0], payload))
+                return
+            if is_flow_job_cancel:
+                self._authorized(lambda token: agent.cancel_flow_job(token, _single_query_value(parsed.query, "org_id"), flow_job_parts[0], payload))
                 return
             if is_note_update:
                 self._authorized(lambda token: agent.update_note(token, _single_query_value(parsed.query, "org_id"), parsed.path.removeprefix("/v1/notes/"), payload))
@@ -1752,6 +1805,54 @@ def _flow_job_response(item: object) -> dict[str, object]:
         "reason": item.get("reason"), "error_code": item.get("error_code"),
         "cancel_requested_at": item.get("cancel_requested_at"), "resume_available": item["resume_available"],
     }
+
+
+def _flow_job_detail_response(detail: object) -> dict[str, object]:
+    if not isinstance(detail, Mapping):
+        raise AgentError("local Caudal job returned an invalid response")
+    readiness = detail.get("llm_readiness")
+    if not isinstance(readiness, Mapping):
+        raise AgentError("local Caudal job returned an invalid response")
+    response = _flow_job_response(detail.get("job"))
+    text_fields = ("reason_code", "compatible_model", "instruction")
+    if any(not isinstance(readiness.get(field), str) for field in text_fields) or not isinstance(readiness.get("requires_user_confirmation"), bool):
+        raise AgentError("local Caudal job returned an invalid response")
+    return {
+        **response,
+        "llm_readiness": {
+            "reason_code": readiness["reason_code"],
+            "requires_user_confirmation": readiness["requires_user_confirmation"],
+            "compatible_model": readiness["compatible_model"],
+            "instruction": readiness["instruction"],
+        },
+    }
+
+
+def _flow_job_id(value: object) -> str:
+    try:
+        return str(uuid.UUID(str(value)))
+    except (ValueError, AttributeError) as error:
+        raise AgentError("Caudal job is invalid") from error
+
+
+def _flow_job_resume_payload(payload: object) -> tuple[int, bool]:
+    if not isinstance(payload, Mapping) or set(payload) != {"expected_revision", "authorize_model_load"}:
+        raise AgentError("Caudal resume has unsupported fields")
+    revision = payload.get("expected_revision")
+    authorize = payload.get("authorize_model_load")
+    if not isinstance(revision, int) or isinstance(revision, bool) or revision < 0 or not isinstance(authorize, bool):
+        raise AgentError("Caudal resume payload is invalid")
+    return revision, authorize
+
+
+def _flow_job_cancel_payload(payload: object) -> tuple[int, str]:
+    if not isinstance(payload, Mapping) or set(payload) != {"expected_revision", "reason"}:
+        raise AgentError("Caudal cancel has unsupported fields")
+    revision = payload.get("expected_revision")
+    reason = payload.get("reason")
+    if not isinstance(revision, int) or isinstance(revision, bool) or revision < 0 or not isinstance(reason, str) or not 1 <= len(reason.strip()) <= 512:
+        raise AgentError("Caudal cancel payload is invalid")
+    return revision, reason.strip()
 
 
 def _flow_processed_notes(control: Any, job: Mapping[str, object]) -> list[dict[str, str]]:

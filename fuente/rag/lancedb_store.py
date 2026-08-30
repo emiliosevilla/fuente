@@ -123,9 +123,7 @@ class LanceDBStore:
                 for record, vector in zip(normalized, vectors)
             ]
             table = self._table(rows)
-            ids = [str(row["id"]) for row in rows]
-            self._delete_where(table, "id", ids)
-            table.add(rows)
+            table.merge_insert("id").when_matched_update_all().when_not_matched_insert_all().execute(rows)
         except Exception as exc:
             self.failed = True
             self.init_error = exc

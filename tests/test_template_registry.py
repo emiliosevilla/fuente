@@ -51,6 +51,15 @@ def test_apunte_and_diario_are_packaged_manual_examples(registry):
     assert "## Próximo paso" in registry.load("diario").template
 
 
+def test_packaged_agent_instructions_preserve_evidence_and_verified_links(registry):
+    for template_id in INITIAL_TEMPLATE_IDS:
+        agents = registry.load(template_id).packaged_agents
+        assert "## Propósito" in agents
+        assert "## Procedimiento" in agents
+        assert "## Comprobación" in agents
+        assert "fuente original intacta" in agents
+
+
 @pytest.mark.parametrize(
     "template_id",
     ["../resumen", "/resumen", "resumen/evil", "resumen\x00", ""],

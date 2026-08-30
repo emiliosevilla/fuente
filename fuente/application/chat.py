@@ -9,6 +9,7 @@ from __future__ import annotations
 import html
 import json
 import logging
+import re
 import urllib.error
 import urllib.request
 from typing import Any, Callable, Mapping, Optional, Protocol
@@ -352,10 +353,24 @@ class ChatApplicationService:
             has_context = bool(retrieval_ctx.get("has_context"))
             evidence = str(retrieval_ctx.get("text") or "").strip()
 
+        explicit_wikilinks = sorted({
+            match.group(0)
+            for _note_id, _title, body in selected_notes
+            for match in re.finditer(r"\[\[[^\]\n]+\]\]", body)
+        })
         if has_context and evidence:
+            wikilink_instruction = ""
+            if explicit_wikilinks:
+                wikilink_instruction = (
+                    "\n\nWikilinks explícitos de la Nota:\n"
+                    + "\n".join(f"- `{link}`" for link in explicit_wikilinks)
+                    + "\nSi propones wikilinks, usa únicamente estos destinos "
+                    "exactos y no inventes otros."
+                )
             user_prompt = (
                 "Contexto recuperado (evidencia):\n"
                 f"{evidence}\n\n"
+                f"{wikilink_instruction}\n\n"
                 "Pregunta del usuario:\n"
                 f"{query}\n\n"
                 "Responde citando solo lo respaldado por el contexto. "

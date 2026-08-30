@@ -215,6 +215,26 @@ def test_selected_pending_note_is_sent_directly_to_the_local_model(grounded_serv
     assert "Chesterton" in provider.calls[-1]["prompt"]
 
 
+def test_selected_note_exposes_its_existing_wikilinks_without_inventing_targets(grounded_service):
+    service, provider, _store = grounded_service
+
+    result = service.ask(
+        "Resume y señala relaciones.",
+        {
+            "context_mode": "single_note",
+            "document_id": "note-pending",
+            "selected_note_title": "03 El loco",
+            "selected_note_markdown": "Véase [[01 Presentación|Chesterton]] y [[> Reseña|materialistas]].",
+        },
+    )
+
+    assert result["ok"] is True
+    prompt = provider.calls[-1]["prompt"]
+    assert "Wikilinks explícitos de la Nota" in prompt
+    assert "[[01 Presentación|Chesterton]]" in prompt
+    assert "[[> Reseña|materialistas]]" in prompt
+
+
 def test_selected_pending_notes_are_sent_together_to_the_local_model(grounded_service):
     service, provider, _store = grounded_service
 

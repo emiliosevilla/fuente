@@ -1567,6 +1567,8 @@ def _settings_response(state: Mapping[str, object], role: str) -> dict[str, obje
         "models": [item for item in settings.get("models", []) if isinstance(item, str)],
         "models_measured": settings.get("models_measured") is True,
         "current_model": settings.get("current_model") if isinstance(settings.get("current_model"), str) else None,
+        "ram_recommended_model": settings.get("ram_recommended_model") if isinstance(settings.get("ram_recommended_model"), str) else None,
+        "ai_provider": settings.get("ai_provider") if settings.get("ai_provider") in {"ollama", "anythingllm"} else "ollama",
         "ram_margin_pct": _percentage(settings.get("ram_margin")),
         "resource_profile": settings.get("resource_profile") if isinstance(settings.get("resource_profile"), str) else None,
         "audio_mode": settings.get("audio_mode") if isinstance(settings.get("audio_mode"), str) else None,

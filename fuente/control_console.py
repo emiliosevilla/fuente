@@ -2116,12 +2116,18 @@ class FuenteConsoleBackend:
             except Exception:
                 pass
 
+        configured_model = self.config.custom_model_override
+        recommended_model = (
+            None if configured_model else self.ram_governor.recommend_model() or None
+        )
         return {
             "vault_path": str(self.vault_path),
             "output_connected_folders": connected_output,
             "models": self.get_ollama_models(),
             "models_measured": self._ollama_models_measured,
-            "current_model": self.config.custom_model_override,
+            "current_model": configured_model,
+            "ram_recommended_model": recommended_model,
+            "ai_provider": "anythingllm" if self.config.anythingllm_url else "ollama",
             "ollama_url": str(self.config.ollama_url),
             "ram_margin": f"{self.config.ram_safety_margin_pct * 100:g}%",
             "allow_non_loopback_ollama": self.config.allow_non_loopback_ollama,

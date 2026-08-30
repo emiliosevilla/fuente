@@ -1110,11 +1110,11 @@ def test_management_can_discard_a_pending_capture(tmp_path: Path):
 def test_management_can_read_captured_review_without_local_paths(tmp_path: Path):
     job_id = "00000000-0000-0000-0000-000000000125"
     captured_id = document_id_for_relative_path("3_capturado/03 El loco.md")
-    original = tmp_path / "1_volcado" / "03 El loco.docx"
-    original.parent.mkdir()
+    copied = tmp_path / "2_copiado" / "03 El loco.docx"
+    copied.parent.mkdir()
     document = Document()
     document.add_paragraph("Original de oficina")
-    document.save(original)
+    document.save(copied)
     captured = tmp_path / "3_capturado" / "03 El loco.md"
     captured.parent.mkdir()
     captured.write_text(
@@ -1148,6 +1148,7 @@ def test_management_can_read_captured_review_without_local_paths(tmp_path: Path)
             return {"job": {
                 "job_id": job_id,
                 "source_relative_path": "1_volcado/03 El loco.docx",
+                "dirty_artifact": "2_copiado/03 El loco.docx",
                 "clean_artifact": "3_capturado/03 El loco.md",
             }}
 
@@ -1169,7 +1170,7 @@ def test_management_can_read_captured_review_without_local_paths(tmp_path: Path)
     assert review == {
         "job_id": job_id,
         "title": "03 El loco.docx",
-        "source": {"filename": "03 El loco.docx", "media_type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "size_bytes": original.stat().st_size},
+        "source": {"filename": "03 El loco.docx", "media_type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "size_bytes": copied.stat().st_size},
         "captured": {
             "document_id": captured_id,
             "revision": 4,
@@ -1178,7 +1179,7 @@ def test_management_can_read_captured_review_without_local_paths(tmp_path: Path)
         },
     }
     assert str(tmp_path) not in str(review)
-    assert source.path == original
+    assert source.path == copied
     assert source.media_type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
     assert preview == {"body_markdown": "Original de oficina", "truncated": False}
     assert str(tmp_path) not in str(preview)
@@ -1208,6 +1209,8 @@ def test_management_can_refine_pending_capture_before_supabase_catalogue_sync(tm
     captured_id = document_id_for_relative_path("3_capturado/Informe.md")
     (tmp_path / "1_volcado").mkdir()
     (tmp_path / "1_volcado" / "Informe.pdf").write_bytes(b"%PDF-1.7")
+    (tmp_path / "2_copiado").mkdir()
+    (tmp_path / "2_copiado" / "Informe.pdf").write_bytes(b"%PDF-1.7")
     (tmp_path / "3_capturado").mkdir()
     (tmp_path / "3_capturado" / "Informe.md").write_text("# Capturado", encoding="utf-8")
     calls: list[tuple[object, ...]] = []
@@ -1239,6 +1242,7 @@ def test_management_can_refine_pending_capture_before_supabase_catalogue_sync(tm
             return {"job": {
                 "job_id": job_id, "stage": "saved_clean", "status": "pending",
                 "error_code": "awaiting_clean_approval", "source_relative_path": "1_volcado/Informe.pdf",
+                "dirty_artifact": "2_copiado/Informe.pdf",
                 "clean_artifact": "3_capturado/Informe.md",
             }}
 

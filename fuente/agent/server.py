@@ -2526,13 +2526,13 @@ def _flow_review_response(
 def _flow_review_artifacts(backend: Any, job: Mapping[str, object], job_id: str) -> tuple[str, Path, str, Path]:
     if job.get("job_id") != job_id:
         raise AgentError("local Caudal job is invalid")
-    source_relative = _safe_sync_relative(job.get("source_relative_path"))
+    source_relative = _safe_sync_relative(job.get("dirty_artifact"))
     captured_relative = _safe_sync_relative(job.get("clean_artifact"))
     if source_relative is None or captured_relative is None or not captured_relative.endswith(".md"):
         raise AgentError("local Caudal review is unavailable")
     try:
         resolver = backend.vault.path_resolver()
-        source_path = resolver.resolve_input(source_relative)
+        source_path = resolver.resolve(source_relative, root_name="vault")
         captured_path = resolver.resolve(captured_relative, root_name="vault")
         if not source_path.is_file() or not captured_path.is_file():
             raise ValueError("review artifact is missing")

@@ -164,6 +164,8 @@ def test_processing_creates_required_red_notes(smart_harness):
     assert [n.note_type for n in notes].count("tareas") == 1
     assert [n.note_type for n in notes].count("reunion") == 1
     assert [n.note_type for n in notes].count("objetivos") == 1
+    assert [n.note_type for n in notes].count("decision") == 1
+    assert [n.note_type for n in notes].count("conclusion") == 1
     assert all(n.seal == "pending_review" for n in notes)
 
 

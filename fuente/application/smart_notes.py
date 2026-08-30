@@ -34,6 +34,8 @@ _PROCESSED_SUBDIRS = {
     "tareas": "tareas",
     "reunion": "reuniones",
     "objetivos": "objetivos",
+    "decision": "decisiones",
+    "conclusion": "conclusiones",
 }
 _FRONTMATTER_NOTE_TYPE = {
     "resumen": "summary",
@@ -43,8 +45,10 @@ _FRONTMATTER_NOTE_TYPE = {
     "tareas": "summary",
     "reunion": "summary",
     "objetivos": "summary",
+    "decision": "summary",
+    "conclusion": "summary",
 }
-_REQUIRED_FIXED = ("resumen", "propiedades", "contexto", "tareas", "reunion", "objetivos")
+_REQUIRED_FIXED = ("resumen", "propiedades", "contexto", "tareas", "reunion", "objetivos", "decision", "conclusion")
 
 
 class ConversationClient(Protocol):
@@ -371,7 +375,7 @@ class SmartNoteGenerator:
     ) -> dict[str, Any]:
         prompt = (
             "Genera notas procesadas en JSON con claves resumen, propiedades, "
-            "contexto, tareas, reunion, objetivos, concepts (lista de slugs) y "
+            "contexto, tareas, reunion, objetivos, decision, conclusion, concepts (lista de slugs) y "
             "concept_bodies (mapa slug->markdown). Conserva sólo hechos de la "
             "fuente; en tareas no inventes responsables y en reunion separa "
             "acuerdos de pendientes.\n\n"
@@ -397,6 +401,8 @@ class SmartNoteGenerator:
             "tareas": f"Tareas extraídas de {source_wikilink}.",
             "reunion": f"Acuerdos y pendientes de {source_wikilink}.",
             "objetivos": f"Objetivos derivados de {source_wikilink}.",
+            "decision": f"Hoja de decisión derivada de {source_wikilink}.",
+            "conclusion": f"Conclusiones derivadas de {source_wikilink}.",
             "concepts": extract_concept_slugs(body),
             "concept_bodies": {},
         }
@@ -679,6 +685,8 @@ class FakeConversationClient:
             "tareas": "Tareas concretas extraídas de la fuente aprobada.",
             "reunion": "Acuerdos y próximos pasos de la fuente aprobada.",
             "objetivos": "Objetivos verificables de la fuente aprobada.",
+            "decision": "Hoja de decisión basada en la fuente aprobada.",
+            "conclusion": "Conclusiones basadas en la fuente aprobada.",
             "concepts": concepts,
             "concept_bodies": bodies,
         }

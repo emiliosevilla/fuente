@@ -932,7 +932,7 @@ class FuenteConsoleBackend:
         }
         note_types = {
             note_type: store.count_feed_catalog(note_type=note_type)
-            for note_type in ("resumen", "propiedades", "contexto", "concepto")
+            for note_type in ("resumen", "propiedades", "contexto", "concepto", "tareas", "reunion", "objetivos", "decision", "conclusion")
         }
         queue_counts = {"active": 0, "waiting": 0}
         pending_jobs: list[dict[str, Any]] = []

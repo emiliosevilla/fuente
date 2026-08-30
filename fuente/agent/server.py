@@ -403,7 +403,7 @@ class GestajoAgent:
             "platform": platform.system(),
             "user_id": binding.user_id,
             "vault_fingerprint": self._vault_fingerprint(),
-            "capabilities": ["flow", "flow_approve", "flow_review", "settings", "sync_inputs", "sync_run", "sync_output", "sync_conflict_read", "sync_conflict_resolve", "note_read", "note_write", "note_share"],
+            "capabilities": ["flow", "flow_approve", "flow_review", "settings", "sync_inputs", "sync_run", "sync_output", "sync_conflict_read", "sync_conflict_resolve", "note_read", "note_write", "note_share", "note_assistant"],
         }
 
     def flow(self, access_token: object, org_id: object) -> dict[str, object]:
@@ -660,6 +660,24 @@ class GestajoAgent:
         ))
         return {**local, "sync_state": sync_state}
 
+    def ask_note_assistant(self, access_token: object, org_id: object, note_id: object, payload: object) -> dict[str, object]:
+        """Run a local, retrieval-grounded assistant request for one visible note."""
+        binding = self._require_user(access_token)
+        if not isinstance(org_id, str) or not isinstance(note_id, str):
+            raise AgentAuthorizationError("note is invalid")
+        self._membership_verifier(binding, self._access_token(access_token), org_id)
+        scope = self._note_visibility_verifier(binding, self._access_token(access_token), note_id)
+        answer = _assistant_response(self._local_backend().process_chat(
+            _note_assistant_payload(payload),
+            {"context_mode": "single_note", "document_id": note_id},
+        ))
+        self._record_audit(binding, self._access_token(access_token), _new_audit_event(
+            note_id, org_id, scope["common_org_id"], binding.user_id,
+            "note_assistant_ask", "success" if answer["ok"] else "error",
+            llm_model=answer["model"] or None,
+        ))
+        return answer
+
     def share_note(self, access_token: object, org_id: object, note_id: object, payload: object) -> dict[str, object]:
         binding = self._require_management(access_token, org_id)
         if not isinstance(note_id, str):
@@ -901,8 +919,9 @@ def _handler_for(agent: GestajoAgent) -> type[BaseHTTPRequestHandler]:
             parsed = urlparse(self.path)
             note_route = parsed.path.removeprefix("/v1/notes/")
             is_note_share = note_route.endswith("/share") and bool(note_route.removesuffix("/share")) and "/" not in note_route.removesuffix("/share")
+            is_note_assistant = note_route.endswith("/assistant") and bool(note_route.removesuffix("/assistant")) and "/" not in note_route.removesuffix("/assistant")
             is_note_update = bool(note_route) and "/" not in note_route
-            if not (is_note_update or is_note_share) and parsed.path not in {
+            if not (is_note_update or is_note_share or is_note_assistant) and parsed.path not in {
                 "/v1/claim", "/v1/flow/approve", "/v1/settings", "/v1/sync-inputs/select", "/v1/sync-inputs/run", "/v1/sync-outputs/run", "/v1/sync-conflicts/read", "/v1/sync-conflicts/resolve",
                 "/v1/sync-inputs/confirm", "/v1/sync-inputs/enabled", "/v1/sync-inputs/remove", "/v1/sync",
             }:
@@ -921,6 +940,9 @@ def _handler_for(agent: GestajoAgent) -> type[BaseHTTPRequestHandler]:
                 return
             if is_note_share:
                 self._authorized(lambda token: agent.share_note(token, _single_query_value(parsed.query, "org_id"), note_route.removesuffix("/share"), payload))
+                return
+            if is_note_assistant:
+                self._authorized(lambda token: agent.ask_note_assistant(token, _single_query_value(parsed.query, "org_id"), note_route.removesuffix("/assistant"), payload))
                 return
             if is_note_update:
                 self._authorized(lambda token: agent.update_note(token, _single_query_value(parsed.query, "org_id"), parsed.path.removeprefix("/v1/notes/"), payload))
@@ -1244,6 +1266,42 @@ def _flow_review_media_type(path: Path) -> str:
     return "text/plain; charset=utf-8" if media_type in {"text/html", "application/xhtml+xml"} else media_type
 
 
+def _note_assistant_payload(payload: object) -> str:
+    if not isinstance(payload, Mapping) or set(payload) != {"message"}:
+        raise AgentError("assistant payload has unsupported fields")
+    message = payload.get("message")
+    if not isinstance(message, str) or not 1 <= len(message.strip()) <= 16_000:
+        raise AgentError("assistant message is invalid")
+    return message.strip()
+
+
+def _assistant_response(value: object) -> dict[str, object]:
+    if not isinstance(value, Mapping):
+        raise AgentError("local assistant returned an invalid response")
+    text = value.get("text")
+    model = value.get("model")
+    if not isinstance(text, str) or len(text) > 100_000:
+        raise AgentError("local assistant returned an invalid response")
+    if not isinstance(model, str) or len(model) > 256:
+        raise AgentError("local assistant returned an invalid response")
+    citations = value.get("citations") if isinstance(value.get("citations"), list) else []
+    return {
+        "ok": value.get("ok") is True,
+        "text": text,
+        "model": model,
+        "degraded": value.get("degraded") is True,
+        "citations": [
+            {
+                "document_id": str(item.get("document_id") or ""),
+                "title": str(item.get("title") or "")[:512],
+                "snippet": str(item.get("snippet") or "")[:2_000],
+            }
+            for item in citations
+            if isinstance(item, Mapping)
+        ][:24],
+    }
+
+
 def _settings_response(state: Mapping[str, object], role: str) -> dict[str, object]:
     settings = state.get("settings") if isinstance(state.get("settings"), Mapping) else {}
     sync = state.get("sync_inputs") if isinstance(state.get("sync_inputs"), Mapping) else {}
@@ -1489,11 +1547,12 @@ def _document_note_registration(note: Mapping[str, object]) -> dict[str, object]
 
 def _new_audit_event(
     note_id: str | None, org_id: str, common_org_id: str, actor_user_id: str, action: str, result: str,
+    *, llm_model: str | None = None,
 ) -> dict[str, object]:
     return _audit_event_payload({
         "id": str(uuid.uuid4()), "note_id": note_id, "org_id": org_id,
         "common_org_id": common_org_id, "actor_user_id": actor_user_id,
-        "action": action, "llm_model": None, "result": result,
+        "action": action, "llm_model": llm_model, "result": result,
         "occurred_at": datetime.now(timezone.utc).isoformat(),
     })
 

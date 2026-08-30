@@ -96,7 +96,7 @@ def test_status_requires_the_bound_user(tmp_path: Path):
     )
 
     assert agent.status("token-a")["claimed"] is True
-    assert agent.status("token-a")["capabilities"] == ["flow", "flow_approve", "flow_review", "settings", "sync_inputs", "sync_run", "sync_output", "sync_conflict_read", "sync_conflict_resolve", "note_read", "note_write", "note_share"]
+    assert agent.status("token-a")["capabilities"] == ["flow", "flow_approve", "flow_review", "settings", "sync_inputs", "sync_run", "sync_output", "sync_conflict_read", "sync_conflict_resolve", "note_read", "note_write", "note_share", "note_assistant"]
     with pytest.raises(AgentAuthenticationError, match="another user"):
         agent.status("token-b")
 
@@ -559,6 +559,44 @@ def test_management_can_read_captured_review_without_local_paths(tmp_path: Path)
     assert str(tmp_path) not in str(review)
     assert source.path.read_bytes() == b"%PDF-1.7"
     assert source.media_type == "application/pdf"
+
+
+def test_visible_note_can_use_local_assistant_without_exposing_paths(tmp_path: Path):
+    note_id = "00000000-0000-0000-0000-000000000010"
+    calls: list[object] = []
+
+    class Backend:
+        @staticmethod
+        def process_chat(message, context):
+            calls.append((message, context))
+            return {
+                "ok": True, "text": "Resumen local", "model": "qwen2.5:7b",
+                "degraded": False,
+                "citations": [{
+                    "document_id": note_id, "title": "Informe", "snippet": "Dato relevante",
+                    "relative_path": "/private/vault/3_capturado/informe.md",
+                }],
+            }
+
+    audits: list[dict[str, object]] = []
+    agent = GestajoAgent(
+        tmp_path, verifier=_verifier, publisher=_publisher,
+        membership_verifier=_membership_verifier,
+        note_visibility_verifier=lambda *_args: {"note_id": note_id, "common_org_id": COMMON_ORG_ID},
+        backend_factory=lambda _vault: Backend(), audit_publisher=lambda _binding, _token, event: audits.append(event),
+    )
+    agent.claim("token-a", {"supabase_url": "https://project.supabase.co", "publishable_key": "sb_publishable_test_key"})
+
+    answer = agent.ask_note_assistant("token-a", "00000000-0000-0000-0000-000000000001", note_id, {"message": "Resume esta Nota"})
+
+    assert calls == [("Resume esta Nota", {"context_mode": "single_note", "document_id": note_id})]
+    assert answer == {
+        "ok": True, "text": "Resumen local", "model": "qwen2.5:7b", "degraded": False,
+        "citations": [{"document_id": note_id, "title": "Informe", "snippet": "Dato relevante"}],
+    }
+    assert "/private" not in str(answer)
+    assert audits[0]["action"] == "note_assistant_ask"
+    assert audits[0]["llm_model"] == "qwen2.5:7b"
 
 
 def test_flow_rejects_consulta(tmp_path: Path):

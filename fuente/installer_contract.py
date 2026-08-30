@@ -13,6 +13,7 @@ import shutil
 import subprocess
 import sys
 import time
+import webbrowser
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -36,6 +37,9 @@ OLLAMA_READY_TIMEOUT_SEC = 30.0
 OLLAMA_READY_POLL_SEC = 1.0
 OCR_REQUIRED_LANGUAGES = frozenset({"eng", "spa"})
 WINDOWS_TESSERACT_DOWNLOAD = "https://tesseract-ocr.github.io/tessdoc/Downloads.html"
+OLLAMA_DOWNLOAD_URL = "https://ollama.com/download"
+ANYTHINGLLM_DOWNLOAD_URL = "https://anythingllm.com/download"
+_OPENED_LOCAL_AI_INSTALLERS: set[str] = set()
 
 ConfirmCallback = Callable[[str, str], bool]
 LogCallback = Callable[[str], None]
@@ -323,6 +327,27 @@ def start_ollama_service() -> bool:
         return False
 
     return wait_for_ollama_ready()
+
+
+def open_official_installer(product: str) -> bool:
+    """Open the vendor's native installer instead of downloading executables ourselves."""
+    urls = {
+        "ollama": OLLAMA_DOWNLOAD_URL,
+        "anythingllm": ANYTHINGLLM_DOWNLOAD_URL,
+    }
+    url = urls.get(product)
+    if url is None:
+        raise ValueError(f"unknown local AI product: {product}")
+    if product in _OPENED_LOCAL_AI_INSTALLERS:
+        return True
+    try:
+        opened = bool(webbrowser.open(url, new=2))
+        if opened:
+            _OPENED_LOCAL_AI_INSTALLERS.add(product)
+        return opened
+    except Exception as exc:
+        logger.warning("Could not open %s installer: %s", product, exc)
+        return False
 
 
 def detect_prerequisites(

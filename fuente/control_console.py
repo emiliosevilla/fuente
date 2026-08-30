@@ -2235,10 +2235,11 @@ class FuenteConsoleBackend:
         if not model:
             return {"ready": False, "provider": provider, "model": None, "reason": "ram_policy"}
         if not self.ram_governor.check_ollama_status():
-            from fuente.installer_contract import start_ollama_service
+            from fuente.installer_contract import open_official_installer, start_ollama_service
 
             if not start_ollama_service():
-                return {"ready": False, "provider": provider, "model": model, "reason": "ollama_unavailable"}
+                open_official_installer("ollama")
+                return {"ready": False, "provider": provider, "model": model, "reason": "ollama_installation_required"}
         if not self.ram_governor.ensure_model_available(model, authorize_download=True):
             return {"ready": False, "provider": provider, "model": model, "reason": "model_unavailable"}
         if provider == "anythingllm":
@@ -2250,7 +2251,10 @@ class FuenteConsoleBackend:
                 client.health()
                 client.set_chat_model(model)
             except (AnythingLLMError, ValueError):
-                return {"ready": False, "provider": provider, "model": model, "reason": "anythingllm_unavailable"}
+                from fuente.installer_contract import open_official_installer
+
+                open_official_installer("anythingllm")
+                return {"ready": False, "provider": provider, "model": model, "reason": "anythingllm_installation_required"}
         return {"ready": True, "provider": provider, "model": model, "reason": None}
 
     def _template_registry(self) -> TemplateRegistry:

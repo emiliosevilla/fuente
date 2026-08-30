@@ -26,6 +26,7 @@ from fuente.installer_contract import (
     step_create_shortcuts,
     step_install_gestajo_agent,
     step_install_model,
+    open_official_installer,
     wait_for_ollama_ready,
 )
 from fuente.core.folder_sync import FolderSyncManager
@@ -413,3 +414,12 @@ def test_wait_for_ollama_ready_polls_until_ready():
     ):
         assert wait_for_ollama_ready(timeout_sec=5, poll_sec=0.01) is True
     assert calls["count"] >= 2
+
+
+def test_official_local_ai_installer_uses_the_system_browser(monkeypatch):
+    monkeypatch.setattr("fuente.installer_contract._OPENED_LOCAL_AI_INSTALLERS", set())
+    with patch("fuente.installer_contract.webbrowser.open", return_value=True) as open_browser:
+        assert open_official_installer("ollama") is True
+        assert open_official_installer("ollama") is True
+
+    open_browser.assert_called_once_with("https://ollama.com/download", new=2)

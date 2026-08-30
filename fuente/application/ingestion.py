@@ -885,6 +885,7 @@ class IngestionApplicationService:
             raise ValueError("completed extraction returned no content")
         context.content = result.content
         context.metadata = result.metadata
+        self._write_extraction_cache(job, result.content, result.metadata)
         return self._advance(job, "extracted")
 
     def _run_save_clean(self, job: JobRecord, context: _RunContext) -> JobRecord:
@@ -904,6 +905,7 @@ class IngestionApplicationService:
         clean_path = self.vault.save_clean_md(
             self._source_name(job), content, dict(context.metadata)
         )
+        self._delete_extraction_cache(job)
         self._register_clean_canonical(clean_path)
         # Saving the canonical record and entering human review are one durable
         # boundary.  A restart after this CAS sees ``saved_clean`` already
@@ -1450,6 +1452,11 @@ class IngestionApplicationService:
             context.metadata = metadata
             return body
 
+        cached = self._read_extraction_cache(job)
+        if cached is not None:
+            context.content, context.metadata = cached
+            return context.content
+
         dirty_path = self._recorded_artifact(job.dirty_artifact)
         if dirty_path is None:
             raise MissingArtifactError(job.job_id, "dirty copy")
@@ -1458,7 +1465,45 @@ class IngestionApplicationService:
             raise MissingArtifactError(job.job_id, "completed extraction content")
         context.content = result.content
         context.metadata = result.metadata
+        self._write_extraction_cache(job, result.content, result.metadata)
         return context.content
+
+    def _extraction_cache_path(self, job: JobRecord) -> Path:
+        """Hidden durable text cache for an approved-but-not-yet-captured source."""
+        return (
+            self.vault.config.vault_path
+            / ".fuente"
+            / "extraction-cache"
+            / f"{uuid.UUID(job.job_id)}.json"
+        )
+
+    def _write_extraction_cache(
+        self, job: JobRecord, content: str, metadata: dict[str, Any]
+    ) -> None:
+        atomic_write_text(
+            self._extraction_cache_path(job),
+            json.dumps({"content": content, "metadata": metadata}, ensure_ascii=False),
+        )
+
+    def _read_extraction_cache(
+        self, job: JobRecord
+    ) -> tuple[str, dict[str, Any]] | None:
+        path = self._extraction_cache_path(job)
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError, TypeError):
+            return None
+        content = payload.get("content") if isinstance(payload, dict) else None
+        metadata = payload.get("metadata") if isinstance(payload, dict) else None
+        if not isinstance(content, str) or not isinstance(metadata, dict):
+            return None
+        return content, metadata
+
+    def _delete_extraction_cache(self, job: JobRecord) -> None:
+        try:
+            self._extraction_cache_path(job).unlink(missing_ok=True)
+        except OSError:
+            logger.warning("Could not remove extraction cache for %s", job.job_id)
 
     def _candidate(self, job: JobRecord, context: _RunContext) -> str:
         """The generated note candidate, regenerated when a job is resumed."""

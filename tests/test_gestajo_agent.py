@@ -97,7 +97,7 @@ def test_status_requires_the_bound_user(tmp_path: Path):
     )
 
     assert agent.status("token-a")["claimed"] is True
-    assert agent.status("token-a")["capabilities"] == ["flow", "flow_import", "flow_approve", "flow_review", "flow_review_captured", "flow_discard", "settings", "sync_inputs", "sync_run", "sync_output", "sync_conflict_read", "sync_conflict_resolve", "document_conflict_read", "document_conflict_resolve", "note_read", "note_relations", "note_lineage", "note_write", "note_merge", "note_approve_processed", "note_share", "note_assistant", "knowledge_assistant", "templates_read", "templates_write"]
+    assert agent.status("token-a")["capabilities"] == ["flow", "flow_import", "flow_approve", "flow_jobs", "flow_review", "flow_review_captured", "flow_discard", "settings", "sync_inputs", "sync_run", "sync_output", "sync_conflict_read", "sync_conflict_resolve", "document_conflict_read", "document_conflict_resolve", "note_read", "note_relations", "note_lineage", "note_write", "note_merge", "note_approve_processed", "note_share", "note_assistant", "knowledge_assistant", "templates_read", "templates_write"]
     with pytest.raises(AgentAuthenticationError, match="another user"):
         agent.status("token-b")
 
@@ -238,6 +238,55 @@ def test_flow_reads_the_open_console_backend(tmp_path: Path):
 
     assert agent.flow("token-a", "00000000-0000-0000-0000-000000000001")["queue"]["waiting"] == 1
     assert calls == ["flow"]
+
+
+def test_flow_jobs_expose_a_paginated_safe_queue_without_local_routes(tmp_path: Path):
+    from http.server import ThreadingHTTPServer
+
+    calls: list[object] = []
+
+    class Backend:
+        @staticmethod
+        def get_jobs(filters, limit, cursor):
+            calls.append((filters, limit, cursor))
+            return {
+                "items": [{
+                    "job_id": "job-1", "source_hash": "a" * 64, "source_relative_path": "1_volcado/privado/Informe.pdf",
+                    "stage": "captured", "status": "pending", "attempt_count": 2,
+                    "created_at": "2026-08-30T10:00:00Z", "updated_at": "2026-08-30T11:00:00Z",
+                    "revision": 4, "reason": "awaiting_approval", "error_code": None,
+                    "cancel_requested_at": None, "resume_available": True,
+                }],
+                "next_cursor": "next-page",
+            }
+
+    agent = GestajoAgent(
+        tmp_path, verifier=_verifier, publisher=_publisher,
+        membership_verifier=lambda *_args: "gestion", backend_factory=lambda _vault: Backend(),
+    )
+    agent.claim("token-a", {"supabase_url": "https://project.supabase.co", "publishable_key": "sb_publishable_test_key"})
+    server = ThreadingHTTPServer(("127.0.0.1", 0), _handler_for(agent))
+    thread = Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        connection = HTTPConnection("127.0.0.1", server.server_port, timeout=2)
+        connection.request("GET", "/v1/flow/jobs?org_id=00000000-0000-0000-0000-000000000001", headers={"Origin": "http://localhost:3000", "Authorization": "Bearer token-a"})
+        response = connection.getresponse()
+        page = json.loads(response.read())
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
+
+    assert response.status == 200, page
+    assert page == {"items": [{
+        "job_id": "job-1", "title": "Informe.pdf", "stage": "captured", "status": "pending", "attempt_count": 2,
+        "created_at": "2026-08-30T10:00:00Z", "updated_at": "2026-08-30T11:00:00Z", "revision": 4,
+        "reason": "awaiting_approval", "error_code": None, "cancel_requested_at": None, "resume_available": True,
+    }], "next_cursor": "next-page"}
+    assert calls == [({}, 50, None)]
+    assert "1_volcado" not in str(page)
+    assert "a" * 64 not in str(page)
 
 
 def test_health_is_cors_and_private_network_ready_for_gestajo(tmp_path: Path):

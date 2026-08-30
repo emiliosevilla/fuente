@@ -510,7 +510,7 @@ class GestajoAgent:
             "platform": platform.system(),
             "user_id": binding.user_id,
             "vault_fingerprint": self._vault_fingerprint(),
-            "capabilities": ["flow", "flow_import", "flow_approve", "flow_review", "flow_review_captured", "flow_discard", "settings", "sync_inputs", "sync_run", "sync_output", "sync_conflict_read", "sync_conflict_resolve", "document_conflict_read", "document_conflict_resolve", "note_read", "note_relations", "note_lineage", "note_write", "note_merge", "note_approve_processed", "note_share", "note_assistant", "knowledge_assistant", "templates_read", "templates_write"],
+            "capabilities": ["flow", "flow_import", "flow_approve", "flow_jobs", "flow_review", "flow_review_captured", "flow_discard", "settings", "sync_inputs", "sync_run", "sync_output", "sync_conflict_read", "sync_conflict_resolve", "document_conflict_read", "document_conflict_resolve", "note_read", "note_relations", "note_lineage", "note_write", "note_merge", "note_approve_processed", "note_share", "note_assistant", "knowledge_assistant", "templates_read", "templates_write"],
         }
 
     def flow(self, access_token: object, org_id: object) -> dict[str, object]:
@@ -520,6 +520,16 @@ class GestajoAgent:
         self._management_verifier(binding, self._access_token(access_token), org_id)
         state = self._read_flow()
         return _flow_response(state)
+
+    def list_flow_jobs(self, access_token: object, org_id: object, cursor: object) -> dict[str, object]:
+        binding = self._require_management(access_token, org_id)
+        if cursor is not None and not isinstance(cursor, str):
+            raise AgentError("flow cursor is invalid")
+        page = _flow_jobs_response(self._local_backend().get_jobs({}, 50, cursor))
+        self._record_audit(binding, self._access_token(access_token), _new_audit_event(
+            None, str(org_id), str(uuid.UUID(str(org_id))), binding.user_id, "caudal_queue_read", "success",
+        ))
+        return page
 
     def import_flow_files(self, access_token: object, org_id: object, payload: object) -> dict[str, object]:
         """Choose local files natively, then copy them into Caudal's input stage."""
@@ -1345,6 +1355,13 @@ def _handler_for(agent: GestajoAgent) -> type[BaseHTTPRequestHandler]:
                     lambda token: agent.flow(token, _single_query_value(parsed.query, "org_id"))
                 )
                 return
+            if parsed.path == "/v1/flow/jobs":
+                self._authorized(
+                    lambda token: agent.list_flow_jobs(
+                        token, _single_query_value(parsed.query, "org_id"), _optional_query_value(parsed.query, "cursor"),
+                    )
+                )
+                return
             if parsed.path.startswith("/v1/flow/reviews/"):
                 review_route = parsed.path.removeprefix("/v1/flow/reviews/")
                 parts = review_route.split("/")
@@ -1625,6 +1642,17 @@ def _single_query_value(query: str, name: str) -> str:
     return values[0]
 
 
+def _optional_query_value(query: str, name: str) -> str | None:
+    from urllib.parse import parse_qs
+
+    values = parse_qs(query, keep_blank_values=True).get(name, [])
+    if not values:
+        return None
+    if len(values) != 1 or not values[0]:
+        raise AgentError(f"{name} is invalid")
+    return values[0]
+
+
 def _read_flow_state(vault_path: Path) -> Mapping[str, object]:
     from fuente.control_console import FuenteConsoleBackend
 
@@ -1692,6 +1720,37 @@ def _flow_response(state: Mapping[str, object]) -> dict[str, object]:
             and _flow_approval_response(item) is not None
         ],
         "pending_reviews": [_flow_review_summary(item) for item in approvals if isinstance(item, Mapping) and _flow_review_summary(item) is not None],
+    }
+
+
+def _flow_jobs_response(page: object) -> dict[str, object]:
+    if not isinstance(page, Mapping) or not isinstance(page.get("items"), list):
+        raise AgentError("local Caudal queue returned an invalid response")
+    next_cursor = page.get("next_cursor")
+    if next_cursor is not None and not isinstance(next_cursor, str):
+        raise AgentError("local Caudal queue returned an invalid response")
+    return {"items": [_flow_job_response(item) for item in page["items"]], "next_cursor": next_cursor}
+
+
+def _flow_job_response(item: object) -> dict[str, object]:
+    if not isinstance(item, Mapping):
+        raise AgentError("local Caudal queue returned an invalid item")
+    route = _safe_sync_relative(item.get("source_relative_path"))
+    text_fields = ("job_id", "stage", "status", "created_at", "updated_at")
+    if route is None or any(not isinstance(item.get(field), str) for field in text_fields):
+        raise AgentError("local Caudal queue returned an invalid item")
+    integer_fields = ("attempt_count", "revision")
+    if any(not isinstance(item.get(field), int) or isinstance(item.get(field), bool) or item[field] < 0 for field in integer_fields):
+        raise AgentError("local Caudal queue returned an invalid item")
+    optional_fields = ("reason", "error_code", "cancel_requested_at")
+    if any(item.get(field) is not None and not isinstance(item.get(field), str) for field in optional_fields) or not isinstance(item.get("resume_available"), bool):
+        raise AgentError("local Caudal queue returned an invalid item")
+    return {
+        "job_id": item["job_id"], "title": PurePosixPath(route).name,
+        "stage": item["stage"], "status": item["status"], "attempt_count": item["attempt_count"],
+        "created_at": item["created_at"], "updated_at": item["updated_at"], "revision": item["revision"],
+        "reason": item.get("reason"), "error_code": item.get("error_code"),
+        "cancel_requested_at": item.get("cancel_requested_at"), "resume_available": item["resume_available"],
     }
 
 

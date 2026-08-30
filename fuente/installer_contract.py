@@ -35,6 +35,7 @@ DEFAULT_OLLAMA_URL = "http://localhost:11434"
 VAULT_SUBDIRS = VAULT_DIRECTORIES[:5]
 OLLAMA_READY_TIMEOUT_SEC = 30.0
 OLLAMA_READY_POLL_SEC = 1.0
+ANYTHINGLLM_READY_TIMEOUT_SEC = 45.0
 OCR_REQUIRED_LANGUAGES = frozenset({"eng", "spa"})
 WINDOWS_TESSERACT_DOWNLOAD = "https://tesseract-ocr.github.io/tessdoc/Downloads.html"
 OLLAMA_DOWNLOAD_URL = "https://ollama.com/download"
@@ -327,6 +328,53 @@ def start_ollama_service() -> bool:
         return False
 
     return wait_for_ollama_ready()
+
+
+def _anythingllm_launch_command() -> list[str] | None:
+    executable = shutil.which("anythingllm")
+    if executable:
+        return [executable]
+    if sys.platform == "darwin" and Path("/Applications/AnythingLLM.app").exists():
+        return ["open", "-a", "AnythingLLM"]
+    if sys.platform == "win32":
+        roots = [os.environ.get("LOCALAPPDATA"), os.environ.get("ProgramFiles")]
+        for root in filter(None, roots):
+            candidate = Path(root) / "Programs" / "AnythingLLM" / "AnythingLLM.exe"
+            if candidate.exists():
+                return [str(candidate)]
+            candidate = Path(root) / "AnythingLLM" / "AnythingLLM.exe"
+            if candidate.exists():
+                return [str(candidate)]
+    return None
+
+
+def wait_for_local_service_ready(
+    is_ready: Callable[[], bool],
+    *,
+    timeout_sec: float = ANYTHINGLLM_READY_TIMEOUT_SEC,
+    poll_sec: float = OLLAMA_READY_POLL_SEC,
+) -> bool:
+    deadline = time.monotonic() + timeout_sec
+    while time.monotonic() < deadline:
+        if is_ready():
+            return True
+        time.sleep(poll_sec)
+    return False
+
+
+def start_anythingllm_service(is_ready: Callable[[], bool]) -> bool:
+    """Start an installed AnythingLLM desktop app and wait for its local API."""
+    if is_ready():
+        return True
+    command = _anythingllm_launch_command()
+    if command is None:
+        return False
+    try:
+        subprocess.Popen(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except Exception as exc:
+        logger.warning("Could not start AnythingLLM service: %s", exc)
+        return False
+    return wait_for_local_service_ready(is_ready)
 
 
 def open_official_installer(product: str) -> bool:

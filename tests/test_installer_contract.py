@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import subprocess
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -27,6 +28,7 @@ from fuente.installer_contract import (
     step_install_gestajo_agent,
     step_install_model,
     open_official_installer,
+    start_anythingllm_service,
     wait_for_ollama_ready,
 )
 from fuente.core.folder_sync import FolderSyncManager
@@ -199,6 +201,22 @@ def test_model_install_skipped_when_already_present(install_ctx):
     assert result.skipped is True
     assert result.model_name == "qwen2.5:7b"
     governor.ensure_model_available.assert_not_called()
+
+
+def test_start_anythingllm_opens_the_installed_desktop_app_and_waits_for_its_api():
+    with patch("fuente.installer_contract.sys.platform", "darwin"), patch(
+        "fuente.installer_contract.shutil.which", return_value=None
+    ), patch("fuente.installer_contract.Path.exists", return_value=True), patch(
+        "fuente.installer_contract.subprocess.Popen"
+    ) as launch, patch(
+        "fuente.installer_contract.wait_for_local_service_ready", return_value=True
+    ) as wait:
+        assert start_anythingllm_service(lambda: False) is True
+
+    launch.assert_called_once_with(
+        ["open", "-a", "AnythingLLM"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+    )
+    wait.assert_called_once()
 
 
 def test_run_installation_without_log_does_not_raise(tmp_path):

@@ -11,6 +11,7 @@ from fuente.application.health import HealthService
 import fuente.application.health as health_module
 from fuente.config import AppConfig, VaultConfig
 from fuente.control_console import FuenteConsoleBackend
+from fuente.integrations.anythingllm import AnythingLLMError
 from fuente.ui.bridge import FuentePyWebViewApi
 
 
@@ -320,6 +321,59 @@ def test_backend_prepare_local_ai_opens_the_official_ollama_installer_when_missi
         "ready": False, "provider": "ollama", "model": "qwen2.5:0.8b", "reason": "ollama_installation_required",
     }
     assert opened == ["ollama"]
+
+
+def test_backend_prepare_local_ai_starts_installed_anythingllm_before_opening_installer(
+    temp_vault_path, monkeypatch
+):
+    backend = FuenteConsoleBackend(temp_vault_path)
+    backend.config.anythingllm_url = "http://127.0.0.1:13001"
+
+    class Governor:
+        @staticmethod
+        def recommend_model():
+            return "qwen2.5:0.8b"
+
+        @staticmethod
+        def check_ollama_status():
+            return True
+
+        @staticmethod
+        def ensure_model_available(model, *, authorize_download):
+            return model == "qwen2.5:0.8b" and authorize_download
+
+    class Client:
+        health_checks = 0
+        selected_models: list[str] = []
+
+        def __init__(self, *_args, **_kwargs):
+            pass
+
+        def health(self):
+            type(self).health_checks += 1
+            if type(self).health_checks == 1:
+                raise AnythingLLMError("not started")
+            return {"ok": True}
+
+        def set_chat_model(self, model):
+            type(self).selected_models.append(model)
+
+    backend.ram_governor = Governor()
+    started: list[str] = []
+    opened: list[str] = []
+    monkeypatch.setattr("fuente.control_console.AnythingLLMConversationClient", Client)
+    monkeypatch.setattr(
+        "fuente.installer_contract.start_anythingllm_service",
+        lambda is_ready: started.append("anythingllm") or is_ready(),
+    )
+    monkeypatch.setattr("fuente.installer_contract.open_official_installer", opened.append)
+
+    assert backend.prepare_local_ai() == {
+        "ready": True, "provider": "anythingllm", "model": "qwen2.5:0.8b", "reason": None,
+    }
+    assert started == ["anythingllm"]
+    assert opened == []
+    assert Client.selected_models == ["qwen2.5:0.8b"]
 
 
 def test_bridge_get_health_returns_backend_snapshot(temp_vault_path):

@@ -2244,16 +2244,22 @@ class FuenteConsoleBackend:
         if not self.ram_governor.ensure_model_available(model, authorize_download=True):
             return {"ready": False, "provider": provider, "model": model, "reason": "model_unavailable"}
         if provider == "anythingllm":
-            try:
+            def configure_anythingllm() -> bool:
                 client = AnythingLLMConversationClient(
                     self.config.anythingllm_url, self.config.anythingllm_workspace_slug,
                     api_key=self.config.anythingllm_api_key,
                 )
                 client.health()
                 client.set_chat_model(model)
-            except (AnythingLLMError, ValueError):
-                from fuente.installer_contract import open_official_installer
+                return True
 
+            try:
+                configure_anythingllm()
+            except (AnythingLLMError, ValueError):
+                from fuente.installer_contract import open_official_installer, start_anythingllm_service
+
+                if start_anythingllm_service(configure_anythingllm):
+                    return {"ready": True, "provider": provider, "model": model, "reason": None}
                 open_official_installer("anythingllm")
                 return {"ready": False, "provider": provider, "model": model, "reason": "anythingllm_installation_required"}
         return {"ready": True, "provider": provider, "model": model, "reason": None}

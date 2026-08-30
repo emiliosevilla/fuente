@@ -912,8 +912,9 @@ class GestajoAgent:
         """Refine the pending capture with the local assistant without remote catalogue access."""
         binding = self._require_management(access_token, org_id)
         note_id = self._flow_review_captured_note_id(job_id)
+        message, _ = _note_assistant_payload(payload)
         answer = _assistant_response(self._local_backend().process_chat(
-            _note_assistant_payload(payload),
+            message,
             {"context_mode": "single_note", "document_id": note_id},
         ))
         self._record_audit(binding, self._access_token(access_token), _new_audit_event(
@@ -1327,15 +1328,22 @@ class GestajoAgent:
         self._membership_verifier(binding, self._access_token(access_token), org_id)
         scope = self._note_visibility_verifier(binding, self._access_token(access_token), note_id)
         note = _note_response(self._note_reader(self.vault_path, note_id), note_id)
-        answer = _assistant_response(self._local_backend().process_chat(
-            _note_assistant_payload(payload),
-            {
+        message, template_id = _note_assistant_payload(payload)
+        context: dict[str, object] = {
                 "context_mode": "single_note",
                 "document_id": note_id,
                 "selected_note_title": note["title"],
                 "selected_note_markdown": note["body_markdown"],
-            },
-        ))
+        }
+        if template_id:
+            template = self._local_backend().load_template(template_id)
+            if not isinstance(template, Mapping) or template.get("error"):
+                raise AgentError("selected template is unavailable")
+            instructions = template.get("agents")
+            if not isinstance(instructions, str) or not instructions.strip():
+                raise AgentError("selected template has no instructions")
+            context["task_instructions"] = instructions
+        answer = _assistant_response(self._local_backend().process_chat(message, context))
         self._record_audit(binding, self._access_token(access_token), _new_audit_event(
             note_id, org_id, scope["common_org_id"], binding.user_id,
             "note_assistant_ask", "success" if answer["ok"] else "error",
@@ -2560,19 +2568,22 @@ def _note_export_response(value: object) -> dict[str, object]:
     }
 
 
-def _note_assistant_payload(payload: object) -> str:
-    if not isinstance(payload, Mapping) or set(payload) != {"message"}:
+def _note_assistant_payload(payload: object) -> tuple[str, str | None]:
+    if not isinstance(payload, Mapping) or set(payload) not in ({"message"}, {"message", "template_id"}):
         raise AgentError("assistant payload has unsupported fields")
     message = payload.get("message")
     if not isinstance(message, str) or not 1 <= len(message.strip()) <= 16_000:
         raise AgentError("assistant message is invalid")
-    return message.strip()
+    template_id = payload.get("template_id")
+    if template_id is None:
+        return message.strip(), None
+    return message.strip(), _template_id(template_id)
 
 
 def _knowledge_assistant_payload(payload: object) -> tuple[str, list[str]]:
     if not isinstance(payload, Mapping) or set(payload) - {"message", "document_ids"} or "message" not in payload:
         raise AgentError("assistant payload has unsupported fields")
-    message = _note_assistant_payload({"message": payload.get("message")})
+    message, _ = _note_assistant_payload({"message": payload.get("message")})
     raw_ids = payload.get("document_ids", [])
     if not isinstance(raw_ids, list) or len(raw_ids) > 24:
         raise AgentError("assistant document_ids are invalid")

@@ -312,6 +312,7 @@ class ChatApplicationService:
             self._refinement_guard(candidate_id, revision)
 
         scope, scope_kwargs = _normalize_scope(ctx)
+        task_instructions = str(ctx.get("task_instructions") or "").strip()
         selected_notes: list[tuple[str, str, str]] = []
         if scope == SCOPE_SINGLE_NOTE:
             selected_markdown = str(ctx.get("selected_note_markdown") or "").strip()
@@ -439,7 +440,11 @@ class ChatApplicationService:
                 self.provider.bind_context(ctx)
             answer = self.provider.generate(
                 model=model,
-                system=self.system_prompt,
+                system=(
+                    self.system_prompt
+                    if not task_instructions
+                    else f"{self.system_prompt}\n\nInstrucciones del tipo de Nota:\n{task_instructions}"
+                ),
                 prompt=user_prompt,
                 think=False,
             )

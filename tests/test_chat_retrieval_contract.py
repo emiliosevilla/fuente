@@ -255,6 +255,25 @@ def test_relation_request_returns_verified_wikilinks_even_if_model_omits_them(gr
     assert "- [[> Reseña|materialistas]]" in result["text"]
 
 
+def test_selected_note_passes_its_local_type_instructions_to_the_model(grounded_service):
+    service, provider, _store = grounded_service
+
+    result = service.ask(
+        "Resume esta Nota.",
+        {
+            "context_mode": "single_note",
+            "document_id": "note-pending",
+            "selected_note_title": "03 El loco",
+            "selected_note_markdown": "Hecho verificable.",
+            "task_instructions": "## Propósito\nResume sólo la evidencia.",
+        },
+    )
+
+    assert result["ok"] is True
+    assert "Instrucciones del tipo de Nota" in provider.calls[-1]["system"]
+    assert "Resume sólo la evidencia." in provider.calls[-1]["system"]
+
+
 def test_selected_pending_notes_are_sent_together_to_the_local_model(grounded_service):
     service, provider, _store = grounded_service
 

@@ -1302,6 +1302,39 @@ def test_visible_note_can_use_local_assistant_without_exposing_paths(tmp_path: P
     assert audits[0]["llm_model"] == "qwen2.5:7b"
 
 
+def test_visible_note_assistant_loads_the_selected_local_type_instructions(tmp_path: Path):
+    note_id = "00000000-0000-0000-0000-000000000010"
+    calls: list[object] = []
+
+    class Backend:
+        @staticmethod
+        def load_template(template_id):
+            assert template_id == "resumen"
+            return {"agents": "## Propósito\nResume sólo la evidencia."}
+
+        @staticmethod
+        def process_chat(message, context):
+            calls.append((message, context))
+            return {"ok": True, "text": "Resumen local", "model": "qwen", "degraded": False, "citations": []}
+
+    agent = GestajoAgent(
+        tmp_path, verifier=_verifier, publisher=_publisher,
+        membership_verifier=_management_verifier, note_visibility_verifier=lambda *_args: {"common_org_id": "00000000-0000-0000-0000-000000000001"},
+        backend_factory=lambda _vault: Backend(), audit_publisher=lambda *_args: None,
+        note_reader=lambda _vault, received_id: {"document_id": received_id, "revision": 1, "title": "Informe", "body_markdown": "# Informe\n\nDato verificable."},
+    )
+    agent.claim("token-a", {"supabase_url": "https://project.supabase.co", "publishable_key": "sb_publishable_test_key"})
+
+    answer = agent.ask_note_assistant("token-a", "00000000-0000-0000-0000-000000000001", note_id, {"message": "Resume", "template_id": "resumen"})
+
+    assert answer["ok"] is True
+    assert calls == [("Resume", {
+        "context_mode": "single_note", "document_id": note_id,
+        "selected_note_title": "Informe", "selected_note_markdown": "# Informe\n\nDato verificable.",
+        "task_instructions": "## Propósito\nResume sólo la evidencia.",
+    })]
+
+
 def test_knowledge_assistant_reads_the_local_kb_without_exposing_routes(tmp_path: Path):
     from http.server import ThreadingHTTPServer
 

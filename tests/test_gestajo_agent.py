@@ -534,7 +534,12 @@ def test_flow_job_controls_expose_ram_decision_without_local_routes(tmp_path: Pa
         def get_job_detail(requested_job_id):
             assert requested_job_id == job_id
             return {
-                "job": job, "events": [{"relative_path": "/private/vault/Informe.pdf"}],
+                "job": job,
+                "events": [{
+                    "stage": "captured", "status": "waiting", "error_code": None,
+                    "error_message": "/private/vault/Informe.pdf", "revision": 4,
+                    "created_at": "2026-08-30T11:00:00Z",
+                }],
                 "llm_readiness": {
                     "reason_code": "llm_waiting_for_memory_or_authorization",
                     "requires_user_confirmation": True, "compatible_model": "qwen2.5:7b",
@@ -568,6 +573,10 @@ def test_flow_job_controls_expose_ram_decision_without_local_routes(tmp_path: Pa
         "reason_code": "llm_waiting_for_memory_or_authorization", "requires_user_confirmation": True,
         "compatible_model": "qwen2.5:7b", "instruction": "Confirma la carga local del modelo.",
     }
+    assert detail["events"] == [{
+        "stage": "captured", "status": "waiting", "error_code": None,
+        "revision": 4, "created_at": "2026-08-30T11:00:00Z",
+    }]
     assert resumed["status"] == "claimed"
     assert cancelled["status"] == "cancelled"
     assert calls == [("resume", job_id, 4, True), ("cancel", job_id, 5, "Descartado por el usuario")]

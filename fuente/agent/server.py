@@ -2321,8 +2321,27 @@ def _flow_job_detail_response(detail: object) -> dict[str, object]:
     text_fields = ("reason_code", "compatible_model", "instruction")
     if any(not isinstance(readiness.get(field), str) for field in text_fields) or not isinstance(readiness.get("requires_user_confirmation"), bool):
         raise AgentError("local Caudal job returned an invalid response")
+    events = detail.get("events")
+    if not isinstance(events, list):
+        raise AgentError("local Caudal job returned an invalid response")
+    visible_events: list[dict[str, object]] = []
+    for event in events[-8:]:
+        if not isinstance(event, Mapping):
+            raise AgentError("local Caudal job returned an invalid response")
+        if any(not isinstance(event.get(field), str) for field in ("stage", "status", "created_at")):
+            raise AgentError("local Caudal job returned an invalid response")
+        if not isinstance(event.get("revision"), int) or isinstance(event["revision"], bool):
+            raise AgentError("local Caudal job returned an invalid response")
+        error_code = event.get("error_code")
+        if error_code is not None and not isinstance(error_code, str):
+            raise AgentError("local Caudal job returned an invalid response")
+        visible_events.append({
+            "stage": event["stage"], "status": event["status"], "error_code": error_code,
+            "revision": event["revision"], "created_at": event["created_at"],
+        })
     return {
         **response,
+        "events": visible_events,
         "llm_readiness": {
             "reason_code": readiness["reason_code"],
             "requires_user_confirmation": readiness["requires_user_confirmation"],

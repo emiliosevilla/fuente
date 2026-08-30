@@ -1,4 +1,5 @@
 from pathlib import Path
+import unicodedata
 from unittest.mock import patch
 
 import pytest
@@ -99,6 +100,17 @@ def test_path_qualified_wikilink_disambiguates_duplicate_basenames(resolver, tem
     second.write_text("b", encoding="utf-8")
 
     assert resolver.resolve_wikilink_target("tema-b/nota") == second.resolve()
+
+
+def test_wikilink_resolves_captured_unicode_and_sanitized_basenames(resolver, temp_vault_path):
+    clean = temp_vault_path / "3_capturado"
+    accented = clean / unicodedata.normalize("NFD", "01 Presentación.md")
+    sanitized = clean / "_ Reseña.md"
+    accented.write_text("presentación", encoding="utf-8")
+    sanitized.write_text("reseña", encoding="utf-8")
+
+    assert resolver.resolve_wikilink_target("01 Presentación") == accented.resolve()
+    assert resolver.resolve_wikilink_target("> Reseña") == sanitized.resolve()
 
 
 @pytest.mark.parametrize(

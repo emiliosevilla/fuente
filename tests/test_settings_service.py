@@ -59,6 +59,23 @@ def test_settings_service_persists_canonical_settings_and_connected_folders(
     ) == {"folders": [str(output_folder.resolve())]}
 
 
+def test_settings_service_persists_loopback_anythingllm_workspace(temp_vault_path):
+    result = SettingsService(load_config(temp_vault_path)).apply(
+        anythingllm_url="http://127.0.0.1:13001",
+        anythingllm_workspace_slug="gestajo",
+    )
+
+    assert result.config.anythingllm_url == "http://127.0.0.1:13001"
+    assert load_config(temp_vault_path).anythingllm_workspace_slug == "gestajo"
+
+
+def test_settings_service_rejects_unsafe_anythingllm_workspace(temp_vault_path):
+    with pytest.raises(SettingsValidationError, match="workspace slug"):
+        SettingsService(load_config(temp_vault_path)).apply(
+            anythingllm_workspace_slug="../../not-a-workspace",
+        )
+
+
 def test_load_config_migrates_legacy_model_and_ram_keys_to_canonical_json(temp_vault_path):
     config_path = get_config_file_path(temp_vault_path)
     config_path.parent.mkdir(parents=True)

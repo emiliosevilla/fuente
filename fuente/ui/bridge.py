@@ -791,6 +791,8 @@ class FuentePyWebViewApi:
             "resource_profile",
             "audio_mode",
             "whisper_model_path",
+            "anythingllm_url",
+            "anythingllm_workspace_slug",
             "output_connected_folders",
         }
         if "input_connected_folders" in parsed:
@@ -806,6 +808,8 @@ class FuentePyWebViewApi:
             "ollama_url",
             "resource_profile",
             "audio_mode",
+            "anythingllm_url",
+            "anythingllm_workspace_slug",
         }
         for field in string_fields & set(parsed):
             if not isinstance(parsed[field], str):

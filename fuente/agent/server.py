@@ -918,7 +918,7 @@ class GestajoAgent:
             raise AgentAuthorizationError("Settings require gestion or admin access")
         if not isinstance(payload, Mapping):
             raise AgentError("settings payload must be an object")
-        allowed = {"custom_model_override", "ram_safety_margin_pct", "resource_profile", "audio_mode"}
+        allowed = {"custom_model_override", "ram_safety_margin_pct", "resource_profile", "audio_mode", "anythingllm_url", "anythingllm_workspace_slug"}
         if not payload or set(payload) - allowed:
             raise AgentError("settings payload has unsupported fields")
         result = self._save_settings(payload)
@@ -2454,6 +2454,8 @@ def _settings_response(state: Mapping[str, object], role: str) -> dict[str, obje
         "current_model": settings.get("current_model") if isinstance(settings.get("current_model"), str) else None,
         "ram_recommended_model": settings.get("ram_recommended_model") if isinstance(settings.get("ram_recommended_model"), str) else None,
         "ai_provider": settings.get("ai_provider") if settings.get("ai_provider") in {"ollama", "anythingllm"} else "ollama",
+        "anythingllm_url": settings.get("anythingllm_url") if isinstance(settings.get("anythingllm_url"), str) else "",
+        "anythingllm_workspace_slug": settings.get("anythingllm_workspace_slug") if isinstance(settings.get("anythingllm_workspace_slug"), str) else "fuente",
         "ram_margin_pct": _percentage(settings.get("ram_margin")),
         "resource_profile": settings.get("resource_profile") if isinstance(settings.get("resource_profile"), str) else None,
         "audio_mode": settings.get("audio_mode") if isinstance(settings.get("audio_mode"), str) else None,

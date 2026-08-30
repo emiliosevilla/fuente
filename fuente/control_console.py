@@ -2204,6 +2204,8 @@ class FuenteConsoleBackend:
             "current_model": configured_model,
             "ram_recommended_model": recommended_model,
             "ai_provider": "anythingllm" if self.config.anythingllm_url else "ollama",
+            "anythingllm_url": self.config.anythingllm_url,
+            "anythingllm_workspace_slug": self.config.anythingllm_workspace_slug,
             "ollama_url": str(self.config.ollama_url),
             "ram_margin": f"{self.config.ram_safety_margin_pct * 100:g}%",
             "allow_non_loopback_ollama": self.config.allow_non_loopback_ollama,

@@ -421,6 +421,7 @@ class ChatApplicationService:
                 model=model,
                 system=self.system_prompt,
                 prompt=user_prompt,
+                think=False,
             )
         except ChatProviderError as exc:
             detail = str(exc)

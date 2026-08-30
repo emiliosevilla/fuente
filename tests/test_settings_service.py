@@ -335,9 +335,10 @@ def test_saved_model_and_url_drive_generation_and_chat_requests(
     assert generation_calls[0][1]["model"] == "configured-model"
     assert len(chat_calls) == 1
     assert chat_calls[0][0] == f"{configured_url}/api/generate"
-    assert chat_calls[0][2] == 12
+    assert chat_calls[0][2] == 180
     assert chat_calls[0][1]["model"] == "configured-model"
     assert chat_calls[0][1]["stream"] is False
+    assert chat_calls[0][1]["think"] is False
     assert "system" in chat_calls[0][1]
     assert "evidencia" in chat_calls[0][1]["system"].lower() or "uncertainty" in chat_calls[0][1]["system"].lower() or "incertidumbre" in chat_calls[0][1]["system"].lower()
     assert "prompt" in chat_calls[0][1]

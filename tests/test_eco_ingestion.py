@@ -68,13 +68,13 @@ def test_eco_ingestion_skips_vectors_and_waits_without_fake_llm(temp_vault_path)
         harness.store.close()
 
 
-def test_eco_pipeline_does_not_construct_minirag(tmp_path, monkeypatch):
+def test_eco_pipeline_does_not_construct_lancedb(tmp_path, monkeypatch):
     config = get_default_config(tmp_path / "vault")
     config.resource_profile = "eco_strict"
     monkeypatch.setattr(
-        "fuente.watcher.watcher.MiniRAGStore",
+        "fuente.watcher.watcher.LanceDBStore",
         lambda *_args, **_kwargs: (_ for _ in ()).throw(
-            AssertionError("Eco constructed MiniRAG")
+            AssertionError("Eco constructed LanceDB")
         ),
     )
 

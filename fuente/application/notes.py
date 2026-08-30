@@ -40,7 +40,7 @@ from fuente.domain.vault_layout import (
     CANONICAL_PROCESSED_DIR_NAME,
     CANONICAL_SHARED_DIR_NAME,
 )
-from fuente.rag.minirag_store import MiniRAGRetrievalBackend
+from fuente.rag.lancedb_store import LanceDBRetrievalBackend, LanceDBUnavailableError
 from fuente.rag.semantic_chunker import SemanticChunker
 
 logger = logging.getLogger(__name__)
@@ -1357,7 +1357,7 @@ class NotesApplicationService:
             return
         if bool(getattr(self.index_store, "failed", False)):
             logger.warning(
-                "MiniRAG index unavailable; approval remains durable for %s",
+                "LanceDB index unavailable; approval remains durable for %s",
                 note.document_id,
             )
             return
@@ -1401,15 +1401,13 @@ class NotesApplicationService:
         }
 
         obsolete = sorted(published - set(chunk_ids))
-        backend = MiniRAGRetrievalBackend(self.index_store)
+        backend = LanceDBRetrievalBackend(self.index_store)
         try:
             result = backend.rebuild(chunks)
         except Exception as error:
-            from fuente.rag.minirag_store import MiniRAGUnavailableError
-
-            if isinstance(error, MiniRAGUnavailableError):
+            if isinstance(error, LanceDBUnavailableError):
                 logger.warning(
-                    "MiniRAG index unavailable; approval remains durable for %s",
+                    "LanceDB index unavailable; approval remains durable for %s",
                     note.document_id,
                 )
                 return
@@ -1417,12 +1415,12 @@ class NotesApplicationService:
         if not result.success:
             if bool(getattr(self.index_store, "failed", False)):
                 logger.warning(
-                    "MiniRAG index unavailable; approval remains durable for %s",
+                    "LanceDB index unavailable; approval remains durable for %s",
                     note.document_id,
                 )
                 return
             raise RuntimeError(
-                f"MiniRAG index rebuild failed for approved note {note.document_id}"
+                f"LanceDB index rebuild failed for approved note {note.document_id}"
             )
 
         # New vectors are durable before the published artifact set changes.
@@ -1480,7 +1478,7 @@ class NotesApplicationService:
                 )
             else:
                 logger.warning(
-                    "Keeping previous artifacts for approved note %s after MiniRAG delete failure",
+                    "Keeping previous artifacts for approved note %s after LanceDB delete failure",
                     note.document_id,
                 )
         if self._index_notifier is not None:

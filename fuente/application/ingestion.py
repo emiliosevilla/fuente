@@ -16,7 +16,7 @@ Durability rules that the stage order encodes:
 
 - Index entries are reconciled per document id: whatever chunk ids were
   previously published for a document are recorded *before* they are written
-  to MiniRAG, so a resumed job can delete the obsolete ones instead of leaving
+  to LanceDB, so a resumed job can delete the obsolete ones instead of leaving
   orphaned vectors behind.
 - Generated Markdown is validated (frontmatter schema) before it is written,
   and the note is written atomically before its index entries are published.
@@ -85,13 +85,12 @@ from fuente.domain.vault_layout import (
     CANONICAL_CLEAN_DIR_NAME,
     CANONICAL_PROCESSED_DIR_NAME,
 )
-from fuente.rag.minirag_store import (
-    MiniRAGRetrievalBackend,
-    MiniRAGStore,
-    MiniRAGUnavailableError,
-    resolve_index_authority,
+from fuente.rag.lancedb_store import (
+    LanceDBRetrievalBackend,
+    LanceDBStore,
+    LanceDBUnavailableError,
 )
-from fuente.rag.minirag_store import MiniRAGStore, MiniRAGUnavailableError
+from fuente.rag.minirag_store import resolve_index_authority
 from fuente.rag.router import RetrievalRouter
 
 logger = logging.getLogger(__name__)
@@ -102,8 +101,8 @@ TERMINAL_STAGES: frozenset[str] = frozenset(
 )
 
 #: `index_artifacts.kind` values this service publishes.
-CHUNK_ARTIFACT_KIND = "minirag_chunk"
-LEGACY_CHUNK_ARTIFACT_KINDS = {CHUNK_ARTIFACT_KIND, "chroma_chunk"}
+CHUNK_ARTIFACT_KIND = "lancedb_chunk"
+LEGACY_CHUNK_ARTIFACT_KINDS = {CHUNK_ARTIFACT_KIND, "minirag_chunk", "chroma_chunk"}
 NOTE_ARTIFACT_KIND = "note_index"
 
 # Stored on a job while a human reviews its canonical clean Markdown.  The
@@ -270,18 +269,17 @@ class IngestionApplicationService:
         self.extraction_policy = ExtractionPolicy([extractors])
         self.chunker = chunker
         self.index_store = index_store if index_store is not None else chroma
-        self._minirag_store = MiniRAGStore(
-            config.vault.minirag_dir,
+        self._lancedb_store = LanceDBStore(
+            config.vault.lancedb_dir,
             ollama_url=config.ollama_url,
             model=config.custom_model_override,
-            job_store=job_store,
         )
         if self.index_store is None and (
             runtime_policy is None or runtime_policy.vector_index_enabled
         ):
-            self.index_store = self._minirag_store
+            self.index_store = self._lancedb_store
         self.router = router or RetrievalRouter(
-            search=MiniRAGRetrievalBackend(self.index_store), enrichment=None
+            search=LanceDBRetrievalBackend(self.index_store), enrichment=None
         )
         self.atomic_generator = atomic_generator
         self.smart_note_generator = smart_note_generator
@@ -306,7 +304,7 @@ class IngestionApplicationService:
             ledger=approval_ledger,
             transition_approvals=self.transition_approvals,
         )
-        setter = getattr(self._minirag_store, "set_approval_checker", None)
+        setter = getattr(self._lancedb_store, "set_approval_checker", None)
         if callable(setter):
             setter(self.approval_service.is_eligible)
 
@@ -347,7 +345,7 @@ class IngestionApplicationService:
             return True
         try:
             return enrichment.delete(chunk_ids) is not False
-        except MiniRAGUnavailableError:
+        except LanceDBUnavailableError:
             return True
 
     def _stamp_note_identity_on_chunks(
@@ -372,7 +370,7 @@ class IngestionApplicationService:
             return
         try:
             result = enrichment.rebuild(chunks)
-        except (MiniRAGUnavailableError, Exception) as exc:
+        except (LanceDBUnavailableError, Exception) as exc:
             logger.info(
                 "MiniRAG enrichment index unavailable for %s: %s",
                 origin.note_id,
@@ -983,7 +981,7 @@ class IngestionApplicationService:
             self._delete_search_chunks(obsolete)
         try:
             result = self.router.search().rebuild(chunks)
-        except MiniRAGUnavailableError:
+        except LanceDBUnavailableError:
             self.job_store.delete_index_artifacts(
                 document_id, artifact_ids=chunk_ids
             )

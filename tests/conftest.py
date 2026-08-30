@@ -19,34 +19,34 @@ from fuente.domain.paths import document_id_for_relative_path
 from fuente.domain.runtime_policy import AudioMode, ExecutionProfile, RuntimePolicy
 from fuente.infrastructure.sqlite_store import JobStore
 from fuente.ram_governor.budget import measured_snapshot
-from fuente.rag.minirag_store import MiniRAGUnavailableError
+from fuente.rag.lancedb_store import LanceDBUnavailableError
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 REPO_VAULT = REPO_ROOT / "Vault_Fuente"
 
 
-class _OfflineMiniRAG:
+class _OfflineLanceDB:
     def __init__(self, *_args, **_kwargs):
         pass
 
     def rebuild(self, _records):
-        raise MiniRAGUnavailableError("MiniRAG disabled in offline tests")
+        raise LanceDBUnavailableError("LanceDB disabled in offline tests")
 
     def delete(self, _document_ids):
-        raise MiniRAGUnavailableError("MiniRAG disabled in offline tests")
+        raise LanceDBUnavailableError("LanceDB disabled in offline tests")
 
 
 @pytest.fixture(autouse=True)
-def isolate_optional_minirag(monkeypatch):
-    """Keep optional MiniRAG offline in modules that still reference it."""
+def isolate_optional_lancedb(monkeypatch):
+    """Keep optional LanceDB offline in modules that create it by default."""
     for target in (
-        "fuente.application.ingestion.MiniRAGStore",
-        "fuente.watcher.watcher.MiniRAGStore",
+        "fuente.application.ingestion.LanceDBStore",
+        "fuente.watcher.watcher.LanceDBStore",
     ):
         module_path, _, attr = target.rpartition(".")
         module = __import__(module_path, fromlist=[attr])
         if hasattr(module, attr):
-            monkeypatch.setattr(target, _OfflineMiniRAG)
+            monkeypatch.setattr(target, _OfflineLanceDB)
 
 
 def patch_abundant_ram(governor) -> None:

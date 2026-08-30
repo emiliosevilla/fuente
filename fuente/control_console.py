@@ -61,7 +61,7 @@ from fuente.application.notes import NotesApplicationService
 from fuente.application.onboarding import OnboardingService
 from fuente.application.review_export import ReviewExportApplicationService
 from fuente.application.retrieval import RetrievalApplicationService
-from fuente.rag.minirag_store import MiniRAGRetrievalBackend, MiniRAGStore
+from fuente.rag.lancedb_store import LanceDBRetrievalBackend, LanceDBStore
 from fuente.rag.router import RetrievalRouter
 from fuente.application.settings import SettingsService, SettingsValidationError
 from fuente.application.templates import TemplateRegistry, TemplateValidationError
@@ -374,7 +374,7 @@ class FuenteConsoleBackend:
         # Set by launch_control_console after ApplicationLifecycle.start() so
         # console theme actions and background services share one VaultManager.
         self.lifecycle: Optional[ApplicationLifecycle] = None
-        self._index_store: Optional[MiniRAGStore] = None
+        self._index_store: Optional[LanceDBStore] = None
         self._retrieval_service: Optional[RetrievalApplicationService] = None
         self._chat_service: Optional[ChatApplicationService] = None
         self._notes_service: Optional[NotesApplicationService] = None
@@ -676,22 +676,22 @@ class FuenteConsoleBackend:
             )
         )
 
-    def _get_index_store(self) -> MiniRAGStore:
+    def _get_index_store(self) -> LanceDBStore:
         if self.lifecycle is not None and self.lifecycle.pipeline is not None:
             pipeline_index = getattr(self.lifecycle.pipeline, "index_store", None)
             if pipeline_index is not None:
                 self._index_store = pipeline_index
                 return pipeline_index
         if self._index_store is None:
-            self._index_store = MiniRAGStore(
-                self.config.vault.minirag_dir,
+            self._index_store = LanceDBStore(
+                self.config.vault.lancedb_dir,
                 ollama_url=self.config.ollama_url,
                 model=self.config.custom_model_override,
             )
         return self._index_store
 
     def get_retrieval_service(self) -> RetrievalApplicationService:
-        """Shared retrieval service backed by the local MiniRAG index."""
+        """Shared retrieval service backed by the local LanceDB index."""
         if self._retrieval_service is None:
             if self.runtime_policy.vector_index_enabled:
                 index_store = self._get_index_store()
@@ -701,7 +701,7 @@ class FuenteConsoleBackend:
                     ram_governor=self.ram_governor,
                     eligibility_guard=self._is_retrieval_hit_eligible,
                     router=RetrievalRouter(
-                        search=MiniRAGRetrievalBackend(index_store),
+                        search=LanceDBRetrievalBackend(index_store),
                         enrichment=None,
                     ),
                 )

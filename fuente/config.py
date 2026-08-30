@@ -204,6 +204,10 @@ class VaultConfig:
     def minirag_dir(self) -> Path:
         return self.system_dir / "minirag"
 
+    @property
+    def lancedb_dir(self) -> Path:
+        return self.system_dir / "lancedb"
+
 
 @dataclass
 class AppConfig:

@@ -12,6 +12,8 @@ from fuente.application.ingestion import (
     SourceNotStableError,
     TERMINAL_STAGES,
 )
+from fuente.application.smart_notes import OllamaConversationClient, SmartNoteGenerator
+from fuente.application.templates import TemplateRegistry
 from fuente.config import AppConfig
 from fuente.core.vault import VaultManager
 from fuente.core.folder_sync import TEMPORARY_SUFFIXES, is_hidden_or_temporary_file
@@ -24,6 +26,7 @@ from fuente.domain.jobs import (
 from fuente.domain.quarantine import QuarantineService
 from fuente.extractors.registry import ExtractorRegistry
 from fuente.infrastructure.sqlite_store import JobStore
+from fuente.integrations.anythingllm import AnythingLLMConversationClient
 from fuente.ram_governor.governor import RAMGovernor
 from fuente.rag.minirag_store import MiniRAGStore
 from fuente.rag.semantic_chunker import SemanticChunker
@@ -167,6 +170,24 @@ class ETLPipeline:
             copy_to_dirty=self._safe_copy_to_dirty,
             stabilize=self._wait_until_stable,
         )
+        self.ingestion.smart_note_generator = SmartNoteGenerator(
+            vault=self.vault,
+            store=self.job_store,
+            templates=TemplateRegistry(config.vault.vault_path, self.job_store),
+            transition_approvals=self.ingestion.transition_approvals,
+            chat_client=self._smart_notes_client(),
+            ram_governor=self.ram_governor,
+        )
+
+    def _smart_notes_client(self):
+        anything_url = (self.config.anythingllm_url or "").strip()
+        if anything_url:
+            return AnythingLLMConversationClient(
+                anything_url,
+                self.config.anythingllm_workspace_slug,
+                api_key=self.config.anythingllm_api_key,
+            )
+        return OllamaConversationClient(self.config.ollama_url)
 
     def set_runtime_policy(self, policy: RuntimePolicy) -> None:
         """Apply policy to existing collaborators without eager index creation."""

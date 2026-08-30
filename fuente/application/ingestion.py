@@ -1475,7 +1475,12 @@ class IngestionApplicationService:
             raise PermissionError(AWAITING_CLEAN_APPROVAL)
         if self.smart_note_generator is not None:
             context.generated_notes = self.smart_note_generator.generate(
-                origin.note_id, origin.revision, origin.content_hash
+                origin.note_id,
+                origin.revision,
+                origin.content_hash,
+                model_name=self._selected_model(
+                    job, authorize_model_load=context.authorize_model_load
+                ),
             )
             if context.generated_notes:
                 first = context.generated_notes[0]

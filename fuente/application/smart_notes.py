@@ -49,6 +49,28 @@ class RAMGovernor(Protocol):
     def ensure_model_available(self, model_name: str) -> None: ...
 
 
+class OllamaConversationClient:
+    """Adapt the existing Ollama chat provider to smart-note generation."""
+
+    def __init__(self, ollama_url: str) -> None:
+        from fuente.application.chat import OllamaChatProvider
+
+        self._provider = OllamaChatProvider(ollama_url, timeout=180.0)
+
+    def chat(self, *, session_id: str, prompt: str, model: str) -> dict[str, object]:
+        del session_id
+        return {
+            "text": self._provider.generate(
+                model=model,
+                system=(
+                    "Eres el procesador local de Fuente. Devuelve únicamente "
+                    "el JSON solicitado y conserva la trazabilidad documental."
+                ),
+                prompt=prompt,
+            )
+        }
+
+
 @dataclass(frozen=True)
 class GeneratedNoteLineage:
     source_note_id: str
@@ -153,7 +175,12 @@ class SmartNoteGenerator:
         self._staging_root = self._vault_root / ".fuente" / "staging"
 
     def generate(
-        self, source_id: str, revision: int, content_hash: str
+        self,
+        source_id: str,
+        revision: int,
+        content_hash: str,
+        *,
+        model_name: str | None = None,
     ) -> list[GeneratedNote]:
         self.transition_approvals.require_current(
             source_id,
@@ -184,7 +211,7 @@ class SmartNoteGenerator:
             content_hash=content_hash,
             path=str(source_row["relative_path"]),
         )
-        model = self._selected_model()
+        model = self._selected_model(model_name)
         generation_id = str(uuid.uuid4())
         staging_dir = self._staging_root / generation_id
         staging_dir.mkdir(parents=True, exist_ok=True)
@@ -231,10 +258,13 @@ class SmartNoteGenerator:
         finally:
             shutil.rmtree(staging_dir, ignore_errors=True)
 
-    def _selected_model(self) -> str:
+    def _selected_model(self, model_name: str | None = None) -> str:
+        selected = (model_name or self.model_name).strip()
+        if not selected:
+            raise SmartNoteGenerationError("No local model is available for smart-note generation")
         if self.ram_governor is not None:
-            self.ram_governor.ensure_model_available(self.model_name)
-        return self.model_name
+            self.ram_governor.ensure_model_available(selected)
+        return selected
 
     def _build_plan(
         self,

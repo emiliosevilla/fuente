@@ -192,6 +192,29 @@ def test_single_note_scope_does_not_cite_other_notes(grounded_service):
     assert CHAT_SYSTEM_PROMPT in provider.calls[-1]["system"]
 
 
+def test_selected_pending_note_is_sent_directly_to_the_local_model(grounded_service):
+    service, provider, _store = grounded_service
+
+    result = service.ask(
+        "¿Cómo se llama esta Nota?",
+        {
+            "context_mode": "single_note",
+            "document_id": "note-pending",
+            "selected_note_title": "03 El loco",
+            "selected_note_markdown": "# 03 El loco\n\nGilbert K. Chesterton escribió Ortodoxia.",
+        },
+    )
+
+    assert result["ok"] is True
+    assert result["has_context"] is True
+    assert result["citations"] == [{
+        "document_id": "note-pending", "revision": 1, "content_hash": "",
+        "title": "03 El loco", "origin": "selected_local_note",
+        "snippet": "# 03 El loco\n\nGilbert K. Chesterton escribió Ortodoxia.",
+    }]
+    assert "Chesterton" in provider.calls[-1]["prompt"]
+
+
 def test_multiple_note_scope_only_cites_the_selected_notes(grounded_service):
     service, _provider, _store = grounded_service
     result = service.ask(

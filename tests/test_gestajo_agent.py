@@ -1280,12 +1280,19 @@ def test_visible_note_can_use_local_assistant_without_exposing_paths(tmp_path: P
         membership_verifier=_membership_verifier,
         note_visibility_verifier=lambda *_args: {"note_id": note_id, "common_org_id": COMMON_ORG_ID},
         backend_factory=lambda _vault: Backend(), audit_publisher=lambda _binding, _token, event: audits.append(event),
+        note_reader=lambda _vault, received_id: {
+            "document_id": received_id, "revision": 1, "title": "Informe",
+            "body_markdown": "# Informe\n\nDato verificable.",
+        },
     )
     agent.claim("token-a", {"supabase_url": "https://project.supabase.co", "publishable_key": "sb_publishable_test_key"})
 
     answer = agent.ask_note_assistant("token-a", "00000000-0000-0000-0000-000000000001", note_id, {"message": "Resume esta Nota"})
 
-    assert calls == [("Resume esta Nota", {"context_mode": "single_note", "document_id": note_id})]
+    assert calls == [("Resume esta Nota", {
+        "context_mode": "single_note", "document_id": note_id,
+        "selected_note_title": "Informe", "selected_note_markdown": "# Informe\n\nDato verificable.",
+    })]
     assert answer == {
         "ok": True, "text": "Resumen local", "model": "qwen2.5:7b", "degraded": False,
         "citations": [{"document_id": note_id, "title": "Informe", "snippet": "Dato relevante"}],

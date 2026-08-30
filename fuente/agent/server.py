@@ -1326,9 +1326,15 @@ class GestajoAgent:
             raise AgentAuthorizationError("note is invalid")
         self._membership_verifier(binding, self._access_token(access_token), org_id)
         scope = self._note_visibility_verifier(binding, self._access_token(access_token), note_id)
+        note = _note_response(self._note_reader(self.vault_path, note_id), note_id)
         answer = _assistant_response(self._local_backend().process_chat(
             _note_assistant_payload(payload),
-            {"context_mode": "single_note", "document_id": note_id},
+            {
+                "context_mode": "single_note",
+                "document_id": note_id,
+                "selected_note_title": note["title"],
+                "selected_note_markdown": note["body_markdown"],
+            },
         ))
         self._record_audit(binding, self._access_token(access_token), _new_audit_event(
             note_id, org_id, scope["common_org_id"], binding.user_id,

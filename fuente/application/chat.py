@@ -306,11 +306,28 @@ class ChatApplicationService:
             self._refinement_guard(candidate_id, revision)
 
         scope, scope_kwargs = _normalize_scope(ctx)
-        retrieval_ctx = self.retrieval.build_context(query, scope, **scope_kwargs)
-        sources = list(retrieval_ctx.get("sources") or [])
-        retrieval_mode = str(retrieval_ctx.get("mode") or MODE_NONE)
-        has_context = bool(retrieval_ctx.get("has_context"))
-        evidence = str(retrieval_ctx.get("text") or "").strip()
+        selected_markdown = str(ctx.get("selected_note_markdown") or "").strip()
+        selected_note_id = str(ctx.get("document_id") or "").strip()
+        selected_note_title = str(ctx.get("selected_note_title") or "").strip()
+        if scope == SCOPE_SINGLE_NOTE and selected_markdown and selected_note_id:
+            # A selected draft is visible only to its already-authorized caller. It is
+            # intentionally not admitted to the general approved-note retriever.
+            evidence = selected_markdown[: self.retrieval.max_chars]
+            sources = [{
+                "document_id": selected_note_id,
+                "title": selected_note_title or selected_note_id,
+                "snippet": evidence[: self.retrieval.snippet_chars],
+                "origin": "selected_local_note",
+            }]
+            retrieval_mode = "selected_local_note"
+            has_context = True
+            retrieval_ctx = {"degraded": False, "degradation_reason": None}
+        else:
+            retrieval_ctx = self.retrieval.build_context(query, scope, **scope_kwargs)
+            sources = list(retrieval_ctx.get("sources") or [])
+            retrieval_mode = str(retrieval_ctx.get("mode") or MODE_NONE)
+            has_context = bool(retrieval_ctx.get("has_context"))
+            evidence = str(retrieval_ctx.get("text") or "").strip()
 
         if has_context and evidence:
             user_prompt = (

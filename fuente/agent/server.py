@@ -1132,18 +1132,26 @@ class GestajoAgent:
             self._document_outbox(), binding, str(org_id),
         )
         try:
-            self._document_outbox().set_document_conflict_skin(
-                user_id=binding.user_id,
-                org_id=str(org_id),
-                connection_id=connection_id,
-                relative_path=relative_path,
-                winner=winner,
-            )
+            if winner is None:
+                self._document_outbox().delete_document_conflict_skin(
+                    user_id=binding.user_id,
+                    org_id=str(org_id),
+                    connection_id=connection_id,
+                    relative_path=relative_path,
+                )
+            else:
+                self._document_outbox().set_document_conflict_skin(
+                    user_id=binding.user_id,
+                    org_id=str(org_id),
+                    connection_id=connection_id,
+                    relative_path=relative_path,
+                    winner=winner,
+                )
         except (OSError, ValueError) as error:
             raise AgentError("local conflict preference could not be saved") from error
         self._record_audit(binding, self._access_token(access_token), _new_audit_event(
             conflict["note_id"] if conflict is not None else None,
-            str(org_id), str(uuid.UUID(str(org_id))), binding.user_id, "sync_conflict_resolve", winner,
+            str(org_id), str(uuid.UUID(str(org_id))), binding.user_id, "sync_conflict_resolve", winner or "cleared",
         ))
         return {"relative_path": relative_path, "winner": winner}
 
@@ -1158,7 +1166,7 @@ class GestajoAgent:
         binding = self._require_management(access_token, org_id)
         conflict_id = _document_conflict_id(conflict_id)
         route = self._document_conflict_route(binding, org_id, conflict_id)
-        if not isinstance(payload, Mapping) or set(payload) != {"winner"}:
+        if not isinstance(payload, Mapping) or set(payload) != {"winner"} or payload.get("winner") not in {"vault", "shared", None}:
             raise AgentError("document conflict resolution is invalid")
         backend = self._local_backend()
         connection = next(
@@ -1175,7 +1183,6 @@ class GestajoAgent:
         result = self.resolve_sync_conflict(access_token, org_id, {
             "connection_id": route["connection_id"], "relative_path": route["relative_path"], "winner": payload["winner"],
         })
-        self._document_outbox().delete_document_conflict_route(conflict_id)
         return result
 
     def _run_sync(
@@ -2859,14 +2866,14 @@ def _sync_conflict_payload(payload: object) -> tuple[str, str]:
     return connection_id, relative_path
 
 
-def _sync_conflict_resolution_payload(payload: object) -> tuple[str, str, str]:
+def _sync_conflict_resolution_payload(payload: object) -> tuple[str, str, str | None]:
     if not isinstance(payload, Mapping) or set(payload) != {"connection_id", "relative_path", "winner"}:
         raise AgentError("sync conflict payload has unsupported fields")
     connection_id, relative_path = _sync_conflict_payload({
         "connection_id": payload.get("connection_id"), "relative_path": payload.get("relative_path"),
     })
     winner = payload.get("winner")
-    if winner not in {"vault", "shared"}:
+    if winner not in {"vault", "shared", None}:
         raise AgentError("conflict winner is invalid")
     return connection_id, relative_path, winner
 

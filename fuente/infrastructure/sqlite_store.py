@@ -1811,6 +1811,18 @@ class JobStore:
         ).fetchone()
         return dict(row) if row is not None else None
 
+    def delete_document_conflict_skin(
+        self, *, user_id: str, org_id: str, connection_id: str, relative_path: str,
+    ) -> bool:
+        cursor = self._connection.execute(
+            """
+            DELETE FROM document_conflict_skins
+            WHERE user_id = ? AND org_id = ? AND connection_id = ? AND relative_path = ?
+            """,
+            (str(uuid.UUID(user_id)), str(uuid.UUID(org_id)), connection_id, PurePosixPath(relative_path).as_posix()),
+        )
+        return cursor.rowcount == 1
+
     def has_active_review_claim(self, artifact_id: str) -> bool:
         now = _timestamp()
         row = self._connection.execute(

@@ -2255,7 +2255,12 @@ class FuenteConsoleBackend:
 
             try:
                 configure_anythingllm()
-            except (AnythingLLMError, ValueError):
+            except (AnythingLLMError, ValueError) as error:
+                if (
+                    isinstance(error, AnythingLLMError)
+                    and error.code == "anythingllm_access_required"
+                ):
+                    return {"ready": False, "provider": provider, "model": model, "reason": "anythingllm_access_required"}
                 from fuente.installer_contract import open_official_installer, start_anythingllm_service
 
                 if start_anythingllm_service(configure_anythingllm):

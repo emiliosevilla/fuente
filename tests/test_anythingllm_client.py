@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import io
 from typing import Any
 from urllib.error import HTTPError
 
@@ -9,6 +10,7 @@ import pytest
 
 from fuente.integrations.anythingllm import (
     ERROR_ANYTHINGLLM,
+    ERROR_ANYTHINGLLM_ACCESS_REQUIRED,
     ERROR_DOCUMENTS_PRESENT,
     AnythingLLMConversationClient,
     AnythingLLMError,
@@ -120,6 +122,21 @@ def test_document_count_and_health(fake_anythingllm):
     assert health["ok"] is True
     assert client.document_count() == 0
     assert any("/api/v1/system" in url for _method, url, _body in calls)
+
+
+def test_health_reports_when_anythingllm_requires_an_api_key(monkeypatch):
+    def forbidden(request, timeout=30.0):
+        raise HTTPError(
+            request.full_url, 403, "forbidden", hdrs=None, fp=io.BytesIO(b"forbidden")
+        )
+
+    monkeypatch.setattr("urllib.request.urlopen", forbidden)
+    client = AnythingLLMConversationClient("http://127.0.0.1:3001", "fuente")
+
+    with pytest.raises(AnythingLLMError) as exc:
+        client.health()
+
+    assert exc.value.code == ERROR_ANYTHINGLLM_ACCESS_REQUIRED
 
 
 def test_chat_requires_zero_documents(fake_anythingllm):

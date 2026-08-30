@@ -12,6 +12,7 @@ from fuente.config import is_loopback_ollama_url
 logger = logging.getLogger(__name__)
 
 ERROR_ANYTHINGLLM = "anythingllm_unavailable"
+ERROR_ANYTHINGLLM_ACCESS_REQUIRED = "anythingllm_access_required"
 ERROR_DOCUMENTS_PRESENT = "anythingllm_documents_present"
 DEFAULT_ANYTHINGLLM_URL = "http://127.0.0.1:3001"
 DEFAULT_ANYTHINGLLM_WORKSPACE = "fuente"
@@ -84,7 +85,11 @@ class AnythingLLMConversationClient:
             detail = exc.read().decode("utf-8", errors="replace")
             raise AnythingLLMError(
                 f"HTTP {exc.code}: {detail}",
-                code=ERROR_ANYTHINGLLM,
+                code=(
+                    ERROR_ANYTHINGLLM_ACCESS_REQUIRED
+                    if exc.code in {401, 403}
+                    else ERROR_ANYTHINGLLM
+                ),
             ) from exc
         except (urllib.error.URLError, TimeoutError, OSError, ValueError) as exc:
             raise AnythingLLMError(

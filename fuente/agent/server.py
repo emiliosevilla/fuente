@@ -2746,7 +2746,7 @@ def _local_ai_prepare_response(value: object) -> dict[str, object]:
     model = value.get("model") if isinstance(value.get("model"), str) else None
     reason = value.get("reason") if value.get("reason") in {
         None, "ram_policy", "ollama_unavailable", "ollama_installation_required", "model_unavailable",
-        "anythingllm_unavailable", "anythingllm_installation_required",
+        "anythingllm_unavailable", "anythingllm_installation_required", "anythingllm_access_required",
     } else None
     if provider is None or (ready and not model) or (not ready and reason is None):
         raise AgentError("local AI preparation returned an invalid response")

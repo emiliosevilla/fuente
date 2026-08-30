@@ -11,7 +11,10 @@ from fuente.application.health import HealthService
 import fuente.application.health as health_module
 from fuente.config import AppConfig, VaultConfig
 from fuente.control_console import FuenteConsoleBackend
-from fuente.integrations.anythingllm import AnythingLLMError
+from fuente.integrations.anythingllm import (
+    ERROR_ANYTHINGLLM_ACCESS_REQUIRED,
+    AnythingLLMError,
+)
 from fuente.ui.bridge import FuentePyWebViewApi
 
 
@@ -376,6 +379,51 @@ def test_backend_prepare_local_ai_starts_installed_anythingllm_before_opening_in
     assert started == ["anythingllm"]
     assert opened == []
     assert Client.selected_models == ["qwen2.5:0.8b"]
+
+
+def test_backend_prepare_local_ai_reports_api_key_requirement_without_reinstalling(
+    temp_vault_path, monkeypatch
+):
+    backend = FuenteConsoleBackend(temp_vault_path)
+
+    class Governor:
+        @staticmethod
+        def recommend_model():
+            return "qwen2.5:0.8b"
+
+        @staticmethod
+        def check_ollama_status():
+            return True
+
+        @staticmethod
+        def ensure_model_available(_model, *, authorize_download):
+            return authorize_download
+
+    class Client:
+        def __init__(self, *_args, **_kwargs):
+            pass
+
+        def health(self):
+            raise AnythingLLMError("API key required", code=ERROR_ANYTHINGLLM_ACCESS_REQUIRED)
+
+    backend.ram_governor = Governor()
+    started: list[str] = []
+    opened: list[str] = []
+    monkeypatch.setattr("fuente.control_console.AnythingLLMConversationClient", Client)
+    monkeypatch.setattr(
+        "fuente.installer_contract.start_anythingllm_service",
+        lambda _is_ready: started.append("anythingllm") or False,
+    )
+    monkeypatch.setattr("fuente.installer_contract.open_official_installer", opened.append)
+
+    assert backend.prepare_local_ai() == {
+        "ready": False,
+        "provider": "anythingllm",
+        "model": "qwen2.5:0.8b",
+        "reason": "anythingllm_access_required",
+    }
+    assert started == []
+    assert opened == []
 
 
 def test_bridge_get_health_returns_backend_snapshot(temp_vault_path):

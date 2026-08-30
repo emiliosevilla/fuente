@@ -100,6 +100,22 @@ def test_open_source_feed_accepts_note_type_order(api):
     assert "error" not in page
 
 
+def test_import_local_paths_keeps_same_named_files(temp_vault_path, tmp_path):
+    backend = FuenteConsoleBackend(temp_vault_path)
+    first = tmp_path / "uno" / "Informe.md"
+    second = tmp_path / "dos" / "Informe.md"
+    first.parent.mkdir()
+    second.parent.mkdir()
+    first.write_text("primer contenido", encoding="utf-8")
+    second.write_text("segundo contenido", encoding="utf-8")
+
+    result = backend.import_local_paths([str(first), str(second)])
+
+    assert result["copied"] == 2
+    assert (backend.vault.input_dir / "Informe.md").read_text(encoding="utf-8") == "primer contenido"
+    assert (backend.vault.input_dir / "Informe-2.md").read_text(encoding="utf-8") == "segundo contenido"
+
+
 def test_get_flow_state_counts_seals_and_note_types(temp_vault_path, api):
     backend = FuenteConsoleBackend(temp_vault_path)
     store = JobStore(temp_vault_path)

@@ -96,7 +96,7 @@ def test_status_requires_the_bound_user(tmp_path: Path):
     )
 
     assert agent.status("token-a")["claimed"] is True
-    assert agent.status("token-a")["capabilities"] == ["flow", "flow_approve", "flow_review", "flow_review_captured", "flow_discard", "settings", "sync_inputs", "sync_run", "sync_output", "sync_conflict_read", "sync_conflict_resolve", "note_read", "note_relations", "note_write", "note_approve_processed", "note_share", "note_assistant", "templates_read", "templates_write"]
+    assert agent.status("token-a")["capabilities"] == ["flow", "flow_import", "flow_approve", "flow_review", "flow_review_captured", "flow_discard", "settings", "sync_inputs", "sync_run", "sync_output", "sync_conflict_read", "sync_conflict_resolve", "note_read", "note_relations", "note_write", "note_approve_processed", "note_share", "note_assistant", "templates_read", "templates_write"]
     with pytest.raises(AgentAuthenticationError, match="another user"):
         agent.status("token-b")
 
@@ -808,6 +808,32 @@ def test_settings_returns_safe_suggestions_to_consulta_and_writes_only_for_manag
     with pytest.raises(AgentAuthorizationError, match="Settings require"):
         agent.save_settings("token-a", "00000000-0000-0000-0000-000000000001", {"audio_mode": "skip"})
     assert calls == []
+
+
+def test_management_imports_caudal_files_with_native_picker_without_exposing_paths(tmp_path: Path):
+    audits = []
+
+    class Backend:
+        def select_files(self, title):
+            assert title == "Añadir documentos a Caudal"
+            return ["/private/original/Informe.pdf"]
+
+        def import_local_paths(self, paths):
+            assert paths == ["/private/original/Informe.pdf"]
+            return {"status": "imported", "copied": 1}
+
+    agent = GestajoAgent(
+        tmp_path, verifier=_verifier, publisher=_publisher,
+        membership_verifier=lambda *_args: "gestion", backend_factory=lambda _vault: Backend(),
+        audit_publisher=lambda _binding, _token, event: audits.append(event),
+    )
+    agent.claim("token-a", {"supabase_url": "https://project.supabase.co", "publishable_key": "sb_publishable_test_key"})
+
+    result = agent.import_flow_files("token-a", "00000000-0000-0000-0000-000000000001", {})
+
+    assert result == {"copied": 1}
+    assert "/private" not in str(result)
+    assert audits[-1]["action"] == "caudal_import"
 
 
 def test_sync_input_uses_native_selection_token_without_returning_a_path(tmp_path: Path):

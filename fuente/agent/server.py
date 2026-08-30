@@ -403,7 +403,7 @@ class GestajoAgent:
             "platform": platform.system(),
             "user_id": binding.user_id,
             "vault_fingerprint": self._vault_fingerprint(),
-            "capabilities": ["flow", "flow_approve", "flow_review", "flow_review_captured", "flow_discard", "settings", "sync_inputs", "sync_run", "sync_output", "sync_conflict_read", "sync_conflict_resolve", "note_read", "note_relations", "note_write", "note_approve_processed", "note_share", "note_assistant", "templates_read", "templates_write"],
+            "capabilities": ["flow", "flow_import", "flow_approve", "flow_review", "flow_review_captured", "flow_discard", "settings", "sync_inputs", "sync_run", "sync_output", "sync_conflict_read", "sync_conflict_resolve", "note_read", "note_relations", "note_write", "note_approve_processed", "note_share", "note_assistant", "templates_read", "templates_write"],
         }
 
     def flow(self, access_token: object, org_id: object) -> dict[str, object]:
@@ -413,6 +413,29 @@ class GestajoAgent:
         self._management_verifier(binding, self._access_token(access_token), org_id)
         state = self._read_flow()
         return _flow_response(state)
+
+    def import_flow_files(self, access_token: object, org_id: object, payload: object) -> dict[str, object]:
+        """Choose local files natively, then copy them into Caudal's input stage."""
+        binding = self._require_management(access_token, org_id)
+        if not isinstance(payload, Mapping) or payload:
+            raise AgentError("flow import payload must be empty")
+        backend = self._local_backend()
+        paths = backend.select_files("Añadir documentos a Caudal")
+        if not isinstance(paths, list) or not all(isinstance(path, str) for path in paths):
+            raise AgentError("native file picker returned an invalid selection")
+        if not paths:
+            return {"copied": 0}
+        result = backend.import_local_paths(paths)
+        if not isinstance(result, Mapping) or result.get("error"):
+            raise AgentError(str(result.get("message") or result.get("error") or "Caudal could not import local files"))
+        copied = result.get("copied")
+        if not isinstance(copied, int) or isinstance(copied, bool) or copied < 1:
+            raise AgentError("Caudal did not confirm any local file")
+        self._record_audit(binding, self._access_token(access_token), _new_audit_event(
+            None, str(org_id), str(uuid.UUID(str(org_id))), binding.user_id,
+            "caudal_import", "success",
+        ))
+        return {"copied": copied}
 
     def approve_flow_transition(self, access_token: object, org_id: object, payload: object) -> dict[str, object]:
         """Approve Fuente's current human-gated transition."""
@@ -1119,7 +1142,7 @@ def _handler_for(agent: GestajoAgent) -> type[BaseHTTPRequestHandler]:
             template_id = parsed.path.removeprefix("/v1/templates/") if parsed.path.startswith("/v1/templates/") else ""
             is_template_save = bool(template_id) and "/" not in template_id
             if not (is_note_update or is_note_share or is_note_assistant or is_note_processed_approval or is_review_captured_update or is_review_captured_assistant or is_template_save) and parsed.path not in {
-                "/v1/claim", "/v1/flow/approve", "/v1/flow/discard", "/v1/settings", "/v1/sync-inputs/select", "/v1/sync-inputs/run", "/v1/sync-outputs/run", "/v1/sync-conflicts/read", "/v1/sync-conflicts/resolve",
+                "/v1/claim", "/v1/flow/import", "/v1/flow/approve", "/v1/flow/discard", "/v1/settings", "/v1/sync-inputs/select", "/v1/sync-inputs/run", "/v1/sync-outputs/run", "/v1/sync-conflicts/read", "/v1/sync-conflicts/resolve",
                 "/v1/sync-inputs/confirm", "/v1/sync-inputs/enabled", "/v1/sync-inputs/remove", "/v1/sync",
             }:
                 self._send_error(HTTPStatus.NOT_FOUND, "route not found")
@@ -1161,6 +1184,9 @@ def _handler_for(agent: GestajoAgent) -> type[BaseHTTPRequestHandler]:
                 self._authorized(lambda token: agent.update_note(token, _single_query_value(parsed.query, "org_id"), parsed.path.removeprefix("/v1/notes/"), payload))
                 return
             org_id = _single_query_value(parsed.query, "org_id")
+            if parsed.path == "/v1/flow/import":
+                self._authorized(lambda token: agent.import_flow_files(token, org_id, payload))
+                return
             if parsed.path == "/v1/flow/approve":
                 self._authorized(lambda token: agent.approve_flow_transition(token, org_id, payload))
                 return

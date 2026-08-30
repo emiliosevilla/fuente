@@ -965,11 +965,10 @@ class FuenteConsoleBackend:
                 for child in resolved.rglob("*"):
                     if not child.is_file() or child.name.startswith("."):
                         continue
-                    target = destination / child.name
-                    shutil.copy2(child, target)
+                    shutil.copy2(child, self._next_import_target(destination, child.name))
                     copied += 1
             elif resolved.is_file():
-                shutil.copy2(resolved, destination / resolved.name)
+                shutil.copy2(resolved, self._next_import_target(destination, resolved.name))
                 copied += 1
             else:
                 return {"error": "import_source_missing", "message": "Selected path is unavailable"}
@@ -980,6 +979,20 @@ class FuenteConsoleBackend:
             "stats": self.get_stats_dict(),
             "flow_state": self.get_flow_state(),
         }
+
+    @staticmethod
+    def _next_import_target(destination: Path, filename: str) -> Path:
+        """Choose a free input filename without replacing an earlier import."""
+        candidate = destination / filename
+        if not candidate.exists():
+            return candidate
+        source = Path(filename)
+        index = 2
+        while True:
+            candidate = destination / f"{source.stem}-{index}{source.suffix}"
+            if not candidate.exists():
+                return candidate
+            index += 1
 
     def get_approval_service(self) -> ApprovalApplicationService:
         """Return the approval ledger facade for canonical clean notes."""

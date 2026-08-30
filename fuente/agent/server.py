@@ -1045,10 +1045,7 @@ class GestajoAgent:
 
     def ask_knowledge_assistant(self, access_token: object, org_id: object, payload: object) -> dict[str, object]:
         """Run the existing local retrieval assistant over this user's Knowledge Base."""
-        binding = self._require_user(access_token)
-        if not isinstance(org_id, str):
-            raise AgentAuthorizationError("organization is invalid")
-        self._membership_verifier(binding, self._access_token(access_token), org_id)
+        binding = self._require_management(access_token, org_id)
         answer = _assistant_response(self._local_backend().process_chat(
             _note_assistant_payload(payload),
             {"context_mode": "all_notes", "session_id": f"gestajo-kb:{binding.user_id}:{org_id}"},

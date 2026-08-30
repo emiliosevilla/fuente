@@ -806,7 +806,7 @@ def test_knowledge_assistant_reads_the_local_kb_without_exposing_routes(tmp_path
 
     agent = GestajoAgent(
         tmp_path, verifier=_verifier, publisher=_publisher,
-        membership_verifier=_membership_verifier, backend_factory=lambda _vault: Backend(),
+        membership_verifier=_management_verifier, backend_factory=lambda _vault: Backend(),
         audit_publisher=lambda _binding, _token, event: audits.append(event),
     )
     agent.claim("token-a", {"supabase_url": "https://project.supabase.co", "publishable_key": "sb_publishable_test_key"})
@@ -835,6 +835,19 @@ def test_knowledge_assistant_reads_the_local_kb_without_exposing_routes(tmp_path
     assert "/private" not in str(answer)
     assert audits[0]["action"] == "knowledge_assistant_ask"
     assert audits[0]["llm_model"] == "qwen2.5:7b"
+
+
+def test_knowledge_assistant_requires_management_access(tmp_path: Path):
+    agent = GestajoAgent(
+        tmp_path, verifier=_verifier, publisher=_publisher,
+        membership_verifier=_membership_verifier,
+    )
+    agent.claim("token-a", {"supabase_url": "https://project.supabase.co", "publishable_key": "sb_publishable_test_key"})
+
+    with pytest.raises(AgentAuthorizationError, match="gestion or admin"):
+        agent.ask_knowledge_assistant(
+            "token-a", "00000000-0000-0000-0000-000000000001", {"message": "Encuentra relaciones"},
+        )
 
 
 def test_visible_note_exposes_safe_local_relations(tmp_path: Path):

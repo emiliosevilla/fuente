@@ -1,5 +1,6 @@
 # -*- mode: python ; coding: utf-8 -*-
 from pathlib import Path
+import sys
 from PyInstaller.utils.hooks import collect_submodules
 
 block_cipher = None
@@ -70,15 +71,16 @@ exe = EXE(
     icon=str(icon),
 )
 coll = COLLECT(exe, a.binaries, a.zipfiles, a.datas, name="Fuente")
-app = BUNDLE(
-    coll,
-    name="Fuente.app",
-    icon=str(icon),
-    bundle_identifier="com.emiliosevilla.fuente",
-    info_plist={
-        "CFBundleURLTypes": [{
-            "CFBundleURLName": "Fuente Gestajo Agent",
-            "CFBundleURLSchemes": ["fuente"],
-        }],
-    },
-)
+if sys.platform == "darwin":
+    app = BUNDLE(
+        coll,
+        name="Fuente.app",
+        icon=str(icon),
+        bundle_identifier="com.emiliosevilla.fuente",
+        info_plist={
+            "CFBundleURLTypes": [{
+                "CFBundleURLName": "Fuente Gestajo Agent",
+                "CFBundleURLSchemes": ["fuente"],
+            }],
+        },
+    )

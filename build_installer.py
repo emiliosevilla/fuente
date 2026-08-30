@@ -20,6 +20,13 @@ RUNTIME_EXCLUDED_DIRS = {
 }
 
 
+def distribution_bundle(dist_dir: Path, platform_name: str | None = None) -> tuple[Path, str]:
+    """Return PyInstaller's platform-native directory and ZIP root name."""
+    if (platform_name or sys.platform) == "darwin":
+        return dist_dir / "Fuente.app", "Fuente.app"
+    return dist_dir / "Fuente", "Fuente"
+
+
 def add_dir_to_zip(zf: zipfile.ZipFile, source_dir: Path, arc_dir_name: str):
     """Añade recursivamente un directorio al ZIP omitiendo archivos temporales, __pycache__, muestras y recursos web (.html)."""
     if not source_dir.exists():
@@ -235,14 +242,12 @@ def build():
     dist_dir.mkdir(parents=True, exist_ok=True)
 
     is_mac = sys.platform == "darwin"
-    is_win = sys.platform == "win32"
-
     zip_name = "Fuente_Distribucion_macOS.zip" if is_mac else "Fuente_Distribucion_Windows.zip"
     zip_path = dist_dir / zip_name
 
-    app_bundle = dist_dir / "Fuente.app"
+    app_bundle, archive_root = distribution_bundle(dist_dir)
     if not app_bundle.is_dir():
-        raise RuntimeError("PyInstaller no generó Fuente.app; no se creará un ZIP incompleto.")
+        raise RuntimeError("PyInstaller no generó el directorio de Fuente; no se creará un ZIP incompleto.")
 
     sign_macos_app(app_bundle)
 
@@ -257,7 +262,7 @@ def build():
         dmg_path = create_macos_dmg(dist_dir, app_bundle, launcher)
     else:
         with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
-            add_dir_to_zip(zf, app_bundle, "Fuente.app")
+            add_dir_to_zip(zf, app_bundle, archive_root)
 
     print("=" * 60)
     print("¡PAQUETE DE DISTRIBUCIÓN CREADO EXITOSAMENTE!")

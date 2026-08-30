@@ -3,6 +3,8 @@ from __future__ import annotations
 import tomllib
 from pathlib import Path
 
+from build_installer import distribution_bundle
+
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -33,7 +35,8 @@ def test_distribution_sources_include_webview_console_and_read_only_reader() -> 
 
     assert "prepare_runtime_payload(base_dir)" in build
     assert "prepare_pip_payload(base_dir)" in build
-    assert 'add_dir_to_zip(zf, app_bundle, "Fuente.app")' in build
+    assert "app_bundle, archive_root = distribution_bundle(dist_dir)" in build
+    assert "add_dir_to_zip(zf, app_bundle, archive_root)" in build
     assert 'write_macos_launcher(dist_dir)' in build
     assert 'launcher = dist_dir / "Instalador_Fuente.command"' in build
     assert '/usr/bin/xattr -cr "$APP_PATH"' in build
@@ -76,6 +79,12 @@ def test_macos_gui_binary_does_not_open_terminal() -> None:
     assert '"CFBundleURLSchemes": ["fuente"]' in spec
     assert "argv_emulation=True" in spec
     build = (ROOT / "build_installer.py").read_text(encoding="utf-8")
-    assert 'add_dir_to_zip(zf, app_bundle, "Fuente.app")' in build
+    assert 'return dist_dir / "Fuente.app", "Fuente.app"' in build
+    assert 'return dist_dir / "Fuente", "Fuente"' in build
     assert 'codesign' in build
     assert 'add_dir_to_zip(zf, base_dir / "fuente", "fuente")' not in build
+
+
+def test_distribution_uses_the_native_directory_on_macos_and_windows(tmp_path) -> None:
+    assert distribution_bundle(tmp_path, "darwin") == (tmp_path / "Fuente.app", "Fuente.app")
+    assert distribution_bundle(tmp_path, "win32") == (tmp_path / "Fuente", "Fuente")

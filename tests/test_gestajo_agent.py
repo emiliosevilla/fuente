@@ -1056,8 +1056,8 @@ def test_management_can_approve_captured_content_for_local_processing(tmp_path: 
     result = agent.approve_flow_transition("token-a", "00000000-0000-0000-0000-000000000001", {"job_id": job_id})
 
     assert calls == [
-        ("begin_review", job_id, "3_capturado", "4_procesado", 1, "c" * 64, USER_A),
-        ("approve", job_id, "3_capturado", "4_procesado", 1, "c" * 64, USER_A),
+        ("begin_review", document_id_for_relative_path("3_capturado/03 El loco.md"), "3_capturado", "4_procesado", 2, "c" * 64, USER_A),
+        ("approve", document_id_for_relative_path("3_capturado/03 El loco.md"), "3_capturado", "4_procesado", 2, "c" * 64, USER_A),
         ("resume", job_id),
     ]
     assert result["processed_notes"] == [{

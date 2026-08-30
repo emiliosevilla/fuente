@@ -801,9 +801,23 @@ class GestajoAgent:
         control = backend.get_job_control_service()
         try:
             content_hash = _flow_approval_hash(backend, job, source_stage)
+            approval_id = job_id
+            approval_revision = 1
+            if source_stage == "3_capturado":
+                captured_relative = _safe_sync_relative(job.get("clean_artifact"))
+                if captured_relative is None:
+                    raise AgentError("local Caudal job is invalid")
+                approval_id = document_id_for_relative_path(captured_relative)
+                catalog = control.ingestion.job_store.get_note(approval_id)
+                if not isinstance(catalog, Mapping):
+                    raise AgentError("local captured note is invalid")
+                approval_revision = int(catalog["revision"])
+                catalog_hash = str(catalog["content_hash"])
+                if catalog_hash != content_hash:
+                    raise AgentError("local captured note changed before approval")
             approvals = control.ingestion.transition_approvals
-            approvals.begin_review(job_id, source_stage, target_stage, 1, content_hash, reviewer=binding.user_id)
-            approvals.approve(job_id, source_stage, target_stage, 1, content_hash, reviewer=binding.user_id)
+            approvals.begin_review(approval_id, source_stage, target_stage, approval_revision, content_hash, reviewer=binding.user_id)
+            approvals.approve(approval_id, source_stage, target_stage, approval_revision, content_hash, reviewer=binding.user_id)
         except (OSError, RuntimeError, ValueError) as error:
             raise AgentError("Caudal could not record the approval locally") from error
         self._record_audit(binding, self._access_token(access_token), _new_audit_event(

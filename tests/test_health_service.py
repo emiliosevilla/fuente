@@ -272,6 +272,33 @@ def test_backend_get_health_does_not_update_ram_governor_last_decision(
     assert backend.ram_governor.last_budget_decision() == before
 
 
+def test_backend_prepare_local_ai_starts_ollama_and_ensures_the_ram_model(temp_vault_path, monkeypatch):
+    backend = FuenteConsoleBackend(temp_vault_path)
+    calls: list[object] = []
+
+    class Governor:
+        @staticmethod
+        def recommend_model():
+            return "qwen2.5:0.8b"
+
+        @staticmethod
+        def check_ollama_status():
+            return False
+
+        @staticmethod
+        def ensure_model_available(model, *, authorize_download):
+            calls.append((model, authorize_download))
+            return True
+
+    backend.ram_governor = Governor()
+    monkeypatch.setattr("fuente.installer_contract.start_ollama_service", lambda: True)
+
+    assert backend.prepare_local_ai() == {
+        "ready": True, "provider": "ollama", "model": "qwen2.5:0.8b", "reason": None,
+    }
+    assert calls == [("qwen2.5:0.8b", True)]
+
+
 def test_bridge_get_health_returns_backend_snapshot(temp_vault_path):
     backend = FuenteConsoleBackend(temp_vault_path)
     bridge = FuentePyWebViewApi(backend)

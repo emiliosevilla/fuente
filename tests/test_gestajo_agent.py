@@ -98,7 +98,7 @@ def test_status_requires_the_bound_user(tmp_path: Path):
     )
 
     assert agent.status("token-a")["claimed"] is True
-    assert agent.status("token-a")["capabilities"] == ["flow", "flow_import", "flow_approve", "flow_jobs", "flow_job_detail", "flow_job_resume", "flow_job_cancel", "flow_review", "flow_review_captured", "flow_review_source_preview", "flow_discard", "quarantine_read", "quarantine_restore", "settings", "sync_inputs", "sync_run", "sync_output", "sync_conflict_read", "sync_conflict_resolve", "document_conflict_read", "document_conflict_resolve", "taxonomy_read", "taxonomy_write", "note_read", "note_search", "note_feed", "note_relations", "note_graph", "note_lineage", "note_export", "note_write", "note_create", "note_theme", "note_merge", "note_approve_processed", "note_share", "note_assistant", "note_assistant_persist", "knowledge_assistant", "templates_read", "templates_write"]
+    assert agent.status("token-a")["capabilities"] == ["flow", "flow_import", "flow_approve", "flow_jobs", "flow_job_detail", "flow_job_resume", "flow_job_cancel", "flow_review", "flow_review_captured", "flow_review_source_preview", "flow_discard", "quarantine_read", "quarantine_restore", "settings", "sync_inputs", "sync_run", "sync_output", "sync_conflict_read", "sync_conflict_resolve", "document_conflict_read", "document_conflict_resolve", "local_ai_prepare", "taxonomy_read", "taxonomy_write", "note_read", "note_search", "note_feed", "note_relations", "note_graph", "note_lineage", "note_export", "note_write", "note_create", "note_theme", "note_merge", "note_approve_processed", "note_share", "note_assistant", "note_assistant_persist", "knowledge_assistant", "templates_read", "templates_write"]
     with pytest.raises(AgentAuthenticationError, match="another user"):
         agent.status("token-b")
 
@@ -1339,6 +1339,28 @@ def test_knowledge_assistant_allows_consulta_only_for_selected_visible_notes(tmp
 
     assert answer["ok"] is True
     assert calls == [("Encuentra relaciones", {"context_mode": "multiple_notes", "document_ids": [visible_id], "session_id": f"gestajo-kb:{USER_A}:{org_id}:{visible_id}"})]
+
+
+def test_local_ai_prepare_runs_for_the_authenticated_member_without_exposing_local_details(tmp_path: Path):
+    org_id = "00000000-0000-0000-0000-000000000001"
+    audits: list[dict[str, object]] = []
+
+    class Backend:
+        @staticmethod
+        def prepare_local_ai():
+            return {"ready": True, "provider": "ollama", "model": "qwen2.5:0.8b", "reason": None}
+
+    agent = GestajoAgent(
+        tmp_path, verifier=_verifier, publisher=_publisher, membership_verifier=_membership_verifier,
+        backend_factory=lambda _vault: Backend(), audit_publisher=lambda _binding, _token, event: audits.append(event),
+    )
+    agent.claim("token-a", {"supabase_url": "https://project.supabase.co", "publishable_key": "sb_publishable_test_key"})
+
+    assert agent.prepare_local_ai("token-a", org_id, {}) == {
+        "ready": True, "provider": "ollama", "model": "qwen2.5:0.8b", "reason": None,
+    }
+    assert audits[0]["action"] == "local_ai_prepare"
+    assert audits[0]["llm_model"] == "qwen2.5:0.8b"
 
 
 def test_visible_note_exposes_safe_local_relations(tmp_path: Path):

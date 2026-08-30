@@ -557,7 +557,7 @@ class GestajoAgent:
             "platform": platform.system(),
             "user_id": binding.user_id,
             "vault_fingerprint": self._vault_fingerprint(),
-            "capabilities": ["flow", "flow_import", "flow_approve", "flow_jobs", "flow_job_detail", "flow_job_resume", "flow_job_cancel", "flow_review", "flow_review_captured", "flow_review_source_preview", "flow_discard", "quarantine_read", "quarantine_restore", "settings", "sync_inputs", "sync_run", "sync_output", "sync_conflict_read", "sync_conflict_resolve", "document_conflict_read", "document_conflict_resolve", "taxonomy_read", "taxonomy_write", "note_read", "note_search", "note_feed", "note_relations", "note_graph", "note_lineage", "note_export", "note_write", "note_create", "note_theme", "note_merge", "note_approve_processed", "note_share", "note_assistant", "note_assistant_persist", "knowledge_assistant", "templates_read", "templates_write"],
+            "capabilities": ["flow", "flow_import", "flow_approve", "flow_jobs", "flow_job_detail", "flow_job_resume", "flow_job_cancel", "flow_review", "flow_review_captured", "flow_review_source_preview", "flow_discard", "quarantine_read", "quarantine_restore", "settings", "sync_inputs", "sync_run", "sync_output", "sync_conflict_read", "sync_conflict_resolve", "document_conflict_read", "document_conflict_resolve", "local_ai_prepare", "taxonomy_read", "taxonomy_write", "note_read", "note_search", "note_feed", "note_relations", "note_graph", "note_lineage", "note_export", "note_write", "note_create", "note_theme", "note_merge", "note_approve_processed", "note_share", "note_assistant", "note_assistant_persist", "knowledge_assistant", "templates_read", "templates_write"],
         }
 
     def taxonomy(self, access_token: object, org_id: object) -> dict[str, object]:
@@ -946,6 +946,22 @@ class GestajoAgent:
             raise AgentAuthorizationError("organization is invalid")
         role = self._membership_verifier(binding, self._access_token(access_token), org_id)
         return _settings_response(self._read_settings(), role)
+
+    def prepare_local_ai(self, access_token: object, org_id: object, payload: object) -> dict[str, object]:
+        if payload != {}:
+            raise AgentError("local AI preparation payload must be empty")
+        binding = self._require_user(access_token)
+        if not isinstance(org_id, str):
+            raise AgentAuthorizationError("organization is invalid")
+        role = self._membership_verifier(binding, self._access_token(access_token), org_id)
+        if role not in {"consulta", "gestion", "admin"}:
+            raise AgentAuthorizationError("organization role is invalid")
+        result = _local_ai_prepare_response(self._local_backend().prepare_local_ai())
+        self._record_audit(binding, self._access_token(access_token), _new_audit_event(
+            None, org_id, org_id, binding.user_id, "local_ai_prepare",
+            "success" if result["ready"] else "error", llm_model=result["model"] or None,
+        ))
+        return result
 
     def save_settings(self, access_token: object, org_id: object, payload: object) -> dict[str, object]:
         binding = self._require_user(access_token)
@@ -1880,6 +1896,7 @@ def _handler_for(agent: GestajoAgent) -> type[BaseHTTPRequestHandler]:
             is_note_create = parsed.path == "/v1/notes/create"
             is_note_update = bool(note_route) and "/" not in note_route and not is_note_merge
             is_knowledge_assistant = parsed.path == "/v1/knowledge-assistant"
+            is_local_ai_prepare = parsed.path == "/v1/ai/prepare"
             flow_job_route = parsed.path.removeprefix("/v1/flow/jobs/") if parsed.path.startswith("/v1/flow/jobs/") else ""
             flow_job_parts = flow_job_route.split("/") if flow_job_route else []
             is_flow_job_resume = len(flow_job_parts) == 2 and bool(flow_job_parts[0]) and flow_job_parts[1] == "resume"
@@ -1892,7 +1909,7 @@ def _handler_for(agent: GestajoAgent) -> type[BaseHTTPRequestHandler]:
             is_template_save = bool(template_id) and "/" not in template_id
             conflict_route = parsed.path.removeprefix("/v1/document-conflicts/") if parsed.path.startswith("/v1/document-conflicts/") else ""
             is_document_conflict_resolve = conflict_route.endswith("/resolve") and bool(conflict_route.removesuffix("/resolve")) and "/" not in conflict_route.removesuffix("/resolve")
-            if not (is_note_merge or is_note_update or is_note_share or is_note_assistant or is_note_assistant_output or is_note_processed_approval or is_note_theme or is_knowledge_assistant or is_flow_job_resume or is_flow_job_cancel or is_review_captured_update or is_review_captured_assistant or is_template_save or is_document_conflict_resolve) and parsed.path not in {
+            if not (is_note_merge or is_note_update or is_note_share or is_note_assistant or is_note_assistant_output or is_note_processed_approval or is_note_theme or is_knowledge_assistant or is_local_ai_prepare or is_flow_job_resume or is_flow_job_cancel or is_review_captured_update or is_review_captured_assistant or is_template_save or is_document_conflict_resolve) and parsed.path not in {
                 "/v1/claim", "/v1/flow/import", "/v1/flow/approve", "/v1/flow/discard", "/v1/settings", "/v1/sync-inputs/select", "/v1/sync-inputs/run", "/v1/sync-outputs/run", "/v1/sync-conflicts/read", "/v1/sync-conflicts/resolve",
                 "/v1/sync-inputs/confirm", "/v1/sync-inputs/enabled", "/v1/sync-inputs/remove", "/v1/sync", "/v1/taxonomy/themes", "/v1/taxonomy/issues", "/v1/quarantine/restore",
             }:
@@ -1905,6 +1922,9 @@ def _handler_for(agent: GestajoAgent) -> type[BaseHTTPRequestHandler]:
                 return
             if parsed.path == "/v1/claim":
                 self._authorized(lambda token: agent.claim(token, payload))
+                return
+            if is_local_ai_prepare:
+                self._authorized(lambda token: agent.prepare_local_ai(token, _single_query_value(parsed.query, "org_id"), payload))
                 return
             if parsed.path == "/v1/sync":
                 self._authorized(lambda token: agent.sync_pending(token, _single_query_value(parsed.query, "org_id")))
@@ -2662,6 +2682,20 @@ def _settings_response(state: Mapping[str, object], role: str) -> dict[str, obje
             for item in inputs if isinstance(item, Mapping)
         ],
     }
+
+
+def _local_ai_prepare_response(value: object) -> dict[str, object]:
+    if not isinstance(value, Mapping):
+        raise AgentError("local AI preparation returned an invalid response")
+    ready = value.get("ready") is True
+    provider = value.get("provider") if value.get("provider") in {"ollama", "anythingllm"} else None
+    model = value.get("model") if isinstance(value.get("model"), str) else None
+    reason = value.get("reason") if value.get("reason") in {
+        None, "ram_policy", "ollama_unavailable", "model_unavailable", "anythingllm_unavailable",
+    } else None
+    if provider is None or (ready and not model) or (not ready and reason is None):
+        raise AgentError("local AI preparation returned an invalid response")
+    return {"ready": ready, "provider": provider, "model": model, "reason": reason}
 
 
 def _percentage(value: object) -> float:

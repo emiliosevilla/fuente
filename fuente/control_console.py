@@ -72,7 +72,7 @@ from fuente.config import (
     load_config,
     describe_offline_mode,
 )
-from fuente.integrations.anythingllm import AnythingLLMConversationClient
+from fuente.integrations.anythingllm import AnythingLLMConversationClient, AnythingLLMError
 from fuente.core.vault import VaultManager
 from fuente.domain.documents import MarkdownDocument
 from fuente.domain.errors import (
@@ -2227,6 +2227,31 @@ class FuenteConsoleBackend:
             "policy": self._policy_dict(self.runtime_policy),
             "offline_mode": describe_offline_mode(self.config),
         }
+
+    def prepare_local_ai(self) -> Dict[str, Any]:
+        """Start the selected local provider and ensure Fuente's RAM-safe model exists."""
+        model = self.config.custom_model_override or self.ram_governor.recommend_model()
+        provider = "anythingllm" if self.config.anythingllm_url else "ollama"
+        if not model:
+            return {"ready": False, "provider": provider, "model": None, "reason": "ram_policy"}
+        if not self.ram_governor.check_ollama_status():
+            from fuente.installer_contract import start_ollama_service
+
+            if not start_ollama_service():
+                return {"ready": False, "provider": provider, "model": model, "reason": "ollama_unavailable"}
+        if not self.ram_governor.ensure_model_available(model, authorize_download=True):
+            return {"ready": False, "provider": provider, "model": model, "reason": "model_unavailable"}
+        if provider == "anythingllm":
+            try:
+                client = AnythingLLMConversationClient(
+                    self.config.anythingllm_url, self.config.anythingllm_workspace_slug,
+                    api_key=self.config.anythingllm_api_key,
+                )
+                client.health()
+                client.set_chat_model(model)
+            except (AnythingLLMError, ValueError):
+                return {"ready": False, "provider": provider, "model": model, "reason": "anythingllm_unavailable"}
+        return {"ready": True, "provider": provider, "model": model, "reason": None}
 
     def _template_registry(self) -> TemplateRegistry:
         if self._job_store is None:

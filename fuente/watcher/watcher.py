@@ -232,6 +232,9 @@ class ETLPipeline:
             safety_margin_pct=config.ram_safety_margin_pct,
         )
         self.ingestion.ram_governor = self.ram_governor
+        if self.ingestion.smart_note_generator is not None:
+            self.ingestion.smart_note_generator.ram_governor = self.ram_governor
+            self.ingestion.smart_note_generator.chat_client = self._smart_notes_client()
 
     def set_active_theme(self, theme_name: str) -> Path:
         """Switch the Vault theme and refresh approval paths."""

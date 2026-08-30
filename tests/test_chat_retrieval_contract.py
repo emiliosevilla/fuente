@@ -235,7 +235,7 @@ def test_selected_note_exposes_its_existing_wikilinks_without_inventing_targets(
     assert "[[> Reseña|materialistas]]" in prompt
 
 
-def test_relation_request_returns_verified_wikilinks_even_if_model_omits_them(grounded_service):
+def test_relation_request_reports_existing_links_and_missing_related_candidates(grounded_service):
     service, provider, _store = grounded_service
     provider.response = "Resumen breve sin enlaces."
 
@@ -250,9 +250,10 @@ def test_relation_request_returns_verified_wikilinks_even_if_model_omits_them(gr
     )
 
     assert "Resumen breve sin enlaces." in result["text"]
-    assert "## Wikilinks verificados en la Nota" in result["text"]
+    assert "## Wikilinks presentes en la Nota" in result["text"]
     assert "- [[01 Presentación|Chesterton]]" in result["text"]
     assert "- [[> Reseña|materialistas]]" in result["text"]
+    assert "No se recuperó otra Nota visible" in result["text"]
 
 
 def test_relation_request_adds_only_authorized_related_note_evidence(grounded_service):

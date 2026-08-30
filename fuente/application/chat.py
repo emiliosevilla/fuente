@@ -531,7 +531,7 @@ class ChatApplicationService:
             )
 
         return self._result(
-            text=_append_verified_wikilinks(
+            text=_append_grounded_wikilinks(
                 answer, query, explicit_wikilinks, related_wikilinks,
             ),
             sources=sources,
@@ -632,25 +632,30 @@ class ChatApplicationService:
         }
 
 
-def _append_verified_wikilinks(
+def _append_grounded_wikilinks(
     answer: str,
     query: str,
     explicit_wikilinks: list[str],
     related_wikilinks: list[str],
 ) -> str:
-    """Keep the link inventory factual even when a small local model is not."""
+    """Report only links grounded in the Note or retrieved visible Notes."""
     if not _RELATION_REQUEST.search(query):
         return answer
     sections = [answer.rstrip()]
     if explicit_wikilinks:
         sections.append(
-            "## Wikilinks verificados en la Nota\n"
+            "## Wikilinks presentes en la Nota\n"
             + "\n".join(f"- {link}" for link in explicit_wikilinks)
         )
     if related_wikilinks:
         sections.append(
             "## Wikilinks disponibles para la relación\n"
             + "\n".join(f"- {link}" for link in related_wikilinks)
+        )
+    else:
+        sections.append(
+            "## Wikilinks disponibles para la relación\n"
+            "No se recuperó otra Nota visible con evidencia suficiente para proponer un wikilink."
         )
     return "\n\n".join(sections)
 

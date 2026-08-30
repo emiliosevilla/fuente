@@ -330,6 +330,12 @@ class ChatApplicationService:
                 if note_id and body:
                     selected_notes.append((note_id, title, body))
 
+        raw_related_document_ids = ctx.get("related_document_ids", ())
+        related_document_ids = sorted({
+            str(note_id).strip()
+            for note_id in raw_related_document_ids
+            if isinstance(note_id, str) and note_id.strip()
+        }) if isinstance(raw_related_document_ids, (list, tuple, set)) else []
         if selected_notes:
             # A selected draft is visible only to its already-authorized caller. It is
             # intentionally not admitted to the general approved-note retriever.
@@ -352,6 +358,27 @@ class ChatApplicationService:
             retrieval_mode = "selected_local_note"
             has_context = bool(evidence)
             retrieval_ctx = {"degraded": False, "degradation_reason": None}
+            if related_document_ids and _RELATION_REQUEST.search(query):
+                selected_title = selected_notes[0][1]
+                selected_body = selected_notes[0][2]
+                related_ctx = self.retrieval.build_context(
+                    "\n".join(part for part in (query, selected_title, selected_body[:1_200]) if part),
+                    SCOPE_MULTIPLE_NOTES,
+                    document_ids=",".join(related_document_ids),
+                )
+                related_sources = [
+                    source for source in related_ctx.get("sources") or []
+                    if str(source.get("document_id") or "") != selected_notes[0][0]
+                ]
+                related_evidence = str(related_ctx.get("text") or "").strip()
+                if related_evidence:
+                    evidence = f"{evidence}\n\n---\n\nNotas relacionadas recuperadas:\n{related_evidence}"
+                    sources.extend(related_sources)
+                    retrieval_mode = f"selected_local_note+{related_ctx.get('mode') or MODE_NONE}"
+                retrieval_ctx = {
+                    "degraded": bool(related_ctx.get("degraded")),
+                    "degradation_reason": related_ctx.get("degradation_reason"),
+                }
         else:
             retrieval_ctx = self.retrieval.build_context(query, scope, **scope_kwargs)
             sources = list(retrieval_ctx.get("sources") or [])

@@ -1344,6 +1344,31 @@ def test_visible_note_assistant_loads_the_selected_local_type_instructions(tmp_p
     })]
 
 
+def test_visible_note_assistant_limits_relation_context_to_rls_visible_notes(tmp_path: Path):
+    note_id = "00000000-0000-0000-0000-000000000010"
+    calls: list[object] = []
+
+    class Backend:
+        @staticmethod
+        def process_chat(message, context):
+            calls.append((message, context))
+            return {"ok": True, "text": "Relaciones locales", "model": "qwen", "degraded": False, "citations": []}
+
+    agent = GestajoAgent(
+        tmp_path, verifier=_verifier, publisher=_publisher,
+        membership_verifier=_management_verifier, note_visibility_verifier=lambda *_args: {"common_org_id": "00000000-0000-0000-0000-000000000001"},
+        visible_note_ids_reader=lambda *_args: {note_id, "00000000-0000-0000-0000-000000000011"},
+        backend_factory=lambda _vault: Backend(), audit_publisher=lambda *_args: None,
+        note_reader=lambda _vault, received_id: {"document_id": received_id, "revision": 1, "title": "Informe", "body_markdown": "Dato verificable."},
+    )
+    agent.claim("token-a", {"supabase_url": "https://project.supabase.co", "publishable_key": "sb_publishable_test_key"})
+
+    answer = agent.ask_note_assistant("token-a", "00000000-0000-0000-0000-000000000001", note_id, {"message": "Resume y señala relaciones."})
+
+    assert answer["ok"] is True
+    assert calls[0][1]["related_document_ids"] == [note_id, "00000000-0000-0000-0000-000000000011"]
+
+
 def test_knowledge_assistant_reads_the_local_kb_without_exposing_routes(tmp_path: Path):
     from http.server import ThreadingHTTPServer
 

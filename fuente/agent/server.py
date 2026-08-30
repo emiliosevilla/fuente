@@ -11,6 +11,7 @@ import hashlib
 import json
 import mimetypes
 import platform
+import re
 from shutil import copyfileobj
 import ssl
 import uuid
@@ -44,6 +45,10 @@ DEFAULT_ALLOWED_ORIGINS = frozenset({
     "https://gestajo-git-dev-emilio-sevilla-ortego-projects.vercel.app",
     "http://localhost:3000",
 })
+_RELATION_REQUEST = re.compile(
+    r"\b(relaci(?:ó|o)n(?:es)?|wikilinks?|enlaces?|v[íi]nculos?)\b",
+    re.IGNORECASE,
+)
 
 
 class AgentError(ValueError):
@@ -1335,6 +1340,9 @@ class GestajoAgent:
                 "selected_note_title": note["title"],
                 "selected_note_markdown": note["body_markdown"],
         }
+        if _RELATION_REQUEST.search(message):
+            visible_ids = self._visible_note_ids_reader(binding, self._access_token(access_token), org_id)
+            context["related_document_ids"] = sorted(visible_ids)
         if template_id:
             template = self._local_backend().load_template(template_id)
             if not isinstance(template, Mapping) or template.get("error"):

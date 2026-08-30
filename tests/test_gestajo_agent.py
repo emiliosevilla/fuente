@@ -413,6 +413,7 @@ def test_origin_and_claim_payload_fail_closed(tmp_path: Path):
 
     assert agent.is_origin_allowed("https://gestajo.vercel.app")
     assert agent.is_origin_allowed("https://gestajo-git-dev-emilio-sevilla-ortego-projects.vercel.app")
+    assert agent.is_origin_allowed("https://gestajo-oerhp6w0a-emilio-sevilla-ortego-projects.vercel.app")
     assert not agent.is_origin_allowed("https://evil.example")
     with pytest.raises(AgentError, match="unsupported fields"):
         agent.claim(
@@ -2465,6 +2466,28 @@ def test_sync_pending_registers_local_catalog_notes_as_private_metadata(tmp_path
         "common_org_id": "00000000-0000-0000-0000-000000000001", "visibility": "private",
         "shared_org_id": None, "note_type": "nota", "status": "pending_review", "theme": "General", "issue": "_Sin_Cuestion",
     }]
+
+
+def test_sync_pending_skips_catalog_notes_already_synced_remotely(tmp_path: Path):
+    note_id = "00000000-0000-0000-0000-000000000010"
+    store = JobStore(tmp_path)
+    store.register_note(
+        note_id=note_id, relative_path="4_salida/nota.md", revision=2, content_hash="a" * 64,
+        note_type="nota", origin_kind=None, theme="General", issue="_Sin_Cuestion", status="pending_review",
+    )
+    store.close()
+    published = []
+    agent = GestajoAgent(
+        tmp_path, verifier=_verifier, publisher=_publisher, membership_verifier=lambda *_args: "gestion",
+        note_metadata_publisher=lambda _binding, _token, payload: published.append(payload),
+        document_catalog_reader=lambda *_args: {note_id: (2, "a" * 64)},
+    )
+    agent.claim("token-a", {"supabase_url": "https://project.supabase.co", "publishable_key": "sb_publishable_test_key"})
+
+    result = agent.sync_pending("token-a", "00000000-0000-0000-0000-000000000001")
+
+    assert result == {"synced": 0, "pending": 0, "catalog": {"registered": 0, "updated": 0, "unchanged": 1}}
+    assert published == []
 
 
 def test_flow_requires_exactly_one_active_organization():

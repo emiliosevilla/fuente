@@ -2850,13 +2850,12 @@ def launch_control_console(vault_path: Optional[Path] = None):
                 width=1280,
                 height=850,
                 min_size=(980, 680),
-                background_color="#ECEFF4"
+                background_color="#ECEFF4",
+                hidden=True,
             )
             api.set_window(window)
             _start_capture_driver(window)
             window.events.closing += api._handle_window_closing
-            window.events.shown += _activate_webview_window
-            window.events.loaded += _activate_webview_window
             webview.start(debug=False)
         else:
             app = FuenteControlConsole(vault_path, backend=backend)

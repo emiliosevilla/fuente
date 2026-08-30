@@ -43,6 +43,7 @@ SOURCE_PREVIEW_MAX_CHARS = 1_000_000
 DEFAULT_ALLOWED_ORIGINS = frozenset({
     "https://gestajo.vercel.app",
     "https://gestajo-git-dev-emilio-sevilla-ortego-projects.vercel.app",
+    "https://gestajo-oerhp6w0a-emilio-sevilla-ortego-projects.vercel.app",
     "http://localhost:3000",
 })
 _RELATION_REQUEST = re.compile(
@@ -1375,7 +1376,15 @@ class GestajoAgent:
             instructions = template.get("agents")
             if not isinstance(instructions, str) or not instructions.strip():
                 raise AgentError("selected template has no instructions")
-            context["task_instructions"] = instructions
+            structure = template.get("template")
+            context["task_instructions"] = instructions.strip()
+            if isinstance(structure, str) and structure.strip():
+                context["task_instructions"] += (
+                    "\n\n## Estructura Markdown obligatoria\n"
+                    "Devuelve únicamente una Nota Markdown completa. Respeta estos encabezados "
+                    "y deja `No consta` cuando la evidencia no permita completar un apartado:\n\n"
+                    f"{structure.strip()}"
+                )
         answer = _assistant_response(self._local_backend().process_chat(message, context))
         self._record_audit(binding, self._access_token(access_token), _new_audit_event(
             note_id, org_id, scope["common_org_id"], binding.user_id,
@@ -1648,11 +1657,6 @@ class GestajoAgent:
         binding = self._require_management(access_token, org_id)
         synced = 0
         local_catalog = self._document_outbox().list_notes()
-        try:
-            remote_catalog = self._document_catalog_reader(binding, self._access_token(access_token))
-            catalog_report = _catalog_sync_report(local_catalog, remote_catalog)
-        except AgentSyncError:
-            catalog_report = None
         for item in self._document_outbox().list_document_outbox():
             try:
                 payload = json.loads(str(item["payload_json"]))
@@ -1672,9 +1676,15 @@ class GestajoAgent:
                 break
             self._document_outbox().delete_document_outbox(str(item["outbox_id"]))
             synced += 1
+        if not local_catalog:
+            return {"synced": synced, "pending": len(self._document_outbox().list_document_outbox())}
+        remote_catalog = self._document_catalog_reader(binding, self._access_token(access_token))
+        catalog_report = _catalog_sync_report(local_catalog, remote_catalog)
         for catalog in local_catalog:
             note_id = catalog.get("note_id")
             if not isinstance(note_id, str):
+                continue
+            if remote_catalog.get(note_id) == (catalog.get("revision"), catalog.get("content_hash")):
                 continue
             try:
                 local = _note_response(self._note_reader(self.vault_path, note_id), note_id)

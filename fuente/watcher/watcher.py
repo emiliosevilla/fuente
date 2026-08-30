@@ -12,8 +12,6 @@ from fuente.application.ingestion import (
     SourceNotStableError,
     TERMINAL_STAGES,
 )
-from fuente.application.smart_notes import OllamaConversationClient, SmartNoteGenerator
-from fuente.application.templates import TemplateRegistry
 from fuente.config import AppConfig
 from fuente.core.vault import VaultManager
 from fuente.core.folder_sync import TEMPORARY_SUFFIXES, is_hidden_or_temporary_file
@@ -169,18 +167,6 @@ class ETLPipeline:
             copy_to_dirty=self._safe_copy_to_dirty,
             stabilize=self._wait_until_stable,
         )
-        self.ingestion.smart_note_generator = SmartNoteGenerator(
-            vault=self.vault,
-            store=self.job_store,
-            templates=TemplateRegistry(config.vault.vault_path, self.job_store),
-            transition_approvals=self.ingestion.transition_approvals,
-            chat_client=self._smart_notes_client(),
-            ram_governor=self.ram_governor,
-        )
-
-    def _smart_notes_client(self):
-        return OllamaConversationClient(self.config.ollama_url)
-
     def set_runtime_policy(self, policy: RuntimePolicy) -> None:
         """Apply policy to existing collaborators without eager index creation."""
         previous = self.runtime_policy
@@ -224,9 +210,6 @@ class ETLPipeline:
             safety_margin_pct=config.ram_safety_margin_pct,
         )
         self.ingestion.ram_governor = self.ram_governor
-        if self.ingestion.smart_note_generator is not None:
-            self.ingestion.smart_note_generator.ram_governor = self.ram_governor
-            self.ingestion.smart_note_generator.chat_client = self._smart_notes_client()
 
     def set_active_theme(self, theme_name: str) -> Path:
         """Switch the Vault theme and refresh approval paths."""

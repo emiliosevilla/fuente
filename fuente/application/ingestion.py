@@ -132,7 +132,7 @@ _STAGE_HANDLERS: dict[str, str] = {
     "copied_dirty": "_run_extract",
     "extracted": "_run_save_clean",
     "saved_clean": "_run_index_chunks",
-    "indexed_chunks": "_run_generate_candidate",
+    "indexed_chunks": "_run_complete_capture",
     "generated_candidate": "_run_validate_candidate",
     "validated_candidate": "_run_save_note",
     "saved_note": "_run_index_note",
@@ -742,7 +742,7 @@ class IngestionApplicationService:
         self, job: JobRecord, *, authorize_model_load: bool = False
     ) -> dict[str, Any] | None:
         policy = self.runtime_policy
-        if policy is None or job.stage != "indexed_chunks":
+        if policy is None or job.stage != "generated_candidate":
             return None
         governor = self.ram_governor
         checker = getattr(governor, "check_cycle_model", None)
@@ -1021,6 +1021,22 @@ class IngestionApplicationService:
             return waiting
         self._generate_candidate(job, context)
         return self._advance(job, "generated_candidate")
+
+    def _run_complete_capture(self, job: JobRecord, context: _RunContext) -> JobRecord:
+        """Finish ETL at the approved capture; processing is user-initiated."""
+        waiting = self._revalidate_clean_approval(job, context)
+        if waiting is not None:
+            return waiting
+        origin = context.approved_origin or self._approved_clean_origin(job)
+        if origin is None:
+            return self._rewind_to_clean_approval(job)
+        document_id = self._document_id(job)
+        self.job_store.upsert_document_identity(
+            document_id=document_id,
+            relative_path=origin.path,
+            content_hash=origin.content_hash,
+        )
+        return self._advance(job, "completed", note_document_id=document_id)
 
     def _run_validate_candidate(self, job: JobRecord, context: _RunContext) -> JobRecord:
         waiting = self._revalidate_clean_approval(job, context)
@@ -1413,10 +1429,6 @@ class IngestionApplicationService:
                     identity,
                 )
                 return None
-            # A job that committed `completed` but died before dropping its
-            # source finishes that cleanup here; only its own recorded source
-            # path is touched, never another file that happens to match.
-            self._delete_source(existing)
             logger.info(
                 "Reusing completed job %s for %s (identical source hash)",
                 existing.job_id,

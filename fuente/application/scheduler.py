@@ -80,8 +80,9 @@ AUDIO_EXTENSIONS = frozenset({".mp3", ".wav", ".m4a", ".ogg", ".flac", ".mp4"})
 _EXTRACT_STAGES = frozenset({"discovered", "stabilized", "copied_dirty"})
 #: Stages whose next work writes/indexes vectors (not save_clean IO).
 _EMBED_STAGES = frozenset({"saved_clean", "saved_note"})
-#: Stages whose next work calls the LLM.
-_LLM_STAGES = frozenset({"indexed_chunks"})
+# No automatic stage calls the LLM. `generated_candidate` remains only for
+# compatibility with jobs created before pipeline version 2.
+_LLM_STAGES = frozenset({"generated_candidate"})
 #: Stages that mutate note/index identity for a document.
 _DOCUMENT_MUTATING_STAGES = frozenset(
     {

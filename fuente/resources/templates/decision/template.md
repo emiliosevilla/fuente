@@ -6,4 +6,8 @@
 
 ## Criterios
 
-## Decisión propuesta
+## Evidencia y restricciones
+
+## Riesgos e incertidumbres
+
+## Estado y decisión propuesta

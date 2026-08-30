@@ -33,8 +33,9 @@ CAPABILITIES: dict[str, dict[str, Any]] = {
             "python-pptx==1.0.2",
             "extract-msg==0.56.0",
             "minirag-hku @ git+https://github.com/HKUDS/MiniRAG.git@e204d239421f45004852953679927fdf6733f236",
+            "lancedb==0.37.1",
         ),
-        "modules": ("watchdog", "psutil", "requests", "pydantic", "yaml", "minirag"),
+        "modules": ("watchdog", "psutil", "requests", "pydantic", "yaml", "minirag", "lancedb"),
         "required": True,
     },
     "office": {

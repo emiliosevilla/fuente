@@ -636,6 +636,7 @@ class VaultMigrator:
             state_dir / "state.db-wal",
             state_dir / "state.db-shm",
             self.vault.config.minirag_dir,
+            self.vault.config.lancedb_dir,
         )
 
     def _snapshot_runtime_state(self, manifest: MigrationManifest) -> None:

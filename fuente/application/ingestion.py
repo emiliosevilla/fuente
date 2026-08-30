@@ -372,19 +372,19 @@ class IngestionApplicationService:
             result = enrichment.rebuild(chunks)
         except (LanceDBUnavailableError, Exception) as exc:
             logger.info(
-                "MiniRAG enrichment index unavailable for %s: %s",
+                "Legacy enrichment index unavailable for %s: %s",
                 origin.note_id,
                 exc,
             )
             return
         if not result.success:
             logger.warning(
-                "MiniRAG enrichment rebuild failed for %s",
+                "Legacy enrichment rebuild failed for %s",
                 origin.note_id,
             )
 
     def _maybe_evaluate_enrichment(self, origin, chunks) -> None:
-        """Run one local A/B probe when an approved note gains a MiniRAG index."""
+        """Run one local A/B probe when an approved note gains a legacy enrichment index."""
         enrichment = self.router.enrichment()
         if enrichment is None or origin is None or not chunks:
             return
@@ -958,7 +958,7 @@ class IngestionApplicationService:
             if artifact["kind"] in LEGACY_CHUNK_ARTIFACT_KINDS
         }
 
-        # Record the ids before writing them: a crash between the MiniRAG write
+        # Record the ids before writing them: a crash between the LanceDB write
         # and the stage transition must still leave every id this attempt may
         # have published discoverable, or the resumed attempt cannot tell which
         # vectors became obsolete.
@@ -995,7 +995,7 @@ class IngestionApplicationService:
                 self._record_vector_degradation(job, reason="vector_index_unavailable")
                 return self._advance(job, "indexed_chunks", note_document_id=document_id)
             raise RuntimeError(
-                f"MiniRAG index rebuild failed for job {job.job_id}"
+                f"LanceDB index rebuild failed for job {job.job_id}"
             )
         self._maybe_rebuild_enrichment_index(chunks, origin)
         self._maybe_evaluate_enrichment(origin, chunks)
@@ -1316,7 +1316,7 @@ class IngestionApplicationService:
 
         Passes identity kwargs into ``SemanticChunker``. Doubles that keep
         custom ids are only stamped with the required metadata so
-        JobStore/MiniRAG reconcile stays intact.
+        JobStore/LanceDB reconcile stays intact.
         """
         from fuente.rag.index_records import ChunkIdentity, materialize_chunks
 

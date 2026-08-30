@@ -1443,7 +1443,7 @@ class NotesApplicationService:
         except Exception:
             rollback_errors = []
             if new_chunk_ids and backend.delete(new_chunk_ids) is False:
-                rollback_errors.append("minirag")
+                rollback_errors.append("lancedb")
             try:
                 self.job_store.delete_index_artifacts(
                     note.document_id, artifact_ids=chunk_ids

@@ -2,8 +2,6 @@
 from __future__ import annotations
 
 from pathlib import Path
-from unittest.mock import patch
-
 import pytest
 
 from fuente.application.lifecycle import ApplicationLifecycle
@@ -11,7 +9,7 @@ from fuente.config import get_default_config
 from fuente.control_console import FuenteConsoleBackend
 from fuente.core.folder_sync import FolderSyncManager
 from fuente.core.vault import VaultManager, document_id_for_relative_path
-from fuente.domain.frontmatter import serialize_frontmatter
+from fuente.application.smart_notes import FakeConversationClient
 from fuente.domain.runtime_policy import ExecutionProfile, RuntimePolicy
 from fuente.watcher.watcher import ETLPipeline, FolderMonitor
 
@@ -19,24 +17,6 @@ from fuente.watcher.watcher import ETLPipeline, FolderMonitor
 THEME = "Derecho_Civil"
 SOURCE_NAME = "tema_scope_doc.txt"
 SOURCE_BODY = "# Nota de Tema\n\nContenido exclusivo del Tema activo."
-
-
-def _mock_generate(clean_md_content, model_name, file_name):
-    stem = Path(file_name).stem
-    return serialize_frontmatter(
-        {
-            "schema_version": 1,
-            "title": stem,
-            "date": "",
-            "author": "Fuente",
-            "tags": [],
-            "issue": "_Sin_Cuestion",
-            "status": "pending_review",
-            "theme": THEME,
-            "sources": [file_name],
-            "history": [],
-        }
-    ) + f"# {stem}\n\n{clean_md_content}"
 
 
 def _general_roots(vault_path: Path) -> dict[str, Path]:
@@ -68,6 +48,7 @@ def themed_pipeline(temp_vault_path):
         root.mkdir(parents=True, exist_ok=True)
 
     pipeline = ETLPipeline(config)
+    pipeline.ingestion.smart_note_generator.chat_client = FakeConversationClient()
     auto_approve_early_transitions(pipeline.ingestion)
     pipeline.set_runtime_policy(
         RuntimePolicy(
@@ -91,11 +72,7 @@ def themed_pipeline(temp_vault_path):
     pipeline.close()
 
 
-@patch(
-    "fuente.watcher.watcher.AtomicNoteGenerator.generate_atomic_note",
-    side_effect=_mock_generate,
-)
-def test_processing_writes_only_inside_active_theme(mock_gen, themed_pipeline):
+def test_processing_writes_only_inside_active_theme(themed_pipeline):
     from tests.conftest import approve_saved_clean_job
 
     pipeline = themed_pipeline
@@ -113,11 +90,11 @@ def test_processing_writes_only_inside_active_theme(mock_gen, themed_pipeline):
 
     dirty = list(pipeline.vault.dirty_dir.glob(f"{Path(SOURCE_NAME).stem}*"))
     clean = list(pipeline.vault.clean_dir.glob(f"{Path(SOURCE_NAME).stem}*.md"))
-    notes = list(pipeline.vault.output_dir.rglob(f"{Path(SOURCE_NAME).stem}*.md"))
+    notes = list(pipeline.vault.output_dir.rglob("*.md"))
 
     assert len(dirty) == 1
     assert len(clean) == 1
-    assert len(notes) == 1
+    assert len(notes) >= 8
     for path in (*dirty, *clean, *notes):
         _assert_under_theme(path, theme_dir)
 

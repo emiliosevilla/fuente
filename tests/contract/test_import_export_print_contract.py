@@ -137,6 +137,11 @@ def test_get_flow_state_counts_seals_and_note_types(temp_vault_path, api):
             "propiedades",
             "contexto",
             "concepto",
+            "tareas",
+            "reunion",
+            "objetivos",
+            "decision",
+            "conclusion",
         }
         assert "steps" in state
         assert state["quarantine"] == 0

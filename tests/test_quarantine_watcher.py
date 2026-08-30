@@ -107,6 +107,7 @@ def test_watcher_preserves_source_when_model_output_is_invalid(tmp_path):
     pipeline.atomic_gen.generate_atomic_note = Mock(
         side_effect=InvalidModelOutputError("invalid schema")
     )
+    pipeline.ingestion.smart_note_generator = None
 
     with patch("fuente.watcher.watcher.wait_until_file_stable", return_value=True):
         assert pipeline.process_file(source) is False

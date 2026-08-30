@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 ERROR_ANYTHINGLLM = "anythingllm_unavailable"
 ERROR_DOCUMENTS_PRESENT = "anythingllm_documents_present"
-DEFAULT_ANYTHINGLLM_URL = "http://127.0.0.1:13001"
+DEFAULT_ANYTHINGLLM_URL = "http://127.0.0.1:3001"
 DEFAULT_ANYTHINGLLM_WORKSPACE = "fuente"
 
 

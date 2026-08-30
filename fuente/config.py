@@ -27,7 +27,8 @@ from fuente.infrastructure.atomic_files import atomic_write_json
 
 logger = logging.getLogger(__name__)
 DEFAULT_OLLAMA_URL = "http://localhost:11434"
-DEFAULT_ANYTHINGLLM_URL = "http://127.0.0.1:13001"
+DEFAULT_ANYTHINGLLM_URL = "http://127.0.0.1:3001"
+LEGACY_ANYTHINGLLM_URL = "http://127.0.0.1:13001"
 DEFAULT_ANYTHINGLLM_WORKSPACE = "fuente"
 DEFAULT_ISSUE = "_Sin_Cuestion"
 VALID_RESOURCE_PROFILES = ("auto", "eco_strict")
@@ -279,6 +280,8 @@ class AppConfig:
             if isinstance(raw_anything_url, str) and raw_anything_url.strip()
             else DEFAULT_ANYTHINGLLM_URL
         )
+        if anythingllm_url == LEGACY_ANYTHINGLLM_URL:
+            anythingllm_url = DEFAULT_ANYTHINGLLM_URL
         if anythingllm_url:
             try:
                 from fuente.integrations.anythingllm import validate_loopback_anythingllm_url

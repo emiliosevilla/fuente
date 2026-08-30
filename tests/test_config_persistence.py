@@ -12,6 +12,7 @@ from fuente.config import (
     load_config,
     DEFAULT_ATOMIC_NOTE_TEMPLATE,
     DEFAULT_ANYTHINGLLM_URL,
+    LEGACY_ANYTHINGLLM_URL,
 )
 from fuente.ram_governor.governor import RAMGovernor
 
@@ -47,6 +48,13 @@ class TestConfigPersistenceAndSettings(unittest.TestCase):
     def test_legacy_empty_anythingllm_url_uses_the_local_default(self):
         config = AppConfig.from_dict(
             {"vault_path": str(self.vault_path), "anythingllm_url": ""}
+        )
+
+        self.assertEqual(config.anythingllm_url, DEFAULT_ANYTHINGLLM_URL)
+
+    def test_legacy_anythingllm_port_uses_the_desktop_default(self):
+        config = AppConfig.from_dict(
+            {"vault_path": str(self.vault_path), "anythingllm_url": LEGACY_ANYTHINGLLM_URL}
         )
 
         self.assertEqual(config.anythingllm_url, DEFAULT_ANYTHINGLLM_URL)
@@ -149,11 +157,11 @@ class TestConfigPersistenceAndSettings(unittest.TestCase):
 
     def test_anythingllm_settings_round_trip(self):
         cfg = load_config(self.vault_path)
-        cfg.anythingllm_url = "http://127.0.0.1:13001"
+        cfg.anythingllm_url = "http://127.0.0.1:13002"
         cfg.anythingllm_workspace_slug = "fuente"
         save_config(cfg)
         loaded = load_config(self.vault_path)
-        self.assertEqual(loaded.anythingllm_url, "http://127.0.0.1:13001")
+        self.assertEqual(loaded.anythingllm_url, "http://127.0.0.1:13002")
         self.assertEqual(loaded.anythingllm_workspace_slug, "fuente")
 
     def test_anythingllm_api_key_from_environment(self):

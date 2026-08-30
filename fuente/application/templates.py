@@ -24,6 +24,8 @@ INITIAL_TEMPLATE_IDS: frozenset[str] = frozenset(
         "propiedades",
         "contexto",
         "concepto",
+        "apunte",
+        "diario",
     }
 )
 
@@ -53,6 +55,8 @@ DISPLAY_NAMES: dict[str, str] = {
     "propiedades": "Propiedades",
     "contexto": "Contexto",
     "concepto": "Concepto",
+    "apunte": "Apunte",
+    "diario": "Diario",
 }
 
 

@@ -37,9 +37,18 @@ def test_template_bundle_stays_inside_hidden_vault_folder(registry):
     assert "/.fuente/agents/resumen/AGENTS.md" in bundle.agents_path.as_posix()
 
 
-def test_lists_seven_initial_template_types(registry):
+def test_lists_initial_template_types(registry):
     summaries = registry.list()
     assert {item.template_id for item in summaries} == set(INITIAL_TEMPLATE_IDS)
+
+
+def test_apunte_and_diario_are_packaged_manual_examples(registry):
+    summaries = {item.template_id: item.label for item in registry.list()}
+
+    assert summaries["apunte"] == "Apunte"
+    assert summaries["diario"] == "Diario"
+    assert "## Preguntas abiertas" in registry.load("apunte").template
+    assert "## Próximo paso" in registry.load("diario").template
 
 
 @pytest.mark.parametrize(

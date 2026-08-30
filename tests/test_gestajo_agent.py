@@ -22,6 +22,7 @@ from fuente.agent.server import (
 )
 from fuente.infrastructure.sqlite_store import JobStore
 from fuente.core.folder_sync import SyncConflict
+from fuente.domain.paths import document_id_for_relative_path
 from fuente.domain.sync import ConnectedFolder, SyncDirection
 
 USER_A = "00000000-0000-0000-0000-0000000000a1"
@@ -95,7 +96,7 @@ def test_status_requires_the_bound_user(tmp_path: Path):
     )
 
     assert agent.status("token-a")["claimed"] is True
-    assert agent.status("token-a")["capabilities"] == ["flow", "flow_approve", "settings", "sync_inputs", "sync_run", "sync_output", "sync_conflict_read", "sync_conflict_resolve", "note_read", "note_write", "note_share"]
+    assert agent.status("token-a")["capabilities"] == ["flow", "flow_approve", "flow_review", "settings", "sync_inputs", "sync_run", "sync_output", "sync_conflict_read", "sync_conflict_resolve", "note_read", "note_write", "note_share"]
     with pytest.raises(AgentAuthenticationError, match="another user"):
         agent.status("token-b")
 
@@ -424,6 +425,78 @@ def test_management_can_approve_copied_content_for_capture(tmp_path: Path):
         ("approve", job_id, "2_copiado", "3_capturado", 1, "b" * 64, USER_A),
         ("resume", job_id),
     ]
+
+
+def test_management_can_read_captured_review_without_local_paths(tmp_path: Path):
+    job_id = "00000000-0000-0000-0000-000000000125"
+    captured_id = document_id_for_relative_path("3_capturado/03 El loco.md")
+    original = tmp_path / "1_volcado" / "03 El loco.pdf"
+    original.parent.mkdir()
+    original.write_bytes(b"%PDF-1.7")
+    captured = tmp_path / "3_capturado" / "03 El loco.md"
+    captured.parent.mkdir()
+    captured.write_text(
+        "---\nnote_id: 00000000-0000-0000-0000-000000000777\ntitle: El loco\n---\n# Capturado",
+        encoding="utf-8",
+    )
+
+    class Vault:
+        config = type("Config", (), {"vault_path": tmp_path})()
+
+        @staticmethod
+        def path_resolver():
+            class Resolver:
+                @staticmethod
+                def resolve_input(relative_path):
+                    return tmp_path / relative_path
+
+                @staticmethod
+                def resolve(relative_path, *, root_name):
+                    assert root_name == "vault"
+                    return tmp_path / relative_path
+
+            return Resolver()
+
+    class Backend:
+        vault = Vault()
+
+        @staticmethod
+        def get_job_detail(value):
+            assert value == job_id
+            return {"job": {
+                "job_id": job_id,
+                "source_relative_path": "1_volcado/03 El loco.pdf",
+                "clean_artifact": "3_capturado/03 El loco.md",
+            }}
+
+    agent = GestajoAgent(
+        tmp_path, verifier=_verifier, publisher=_publisher,
+        management_verifier=_management_verifier, membership_verifier=lambda *_args: "gestion",
+        backend_factory=lambda _vault: Backend(),
+        note_reader=lambda _vault, note_id: {
+            "document_id": note_id, "revision": 4, "title": "El loco", "body_markdown": "# Capturado",
+        },
+        audit_publisher=lambda *_args: None,
+    )
+    agent.claim("token-a", {"supabase_url": "https://project.supabase.co", "publishable_key": "sb_publishable_test_key"})
+
+    review = agent.read_flow_review("token-a", "00000000-0000-0000-0000-000000000001", job_id)
+    source = agent.read_flow_review_source("token-a", "00000000-0000-0000-0000-000000000001", job_id)
+
+    assert review == {
+        "job_id": job_id,
+        "title": "03 El loco.pdf",
+        "source": {"filename": "03 El loco.pdf", "media_type": "application/pdf", "size_bytes": 8},
+        "captured": {
+            "document_id": captured_id,
+            "revision": 4,
+            "title": "El loco",
+            "body_markdown": "# Capturado",
+        },
+    }
+    assert str(tmp_path) not in str(review)
+    assert source.path.read_bytes() == b"%PDF-1.7"
+    assert source.media_type == "application/pdf"
 
 
 def test_flow_rejects_consulta(tmp_path: Path):

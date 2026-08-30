@@ -9,7 +9,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+import mimetypes
 import platform
+from shutil import copyfileobj
 import ssl
 import uuid
 from dataclasses import asdict, dataclass
@@ -24,7 +26,7 @@ from urllib.parse import quote, urlparse
 from urllib.request import Request, urlopen
 
 from fuente.domain.sync import SyncDirection
-from fuente.domain.paths import SourcePathAuthorizer
+from fuente.domain.paths import SourcePathAuthorizer, document_id_for_relative_path
 from fuente.domain.vault_layout import VaultLayout
 from fuente.infrastructure.atomic_files import atomic_copy, atomic_write_json
 
@@ -51,6 +53,12 @@ class AgentSyncError(AgentError):
 
 class AgentAuthorizationError(AgentError):
     """The authenticated user lacks the capability required by an agent route."""
+
+
+@dataclass(frozen=True)
+class _FlowReviewSource:
+    path: Path
+    media_type: str
 
 
 @dataclass(frozen=True)
@@ -395,7 +403,7 @@ class GestajoAgent:
             "platform": platform.system(),
             "user_id": binding.user_id,
             "vault_fingerprint": self._vault_fingerprint(),
-            "capabilities": ["flow", "flow_approve", "settings", "sync_inputs", "sync_run", "sync_output", "sync_conflict_read", "sync_conflict_resolve", "note_read", "note_write", "note_share"],
+            "capabilities": ["flow", "flow_approve", "flow_review", "settings", "sync_inputs", "sync_run", "sync_output", "sync_conflict_read", "sync_conflict_resolve", "note_read", "note_write", "note_share"],
         }
 
     def flow(self, access_token: object, org_id: object) -> dict[str, object]:
@@ -436,6 +444,50 @@ class GestajoAgent:
         except (OSError, RuntimeError, ValueError) as error:
             raise AgentError("Caudal recorded the approval but could not continue the job") from error
         return _flow_response(self._read_flow())
+
+    def read_flow_review(self, access_token: object, org_id: object, job_id: object) -> dict[str, object]:
+        """Return the safe original/captured review projection for Gestajo."""
+        binding = self._require_management(access_token, org_id)
+        try:
+            valid_job_id = str(uuid.UUID(str(job_id)))
+        except (ValueError, AttributeError) as error:
+            raise AgentError("Caudal job is invalid") from error
+        detail = self._local_backend().get_job_detail(valid_job_id)
+        job = detail.get("job") if isinstance(detail, Mapping) else None
+        if not isinstance(job, Mapping):
+            raise AgentError("local Caudal job is invalid")
+        review = _flow_review_response(
+            self.vault_path, self._note_reader, self._local_backend(), job, valid_job_id,
+        )
+        self._record_audit(binding, self._access_token(access_token), _new_audit_event(
+            str(review["captured"]["document_id"]), str(org_id), str(uuid.UUID(str(org_id))),
+            binding.user_id, "caudal_review_read", "success",
+        ))
+        return review
+
+    def read_flow_review_source(self, access_token: object, org_id: object, job_id: object) -> _FlowReviewSource:
+        """Resolve original bytes only after the same local management check."""
+        binding = self._require_management(access_token, org_id)
+        try:
+            valid_job_id = str(uuid.UUID(str(job_id)))
+        except (ValueError, AttributeError) as error:
+            raise AgentError("Caudal job is invalid") from error
+        detail = self._local_backend().get_job_detail(valid_job_id)
+        job = detail.get("job") if isinstance(detail, Mapping) else None
+        if not isinstance(job, Mapping):
+            raise AgentError("local Caudal job is invalid")
+        _source_relative, source_path, captured_relative, _captured_path = _flow_review_artifacts(
+            self._local_backend(), job, valid_job_id,
+        )
+        captured_id = document_id_for_relative_path(captured_relative)
+        self._record_audit(binding, self._access_token(access_token), _new_audit_event(
+            captured_id, str(org_id), str(uuid.UUID(str(org_id))), binding.user_id,
+            "caudal_review_original_read", "success",
+        ))
+        return _FlowReviewSource(
+            path=source_path,
+            media_type=_flow_review_media_type(source_path),
+        )
 
     def settings(self, access_token: object, org_id: object) -> dict[str, object]:
         binding = self._require_user(access_token)
@@ -812,6 +864,22 @@ def _handler_for(agent: GestajoAgent) -> type[BaseHTTPRequestHandler]:
                     lambda token: agent.flow(token, _single_query_value(parsed.query, "org_id"))
                 )
                 return
+            if parsed.path.startswith("/v1/flow/reviews/"):
+                review_route = parsed.path.removeprefix("/v1/flow/reviews/")
+                is_source = review_route.endswith("/source")
+                job_id = review_route.removesuffix("/source") if is_source else review_route
+                if not job_id or "/" in job_id:
+                    self._send_error(HTTPStatus.NOT_FOUND, "route not found")
+                    return
+                if is_source:
+                    self._authorized_file(
+                        lambda token: agent.read_flow_review_source(token, _single_query_value(parsed.query, "org_id"), job_id)
+                    )
+                    return
+                self._authorized(
+                    lambda token: agent.read_flow_review(token, _single_query_value(parsed.query, "org_id"), job_id)
+                )
+                return
             if parsed.path == "/v1/settings":
                 self._authorized(
                     lambda token: agent.settings(token, _single_query_value(parsed.query, "org_id"))
@@ -907,6 +975,27 @@ def _handler_for(agent: GestajoAgent) -> type[BaseHTTPRequestHandler]:
             except AgentError as error:
                 self._send_error(HTTPStatus.BAD_REQUEST, str(error))
 
+        def _authorized_file(self, operation: Callable[[str], _FlowReviewSource]) -> None:
+            origin = self.headers.get("Origin")
+            if not agent.is_origin_allowed(origin):
+                self._send_error(HTTPStatus.FORBIDDEN, "origin is not allowed")
+                return
+            header = self.headers.get("Authorization", "")
+            if not header.startswith("Bearer "):
+                self._send_error(HTTPStatus.UNAUTHORIZED, "missing bearer token")
+                return
+            try:
+                source = operation(header.removeprefix("Bearer "))
+                self._send_file(source)
+            except AgentAuthenticationError as error:
+                self._send_error(HTTPStatus.UNAUTHORIZED, str(error))
+            except AgentAuthorizationError as error:
+                self._send_error(HTTPStatus.FORBIDDEN, str(error))
+            except AgentSyncError as error:
+                self._send_error(HTTPStatus.SERVICE_UNAVAILABLE, str(error))
+            except AgentError as error:
+                self._send_error(HTTPStatus.BAD_REQUEST, str(error))
+
         def _json_body(self, *, max_bytes: int = 16_384) -> object:
             length = self.headers.get("Content-Length")
             if not length or not length.isdigit() or int(length) > max_bytes:
@@ -934,6 +1023,23 @@ def _handler_for(agent: GestajoAgent) -> type[BaseHTTPRequestHandler]:
             self.send_header("Cache-Control", "no-store")
             self.end_headers()
             self.wfile.write(body)
+
+        def _send_file(self, source: _FlowReviewSource) -> None:
+            try:
+                size = source.path.stat().st_size
+                handle = source.path.open("rb")
+            except OSError as error:
+                raise AgentError("local Caudal review is unavailable") from error
+            with handle:
+                self.send_response(HTTPStatus.OK)
+                self._cors()
+                self.send_header("Content-Type", source.media_type)
+                self.send_header("Content-Length", str(size))
+                self.send_header("Cache-Control", "no-store")
+                self.send_header("Content-Security-Policy", "sandbox")
+                self.send_header("X-Content-Type-Options", "nosniff")
+                self.end_headers()
+                copyfileobj(handle, self.wfile)
 
         def _send_error(self, status: HTTPStatus, message: str) -> None:
             self._send_json(status, {"error": message})
@@ -1059,6 +1165,52 @@ def _flow_approval_response(job: Mapping[str, object]) -> dict[str, str] | None:
     if transition is None:
         return None
     return {"job_id": job_id, "title": PurePosixPath(safe_path).name, "source_stage": transition[0], "target_stage": transition[1]}
+
+
+def _flow_review_response(
+    vault_path: Path,
+    note_reader: Callable[[Path, str], Mapping[str, object]],
+    backend: Any,
+    job: Mapping[str, object],
+    job_id: str,
+) -> dict[str, object]:
+    source_relative, source_path, captured_relative, _captured_path = _flow_review_artifacts(backend, job, job_id)
+    try:
+        captured_id = document_id_for_relative_path(captured_relative)
+        captured = _note_response(note_reader(vault_path, captured_id), captured_id)
+        source_size = source_path.stat().st_size
+    except (OSError, ValueError) as error:
+        raise AgentError("local Caudal review is unavailable") from error
+    media_type = _flow_review_media_type(source_path)
+    return {
+        "job_id": job_id,
+        "title": PurePosixPath(source_relative).name,
+        "source": {"filename": source_path.name, "media_type": media_type, "size_bytes": source_size},
+        "captured": captured,
+    }
+
+
+def _flow_review_artifacts(backend: Any, job: Mapping[str, object], job_id: str) -> tuple[str, Path, str, Path]:
+    if job.get("job_id") != job_id:
+        raise AgentError("local Caudal job is invalid")
+    source_relative = _safe_sync_relative(job.get("source_relative_path"))
+    captured_relative = _safe_sync_relative(job.get("clean_artifact"))
+    if source_relative is None or captured_relative is None or not captured_relative.endswith(".md"):
+        raise AgentError("local Caudal review is unavailable")
+    try:
+        resolver = backend.vault.path_resolver()
+        source_path = resolver.resolve_input(source_relative)
+        captured_path = resolver.resolve(captured_relative, root_name="vault")
+        if not source_path.is_file() or not captured_path.is_file():
+            raise ValueError("review artifact is missing")
+    except (OSError, ValueError) as error:
+        raise AgentError("local Caudal review is unavailable") from error
+    return source_relative, source_path, captured_relative, captured_path
+
+
+def _flow_review_media_type(path: Path) -> str:
+    media_type = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
+    return "text/plain; charset=utf-8" if media_type in {"text/html", "application/xhtml+xml"} else media_type
 
 
 def _settings_response(state: Mapping[str, object], role: str) -> dict[str, object]:

@@ -34,6 +34,7 @@ from fuente.application.feed import DEFAULT_FEED_LIMIT, FEED_ORDERS, MAX_CURSOR_
 from fuente.extractors.base import ExtractionResult
 from fuente.extractors.office_pdf import TextAndOfficeExtractor
 from fuente.infrastructure.atomic_files import atomic_copy, atomic_write_json
+from fuente.agent.update import AgentUpdater
 
 
 AGENT_VERSION = "0.2"
@@ -483,6 +484,7 @@ class GestajoAgent:
         conflict_publisher: Callable[[AgentBinding, str, Mapping[str, object]], None] = publish_document_conflict,
         conflict_resolver: Callable[[AgentBinding, str, Mapping[str, object]], None] = resolve_document_conflict,
         outbox_factory: Callable[[Path], Any] | None = None,
+        agent_updater: AgentUpdater | None = None,
         allowed_origins: frozenset[str] = DEFAULT_ALLOWED_ORIGINS,
     ) -> None:
         self.vault_path = Path(vault_path).expanduser().resolve()
@@ -508,6 +510,7 @@ class GestajoAgent:
         self._conflict_resolver = conflict_resolver
         self._outbox_factory = outbox_factory or _document_outbox
         self._outbox: Any | None = None
+        self._agent_updater = agent_updater or AgentUpdater()
         self._allowed_origins = allowed_origins
         self._binding = _read_binding(self.vault_path)
 
@@ -557,8 +560,27 @@ class GestajoAgent:
             "platform": platform.system(),
             "user_id": binding.user_id,
             "vault_fingerprint": self._vault_fingerprint(),
-            "capabilities": ["flow", "flow_import", "flow_approve", "flow_jobs", "flow_job_detail", "flow_job_resume", "flow_job_cancel", "flow_review", "flow_review_captured", "flow_review_source_preview", "flow_discard", "quarantine_read", "quarantine_restore", "settings", "sync_inputs", "sync_run", "sync_output", "sync_conflict_read", "sync_conflict_resolve", "document_conflict_read", "document_conflict_resolve", "local_ai_prepare", "taxonomy_read", "taxonomy_write", "note_read", "note_search", "note_feed", "note_relations", "note_graph", "note_lineage", "note_export", "note_write", "note_create", "note_theme", "note_merge", "note_approve_processed", "note_share", "note_assistant", "note_assistant_persist", "knowledge_assistant", "templates_read", "templates_write"],
+            "capabilities": ["flow", "flow_import", "flow_approve", "flow_jobs", "flow_job_detail", "flow_job_resume", "flow_job_cancel", "flow_review", "flow_review_captured", "flow_review_source_preview", "flow_discard", "quarantine_read", "quarantine_restore", "settings", "sync_inputs", "sync_run", "sync_output", "sync_conflict_read", "sync_conflict_resolve", "document_conflict_read", "document_conflict_resolve", "local_ai_prepare", "agent_update", "taxonomy_read", "taxonomy_write", "note_read", "note_search", "note_feed", "note_relations", "note_graph", "note_lineage", "note_export", "note_write", "note_create", "note_theme", "note_merge", "note_approve_processed", "note_share", "note_assistant", "note_assistant_persist", "knowledge_assistant", "templates_read", "templates_write"],
         }
+
+    def agent_update(self, access_token: object, org_id: object, *, launch: bool = False, payload: object = None) -> dict[str, object]:
+        if payload is not None and payload != {}:
+            raise AgentError("agent update payload must be empty")
+        binding = self._require_management(access_token, org_id)
+        try:
+            flow = self._local_backend().get_flow_state()
+            active_jobs = int(flow.get("queue", {}).get("active", 0)) if isinstance(flow, Mapping) else 0
+        except (AttributeError, TypeError, ValueError) as error:
+            raise AgentError("Caudal status is unavailable; agent update was not started") from error
+        update = self._agent_updater.inspect(AGENT_VERSION, active_jobs=active_jobs)
+        if launch:
+            update = self._agent_updater.launch(update)
+        result = update.public()
+        self._record_audit(binding, self._access_token(access_token), _new_audit_event(
+            None, str(org_id), str(uuid.UUID(str(org_id))), binding.user_id,
+            "agent_update_start" if launch else "agent_update_check", str(result["state"]),
+        ))
+        return result
 
     def taxonomy(self, access_token: object, org_id: object) -> dict[str, object]:
         binding = self._require_user(access_token)
@@ -1747,6 +1769,11 @@ def _handler_for(agent: GestajoAgent) -> type[BaseHTTPRequestHandler]:
                     lambda token: agent.flow(token, _single_query_value(parsed.query, "org_id"))
                 )
                 return
+            if parsed.path == "/v1/update":
+                self._authorized(
+                    lambda token: agent.agent_update(token, _single_query_value(parsed.query, "org_id"))
+                )
+                return
             if parsed.path == "/v1/flow/jobs":
                 self._authorized(
                     lambda token: agent.list_flow_jobs(
@@ -1911,7 +1938,7 @@ def _handler_for(agent: GestajoAgent) -> type[BaseHTTPRequestHandler]:
             is_document_conflict_resolve = conflict_route.endswith("/resolve") and bool(conflict_route.removesuffix("/resolve")) and "/" not in conflict_route.removesuffix("/resolve")
             if not (is_note_merge or is_note_update or is_note_share or is_note_assistant or is_note_assistant_output or is_note_processed_approval or is_note_theme or is_knowledge_assistant or is_local_ai_prepare or is_flow_job_resume or is_flow_job_cancel or is_review_captured_update or is_review_captured_assistant or is_template_save or is_document_conflict_resolve) and parsed.path not in {
                 "/v1/claim", "/v1/flow/import", "/v1/flow/approve", "/v1/flow/discard", "/v1/settings", "/v1/sync-inputs/select", "/v1/sync-inputs/run", "/v1/sync-outputs/run", "/v1/sync-conflicts/read", "/v1/sync-conflicts/resolve",
-                "/v1/sync-inputs/confirm", "/v1/sync-inputs/enabled", "/v1/sync-inputs/remove", "/v1/sync", "/v1/taxonomy/themes", "/v1/taxonomy/issues", "/v1/quarantine/restore",
+                "/v1/sync-inputs/confirm", "/v1/sync-inputs/enabled", "/v1/sync-inputs/remove", "/v1/sync", "/v1/taxonomy/themes", "/v1/taxonomy/issues", "/v1/quarantine/restore", "/v1/update",
             }:
                 self._send_error(HTTPStatus.NOT_FOUND, "route not found")
                 return
@@ -1925,6 +1952,9 @@ def _handler_for(agent: GestajoAgent) -> type[BaseHTTPRequestHandler]:
                 return
             if is_local_ai_prepare:
                 self._authorized(lambda token: agent.prepare_local_ai(token, _single_query_value(parsed.query, "org_id"), payload))
+                return
+            if parsed.path == "/v1/update":
+                self._authorized(lambda token: agent.agent_update(token, _single_query_value(parsed.query, "org_id"), launch=True, payload=payload))
                 return
             if parsed.path == "/v1/sync":
                 self._authorized(lambda token: agent.sync_pending(token, _single_query_value(parsed.query, "org_id")))

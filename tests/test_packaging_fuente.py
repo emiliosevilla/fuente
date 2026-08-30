@@ -88,3 +88,12 @@ def test_macos_gui_binary_does_not_open_terminal() -> None:
 def test_distribution_uses_the_native_directory_on_macos_and_windows(tmp_path) -> None:
     assert distribution_bundle(tmp_path, "darwin") == (tmp_path / "Fuente.app", "Fuente.app")
     assert distribution_bundle(tmp_path, "win32") == (tmp_path / "Fuente", "Fuente")
+
+
+def test_tagged_build_publishes_both_native_installers_as_a_release() -> None:
+    workflow = (ROOT / ".github" / "workflows" / "build-installers.yml").read_text(encoding="utf-8")
+
+    assert "refs/tags/v" in workflow
+    assert "actions/download-artifact@v4" in workflow
+    assert "contents: write" in workflow
+    assert 'gh release create "$GITHUB_REF_NAME" --verify-tag --generate-notes dist/*' in workflow

@@ -1937,6 +1937,10 @@ def test_sync_conflict_resolution_requires_the_selected_winner(tmp_path: Path):
         connection_id=connection.connection_id,
         relative_path="nota.md",
     ) == {"winner": "vault"}
+    assert agent.read_sync_conflict(
+        "token-a", "00000000-0000-0000-0000-000000000001",
+        {"connection_id": connection.connection_id, "relative_path": "nota.md"},
+    )["local_skin"] == "vault"
     assert audits[0]["action"] == "sync_conflict_resolve"
     with pytest.raises(AgentError, match="winner"):
         agent.resolve_sync_conflict("token-a", "00000000-0000-0000-0000-000000000001", {"connection_id": connection.connection_id, "relative_path": "nota.md", "winner": "auto"})

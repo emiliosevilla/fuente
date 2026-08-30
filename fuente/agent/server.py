@@ -1097,6 +1097,14 @@ class GestajoAgent:
             "vault_markdown": _read_sync_markdown(vault_root, relative_path),
             "shared_markdown": _read_sync_markdown(Path(connection.root), relative_path),
         }
+        skin = self._document_outbox().get_document_conflict_skin(
+            user_id=binding.user_id,
+            org_id=str(org_id),
+            connection_id=connection_id,
+            relative_path=relative_path,
+        )
+        if skin is not None:
+            result["local_skin"] = skin["winner"]
         self._record_audit(binding, self._access_token(access_token), _new_audit_event(
             None, str(org_id), str(uuid.UUID(str(org_id))), binding.user_id, "sync_conflict_read", "success",
         ))

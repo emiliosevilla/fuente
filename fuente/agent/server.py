@@ -403,7 +403,7 @@ class GestajoAgent:
             "platform": platform.system(),
             "user_id": binding.user_id,
             "vault_fingerprint": self._vault_fingerprint(),
-            "capabilities": ["flow", "flow_approve", "flow_review", "settings", "sync_inputs", "sync_run", "sync_output", "sync_conflict_read", "sync_conflict_resolve", "note_read", "note_relations", "note_write", "note_share", "note_assistant"],
+            "capabilities": ["flow", "flow_approve", "flow_review", "settings", "sync_inputs", "sync_run", "sync_output", "sync_conflict_read", "sync_conflict_resolve", "note_read", "note_relations", "note_write", "note_share", "note_assistant", "templates_read", "templates_write"],
         }
 
     def flow(self, access_token: object, org_id: object) -> dict[str, object]:
@@ -512,6 +512,25 @@ class GestajoAgent:
         if result.get("error"):
             raise AgentError(str(result.get("message") or result["error"]))
         return self.settings(access_token, org_id)
+
+    def list_templates(self, access_token: object, org_id: object) -> dict[str, object]:
+        binding = self._require_user(access_token)
+        self._membership_verifier(binding, self._access_token(access_token), org_id)
+        return _template_list_response(self._local_backend().list_templates())
+
+    def read_template(self, access_token: object, org_id: object, template_id: object) -> dict[str, object]:
+        binding = self._require_user(access_token)
+        self._membership_verifier(binding, self._access_token(access_token), org_id)
+        return _template_response(self._local_backend().load_template(_template_id(template_id)))
+
+    def save_template(self, access_token: object, org_id: object, template_id: object, payload: object) -> dict[str, object]:
+        binding = self._require_management(access_token, org_id)
+        template_id = _template_id(template_id)
+        if not isinstance(payload, Mapping) or set(payload) != {"template", "agents", "expected_revision"}:
+            raise AgentError("template payload has unsupported fields")
+        if not isinstance(payload["template"], str) or not isinstance(payload["agents"], str) or not isinstance(payload["expected_revision"], int):
+            raise AgentError("template payload is invalid")
+        return _template_response(self._local_backend().save_template({"template_id": template_id, **payload}))
 
     def select_sync_input(self, access_token: object, org_id: object) -> dict[str, object]:
         self._require_management(access_token, org_id)
@@ -911,6 +930,20 @@ def _handler_for(agent: GestajoAgent) -> type[BaseHTTPRequestHandler]:
                     lambda token: agent.settings(token, _single_query_value(parsed.query, "org_id"))
                 )
                 return
+            if parsed.path == "/v1/templates":
+                self._authorized(
+                    lambda token: agent.list_templates(token, _single_query_value(parsed.query, "org_id"))
+                )
+                return
+            if parsed.path.startswith("/v1/templates/"):
+                template_id = parsed.path.removeprefix("/v1/templates/")
+                if not template_id or "/" in template_id:
+                    self._send_error(HTTPStatus.NOT_FOUND, "route not found")
+                    return
+                self._authorized(
+                    lambda token: agent.read_template(token, _single_query_value(parsed.query, "org_id"), template_id)
+                )
+                return
             if parsed.path.startswith("/v1/notes/"):
                 note_id = parsed.path.removeprefix("/v1/notes/")
                 if note_id.endswith("/relations"):
@@ -936,7 +969,9 @@ def _handler_for(agent: GestajoAgent) -> type[BaseHTTPRequestHandler]:
             is_note_share = note_route.endswith("/share") and bool(note_route.removesuffix("/share")) and "/" not in note_route.removesuffix("/share")
             is_note_assistant = note_route.endswith("/assistant") and bool(note_route.removesuffix("/assistant")) and "/" not in note_route.removesuffix("/assistant")
             is_note_update = bool(note_route) and "/" not in note_route
-            if not (is_note_update or is_note_share or is_note_assistant) and parsed.path not in {
+            template_id = parsed.path.removeprefix("/v1/templates/") if parsed.path.startswith("/v1/templates/") else ""
+            is_template_save = bool(template_id) and "/" not in template_id
+            if not (is_note_update or is_note_share or is_note_assistant or is_template_save) and parsed.path not in {
                 "/v1/claim", "/v1/flow/approve", "/v1/settings", "/v1/sync-inputs/select", "/v1/sync-inputs/run", "/v1/sync-outputs/run", "/v1/sync-conflicts/read", "/v1/sync-conflicts/resolve",
                 "/v1/sync-inputs/confirm", "/v1/sync-inputs/enabled", "/v1/sync-inputs/remove", "/v1/sync",
             }:
@@ -952,6 +987,9 @@ def _handler_for(agent: GestajoAgent) -> type[BaseHTTPRequestHandler]:
                 return
             if parsed.path == "/v1/sync":
                 self._authorized(lambda token: agent.sync_pending(token, _single_query_value(parsed.query, "org_id")))
+                return
+            if is_template_save:
+                self._authorized(lambda token: agent.save_template(token, _single_query_value(parsed.query, "org_id"), template_id, payload))
                 return
             if is_note_share:
                 self._authorized(lambda token: agent.share_note(token, _single_query_value(parsed.query, "org_id"), note_route.removesuffix("/share"), payload))
@@ -1329,6 +1367,32 @@ def _note_relations_response(value: object) -> dict[str, object]:
             for item in outgoing if isinstance(item, Mapping)
         ][:24],
     }
+
+
+def _template_id(value: object) -> str:
+    if not isinstance(value, str) or not value or len(value) > 64 or "/" in value or "\\" in value:
+        raise AgentError("template is invalid")
+    return value
+
+
+def _template_list_response(value: object) -> dict[str, object]:
+    if not isinstance(value, list):
+        raise AgentError("local templates returned an invalid response")
+    return {"templates": [
+        {"template_id": _template_id(item.get("template_id")), "label": str(item.get("label") or "")[:128], "revision": item.get("revision")}
+        for item in value
+        if isinstance(item, Mapping) and isinstance(item.get("revision"), int)
+    ]}
+
+
+def _template_response(value: object) -> dict[str, object]:
+    if not isinstance(value, Mapping) or value.get("error"):
+        raise AgentError(str(value.get("message") if isinstance(value, Mapping) else "local template is invalid"))
+    template_id = _template_id(value.get("template_id"))
+    template, agents, revision = value.get("template"), value.get("agents"), value.get("revision")
+    if not isinstance(template, str) or not isinstance(agents, str) or not isinstance(revision, int):
+        raise AgentError("local template returned an invalid response")
+    return {"template_id": template_id, "template": template, "agents": agents, "revision": revision}
 
 
 def _settings_response(state: Mapping[str, object], role: str) -> dict[str, object]:

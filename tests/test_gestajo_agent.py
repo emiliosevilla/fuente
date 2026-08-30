@@ -96,7 +96,7 @@ def test_status_requires_the_bound_user(tmp_path: Path):
     )
 
     assert agent.status("token-a")["claimed"] is True
-    assert agent.status("token-a")["capabilities"] == ["flow", "flow_approve", "flow_review", "settings", "sync_inputs", "sync_run", "sync_output", "sync_conflict_read", "sync_conflict_resolve", "note_read", "note_relations", "note_write", "note_share", "note_assistant"]
+    assert agent.status("token-a")["capabilities"] == ["flow", "flow_approve", "flow_review", "settings", "sync_inputs", "sync_run", "sync_output", "sync_conflict_read", "sync_conflict_resolve", "note_read", "note_relations", "note_write", "note_share", "note_assistant", "templates_read", "templates_write"]
     with pytest.raises(AgentAuthenticationError, match="another user"):
         agent.status("token-b")
 
@@ -108,6 +108,32 @@ def test_second_user_cannot_claim_bound_vault(tmp_path: Path):
 
     with pytest.raises(AgentAuthenticationError, match="another user"):
         agent.claim("token-b", payload)
+
+
+def test_templates_are_readable_but_only_management_can_write(tmp_path: Path):
+    calls: list[dict[str, object]] = []
+
+    class Backend:
+        @staticmethod
+        def list_templates():
+            return [{"template_id": "resumen", "label": "Resumen", "revision": 2, "template_path": "/private/template"}]
+
+        @staticmethod
+        def load_template(template_id):
+            return {"template_id": template_id, "revision": 2, "template": "# Resumen", "agents": "Resume", "template_path": "/private/template"}
+
+        @staticmethod
+        def save_template(payload):
+            calls.append(payload)
+            return {"template_id": payload["template_id"], "revision": 3, "template": payload["template"], "agents": payload["agents"]}
+
+    agent = GestajoAgent(tmp_path, verifier=_verifier, publisher=_publisher, management_verifier=_management_verifier, membership_verifier=_management_verifier, backend_factory=lambda _vault: Backend())
+    agent.claim("token-a", {"supabase_url": "https://project.supabase.co", "publishable_key": "sb_publishable_test_key"})
+
+    assert agent.list_templates("token-a", "00000000-0000-0000-0000-000000000001") == {"templates": [{"template_id": "resumen", "label": "Resumen", "revision": 2}]}
+    assert agent.read_template("token-a", "00000000-0000-0000-0000-000000000001", "resumen") == {"template_id": "resumen", "revision": 2, "template": "# Resumen", "agents": "Resume"}
+    assert agent.save_template("token-a", "00000000-0000-0000-0000-000000000001", "resumen", {"template": "x", "agents": "x", "expected_revision": 2}) == {"template_id": "resumen", "revision": 3, "template": "x", "agents": "x"}
+    assert calls == [{"template_id": "resumen", "template": "x", "agents": "x", "expected_revision": 2}]
 
 
 def test_origin_and_claim_payload_fail_closed(tmp_path: Path):

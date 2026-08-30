@@ -32,6 +32,7 @@ def fake_anythingllm(monkeypatch):
     workspace_documents: list[dict[str, Any]] = []
     chat_history: dict[str, list[str]] = {}
     auth_headers: list[str] = []
+    workspace_model = "qwen2.5:0.5b"
 
     class Response:
         def __init__(self, payload: dict[str, Any]) -> None:
@@ -47,6 +48,7 @@ def fake_anythingllm(monkeypatch):
             return json.dumps(self._payload).encode("utf-8")
 
     def fake_urlopen(request, timeout=30.0):
+        nonlocal workspace_model
         url = request.full_url
         method = request.method
         body = None
@@ -72,10 +74,15 @@ def fake_anythingllm(monkeypatch):
                         {
                             "slug": "fuente",
                             "documents": list(workspace_documents),
+                            "chatModel": workspace_model,
                         }
                     ]
                 }
             )
+
+        if url.endswith("/api/v1/workspace/fuente/update"):
+            workspace_model = str((body or {}).get("chatModel") or "")
+            return Response({"workspace": {"slug": "fuente", "chatModel": workspace_model}})
 
         if url.endswith("/api/v1/workspace/fuente/chat"):
             assert body is not None
@@ -143,9 +150,13 @@ def test_chat_uses_session_and_returns_response(fake_anythingllm):
     assert first["textResponse"]
     assert "PLASMA-77" in str(second["textResponse"])
     assert len(history["fuente-session"]) == 2
-    chat_calls = [entry for entry in calls if entry[0] == "POST" and entry[2]]
+    chat_calls = [entry for entry in calls if entry[0] == "POST" and entry[1].endswith("/chat")]
     assert chat_calls[0][2]["sessionId"] == "fuente-session"
     assert chat_calls[0][2]["mode"] == "chat"
+    assert [entry[2] for entry in calls if entry[1].endswith("/update")] == [
+        {"chatModel": "qwen2.5:0.5b"},
+        {"chatModel": "qwen2.5:0.5b"},
+    ]
     assert auth_headers
     assert all(header == "Bearer test-key" for header in auth_headers)
 

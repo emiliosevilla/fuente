@@ -139,6 +139,23 @@ class AnythingLLMConversationClient:
                 code=ERROR_DOCUMENTS_PRESENT,
             )
 
+    def set_chat_model(self, model: str) -> None:
+        """Apply Fuente's RAM-authorized model to the local workspace."""
+        model_name = (model or "").strip()
+        if not model_name:
+            raise AnythingLLMError("model is required", code=ERROR_ANYTHINGLLM)
+        payload = self._request(
+            "POST",
+            f"/api/v1/workspace/{self.workspace_slug}/update",
+            {"chatModel": model_name},
+        )
+        workspace = payload.get("workspace")
+        if not isinstance(workspace, Mapping) or workspace.get("chatModel") != model_name:
+            raise AnythingLLMError(
+                "AnythingLLM did not apply the requested chat model",
+                code=ERROR_ANYTHINGLLM,
+            )
+
     def chat(self, *, session_id: str, prompt: str, model: str) -> dict[str, object]:
         session = (session_id or "").strip()
         if not session:
@@ -151,6 +168,7 @@ class AnythingLLMConversationClient:
             raise AnythingLLMError("model is required", code=ERROR_ANYTHINGLLM)
 
         self._ensure_zero_documents()
+        self.set_chat_model(model_name)
         body: dict[str, Any] = {
             "message": message,
             "mode": "chat",

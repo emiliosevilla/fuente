@@ -27,6 +27,8 @@ from urllib.request import Request, urlopen
 
 from fuente.domain.sync import SyncDirection
 from fuente.domain.paths import SourcePathAuthorizer, document_id_for_relative_path
+from fuente.domain.documents import content_hash_for_markdown
+from fuente.domain.frontmatter import FrontmatterError, parse_frontmatter
 from fuente.domain.vault_layout import VaultLayout
 from fuente.infrastructure.atomic_files import atomic_copy, atomic_write_json
 
@@ -312,6 +314,61 @@ def publish_document_audit(binding: AgentBinding, access_token: str, event: Mapp
         raise AgentSyncError("Supabase did not confirm the document audit")
 
 
+def publish_document_conflict(
+    binding: AgentBinding, access_token: str, conflict: Mapping[str, object],
+) -> None:
+    """Persist verified conflict metadata only; paths and Markdown stay local."""
+    request = Request(
+        f"{binding.supabase_url}/rest/v1/document_conflicts",
+        data=json.dumps(dict(conflict), separators=(",", ":")).encode("utf-8"),
+        headers={
+            "apikey": binding.publishable_key, "Authorization": f"Bearer {access_token}",
+            "Content-Type": "application/json", "Prefer": "return=representation",
+        },
+        method="POST",
+    )
+    try:
+        with urlopen(request, timeout=5) as response:
+            rows = json.loads(response.read().decode("utf-8"))
+    except HTTPError as error:
+        if error.code == HTTPStatus.CONFLICT:
+            return
+        raise AgentSyncError("Supabase could not persist the document conflict") from error
+    except (URLError, TimeoutError, OSError, json.JSONDecodeError) as error:
+        raise AgentSyncError("Supabase could not persist the document conflict") from error
+    if not isinstance(rows, list) or len(rows) != 1:
+        raise AgentSyncError("Supabase did not confirm the document conflict")
+
+
+def resolve_document_conflict(
+    binding: AgentBinding, access_token: str, conflict: Mapping[str, object],
+) -> None:
+    """Mark the exact, previously detected conflict as human-resolved."""
+    conflict_id = conflict["id"]
+    payload = {
+        "status": "resolved",
+        "resolution": conflict["resolution"],
+        "resolved_by": binding.user_id,
+        "resolved_at": datetime.now(timezone.utc).isoformat(),
+    }
+    request = Request(
+        f"{binding.supabase_url}/rest/v1/document_conflicts?id=eq.{quote(str(conflict_id), safe='')}&status=eq.open",
+        data=json.dumps(payload, separators=(",", ":")).encode("utf-8"),
+        headers={
+            "apikey": binding.publishable_key, "Authorization": f"Bearer {access_token}",
+            "Content-Type": "application/json", "Prefer": "return=representation",
+        },
+        method="PATCH",
+    )
+    try:
+        with urlopen(request, timeout=5) as response:
+            rows = json.loads(response.read().decode("utf-8"))
+    except (HTTPError, URLError, TimeoutError, OSError, json.JSONDecodeError) as error:
+        raise AgentSyncError("Supabase could not resolve the document conflict") from error
+    if not isinstance(rows, list) or len(rows) > 1:
+        raise AgentSyncError("Supabase did not confirm the document conflict resolution")
+
+
 class GestajoAgent:
     """Own one vault and expose only an authenticated, path-free status contract."""
 
@@ -334,6 +391,8 @@ class GestajoAgent:
         note_sharer: Callable[[Path, str, int, str], Mapping[str, object]] | None = None,
         note_metadata_publisher: Callable[[AgentBinding, str, Mapping[str, object]], None] = publish_document_note_metadata,
         audit_publisher: Callable[[AgentBinding, str, Mapping[str, object]], None] = publish_document_audit,
+        conflict_publisher: Callable[[AgentBinding, str, Mapping[str, object]], None] = publish_document_conflict,
+        conflict_resolver: Callable[[AgentBinding, str, Mapping[str, object]], None] = resolve_document_conflict,
         outbox_factory: Callable[[Path], Any] | None = None,
         allowed_origins: frozenset[str] = DEFAULT_ALLOWED_ORIGINS,
     ) -> None:
@@ -354,6 +413,8 @@ class GestajoAgent:
         self._note_sharer = note_sharer or _share_note
         self._note_metadata_publisher = note_metadata_publisher
         self._audit_publisher = audit_publisher
+        self._conflict_publisher = conflict_publisher
+        self._conflict_resolver = conflict_resolver
         self._outbox_factory = outbox_factory or _document_outbox
         self._outbox: Any | None = None
         self._allowed_origins = allowed_origins
@@ -729,13 +790,28 @@ class GestajoAgent:
         connected_root = backend.sync_manager._authorized_output_destination(Path(connection.root))
         vault_path = _sync_markdown_path(shared_root, relative_path)
         shared_path = _sync_markdown_path(connected_root, relative_path)
+        conflict = _sync_conflict_metadata(
+            _read_sync_markdown(shared_root, relative_path), _read_sync_markdown(connected_root, relative_path),
+            self._document_outbox(), binding, str(org_id),
+        )
         source, destination = (vault_path, shared_path) if winner == "vault" else (shared_path, vault_path)
         try:
             atomic_copy(source, destination)
         except OSError as error:
             raise AgentError("conflict resolution could not be written locally") from error
+        if conflict is not None:
+            resolution = {**conflict, "resolution": "local" if winner == "vault" else "sharepoint"}
+            try:
+                self._conflict_resolver(binding, self._access_token(access_token), resolution)
+                self._document_outbox().delete_document_outbox(f"document_conflict_resolution:{conflict['id']}")
+            except AgentSyncError:
+                self._document_outbox().upsert_document_outbox(
+                    outbox_id=f"document_conflict_resolution:{conflict['id']}",
+                    kind="document_conflict_resolution", payload=resolution,
+                )
         self._record_audit(binding, self._access_token(access_token), _new_audit_event(
-            None, str(org_id), str(uuid.UUID(str(org_id))), binding.user_id, "sync_conflict_resolve", winner,
+            conflict["note_id"] if conflict is not None else None,
+            str(org_id), str(uuid.UUID(str(org_id))), binding.user_id, "sync_conflict_resolve", winner,
         ))
         return {"relative_path": relative_path, "winner": winner}
 
@@ -759,11 +835,44 @@ class GestajoAgent:
         except (OSError, ValueError) as error:
             raise AgentError("local folder synchronization failed") from error
         result = _sync_report_response(report)
+        for conflict in result["conflicts"]:
+            metadata = self._sync_conflict_metadata(backend, connection, conflict, binding, str(org_id))
+            if metadata is None:
+                continue
+            try:
+                self._conflict_publisher(binding, self._access_token(access_token), metadata)
+                self._document_outbox().delete_document_outbox(f"document_conflict:{metadata['id']}")
+                outcome = "synced"
+            except AgentSyncError:
+                self._document_outbox().upsert_document_outbox(
+                    outbox_id=f"document_conflict:{metadata['id']}", kind="document_conflict", payload=metadata,
+                )
+                outcome = "pending_sync"
+            self._record_audit(binding, self._access_token(access_token), _new_audit_event(
+                str(metadata["note_id"]), str(org_id), str(uuid.UUID(str(org_id))), binding.user_id,
+                "sync_conflict_detect", outcome,
+            ))
         self._record_audit(binding, self._access_token(access_token), _new_audit_event(
             None, str(org_id), str(uuid.UUID(str(org_id))), binding.user_id,
             action, "conflict" if result["conflicts"] else "success",
         ))
         return result
+
+    def _sync_conflict_metadata(
+        self, backend: Any, connection: Any, conflict: Mapping[str, object], binding: AgentBinding, org_id: str,
+    ) -> dict[str, object] | None:
+        relative_path = conflict.get("source_relative_path")
+        if not isinstance(relative_path, str):
+            return None
+        try:
+            vault_root = VaultLayout(backend.sync_manager.active_theme_dir).shared_dir
+            return _sync_conflict_metadata(
+                _read_sync_markdown(vault_root, relative_path),
+                _read_sync_markdown(Path(connection.root), relative_path),
+                self._document_outbox(), binding, org_id,
+            )
+        except (AgentError, AttributeError, OSError):
+            return None
 
     def read_note(self, access_token: object, org_id: object, note_id: object) -> dict[str, object]:
         binding = self._require_user(access_token)
@@ -955,6 +1064,10 @@ class GestajoAgent:
                     self._note_metadata_publisher(binding, self._access_token(access_token), payload)
                 elif item.get("kind") == "audit_event":
                     self._audit_publisher(binding, self._access_token(access_token), payload)
+                elif item.get("kind") == "document_conflict":
+                    self._conflict_publisher(binding, self._access_token(access_token), payload)
+                elif item.get("kind") == "document_conflict_resolution":
+                    self._conflict_resolver(binding, self._access_token(access_token), payload)
                 else:
                     raise ValueError("document outbox kind is invalid")
             except (AgentSyncError, ValueError, json.JSONDecodeError):
@@ -1792,6 +1905,45 @@ def _safe_sync_relative(value: object) -> str | None:
     if path.is_absolute() or ".." in path.parts:
         return None
     return path.as_posix()
+
+
+def _sync_conflict_metadata(
+    vault_markdown: str, shared_markdown: str, store: Any, binding: AgentBinding, org_id: str,
+) -> dict[str, object] | None:
+    """Return only an identifiable conflict projection; never infer a revision."""
+    try:
+        vault_metadata, _ = parse_frontmatter(vault_markdown)
+        shared_metadata, _ = parse_frontmatter(shared_markdown)
+        note_id = str(uuid.UUID(str(vault_metadata.get("note_id"))))
+        if shared_metadata.get("note_id") != note_id:
+            return None
+        local_revision = vault_metadata.get("revision", 1)
+        remote_revision = shared_metadata.get("revision", 1)
+        if (
+            isinstance(local_revision, bool) or not isinstance(local_revision, int) or local_revision < 1
+            or isinstance(remote_revision, bool) or not isinstance(remote_revision, int) or remote_revision < 1
+            or store.get_note(note_id) is None
+        ):
+            return None
+        local_hash = content_hash_for_markdown(vault_markdown)
+        remote_hash = content_hash_for_markdown(shared_markdown)
+        if local_hash == remote_hash:
+            return None
+        conflict_id = str(uuid.uuid5(uuid.UUID(note_id), f"{local_hash}:{remote_hash}"))
+        normalized_org_id = str(uuid.UUID(org_id))
+        return {
+            "id": conflict_id,
+            "note_id": note_id,
+            "org_id": normalized_org_id,
+            "common_org_id": normalized_org_id,
+            "local_revision": local_revision,
+            "remote_revision": remote_revision,
+            "local_hash": local_hash,
+            "remote_hash": remote_hash,
+            "detected_by": str(uuid.UUID(binding.user_id)),
+        }
+    except (FrontmatterError, ValueError, TypeError):
+        return None
 
 
 def _sync_report_response(value: Mapping[str, object]) -> dict[str, object]:

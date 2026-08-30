@@ -982,6 +982,94 @@ def test_sync_output_reuses_hash_reconciler_and_never_overwrites_a_conflict(tmp_
     assert audits[0]["result"] == "conflict"
 
 
+def test_sync_output_publishes_only_verified_conflict_metadata(tmp_path: Path):
+    note_id = "00000000-0000-0000-0000-000000000010"
+    connection = ConnectedFolder("sharepoint_mount", str(tmp_path / "sharepoint"), "Compartidos", True)
+    shared = tmp_path / "5_compartido"
+    shared.mkdir()
+    Path(connection.root).mkdir()
+    local = (
+        f"---\nschema_version: 3\nnote_id: {note_id}\nnote_type: original\ntitle: Nota local\n"
+        "date: '2026-08-30'\nauthor: Usuario\ntags: []\nissue: _Sin_Cuestion\nstatus: approved\n"
+        "history: []\nrevision: 2\n---\nLocal\n"
+    )
+    remote = local.replace("Nota local", "Nota remota").replace("revision: 2", "revision: 3").replace("Local\n", "Remota\n")
+    (shared / "nota.md").write_text(local, encoding="utf-8")
+    (Path(connection.root) / "nota.md").write_text(remote, encoding="utf-8")
+    store = JobStore(tmp_path)
+    store.register_note(
+        note_id=note_id, relative_path="4_procesado/nota.md", revision=2, content_hash="a" * 64,
+        note_type="original", origin_kind=None, theme="General", issue="_Sin_Cuestion", status="approved",
+    )
+    store.close()
+    published = []
+
+    class SyncManager:
+        active_theme_dir = tmp_path
+
+        def load_connections(self):
+            return [connection]
+
+        def sync_connection(self, received, *, direction):
+            assert received == connection
+            assert direction is SyncDirection.OUTPUT_SHARED
+            return type("Report", (), {
+                "copied": 0, "unchanged": 0, "scanned": 1, "manifest_updates": 0,
+                "conflicts": [SyncConflict("key", "nota.md", "nota.md", "a" * 64, "b" * 64)],
+                "diagnostics": [],
+            })()
+
+    class Backend:
+        sync_manager = SyncManager()
+
+    agent = GestajoAgent(
+        tmp_path, verifier=_verifier, publisher=_publisher,
+        membership_verifier=lambda *_args: "gestion", backend_factory=lambda _vault: Backend(),
+        conflict_publisher=lambda _binding, _token, payload: published.append(dict(payload)),
+    )
+    agent.claim("token-a", {"supabase_url": "https://project.supabase.co", "publishable_key": "sb_publishable_test_key"})
+
+    agent.run_sync_output("token-a", "00000000-0000-0000-0000-000000000001", {"connection_id": connection.connection_id})
+
+    assert published[0]["note_id"] == note_id
+    assert published[0]["local_revision"] == 2
+    assert published[0]["remote_revision"] == 3
+    assert published[0]["local_hash"] != published[0]["remote_hash"]
+    assert str(tmp_path) not in str(published)
+    assert "Nota local" not in str(published)
+    assert "Nota remota" not in str(published)
+
+
+def test_sync_pending_flushes_conflict_metadata(tmp_path: Path):
+    note_id = "00000000-0000-0000-0000-000000000010"
+    store = JobStore(tmp_path)
+    store.upsert_document_outbox(
+        outbox_id="document_conflict:00000000-0000-0000-0000-000000000020",
+        kind="document_conflict",
+        payload={
+            "id": "00000000-0000-0000-0000-000000000020", "note_id": note_id,
+            "org_id": "00000000-0000-0000-0000-000000000001", "common_org_id": "00000000-0000-0000-0000-000000000001",
+            "local_revision": 2, "remote_revision": 3, "local_hash": "a" * 64,
+            "remote_hash": "b" * 64, "detected_by": USER_A,
+        },
+    )
+    published = []
+    agent = GestajoAgent(
+        tmp_path, verifier=_verifier, publisher=_publisher,
+        membership_verifier=lambda *_args: "gestion",
+        conflict_publisher=lambda _binding, token, payload: published.append((token, dict(payload))),
+    )
+    agent.claim("token-a", {"supabase_url": "https://project.supabase.co", "publishable_key": "sb_publishable_test_key"})
+
+    result = agent.sync_pending("token-a", "00000000-0000-0000-0000-000000000001")
+
+    assert result == {"synced": 1, "pending": 0}
+    assert published[0][0] == "token-a"
+    assert published[0][1]["note_id"] == note_id
+    assert "token-a" not in str(store.list_document_outbox())
+    store.close()
+
+
 def test_sync_conflict_reads_only_two_local_markdown_copies(tmp_path: Path):
     connection = ConnectedFolder("sharepoint_mount", str(tmp_path / "sharepoint"), "Compartidos", True)
     shared = tmp_path / "5_compartido"

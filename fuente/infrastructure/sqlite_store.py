@@ -1688,7 +1688,7 @@ class JobStore:
     def upsert_document_outbox(
         self, *, outbox_id: str, kind: str, payload: dict[str, Any]
     ) -> dict[str, Any]:
-        if kind not in {"note_metadata", "audit_event"}:
+        if kind not in {"note_metadata", "audit_event", "document_conflict", "document_conflict_resolution"}:
             raise ValueError("document outbox kind is invalid")
         if not isinstance(outbox_id, str) or not outbox_id or len(outbox_id) > 160:
             raise ValueError("document outbox id is invalid")

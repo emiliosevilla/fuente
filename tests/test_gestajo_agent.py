@@ -98,7 +98,7 @@ def test_status_requires_the_bound_user(tmp_path: Path):
     )
 
     assert agent.status("token-a")["claimed"] is True
-    assert agent.status("token-a")["capabilities"] == ["flow", "flow_import", "flow_approve", "flow_jobs", "flow_job_detail", "flow_job_resume", "flow_job_cancel", "flow_review", "flow_review_captured", "flow_review_source_preview", "flow_discard", "quarantine_read", "quarantine_restore", "settings", "sync_inputs", "sync_run", "sync_output", "sync_conflict_read", "sync_conflict_resolve", "document_conflict_read", "document_conflict_resolve", "taxonomy_read", "taxonomy_write", "note_read", "note_search", "note_relations", "note_lineage", "note_export", "note_write", "note_create", "note_theme", "note_merge", "note_approve_processed", "note_share", "note_assistant", "note_assistant_persist", "knowledge_assistant", "templates_read", "templates_write"]
+    assert agent.status("token-a")["capabilities"] == ["flow", "flow_import", "flow_approve", "flow_jobs", "flow_job_detail", "flow_job_resume", "flow_job_cancel", "flow_review", "flow_review_captured", "flow_review_source_preview", "flow_discard", "quarantine_read", "quarantine_restore", "settings", "sync_inputs", "sync_run", "sync_output", "sync_conflict_read", "sync_conflict_resolve", "document_conflict_read", "document_conflict_resolve", "taxonomy_read", "taxonomy_write", "note_read", "note_search", "note_relations", "note_graph", "note_lineage", "note_export", "note_write", "note_create", "note_theme", "note_merge", "note_approve_processed", "note_share", "note_assistant", "note_assistant_persist", "knowledge_assistant", "templates_read", "templates_write"]
     with pytest.raises(AgentAuthenticationError, match="another user"):
         agent.status("token-b")
 
@@ -1322,6 +1322,73 @@ def test_visible_note_exposes_safe_local_relations(tmp_path: Path):
     assert relations == {"center": {"document_id": note_id, "title": "Central"}, "outgoing": [{"document_id": "00000000-0000-0000-0000-000000000011", "title": "Relacionado", "seal": "approved", "broken": False}]}
     assert "/private" not in str(relations)
     assert audits[0]["action"] == "note_relations_read"
+
+
+def test_note_graph_only_contains_the_active_suborganization_visible_nodes(tmp_path: Path):
+    org_id = "00000000-0000-0000-0000-000000000001"
+    first_id = "00000000-0000-0000-0000-000000000010"
+    second_id = "00000000-0000-0000-0000-000000000011"
+    hidden_id = "00000000-0000-0000-0000-000000000012"
+
+    class Backend:
+        @staticmethod
+        def list_feed(_cursor, _limit, _filters, _order):
+            return {"items": [
+                {"document_id": first_id, "title": "Origen", "seal": "approved", "theme": "General", "issue": "_Sin_Cuestion", "note_type": "summary", "relative_path": "/private/origen.md"},
+                {"document_id": second_id, "title": "Destino", "seal": "approved", "theme": "General", "issue": "_Sin_Cuestion", "note_type": "summary"},
+                {"document_id": hidden_id, "title": "Privada ajena", "seal": "approved", "theme": "General", "issue": "_Sin_Cuestion", "note_type": "summary"},
+            ], "has_more": False}
+
+        @staticmethod
+        def get_relation_preview(note_id):
+            return {
+                "center": {"document_id": note_id, "title": "Seguro"},
+                "outgoing": [
+                    {"document_id": second_id, "title": "Destino", "seal": "approved"},
+                    {"document_id": hidden_id, "title": "Privada ajena", "seal": "approved"},
+                ] if note_id == first_id else [],
+            }
+
+    audits: list[dict[str, object]] = []
+    agent = GestajoAgent(
+        tmp_path, verifier=_verifier, publisher=_publisher, membership_verifier=_membership_verifier,
+        backend_factory=lambda _vault: Backend(),
+        visible_note_ids_reader=lambda *_args: {first_id, second_id},
+        audit_publisher=lambda _binding, _token, event: audits.append(event),
+    )
+    agent.claim("token-a", {"supabase_url": "https://project.supabase.co", "publishable_key": "sb_publishable_test_key"})
+
+    graph = agent.read_note_graph("token-a", org_id)
+
+    assert graph == {
+        "nodes": [
+            {"document_id": first_id, "title": "Origen", "seal": "approved", "theme": "General", "issue": "_Sin_Cuestion", "note_type": "summary"},
+            {"document_id": second_id, "title": "Destino", "seal": "approved", "theme": "General", "issue": "_Sin_Cuestion", "note_type": "summary"},
+        ],
+        "edges": [{"source_id": first_id, "target_id": second_id}],
+        "truncated": False,
+    }
+    assert "/private" not in str(graph)
+    assert hidden_id not in str(graph)
+    assert audits[0]["action"] == "note_graph_read"
+
+    from http.server import ThreadingHTTPServer
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), _handler_for(agent))
+    thread = Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        connection = HTTPConnection("127.0.0.1", server.server_port, timeout=2)
+        connection.request("GET", f"/v1/notes/graph?org_id={org_id}", headers={"Origin": "http://localhost:3000", "Authorization": "Bearer token-a"})
+        response = connection.getresponse()
+        route_graph = json.loads(response.read())
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
+
+    assert response.status == 200
+    assert route_graph == graph
 
 
 def test_flow_rejects_consulta(tmp_path: Path):

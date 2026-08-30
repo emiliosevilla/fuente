@@ -341,6 +341,41 @@ def read_document_note_catalog(binding: AgentBinding, access_token: str) -> dict
     return catalog
 
 
+def read_visible_document_note_ids(
+    binding: AgentBinding, access_token: str, org_id: str,
+) -> set[str]:
+    """Return only document ids visible in the selected suborganization under RLS."""
+    normalized_org_id = str(uuid.UUID(org_id))
+    visible_ids: set[str] = set()
+    offset = 0
+    while True:
+        request = Request(
+            f"{binding.supabase_url}/rest/v1/document_notes?select=note_id&or=(owner_org_id.eq.{normalized_org_id},shared_org_id.eq.{normalized_org_id})",
+            headers={
+                "apikey": binding.publishable_key, "Authorization": f"Bearer {access_token}",
+                "Range": f"{offset}-{offset + 999}",
+            },
+            method="GET",
+        )
+        try:
+            with urlopen(request, timeout=5) as response:
+                page = json.loads(response.read().decode("utf-8"))
+        except (HTTPError, URLError, TimeoutError, OSError, json.JSONDecodeError) as error:
+            raise AgentSyncError("Supabase could not read the visible document catalog") from error
+        if not isinstance(page, list):
+            raise AgentSyncError("Supabase returned an invalid visible document catalog")
+        for row in page:
+            if not isinstance(row, Mapping):
+                raise AgentSyncError("Supabase returned an invalid visible document catalog")
+            try:
+                visible_ids.add(str(uuid.UUID(str(row["note_id"]))))
+            except (KeyError, TypeError, ValueError) as error:
+                raise AgentSyncError("Supabase returned an invalid visible document catalog") from error
+        if len(page) < 1000:
+            return visible_ids
+        offset += len(page)
+
+
 def publish_document_audit(binding: AgentBinding, access_token: str, event: Mapping[str, object]) -> None:
     payload = _audit_event_payload(event)
     request = Request(
@@ -442,6 +477,7 @@ class GestajoAgent:
         note_sharer: Callable[[Path, str, int, str], Mapping[str, object]] | None = None,
         note_metadata_publisher: Callable[[AgentBinding, str, Mapping[str, object]], None] = publish_document_note_metadata,
         document_catalog_reader: Callable[[AgentBinding, str], Mapping[str, tuple[int, str]]] = read_document_note_catalog,
+        visible_note_ids_reader: Callable[[AgentBinding, str, str], set[str]] | None = None,
         audit_publisher: Callable[[AgentBinding, str, Mapping[str, object]], None] = publish_document_audit,
         conflict_publisher: Callable[[AgentBinding, str, Mapping[str, object]], None] = publish_document_conflict,
         conflict_resolver: Callable[[AgentBinding, str, Mapping[str, object]], None] = resolve_document_conflict,
@@ -465,6 +501,7 @@ class GestajoAgent:
         self._note_sharer = note_sharer or _share_note
         self._note_metadata_publisher = note_metadata_publisher
         self._document_catalog_reader = document_catalog_reader
+        self._visible_note_ids_reader = visible_note_ids_reader or read_visible_document_note_ids
         self._audit_publisher = audit_publisher
         self._conflict_publisher = conflict_publisher
         self._conflict_resolver = conflict_resolver
@@ -519,7 +556,7 @@ class GestajoAgent:
             "platform": platform.system(),
             "user_id": binding.user_id,
             "vault_fingerprint": self._vault_fingerprint(),
-            "capabilities": ["flow", "flow_import", "flow_approve", "flow_jobs", "flow_job_detail", "flow_job_resume", "flow_job_cancel", "flow_review", "flow_review_captured", "flow_review_source_preview", "flow_discard", "quarantine_read", "quarantine_restore", "settings", "sync_inputs", "sync_run", "sync_output", "sync_conflict_read", "sync_conflict_resolve", "document_conflict_read", "document_conflict_resolve", "taxonomy_read", "taxonomy_write", "note_read", "note_search", "note_relations", "note_lineage", "note_export", "note_write", "note_create", "note_theme", "note_merge", "note_approve_processed", "note_share", "note_assistant", "note_assistant_persist", "knowledge_assistant", "templates_read", "templates_write"],
+            "capabilities": ["flow", "flow_import", "flow_approve", "flow_jobs", "flow_job_detail", "flow_job_resume", "flow_job_cancel", "flow_review", "flow_review_captured", "flow_review_source_preview", "flow_discard", "quarantine_read", "quarantine_restore", "settings", "sync_inputs", "sync_run", "sync_output", "sync_conflict_read", "sync_conflict_resolve", "document_conflict_read", "document_conflict_resolve", "taxonomy_read", "taxonomy_write", "note_read", "note_search", "note_relations", "note_graph", "note_lineage", "note_export", "note_write", "note_create", "note_theme", "note_merge", "note_approve_processed", "note_share", "note_assistant", "note_assistant_persist", "knowledge_assistant", "templates_read", "templates_write"],
         }
 
     def taxonomy(self, access_token: object, org_id: object) -> dict[str, object]:
@@ -1340,6 +1377,44 @@ class GestajoAgent:
         ))
         return result
 
+    def read_note_graph(self, access_token: object, org_id: object) -> dict[str, object]:
+        """Return the current suborganization's visible wikilink graph, never Vault paths."""
+        binding = self._require_user(access_token)
+        if not isinstance(org_id, str):
+            raise AgentAuthorizationError("organization is invalid")
+        try:
+            normalized_org_id = str(uuid.UUID(org_id))
+        except ValueError as error:
+            raise AgentAuthorizationError("organization is invalid") from error
+        self._membership_verifier(binding, self._access_token(access_token), normalized_org_id)
+        visible_ids = self._visible_note_ids_reader(binding, self._access_token(access_token), normalized_org_id)
+        page = self._local_backend().list_feed(None, 100, {}, "date")
+        if not isinstance(page, Mapping) or not isinstance(page.get("items"), list):
+            raise AgentError("local note graph returned an invalid response")
+        nodes = {
+            node["document_id"]: node
+            for item in page["items"]
+            if isinstance(item, Mapping)
+            for node in [_note_graph_node_response(item)]
+            if node["document_id"] in visible_ids
+        }
+        edges: set[tuple[str, str]] = set()
+        for note_id in nodes:
+            preview = _note_relations_response(self._local_backend().get_relation_preview(note_id))
+            for relation in preview["outgoing"]:
+                target_id = relation["document_id"]
+                if not relation["broken"] and target_id in nodes:
+                    edges.add((note_id, target_id))
+        result = {
+            "nodes": list(nodes.values()),
+            "edges": [{"source_id": source_id, "target_id": target_id} for source_id, target_id in sorted(edges)],
+            "truncated": page.get("has_more") is True,
+        }
+        self._record_audit(binding, self._access_token(access_token), _new_audit_event(
+            None, normalized_org_id, normalized_org_id, binding.user_id, "note_graph_read", "success",
+        ))
+        return result
+
     def read_note_lineage(self, access_token: object, org_id: object, note_id: object) -> dict[str, object]:
         binding = self._require_user(access_token)
         if not isinstance(org_id, str) or not isinstance(note_id, str):
@@ -1694,6 +1769,11 @@ def _handler_for(agent: GestajoAgent) -> type[BaseHTTPRequestHandler]:
                         token, _single_query_value(parsed.query, "org_id"),
                         _single_query_value(parsed.query, "mode"), _single_query_value(parsed.query, "q"),
                     )
+                )
+                return
+            if parsed.path == "/v1/notes/graph":
+                self._authorized(
+                    lambda token: agent.read_note_graph(token, _single_query_value(parsed.query, "org_id"))
                 )
                 return
             if parsed.path.startswith("/v1/notes/"):
@@ -2430,6 +2510,17 @@ def _note_relations_response(value: object) -> dict[str, object]:
             for item in outgoing if isinstance(item, Mapping)
         ][:24],
     }
+
+
+def _note_graph_node_response(value: Mapping[str, object]) -> dict[str, str]:
+    try:
+        document_id = str(uuid.UUID(str(value["document_id"])))
+    except (KeyError, TypeError, ValueError) as error:
+        raise AgentError("local note graph returned an invalid node") from error
+    fields = {field: value.get(field) for field in ("title", "seal", "theme", "issue", "note_type")}
+    if not all(isinstance(item, str) for item in fields.values()):
+        raise AgentError("local note graph returned an invalid node")
+    return {"document_id": document_id, **{field: str(item)[:512] for field, item in fields.items()}}
 
 
 def _note_lineage_response(value: object) -> dict[str, object]:

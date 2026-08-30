@@ -41,6 +41,11 @@ CHAT_SYSTEM_PROMPT = (
     "claridad y no inventes citas ni fuentes. Responde en español."
 )
 
+_RELATION_REQUEST = re.compile(
+    r"\b(relaci(?:ó|o)n(?:es)?|wikilinks?|enlaces?|v[íi]nculos?)\b",
+    re.IGNORECASE,
+)
+
 ERROR_OLLAMA = "ollama_unavailable"
 ERROR_ANYTHINGLLM = "anythingllm_unavailable"
 ERROR_EMPTY_MESSAGE = "empty_message"
@@ -484,7 +489,7 @@ class ChatApplicationService:
             )
 
         return self._result(
-            text=answer,
+            text=_append_verified_wikilinks(answer, query, explicit_wikilinks),
             sources=sources,
             retrieval_mode=retrieval_mode,
             has_context=has_context,
@@ -581,3 +586,18 @@ class ChatApplicationService:
             "policy_reason": policy_reason,
             "model": model,
         }
+
+
+def _append_verified_wikilinks(
+    answer: str,
+    query: str,
+    explicit_wikilinks: list[str],
+) -> str:
+    """Keep the link inventory factual even when a small local model is not."""
+    if not explicit_wikilinks or not _RELATION_REQUEST.search(query):
+        return answer
+    return (
+        f"{answer.rstrip()}\n\n"
+        "## Wikilinks verificados en la Nota\n"
+        + "\n".join(f"- {link}" for link in explicit_wikilinks)
+    )

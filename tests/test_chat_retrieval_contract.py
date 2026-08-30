@@ -235,6 +235,26 @@ def test_selected_note_exposes_its_existing_wikilinks_without_inventing_targets(
     assert "[[> Reseña|materialistas]]" in prompt
 
 
+def test_relation_request_returns_verified_wikilinks_even_if_model_omits_them(grounded_service):
+    service, provider, _store = grounded_service
+    provider.response = "Resumen breve sin enlaces."
+
+    result = service.ask(
+        "Resume y señala relaciones y wikilinks útiles.",
+        {
+            "context_mode": "single_note",
+            "document_id": "note-pending",
+            "selected_note_title": "03 El loco",
+            "selected_note_markdown": "Véase [[01 Presentación|Chesterton]] y [[> Reseña|materialistas]].",
+        },
+    )
+
+    assert "Resumen breve sin enlaces." in result["text"]
+    assert "## Wikilinks verificados en la Nota" in result["text"]
+    assert "- [[01 Presentación|Chesterton]]" in result["text"]
+    assert "- [[> Reseña|materialistas]]" in result["text"]
+
+
 def test_selected_pending_notes_are_sent_together_to_the_local_model(grounded_service):
     service, provider, _store = grounded_service
 

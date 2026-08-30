@@ -275,6 +275,7 @@ def test_backend_get_health_does_not_update_ram_governor_last_decision(
 
 def test_backend_prepare_local_ai_starts_ollama_and_ensures_the_ram_model(temp_vault_path, monkeypatch):
     backend = FuenteConsoleBackend(temp_vault_path)
+    backend.config.anythingllm_url = ""
     calls: list[object] = []
 
     class Governor:
@@ -302,6 +303,7 @@ def test_backend_prepare_local_ai_starts_ollama_and_ensures_the_ram_model(temp_v
 
 def test_backend_prepare_local_ai_opens_the_official_ollama_installer_when_missing(temp_vault_path, monkeypatch):
     backend = FuenteConsoleBackend(temp_vault_path)
+    backend.config.anythingllm_url = ""
 
     class Governor:
         @staticmethod

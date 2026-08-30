@@ -5,7 +5,14 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from fuente.config import VaultConfig, AppConfig, save_config, load_config, DEFAULT_ATOMIC_NOTE_TEMPLATE
+from fuente.config import (
+    VaultConfig,
+    AppConfig,
+    save_config,
+    load_config,
+    DEFAULT_ATOMIC_NOTE_TEMPLATE,
+    DEFAULT_ANYTHINGLLM_URL,
+)
 from fuente.ram_governor.governor import RAMGovernor
 
 
@@ -34,8 +41,15 @@ class TestConfigPersistenceAndSettings(unittest.TestCase):
         self.assertEqual(cfg.resource_profile, "auto")
         self.assertEqual(cfg.audio_mode, "auto")
         self.assertIsNone(cfg.whisper_model_path)
-        self.assertEqual(cfg.anythingllm_url, "")
+        self.assertEqual(cfg.anythingllm_url, DEFAULT_ANYTHINGLLM_URL)
         self.assertEqual(cfg.anythingllm_workspace_slug, "fuente")
+
+    def test_legacy_empty_anythingllm_url_uses_the_local_default(self):
+        config = AppConfig.from_dict(
+            {"vault_path": str(self.vault_path), "anythingllm_url": ""}
+        )
+
+        self.assertEqual(config.anythingllm_url, DEFAULT_ANYTHINGLLM_URL)
 
     def test_save_and_load_custom_config(self):
         cfg = load_config(self.vault_path)

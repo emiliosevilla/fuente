@@ -223,7 +223,7 @@ class AppConfig:
     resource_profile: str = "auto"
     audio_mode: str = "auto"
     whisper_model_path: str | None = None
-    anythingllm_url: str = ""
+    anythingllm_url: str = DEFAULT_ANYTHINGLLM_URL
     anythingllm_workspace_slug: str = DEFAULT_ANYTHINGLLM_WORKSPACE
     anythingllm_api_key: str = ""
 
@@ -273,11 +273,11 @@ class AppConfig:
             if isinstance(raw_whisper_path, str) and raw_whisper_path.strip()
             else None
         )
-        raw_anything_url = data.get("anythingllm_url", "")
+        raw_anything_url = data.get("anythingllm_url", DEFAULT_ANYTHINGLLM_URL)
         anythingllm_url = (
             raw_anything_url.strip()
             if isinstance(raw_anything_url, str) and raw_anything_url.strip()
-            else ""
+            else DEFAULT_ANYTHINGLLM_URL
         )
         if anythingllm_url:
             try:

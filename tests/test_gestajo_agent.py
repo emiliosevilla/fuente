@@ -314,6 +314,12 @@ def test_flow_requires_management_and_never_returns_local_paths(tmp_path: Path):
                 "source_relative_path": "1_volcado/personal/03 El loco.md",
                 "stage": "stabilized", "status": "pending",
                 "error_code": "awaiting_transition_approval",
+            }, {
+                "job_id": "00000000-0000-0000-0000-000000000124",
+                "source_relative_path": "1_volcado/personal/Informe.pdf",
+                "clean_artifact": "3_capturado/Informe.md",
+                "stage": "saved_clean", "status": "pending",
+                "error_code": "awaiting_clean_approval",
             }],
         },
     )
@@ -325,6 +331,9 @@ def test_flow_requires_management_and_never_returns_local_paths(tmp_path: Path):
     assert flow["pending_approvals"] == [{
         "job_id": "00000000-0000-0000-0000-000000000123", "title": "03 El loco.md",
         "source_stage": "1_volcado", "target_stage": "2_copiado",
+    }]
+    assert flow["pending_reviews"] == [{
+        "job_id": "00000000-0000-0000-0000-000000000124", "title": "Informe.pdf",
     }]
     assert "/private/vault" not in str(flow)
 

@@ -1110,6 +1110,7 @@ def _flow_response(state: Mapping[str, object]) -> dict[str, object]:
         "quarantine": count(state.get("quarantine")),
         "queue": {"active": count(queue.get("active")), "waiting": count(queue.get("waiting"))},
         "pending_approvals": [_flow_approval_response(item) for item in approvals if isinstance(item, Mapping) and _flow_approval_response(item) is not None],
+        "pending_reviews": [_flow_review_summary(item) for item in approvals if isinstance(item, Mapping) and _flow_review_summary(item) is not None],
     }
 
 
@@ -1165,6 +1166,26 @@ def _flow_approval_response(job: Mapping[str, object]) -> dict[str, str] | None:
     if transition is None:
         return None
     return {"job_id": job_id, "title": PurePosixPath(safe_path).name, "source_stage": transition[0], "target_stage": transition[1]}
+
+
+def _flow_review_summary(job: Mapping[str, object]) -> dict[str, str] | None:
+    job_id = job.get("job_id")
+    source = _safe_sync_relative(job.get("source_relative_path"))
+    captured = _safe_sync_relative(job.get("clean_artifact"))
+    if (
+        not isinstance(job_id, str)
+        or source is None
+        or captured is None
+        or not captured.endswith(".md")
+        or job.get("stage") != "saved_clean"
+        or job.get("status") != "pending"
+        or job.get("error_code") != "awaiting_clean_approval"
+    ):
+        return None
+    try:
+        return {"job_id": str(uuid.UUID(job_id)), "title": PurePosixPath(source).name}
+    except ValueError:
+        return None
 
 
 def _flow_review_response(

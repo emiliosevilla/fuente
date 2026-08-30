@@ -875,6 +875,18 @@ class GestajoAgent:
         route = self._document_conflict_route(binding, org_id, conflict_id)
         if not isinstance(payload, Mapping) or set(payload) != {"winner"}:
             raise AgentError("document conflict resolution is invalid")
+        backend = self._local_backend()
+        connection = next(
+            (item for item in backend.sync_manager.load_connections() if item.connection_id == route["connection_id"]),
+            None,
+        )
+        if connection is None:
+            raise AgentError("sync connection is unavailable")
+        current_conflict = self._sync_conflict_metadata(
+            backend, connection, {"source_relative_path": route["relative_path"]}, binding, str(org_id),
+        )
+        if current_conflict is None or current_conflict["id"] != conflict_id:
+            raise AgentError("conflict has changed locally; reopen it before deciding")
         result = self.resolve_sync_conflict(access_token, org_id, {
             "connection_id": route["connection_id"], "relative_path": route["relative_path"], "winner": payload["winner"],
         })

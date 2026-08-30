@@ -1117,7 +1117,7 @@ def test_sync_conflict_reads_only_two_local_markdown_copies(tmp_path: Path):
         agent.read_sync_conflict("token-a", "00000000-0000-0000-0000-000000000001", {"connection_id": connection.connection_id, "relative_path": "../secret.md"})
 
 
-def test_document_conflict_route_keeps_paths_local_and_opens_the_existing_comparison(tmp_path: Path):
+def test_document_conflict_route_keeps_paths_local_and_opens_the_existing_comparison(tmp_path: Path, monkeypatch):
     conflict_id = "00000000-0000-0000-0000-000000000020"
     connection = ConnectedFolder("sharepoint_mount", str(tmp_path / "sharepoint"), "Compartidos", True)
     shared = tmp_path / "5_compartido"
@@ -1150,6 +1150,11 @@ def test_document_conflict_route_keeps_paths_local_and_opens_the_existing_compar
 
     assert result == {"relative_path": "nota.md", "vault_markdown": "# Vault", "shared_markdown": "# Compartida"}
     assert str(tmp_path) not in str(result)
+    monkeypatch.setattr(agent, "_sync_conflict_metadata", lambda *_args: {"id": "00000000-0000-0000-0000-000000000021"})
+    with pytest.raises(AgentError, match="changed locally"):
+        agent.resolve_document_conflict(
+            "token-a", "00000000-0000-0000-0000-000000000001", conflict_id, {"winner": "vault"},
+        )
     store.close()
 
 

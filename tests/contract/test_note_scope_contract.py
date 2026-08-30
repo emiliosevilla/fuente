@@ -102,6 +102,16 @@ def test_drag_target_changes_note_status_and_records_history(bridge_backend):
     assert entry["seal"] == "in_review"
 
 
+def test_drag_target_cannot_bypass_processed_output_approval(bridge_backend):
+    bridge, _backend, document_id, note_path = _seed_themed_issue_note(bridge_backend)
+
+    result = bridge.move_notes_to_status([document_id], "approved")
+
+    assert result["error"] == "note_status_change_failed"
+    metadata, _body = parse_frontmatter(note_path.read_text(encoding="utf-8"))
+    assert metadata["status"] == "pending_review"
+
+
 def test_bridge_approval_changes_state_and_history(bridge_backend):
     bridge, _backend, document_id, note_path = _seed_themed_issue_note(bridge_backend)
     revision = bridge.get_note_metadata(document_id)["revision"]

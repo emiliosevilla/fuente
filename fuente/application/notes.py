@@ -626,8 +626,10 @@ class NotesApplicationService:
             for document_id in document_ids
         ):
             raise ValueError("document_ids is invalid")
-        if target_status not in {"pending_review", "in_review", "approved"}:
-            raise ValueError("target_status is invalid")
+        if target_status not in {"pending_review", "in_review"}:
+            raise ValueError(
+                "approved status requires approve_processed_output"
+            )
 
         moved: list[dict[str, Any]] = []
         errors: list[dict[str, str]] = []

@@ -1356,9 +1356,18 @@ class GestajoAgent:
     def ask_knowledge_assistant(self, access_token: object, org_id: object, payload: object) -> dict[str, object]:
         """Run the existing local retrieval assistant over this user's Knowledge Base."""
         binding = self._require_management(access_token, org_id)
+        message, document_ids = _knowledge_assistant_payload(payload)
+        context: dict[str, object] = {"context_mode": "all_notes"}
+        session_scope = "all"
+        if document_ids:
+            visible_ids = self._visible_note_ids_reader(binding, self._access_token(access_token), org_id)
+            if not set(document_ids).issubset(visible_ids):
+                raise AgentAuthorizationError("selected note is not available")
+            context = {"context_mode": "multiple_notes", "document_ids": document_ids}
+            session_scope = ",".join(document_ids)
+        context["session_id"] = f"gestajo-kb:{binding.user_id}:{org_id}:{session_scope}"
         answer = _assistant_response(self._local_backend().process_chat(
-            _note_assistant_payload(payload),
-            {"context_mode": "all_notes", "session_id": f"gestajo-kb:{binding.user_id}:{org_id}"},
+            message, context,
         ))
         self._record_audit(binding, self._access_token(access_token), _new_audit_event(
             None, org_id, org_id, binding.user_id, "knowledge_assistant_ask",
@@ -2466,6 +2475,20 @@ def _note_assistant_payload(payload: object) -> str:
     if not isinstance(message, str) or not 1 <= len(message.strip()) <= 16_000:
         raise AgentError("assistant message is invalid")
     return message.strip()
+
+
+def _knowledge_assistant_payload(payload: object) -> tuple[str, list[str]]:
+    if not isinstance(payload, Mapping) or set(payload) - {"message", "document_ids"} or "message" not in payload:
+        raise AgentError("assistant payload has unsupported fields")
+    message = _note_assistant_payload({"message": payload.get("message")})
+    raw_ids = payload.get("document_ids", [])
+    if not isinstance(raw_ids, list) or len(raw_ids) > 24:
+        raise AgentError("assistant document_ids are invalid")
+    try:
+        document_ids = sorted({str(uuid.UUID(str(note_id))) for note_id in raw_ids})
+    except (ValueError, TypeError) as error:
+        raise AgentError("assistant document_ids are invalid") from error
+    return message, document_ids
 
 
 def _assistant_note_create_payload(payload: object) -> tuple[str, str, str, str]:

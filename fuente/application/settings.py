@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
+import os
 from pathlib import Path
 import re
 from typing import Callable, Iterable
@@ -51,6 +52,27 @@ def _validate_tiny_cpu_path(path: str | None) -> str:
             "whisper_model_path must point to an existing local directory or file"
         )
     return str(candidate.resolve())
+
+
+def discover_local_tiny_whisper_model() -> Path | None:
+    """Return an already-downloaded Faster Whisper tiny model, never downloading."""
+    cache_root = Path(
+        os.environ.get("HF_HUB_CACHE")
+        or os.environ.get("HUGGINGFACE_HUB_CACHE")
+        or Path.home() / ".cache" / "huggingface" / "hub"
+    )
+    snapshots = cache_root / "models--Systran--faster-whisper-tiny" / "snapshots"
+    try:
+        candidates = [
+            model.parent
+            for model in snapshots.glob("*/model.bin")
+            if (model.parent / "config.json").is_file()
+        ]
+    except OSError:
+        return None
+    if not candidates:
+        return None
+    return max(candidates, key=lambda candidate: candidate.stat().st_mtime)
 
 
 def _validated_anythingllm_workspace(value: object) -> str:
@@ -198,6 +220,9 @@ class SettingsService:
             else whisper_model_path
         )
         if selected_audio_mode == "tiny_cpu":
+            if selected_whisper_path is None:
+                detected_model = discover_local_tiny_whisper_model()
+                selected_whisper_path = str(detected_model) if detected_model else None
             selected_whisper_path = _validate_tiny_cpu_path(selected_whisper_path)
 
         raw_anything_url = self.config.anythingllm_url if anythingllm_url is None else anythingllm_url

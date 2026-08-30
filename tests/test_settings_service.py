@@ -162,6 +162,23 @@ def test_settings_service_persists_runtime_policy_settings(temp_vault_path, tmp_
     assert reloaded.whisper_model_path == str(whisper_dir.resolve())
 
 
+def test_settings_service_detects_the_existing_tiny_whisper_model(
+    temp_vault_path, tmp_path, monkeypatch
+):
+    whisper_dir = tmp_path / "tiny"
+    whisper_dir.mkdir()
+    (whisper_dir / "model.bin").write_bytes(b"local model")
+    (whisper_dir / "config.json").write_text("{}", encoding="utf-8")
+    monkeypatch.setattr(
+        "fuente.application.settings.discover_local_tiny_whisper_model",
+        lambda: whisper_dir,
+    )
+
+    result = SettingsService(load_config(temp_vault_path)).apply(audio_mode="tiny_cpu")
+
+    assert result.config.whisper_model_path == str(whisper_dir.resolve())
+
+
 @pytest.mark.parametrize(
     ("field", "value"),
     [("resource_profile", "unknown"), ("audio_mode", "unknown")],

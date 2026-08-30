@@ -98,9 +98,48 @@ def test_status_requires_the_bound_user(tmp_path: Path):
     )
 
     assert agent.status("token-a")["claimed"] is True
-    assert agent.status("token-a")["capabilities"] == ["flow", "flow_import", "flow_approve", "flow_jobs", "flow_job_detail", "flow_job_resume", "flow_job_cancel", "flow_review", "flow_review_captured", "flow_review_source_preview", "flow_discard", "quarantine_read", "quarantine_restore", "settings", "sync_inputs", "sync_run", "sync_output", "sync_conflict_read", "sync_conflict_resolve", "document_conflict_read", "document_conflict_resolve", "taxonomy_read", "taxonomy_write", "note_read", "note_search", "note_relations", "note_lineage", "note_export", "note_write", "note_theme", "note_merge", "note_approve_processed", "note_share", "note_assistant", "note_assistant_persist", "knowledge_assistant", "templates_read", "templates_write"]
+    assert agent.status("token-a")["capabilities"] == ["flow", "flow_import", "flow_approve", "flow_jobs", "flow_job_detail", "flow_job_resume", "flow_job_cancel", "flow_review", "flow_review_captured", "flow_review_source_preview", "flow_discard", "quarantine_read", "quarantine_restore", "settings", "sync_inputs", "sync_run", "sync_output", "sync_conflict_read", "sync_conflict_resolve", "document_conflict_read", "document_conflict_resolve", "taxonomy_read", "taxonomy_write", "note_read", "note_search", "note_relations", "note_lineage", "note_export", "note_write", "note_create", "note_theme", "note_merge", "note_approve_processed", "note_share", "note_assistant", "note_assistant_persist", "knowledge_assistant", "templates_read", "templates_write"]
     with pytest.raises(AgentAuthenticationError, match="another user"):
         agent.status("token-b")
+
+
+def test_management_creates_a_private_manual_note_without_exposing_its_path(tmp_path: Path):
+    org_id = "00000000-0000-0000-0000-000000000001"
+    created_id = "00000000-0000-0000-0000-000000000010"
+    published: list[dict[str, object]] = []
+
+    class Backend:
+        @staticmethod
+        def create_manual_note(title, body_markdown):
+            assert (title, body_markdown) == ("Nueva Nota", "# Nueva Nota\n")
+            return {
+                "document_id": created_id, "revision": 1, "content_hash": "a" * 64,
+                "title": title, "path": "/private/vault/4_procesado/Nueva Nota.md",
+            }
+
+    class Outbox:
+        @staticmethod
+        def get_note(note_id):
+            assert note_id == created_id
+            return {"note_type": "manual", "status": "pending_review", "theme": "General", "issue": "_Sin_Cuestion"}
+
+        @staticmethod
+        def delete_document_outbox(_outbox_id):
+            return None
+
+    agent = GestajoAgent(
+        tmp_path, verifier=_verifier, publisher=_publisher, management_verifier=_management_verifier,
+        membership_verifier=_management_verifier, backend_factory=lambda _vault: Backend(),
+        note_metadata_publisher=lambda _binding, _token, metadata: published.append(dict(metadata)),
+        audit_publisher=lambda *_args: None, outbox_factory=lambda _vault: Outbox(),
+    )
+    agent.claim("token-a", {"supabase_url": "https://project.supabase.co", "publishable_key": "sb_publishable_test_key"})
+
+    result = agent.create_manual_note("token-a", org_id, {"title": "Nueva Nota", "body_markdown": "# Nueva Nota\n"})
+
+    assert result == {"document_id": created_id, "revision": 1, "content_hash": "a" * 64, "title": "Nueva Nota", "sync_state": "synced"}
+    assert published[0]["visibility"] == "private"
+    assert "/private" not in str(result)
 
 
 def test_second_user_cannot_claim_bound_vault(tmp_path: Path):

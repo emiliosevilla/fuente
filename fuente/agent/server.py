@@ -519,7 +519,7 @@ class GestajoAgent:
             "platform": platform.system(),
             "user_id": binding.user_id,
             "vault_fingerprint": self._vault_fingerprint(),
-            "capabilities": ["flow", "flow_import", "flow_approve", "flow_jobs", "flow_job_detail", "flow_job_resume", "flow_job_cancel", "flow_review", "flow_review_captured", "flow_review_source_preview", "flow_discard", "quarantine_read", "quarantine_restore", "settings", "sync_inputs", "sync_run", "sync_output", "sync_conflict_read", "sync_conflict_resolve", "document_conflict_read", "document_conflict_resolve", "taxonomy_read", "taxonomy_write", "note_read", "note_search", "note_relations", "note_lineage", "note_export", "note_write", "note_theme", "note_merge", "note_approve_processed", "note_share", "note_assistant", "note_assistant_persist", "knowledge_assistant", "templates_read", "templates_write"],
+            "capabilities": ["flow", "flow_import", "flow_approve", "flow_jobs", "flow_job_detail", "flow_job_resume", "flow_job_cancel", "flow_review", "flow_review_captured", "flow_review_source_preview", "flow_discard", "quarantine_read", "quarantine_restore", "settings", "sync_inputs", "sync_run", "sync_output", "sync_conflict_read", "sync_conflict_resolve", "document_conflict_read", "document_conflict_resolve", "taxonomy_read", "taxonomy_write", "note_read", "note_search", "note_relations", "note_lineage", "note_export", "note_write", "note_create", "note_theme", "note_merge", "note_approve_processed", "note_share", "note_assistant", "note_assistant_persist", "knowledge_assistant", "templates_read", "templates_write"],
         }
 
     def taxonomy(self, access_token: object, org_id: object) -> dict[str, object]:
@@ -1292,6 +1292,29 @@ class GestajoAgent:
         ))
         return {**local, "sync_state": sync_state}
 
+    def create_manual_note(self, access_token: object, org_id: object, payload: object) -> dict[str, object]:
+        binding = self._require_management(access_token, org_id)
+        title, body_markdown = _manual_note_create_payload(payload)
+        local = _note_create_response(self._local_backend().create_manual_note(title, body_markdown))
+        created_note_id = str(local["document_id"])
+        metadata = _document_note_sync_payload(
+            local, self._document_outbox().get_note(created_note_id) or {}, binding, str(org_id),
+        )
+        try:
+            self._note_metadata_publisher(binding, self._access_token(access_token), metadata)
+            self._document_outbox().delete_document_outbox(_metadata_outbox_id(created_note_id))
+            sync_state = "synced"
+        except AgentSyncError:
+            self._document_outbox().upsert_document_outbox(
+                outbox_id=_metadata_outbox_id(created_note_id), kind="note_metadata", payload=metadata,
+            )
+            sync_state = "pending_sync"
+        self._record_audit(binding, self._access_token(access_token), _new_audit_event(
+            created_note_id, str(org_id), str(uuid.UUID(str(org_id))), binding.user_id,
+            "note_manual_create", sync_state,
+        ))
+        return {**local, "sync_state": sync_state}
+
     def ask_knowledge_assistant(self, access_token: object, org_id: object, payload: object) -> dict[str, object]:
         """Run the existing local retrieval assistant over this user's Knowledge Base."""
         binding = self._require_management(access_token, org_id)
@@ -1725,6 +1748,7 @@ def _handler_for(agent: GestajoAgent) -> type[BaseHTTPRequestHandler]:
             is_note_processed_approval = note_route.endswith("/approve-processed") and bool(note_route.removesuffix("/approve-processed")) and "/" not in note_route.removesuffix("/approve-processed")
             is_note_theme = note_route.endswith("/theme") and bool(note_route.removesuffix("/theme")) and "/" not in note_route.removesuffix("/theme")
             is_note_merge = parsed.path == "/v1/notes/merge"
+            is_note_create = parsed.path == "/v1/notes/create"
             is_note_update = bool(note_route) and "/" not in note_route and not is_note_merge
             is_knowledge_assistant = parsed.path == "/v1/knowledge-assistant"
             flow_job_route = parsed.path.removeprefix("/v1/flow/jobs/") if parsed.path.startswith("/v1/flow/jobs/") else ""
@@ -1755,6 +1779,9 @@ def _handler_for(agent: GestajoAgent) -> type[BaseHTTPRequestHandler]:
                 return
             if parsed.path == "/v1/sync":
                 self._authorized(lambda token: agent.sync_pending(token, _single_query_value(parsed.query, "org_id")))
+                return
+            if is_note_create:
+                self._authorized(lambda token: agent.create_manual_note(token, _single_query_value(parsed.query, "org_id"), payload))
                 return
             if is_note_merge:
                 self._authorized(lambda token: agent.merge_notes(
@@ -2350,6 +2377,18 @@ def _assistant_note_create_payload(payload: object) -> tuple[str, str, str, str]
     ):
         raise AgentError("assistant note payload is invalid")
     return title.strip(), kind, body_markdown, model.strip()
+
+
+def _manual_note_create_payload(payload: object) -> tuple[str, str]:
+    if not isinstance(payload, Mapping) or set(payload) != {"title", "body_markdown"}:
+        raise AgentError("manual note payload has unsupported fields")
+    title, body_markdown = payload.get("title"), payload.get("body_markdown")
+    if (
+        not isinstance(title, str) or not 1 <= len(title.strip()) <= 200 or "\x00" in title
+        or not isinstance(body_markdown, str) or len(body_markdown) > 100_000 or "\x00" in body_markdown
+    ):
+        raise AgentError("manual note payload is invalid")
+    return title.strip(), body_markdown.rstrip() + "\n"
 
 
 def _assistant_response(value: object) -> dict[str, object]:

@@ -139,7 +139,7 @@ class NotesApplicationService:
             raise OutputApprovalRequiredError(note.document_id)
         self.require_eligible_origins(
             note,
-            requires_origins=note.note_type != "original",
+            requires_origins=note.note_type not in {"original", "manual"},
         )
 
     def approve_processed_output(
@@ -156,7 +156,7 @@ class NotesApplicationService:
             content_hash = self._current_processed_hash(note, path)
             if note.revision != expected_revision:
                 raise NoteRevisionConflictError(note.document_id)
-            self.require_eligible_origins(note, requires_origins=note.note_type != "original")
+            self.require_eligible_origins(note, requires_origins=note.note_type not in {"original", "manual"})
             return self.approval_service.approve_processed(
                 note.document_id,
                 expected_revision,
@@ -174,7 +174,7 @@ class NotesApplicationService:
             if not path.resolve().is_relative_to(self.vault.processed_dir.resolve()):
                 raise OutputApprovalRequiredError(note.document_id)
             content_hash = self._current_processed_hash(note, path)
-            self.require_eligible_origins(note, requires_origins=note.note_type != "original")
+            self.require_eligible_origins(note, requires_origins=note.note_type not in {"original", "manual"})
             if not self.approval_service.is_processed_current(
                 note.document_id, note.revision, content_hash
             ):
@@ -548,6 +548,48 @@ class NotesApplicationService:
                     theme=self.vault.active_theme,
                     issue="_Sin_Cuestion",
                     status="pending_review",
+                )
+            except BaseException:
+                path.unlink(missing_ok=True)
+                raise
+        return created
+
+    def create_manual_note(self, *, title: str, body_markdown: str) -> NoteDocument:
+        """Create a local note authored directly in Gestajo."""
+        if (
+            not isinstance(title, str)
+            or not 1 <= len(title.strip()) <= 200
+            or "\x00" in title
+            or not isinstance(body_markdown, str)
+            or len(body_markdown) > 100_000
+            or "\x00" in body_markdown
+        ):
+            raise ValueError("manual note payload is invalid")
+        path = self.vault.atomic_note_path(f"manual-{uuid.uuid4().hex}", "_Sin_Cuestion")
+        relative_path = path.resolve().relative_to(self.vault.config.vault_path.resolve()).as_posix()
+        document_id = document_id_for_relative_path(relative_path)
+        metadata = {
+            "schema_version": 3,
+            "note_id": document_id,
+            "note_type": "manual",
+            "title": title.strip(),
+            "date": time.strftime("%Y-%m-%d"),
+            "author": "Gestajo",
+            "tags": ["manual"],
+            "issue": "_Sin_Cuestion",
+            "status": "pending_review",
+            "origins": [],
+            "history": [{"date": time.strftime("%Y-%m-%d %H:%M:%S"), "action": "manual_note_created"}],
+        }
+        markdown = serialize_human_frontmatter(metadata) + body_markdown.rstrip() + "\n"
+        created = NoteDocument.from_persisted(document_id=document_id, relative_path=relative_path, markdown=markdown, revision=1)
+        with document_file_lock(self.vault.config.vault_path / ".fuente" / "note-editor-locks", document_id):
+            atomic_write_text(path, markdown)
+            try:
+                self.job_store.register_note(
+                    note_id=document_id, relative_path=relative_path, content_hash=created.content_hash,
+                    note_type="manual", origin_kind=None, theme=self.vault.active_theme,
+                    issue="_Sin_Cuestion", status="pending_review",
                 )
             except BaseException:
                 path.unlink(missing_ok=True)

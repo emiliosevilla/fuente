@@ -142,6 +142,52 @@ def test_management_creates_a_private_manual_note_without_exposing_its_path(tmp_
     assert "/private" not in str(result)
 
 
+def test_management_creates_a_note_with_the_selected_source_template(tmp_path: Path):
+    org_id = "00000000-0000-0000-0000-000000000001"
+    created_id = "00000000-0000-0000-0000-000000000012"
+    published: list[dict[str, object]] = []
+
+    class Backend:
+        @staticmethod
+        def load_template(template_id):
+            assert template_id == "reunion"
+            return {"template_id": template_id}
+
+        @staticmethod
+        def create_manual_note(title, body_markdown, note_type):
+            assert (title, body_markdown, note_type) == (
+                "Acta de reunión", "# Reunión\n\n## Acuerdos\n", "reunion",
+            )
+            return {
+                "document_id": created_id, "revision": 1, "content_hash": "a" * 64,
+                "title": title, "path": "/private/vault/4_procesado/Acta de reunión.md",
+            }
+
+    class Outbox:
+        @staticmethod
+        def get_note(note_id):
+            assert note_id == created_id
+            return {"note_type": "reunion", "status": "pending_review", "theme": "General", "issue": "_Sin_Cuestion"}
+
+        @staticmethod
+        def delete_document_outbox(_outbox_id):
+            return None
+
+    agent = GestajoAgent(
+        tmp_path, verifier=_verifier, publisher=_publisher, management_verifier=_management_verifier,
+        membership_verifier=_management_verifier, backend_factory=lambda _vault: Backend(),
+        note_metadata_publisher=lambda _binding, _token, metadata: published.append(dict(metadata)),
+        audit_publisher=lambda *_args: None, outbox_factory=lambda _vault: Outbox(),
+    )
+    agent.claim("token-a", {"supabase_url": "https://project.supabase.co", "publishable_key": "sb_publishable_test_key"})
+
+    agent.create_manual_note("token-a", org_id, {
+        "title": "Acta de reunión", "body_markdown": "# Reunión\n\n## Acuerdos\n", "template_id": "reunion",
+    })
+
+    assert published[0]["note_type"] == "reunion"
+
+
 def test_second_user_cannot_claim_bound_vault(tmp_path: Path):
     agent = GestajoAgent(tmp_path, verifier=_verifier, publisher=_publisher, management_verifier=_management_verifier)
     payload = {"supabase_url": "https://project.supabase.co", "publishable_key": "sb_publishable_test_key"}

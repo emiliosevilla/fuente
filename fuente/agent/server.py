@@ -1379,8 +1379,17 @@ class GestajoAgent:
 
     def create_manual_note(self, access_token: object, org_id: object, payload: object) -> dict[str, object]:
         binding = self._require_management(access_token, org_id)
-        title, body_markdown = _manual_note_create_payload(payload)
-        local = _note_create_response(self._local_backend().create_manual_note(title, body_markdown))
+        title, body_markdown, note_type = _manual_note_create_payload(payload)
+        backend = self._local_backend()
+        if note_type != "manual":
+            template = backend.load_template(note_type)
+            if not isinstance(template, Mapping) or template.get("error"):
+                raise AgentError(str(template.get("message") or template.get("error") or "selected template is unavailable"))
+        local = _note_create_response(
+            backend.create_manual_note(title, body_markdown)
+            if note_type == "manual"
+            else backend.create_manual_note(title, body_markdown, note_type)
+        )
         created_note_id = str(local["document_id"])
         metadata = _document_note_sync_payload(
             local, self._document_outbox().get_note(created_note_id) or {}, binding, str(org_id),
@@ -2587,16 +2596,16 @@ def _assistant_note_create_payload(payload: object) -> tuple[str, str, str, str]
     return title.strip(), kind, body_markdown, model.strip()
 
 
-def _manual_note_create_payload(payload: object) -> tuple[str, str]:
-    if not isinstance(payload, Mapping) or set(payload) != {"title", "body_markdown"}:
+def _manual_note_create_payload(payload: object) -> tuple[str, str, str]:
+    if not isinstance(payload, Mapping) or set(payload) not in ({"title", "body_markdown"}, {"title", "body_markdown", "template_id"}):
         raise AgentError("manual note payload has unsupported fields")
-    title, body_markdown = payload.get("title"), payload.get("body_markdown")
+    title, body_markdown, template_id = payload.get("title"), payload.get("body_markdown"), payload.get("template_id")
     if (
         not isinstance(title, str) or not 1 <= len(title.strip()) <= 200 or "\x00" in title
         or not isinstance(body_markdown, str) or len(body_markdown) > 100_000 or "\x00" in body_markdown
     ):
         raise AgentError("manual note payload is invalid")
-    return title.strip(), body_markdown.rstrip() + "\n"
+    return title.strip(), body_markdown.rstrip() + "\n", "manual" if template_id is None else _template_id(template_id)
 
 
 def _assistant_response(value: object) -> dict[str, object]:

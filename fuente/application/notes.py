@@ -554,7 +554,7 @@ class NotesApplicationService:
                 raise
         return created
 
-    def create_manual_note(self, *, title: str, body_markdown: str) -> NoteDocument:
+    def create_manual_note(self, *, title: str, body_markdown: str, note_type: str = "manual") -> NoteDocument:
         """Create a local note authored directly in Gestajo."""
         if (
             not isinstance(title, str)
@@ -563,19 +563,23 @@ class NotesApplicationService:
             or not isinstance(body_markdown, str)
             or len(body_markdown) > 100_000
             or "\x00" in body_markdown
+            or not isinstance(note_type, str)
+            or not 1 <= len(note_type.strip()) <= 64
+            or not note_type.replace("_", "").replace("-", "").isalnum()
         ):
             raise ValueError("manual note payload is invalid")
+        note_type = note_type.strip()
         path = self.vault.atomic_note_path(f"manual-{uuid.uuid4().hex}", "_Sin_Cuestion")
         relative_path = path.resolve().relative_to(self.vault.config.vault_path.resolve()).as_posix()
         document_id = document_id_for_relative_path(relative_path)
         metadata = {
             "schema_version": 3,
             "note_id": document_id,
-            "note_type": "manual",
+            "note_type": note_type,
             "title": title.strip(),
             "date": time.strftime("%Y-%m-%d"),
             "author": "Gestajo",
-            "tags": ["manual"],
+            "tags": ["manual", note_type],
             "issue": "_Sin_Cuestion",
             "status": "pending_review",
             "origins": [],
@@ -588,7 +592,7 @@ class NotesApplicationService:
             try:
                 self.job_store.register_note(
                     note_id=document_id, relative_path=relative_path, content_hash=created.content_hash,
-                    note_type="manual", origin_kind=None, theme=self.vault.active_theme,
+                    note_type=note_type, origin_kind=None, theme=self.vault.active_theme,
                     issue="_Sin_Cuestion", status="pending_review",
                 )
             except BaseException:

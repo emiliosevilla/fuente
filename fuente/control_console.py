@@ -886,9 +886,9 @@ class FuenteConsoleBackend:
             "path": note.relative_path,
         }
 
-    def create_manual_note(self, title: str, body_markdown: str) -> Dict[str, Any]:
+    def create_manual_note(self, title: str, body_markdown: str, note_type: str = "manual") -> Dict[str, Any]:
         try:
-            note = self.get_notes_service().create_manual_note(title=title, body_markdown=body_markdown)
+            note = self.get_notes_service().create_manual_note(title=title, body_markdown=body_markdown, note_type=note_type)
         except PathAuthorizationError as error:
             return self._path_error(error)
         except (TypeError, ValueError, OSError) as error:

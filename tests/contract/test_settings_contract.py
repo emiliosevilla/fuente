@@ -248,12 +248,18 @@ def test_bridge_get_settings_info_reflects_persisted_values(temp_vault_path):
             "ollama_url": "http://localhost:11434",
         }
     )
+    backend.ram_governor.recommend_model_decision = lambda: SimpleNamespace(
+        allowed=True, model_id="qwen2.5:0.5b", available_gb=1.6
+    )
 
     info = bridge.get_settings_info()
 
     assert info["current_model"] == "llama3.2"
     assert info["ollama_url"] == "http://localhost:11434"
     assert info["ram_margin"] == "30%"
+    assert info["ram_governor"] == {
+        "recommended_model": "qwen2.5:0.5b", "available_gb": 1.6
+    }
     assert info["allow_non_loopback_ollama"] is False
 
 

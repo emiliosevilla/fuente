@@ -1664,6 +1664,7 @@ def test_settings_returns_safe_suggestions_to_consulta_and_writes_only_for_manag
                 "models": ["qwen2.5:14b"], "models_measured": True,
                 "current_model": "qwen2.5:14b", "ram_margin": "30%",
                 "ram_recommended_model": "qwen2.5:14b", "ai_provider": "ollama",
+                "ram_governor": {"recommended_model": "qwen2.5:14b", "available_gb": 5.4},
                 "anythingllm_url": "", "anythingllm_workspace_slug": "fuente",
                 "resource_profile": "auto", "audio_mode": "auto",
                 "offline_mode": {"is_local_only": True, "label": "Solo local", "ollama_url": "http://127.0.0.1:11434"},
@@ -1680,6 +1681,7 @@ def test_settings_returns_safe_suggestions_to_consulta_and_writes_only_for_manag
     assert settings["can_edit"] is False
     assert settings["ram_margin_pct"] == 0.3
     assert settings["ram_recommended_model"] == "qwen2.5:14b"
+    assert settings["ram_governor"] == {"recommended_model": "qwen2.5:14b", "available_gb": 5.4}
     assert settings["ai_provider"] == "ollama"
     assert settings["anythingllm_url"] == ""
     assert settings["anythingllm_workspace_slug"] == "fuente"

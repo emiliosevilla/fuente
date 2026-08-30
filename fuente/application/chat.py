@@ -391,6 +391,10 @@ class ChatApplicationService:
             for _note_id, _title, body in selected_notes
             for match in re.finditer(r"\[\[[^\]\n]+\]\]", body)
         })
+        related_wikilinks = _related_wikilink_candidates(
+            sources,
+            {note_id for note_id, _title, _body in selected_notes},
+        ) if _RELATION_REQUEST.search(query) else []
         if has_context and evidence:
             wikilink_instruction = ""
             if explicit_wikilinks:
@@ -399,6 +403,12 @@ class ChatApplicationService:
                     + "\n".join(f"- `{link}`" for link in explicit_wikilinks)
                     + "\nSi propones wikilinks, usa únicamente estos destinos "
                     "exactos y no inventes otros."
+                )
+            if related_wikilinks:
+                wikilink_instruction += (
+                    "\n\nNotas recuperadas disponibles para enlazar:\n"
+                    + "\n".join(f"- `{link}`" for link in related_wikilinks)
+                    + "\nÚsalas sólo como propuestas y explica el nexo respaldado por la evidencia."
                 )
             user_prompt = (
                 "Contexto recuperado (evidencia):\n"
@@ -521,7 +531,9 @@ class ChatApplicationService:
             )
 
         return self._result(
-            text=_append_verified_wikilinks(answer, query, explicit_wikilinks),
+            text=_append_verified_wikilinks(
+                answer, query, explicit_wikilinks, related_wikilinks,
+            ),
             sources=sources,
             retrieval_mode=retrieval_mode,
             has_context=has_context,
@@ -624,12 +636,34 @@ def _append_verified_wikilinks(
     answer: str,
     query: str,
     explicit_wikilinks: list[str],
+    related_wikilinks: list[str],
 ) -> str:
     """Keep the link inventory factual even when a small local model is not."""
-    if not explicit_wikilinks or not _RELATION_REQUEST.search(query):
+    if not _RELATION_REQUEST.search(query):
         return answer
-    return (
-        f"{answer.rstrip()}\n\n"
-        "## Wikilinks verificados en la Nota\n"
-        + "\n".join(f"- {link}" for link in explicit_wikilinks)
-    )
+    sections = [answer.rstrip()]
+    if explicit_wikilinks:
+        sections.append(
+            "## Wikilinks verificados en la Nota\n"
+            + "\n".join(f"- {link}" for link in explicit_wikilinks)
+        )
+    if related_wikilinks:
+        sections.append(
+            "## Wikilinks disponibles para la relación\n"
+            + "\n".join(f"- {link}" for link in related_wikilinks)
+        )
+    return "\n\n".join(sections)
+
+
+def _related_wikilink_candidates(
+    sources: list[Mapping[str, Any]], selected_note_ids: set[str],
+) -> list[str]:
+    """Return exact, authorized note titles that are safe to render as wikilinks."""
+    candidates = set()
+    for source in sources:
+        if str(source.get("document_id") or "") in selected_note_ids:
+            continue
+        title = str(source.get("title") or "").strip()
+        if title and not any(character in title for character in "[]|\r\n"):
+            candidates.add(f"[[{title}]]")
+    return sorted(candidates)

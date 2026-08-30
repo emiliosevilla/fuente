@@ -46,7 +46,7 @@ def test_list_templates_recovers_when_lifecycle_cleared_job_store(temp_vault_pat
     result = FuentePyWebViewApi(backend).list_templates()
     assert "error" not in result
     assert {template["template_id"] for template in result["templates"]} == {
-        "resumen", "propiedades", "contexto", "concepto", "tareas",
+        "apunte", "diario", "resumen", "propiedades", "contexto", "concepto", "tareas",
         "reunion", "objetivos", "decision", "conclusion",
     }
 
@@ -68,7 +68,7 @@ def test_bridge_lists_hidden_templates(temp_vault_path):
     result = bridge.list_templates()
     assert "error" not in result
     assert {template["template_id"] for template in result["templates"]} == {
-        "resumen", "propiedades", "contexto", "concepto", "tareas",
+        "apunte", "diario", "resumen", "propiedades", "contexto", "concepto", "tareas",
         "reunion", "objetivos", "decision", "conclusion",
     }
 

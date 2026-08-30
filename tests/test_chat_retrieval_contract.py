@@ -274,6 +274,27 @@ def test_relation_request_adds_only_authorized_related_note_evidence(grounded_se
     assert "Notas relacionadas recuperadas" in provider.calls[-1]["prompt"]
 
 
+def test_relation_request_exposes_only_retrieved_note_titles_as_wikilink_candidates(grounded_service):
+    service, provider, _store = grounded_service
+    provider.response = "## Relaciones\n\nHay una relación laboral relevante."
+
+    result = service.ask(
+        "Resume y señala relaciones y wikilinks útiles.",
+        {
+            "context_mode": "single_note",
+            "document_id": "note-pending",
+            "selected_note_title": "Informe pendiente",
+            "selected_note_markdown": "El despido improcedente genera salarios de tramitación.",
+            "related_document_ids": ["note-laboral", "note-pending"],
+        },
+    )
+
+    assert "Notas recuperadas disponibles para enlazar" in provider.calls[-1]["prompt"]
+    assert "## Wikilinks disponibles para la relación" in result["text"]
+    assert "- [[despido]]" in result["text"]
+    assert "[[Informe pendiente]]" not in result["text"]
+
+
 def test_selected_note_passes_its_local_type_instructions_to_the_model(grounded_service):
     service, provider, _store = grounded_service
 

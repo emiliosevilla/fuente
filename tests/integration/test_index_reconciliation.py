@@ -1,7 +1,7 @@
 """Index reconciliation through the real ingestion pipeline (Task 8.2)."""
 from __future__ import annotations
 
-from fuente.application.ingestion import document_id_for_source
+from fuente.application.ingestion import CHUNK_ARTIFACT_KIND, document_id_for_source
 
 from tests.integration.conftest import (
     ScriptedChunker,
@@ -53,7 +53,7 @@ def test_reindex_with_fewer_chunks_removes_stale_vectors(temp_vault_path):
         chunk_ids = {
             a["artifact_id"]
             for a in artifacts
-            if a["kind"] == "minirag_chunk"
+            if a["kind"] == CHUNK_ARTIFACT_KIND
         }
         assert chunk_ids == harness.chroma.chunk_ids()
     finally:

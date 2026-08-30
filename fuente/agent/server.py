@@ -2770,12 +2770,18 @@ def _settings_response(state: Mapping[str, object], role: str) -> dict[str, obje
     settings = state.get("settings") if isinstance(state.get("settings"), Mapping) else {}
     sync = state.get("sync_inputs") if isinstance(state.get("sync_inputs"), Mapping) else {}
     inputs = sync.get("inputs") if isinstance(sync.get("inputs"), list) else []
+    ram_governor = settings.get("ram_governor") if isinstance(settings.get("ram_governor"), Mapping) else {}
+    available_gb = ram_governor.get("available_gb")
     return {
         "can_edit": role in {"gestion", "admin"},
         "models": [item for item in settings.get("models", []) if isinstance(item, str)],
         "models_measured": settings.get("models_measured") is True,
         "current_model": settings.get("current_model") if isinstance(settings.get("current_model"), str) else None,
         "ram_recommended_model": settings.get("ram_recommended_model") if isinstance(settings.get("ram_recommended_model"), str) else None,
+        "ram_governor": {
+            "recommended_model": ram_governor.get("recommended_model") if isinstance(ram_governor.get("recommended_model"), str) else None,
+            "available_gb": available_gb if isinstance(available_gb, (int, float)) and not isinstance(available_gb, bool) else None,
+        },
         "ai_provider": settings.get("ai_provider") if settings.get("ai_provider") in {"ollama", "anythingllm"} else "ollama",
         "anythingllm_url": settings.get("anythingllm_url") if isinstance(settings.get("anythingllm_url"), str) else "",
         "anythingllm_workspace_slug": settings.get("anythingllm_workspace_slug") if isinstance(settings.get("anythingllm_workspace_slug"), str) else "fuente",

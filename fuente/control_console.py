@@ -2199,9 +2199,8 @@ class FuenteConsoleBackend:
                 pass
 
         configured_model = self.config.custom_model_override
-        recommended_model = (
-            None if configured_model else self.ram_governor.recommend_model() or None
-        )
+        ram_decision = self.ram_governor.recommend_model_decision()
+        recommended_model = None if configured_model else (ram_decision.model_id if ram_decision.allowed else None)
         return {
             "vault_path": str(self.vault_path),
             "output_connected_folders": connected_output,
@@ -2209,6 +2208,10 @@ class FuenteConsoleBackend:
             "models_measured": self._ollama_models_measured,
             "current_model": configured_model,
             "ram_recommended_model": recommended_model,
+            "ram_governor": {
+                "recommended_model": ram_decision.model_id if ram_decision.allowed else None,
+                "available_gb": ram_decision.available_gb,
+            },
             "ai_provider": "ollama",
             "anythingllm_url": "",
             "anythingllm_workspace_slug": "",

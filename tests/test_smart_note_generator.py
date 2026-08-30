@@ -187,6 +187,30 @@ def test_processing_uses_the_ram_governor_selected_model(smart_harness):
     assert calls == ["qwen2.5:7b"]
 
 
+def test_processing_sends_the_local_note_type_instructions_to_the_model(smart_harness):
+    source = _source_with_concepts(smart_harness, "ebitda")
+    _approve_transition(smart_harness, source)
+    bundle = smart_harness["generator"].templates.load("resumen")
+    smart_harness["generator"].templates.save(
+        "resumen", bundle.template, "INSTRUCCION LOCAL DE RESUMEN", bundle.revision,
+    )
+    prompts: list[str] = []
+
+    class Client:
+        def chat(self, *, session_id, prompt, model):
+            prompts.append(prompt)
+            return {"text": '{"resumen":"x","propiedades":"x","contexto":"x","tareas":"x","reunion":"x","objetivos":"x","decision":"x","conclusion":"x","concepts":[],"concept_bodies":{}}'}
+
+    smart_harness["generator"].chat_client = Client()
+    smart_harness["generator"].generate(
+        source["note_id"], source["revision"], source["content_hash"]
+    )
+
+    assert "# Instrucciones por tipo de nota" in prompts[0]
+    assert "## resumen\nINSTRUCCION LOCAL DE RESUMEN" in prompts[0]
+    assert "## concepto" in prompts[0]
+
+
 def test_generation_blocked_without_transition_approval(smart_harness):
     source = _source_with_concepts(smart_harness, "ebitda", approve_transition=False)
     with pytest.raises(OutputApprovalRequiredError):

@@ -1003,8 +1003,7 @@ class GestajoAgent:
         return self.settings(access_token, org_id)
 
     def list_templates(self, access_token: object, org_id: object) -> dict[str, object]:
-        binding = self._require_user(access_token)
-        self._membership_verifier(binding, self._access_token(access_token), org_id)
+        binding = self._require_management(access_token, org_id)
         result = _template_list_response(self._local_backend().list_templates())
         self._record_audit(binding, self._access_token(access_token), _new_audit_event(
             None, str(org_id), str(uuid.UUID(str(org_id))), binding.user_id, "template_list", "success",
@@ -1012,8 +1011,7 @@ class GestajoAgent:
         return result
 
     def read_template(self, access_token: object, org_id: object, template_id: object) -> dict[str, object]:
-        binding = self._require_user(access_token)
-        self._membership_verifier(binding, self._access_token(access_token), org_id)
+        binding = self._require_management(access_token, org_id)
         result = _template_response(self._local_backend().load_template(_template_id(template_id)))
         self._record_audit(binding, self._access_token(access_token), _new_audit_event(
             None, str(org_id), str(uuid.UUID(str(org_id))), binding.user_id, "template_read", "success",
@@ -1030,6 +1028,17 @@ class GestajoAgent:
         result = _template_response(self._local_backend().save_template({"template_id": template_id, **payload}))
         self._record_audit(binding, self._access_token(access_token), _new_audit_event(
             None, str(org_id), str(uuid.UUID(str(org_id))), binding.user_id, "template_update", "success",
+        ))
+        return result
+
+    def restore_template_agents(self, access_token: object, org_id: object, template_id: object, payload: object) -> dict[str, object]:
+        binding = self._require_management(access_token, org_id)
+        template_id = _template_id(template_id)
+        if not isinstance(payload, Mapping) or set(payload) != {"expected_revision"} or not isinstance(payload["expected_revision"], int):
+            raise AgentError("template restore payload is invalid")
+        result = _template_response(self._local_backend().restore_template_agents(template_id, int(payload["expected_revision"])))
+        self._record_audit(binding, self._access_token(access_token), _new_audit_event(
+            None, str(org_id), str(uuid.UUID(str(org_id))), binding.user_id, "template_restore_instructions", "success",
         ))
         return result
 
@@ -1932,11 +1941,14 @@ def _handler_for(agent: GestajoAgent) -> type[BaseHTTPRequestHandler]:
             review_parts = review_route.split("/") if review_route else []
             is_review_captured_update = len(review_parts) == 2 and bool(review_parts[0]) and review_parts[1] == "captured"
             is_review_captured_assistant = len(review_parts) == 3 and bool(review_parts[0]) and review_parts[1:] == ["captured", "assistant"]
-            template_id = parsed.path.removeprefix("/v1/templates/") if parsed.path.startswith("/v1/templates/") else ""
-            is_template_save = bool(template_id) and "/" not in template_id
+            template_route = parsed.path.removeprefix("/v1/templates/") if parsed.path.startswith("/v1/templates/") else ""
+            template_parts = template_route.split("/") if template_route else []
+            template_id = template_parts[0] if template_parts else ""
+            is_template_save = len(template_parts) == 1 and bool(template_id)
+            is_template_restore_agents = len(template_parts) == 2 and bool(template_id) and template_parts[1] == "restore-instructions"
             conflict_route = parsed.path.removeprefix("/v1/document-conflicts/") if parsed.path.startswith("/v1/document-conflicts/") else ""
             is_document_conflict_resolve = conflict_route.endswith("/resolve") and bool(conflict_route.removesuffix("/resolve")) and "/" not in conflict_route.removesuffix("/resolve")
-            if not (is_note_merge or is_note_update or is_note_share or is_note_assistant or is_note_assistant_output or is_note_processed_approval or is_note_theme or is_knowledge_assistant or is_local_ai_prepare or is_flow_job_resume or is_flow_job_cancel or is_review_captured_update or is_review_captured_assistant or is_template_save or is_document_conflict_resolve) and parsed.path not in {
+            if not (is_note_merge or is_note_update or is_note_share or is_note_assistant or is_note_assistant_output or is_note_processed_approval or is_note_theme or is_knowledge_assistant or is_local_ai_prepare or is_flow_job_resume or is_flow_job_cancel or is_review_captured_update or is_review_captured_assistant or is_template_save or is_template_restore_agents or is_document_conflict_resolve) and parsed.path not in {
                 "/v1/claim", "/v1/flow/import", "/v1/flow/approve", "/v1/flow/discard", "/v1/settings", "/v1/sync-inputs/select", "/v1/sync-inputs/run", "/v1/sync-outputs/run", "/v1/sync-conflicts/read", "/v1/sync-conflicts/resolve",
                 "/v1/sync-inputs/confirm", "/v1/sync-inputs/enabled", "/v1/sync-inputs/remove", "/v1/sync", "/v1/taxonomy/themes", "/v1/taxonomy/issues", "/v1/quarantine/restore", "/v1/update",
             }:
@@ -1979,6 +1991,9 @@ def _handler_for(agent: GestajoAgent) -> type[BaseHTTPRequestHandler]:
                 return
             if is_template_save:
                 self._authorized(lambda token: agent.save_template(token, _single_query_value(parsed.query, "org_id"), template_id, payload))
+                return
+            if is_template_restore_agents:
+                self._authorized(lambda token: agent.restore_template_agents(token, _single_query_value(parsed.query, "org_id"), template_id, payload))
                 return
             if is_note_share:
                 self._authorized(lambda token: agent.share_note(token, _single_query_value(parsed.query, "org_id"), note_route.removesuffix("/share"), payload))

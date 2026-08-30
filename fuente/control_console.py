@@ -2290,6 +2290,12 @@ class FuenteConsoleBackend:
         except (PathAuthorizationError, TemplateRevisionConflictError, TemplateValidationError) as error:
             return {"error": error.code, "message": str(error)}
 
+    def restore_template_agents(self, template_id: str, expected_revision: int) -> Dict[str, Any]:
+        try:
+            return self._template_registry().restore_agents(template_id, expected_revision).to_dict()
+        except (PathAuthorizationError, TemplateRevisionConflictError, TemplateValidationError) as error:
+            return {"error": error.code, "message": str(error)}
+
     def preview_template(self, template: str, agents: str) -> Dict[str, Any]:
         try:
             return self._template_registry().preview(template, agents)

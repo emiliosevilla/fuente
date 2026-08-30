@@ -209,6 +209,17 @@ class TemplateRegistry:
             expected_revision=int(expected_revision),
         )
 
+    def restore_agents(self, template_id: str, expected_revision: int) -> TemplateBundle:
+        """Restore only the packaged AGENTS.md, preserving the Markdown template."""
+        bundle = self.load(template_id)
+        _, packaged_agents = self._packaged_content(bundle.template_id)
+        return self.save(
+            bundle.template_id,
+            bundle.template,
+            packaged_agents,
+            expected_revision=int(expected_revision),
+        )
+
     def preview(self, template: str, agents: str) -> dict[str, str]:
         self._validate_variables(template)
         sample = {name: f"[{name}]" for name in sorted(ALLOWED_TEMPLATE_VARIABLES)}

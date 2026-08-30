@@ -276,7 +276,7 @@ def test_management_restores_quarantine_by_opaque_id_without_routes(tmp_path: Pa
     assert agent.restore_quarantine("token-a", org_id, {"quarantine_id": quarantine_id, "issue": "_Sin_Cuestion"}) == {"quarantine_id": quarantine_id, "status": "restored"}
 
 
-def test_templates_are_readable_but_only_management_can_write(tmp_path: Path):
+def test_templates_are_available_only_to_management(tmp_path: Path):
     calls: list[dict[str, object]] = []
 
     class Backend:
@@ -293,6 +293,11 @@ def test_templates_are_readable_but_only_management_can_write(tmp_path: Path):
             calls.append(payload)
             return {"template_id": payload["template_id"], "revision": 3, "template": payload["template"], "agents": payload["agents"]}
 
+        @staticmethod
+        def restore_template_agents(template_id, expected_revision):
+            assert (template_id, expected_revision) == ("resumen", 3)
+            return {"template_id": template_id, "revision": 4, "template": "x", "agents": "Instrucciones por defecto"}
+
     audits: list[dict[str, object]] = []
     agent = GestajoAgent(tmp_path, verifier=_verifier, publisher=_publisher, management_verifier=_management_verifier, membership_verifier=_management_verifier, backend_factory=lambda _vault: Backend(), audit_publisher=lambda _binding, _token, event: audits.append(event))
     agent.claim("token-a", {"supabase_url": "https://project.supabase.co", "publishable_key": "sb_publishable_test_key"})
@@ -300,8 +305,17 @@ def test_templates_are_readable_but_only_management_can_write(tmp_path: Path):
     assert agent.list_templates("token-a", "00000000-0000-0000-0000-000000000001") == {"templates": [{"template_id": "resumen", "label": "Resumen", "revision": 2}]}
     assert agent.read_template("token-a", "00000000-0000-0000-0000-000000000001", "resumen") == {"template_id": "resumen", "revision": 2, "template": "# Resumen", "agents": "Resume"}
     assert agent.save_template("token-a", "00000000-0000-0000-0000-000000000001", "resumen", {"template": "x", "agents": "x", "expected_revision": 2}) == {"template_id": "resumen", "revision": 3, "template": "x", "agents": "x"}
+    assert agent.restore_template_agents("token-a", "00000000-0000-0000-0000-000000000001", "resumen", {"expected_revision": 3}) == {"template_id": "resumen", "revision": 4, "template": "x", "agents": "Instrucciones por defecto"}
     assert calls == [{"template_id": "resumen", "template": "x", "agents": "x", "expected_revision": 2}]
-    assert [event["action"] for event in audits] == ["template_list", "template_read", "template_update"]
+    assert [event["action"] for event in audits] == ["template_list", "template_read", "template_update", "template_restore_instructions"]
+
+    consulta_agent = GestajoAgent(
+        tmp_path / "consulta", verifier=_verifier, publisher=_publisher,
+        membership_verifier=_membership_verifier, backend_factory=lambda _vault: Backend(),
+    )
+    consulta_agent.claim("token-a", {"supabase_url": "https://project.supabase.co", "publishable_key": "sb_publishable_test_key"})
+    with pytest.raises(AgentAuthorizationError, match="gestion or admin"):
+        consulta_agent.list_templates("token-a", "00000000-0000-0000-0000-000000000001")
 
 
 def test_note_lineage_exposes_only_safe_processing_metadata(tmp_path: Path):

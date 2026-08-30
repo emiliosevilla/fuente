@@ -116,6 +116,22 @@ def test_restore_packaged_resource(registry):
     assert restored.revision == edited.revision + 1
 
 
+def test_restore_agents_preserves_the_markdown_template(registry):
+    bundle = registry.load("resumen")
+    edited = registry.save(
+        "resumen",
+        bundle.template + "\n\nEncabezado local.",
+        "Instrucción local.",
+        expected_revision=bundle.revision,
+    )
+
+    restored = registry.restore_agents("resumen", expected_revision=edited.revision)
+
+    assert restored.template == edited.template
+    assert restored.agents == edited.packaged_agents
+    assert restored.revision == edited.revision + 1
+
+
 def test_create_new_template_type(registry):
     created = registry.save(
         "briefing",

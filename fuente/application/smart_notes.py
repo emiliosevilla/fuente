@@ -374,12 +374,19 @@ class SmartNoteGenerator:
         self, body: str, origin: OriginRef, source_wikilink: str, model: str
     ) -> dict[str, Any]:
         prompt = (
-            "Genera notas procesadas en JSON con claves resumen, propiedades, "
-            "contexto, tareas, reunion, objetivos, decision, conclusion, concepts (lista de slugs) y "
-            "concept_bodies (mapa slug->markdown). Conserva sólo hechos de la "
-            "fuente; en tareas no inventes responsables y en reunion separa "
-            "acuerdos de pendientes.\n\n"
-            f"Fuente: {origin.path}\n{body}"
+            "Eres Fuente, un agente local que compila una fuente capturada y aprobada "
+            "en notas Markdown trazables. La fuente es canónica: no la modifiques ni "
+            "atribuyas datos que no contiene. Conserva sólo hechos verificables; marca "
+            "las ausencias como 'No consta'. No inventes personas, fechas, decisiones, "
+            "enlaces ni wikilinks. Si hay ambigüedad, exprésala como duda.\n\n"
+            "Devuelve únicamente un objeto JSON válido, sin bloques de código, con las "
+            "claves resumen, propiedades, contexto, tareas, reunion, objetivos, decision, "
+            "conclusion, concepts (lista de slugs) y concept_bodies (mapa slug->markdown). "
+            "Cada valor de nota debe seguir exclusivamente su sección de instrucciones. "
+            "Los conceptos deben ser atómicos y no duplicar equivalentes.\n\n"
+            "# Instrucciones por tipo de nota\n\n"
+            f"{self._agent_instructions()}\n\n"
+            f"# Fuente aprobada\nRuta relativa: {origin.path}\nEnlace al origen: {source_wikilink}\n\n{body}"
         )
         response = self.chat_client.chat(
             session_id=f"smart-notes:{origin.note_id}",
@@ -406,6 +413,12 @@ class SmartNoteGenerator:
             "concepts": extract_concept_slugs(body),
             "concept_bodies": {},
         }
+
+    def _agent_instructions(self) -> str:
+        return "\n\n".join(
+            f"## {template_id}\n{self.templates.load(template_id).agents.strip()}"
+            for template_id in (*_REQUIRED_FIXED, "concepto")
+        )
 
     def _planned_note(
         self,

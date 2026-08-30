@@ -436,6 +436,59 @@ def test_management_can_approve_copied_content_for_capture(tmp_path: Path):
     ]
 
 
+def test_management_can_approve_captured_content_for_local_processing(tmp_path: Path):
+    job_id = "00000000-0000-0000-0000-000000000126"
+    captured = tmp_path / "3_capturado" / "03 El loco.md"
+    captured.parent.mkdir()
+    captured.write_text("# Capturado", encoding="utf-8")
+    calls: list[tuple[object, ...]] = []
+
+    class Approvals:
+        def begin_review(self, *args, **kwargs):
+            calls.append(("begin_review", *args, kwargs["reviewer"]))
+
+        def approve(self, *args, **kwargs):
+            calls.append(("approve", *args, kwargs["reviewer"]))
+
+    class Ingestion:
+        transition_approvals = Approvals()
+
+        def resume(self, value):
+            calls.append(("resume", value))
+
+    class Backend:
+        vault = type("Vault", (), {
+            "config": type("Config", (), {"vault_path": tmp_path})(),
+            "calculate_file_hash": staticmethod(lambda _path: "c" * 64),
+        })()
+
+        def get_job_detail(self, value):
+            assert value == job_id
+            return {"job": {
+                "job_id": job_id, "stage": "saved_clean", "status": "pending",
+                "error_code": "awaiting_clean_approval", "clean_artifact": "3_capturado/03 El loco.md",
+            }}
+
+        def get_job_control_service(self):
+            return type("Control", (), {"ingestion": Ingestion()})()
+
+    agent = GestajoAgent(
+        tmp_path, verifier=_verifier, publisher=_publisher,
+        management_verifier=_management_verifier, backend_factory=lambda _vault: Backend(),
+        flow_reader=lambda _vault: {"steps": {}, "seals": {}, "queue": {}, "pending_approvals": []},
+        audit_publisher=lambda *_args: None,
+    )
+    agent.claim("token-a", {"supabase_url": "https://project.supabase.co", "publishable_key": "sb_publishable_test_key"})
+
+    agent.approve_flow_transition("token-a", "00000000-0000-0000-0000-000000000001", {"job_id": job_id})
+
+    assert calls == [
+        ("begin_review", job_id, "3_capturado", "4_procesado", 1, "c" * 64, USER_A),
+        ("approve", job_id, "3_capturado", "4_procesado", 1, "c" * 64, USER_A),
+        ("resume", job_id),
+    ]
+
+
 def test_management_can_read_captured_review_without_local_paths(tmp_path: Path):
     job_id = "00000000-0000-0000-0000-000000000125"
     captured_id = document_id_for_relative_path("3_capturado/03 El loco.md")

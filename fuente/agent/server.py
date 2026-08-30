@@ -1109,7 +1109,13 @@ def _flow_response(state: Mapping[str, object]) -> dict[str, object]:
         "seals": {str(name): count(value) for name, value in seals.items()},
         "quarantine": count(state.get("quarantine")),
         "queue": {"active": count(queue.get("active")), "waiting": count(queue.get("waiting"))},
-        "pending_approvals": [_flow_approval_response(item) for item in approvals if isinstance(item, Mapping) and _flow_approval_response(item) is not None],
+        "pending_approvals": [
+            _flow_approval_response(item)
+            for item in approvals
+            if isinstance(item, Mapping)
+            and _flow_review_summary(item) is None
+            and _flow_approval_response(item) is not None
+        ],
         "pending_reviews": [_flow_review_summary(item) for item in approvals if isinstance(item, Mapping) and _flow_review_summary(item) is not None],
     }
 
@@ -1130,6 +1136,8 @@ def _flow_approval_transition(job: Mapping[str, object], job_id: str) -> tuple[s
         return "1_volcado", "2_copiado"
     if job.get("error_code") == "awaiting_transition_approval" and job.get("stage") == "extracted":
         return "2_copiado", "3_capturado"
+    if job.get("error_code") == "awaiting_clean_approval" and job.get("stage") == "saved_clean":
+        return "3_capturado", "4_procesado"
     return None
 
 
@@ -1138,10 +1146,12 @@ def _flow_approval_hash(backend: Any, job: Mapping[str, object], source_stage: s
         content_hash = job.get("source_hash")
         if isinstance(content_hash, str) and len(content_hash) == 64:
             return content_hash
-    if source_stage == "2_copiado":
-        relative_path = _safe_sync_relative(job.get("dirty_artifact"))
+    if source_stage in {"2_copiado", "3_capturado"}:
+        artifact = "dirty_artifact" if source_stage == "2_copiado" else "clean_artifact"
+        relative_path = _safe_sync_relative(job.get(artifact))
         vault_root = Path(backend.vault.config.vault_path).resolve()
-        if relative_path is not None:
+        expected_root = source_stage
+        if relative_path is not None and relative_path.startswith(f"{expected_root}/"):
             path = (vault_root / relative_path).resolve()
             if path.is_relative_to(vault_root) and path.is_file():
                 content_hash = backend.vault.calculate_file_hash(path)

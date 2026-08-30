@@ -204,6 +204,9 @@ def test_model_install_skipped_when_already_present(install_ctx):
 
 
 def test_start_anythingllm_opens_the_installed_desktop_app_and_waits_for_its_api():
+    def unavailable():
+        raise RuntimeError("AnythingLLM is not started")
+
     with patch("fuente.installer_contract.sys.platform", "darwin"), patch(
         "fuente.installer_contract.shutil.which", return_value=None
     ), patch("fuente.installer_contract.Path.exists", return_value=True), patch(
@@ -211,7 +214,7 @@ def test_start_anythingllm_opens_the_installed_desktop_app_and_waits_for_its_api
     ) as launch, patch(
         "fuente.installer_contract.wait_for_local_service_ready", return_value=True
     ) as wait:
-        assert start_anythingllm_service(lambda: False) is True
+        assert start_anythingllm_service(unavailable) is True
 
     launch.assert_called_once_with(
         ["open", "-a", "AnythingLLM"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL

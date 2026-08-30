@@ -356,7 +356,11 @@ def wait_for_local_service_ready(
 ) -> bool:
     deadline = time.monotonic() + timeout_sec
     while time.monotonic() < deadline:
-        if is_ready():
+        try:
+            ready = bool(is_ready())
+        except Exception:
+            ready = False
+        if ready:
             return True
         time.sleep(poll_sec)
     return False
@@ -364,7 +368,11 @@ def wait_for_local_service_ready(
 
 def start_anythingllm_service(is_ready: Callable[[], bool]) -> bool:
     """Start an installed AnythingLLM desktop app and wait for its local API."""
-    if is_ready():
+    try:
+        already_ready = bool(is_ready())
+    except Exception:
+        already_ready = False
+    if already_ready:
         return True
     command = _anythingllm_launch_command()
     if command is None:

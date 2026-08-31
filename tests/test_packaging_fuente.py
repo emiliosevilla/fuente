@@ -108,3 +108,4 @@ def test_tagged_build_publishes_both_native_installers_as_a_release() -> None:
     assert "actions/download-artifact@v4" in workflow
     assert "contents: write" in workflow
     assert 'gh release create "$GITHUB_REF_NAME" --verify-tag --generate-notes dist/*' in workflow
+    assert "actions/checkout@v4" in workflow.split("  release:", 1)[1]

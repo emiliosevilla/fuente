@@ -103,6 +103,14 @@ fuente --install-gestajo-agent
 fuente --serve-gestajo-agent --vault /ruta/al/Vault
 ```
 
+En Windows, si Gestajo no encuentra el agente, descarga automáticamente el
+paquete de la última release de Fuente. Extrae el ZIP y ejecuta
+`Instalar_Fuente_para_Gestajo.cmd`: prepara el certificado local, registra
+`fuente://` para ese usuario y deja el agente en segundo plano. El navegador
+no puede ejecutar un binario descargado por sí mismo. El mismo agente acepta
+`http://localhost:3000`, las vistas previas de desarrollo autorizadas y
+`https://gestajo.vercel.app`.
+
 ## Arquitectura
 
 ```text

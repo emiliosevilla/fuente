@@ -18,6 +18,7 @@ RUNTIME_EXCLUDED_DIRS = {
     "4_salida", "1_volcado", "2_copiado", "3_capturado", "4_procesado",
     "5_compartido", ".fuente", "venv",
 }
+GESTAJO_AGENT_INSTALL_URL = "fuente://gestajo-agent/install"
 
 
 def distribution_bundle(dist_dir: Path, platform_name: str | None = None) -> tuple[Path, str]:
@@ -118,6 +119,18 @@ exec /usr/bin/open "$APP_PATH"
         encoding="utf-8",
     )
     launcher.chmod(0o755)
+    return launcher
+
+
+def write_windows_agent_launcher(app_bundle: Path) -> Path:
+    """Add the explicit first-run launcher required by Windows browsers."""
+    launcher = app_bundle / "Instalar_Fuente_para_Gestajo.cmd"
+    launcher.write_text(
+        "@echo off\r\n"
+        "setlocal\r\n"
+        'start "" "%~dp0Fuente.exe" "' + GESTAJO_AGENT_INSTALL_URL + '"\r\n',
+        encoding="utf-8",
+    )
     return launcher
 
 
@@ -261,6 +274,7 @@ def build():
         ], cwd=dist_dir)
         dmg_path = create_macos_dmg(dist_dir, app_bundle, launcher)
     else:
+        write_windows_agent_launcher(app_bundle)
         with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
             add_dir_to_zip(zf, app_bundle, archive_root)
 

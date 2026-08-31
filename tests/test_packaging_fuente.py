@@ -3,7 +3,7 @@ from __future__ import annotations
 import tomllib
 from pathlib import Path
 
-from build_installer import distribution_bundle
+from build_installer import GESTAJO_AGENT_INSTALL_URL, distribution_bundle, write_windows_agent_launcher
 
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -88,6 +88,17 @@ def test_macos_gui_binary_does_not_open_terminal() -> None:
 def test_distribution_uses_the_native_directory_on_macos_and_windows(tmp_path) -> None:
     assert distribution_bundle(tmp_path, "darwin") == (tmp_path / "Fuente.app", "Fuente.app")
     assert distribution_bundle(tmp_path, "win32") == (tmp_path / "Fuente", "Fuente")
+
+
+def test_windows_distribution_includes_a_launcher_for_the_gestajo_agent(tmp_path) -> None:
+    launcher = write_windows_agent_launcher(tmp_path)
+
+    assert launcher.name == "Instalar_Fuente_para_Gestajo.cmd"
+    assert launcher.read_text(encoding="utf-8") == (
+        "@echo off\n"
+        "setlocal\n"
+        f'start "" "%~dp0Fuente.exe" "{GESTAJO_AGENT_INSTALL_URL}"\n'
+    )
 
 
 def test_tagged_build_publishes_both_native_installers_as_a_release() -> None:

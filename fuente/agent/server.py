@@ -3048,9 +3048,18 @@ def _note_response(value: Mapping[str, object], note_id: str) -> dict[str, objec
     revision = value.get("revision")
     title = value.get("title")
     body = value.get("body_markdown")
+    status = value.get("status")
     if document_id != note_id or not isinstance(revision, int) or revision < 1 or not isinstance(title, str) or not isinstance(body, str):
         raise AgentError("local note has an invalid contract")
-    return {"document_id": document_id, "revision": revision, "title": title, "body_markdown": body}
+    if status is not None and not isinstance(status, str):
+        raise AgentError("local note has an invalid contract")
+    return {
+        "document_id": document_id,
+        "revision": revision,
+        "title": title,
+        "body_markdown": body,
+        **({"status": status} if status is not None else {}),
+    }
 
 
 def _note_search_request(mode: object, query: object) -> tuple[str, str]:

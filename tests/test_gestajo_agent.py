@@ -2131,7 +2131,7 @@ def test_note_read_checks_rls_before_returning_markdown_and_never_returns_paths(
         audit_publisher=lambda _binding, _token, event: audits.append(event),
         note_reader=lambda _vault, received_id: {
             "document_id": received_id, "revision": 2, "title": "Nota segura",
-            "body_markdown": "# Nota segura", "path": "/private/vault/nota.md", "html": "<h1>Nota segura</h1>",
+            "body_markdown": "# Nota segura", "status": "approved", "path": "/private/vault/nota.md", "html": "<h1>Nota segura</h1>",
         },
     )
     agent.claim("token-a", {"supabase_url": "https://project.supabase.co", "publishable_key": "sb_publishable_test_key"})
@@ -2139,7 +2139,7 @@ def test_note_read_checks_rls_before_returning_markdown_and_never_returns_paths(
     note = agent.read_note("token-a", "00000000-0000-0000-0000-000000000001", note_id)
 
     assert checked == [(USER_A, "token-a", note_id)]
-    assert note == {"document_id": note_id, "revision": 2, "title": "Nota segura", "body_markdown": "# Nota segura"}
+    assert note == {"document_id": note_id, "revision": 2, "title": "Nota segura", "body_markdown": "# Nota segura", "status": "approved"}
     assert "/private" not in str(note)
     assert {key: audits[0][key] for key in ("note_id", "org_id", "common_org_id", "actor_user_id", "action", "llm_model", "result")} == {
         "note_id": note_id, "org_id": "00000000-0000-0000-0000-000000000001",

@@ -109,7 +109,7 @@ def test_status_requires_the_bound_user(tmp_path: Path):
     )
 
     assert agent.status("token-a")["claimed"] is True
-    assert agent.status("token-a")["capabilities"] == ["flow", "flow_import", "flow_approve", "flow_jobs", "flow_job_detail", "flow_job_resume", "flow_job_cancel", "flow_review", "flow_review_captured", "flow_review_source_preview", "flow_discard", "quarantine_read", "quarantine_restore", "settings", "sync_inputs", "sync_run", "sync_output", "sync_conflict_read", "sync_conflict_resolve", "document_conflict_read", "document_conflict_resolve", "local_ai_prepare", "agent_update", "taxonomy_read", "taxonomy_write", "note_read", "note_search", "note_feed", "note_relations", "note_graph", "note_lineage", "note_export", "note_write", "note_create", "note_theme", "note_merge", "note_approve_processed", "note_share", "note_assistant", "note_assistant_persist", "knowledge_assistant", "templates_read", "templates_write"]
+    assert agent.status("token-a")["capabilities"] == ["flow", "flow_import", "flow_approve", "flow_jobs", "flow_job_detail", "flow_job_resume", "flow_job_cancel", "flow_review", "flow_review_captured", "flow_review_source_preview", "flow_review_source_open", "flow_discard", "quarantine_read", "quarantine_restore", "settings", "sync_inputs", "sync_run", "sync_output", "sync_conflict_read", "sync_conflict_resolve", "document_conflict_read", "document_conflict_resolve", "local_ai_prepare", "agent_update", "taxonomy_read", "taxonomy_write", "note_read", "note_search", "note_feed", "note_relations", "note_graph", "note_lineage", "note_export", "note_write", "note_create", "note_theme", "note_merge", "note_approve_processed", "note_share", "note_assistant", "note_assistant_persist", "knowledge_assistant", "templates_read", "templates_write"]
     with pytest.raises(AgentAuthenticationError, match="another user"):
         agent.status("token-b")
 
@@ -851,6 +851,10 @@ def test_publish_note_metadata_accepts_an_already_registered_note_after_retry(mo
 
 
 def test_flow_requires_management_and_never_returns_local_paths(tmp_path: Path):
+    (tmp_path / "1_volcado/personal").mkdir(parents=True)
+    (tmp_path / "1_volcado/personal/03 El loco.md").write_bytes(b"abc")
+    (tmp_path / "3_capturado").mkdir()
+    (tmp_path / "3_capturado/Informe.md").write_bytes(b"captured")
     agent = GestajoAgent(
         tmp_path, verifier=_verifier, publisher=_publisher,
         management_verifier=_management_verifier,
@@ -864,12 +868,14 @@ def test_flow_requires_management_and_never_returns_local_paths(tmp_path: Path):
                 "source_relative_path": "1_volcado/personal/03 El loco.md",
                 "stage": "stabilized", "status": "pending",
                 "error_code": "awaiting_transition_approval",
+                "created_at": "2026-08-30T09:00:00Z", "updated_at": "2026-08-30T10:00:00Z",
             }, {
                 "job_id": "00000000-0000-0000-0000-000000000124",
                 "source_relative_path": "1_volcado/personal/Informe.pdf",
                 "clean_artifact": "3_capturado/Informe.md",
                 "stage": "saved_clean", "status": "pending",
                 "error_code": "awaiting_clean_approval",
+                "created_at": "2026-08-30T08:00:00Z", "updated_at": "2026-08-30T11:00:00Z",
             }],
         },
     )
@@ -881,9 +887,12 @@ def test_flow_requires_management_and_never_returns_local_paths(tmp_path: Path):
     assert flow["pending_approvals"] == [{
         "job_id": "00000000-0000-0000-0000-000000000123", "title": "03 El loco.md",
         "source_stage": "1_volcado", "target_stage": "2_copiado",
+        "created_at": "2026-08-30T09:00:00Z", "updated_at": "2026-08-30T10:00:00Z", "size_bytes": 3,
     }]
     assert flow["pending_reviews"] == [{
         "job_id": "00000000-0000-0000-0000-000000000124", "title": "Informe.pdf",
+        "source_stage": "3_capturado", "target_stage": "4_procesado",
+        "created_at": "2026-08-30T08:00:00Z", "updated_at": "2026-08-30T11:00:00Z", "size_bytes": 8,
     }]
     assert "/private/vault" not in str(flow)
 
@@ -1156,6 +1165,7 @@ def test_management_can_read_captured_review_without_local_paths(tmp_path: Path)
             assert value == job_id
             return {"job": {
                 "job_id": job_id,
+                "stage": "saved_clean", "status": "pending", "error_code": "awaiting_clean_approval",
                 "source_relative_path": "1_volcado/03 El loco.docx",
                 "dirty_artifact": "2_copiado/03 El loco.docx",
                 "clean_artifact": "3_capturado/03 El loco.md",
@@ -1177,9 +1187,11 @@ def test_management_can_read_captured_review_without_local_paths(tmp_path: Path)
     preview = agent.read_flow_review_source_preview("token-a", "00000000-0000-0000-0000-000000000001", job_id)
 
     assert review == {
-        "job_id": job_id,
-        "title": "03 El loco.docx",
-        "source": {"filename": "03 El loco.docx", "media_type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "size_bytes": copied.stat().st_size},
+        "job_id": job_id, "title": "03 El loco.docx",
+        "source_stage": "3_capturado", "target_stage": "4_procesado",
+        "previous": {"filename": "03 El loco.docx", "media_type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "size_bytes": copied.stat().st_size, "stage": "2_copiado"},
+        "current": {"filename": "03 El loco.md", "media_type": "text/markdown; charset=utf-8", "size_bytes": captured.stat().st_size, "stage": "3_capturado"},
+        "source": {"filename": "03 El loco.docx", "media_type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "size_bytes": copied.stat().st_size, "stage": "2_copiado"},
         "captured": {
             "document_id": captured_id,
             "revision": 4,
@@ -1211,6 +1223,94 @@ def test_management_can_read_captured_review_without_local_paths(tmp_path: Path)
         server.shutdown()
         server.server_close()
         thread.join(timeout=2)
+
+
+def test_management_can_compare_copied_content_with_its_previous_stage(tmp_path: Path):
+    job_id = "00000000-0000-0000-0000-000000000126"
+    original = tmp_path / "1_volcado" / "Acta.md"
+    copied = tmp_path / "2_copiado" / "Acta.md"
+    original.parent.mkdir()
+    copied.parent.mkdir()
+    original.write_text("# Original", encoding="utf-8")
+    copied.write_text("# Copia", encoding="utf-8")
+
+    class Vault:
+        config = type("Config", (), {"vault_path": tmp_path})()
+
+        @staticmethod
+        def path_resolver():
+            class Resolver:
+                @staticmethod
+                def resolve(relative_path, *, root_name):
+                    assert root_name == "vault"
+                    return tmp_path / relative_path
+
+            return Resolver()
+
+    opened_files: list[str] = []
+
+    class Backend:
+        vault = Vault()
+
+        @staticmethod
+        def get_job_detail(value):
+            assert value == job_id
+            return {"job": {
+                "job_id": job_id, "stage": "extracted", "status": "pending",
+                "error_code": "awaiting_transition_approval",
+                "source_relative_path": "1_volcado/Acta.md",
+                "dirty_artifact": "2_copiado/Acta.md",
+            }}
+
+        @staticmethod
+        def open_file_natively(file_identity):
+            opened_files.append(file_identity)
+            return {"status": "opened", "file_id": file_identity}
+
+    agent = GestajoAgent(
+        tmp_path, verifier=_verifier, publisher=_publisher,
+        management_verifier=_management_verifier, membership_verifier=lambda *_args: "gestion",
+        backend_factory=lambda _vault: Backend(),
+        audit_publisher=lambda *_args: None,
+    )
+    agent.claim("token-a", {"supabase_url": "https://project.supabase.co", "publishable_key": "sb_publishable_test_key"})
+
+    review = agent.read_flow_review("token-a", "00000000-0000-0000-0000-000000000001", job_id)
+    previous = agent.read_flow_review_source("token-a", "00000000-0000-0000-0000-000000000001", job_id, "previous")
+    current = agent.read_flow_review_source("token-a", "00000000-0000-0000-0000-000000000001", job_id, "current")
+    opened = agent.open_flow_review_source("token-a", "00000000-0000-0000-0000-000000000001", job_id, {"side": "current"})
+
+    assert review["source_stage"] == "2_copiado"
+    assert review["target_stage"] == "3_capturado"
+    assert review["previous"]["stage"] == "1_volcado"
+    assert review["current"]["stage"] == "2_copiado"
+    assert review["captured"] is None
+    assert previous.path == original
+    assert current.path == copied
+    assert current.media_type == "text/markdown; charset=utf-8"
+    assert opened == {"status": "opened", "filename": "Acta.md"}
+    assert str(tmp_path) not in str(review)
+
+    from http.server import ThreadingHTTPServer
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), _handler_for(agent))
+    thread = Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        connection = HTTPConnection("127.0.0.1", server.server_port, timeout=2)
+        connection.request(
+            "POST", f"/v1/flow/reviews/{job_id}/source-open?org_id=00000000-0000-0000-0000-000000000001",
+            body=json.dumps({"side": "previous"}),
+            headers={"Origin": "http://localhost:3000", "Authorization": "Bearer token-a", "Content-Type": "application/json"},
+        )
+        response = connection.getresponse()
+        assert response.status == 200
+        assert json.loads(response.read()) == {"status": "opened", "filename": "Acta.md"}
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
+    assert opened_files == ["2_copiado/Acta.md", "1_volcado/Acta.md"]
 
 
 def test_management_can_refine_pending_capture_before_supabase_catalogue_sync(tmp_path: Path):
@@ -1281,7 +1381,10 @@ def test_management_can_refine_pending_capture_before_supabase_catalogue_sync(tm
 
     assert note["document_id"] == captured_id
     assert updated == {"document_id": captured_id, "revision": 5, "title": "Informe", "content_hash": "a" * 64, "sync_state": "pending_sync"}
-    assert calls == [(captured_id, 4, "# Editada"), ("Refina", {"context_mode": "single_note", "document_id": captured_id})]
+    assert calls == [(captured_id, 4, "# Editada"), ("Refina", {
+        "context_mode": "single_note", "document_id": captured_id,
+        "selected_note_title": "Informe", "selected_note_markdown": "# Capturado",
+    })]
     assert answer["text"] == "# Refinado"
     assert [event["action"] for event in audits] == [
         "caudal_review_captured_read", "caudal_review_captured_update", "caudal_review_captured_assistant",
@@ -1293,6 +1396,10 @@ def test_visible_note_can_use_local_assistant_without_exposing_paths(tmp_path: P
     calls: list[object] = []
 
     class Backend:
+        @staticmethod
+        def prepare_local_ai():
+            calls.append("prepare")
+
         @staticmethod
         def process_chat(message, context):
             calls.append((message, context))
@@ -1320,7 +1427,7 @@ def test_visible_note_can_use_local_assistant_without_exposing_paths(tmp_path: P
 
     answer = agent.ask_note_assistant("token-a", "00000000-0000-0000-0000-000000000001", note_id, {"message": "Resume esta Nota"})
 
-    assert calls == [("Resume esta Nota", {
+    assert calls == ["prepare", ("Resume esta Nota", {
         "context_mode": "single_note", "document_id": note_id,
         "selected_note_title": "Informe", "selected_note_markdown": "# Informe\n\nDato verificable.",
     })]

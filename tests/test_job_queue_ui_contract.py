@@ -220,6 +220,26 @@ def test_queue_backend_uses_lifecycle_owned_store_and_returns_json_safe_projecti
     json.dumps(detail)
 
 
+def test_queue_backend_reads_durable_pending_jobs_before_lifecycle_is_attached(temp_vault_path):
+    backend = FuenteConsoleBackend(temp_vault_path)
+    assert backend._job_store is not None
+    job = backend._job_store.create_job(
+        source_hash="hash-pending-before-lifecycle",
+        source_relative_path="1_volcado/pending.txt",
+    )
+    job = backend._job_store.update_job(
+        job.job_id, expected_revision=job.revision,
+        stage="copied_dirty", dirty_artifact="2_copiado/pending.txt",
+    )
+
+    page = backend.get_jobs({"status": "pending"}, 100, None)
+
+    assert [item["job_id"] for item in page["items"]] == [job.job_id]
+    pending = backend.get_flow_state()["pending_approvals"]
+    assert [item["job_id"] for item in pending] == [job.job_id]
+    assert pending[0]["dirty_artifact"] == "2_copiado/pending.txt"
+
+
 def test_queue_mutations_return_json_safe_job_records(queue_bridge):
     bridge, _backend, store = queue_bridge
     resumable = store.create_job(

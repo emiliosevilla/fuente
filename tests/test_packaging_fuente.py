@@ -94,10 +94,10 @@ def test_windows_distribution_includes_a_launcher_for_the_gestajo_agent(tmp_path
     launcher = write_windows_agent_launcher(tmp_path)
 
     assert launcher.name == "Instalar_Fuente_para_Gestajo.cmd"
-    assert launcher.read_text(encoding="utf-8") == (
-        "@echo off\n"
-        "setlocal\n"
-        f'start "" "%~dp0Fuente.exe" "{GESTAJO_AGENT_INSTALL_URL}"\n'
+    assert launcher.read_bytes() == (
+        b"@echo off\r\n"
+        b"setlocal\r\n"
+        + f'start "" "%~dp0Fuente.exe" "{GESTAJO_AGENT_INSTALL_URL}"\r\n'.encode()
     )
 
 

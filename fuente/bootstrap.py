@@ -12,6 +12,7 @@ from fuente.ui.setup_backend import FuenteSetupBackend, load_startup_vault
 
 
 _GESTAJO_AGENT_INSTALL_URL = "fuente://gestajo-agent/install"
+_GESTAJO_AGENT_PACKAGE_CHECK = "--check-gestajo-agent-package"
 
 
 def is_gestajo_agent_install_request(arguments: list[str]) -> bool:
@@ -64,16 +65,52 @@ def _launch_runtime(arguments: list[str]) -> None:
 
 
 def _launch_gestajo_agent_installer() -> None:
-    _launch_runtime(["--install-gestajo-agent"])
+    # The browser installer must never download a Python runtime on first use.
+    # A released package either contains the agent runtime or fails clearly.
+    ensure_capability("core", allow_download=False)
+    activate_runtime_source()
+    module_name = ".".join(("fuente", "main"))
+    main = importlib.import_module(module_name).main
+    sys.argv = [sys.argv[0], "--install-gestajo-agent"]
+    main()
+
+
+def _check_gestajo_agent_package() -> None:
+    """Fail before release when the bundled agent cannot start without downloads."""
+    ensure_capability("core", allow_download=False)
+    activate_runtime_source()
+    importlib.import_module("fuente.main")
+    importlib.import_module("fuente.agent.server")
+    importlib.import_module("fuente.agent.tls")
+    importlib.import_module("fuente.control_console")
+
+
+def _show_agent_install_error(message: str) -> None:
+    """Show an actionable installer error without loading PyWebView on Windows."""
+    import tkinter as tk
+    from tkinter import messagebox
+
+    root = tk.Tk()
+    root.withdraw()
+    try:
+        messagebox.showerror("Documentos de Gestajo", message, parent=root)
+    finally:
+        root.destroy()
 
 
 def main() -> None:
     arguments = sys.argv[1:]
+    if _GESTAJO_AGENT_PACKAGE_CHECK in arguments:
+        _check_gestajo_agent_package()
+        return
     if is_gestajo_agent_install_request(arguments):
         try:
             _launch_gestajo_agent_installer()
-        except RuntimeCapabilityError as error:
-            _launch_setup(str(error))
+        except Exception as error:
+            _show_agent_install_error(
+                "Esta descarga de Fuente está incompleta y no se ha instalado. "
+                f"Descarga una versión nueva desde Gestajo. Detalle: {error}"
+            )
         return
     if "--runtime" in arguments:
         arguments.remove("--runtime")

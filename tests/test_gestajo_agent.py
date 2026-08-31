@@ -1,4 +1,5 @@
 import json
+import sqlite3
 from http.client import HTTPConnection
 from pathlib import Path
 from threading import Thread
@@ -26,6 +27,7 @@ from fuente.agent.server import (
 from fuente.infrastructure.sqlite_store import JobStore
 from fuente.core.folder_sync import SyncConflict
 from fuente.domain.paths import document_id_for_relative_path
+from fuente.domain.errors import PathAuthorizationError
 from fuente.domain.sync import ConnectedFolder, SyncDirection
 
 USER_A = "00000000-0000-0000-0000-0000000000a1"
@@ -1637,6 +1639,9 @@ def test_note_graph_skips_invalid_or_unreadable_local_entries(tmp_path: Path):
     org_id = "00000000-0000-0000-0000-000000000001"
     first_id = "00000000-0000-0000-0000-000000000010"
     second_id = "00000000-0000-0000-0000-000000000011"
+    third_id = "00000000-0000-0000-0000-000000000012"
+    fourth_id = "00000000-0000-0000-0000-000000000013"
+    fifth_id = "00000000-0000-0000-0000-000000000014"
 
     class Backend:
         @staticmethod
@@ -1644,6 +1649,9 @@ def test_note_graph_skips_invalid_or_unreadable_local_entries(tmp_path: Path):
             return {"items": [
                 {"document_id": first_id, "title": "Legible", "seal": "approved", "theme": "General", "issue": "_Sin_Cuestion", "note_type": "summary"},
                 {"document_id": second_id, "title": "Huérfana", "seal": "approved", "theme": "General", "issue": "_Sin_Cuestion", "note_type": "summary"},
+                {"document_id": third_id, "title": "No autorizada", "seal": "approved", "theme": "General", "issue": "_Sin_Cuestion", "note_type": "summary"},
+                {"document_id": fourth_id, "title": "Catálogo inválido", "seal": "approved", "theme": "General", "issue": "_Sin_Cuestion", "note_type": "summary"},
+                {"document_id": fifth_id, "title": "SQLite roto", "seal": "approved", "theme": "General", "issue": "_Sin_Cuestion", "note_type": "summary"},
                 {"document_id": "not-a-note-id"},
             ], "has_more": False}
 
@@ -1651,11 +1659,17 @@ def test_note_graph_skips_invalid_or_unreadable_local_entries(tmp_path: Path):
         def get_relation_preview(note_id):
             if note_id == second_id:
                 raise OSError("missing local file")
+            if note_id == third_id:
+                raise PathAuthorizationError()
+            if note_id == fourth_id:
+                raise TypeError("revision is missing")
+            if note_id == fifth_id:
+                raise sqlite3.InterfaceError("bad parameter")
             return {"center": {"document_id": note_id, "title": "Legible"}, "outgoing": []}
 
     agent = GestajoAgent(
         tmp_path, verifier=_verifier, publisher=_publisher, membership_verifier=_membership_verifier,
-        backend_factory=lambda _vault: Backend(), visible_note_ids_reader=lambda *_args: {first_id, second_id},
+        backend_factory=lambda _vault: Backend(), visible_note_ids_reader=lambda *_args: {first_id, second_id, third_id, fourth_id, fifth_id},
     )
     agent.claim("token-a", {"supabase_url": "https://project.supabase.co", "publishable_key": "sb_publishable_test_key"})
 

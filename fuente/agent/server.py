@@ -12,6 +12,7 @@ import json
 import mimetypes
 import platform
 import re
+import sqlite3
 from shutil import copyfileobj
 import ssl
 import uuid
@@ -27,6 +28,7 @@ from urllib.parse import quote, urlparse
 from urllib.request import Request, urlopen
 
 from fuente.domain.sync import SyncDirection
+from fuente.domain.errors import PathAuthorizationError
 from fuente.domain.paths import SourcePathAuthorizer, document_id_for_relative_path
 from fuente.domain.documents import content_hash_for_markdown
 from fuente.domain.frontmatter import FrontmatterError, parse_frontmatter
@@ -1544,7 +1546,7 @@ class GestajoAgent:
         for note_id in list(nodes):
             try:
                 preview = _note_relations_response(self._local_backend().get_relation_preview(note_id))
-            except (AgentError, OSError):
+            except (AgentError, OSError, PathAuthorizationError, TypeError, sqlite3.Error):
                 nodes.pop(note_id, None)
                 continue
             for relation in preview["outgoing"]:

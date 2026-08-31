@@ -564,11 +564,14 @@ class FuenteConsoleBackend:
         ) = previous_services
 
     def get_job_control_service(self) -> JobControlService:
-        """Return queue control backed by the active lifecycle's job store."""
+        """Return queue control backed by the durable job store."""
         resolved = self._resolve_step2_ingestion()
         if resolved is None:
-            raise RuntimeError("The lifecycle-owned job queue is not started")
-        ingestion, job_store = resolved
+            if self._job_store is None:
+                raise RuntimeError("The lifecycle-owned job queue is not started")
+            ingestion, job_store = None, self._job_store
+        else:
+            ingestion, job_store = resolved
         if (
             self._job_control_service is None
             or self._job_control_service.ingestion is not ingestion
@@ -975,7 +978,9 @@ class FuenteConsoleBackend:
             queue_counts["active"] = len(
                 self.get_jobs({"status": "claimed"}, limit=100).get("items", [])
             )
-            pending_jobs = self.get_jobs({"status": "pending"}, limit=100).get("items", [])
+            pending_summaries = self.get_jobs({"status": "pending"}, limit=100).get("items", [])
+            control = self.get_job_control_service()
+            pending_jobs = [asdict(control.get_job(item["job_id"]).job) for item in pending_summaries]
             queue_counts["waiting"] = len(pending_jobs)
         except RuntimeError:
             pass
@@ -2239,6 +2244,19 @@ class FuenteConsoleBackend:
                 return {"ready": False, "provider": provider, "model": model, "reason": "ollama_installation_required"}
         if not self.ram_governor.ensure_model_available(model, authorize_download=True):
             return {"ready": False, "provider": provider, "model": model, "reason": "model_unavailable"}
+        try:
+            _snapshot, next_policy = self._measure_policy_for_config(self.config)
+        except Exception:
+            logger.exception("No se pudo actualizar la política de IA local")
+            return {"ready": False, "provider": provider, "model": model, "reason": "ram_policy"}
+        self.runtime_policy = next_policy
+        if self.lifecycle is not None and self.lifecycle.is_running and self.lifecycle.pipeline is not None:
+            self.lifecycle.set_runtime_policy(next_policy)
+            self._index_store = getattr(self.lifecycle.pipeline, "index_store", None)
+        self._retrieval_service = None
+        self._chat_service = None
+        if not next_policy.llm_available or next_policy.selected_model != model:
+            return {"ready": False, "provider": provider, "model": model, "reason": "ram_policy"}
         return {"ready": True, "provider": provider, "model": model, "reason": None}
 
     def _template_registry(self) -> TemplateRegistry:

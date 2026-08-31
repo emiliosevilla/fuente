@@ -5,6 +5,7 @@ import json
 import subprocess
 import urllib.request
 import webbrowser
+from dataclasses import replace
 from pathlib import Path
 
 from fuente.application.health import HealthService
@@ -293,11 +294,19 @@ def test_backend_prepare_local_ai_starts_ollama_and_ensures_the_ram_model(temp_v
 
     backend.ram_governor = Governor()
     monkeypatch.setattr("fuente.installer_contract.start_ollama_service", lambda: True)
+    ready_policy = replace(
+        backend.runtime_policy,
+        selected_model="qwen2.5:0.8b",
+        llm_available=True,
+        reason="modelo local disponible",
+    )
+    monkeypatch.setattr(backend, "_measure_policy_for_config", lambda _config: (object(), ready_policy))
 
     assert backend.prepare_local_ai() == {
         "ready": True, "provider": "ollama", "model": "qwen2.5:0.8b", "reason": None,
     }
     assert calls == [("qwen2.5:0.8b", True)]
+    assert backend.runtime_policy == ready_policy
 
 
 def test_backend_prepare_local_ai_opens_the_official_ollama_installer_when_missing(temp_vault_path, monkeypatch):

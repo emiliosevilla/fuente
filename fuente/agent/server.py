@@ -27,6 +27,7 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import quote, urlparse
 from urllib.request import Request, urlopen
 
+from fuente import __version__
 from fuente.domain.sync import SyncDirection
 from fuente.domain.errors import PathAuthorizationError
 from fuente.domain.paths import SourcePathAuthorizer, document_id_for_relative_path
@@ -40,7 +41,7 @@ from fuente.infrastructure.atomic_files import atomic_write_json
 from fuente.agent.update import AgentUpdater
 
 
-AGENT_VERSION = "0.2"
+AGENT_VERSION = __version__
 SOURCE_PREVIEW_MAX_CHARS = 1_000_000
 DEFAULT_ALLOWED_ORIGINS = frozenset({
     "https://gestajo.vercel.app",
@@ -568,7 +569,7 @@ class GestajoAgent:
             "platform": platform.system(),
             "user_id": binding.user_id,
             "vault_fingerprint": self._vault_fingerprint(),
-            "capabilities": ["flow", "flow_import", "flow_approve", "flow_jobs", "flow_job_detail", "flow_job_resume", "flow_job_cancel", "flow_review", "flow_review_captured", "flow_review_source_preview", "flow_discard", "quarantine_read", "quarantine_restore", "settings", "sync_inputs", "sync_run", "sync_output", "sync_conflict_read", "sync_conflict_resolve", "document_conflict_read", "document_conflict_resolve", "local_ai_prepare", "agent_update", "taxonomy_read", "taxonomy_write", "note_read", "note_search", "note_feed", "note_relations", "note_graph", "note_lineage", "note_export", "note_write", "note_create", "note_theme", "note_merge", "note_approve_processed", "note_share", "note_assistant", "note_assistant_persist", "knowledge_assistant", "templates_read", "templates_write"],
+            "capabilities": ["flow", "flow_import", "flow_approve", "flow_jobs", "flow_job_detail", "flow_job_resume", "flow_job_cancel", "flow_review", "flow_review_captured", "flow_review_source_preview", "flow_review_source_open", "flow_discard", "quarantine_read", "quarantine_restore", "settings", "sync_inputs", "sync_run", "sync_output", "sync_conflict_read", "sync_conflict_resolve", "document_conflict_read", "document_conflict_resolve", "local_ai_prepare", "agent_update", "taxonomy_read", "taxonomy_write", "note_read", "note_search", "note_feed", "note_relations", "note_graph", "note_lineage", "note_export", "note_write", "note_create", "note_theme", "note_merge", "note_approve_processed", "note_share", "note_assistant", "note_assistant_persist", "knowledge_assistant", "templates_read", "templates_write"],
         }
 
     def agent_update(self, access_token: object, org_id: object, *, launch: bool = False, payload: object = None) -> dict[str, object]:
@@ -689,7 +690,7 @@ class GestajoAgent:
             raise AgentAuthorizationError("organization is invalid")
         self._management_verifier(binding, self._access_token(access_token), org_id)
         state = self._read_flow()
-        return _flow_response(state)
+        return _flow_response(state, self.vault_path)
 
     def list_flow_jobs(self, access_token: object, org_id: object, cursor: object) -> dict[str, object]:
         binding = self._require_management(access_token, org_id)
@@ -834,7 +835,7 @@ class GestajoAgent:
             control.ingestion.resume(job_id)
         except (OSError, RuntimeError, ValueError) as error:
             raise AgentError("Caudal recorded the approval but could not continue the job") from error
-        result = _flow_response(self._read_flow())
+        result = _flow_response(self._read_flow(), self.vault_path)
         if source_stage == "3_capturado":
             result["processed_notes"] = _flow_processed_notes(control, job)
         return result
@@ -853,14 +854,16 @@ class GestajoAgent:
         review = _flow_review_response(
             self.vault_path, self._note_reader, self._local_backend(), job, valid_job_id,
         )
+        captured = review.get("captured")
+        note_id = str(captured["document_id"]) if isinstance(captured, Mapping) else None
         self._record_audit(binding, self._access_token(access_token), _new_audit_event(
-            str(review["captured"]["document_id"]), str(org_id), str(uuid.UUID(str(org_id))),
+            note_id, str(org_id), str(uuid.UUID(str(org_id))),
             binding.user_id, "caudal_review_read", "success",
         ))
         return review
 
-    def read_flow_review_source(self, access_token: object, org_id: object, job_id: object) -> _FlowReviewSource:
-        """Resolve original bytes only after the same local management check."""
+    def read_flow_review_source(self, access_token: object, org_id: object, job_id: object, side: object = None) -> _FlowReviewSource:
+        """Resolve one review side only after the same local management check."""
         binding = self._require_management(access_token, org_id)
         try:
             valid_job_id = str(uuid.UUID(str(job_id)))
@@ -870,12 +873,12 @@ class GestajoAgent:
         job = detail.get("job") if isinstance(detail, Mapping) else None
         if not isinstance(job, Mapping):
             raise AgentError("local Caudal job is invalid")
-        _source_relative, source_path, captured_relative, _captured_path = _flow_review_artifacts(
-            self._local_backend(), job, valid_job_id,
-        )
-        captured_id = document_id_for_relative_path(captured_relative)
+        _transition, previous, current = _flow_review_artifacts(self._local_backend(), job, valid_job_id)
+        selected = current if _flow_review_side(side) == "current" or previous is None else previous
+        selected_relative, source_path = selected
+        current_id = document_id_for_relative_path(current[0]) if current[0].startswith("3_capturado/") else None
         self._record_audit(binding, self._access_token(access_token), _new_audit_event(
-            captured_id, str(org_id), str(uuid.UUID(str(org_id))), binding.user_id,
+            current_id, str(org_id), str(uuid.UUID(str(org_id))), binding.user_id,
             "caudal_review_original_read", "success",
         ))
         return _FlowReviewSource(
@@ -883,8 +886,8 @@ class GestajoAgent:
             media_type=_flow_review_media_type(source_path),
         )
 
-    def read_flow_review_source_preview(self, access_token: object, org_id: object, job_id: object) -> dict[str, object]:
-        """Extract an unsupported original locally for its Gestajo side-by-side review."""
+    def read_flow_review_source_preview(self, access_token: object, org_id: object, job_id: object, side: object = None) -> dict[str, object]:
+        """Extract one unsupported review side locally for Gestajo."""
         binding = self._require_management(access_token, org_id)
         try:
             valid_job_id = str(uuid.UUID(str(job_id)))
@@ -894,16 +897,45 @@ class GestajoAgent:
         job = detail.get("job") if isinstance(detail, Mapping) else None
         if not isinstance(job, Mapping):
             raise AgentError("local Caudal job is invalid")
-        _source_relative, source_path, captured_relative, _captured_path = _flow_review_artifacts(
-            self._local_backend(), job, valid_job_id,
-        )
+        _transition, previous, current = _flow_review_artifacts(self._local_backend(), job, valid_job_id)
+        selected = current if _flow_review_side(side) == "current" or previous is None else previous
+        _selected_relative, source_path = selected
         preview = _flow_review_source_preview(source_path)
-        captured_id = document_id_for_relative_path(captured_relative)
+        current_id = document_id_for_relative_path(current[0]) if current[0].startswith("3_capturado/") else None
         self._record_audit(binding, self._access_token(access_token), _new_audit_event(
-            captured_id, str(org_id), str(uuid.UUID(str(org_id))), binding.user_id,
+            current_id, str(org_id), str(uuid.UUID(str(org_id))), binding.user_id,
             "caudal_review_original_preview", "success",
         ))
         return preview
+
+    def open_flow_review_source(self, access_token: object, org_id: object, job_id: object, payload: object) -> dict[str, object]:
+        """Open one authorized review artifact with the operating system's application."""
+        binding = self._require_management(access_token, org_id)
+        if not isinstance(payload, Mapping) or set(payload) != {"side"}:
+            raise AgentError("Caudal review open payload is invalid")
+        try:
+            valid_job_id = str(uuid.UUID(str(job_id)))
+        except (ValueError, AttributeError) as error:
+            raise AgentError("Caudal job is invalid") from error
+        backend = self._local_backend()
+        detail = backend.get_job_detail(valid_job_id)
+        job = detail.get("job") if isinstance(detail, Mapping) else None
+        if not isinstance(job, Mapping):
+            raise AgentError("local Caudal job is invalid")
+        _transition, previous, current = _flow_review_artifacts(backend, job, valid_job_id)
+        selected = current if _flow_review_side(payload["side"]) == "current" or previous is None else previous
+        relative_path, _source_path = selected
+        try:
+            result = backend.open_file_natively(relative_path)
+        except (AttributeError, OSError, RuntimeError, ValueError) as error:
+            raise AgentError("the original could not be opened locally") from error
+        if not isinstance(result, Mapping) or result.get("status") != "opened":
+            raise AgentError("the original could not be opened locally")
+        self._record_audit(binding, self._access_token(access_token), _new_audit_event(
+            None, str(org_id), str(uuid.UUID(str(org_id))), binding.user_id,
+            "caudal_review_original_open", "success",
+        ))
+        return {"status": "opened", "filename": PurePosixPath(relative_path).name}
 
     def read_flow_review_captured(self, access_token: object, org_id: object, job_id: object) -> dict[str, object]:
         """Read the captured note while its Caudal approval is still pending locally."""
@@ -938,10 +970,16 @@ class GestajoAgent:
         """Refine the pending capture with the local assistant without remote catalogue access."""
         binding = self._require_management(access_token, org_id)
         note_id = self._flow_review_captured_note_id(job_id)
+        note = _note_response(self._note_reader(self.vault_path, note_id), note_id)
         message, _ = _note_assistant_payload(payload)
-        answer = _assistant_response(self._local_backend().process_chat(
+        answer = _assistant_response(self._process_local_chat(
             message,
-            {"context_mode": "single_note", "document_id": note_id},
+            {
+                "context_mode": "single_note",
+                "document_id": note_id,
+                "selected_note_title": note["title"],
+                "selected_note_markdown": note["body_markdown"],
+            },
         ))
         self._record_audit(binding, self._access_token(access_token), _new_audit_event(
             note_id, str(org_id), str(uuid.UUID(str(org_id))), binding.user_id,
@@ -957,7 +995,7 @@ class GestajoAgent:
         backend = self._local_backend()
         detail = backend.get_job_detail(job_id)
         job = detail.get("job") if isinstance(detail, Mapping) else None
-        if _flow_review_summary(job) is None or not isinstance(job, Mapping):
+        if not isinstance(job, Mapping) or _flow_approval_transition(job, job_id) is None:
             raise AgentError("the requested Caudal review is not available")
         revision = job.get("revision")
         if not isinstance(revision, int) or isinstance(revision, bool) or revision < 0:
@@ -968,11 +1006,12 @@ class GestajoAgent:
             )
         except (OSError, RuntimeError, ValueError) as error:
             raise AgentError("Caudal could not discard the captured material locally") from error
+        action = "caudal_capture_discard" if job.get("stage") == "saved_clean" else "caudal_transition_discard"
         self._record_audit(binding, self._access_token(access_token), _new_audit_event(
             None, str(org_id), str(uuid.UUID(str(org_id))), binding.user_id,
-            "caudal_capture_discard", "success",
+            action, "success",
         ))
-        return _flow_response(self._read_flow())
+        return _flow_response(self._read_flow(), self.vault_path)
 
     def _flow_review_captured_note_id(self, job_id: object) -> str:
         try:
@@ -984,10 +1023,10 @@ class GestajoAgent:
         job = detail.get("job") if isinstance(detail, Mapping) else None
         if not isinstance(job, Mapping) or _flow_review_summary(job) is None:
             raise AgentError("the requested Caudal review is not available")
-        _source_relative, _source_path, captured_relative, _captured_path = _flow_review_artifacts(
-            backend, job, valid_job_id,
-        )
-        return document_id_for_relative_path(captured_relative)
+        transition, _previous, current = _flow_review_artifacts(backend, job, valid_job_id)
+        if transition[0] != "3_capturado":
+            raise AgentError("the requested Caudal review is not available")
+        return document_id_for_relative_path(current[0])
 
     def settings(self, access_token: object, org_id: object) -> dict[str, object]:
         binding = self._require_user(access_token)
@@ -1387,7 +1426,7 @@ class GestajoAgent:
                     "y deja `No consta` cuando la evidencia no permita completar un apartado:\n\n"
                     f"{structure.strip()}"
                 )
-        answer = _assistant_response(self._local_backend().process_chat(message, context))
+        answer = _assistant_response(self._process_local_chat(message, context))
         self._record_audit(binding, self._access_token(access_token), _new_audit_event(
             note_id, org_id, scope["common_org_id"], binding.user_id,
             "note_assistant_ask", "success" if answer["ok"] else "error",
@@ -1492,9 +1531,7 @@ class GestajoAgent:
             }
             session_scope = ",".join(document_ids)
         context["session_id"] = f"gestajo-kb:{binding.user_id}:{org_id}:{session_scope}"
-        answer = _assistant_response(self._local_backend().process_chat(
-            message, context,
-        ))
+        answer = _assistant_response(self._process_local_chat(message, context))
         self._record_audit(binding, self._access_token(access_token), _new_audit_event(
             None, org_id, org_id, binding.user_id, "knowledge_assistant_ask",
             "success" if answer["ok"] else "error", llm_model=answer["model"] or None,
@@ -1743,6 +1780,13 @@ class GestajoAgent:
             self._backend = self._backend_factory(self.vault_path)
         return self._backend
 
+    def _process_local_chat(self, message: str, context: Mapping[str, object]) -> object:
+        backend = self._local_backend()
+        prepare = getattr(backend, "prepare_local_ai", None)
+        if callable(prepare):
+            prepare()
+        return backend.process_chat(message, context)
+
     def _document_outbox(self) -> Any:
         if self._outbox is None:
             self._outbox = self._outbox_factory(self.vault_path)
@@ -1893,12 +1937,12 @@ def _handler_for(agent: GestajoAgent) -> type[BaseHTTPRequestHandler]:
                 job_id = parts[0]
                 if len(parts) == 2 and parts[1] == "source":
                     self._authorized_file(
-                        lambda token: agent.read_flow_review_source(token, _single_query_value(parsed.query, "org_id"), job_id)
+                        lambda token: agent.read_flow_review_source(token, _single_query_value(parsed.query, "org_id"), job_id, _optional_query_value(parsed.query, "side"))
                     )
                     return
                 if len(parts) == 2 and parts[1] == "source-preview":
                     self._authorized(
-                        lambda token: agent.read_flow_review_source_preview(token, _single_query_value(parsed.query, "org_id"), job_id)
+                        lambda token: agent.read_flow_review_source_preview(token, _single_query_value(parsed.query, "org_id"), job_id, _optional_query_value(parsed.query, "side"))
                     )
                     return
                 if len(parts) == 2:
@@ -2026,6 +2070,7 @@ def _handler_for(agent: GestajoAgent) -> type[BaseHTTPRequestHandler]:
             review_parts = review_route.split("/") if review_route else []
             is_review_captured_update = len(review_parts) == 2 and bool(review_parts[0]) and review_parts[1] == "captured"
             is_review_captured_assistant = len(review_parts) == 3 and bool(review_parts[0]) and review_parts[1:] == ["captured", "assistant"]
+            is_review_source_open = len(review_parts) == 2 and bool(review_parts[0]) and review_parts[1] == "source-open"
             template_route = parsed.path.removeprefix("/v1/templates/") if parsed.path.startswith("/v1/templates/") else ""
             template_parts = template_route.split("/") if template_route else []
             template_id = template_parts[0] if template_parts else ""
@@ -2033,7 +2078,7 @@ def _handler_for(agent: GestajoAgent) -> type[BaseHTTPRequestHandler]:
             is_template_restore_agents = len(template_parts) == 2 and bool(template_id) and template_parts[1] == "restore-instructions"
             conflict_route = parsed.path.removeprefix("/v1/document-conflicts/") if parsed.path.startswith("/v1/document-conflicts/") else ""
             is_document_conflict_resolve = conflict_route.endswith("/resolve") and bool(conflict_route.removesuffix("/resolve")) and "/" not in conflict_route.removesuffix("/resolve")
-            if not (is_note_merge or is_note_update or is_note_share or is_note_assistant or is_note_assistant_output or is_note_processed_approval or is_note_theme or is_knowledge_assistant or is_local_ai_prepare or is_flow_job_resume or is_flow_job_cancel or is_review_captured_update or is_review_captured_assistant or is_template_save or is_template_restore_agents or is_document_conflict_resolve) and parsed.path not in {
+            if not (is_note_merge or is_note_update or is_note_share or is_note_assistant or is_note_assistant_output or is_note_processed_approval or is_note_theme or is_knowledge_assistant or is_local_ai_prepare or is_flow_job_resume or is_flow_job_cancel or is_review_captured_update or is_review_captured_assistant or is_review_source_open or is_template_save or is_template_restore_agents or is_document_conflict_resolve) and parsed.path not in {
                 "/v1/claim", "/v1/flow/import", "/v1/flow/approve", "/v1/flow/discard", "/v1/settings", "/v1/sync-inputs/select", "/v1/sync-inputs/run", "/v1/sync-outputs/run", "/v1/sync-conflicts/read", "/v1/sync-conflicts/resolve",
                 "/v1/sync-inputs/confirm", "/v1/sync-inputs/enabled", "/v1/sync-inputs/remove", "/v1/sync", "/v1/taxonomy/themes", "/v1/taxonomy/issues", "/v1/quarantine/restore", "/v1/update",
             }:
@@ -2071,6 +2116,11 @@ def _handler_for(agent: GestajoAgent) -> type[BaseHTTPRequestHandler]:
                 return
             if is_review_captured_assistant:
                 self._authorized(lambda token: agent.ask_flow_review_captured_assistant(
+                    token, _single_query_value(parsed.query, "org_id"), review_parts[0], payload,
+                ))
+                return
+            if is_review_source_open:
+                self._authorized(lambda token: agent.open_flow_review_source(
                     token, _single_query_value(parsed.query, "org_id"), review_parts[0], payload,
                 ))
                 return
@@ -2312,7 +2362,7 @@ def _document_outbox(vault_path: Path) -> Any:
     return JobStore(vault_path)
 
 
-def _flow_response(state: Mapping[str, object]) -> dict[str, object]:
+def _flow_response(state: Mapping[str, object], vault_path: Path | None = None) -> dict[str, object]:
     def count(value: object) -> int:
         return max(0, int(value)) if isinstance(value, (int, float)) else 0
 
@@ -2327,13 +2377,13 @@ def _flow_response(state: Mapping[str, object]) -> dict[str, object]:
         "quarantine": count(state.get("quarantine")),
         "queue": {"active": count(queue.get("active")), "waiting": count(queue.get("waiting"))},
         "pending_approvals": [
-            _flow_approval_response(item)
+            approval
             for item in approvals
             if isinstance(item, Mapping)
             and _flow_review_summary(item) is None
-            and _flow_approval_response(item) is not None
+            and (approval := _flow_approval_response(item, vault_path)) is not None
         ],
-        "pending_reviews": [_flow_review_summary(item) for item in approvals if isinstance(item, Mapping) and _flow_review_summary(item) is not None],
+        "pending_reviews": [review for item in approvals if isinstance(item, Mapping) and (review := _flow_review_summary(item, vault_path)) is not None],
     }
 
 
@@ -2504,7 +2554,7 @@ def _flow_approval_hash(backend: Any, job: Mapping[str, object], source_stage: s
     raise AgentError("local Caudal job is invalid")
 
 
-def _flow_approval_response(job: Mapping[str, object]) -> dict[str, str] | None:
+def _flow_approval_response(job: Mapping[str, object], vault_path: Path | None = None) -> dict[str, object] | None:
     job_id = job.get("job_id")
     relative_path = job.get("source_relative_path")
     if not isinstance(job_id, str) or not isinstance(relative_path, str):
@@ -2519,10 +2569,14 @@ def _flow_approval_response(job: Mapping[str, object]) -> dict[str, str] | None:
     transition = _flow_approval_transition(job, job_id)
     if transition is None:
         return None
-    return {"job_id": job_id, "title": PurePosixPath(safe_path).name, "source_stage": transition[0], "target_stage": transition[1]}
+    return {
+        "job_id": job_id, "title": PurePosixPath(safe_path).name,
+        "source_stage": transition[0], "target_stage": transition[1],
+        **_flow_pending_metadata(job, vault_path, transition[0]),
+    }
 
 
-def _flow_review_summary(job: Mapping[str, object]) -> dict[str, str] | None:
+def _flow_review_summary(job: Mapping[str, object], vault_path: Path | None = None) -> dict[str, object] | None:
     job_id = job.get("job_id")
     source = _safe_sync_relative(job.get("source_relative_path"))
     captured = _safe_sync_relative(job.get("clean_artifact"))
@@ -2537,9 +2591,34 @@ def _flow_review_summary(job: Mapping[str, object]) -> dict[str, str] | None:
     ):
         return None
     try:
-        return {"job_id": str(uuid.UUID(job_id)), "title": PurePosixPath(source).name}
+        return {
+            "job_id": str(uuid.UUID(job_id)), "title": PurePosixPath(source).name,
+            "source_stage": "3_capturado", "target_stage": "4_procesado",
+            **_flow_pending_metadata(job, vault_path, "3_capturado"),
+        }
     except ValueError:
         return None
+
+
+def _flow_pending_metadata(job: Mapping[str, object], vault_path: Path | None, source_stage: str) -> dict[str, object]:
+    metadata = {
+        field: job[field]
+        for field in ("created_at", "updated_at")
+        if isinstance(job.get(field), str)
+    }
+    artifact_field = {
+        "1_volcado": "source_relative_path",
+        "2_copiado": "dirty_artifact",
+        "3_capturado": "clean_artifact",
+    }.get(source_stage)
+    relative = _safe_sync_relative(job.get(artifact_field)) if artifact_field else None
+    if vault_path is None or relative is None:
+        return metadata
+    root = vault_path.resolve()
+    path = (root / relative).resolve()
+    if path.is_relative_to(root) and path.is_file():
+        metadata["size_bytes"] = path.stat().st_size
+    return metadata
 
 
 def _flow_review_response(
@@ -2549,43 +2628,91 @@ def _flow_review_response(
     job: Mapping[str, object],
     job_id: str,
 ) -> dict[str, object]:
-    source_relative, source_path, captured_relative, _captured_path = _flow_review_artifacts(backend, job, job_id)
+    transition, previous, current = _flow_review_artifacts(backend, job, job_id)
+    source_stage, target_stage = transition
+    current_relative, current_path = current
     try:
-        captured_id = document_id_for_relative_path(captured_relative)
-        captured = _note_response(note_reader(vault_path, captured_id), captured_id)
-        source_size = source_path.stat().st_size
+        captured = None
+        if source_stage == "3_capturado":
+            captured_id = document_id_for_relative_path(current_relative)
+            captured = _note_response(note_reader(vault_path, captured_id), captured_id)
     except (OSError, ValueError) as error:
         raise AgentError("local Caudal review is unavailable") from error
-    media_type = _flow_review_media_type(source_path)
+    current_descriptor = _flow_review_artifact_response(current_relative, current_path, source_stage)
+    previous_descriptor = None
+    if previous is not None:
+        previous_stage = {"2_copiado": "1_volcado", "3_capturado": "2_copiado"}[source_stage]
+        previous_descriptor = _flow_review_artifact_response(previous[0], previous[1], previous_stage)
     return {
         "job_id": job_id,
-        "title": PurePosixPath(source_relative).name,
-        "source": {"filename": source_path.name, "media_type": media_type, "size_bytes": source_size},
+        "title": PurePosixPath(str(job["source_relative_path"])).name,
+        "source_stage": source_stage,
+        "target_stage": target_stage,
+        "previous": previous_descriptor,
+        "current": current_descriptor,
+        "source": previous_descriptor or current_descriptor,
         "captured": captured,
     }
 
 
-def _flow_review_artifacts(backend: Any, job: Mapping[str, object], job_id: str) -> tuple[str, Path, str, Path]:
+def _flow_review_artifacts(
+    backend: Any, job: Mapping[str, object], job_id: str,
+) -> tuple[tuple[str, str], tuple[str, Path] | None, tuple[str, Path]]:
     if job.get("job_id") != job_id:
         raise AgentError("local Caudal job is invalid")
-    source_relative = _safe_sync_relative(job.get("dirty_artifact"))
-    captured_relative = _safe_sync_relative(job.get("clean_artifact"))
-    if source_relative is None or captured_relative is None or not captured_relative.endswith(".md"):
+    transition = _flow_approval_transition(job, job_id)
+    original = _safe_sync_relative(job.get("source_relative_path"))
+    dirty = _safe_sync_relative(job.get("dirty_artifact"))
+    clean = _safe_sync_relative(job.get("clean_artifact"))
+    if transition is None or original is None:
+        raise AgentError("local Caudal review is unavailable")
+    source_stage, _target_stage = transition
+    if source_stage == "1_volcado":
+        previous_relative, current_relative = None, original
+    elif source_stage == "2_copiado" and dirty is not None:
+        previous_relative, current_relative = original, dirty
+    elif source_stage == "3_capturado" and dirty is not None and clean is not None and clean.endswith(".md"):
+        previous_relative, current_relative = dirty, clean
+    else:
         raise AgentError("local Caudal review is unavailable")
     try:
         resolver = backend.vault.path_resolver()
-        source_path = resolver.resolve(source_relative, root_name="vault")
-        captured_path = resolver.resolve(captured_relative, root_name="vault")
-        if not source_path.is_file() or not captured_path.is_file():
+        previous_path = resolver.resolve(previous_relative, root_name="vault") if previous_relative else None
+        current_path = resolver.resolve(current_relative, root_name="vault")
+        if (previous_path is not None and not previous_path.is_file()) or not current_path.is_file():
             raise ValueError("review artifact is missing")
     except (OSError, ValueError) as error:
         raise AgentError("local Caudal review is unavailable") from error
-    return source_relative, source_path, captured_relative, captured_path
+    previous = (previous_relative, previous_path) if previous_relative is not None and previous_path is not None else None
+    return transition, previous, (current_relative, current_path)
+
+
+def _flow_review_artifact_response(relative_path: str, path: Path, stage: str) -> dict[str, object]:
+    try:
+        size_bytes = path.stat().st_size
+    except OSError as error:
+        raise AgentError("local Caudal review is unavailable") from error
+    return {
+        "filename": PurePosixPath(relative_path).name,
+        "media_type": _flow_review_media_type(path),
+        "size_bytes": size_bytes,
+        "stage": stage,
+    }
+
+
+def _flow_review_side(value: object) -> str:
+    if value in {None, "previous"}:
+        return "previous"
+    if value == "current":
+        return "current"
+    raise AgentError("Caudal review side is invalid")
 
 
 def _flow_review_media_type(path: Path) -> str:
     media_type = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
-    return "text/plain; charset=utf-8" if media_type in {"text/html", "application/xhtml+xml"} else media_type
+    if media_type in {"text/html", "application/xhtml+xml"}:
+        return "text/plain; charset=utf-8"
+    return f"{media_type}; charset=utf-8" if media_type.startswith("text/") else media_type
 
 
 def _flow_review_source_preview(path: Path) -> dict[str, object]:

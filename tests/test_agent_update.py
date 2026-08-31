@@ -5,7 +5,7 @@ from http.client import HTTPConnection
 from http.server import ThreadingHTTPServer
 from threading import Thread
 
-from fuente.agent.server import GestajoAgent, _handler_for
+from fuente.agent.server import AGENT_VERSION, GestajoAgent, _handler_for
 from fuente.agent.update import AgentUpdater
 
 
@@ -51,7 +51,7 @@ def test_agent_update_requires_management_and_a_safe_caudal_snapshot(tmp_path):
     agent.claim("token", {"supabase_url": "https://project.supabase.co", "publishable_key": "sb_publishable_test_key"})
 
     assert agent.agent_update("token", "00000000-0000-0000-0000-000000000001", launch=True, payload={}) == {
-        "state": "download_started", "current_version": "0.2", "available_version": "0.3.0",
+        "state": "download_started", "current_version": AGENT_VERSION, "available_version": "0.3.0",
     }
     assert audits[0]["action"] == "agent_update_start"
 
@@ -80,7 +80,7 @@ def test_agent_update_route_requires_an_authenticated_management_session(tmp_pat
         connection.request("POST", "/v1/update?org_id=00000000-0000-0000-0000-000000000001", body="{}", headers={"Origin": "http://localhost:3000", "Authorization": "Bearer token", "Content-Type": "application/json"})
         response = connection.getresponse()
         assert response.status == 200
-        assert json.loads(response.read()) == {"state": "download_started", "current_version": "0.2", "available_version": "0.3.0"}
+        assert json.loads(response.read()) == {"state": "download_started", "current_version": AGENT_VERSION, "available_version": "0.3.0"}
     finally:
         server.shutdown()
         thread.join(timeout=2)

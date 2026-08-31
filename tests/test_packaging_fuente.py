@@ -3,6 +3,8 @@ from __future__ import annotations
 import tomllib
 from pathlib import Path
 
+from fuente import __version__
+from fuente.agent.server import AGENT_VERSION
 from build_installer import (
     GESTAJO_AGENT_INSTALL_URL,
     distribution_bundle,
@@ -18,6 +20,7 @@ def test_pyproject_exposes_only_fuente_entry_point() -> None:
     project = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
 
     assert project["project"]["name"] == "fuente"
+    assert project["project"]["version"] == __version__ == AGENT_VERSION
     assert project["project"]["scripts"] == {"fuente": "fuente.main:main"}
 
 

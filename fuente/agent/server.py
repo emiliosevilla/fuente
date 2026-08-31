@@ -19,7 +19,7 @@ import uuid
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from http import HTTPStatus
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path, PurePosixPath
 from typing import Any, Callable, Mapping
 from threading import Thread
@@ -1793,7 +1793,7 @@ class GestajoAgent:
         return hashlib.sha256(str(self.vault_path).encode("utf-8")).hexdigest()
 
 
-class GestajoAgentServer(ThreadingHTTPServer):
+class GestajoAgentServer(HTTPServer):
     """HTTPS server intentionally bound to one IPv4 loopback address."""
 
     def __init__(self, agent: GestajoAgent, ssl_context: ssl.SSLContext, port: int = 43819) -> None:

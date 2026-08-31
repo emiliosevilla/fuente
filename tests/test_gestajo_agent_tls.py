@@ -1,5 +1,6 @@
 import ssl
 from http.client import HTTPSConnection
+from http.server import ThreadingHTTPServer
 from pathlib import Path
 from threading import Thread
 
@@ -50,6 +51,7 @@ def test_agent_tls_serves_the_loopback_health_contract(tmp_path: Path):
     context = load_agent_tls_context(paths)
     assert context is not None
     server = GestajoAgentServer(GestajoAgent(tmp_path), context, port=0)
+    assert not isinstance(server, ThreadingHTTPServer)
     thread = Thread(target=server.serve_forever, daemon=True)
     thread.start()
     try:

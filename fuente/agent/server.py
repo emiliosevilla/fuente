@@ -1525,16 +1525,28 @@ class GestajoAgent:
         page = self._local_backend().list_feed(None, 100, {}, "date")
         if not isinstance(page, Mapping) or not isinstance(page.get("items"), list):
             raise AgentError("local note graph returned an invalid response")
-        nodes = {
-            node["document_id"]: node
-            for item in page["items"]
-            if isinstance(item, Mapping)
-            for node in [_note_graph_node_response(item)]
-            if node["document_id"] in visible_ids
-        }
+        nodes: dict[str, dict[str, str]] = {}
+        for item in page["items"]:
+            if not isinstance(item, Mapping):
+                continue
+            try:
+                document_id = str(uuid.UUID(str(item.get("document_id"))))
+            except (TypeError, ValueError):
+                continue
+            if document_id not in visible_ids:
+                continue
+            try:
+                node = _note_graph_node_response(item)
+            except AgentError:
+                continue
+            nodes[document_id] = node
         edges: set[tuple[str, str]] = set()
-        for note_id in nodes:
-            preview = _note_relations_response(self._local_backend().get_relation_preview(note_id))
+        for note_id in list(nodes):
+            try:
+                preview = _note_relations_response(self._local_backend().get_relation_preview(note_id))
+            except (AgentError, OSError):
+                nodes.pop(note_id, None)
+                continue
             for relation in preview["outgoing"]:
                 target_id = relation["document_id"]
                 if not relation["broken"] and target_id in nodes:

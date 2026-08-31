@@ -1633,6 +1633,39 @@ def test_note_graph_only_contains_the_active_suborganization_visible_nodes(tmp_p
     assert route_graph == graph
 
 
+def test_note_graph_skips_invalid_or_unreadable_local_entries(tmp_path: Path):
+    org_id = "00000000-0000-0000-0000-000000000001"
+    first_id = "00000000-0000-0000-0000-000000000010"
+    second_id = "00000000-0000-0000-0000-000000000011"
+
+    class Backend:
+        @staticmethod
+        def list_feed(_cursor, _limit, _filters, _order):
+            return {"items": [
+                {"document_id": first_id, "title": "Legible", "seal": "approved", "theme": "General", "issue": "_Sin_Cuestion", "note_type": "summary"},
+                {"document_id": second_id, "title": "Huérfana", "seal": "approved", "theme": "General", "issue": "_Sin_Cuestion", "note_type": "summary"},
+                {"document_id": "not-a-note-id"},
+            ], "has_more": False}
+
+        @staticmethod
+        def get_relation_preview(note_id):
+            if note_id == second_id:
+                raise OSError("missing local file")
+            return {"center": {"document_id": note_id, "title": "Legible"}, "outgoing": []}
+
+    agent = GestajoAgent(
+        tmp_path, verifier=_verifier, publisher=_publisher, membership_verifier=_membership_verifier,
+        backend_factory=lambda _vault: Backend(), visible_note_ids_reader=lambda *_args: {first_id, second_id},
+    )
+    agent.claim("token-a", {"supabase_url": "https://project.supabase.co", "publishable_key": "sb_publishable_test_key"})
+
+    assert agent.read_note_graph("token-a", org_id) == {
+        "nodes": [{"document_id": first_id, "title": "Legible", "seal": "approved", "theme": "General", "issue": "_Sin_Cuestion", "note_type": "summary"}],
+        "edges": [],
+        "truncated": False,
+    }
+
+
 def test_note_feed_exposes_only_visible_local_excerpts_without_paths(tmp_path: Path):
     org_id = "00000000-0000-0000-0000-000000000001"
     visible_id = "00000000-0000-0000-0000-000000000010"

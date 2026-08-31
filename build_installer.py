@@ -130,6 +130,7 @@ def write_windows_agent_launcher(app_bundle: Path) -> Path:
         "setlocal\r\n"
         'start "" "%~dp0Fuente.exe" "' + GESTAJO_AGENT_INSTALL_URL + '"\r\n',
         encoding="utf-8",
+        newline="",
     )
     return launcher
 

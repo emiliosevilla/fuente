@@ -1,7 +1,7 @@
 # -*- mode: python ; coding: utf-8 -*-
 from pathlib import Path
 import sys
-from PyInstaller.utils.hooks import collect_submodules
+from PyInstaller.utils.hooks import collect_all, collect_submodules
 
 block_cipher = None
 icon = Path("assets/fuente_icon.ico")
@@ -11,10 +11,36 @@ if not icon.is_file():
 if not runtime_source.is_file():
     raise FileNotFoundError("Run build_installer.py before building fuente.spec.")
 
+# The browser-installed agent has no Python environment to complete itself.
+# Analyze Fuente's runtime code and bundle the required local dependencies.
+core_runtime_packages = (
+    "cryptography",
+    "docx",
+    "extract_msg",
+    "lancedb",
+    "minirag",
+    "openpyxl",
+    "pdfplumber",
+    "pptx",
+    "pydantic",
+    "psutil",
+    "requests",
+    "watchdog",
+    "yaml",
+)
+core_datas = []
+core_binaries = []
+core_hiddenimports = [*collect_submodules("fuente")]
+for package in core_runtime_packages:
+    datas, binaries, hiddenimports = collect_all(package)
+    core_datas.extend(datas)
+    core_binaries.extend(binaries)
+    core_hiddenimports.extend(hiddenimports)
+
 a = Analysis(
     ["fuente/bootstrap.py"],
     pathex=["."],
-    binaries=[],
+    binaries=core_binaries,
     datas=[
         ("assets", "assets"),
         ("fuente/ui/static", "fuente/ui/static"),
@@ -22,6 +48,7 @@ a = Analysis(
         ("consola_preview.html", "."),
         ("build/pip-source.zip", "."),
         ("build/runtime-source.zip", "."),
+        *core_datas,
     ],
     hiddenimports=[
         "webview.platforms.cocoa",
@@ -30,6 +57,7 @@ a = Analysis(
         "tkinter.ttk",
         "tkinter.messagebox",
         "tkinter.filedialog",
+        *core_hiddenimports,
         *collect_submodules("pip"),
         *collect_submodules("minirag"),
     ],
@@ -39,9 +67,7 @@ a = Analysis(
         "docling",
         "faster_whisper",
         "markitdown",
-        "numpy",
         "onnxruntime",
-        "pandas",
         "pdfminer",
         "PIL",
         "sentence_transformers",

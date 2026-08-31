@@ -135,6 +135,30 @@ def write_windows_agent_launcher(app_bundle: Path) -> Path:
     return launcher
 
 
+def verify_windows_agent_bundle(
+    app_bundle: Path,
+    *,
+    runner=subprocess.run,
+) -> None:
+    """Prove the shipped executable can prepare the Gestajo agent unaided."""
+    executable = app_bundle / "Fuente.exe"
+    if not executable.is_file():
+        raise RuntimeError("El paquete Windows no contiene Fuente.exe.")
+    result = runner(
+        [str(executable), "--check-gestajo-agent-package"],
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=False,
+    )
+    if result.returncode != 0:
+        detail = (result.stderr or result.stdout or "sin detalle").strip()
+        raise RuntimeError(
+            "El paquete Windows no puede iniciar el agente de Gestajo sin instalar Python. "
+            f"Detalle: {detail}"
+        )
+
+
 def create_macos_dmg(dist_dir: Path, app_bundle: Path, launcher: Path) -> Path:
     """Create the primary macOS installer image with the standard Applications link."""
     dmg_path = dist_dir / "Fuente_Distribucion_macOS.dmg"
@@ -276,6 +300,7 @@ def build():
         dmg_path = create_macos_dmg(dist_dir, app_bundle, launcher)
     else:
         write_windows_agent_launcher(app_bundle)
+        verify_windows_agent_bundle(app_bundle)
         with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
             add_dir_to_zip(zf, app_bundle, archive_root)
 

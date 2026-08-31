@@ -12,13 +12,14 @@ import json
 import mimetypes
 import platform
 import re
+import sqlite3
 from shutil import copyfileobj
 import ssl
 import uuid
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from http import HTTPStatus
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path, PurePosixPath
 from typing import Any, Callable, Mapping
 from threading import Thread
@@ -27,6 +28,7 @@ from urllib.parse import quote, urlparse
 from urllib.request import Request, urlopen
 
 from fuente.domain.sync import SyncDirection
+from fuente.domain.errors import PathAuthorizationError
 from fuente.domain.paths import SourcePathAuthorizer, document_id_for_relative_path
 from fuente.domain.documents import content_hash_for_markdown
 from fuente.domain.frontmatter import FrontmatterError, parse_frontmatter
@@ -1525,16 +1527,28 @@ class GestajoAgent:
         page = self._local_backend().list_feed(None, 100, {}, "date")
         if not isinstance(page, Mapping) or not isinstance(page.get("items"), list):
             raise AgentError("local note graph returned an invalid response")
-        nodes = {
-            node["document_id"]: node
-            for item in page["items"]
-            if isinstance(item, Mapping)
-            for node in [_note_graph_node_response(item)]
-            if node["document_id"] in visible_ids
-        }
+        nodes: dict[str, dict[str, str]] = {}
+        for item in page["items"]:
+            if not isinstance(item, Mapping):
+                continue
+            try:
+                document_id = str(uuid.UUID(str(item.get("document_id"))))
+            except (TypeError, ValueError):
+                continue
+            if document_id not in visible_ids:
+                continue
+            try:
+                node = _note_graph_node_response(item)
+            except AgentError:
+                continue
+            nodes[document_id] = node
         edges: set[tuple[str, str]] = set()
-        for note_id in nodes:
-            preview = _note_relations_response(self._local_backend().get_relation_preview(note_id))
+        for note_id in list(nodes):
+            try:
+                preview = _note_relations_response(self._local_backend().get_relation_preview(note_id))
+            except (AgentError, OSError, PathAuthorizationError, TypeError, sqlite3.Error):
+                nodes.pop(note_id, None)
+                continue
             for relation in preview["outgoing"]:
                 target_id = relation["document_id"]
                 if not relation["broken"] and target_id in nodes:
@@ -1779,7 +1793,7 @@ class GestajoAgent:
         return hashlib.sha256(str(self.vault_path).encode("utf-8")).hexdigest()
 
 
-class GestajoAgentServer(ThreadingHTTPServer):
+class GestajoAgentServer(HTTPServer):
     """HTTPS server intentionally bound to one IPv4 loopback address."""
 
     def __init__(self, agent: GestajoAgent, ssl_context: ssl.SSLContext, port: int = 43819) -> None:
@@ -3034,9 +3048,18 @@ def _note_response(value: Mapping[str, object], note_id: str) -> dict[str, objec
     revision = value.get("revision")
     title = value.get("title")
     body = value.get("body_markdown")
+    status = value.get("status")
     if document_id != note_id or not isinstance(revision, int) or revision < 1 or not isinstance(title, str) or not isinstance(body, str):
         raise AgentError("local note has an invalid contract")
-    return {"document_id": document_id, "revision": revision, "title": title, "body_markdown": body}
+    if status is not None and not isinstance(status, str):
+        raise AgentError("local note has an invalid contract")
+    return {
+        "document_id": document_id,
+        "revision": revision,
+        "title": title,
+        "body_markdown": body,
+        **({"status": status} if status is not None else {}),
+    }
 
 
 def _note_search_request(mode: object, query: object) -> tuple[str, str]:

@@ -3,7 +3,12 @@ from __future__ import annotations
 import tomllib
 from pathlib import Path
 
-from build_installer import GESTAJO_AGENT_INSTALL_URL, distribution_bundle, write_windows_agent_launcher
+from build_installer import (
+    GESTAJO_AGENT_INSTALL_URL,
+    distribution_bundle,
+    verify_windows_agent_bundle,
+    write_windows_agent_launcher,
+)
 
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -35,6 +40,7 @@ def test_distribution_sources_include_webview_console_and_read_only_reader() -> 
 
     assert "prepare_runtime_payload(base_dir)" in build
     assert "prepare_pip_payload(base_dir)" in build
+    assert "verify_windows_agent_bundle(app_bundle)" in build
     assert "app_bundle, archive_root = distribution_bundle(dist_dir)" in build
     assert "add_dir_to_zip(zf, app_bundle, archive_root)" in build
     assert 'write_macos_launcher(dist_dir)' in build
@@ -99,6 +105,36 @@ def test_windows_distribution_includes_a_launcher_for_the_gestajo_agent(tmp_path
         b"setlocal\r\n"
         + f'start "" "%~dp0Fuente.exe" "{GESTAJO_AGENT_INSTALL_URL}"\r\n'.encode()
     )
+
+
+def test_windows_agent_bundle_check_runs_the_native_executable(tmp_path) -> None:
+    executable = tmp_path / "Fuente.exe"
+    executable.touch()
+    commands: list[list[str]] = []
+
+    class Result:
+        returncode = 0
+        stdout = ""
+        stderr = ""
+
+    verify_windows_agent_bundle(
+        tmp_path,
+        runner=lambda command, **_kwargs: commands.append(command) or Result(),
+    )
+
+    assert commands == [[str(executable), "--check-gestajo-agent-package"]]
+
+
+def test_windows_agent_package_cannot_depend_on_runtime_downloads() -> None:
+    bootstrap = (ROOT / "fuente" / "bootstrap.py").read_text(encoding="utf-8")
+    spec = (ROOT / "fuente.spec").read_text(encoding="utf-8")
+
+    assert 'ensure_capability("core", allow_download=False)' in bootstrap
+    assert "_GESTAJO_AGENT_PACKAGE_CHECK" in bootstrap
+    assert 'collect_submodules("fuente")' in spec
+    assert '"lancedb"' in spec
+    assert '"numpy"' not in spec.split("excludes=[", 1)[1]
+    assert 'importlib.import_module("fuente.agent.tls")' in bootstrap
 
 
 def test_tagged_build_publishes_both_native_installers_as_a_release() -> None:

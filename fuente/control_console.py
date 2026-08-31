@@ -2521,7 +2521,8 @@ class FuenteConsoleBackend:
                 fallback_html.append(f"<p>{fallback_children(children)}</p>")
         catalog_record = self.get_notes_service().job_store.get_note(note_id)
         revision = int(catalog_record["revision"]) if catalog_record else 1
-        return {
+        status = catalog_record.get("status") if catalog_record else None
+        result = {
             "title": title,
             "document_id": note_id,
             "path": relative,
@@ -2530,6 +2531,9 @@ class FuenteConsoleBackend:
             "document": document,
             "html": "".join(fallback_html),
         }
+        if isinstance(status, str):
+            result["status"] = status
+        return result
 
     def get_category_files(self, category: str) -> List[Dict[str, Any]]:
         """Return authorized, vault-relative identities for a pipeline category."""

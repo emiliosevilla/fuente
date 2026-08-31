@@ -2,6 +2,7 @@ import sys
 import types
 
 from fuente import main as fuente_main
+from fuente import bootstrap
 from fuente.agent import tls
 from fuente.bootstrap import is_gestajo_agent_install_request
 
@@ -36,3 +37,26 @@ def test_direct_agent_install_registers_the_connector(monkeypatch):
 
     assert fuente_main.run_gestajo_agent_install() is True
     assert events == ["withdraw", "info", "destroy"]
+
+
+def test_browser_agent_installer_never_downloads_a_python_runtime(monkeypatch):
+    capability_calls: list[tuple[str, bool | None]] = []
+    launched: list[str] = []
+
+    monkeypatch.setattr(sys, "argv", ["Fuente"])
+    monkeypatch.setattr(
+        bootstrap,
+        "ensure_capability",
+        lambda capability, *, allow_download=None: capability_calls.append((capability, allow_download)),
+    )
+    monkeypatch.setattr(bootstrap, "activate_runtime_source", lambda: None)
+    monkeypatch.setattr(
+        bootstrap.importlib,
+        "import_module",
+        lambda _name: types.SimpleNamespace(main=lambda: launched.append("agent")),
+    )
+
+    bootstrap._launch_gestajo_agent_installer()
+
+    assert capability_calls == [("core", False)]
+    assert launched == ["agent"]

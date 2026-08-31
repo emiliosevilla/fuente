@@ -104,10 +104,16 @@ fuente --serve-gestajo-agent --vault /ruta/al/Vault
 ```
 
 En Windows, si Gestajo no encuentra el agente, descarga automáticamente el
-paquete de la última release de Fuente. Extrae el ZIP y ejecuta
-`Instalar_Fuente_para_Gestajo.cmd`: prepara el certificado local, registra
-`fuente://` para ese usuario y deja el agente en segundo plano. El navegador
-no puede ejecutar un binario descargado por sí mismo. El mismo agente acepta
+paquete de la última release de Fuente. El proceso para una persona usuaria es:
+
+1. Pulsa **Extraer todo** sobre el ZIP descargado.
+2. Abre la carpeta extraída y haz doble clic en `Instalar_Fuente_para_Gestajo.cmd`.
+3. Acepta el único aviso para instalar el certificado local de Fuente.
+
+No hace falta instalar Python, `pythonnet`, dependencias ni ejecutar comandos.
+El paquete incluye el agente completo, registra `fuente://` para ese usuario y
+lo deja en segundo plano. El navegador no puede ejecutar un binario descargado
+por sí mismo. El mismo agente acepta
 `http://localhost:3000`, las vistas previas de desarrollo autorizadas y
 `https://gestajo.vercel.app`.
 

@@ -60,6 +60,12 @@ def test_agent_tls_serves_the_loopback_health_contract(tmp_path: Path):
         response = connection.getresponse()
         assert response.status == 200
         assert response.getheader("Access-Control-Allow-Origin") == "https://gestajo.vercel.app"
+        assert response.getheader("Connection") == "close"
+        response.read()
+
+        second = HTTPSConnection("127.0.0.1", server.server_port, context=ssl._create_unverified_context(), timeout=2)
+        second.request("GET", "/v1/health", headers={"Origin": "https://gestajo.vercel.app"})
+        assert second.getresponse().status == 200
     finally:
         server.shutdown()
         server.server_close()

@@ -1,6 +1,6 @@
 # Fuente y Caudal — auditoría final
 
-Revalidado: 2026-09-01 en rama `dev`, HEAD `55c4325`. Fuente 0.2.8 cambia el refinado local con IA y la confianza TLS, sin modificar el recurso visual nativo. Se conservaron los PNG verificados y se recalcularon sus sellos para el árbol actual. Veredicto: **READY**.
+Revalidado: 2026-09-01 en rama `dev`, HEAD `26aa23d`. Fuente 0.2.9 conecta el bundle de certificados del ejecutable con HTTPS saliente. La sesión real de Gestajo en Safari quedó conectada y sincronizada; Proceso, Contenidos y Ajustes resultaron operativos. El recurso visual nativo no cambia, por lo que se conservaron los PNG verificados y se recalcularon sus sellos para el árbol actual. Veredicto: **READY**.
 
 `evaluate_release(Path("docs/evidence/fuente-y-caudal"))` → **READY**; G0–G9 PASS; auditorías escritas PASS; 0 reasons.
 

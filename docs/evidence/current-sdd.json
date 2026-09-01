@@ -1,8 +1,8 @@
 {
-  "base_head": "375ae998ad88774751736234b798342a3e670cee",
-  "branch": "dev",
-  "gate": "RESULT: READY",
-  "measured_at": "2026-09-01T15:50:08Z",
+  "base_head": "09460eea0c1789c810d0b09c5c9404ddf3ad7964",
+  "branch": "codex/fuente-agent-connection-close",
+  "gate": "RESULT: BLOCKED",
+  "measured_at": "2026-09-01T16:11:50Z",
   "p_status": {
     "P-01": "COMPLETE",
     "P-02": "COMPLETE",
@@ -23,6 +23,6 @@
     "Q-07": "COMPLETE",
     "Q-08": "COMPLETE"
   },
-  "source_tree_digest": "d94c87938fbf3d4b7dcbb5809960c1141c78feb355ef0d04a765d3247f754bfc",
-  "suite": "1413 passed, 1 skipped in 69.10s (0:01:09)"
+  "source_tree_digest": "21b77d542bd7b83e7771c89b7bd2c240a7abd441c4d459483e565251713ccb62",
+  "suite": "1421 passed, 1 skipped in 68.26s (0:01:08)"
 }

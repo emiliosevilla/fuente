@@ -1,6 +1,6 @@
 {
   "measured_at": "2026-09-01T15:06:53Z",
-  "git_head": "375ae998ad88774751736234b798342a3e670cee",
+  "git_head": "75e79317e04200e73bf7bde10ccead0fa4016c39",
   "gates": {
     "G0": "PASS",
     "G1": "PASS",
@@ -30,7 +30,7 @@
     },
     {
       "file": "01-setup-empty.png",
-      "git_head": "375ae998ad88774751736234b798342a3e670cee",
+      "git_head": "75e79317e04200e73bf7bde10ccead0fa4016c39",
       "window_owner": "Python",
       "window_owner_pid": 65973,
       "window_title": "Fuente y Caudal",
@@ -45,7 +45,7 @@
     },
     {
       "file": "02-setup-ready.png",
-      "git_head": "375ae998ad88774751736234b798342a3e670cee",
+      "git_head": "75e79317e04200e73bf7bde10ccead0fa4016c39",
       "window_owner": "Python",
       "window_owner_pid": 65973,
       "window_title": "Fuente y Caudal",
@@ -60,7 +60,7 @@
     },
     {
       "file": "03-home-1024.png",
-      "git_head": "375ae998ad88774751736234b798342a3e670cee",
+      "git_head": "75e79317e04200e73bf7bde10ccead0fa4016c39",
       "window_owner": "Python",
       "window_owner_pid": 65973,
       "window_title": "Fuente y Caudal",
@@ -75,7 +75,7 @@
     },
     {
       "file": "04-home-1280.png",
-      "git_head": "375ae998ad88774751736234b798342a3e670cee",
+      "git_head": "75e79317e04200e73bf7bde10ccead0fa4016c39",
       "window_owner": "Python",
       "window_owner_pid": 65973,
       "window_title": "Fuente y Caudal",
@@ -90,7 +90,7 @@
     },
     {
       "file": "06-fuente-chat.png",
-      "git_head": "375ae998ad88774751736234b798342a3e670cee",
+      "git_head": "75e79317e04200e73bf7bde10ccead0fa4016c39",
       "window_owner": "Python",
       "window_owner_pid": 65973,
       "window_title": "Fuente y Caudal",
@@ -105,7 +105,7 @@
     },
     {
       "file": "06-keyboard-focus.png",
-      "git_head": "375ae998ad88774751736234b798342a3e670cee",
+      "git_head": "75e79317e04200e73bf7bde10ccead0fa4016c39",
       "window_owner": "Python",
       "window_owner_pid": 65973,
       "window_title": "Fuente y Caudal",
@@ -120,7 +120,7 @@
     },
     {
       "file": "07-source-1024.png",
-      "git_head": "375ae998ad88774751736234b798342a3e670cee",
+      "git_head": "75e79317e04200e73bf7bde10ccead0fa4016c39",
       "window_owner": "Python",
       "window_owner_pid": 65973,
       "window_title": "Fuente y Caudal",
@@ -135,7 +135,7 @@
     },
     {
       "file": "07-template-helper.png",
-      "git_head": "375ae998ad88774751736234b798342a3e670cee",
+      "git_head": "75e79317e04200e73bf7bde10ccead0fa4016c39",
       "window_owner": "Python",
       "window_owner_pid": 65973,
       "window_title": "Fuente y Caudal",
@@ -150,7 +150,7 @@
     },
     {
       "file": "08-flow-1024.png",
-      "git_head": "375ae998ad88774751736234b798342a3e670cee",
+      "git_head": "75e79317e04200e73bf7bde10ccead0fa4016c39",
       "window_owner": "Python",
       "window_owner_pid": 65973,
       "window_title": "Fuente y Caudal",
@@ -165,7 +165,7 @@
     },
     {
       "file": "08-fuente-views.png",
-      "git_head": "375ae998ad88774751736234b798342a3e670cee",
+      "git_head": "75e79317e04200e73bf7bde10ccead0fa4016c39",
       "window_owner": "Python",
       "window_owner_pid": 65973,
       "window_title": "Fuente y Caudal",
@@ -180,7 +180,7 @@
     },
     {
       "file": "09-fuente-search-relations.png",
-      "git_head": "375ae998ad88774751736234b798342a3e670cee",
+      "git_head": "75e79317e04200e73bf7bde10ccead0fa4016c39",
       "window_owner": "Python",
       "window_owner_pid": 65973,
       "window_title": "Fuente y Caudal",
@@ -195,7 +195,7 @@
     },
     {
       "file": "09-home-gruvbox-1024.png",
-      "git_head": "375ae998ad88774751736234b798342a3e670cee",
+      "git_head": "75e79317e04200e73bf7bde10ccead0fa4016c39",
       "window_owner": "Python",
       "window_owner_pid": 65973,
       "window_title": "Fuente y Caudal",
@@ -210,7 +210,7 @@
     },
     {
       "file": "10-caudal-pipeline.png",
-      "git_head": "375ae998ad88774751736234b798342a3e670cee",
+      "git_head": "75e79317e04200e73bf7bde10ccead0fa4016c39",
       "window_owner": "Python",
       "window_owner_pid": 65973,
       "window_title": "Fuente y Caudal",
@@ -225,7 +225,7 @@
     },
     {
       "file": "10-fuente-obsidian.png",
-      "git_head": "375ae998ad88774751736234b798342a3e670cee",
+      "git_head": "75e79317e04200e73bf7bde10ccead0fa4016c39",
       "window_owner": "Obsidian",
       "window_owner_pid": 24471,
       "window_title": "Nueva pestaña - Fuente - Obsidian 1.13.7",
@@ -238,7 +238,7 @@
     },
     {
       "file": "10-source-context-reopened.png",
-      "git_head": "375ae998ad88774751736234b798342a3e670cee",
+      "git_head": "75e79317e04200e73bf7bde10ccead0fa4016c39",
       "window_owner": "Python",
       "window_owner_pid": 65973,
       "window_title": "Fuente y Caudal",
@@ -253,7 +253,7 @@
     },
     {
       "file": "11-caudal-seals.png",
-      "git_head": "375ae998ad88774751736234b798342a3e670cee",
+      "git_head": "75e79317e04200e73bf7bde10ccead0fa4016c39",
       "window_owner": "Python",
       "window_owner_pid": 65973,
       "window_title": "Fuente y Caudal",
@@ -268,7 +268,7 @@
     },
     {
       "file": "11-settings-focus-1024.png",
-      "git_head": "375ae998ad88774751736234b798342a3e670cee",
+      "git_head": "75e79317e04200e73bf7bde10ccead0fa4016c39",
       "window_owner": "Python",
       "window_owner_pid": 65973,
       "window_title": "Fuente y Caudal",
@@ -283,7 +283,7 @@
     },
     {
       "file": "12-caudal-feed-link.png",
-      "git_head": "375ae998ad88774751736234b798342a3e670cee",
+      "git_head": "75e79317e04200e73bf7bde10ccead0fa4016c39",
       "window_owner": "Python",
       "window_owner_pid": 65973,
       "window_title": "Fuente y Caudal",

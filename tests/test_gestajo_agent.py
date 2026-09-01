@@ -1377,13 +1377,22 @@ def test_management_can_refine_pending_capture_before_supabase_catalogue_sync(tm
 
     note = agent.read_flow_review_captured("token-a", "00000000-0000-0000-0000-000000000001", job_id)
     updated = agent.update_flow_review_captured("token-a", "00000000-0000-0000-0000-000000000001", job_id, {"expected_revision": 4, "body_markdown": "# Editada"})
-    answer = agent.ask_flow_review_captured_assistant("token-a", "00000000-0000-0000-0000-000000000001", job_id, {"message": "Refina"})
+    answer = agent.ask_flow_review_captured_assistant(
+        "token-a", "00000000-0000-0000-0000-000000000001", job_id,
+        {"message": "Refina la selección.", "selected_text": "frase redundante redundante"},
+    )
 
     assert note["document_id"] == captured_id
     assert updated == {"document_id": captured_id, "revision": 5, "title": "Informe", "content_hash": "a" * 64, "sync_state": "pending_sync"}
-    assert calls == [(captured_id, 4, "# Editada"), ("Refina", {
+    assert calls == [(captured_id, 4, "# Editada"), ("Refina la selección.", {
         "context_mode": "single_note", "document_id": captured_id,
-        "selected_note_title": "Informe", "selected_note_markdown": "# Capturado",
+        "selected_note_title": "Informe", "selected_note_markdown": "frase redundante redundante",
+        "response_mode": "edit_selection",
+        "task_instructions": (
+            "Edita exclusivamente el fragmento seleccionado. Conserva significado, hechos, voz, idioma "
+            "y Markdown existente. Mejora gramática, claridad y concisión sin resumir ni añadir información. "
+            "Devuelve sólo el texto sustituto: sin explicaciones, títulos nuevos, separadores ni bloques de código."
+        ),
     })]
     assert answer["text"] == "# Refinado"
     assert [event["action"] for event in audits] == [

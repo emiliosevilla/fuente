@@ -971,15 +971,21 @@ class GestajoAgent:
         binding = self._require_management(access_token, org_id)
         note_id = self._flow_review_captured_note_id(job_id)
         note = _note_response(self._note_reader(self.vault_path, note_id), note_id)
-        message, _ = _note_assistant_payload(payload)
+        message, _, selected_text = _note_assistant_payload(payload)
+        context: dict[str, object] = {
+            "context_mode": "single_note",
+            "document_id": note_id,
+            "selected_note_title": note["title"],
+            "selected_note_markdown": selected_text or note["body_markdown"],
+        }
+        if selected_text:
+            context.update({
+                "response_mode": "edit_selection",
+                "task_instructions": _SELECTION_REFINEMENT_INSTRUCTIONS,
+            })
         answer = _assistant_response(self._process_local_chat(
             message,
-            {
-                "context_mode": "single_note",
-                "document_id": note_id,
-                "selected_note_title": note["title"],
-                "selected_note_markdown": note["body_markdown"],
-            },
+            context,
         ))
         self._record_audit(binding, self._access_token(access_token), _new_audit_event(
             note_id, str(org_id), str(uuid.UUID(str(org_id))), binding.user_id,
@@ -1400,13 +1406,18 @@ class GestajoAgent:
         self._membership_verifier(binding, self._access_token(access_token), org_id)
         scope = self._note_visibility_verifier(binding, self._access_token(access_token), note_id)
         note = _note_response(self._note_reader(self.vault_path, note_id), note_id)
-        message, template_id = _note_assistant_payload(payload)
+        message, template_id, selected_text = _note_assistant_payload(payload)
         context: dict[str, object] = {
                 "context_mode": "single_note",
                 "document_id": note_id,
                 "selected_note_title": note["title"],
-                "selected_note_markdown": note["body_markdown"],
+                "selected_note_markdown": selected_text or note["body_markdown"],
         }
+        if selected_text:
+            context.update({
+                "response_mode": "edit_selection",
+                "task_instructions": _SELECTION_REFINEMENT_INSTRUCTIONS,
+            })
         if _RELATION_REQUEST.search(message):
             visible_ids = self._visible_note_ids_reader(binding, self._access_token(access_token), org_id)
             context["related_document_ids"] = sorted(visible_ids)
@@ -2777,22 +2788,36 @@ def _note_export_response(value: object) -> dict[str, object]:
     }
 
 
-def _note_assistant_payload(payload: object) -> tuple[str, str | None]:
-    if not isinstance(payload, Mapping) or set(payload) not in ({"message"}, {"message", "template_id"}):
+_SELECTION_REFINEMENT_INSTRUCTIONS = (
+    "Edita exclusivamente el fragmento seleccionado. Conserva significado, hechos, voz, idioma "
+    "y Markdown existente. Mejora gramática, claridad y concisión sin resumir ni añadir información. "
+    "Devuelve sólo el texto sustituto: sin explicaciones, títulos nuevos, separadores ni bloques de código."
+)
+
+
+def _note_assistant_payload(payload: object) -> tuple[str, str | None, str | None]:
+    if not isinstance(payload, Mapping) or set(payload) not in (
+        {"message"}, {"message", "template_id"}, {"message", "selected_text"},
+    ):
         raise AgentError("assistant payload has unsupported fields")
     message = payload.get("message")
     if not isinstance(message, str) or not 1 <= len(message.strip()) <= 16_000:
         raise AgentError("assistant message is invalid")
     template_id = payload.get("template_id")
+    selected_text = payload.get("selected_text")
+    if selected_text is not None:
+        if not isinstance(selected_text, str) or not 1 <= len(selected_text.strip()) <= 12_000:
+            raise AgentError("assistant selected text is invalid")
+        return message.strip(), None, selected_text.strip()
     if template_id is None:
-        return message.strip(), None
-    return message.strip(), _template_id(template_id)
+        return message.strip(), None, None
+    return message.strip(), _template_id(template_id), None
 
 
 def _knowledge_assistant_payload(payload: object) -> tuple[str, list[str]]:
     if not isinstance(payload, Mapping) or set(payload) - {"message", "document_ids"} or "message" not in payload:
         raise AgentError("assistant payload has unsupported fields")
-    message, _ = _note_assistant_payload({"message": payload.get("message")})
+    message, _, _ = _note_assistant_payload({"message": payload.get("message")})
     raw_ids = payload.get("document_ids", [])
     if not isinstance(raw_ids, list) or len(raw_ids) > 24:
         raise AgentError("assistant document_ids are invalid")

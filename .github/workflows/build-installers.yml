@@ -36,6 +36,9 @@ jobs:
         run: python -m pytest -q tests/test_packaging_fuente.py
       - name: Build installer
         run: python build_installer.py
+      - name: Verify installed Windows launcher
+        if: runner.os == 'Windows'
+        run: cmd /c dist\Fuente\Instalar_Fuente_para_Gestajo.cmd --check
       - name: Upload installer
         uses: actions/upload-artifact@v4
         with:

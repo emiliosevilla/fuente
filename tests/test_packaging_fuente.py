@@ -9,6 +9,7 @@ from build_installer import (
     GESTAJO_AGENT_INSTALL_URL,
     distribution_bundle,
     verify_windows_agent_bundle,
+    write_macos_launcher,
     write_windows_agent_launcher,
 )
 
@@ -49,7 +50,7 @@ def test_distribution_sources_include_webview_console_and_read_only_reader() -> 
     assert 'write_macos_launcher(dist_dir)' in build
     assert 'launcher = dist_dir / "Instalador_Fuente.command"' in build
     assert '/usr/bin/xattr -cr "$APP_PATH"' in build
-    assert 'exec /usr/bin/open "$APP_PATH"' in build
+    assert 'exec /usr/bin/open "$APP_PATH" --args "{GESTAJO_AGENT_INSTALL_URL}"' in build
     assert '"/usr/bin/zip", "-qryy"' in build
     assert '"/usr/bin/hdiutil", "create"' in build
     assert 'Fuente_Distribucion_macOS.dmg' in build
@@ -99,15 +100,21 @@ def test_distribution_uses_the_native_directory_on_macos_and_windows(tmp_path) -
     assert distribution_bundle(tmp_path, "win32") == (tmp_path / "Fuente", "Fuente")
 
 
+def test_macos_installer_opens_the_gestajo_agent_setup(tmp_path) -> None:
+    launcher = write_macos_launcher(tmp_path)
+
+    assert f'exec /usr/bin/open "$APP_PATH" --args "{GESTAJO_AGENT_INSTALL_URL}"' in launcher.read_text()
+
+
 def test_windows_distribution_includes_a_launcher_for_the_gestajo_agent(tmp_path) -> None:
     launcher = write_windows_agent_launcher(tmp_path)
 
     assert launcher.name == "Instalar_Fuente_para_Gestajo.cmd"
-    assert launcher.read_bytes() == (
-        b"@echo off\r\n"
-        b"setlocal\r\n"
-        + f'start "" "%~dp0Fuente.exe" "{GESTAJO_AGENT_INSTALL_URL}"\r\n'.encode()
-    )
+    script = launcher.read_text(encoding="utf-8")
+    assert 'set "INSTALL_DIR=%LOCALAPPDATA%\\Programs\\Fuente"' in script
+    assert 'robocopy "%~dp0." "%INSTALL_DIR%" /E /R:2 /W:1' in script
+    assert '"%INSTALL_DIR%\\Fuente.exe" --check-gestajo-agent-package' in script
+    assert f'start "" "%INSTALL_DIR%\\Fuente.exe" "{GESTAJO_AGENT_INSTALL_URL}"' in script
 
 
 def test_windows_agent_bundle_check_runs_the_native_executable(tmp_path) -> None:

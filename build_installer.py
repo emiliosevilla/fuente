@@ -106,7 +106,7 @@ def write_macos_launcher(dist_dir: Path) -> Path:
     (dist_dir / "Fuente.command").unlink(missing_ok=True)
     launcher = dist_dir / "Instalador_Fuente.command"
     launcher.write_text(
-        '''#!/bin/bash
+        f'''#!/bin/bash
 set -e
 APP_PATH="/Applications/Fuente.app"
 if [ ! -d "$APP_PATH" ]; then
@@ -114,7 +114,7 @@ if [ ! -d "$APP_PATH" ]; then
     exit 1
 fi
 /usr/bin/xattr -cr "$APP_PATH"
-exec /usr/bin/open "$APP_PATH"
+exec /usr/bin/open "$APP_PATH" --args "{GESTAJO_AGENT_INSTALL_URL}"
 ''',
         encoding="utf-8",
     )
@@ -123,12 +123,22 @@ exec /usr/bin/open "$APP_PATH"
 
 
 def write_windows_agent_launcher(app_bundle: Path) -> Path:
-    """Add the explicit first-run launcher required by Windows browsers."""
+    """Install Fuente for the current Windows user and start its local agent."""
     launcher = app_bundle / "Instalar_Fuente_para_Gestajo.cmd"
     launcher.write_text(
         "@echo off\r\n"
         "setlocal\r\n"
-        'start "" "%~dp0Fuente.exe" "' + GESTAJO_AGENT_INSTALL_URL + '"\r\n',
+        'if not defined LOCALAPPDATA exit /b 1\r\n'
+        'set "INSTALL_DIR=%LOCALAPPDATA%\\Programs\\Fuente"\r\n'
+        'if /I "%~1"=="--check" set "INSTALL_DIR=%TEMP%\\Fuente-install-check"\r\n'
+        'if not exist "%INSTALL_DIR%" mkdir "%INSTALL_DIR%"\r\n'
+        'robocopy "%~dp0." "%INSTALL_DIR%" /E /R:2 /W:1 >nul\r\n'
+        'if errorlevel 8 exit /b %errorlevel%\r\n'
+        'if /I not "%~1"=="--check" goto install\r\n'
+        '"%INSTALL_DIR%\\Fuente.exe" --check-gestajo-agent-package\r\n'
+        'exit /b %errorlevel%\r\n'
+        ':install\r\n'
+        'start "" "%INSTALL_DIR%\\Fuente.exe" "' + GESTAJO_AGENT_INSTALL_URL + '"\r\n',
         encoding="utf-8",
         newline="",
     )

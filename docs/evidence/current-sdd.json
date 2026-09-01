@@ -1,8 +1,8 @@
 {
-  "base_head": "09460eea0c1789c810d0b09c5c9404ddf3ad7964",
-  "branch": "codex/fuente-agent-connection-close",
+  "base_head": "75e79317e04200e73bf7bde10ccead0fa4016c39",
+  "branch": "dev",
   "gate": "RESULT: BLOCKED",
-  "measured_at": "2026-09-01T16:11:50Z",
+  "measured_at": "2026-09-01T16:19:19Z",
   "p_status": {
     "P-01": "COMPLETE",
     "P-02": "COMPLETE",

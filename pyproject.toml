@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "fuente"
-version = "0.2.5"
+version = "0.2.6"
 description = "ETL Knowledge Base autónomo con IA local y RAG para Obsidian"
 readme = "README.md"
 requires-python = ">=3.10"

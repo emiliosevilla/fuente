@@ -73,6 +73,7 @@ def test_bootstrap_spec_excludes_optional_native_runtime() -> None:
     assert "COLLECT(" in spec
     assert '"torch"' in spec
     assert '"docling"' in spec
+    assert '"pdfminer"' not in spec.split("excludes=[", 1)[1]
     assert '"pip._internal.cli.main"' not in spec
     assert '"Fuente y Caudal"' in bootstrap
 
@@ -80,6 +81,7 @@ def test_bootstrap_spec_excludes_optional_native_runtime() -> None:
 def test_spec_keeps_stdlib_optparse_for_embedded_pip() -> None:
     spec = (ROOT / "fuente.spec").read_text(encoding="utf-8")
     assert '"optparse"' in spec
+    assert '"jinja2.meta"' in spec
 
 
 def test_macos_gui_binary_does_not_open_terminal() -> None:
@@ -87,6 +89,8 @@ def test_macos_gui_binary_does_not_open_terminal() -> None:
     assert "console=False" in spec
     assert 'name="Fuente.app"' in spec
     assert '"CFBundleURLSchemes": ["fuente"]' in spec
+    assert '"CFBundleShortVersionString": __version__' in spec
+    assert '"CFBundleVersion": __version__' in spec
     assert "argv_emulation=True" in spec
     build = (ROOT / "build_installer.py").read_text(encoding="utf-8")
     assert 'return dist_dir / "Fuente.app", "Fuente.app"' in build

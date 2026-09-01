@@ -208,10 +208,10 @@ def main():
 
     if args.install_gestajo_agent:
         if run_gestajo_agent_install():
-            vault_path = vault_path or Path.home() / "Fuente_Vault"
+            vault_path = vault_path or Path.home() / "Documents" / "Fuente_Vault"
             run_gestajo_agent_service(vault_path)
     elif args.serve_gestajo_agent:
-        vault_path = vault_path or Path.home() / "Fuente_Vault"
+        vault_path = vault_path or Path.home() / "Documents" / "Fuente_Vault"
         run_gestajo_agent_service(vault_path)
     elif args.flush:
         vault_path = vault_path or Path.home() / "Documents" / "Fuente_Vault"

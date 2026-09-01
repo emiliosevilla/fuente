@@ -145,6 +145,24 @@ def test_main_gestajo_agent_argv(monkeypatch, tmp_path):
     assert calls == [tmp_path / "vault"]
 
 
+def test_gestajo_agent_uses_the_standard_vault_by_default(monkeypatch, tmp_path):
+    import fuente.main as main_module
+
+    calls = []
+    monkeypatch.setattr(main_module, "load_startup_vault", lambda: None)
+    monkeypatch.setattr(main_module.Path, "home", lambda: tmp_path)
+    monkeypatch.setattr(
+        main_module,
+        "run_gestajo_agent_service",
+        lambda vault_path: calls.append(vault_path),
+    )
+    monkeypatch.setattr(sys, "argv", ["fuente", "--serve-gestajo-agent"])
+
+    main_module.main()
+
+    assert calls == [tmp_path / "Documents" / "Fuente_Vault"]
+
+
 def test_gestajo_agent_service_stops_owned_services(monkeypatch, tmp_path):
     import fuente.main as main_module
 

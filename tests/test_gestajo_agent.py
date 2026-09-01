@@ -1,5 +1,8 @@
 import json
+import os
 import sqlite3
+import subprocess
+import sys
 from http.client import HTTPConnection
 from pathlib import Path
 from threading import Thread
@@ -33,6 +36,22 @@ from fuente.domain.sync import ConnectedFolder, SyncDirection
 USER_A = "00000000-0000-0000-0000-0000000000a1"
 USER_B = "00000000-0000-0000-0000-0000000000b2"
 COMMON_ORG_ID = "00000000-0000-0000-0000-000000000099"
+
+
+def test_runtime_points_stdlib_https_to_bundled_certificates():
+    environment = dict(os.environ)
+    environment.pop("SSL_CERT_FILE", None)
+
+    subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            "import os, requests, fuente; assert os.environ['SSL_CERT_FILE'] == requests.certs.where()",
+        ],
+        cwd=Path(__file__).parents[1],
+        env=environment,
+        check=True,
+    )
 
 
 @pytest.mark.parametrize("kind", ["apunte", "diario"])

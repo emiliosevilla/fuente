@@ -8,9 +8,11 @@ from __future__ import annotations
 
 import os
 import ipaddress
+import plistlib
 import ssl
 import subprocess
 import sys
+import tempfile
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -186,10 +188,29 @@ def _is_ca_trusted(
 ) -> bool:
     if not paths.ca_certificate.is_file():
         return False
+    try:
+        fingerprint = x509.load_pem_x509_certificate(paths.ca_certificate.read_bytes()).fingerprint(hashes.SHA1()).hex().upper()
+    except (OSError, ValueError):
+        return False
     if platform_name == "darwin":
-        command = ["security", "find-certificate", "-c", AGENT_CA_LABEL, "-a", str(Path.home() / "Library" / "Keychains" / "login.keychain-db")]
+        for domain in ([], ["-d"]):
+            try:
+                with tempfile.NamedTemporaryFile(suffix=".plist") as exported:
+                    result = run(
+                        ["security", "trust-settings-export", *domain, exported.name],
+                        capture_output=True, text=True, check=False,
+                    )
+                    if result.returncode != 0:
+                        continue
+                    trust_list = plistlib.loads(Path(exported.name).read_bytes()).get("trustList", {})
+                    settings = trust_list.get(fingerprint, {}).get("trustSettings", [])
+                    if any(setting.get("kSecTrustSettingsPolicyName") == "sslServer" for setting in settings):
+                        return True
+            except (OSError, plistlib.InvalidFileException, AttributeError):
+                continue
+        return False
     elif platform_name == "win32":
-        command = ["certutil", "-user", "-store", "Root", AGENT_CA_LABEL]
+        command = ["certutil", "-user", "-store", "Root", fingerprint]
     else:
         return False
     try:
@@ -201,7 +222,7 @@ def _is_ca_trusted(
 def _trust_ca(paths: AgentTlsPaths, platform_name: str, run: Callable[..., subprocess.CompletedProcess[str]]) -> None:
     if platform_name == "darwin":
         _run_checked(run, [
-            "security", "add-trusted-cert", "-d", "-r", "trustRoot", "-k",
+            "security", "add-trusted-cert", "-r", "trustRoot", "-p", "ssl", "-k",
             str(Path.home() / "Library" / "Keychains" / "login.keychain-db"), str(paths.ca_certificate),
         ])
         return

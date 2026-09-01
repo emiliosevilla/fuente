@@ -1,8 +1,8 @@
 {
-  "base_head": "ecc872fc5c1a7917ce8ca7bf6cb3c5a7d9a72ab0",
-  "branch": "dev",
-  "gate": "RESULT: READY",
-  "measured_at": "2026-09-01T15:08:57Z",
+  "base_head": "5d8f349ea62efa1279c05e5a6595529b2b02cb14",
+  "branch": "codex/fix-fuente-runtime-upgrade",
+  "gate": "RESULT: BLOCKED",
+  "measured_at": "2026-09-01T15:43:15Z",
   "p_status": {
     "P-01": "COMPLETE",
     "P-02": "COMPLETE",
@@ -23,6 +23,6 @@
     "Q-07": "COMPLETE",
     "Q-08": "COMPLETE"
   },
-  "source_tree_digest": "e6e9d4ce3b5376deff1c44ea4ef9020d59b943955b3075fe3a08743b76a43afb",
-  "suite": "1418 passed, 1 skipped in 72.73s (0:01:12)"
+  "source_tree_digest": "d94c87938fbf3d4b7dcbb5809960c1141c78feb355ef0d04a765d3247f754bfc",
+  "suite": "1413 passed, 1 skipped in 69.10s (0:01:09)"
 }

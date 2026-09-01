@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import importlib
 import importlib.util
 import json
 import os
@@ -35,7 +36,11 @@ CAPABILITIES: dict[str, dict[str, Any]] = {
             "minirag-hku @ git+https://github.com/HKUDS/MiniRAG.git@e204d239421f45004852953679927fdf6733f236",
             "lancedb==0.37.1",
         ),
-        "modules": ("watchdog", "psutil", "requests", "pydantic", "yaml", "minirag", "lancedb"),
+        "modules": (
+            "watchdog", "psutil", "requests", "pydantic", "yaml", "docx",
+            "pdfplumber", "openpyxl", "pptx", "extract_msg", "minirag", "lancedb",
+        ),
+        "import_checks": ("docx", "pdfplumber"),
         "required": True,
     },
     "office": {
@@ -67,6 +72,14 @@ def runtime_root() -> Path:
 
 def site_packages_dir() -> Path:
     return runtime_root() / "site-packages"
+
+
+def _prefer_bundled_dependencies() -> None:
+    """Keep old downloaded packages behind the dependencies shipped by Fuente."""
+    site_packages = str(site_packages_dir())
+    if site_packages in sys.path:
+        sys.path.remove(site_packages)
+    sys.path.append(site_packages)
 
 
 def _bundle_file(name: str) -> Path:
@@ -102,11 +115,10 @@ def runtime_source_dir() -> Path:
 def activate_runtime_source() -> Path:
     source = runtime_source_dir()
     source_text = str(source)
-    if source_text not in sys.path:
-        sys.path.insert(0, source_text)
-    site_packages = str(site_packages_dir())
-    if site_packages not in sys.path:
-        sys.path.insert(0, site_packages)
+    _prefer_bundled_dependencies()
+    if source_text in sys.path:
+        sys.path.remove(source_text)
+    sys.path.insert(0, source_text)
     for name in tuple(sys.modules):
         if name == "fuente" or name.startswith("fuente."):
             del sys.modules[name]
@@ -114,11 +126,17 @@ def activate_runtime_source() -> Path:
 
 
 def _installed(capability: dict[str, Any]) -> bool:
-    site_packages = str(site_packages_dir())
-    if site_packages not in sys.path:
-        sys.path.insert(0, site_packages)
+    _prefer_bundled_dependencies()
     importlib.invalidate_caches()
-    return all(importlib.util.find_spec(name) is not None for name in capability["modules"])
+    if not all(importlib.util.find_spec(name) is not None for name in capability["modules"]):
+        return False
+    try:
+        for name in capability.get("import_checks", ()):
+            importlib.import_module(name)
+    except (ImportError, AttributeError) as error:
+        print(f"Fuente no puede importar {name}: {error}", file=sys.stderr)
+        return False
+    return True
 
 
 def capability_status() -> list[dict[str, Any]]:
@@ -177,6 +195,7 @@ def ensure_capability(
     try:
         result = installer([
             "install",
+            "--upgrade",
             "--disable-pip-version-check",
             "--no-warn-script-location",
             "--target",

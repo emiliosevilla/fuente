@@ -2,6 +2,7 @@
 from pathlib import Path
 import sys
 from PyInstaller.utils.hooks import collect_all, collect_submodules
+from fuente import __version__
 
 block_cipher = None
 icon = Path("assets/fuente_icon.ico")
@@ -54,6 +55,7 @@ a = Analysis(
         "webview.platforms.cocoa",
         "optparse",
         "colorsys",
+        "jinja2.meta",
         "tkinter.ttk",
         "tkinter.messagebox",
         "tkinter.filedialog",
@@ -68,7 +70,6 @@ a = Analysis(
         "faster_whisper",
         "markitdown",
         "onnxruntime",
-        "pdfminer",
         "PIL",
         "sentence_transformers",
         "setuptools",
@@ -104,6 +105,8 @@ if sys.platform == "darwin":
         icon=str(icon),
         bundle_identifier="com.emiliosevilla.fuente",
         info_plist={
+            "CFBundleShortVersionString": __version__,
+            "CFBundleVersion": __version__,
             "CFBundleURLTypes": [{
                 "CFBundleURLName": "Fuente Gestajo Agent",
                 "CFBundleURLSchemes": ["fuente"],

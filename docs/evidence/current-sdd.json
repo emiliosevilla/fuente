@@ -1,8 +1,8 @@
 {
-  "base_head": "5d8f349ea62efa1279c05e5a6595529b2b02cb14",
-  "branch": "codex/fix-fuente-runtime-upgrade",
-  "gate": "RESULT: BLOCKED",
-  "measured_at": "2026-09-01T15:43:15Z",
+  "base_head": "375ae998ad88774751736234b798342a3e670cee",
+  "branch": "dev",
+  "gate": "RESULT: READY",
+  "measured_at": "2026-09-01T15:50:08Z",
   "p_status": {
     "P-01": "COMPLETE",
     "P-02": "COMPLETE",

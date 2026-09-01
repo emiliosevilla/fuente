@@ -87,6 +87,23 @@ def test_macos_installs_ssl_trust_in_the_user_keychain(tmp_path: Path):
     assert "-d" not in install
 
 
+def test_windows_checks_the_exact_ca_fingerprint_in_the_user_root_store(tmp_path: Path):
+    paths = agent_tls_paths(platform_name="win32", home=tmp_path)
+    _ensure_certificates(paths)
+    fingerprint = x509.load_pem_x509_certificate(paths.ca_certificate.read_bytes()).fingerprint(hashes.SHA1()).hex().upper()
+    commands: list[list[str]] = []
+
+    class Result:
+        returncode = 0
+        stdout = ""
+        stderr = ""
+
+    assert _is_ca_trusted(
+        paths, "win32", lambda command, **_kwargs: commands.append(command) or Result(),
+    ) is True
+    assert commands == [["certutil", "-user", "-store", "Root", fingerprint]]
+
+
 def test_agent_tls_serves_the_loopback_health_contract(tmp_path: Path):
     paths = agent_tls_paths(platform_name="darwin", home=tmp_path)
     _ensure_certificates(paths)

@@ -103,8 +103,14 @@ fuente --install-gestajo-agent
 fuente --serve-gestajo-agent --vault /ruta/al/Vault
 ```
 
-En Windows, si Gestajo no encuentra el agente, descarga automáticamente el
-paquete de la última release de Fuente. El proceso para una persona usuaria es:
+Si Gestajo no ha detectado Fuente antes, descarga automáticamente el paquete
+nativo de la última release. En macOS:
+
+1. Abre el DMG y arrastra `Fuente.app` a `Aplicaciones`.
+2. Ejecuta `Instalador_Fuente.command` desde el DMG.
+3. Confirma la instalación del certificado local de Fuente.
+
+En Windows:
 
 1. Pulsa **Extraer todo** sobre el ZIP descargado.
 2. Abre la carpeta extraída y haz doble clic en `Instalar_Fuente_para_Gestajo.cmd`.
@@ -112,8 +118,10 @@ paquete de la última release de Fuente. El proceso para una persona usuaria es:
 
 No hace falta instalar Python, `pythonnet`, dependencias ni ejecutar comandos.
 El paquete incluye el agente completo, registra `fuente://` para ese usuario y
-lo deja en segundo plano. El navegador no puede ejecutar un binario descargado
-por sí mismo. El mismo agente acepta
+lo deja en segundo plano. En Windows queda instalado en
+`%LOCALAPPDATA%\\Programs\\Fuente`; el ZIP extraído ya puede borrarse. Gestajo
+usa después `fuente://` para reabrir la instalación existente. El navegador no
+puede ejecutar un binario descargado por sí mismo. El mismo agente acepta
 `http://localhost:3000`, las vistas previas de desarrollo autorizadas y
 `https://gestajo.vercel.app`.
 

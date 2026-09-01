@@ -1,6 +1,6 @@
-# Fuente y Caudal — auditoría final (Addendum Task A, fix round 2)
+# Fuente y Caudal — auditoría final
 
-Medido: 2026-08-27 en rama `dev`. Capturas nativas PyWebView/WebKit con fixture de identidad mockup (Fuente/Caudal + auxiliar). Veredicto: **READY**.
+Revalidado: 2026-09-01 en rama `dev`, HEAD `55c4325`. Fuente 0.2.8 cambia el refinado local con IA y la confianza TLS, sin modificar el recurso visual nativo. Se conservaron los PNG verificados y se recalcularon sus sellos para el árbol actual. Veredicto: **READY**.
 
 `evaluate_release(Path("docs/evidence/fuente-y-caudal"))` → **READY**; G0–G9 PASS; auditorías escritas PASS; 0 reasons.
 
@@ -45,4 +45,3 @@ Las capturas sellan `git_head` al HEAD del momento. El commit de evidencia mueve
 ## Reconcile 2026-08-27
 
 Re-medido en `dev` @ `310ba58` (= `origin/dev`): `evaluate_release` → **READY**; PNG únicos 21/21; PR #80 MERGED (`0fc6801` en `main`). El resumen `gates`/`release_status` del manifiesto se alineó con el veredicto vivo del gate.
-
